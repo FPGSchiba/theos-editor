@@ -29,6 +29,12 @@ All checks are required status checks on `main` (branch protection, administrato
 | `approval` | fails while the PR touches a protected path and lacks the label `approved` | Linux |
 | `ui` | from P11: `pnpm install --frozen-lockfile`, `svelte-check`, `eslint`, `vitest`, Playwright component tests | Linux, Windows |
 
+**macOS** is not in the per-PR matrix, because macOS runner minutes are expensive on a private
+repository. Instead a scheduled workflow `macos` runs `clippy`, `test` and (from P11) `ui` on
+`macos-latest` for `main` once a week and on demand, and `release.yml` runs the same before every
+release (`docs/release.md`). A red `macos` run is fixed before the next release; it is listed in
+`docs/status.md` under "Needs Jann" until then.
+
 `cargo xtask gate` runs every check except `pr-body`, `pr-title` and `approval` locally, on
 Windows and Linux, with the same results as CI (`commit-msg` checks the commits since `main`).
 Claude runs it before claiming a phase is done.

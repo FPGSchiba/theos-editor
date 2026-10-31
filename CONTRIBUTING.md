@@ -87,7 +87,8 @@ branch history. On `main`, the squashed pull request is the unit.
 
 - Test first (superpowers:test-driven-development). A test that proves an acceptance criterion
   carries `// AC: <id>` (`docs/gate.md` §4).
-- Tests run on Windows and Linux and need no network. Tests that need ComfyUI, an LLM endpoint or
+- Tests run on Windows and Linux for every pull request, and on macOS weekly and before every
+  release; they need no network. Tests that need ComfyUI, an LLM endpoint or
   another external service are marked `#[ignore = "needs <service>"]` and run on request.
 - Fixtures live in `crates/<crate>/tests/fixtures/`; synthetic fixtures say so in their file.
 

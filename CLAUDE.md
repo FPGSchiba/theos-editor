@@ -87,8 +87,9 @@ cargo xtask generator-check -- <command…>
   (`#[cfg(test)]`) for units, `tests/` for behaviour, fixtures in `crates/<crate>/tests/fixtures/`.
 - Content fixtures are real-looking records following `docs/specs/data-model.md`. Never invent
   lore canon in fixtures beyond what the examples show; mark synthetic fixtures as such.
-- Windows matters: paths through `std::path`, no shell assumptions, LF in files we write, Ctrl
-  in the UI, processes stopped as whole trees.
+- Windows matters most, and macOS ships too: paths through `std::path`, no shell assumptions, LF
+  in files we write, Ctrl in the UI (Cmd on macOS), processes stopped as whole trees. Code paths
+  that differ per OS get a test on each OS; macOS is tested by the weekly `macos` workflow.
 - Branches, commits, PR titles, versions and tags follow `CONTRIBUTING.md`: Conventional
   Commits with the `Refs:` and `Phase:` footers and the Claude trailers; PR titles like
   `feat(content): records and grammars (P02)` and `docs(spec): records and grammars (P02)`.

@@ -8,8 +8,9 @@ Versioning and tagging rules are in `CONTRIBUTING.md` §5.
 - Jann decides when a release happens; nothing else does.
 - One product version and one tag per release.
 - The changelog is written from the Conventional Commits on `main`, not by hand.
-- Every artifact is built by CI from the tagged commit with `--locked`, for Windows and Linux,
-  with checksums and build provenance.
+- Every artifact is built by CI from the tagged commit with `--locked`, for Windows, Linux and
+  macOS, with checksums and build provenance.
+- Nothing is published unless the full test suite passed on all three platforms for that commit.
 
 ## 2. Flow
 
@@ -18,7 +19,8 @@ push to main ──► release-plz updates the release PR "chore(release): vX.Y.
                  (version in [workspace.package], CHANGELOG.md section)
 Jann merges the release PR
              ──► release-plz creates the annotated tag vX.Y.Z on main
-tag vX.Y.Z   ──► release.yml builds on windows-latest and ubuntu-latest
+tag vX.Y.Z   ──► release.yml: tests on windows-latest, ubuntu-latest and macos-latest
+             ──► builds on all three (macOS: arm64 + x86_64, merged into universal binaries)
                  ──► GitHub Release vX.Y.Z with artifacts, SHA256SUMS, provenance,
                      notes = the CHANGELOG section (pre-release for -rc.N)
 ```
@@ -29,8 +31,11 @@ tag vX.Y.Z   ──► release.yml builds on windows-latest and ubuntu-latest
    the proposed version (for example to reach a milestone or cut `-rc.1`) before merging.
 2. **Tag.** Merging the release PR makes release-plz create the tag `vX.Y.Z`. Only the
    `theos-editor` package creates a tag; all crates are in one version group.
-3. **Build and publish.** The tag starts `release.yml`, which builds, checksums, attests and
-   creates the GitHub Release. Nothing is published to crates.io.
+3. **Build and publish.** The tag starts `release.yml`. It first runs the full test suite on
+   Windows, Linux and macOS (macOS is not part of the per-PR gate, so this is where a macOS-only
+   break is caught before anything ships). Then it builds, checksums, attests and creates the
+   GitHub Release. If any platform fails, no release is created; the fix goes to `main` and a new
+   patch version is cut. Nothing is published to crates.io.
 4. **Consumers.** The GitHub Action in tower-of-theos that runs `theos check` pins a released
    version; moving it to a new release is a normal pull request there.
 
@@ -40,7 +45,9 @@ tag vX.Y.Z   ──► release.yml builds on windows-latest and ubuntu-latest
 |---|---|---|
 | `theos-<version>-x86_64-pc-windows-msvc.zip` (`theos.exe`, `theos-mcp.exe`) | `cargo build --release --locked` | P05 |
 | `theos-<version>-x86_64-unknown-linux-gnu.tar.gz` (`theos`, `theos-mcp`) | same | P05 |
+| `theos-<version>-universal-apple-darwin.tar.gz` (`theos`, `theos-mcp`) | builds for `aarch64-apple-darwin` and `x86_64-apple-darwin`, merged with `lipo` | P05 |
 | `Theos Editor_<version>_x64-setup.exe` | Tauri bundler (NSIS) | P18 |
+| `Theos Editor_<version>_universal.dmg` | Tauri bundler, target `universal-apple-darwin` | P18 |
 | `SHA256SUMS` | all files above | P05 |
 | Build provenance attestation | `actions/attest-build-provenance` | P05 |
 
@@ -82,7 +89,21 @@ minor version; that decision is Jann's.
 - A broken release is followed by a fixed patch release; its GitHub Release notes say which
   version replaces it. Tags and releases are never deleted.
 
-## 7. Not in v1
+## 7. macOS without signing
+
+v1 ships macOS builds ad-hoc signed only, without an Apple Developer ID and without
+notarization. Gatekeeper therefore blocks the downloaded app and binaries on first start. Every
+GitHub Release contains these steps in its notes:
+
+- App: right-click **Theos Editor** › **Open** once, or allow it under System Settings › Privacy
+  & Security.
+- CLI: `xattr -d com.apple.quarantine theos theos-mcp` after unpacking.
+
+Signing and notarization need an Apple Developer account; adding them later changes only
+`release.yml` and its secrets.
+
+## 8. Not in v1
 
 Code signing for Windows (the installer shows a SmartScreen warning until a certificate is
-added), the Tauri auto-updater (needs signing keys), macOS builds, crates.io publishing.
+added), Developer ID signing and notarization for macOS (§7), the Tauri auto-updater (needs
+signing keys), crates.io publishing.

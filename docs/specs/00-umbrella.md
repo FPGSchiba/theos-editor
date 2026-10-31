@@ -27,7 +27,9 @@ generative workflows (maps, concept art) built in, including notes that feed the
 - **G1** Repositories: `theos-editor` (this repo) holds the editor. `tower-of-theos` holds the
   content project and the map toolset. `Theos-Engine` is never a dependency, except behind the
   cargo feature `engine`, which no phase here builds.
-- **G2** Platforms: Windows 11 x64 (primary) and Linux x64. Every Rust check runs on both.
+- **G2** Platforms: Windows 11 x64 (primary), Linux x64, and macOS 13 or later on Apple silicon
+  and Intel (universal builds). Every PR is checked on Windows and Linux; macOS is tested weekly
+  and before every release (`docs/gate.md` §1).
 - **G3** Rust: stable toolchain pinned in `rust-toolchain.toml`, edition 2024, `unsafe_code`
   forbidden, `Cargo.lock` committed, all builds `--locked`.
 - **G4** Crates: `theos-content`, `theos-vcs`, `theos-studio` (libs); `theos`, `theos-mcp`,
@@ -45,7 +47,8 @@ generative workflows (maps, concept art) built in, including notes that feed the
 - **G11** Generators only through `docs/generators.md`; no generator-specific field in the data
   model; the UI works for any generator that produces a kind.
 - **G12** Network only to ComfyUI and the configured LLM endpoint, both opt-in; no telemetry.
-- **G13** UI uses `design/theos-ui/` and follows `docs/ui/`; shortcuts use Ctrl.
+- **G13** UI uses `design/theos-ui/` and follows `docs/ui/`; shortcuts use Ctrl on Windows and
+  Linux and Cmd on macOS, from one keymap.
 - **G14** Settings in three layers (part default → user → project); secrets in the OS
   credential store.
 - **G15** Every AC below has at least one test tagged with its id (`docs/gate.md` §4).
@@ -112,6 +115,7 @@ waits for Jann.
   `(gate)`, `(docs)` or a release title.
 - CE-08.10 `commit-msg` fails when any commit of the PR is not a Conventional Commit.
 - CE-08.11 The workspace has one version in `[workspace.package]` that every crate inherits.
+- CE-08.12 A scheduled workflow runs `clippy` and `test` on macOS weekly and on demand.
 
 ### P01 · Content layout and templates (tower-of-theos)
 
@@ -206,9 +210,11 @@ real records are added once the lore import exists.
   `CHANGELOG.md` section generated from the Conventional Commits since the last tag.
 - CE-08R.2 Merging the release PR creates exactly one annotated tag `vX.Y.Z` on `main`; all
   crates carry that version; nothing is published to crates.io.
-- CE-08R.3 The tag builds `theos` and `theos-mcp` for Windows and Linux with `--locked` and
-  publishes them with `SHA256SUMS` and build provenance in a GitHub Release whose notes are the
-  changelog section.
+- CE-08R.3 The tag builds `theos` and `theos-mcp` for Windows, Linux and macOS (universal
+  binary) with `--locked` and publishes them with `SHA256SUMS` and build provenance in a GitHub
+  Release whose notes are the changelog section and the macOS first-start steps.
+- CE-08R.6 The release workflow runs the full test suite on Windows, Linux and macOS first and
+  creates no release if any platform fails.
 - CE-08R.4 A tag with `-rc.N` produces a GitHub pre-release.
 - CE-08R.5 `theos --version` and `theos-mcp --version` print the version, the commit, the data
   model `schema_version` and the generator protocol version.
@@ -274,6 +280,9 @@ The PR waits for Jann (content repo).
 - CE-28.4 A determinism fixture gives identical output hashes on Windows and Linux, or the
   difference is documented with a tolerance.
 - CE-28.5 The old entry point `python -m theos_maps.run` keeps working.
+- CE-28.6 The toolset installs and runs on macOS (Apple silicon and Intel), or the gap is
+  documented with a workaround. (fastscapelib 0.3.0 has conda-forge builds for macOS; whether
+  PyPI wheels exist is checked in this phase.)
 
 ### P09 · Generator layer and generator tools
 
@@ -281,7 +290,8 @@ The PR waits for Jann (content repo).
 - CE-29.1 Generators registered in `.theos/settings.toml` are described and listed with their recipes.
 - CE-29.2 A run over N seeds produces N candidate runs; keeping one writes a version record with
   outputs copied to the binaries folder and hashed.
-- CE-29.3 Cancel stops the whole process tree on Windows and Linux; partial outputs are discarded.
+- CE-29.3 Cancel stops the whole process tree on Windows, Linux and macOS; partial outputs are
+  discarded.
 - CE-29.4 First use of the maps generator creates the uv venv with Python 3.12 and leaves the
   system Python untouched.
 - CE-29.5 `cargo xtask generator-check` passes for theos_maps and names the violation for a
@@ -314,7 +324,7 @@ From this phase the gate includes `ui` (added by an approved gate PR inside this
 
 **CE-32 Editor shell**
 - CE-32.1 The app opens a project and shows the rail of `docs/architecture.md` §6.
-- CE-32.2 Ctrl shortcuts and a command palette.
+- CE-32.2 Shortcuts (Ctrl on Windows and Linux, Cmd on macOS) and a command palette.
 - CE-32.3 Builds with and without the `engine` feature (the feature is empty).
 - CE-32.4 IPC types for the UI are generated from Rust; a mismatch fails the build.
 
@@ -415,8 +425,8 @@ From this phase the gate includes `ui` (added by an approved gate PR inside this
 ### P18 · Installer, first run, Code preset
 
 **CE-49 Installer and first run**
-- CE-49.1 The release workflow attaches a Windows installer (Tauri bundler) to every release; the
-  app's version is the workspace version.
+- CE-49.1 The release workflow attaches a Windows installer and a universal macOS disk image
+  (Tauri bundler) to every release; the app's version is the workspace version.
 - CE-49.2 First run checks git, uv, the binaries folder and ComfyUI, and says what is missing.
 
 **CE-50 Code preset**

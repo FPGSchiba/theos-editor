@@ -15,7 +15,7 @@ Engine integration (later) is described on the Confluence pages "Tauri-Based Edi
 | Human and agent, one API | UI, CLI and MCP call the same command layer; every write passes the same validation. |
 | Plain files, git history | Markdown records in git; indexes and generated views are rebuilt, never committed; binaries stay outside git. |
 | Built by Claude, owned by Jann | Small PRs, rustdoc, decision log, strict gate (`docs/gate.md`). |
-| Windows first | Primary platform; CI runs everything on Windows and Linux. |
+| Windows first | Primary platform; every PR is checked on Windows and Linux; macOS is tested weekly and before every release, and ships as universal builds. |
 
 ## 2. Repositories
 
@@ -138,8 +138,9 @@ previews and commit-message suggestions. Output is always an AI-marked draft.
 
 ## 13. Settings and projects
 
-Three layers: part default → user (`%APPDATA%\theos\settings.toml`, `$XDG_CONFIG_HOME/theos` on
-Linux; holds `binaries_root`) → project (`.theos/settings.toml`, tracked). Format-preserving TOML;
+Three layers: part default → user (`%APPDATA%\theos\settings.toml` on Windows,
+`$XDG_CONFIG_HOME/theos/settings.toml` on Linux, `~/Library/Application Support/theos/settings.toml`
+on macOS; holds `binaries_root`) → project (`.theos/settings.toml`, tracked). Format-preserving TOML;
 secrets in the OS credential store. Project kinds: `content` now, `game` with the engine part,
 `tool` for sandboxes.
 
