@@ -8,10 +8,7 @@ repository.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-# Not used by the library yet (`engine-free` will use it). It is a normal dependency, not a
-# dev-dependency, so that `cargo run -p xtask` and `cargo test --workspace` resolve the same
-# features for `serde_json` and `serde_core`. Otherwise the second build relinks
-# `target/debug/xtask.exe`, which Windows refuses while `cargo xtask test` is running it.
+# Not used by the library yet; `engine-free` will use it.
 cargo_metadata.workspace = true
 clap.workspace = true
 serde.workspace = true
