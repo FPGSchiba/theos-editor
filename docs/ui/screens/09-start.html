@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>09 · Start — projects — Theos Editor reference</title>
+<!--
+  Reference screen 09 of the Theos content editor, exported from the design canvas on 2026-10-31.
+  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
+-->
+<link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
+<link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<style>
+body{margin:0;background:#060810}
+a{color:#3ef0ff}a:hover{color:#e4ecff}
+.tu-shell.cs{height:900px}
+:where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
+:where(.cs) button.nav{display:flex;align-items:center;gap:10px;width:100%;padding:8px 12px;background:transparent;border:0;border-left:2px solid transparent;font:700 10.5px/14px var(--tu-font-i);letter-spacing:.8px;text-transform:uppercase;color:var(--textDim);text-align:left}
+:where(.cs) button.nav.is-active{color:var(--sig-attention);border-left-color:var(--sig-attention);background:color-mix(in srgb,var(--sig-attention) 8%,transparent)}
+:where(.cs) button.kindopt{display:grid;grid-template-columns:22px minmax(0,1fr);gap:2px 8px;width:100%;padding:9px 10px;background:var(--panel);border:1px solid var(--border);text-align:left;color:var(--text)}
+:where(.cs) button.kindopt.is-on{border-color:var(--sig-attention);background:color-mix(in srgb,var(--sig-attention) 8%,var(--panel))}
+:where(.cs) button.kindopt[disabled]{opacity:.5}
+@media (max-width:1000px){
+.tu-shell.cs{height:auto}
+.cs .tu-statusbar{flex-wrap:wrap;height:auto}
+}
+</style>
+</head>
+<body>
+<div class="tu-shell cs" style="--tu-font-i: var(--font-ui); grid-template-columns: minmax(0, 1fr); grid-template-rows: var(--h-titlebar) minmax(0, 1fr) var(--h-statusbar);">
+
+  <header class="tu-titlebar">
+    <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">start</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>v0.4.2 · up to date</span>
+  </header>
+
+  <main style="min-height: 0; overflow: auto; padding: 20px; display: flex; justify-content: center;">
+    <div style="width: 100%; max-width: 1340px; display: flex; flex-wrap: wrap; gap: 4px; align-items: stretch;">
+
+      <!-- Left: actions, nav, environment -->
+      <section class="tu-window" style="flex: 0 1 270px; min-width: 240px;">
+        <div style="padding: 22px 16px 18px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--border);">
+          <span style="width: 30px; height: 30px; border: 2px solid var(--sig-attention); box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;"><span style="width: 12px; height: 12px; background: var(--sig-attention); opacity: 0.75;"></span></span>
+          <span style="font: 700 20px/24px var(--font-ui); letter-spacing: 1.5px; color: var(--text);">THEOS//EDITOR</span>
+          <span class="tu-mono tu-dim" style="font-size: 10px;">v0.4.2 · content build · 9 extensions</span>
+        </div>
+        <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border);">
+          <button class="tu-btn tu-btn--primary tu-btn--block tu-btn--lg" type="button"><span class="tu-btn__icon">+</span>New project</button>
+          <button class="tu-btn tu-btn--secondary tu-btn--block" type="button">Open folder… Ctrl+O</button>
+          <button class="tu-btn tu-btn--secondary tu-btn--block" type="button">Clone from git…</button>
+        </div>
+        <nav style="padding: 8px 0; display: flex; flex-direction: column; border-bottom: 1px solid var(--border);" aria-label="Start sections">
+          <button class="nav is-active" type="button"><span class="tu-mono" style="font-weight: 400;">◈</span>Projects</button>
+          <button class="nav" type="button"><span class="tu-mono" style="font-weight: 400;">⊞</span>Extensions</button>
+          <button class="nav" type="button"><span class="tu-mono" style="font-weight: 400;">≡</span>Settings</button>
+          <button class="nav" type="button"><span class="tu-mono" style="font-weight: 400;">¶</span>Learn</button>
+        </nav>
+        <div style="margin-top: auto; padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 7px;">
+          <span class="tu-label tu-label--xs">This machine</span>
+          <span class="tu-statuspip"><span class="tu-pip is-approve"></span>git 2.47 · found</span>
+          <span class="tu-statuspip"><span class="tu-pip is-approve"></span>ComfyUI · 127.0.0.1:8188</span>
+          <span class="tu-statuspip"><span class="tu-pip is-neutral"></span>LLM harness · not set up</span>
+          <span class="tu-statuspip"><span class="tu-pip is-neutral"></span>engine extension · not installed</span>
+        </div>
+      </section>
+
+      <!-- Middle: projects -->
+      <section class="tu-window" style="flex: 1 1 480px;">
+        <div class="tu-tabbar"><div class="tu-tabbar__title">Projects</div><div class="tu-tabbar__ctrls"><span>⋯</span></div></div>
+        <div class="tu-window__bar" style="flex-wrap: wrap;">
+          <label class="tu-input" style="flex: 1 1 200px;"><span class="tu-input__icon">~</span><input type="text" aria-label="Find project" placeholder="find project or path"></label>
+          <span class="tu-seg"><button class="tu-seg__opt is-active" type="button">All</button><button class="tu-seg__opt" type="button">Content</button><button class="tu-seg__opt" type="button">Game</button><button class="tu-seg__opt" type="button">Tools</button></span>
+        </div>
+        <div class="tu-window__body">
+          <div class="tu-section__head" style="border-top: 0;"><span class="tu-label tu-label--sm tu-label--strong">Pinned</span></div>
+
+          <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 3px 12px; align-items: center; padding: 12px 14px; border-left: 2px solid var(--textDim); background: var(--panel2);">
+            <span class="tu-mono" style="font-size: 16px; color: var(--text); grid-row: span 2;">◈</span>
+            <span class="tu-row"><span style="font: 700 14px/18px var(--font-ui); color: var(--text);">tower-of-theos</span><span class="tu-tiertag">CONTENT</span></span>
+            <button class="tu-btn tu-btn--secondary tu-btn--sm" type="button" style="grid-row: span 2;">Open ⏎</button>
+            <span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">D:\dev\tower-of-theos · main ↑2 · 5 changed · 214 records · opened 10 min ago</span>
+          </div>
+
+          <div class="tu-section__head" style="border-top: 1px solid var(--border);"><span class="tu-label tu-label--sm tu-label--strong">Recent</span><span class="tu-section__more">clear</span></div>
+
+          <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 3px 12px; align-items: center; padding: 10px 14px;">
+            <span class="tu-mono" style="font-size: 15px; color: var(--textDim); grid-row: span 2;">◈</span>
+            <span class="tu-row"><span style="font: 600 13px/18px var(--font-ui); color: var(--text);">tot-sandbox</span><span class="tu-tiertag">CONTENT</span></span>
+            <span class="tu-mono tu-mute" style="font-size: 10px; grid-row: span 2;">yesterday</span>
+            <span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">D:\dev\tot-sandbox · main · 12 records</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 3px 12px; align-items: center; padding: 10px 14px; border-top: 1px dashed var(--border);">
+            <span class="tu-mono" style="font-size: 15px; color: var(--textDim); grid-row: span 2;">◎</span>
+            <span class="tu-row"><span style="font: 600 13px/18px var(--font-ui); color: var(--text);">magic-sandbox</span><span class="tu-tiertag">TOOL</span></span>
+            <span class="tu-mono tu-mute" style="font-size: 10px; grid-row: span 2;">3 days</span>
+            <span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">D:\dev\theos-engine\tools\magic · opens the TensionGraph sandbox</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 3px 12px; align-items: center; padding: 10px 14px; border-top: 1px dashed var(--border);">
+            <span class="tu-mono" style="font-size: 15px; color: var(--textMute); grid-row: span 2;">▲</span>
+            <span class="tu-row"><span style="font: 600 13px/18px var(--font-ui); color: var(--textDim);">hollowbrook</span><span class="tu-tiertag" style="color: var(--textDim);">GAME</span></span>
+            <button class="tu-btn tu-btn--secondary tu-btn--sm" type="button" style="grid-row: span 2;">Get engine extension</button>
+            <span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">D:\dev\hollowbrook · needs the engine extension to open</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 3px 12px; align-items: center; padding: 10px 14px; border-top: 1px dashed var(--border);">
+            <span class="tu-mono" style="font-size: 15px; color: var(--sig-reject); grid-row: span 2;">✕</span>
+            <span class="tu-row"><span style="font: 600 13px/18px var(--font-ui); color: var(--textDim);">lore-test</span><span class="tu-mono" style="font-size: 10px; color: var(--sig-reject);">FOLDER MISSING</span></span>
+            <button class="tu-btn tu-btn--ghost tu-btn--sm" type="button" style="grid-row: span 2;">Remove</button>
+            <span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">E:\old\lore-test · drive not connected?</span>
+          </div>
+
+          <div style="margin: auto 14px 14px; padding: 18px; border: 1px dashed var(--border); text-align: center; font: 400 10.5px/16px var(--font-mono); color: var(--textDim);">Drop a folder here to open it. A folder with a theos.toml opens as a project; any other folder can become one.</div>
+        </div>
+      </section>
+
+      <!-- Right: new project -->
+      <section class="tu-window is-hot" style="flex: 0 1 420px; min-width: 300px;">
+        <div class="tu-tabbar"><div class="tu-tabbar__title">New project</div><div class="tu-tabbar__ctrls"><span>✕</span></div></div>
+        <div class="tu-window__body" style="padding: 14px; gap: 14px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span class="tu-label tu-label--xs">Kind</span>
+            <button class="kindopt is-on" type="button"><span class="tu-mono" style="font-size: 15px; color: var(--sig-attention); grid-row: span 2;">◈</span><span style="font: 700 12px/16px var(--font-ui);">Content project</span><span style="font: 400 11px/15px var(--font-ui); color: var(--textDim);">Codex, Scripts, Concepts, Maps, Review. Markdown records in git.</span></button>
+            <button class="kindopt" type="button" disabled><span class="tu-mono" style="font-size: 15px; color: var(--textDim); grid-row: span 2;">▲</span><span style="font: 700 12px/16px var(--font-ui);">Game project <span class="tu-mono tu-dim" style="font-weight: 400; font-size: 10px;">· later</span></span><span style="font: 400 11px/15px var(--font-ui); color: var(--textDim);">Scenes and play-in-editor on top of content. Needs the engine extension.</span></button>
+            <button class="kindopt" type="button"><span class="tu-mono" style="font-size: 15px; color: var(--textDim); grid-row: span 2;">⊞</span><span style="font: 700 12px/16px var(--font-ui);">From an existing folder</span><span style="font: 400 11px/15px var(--font-ui); color: var(--textDim);">Adds a theos.toml to a folder you already have, such as a fresh clone of the repo.</span></button>
+          </div>
+
+          <div class="tu-fm">
+            <div class="tu-fm__row"><span class="tu-fm__key">Name</span><span class="tu-fm__val"><label class="tu-input" style="flex: 1;"><input type="text" aria-label="Project name" value="tot-sandbox-2"></label></span></div>
+            <div class="tu-fm__row"><span class="tu-fm__key">Location</span><span class="tu-fm__val"><label class="tu-input" style="flex: 1;"><input type="text" aria-label="Location" value="D:\dev\"></label><button class="tu-iconbtn" type="button" aria-label="Browse">⋯</button></span></div>
+            <div class="tu-fm__row"><span class="tu-fm__key">Start with</span><span class="tu-fm__val"><span class="tu-seg"><button class="tu-seg__opt" type="button">Empty</button><button class="tu-seg__opt is-active" type="button">Tower skeleton</button></span></span></div>
+            <div class="tu-fm__row"><span class="tu-fm__key">Git</span><span class="tu-fm__val"><span class="tu-toggle is-on"><span class="tu-toggle__track"></span>init repo + first commit</span></span></div>
+            <div class="tu-fm__row"><span class="tu-fm__key">Remote</span><span class="tu-fm__val"><label class="tu-input" style="flex: 1;"><input type="text" aria-label="Remote URL" placeholder="optional · add later"></label></span></div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span class="tu-label tu-label--xs">Extensions</span>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px;">
+              <span class="tu-check is-on"><span class="tu-check__box"></span>Codex <span class="tu-mono tu-mute" style="font-size: 9px;">core</span></span>
+              <span class="tu-check is-on"><span class="tu-check__box"></span>Changes <span class="tu-mono tu-mute" style="font-size: 9px;">core</span></span>
+              <span class="tu-check is-on"><span class="tu-check__box"></span>Scripts</span>
+              <span class="tu-check is-on"><span class="tu-check__box"></span>Graph</span>
+              <span class="tu-check is-on"><span class="tu-check__box"></span>Concepts</span>
+              <span class="tu-check is-on"><span class="tu-check__box"></span>Review</span>
+              <span class="tu-check is-on"><span class="tu-check__box"></span>Maps</span>
+              <span class="tu-check is-on"><span class="tu-check__box"></span>ComfyUI bridge</span>
+              <span class="tu-check is-on"><span class="tu-check__box"></span>MCP server</span>
+              <span class="tu-check" style="color: var(--textMute);"><span class="tu-check__box"></span>Engine ⊘ not installed</span>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span class="tu-row"><span class="tu-label tu-label--xs">Writes</span><span class="tu-mono tu-dim" style="font-size: 10px;">theos.toml</span></span>
+<pre class="tu-code">[project]
+name   = "tot-sandbox-2"
+kind   = "content"
+schema_version = 1
+
+[extensions]
+enabled = ["codex", "changes", "scripts", "graph", "concepts",
+           "maps", "review", "comfy-bridge", "mcp"]</pre>
+          </div>
+
+          <div style="margin-top: auto; display: flex; gap: 6px; justify-content: flex-end;">
+            <button class="tu-btn tu-btn--secondary" type="button">Cancel</button>
+            <button class="tu-btn tu-btn--primary" type="button">Create project</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="tu-statusbar">
+    <span class="tu-statusbar__brand">THEOS//EDITOR</span>
+    <span>v0.4.2 · no project open</span>
+    <span class="tu-spacer"></span>
+    <span>extensions 9 · engine not installed</span>
+  </footer>
+</div>
+</body>
+</html>

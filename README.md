@@ -14,9 +14,11 @@ comes later as an optional part.
 | `docs/specs/data-model.md` | The content data model (schema v1) |
 | `docs/generators.md` | How maps, concept art and future generators plug in |
 | `docs/gate.md` | What a change must pass to reach `main` |
+| `CONTRIBUTING.md` | Branches, commits, pull requests, versions and tags |
+| `docs/release.md` | The release pipeline |
 | `docs/status.md` | Where the build stands |
 | `docs/decisions/` | Decision log |
-| `docs/ui/` | Reference screens |
+| `docs/ui/` | Reference screens (HTML, with PNG previews) |
 | `design/theos-ui/` | The Theos UI design system |
 | `CLAUDE.md` | How Claude works in this repo |
 

@@ -24,11 +24,14 @@ All checks are required status checks on `main` (branch protection, administrato
 | `lints` | `cargo xtask lints`: `[workspace.lints]` in the root `Cargo.toml` equals `gate/lints.toml`; every `#[expect]` carries a `reason`; no `#[allow]`; every `#[ignore]` carries a reason | Linux |
 | `ac-trace` | `cargo xtask ac-trace`: every acceptance criterion of the PR's phase has at least one test tagged `AC: <id>`; no tag names an unknown criterion | Linux |
 | `pr-body` | `cargo xtask pr-body`: the PR description has every section of the template, filled | Linux |
+| `pr-title` | `cargo xtask pr-title`: the title is a Conventional Commit ending with `(PNN)`, `(gate)`, `(docs)` or a release title (`CONTRIBUTING.md` §3) | Linux |
+| `commit-msg` | `cargo xtask commit-msg`: every commit of the PR is a Conventional Commit (`CONTRIBUTING.md` §2) | Linux |
 | `approval` | fails while the PR touches a protected path and lacks the label `approved` | Linux |
 | `ui` | from P11: `pnpm install --frozen-lockfile`, `svelte-check`, `eslint`, `vitest`, Playwright component tests | Linux, Windows |
 
-`cargo xtask gate` runs every check except `pr-body` and `approval` locally, on Windows and
-Linux, with the same results as CI. Claude runs it before claiming a phase is done.
+`cargo xtask gate` runs every check except `pr-body`, `pr-title` and `approval` locally, on
+Windows and Linux, with the same results as CI (`commit-msg` checks the commits since `main`).
+Claude runs it before claiming a phase is done.
 
 ## 2. Lints (`gate/lints.toml`, mirrored into `Cargo.toml`)
 
@@ -65,9 +68,10 @@ only in `docs/specs/00-umbrella.md`.
 
 ## 5. Protected paths — Jann approves
 
-- `CLAUDE.md`, `.claude/**`
+- `CLAUDE.md`, `.claude/**`, `CONTRIBUTING.md`
 - `docs/**`, except `docs/plans/**` and `docs/status.md`
 - `.github/**`, `gate/**`, `xtask/**`, `deny.toml`, `rust-toolchain.toml`, `.cargo/**`
+- `CHANGELOG.md`, `release-plz.toml`, `cliff.toml` (so every release PR waits for Jann)
 - `design/**`
 - the `[workspace.lints]` table of the root `Cargo.toml` (checked by `lints`)
 
@@ -83,6 +87,8 @@ Crate-level READMEs and rustdoc are not protected; they are reviewed in the phas
 - No direct pushes, force pushes or deletions on `main`, for administrators too.
 - Claude enables auto-merge on its PRs that do not touch protected paths; the PR merges when all
   checks pass.
+- Release PRs are merged by Jann only. Tags are created only by the release pipeline
+  (`docs/release.md`); nobody creates, moves or deletes a tag by hand.
 
 ## 7. Process requirements outside CI
 

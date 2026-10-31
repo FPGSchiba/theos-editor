@@ -24,4 +24,8 @@ are added here as numbered records (`NNNN-<slug>.md`) in a PR that waits for Jan
 | 2026-10-31 | Umbrella spec with phases; each phase runs spec → plan → subagent-driven build with superpowers. |
 | 2026-10-31 | The final whole-branch review loops with fresh reviewers until clean (cap 5 rounds). |
 | 2026-10-31 | Code PRs merge automatically on green CI; documentation and gate changes wait for Jann; enforced by CLAUDE.md under a shared GitHub identity. |
+| 2026-10-31 | UI references are standalone HTML built only from the design system; PNGs are previews rendered from it. |
+| 2026-10-31 | Conventional Commits for every commit and PR title; branch names per `CONTRIBUTING.md`. |
+| 2026-10-31 | One SemVer product version for all crates; tags `vX.Y.Z` only from the release pipeline; milestones 0.1 (S2) to 1.0 (S7). |
+| 2026-10-31 | Releases through release-plz (release PR merged by Jann, one tag) and a tag-triggered workflow for Windows and Linux artifacts with checksums and provenance. |
 | open | Prose editor component — decided by phase P10. |

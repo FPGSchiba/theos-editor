@@ -1,3 +1,6 @@
+<!-- Title: a Conventional Commit ending with the phase, e.g. `feat(content): records and grammars (P02)`.
+     See CONTRIBUTING.md §3. -->
+
 ## Phase
 
 <!-- PNN — name. For spec PRs: PNN-spec. For gate or docs PRs: what and why. -->

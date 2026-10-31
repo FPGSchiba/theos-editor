@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>08 · Changes — source control — Theos Editor reference</title>
+<!--
+  Reference screen 08 of the Theos content editor, exported from the design canvas on 2026-10-31.
+  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
+-->
+<link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
+<link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<style>
+body{margin:0;background:#060810}
+a{color:#3ef0ff}a:hover{color:#e4ecff}
+.tu-shell.cs{height:900px}
+:where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
+:where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
+.d-ins{background:color-mix(in srgb,var(--text) 12%,transparent);color:var(--text);text-decoration:underline;text-decoration-color:var(--textDim);text-underline-offset:3px}
+.d-del{color:var(--textMute);text-decoration:line-through}
+@media (max-width:1000px){
+.tu-shell.cs{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:var(--h-titlebar) auto auto minmax(0,1fr) var(--h-statusbar)}
+.cs .tu-rail{flex-direction:row;width:auto;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}
+.cs .tu-rail .tu-rail__item{width:60px;flex-shrink:0}
+.cs .tu-rail__spacer{display:none}
+.cs .tu-toolbar{height:auto;flex-wrap:wrap;padding:6px 10px}
+.cs .tu-shell__work{flex-wrap:wrap}
+.cs .tu-shell__work > *{flex:1 1 100% !important;min-height:320px}
+}
+</style>
+</head>
+<body>
+<div class="tu-shell cs" style="--tu-font-i: var(--font-ui)">
+
+  <header class="tu-titlebar">
+    <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <span class="tu-titlebar__sep">▸</span><span>tower-of-theos</span>
+    <span class="tu-titlebar__sep">▸</span><span>git · main</span>
+    <span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Changes</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-pip is-neutral"></span>↑2 to push · ↓1 incoming</span>
+    <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+  </header>
+
+  <div class="tu-toolbar">
+    <span class="tu-label tu-label--xs">Branch</span>
+    <span class="tu-select" style="width: 150px;">main</span>
+    <span class="tu-divider"></span>
+    <button class="tu-btn tu-btn--secondary" type="button"><span class="tu-btn__icon">↓</span>Pull 1</button>
+    <button class="tu-btn tu-btn--secondary" type="button"><span class="tu-btn__icon">↑</span>Push 2</button>
+    <span class="tu-mono tu-dim" style="font-size: 10px; margin-left: 4px;">origin · synced 14:10</span>
+    <span class="tu-divider"></span>
+    <label class="tu-input" style="width: 220px;"><span class="tu-input__icon">~</span><input type="text" aria-label="Search history" placeholder="search history   @author   #id"></label>
+    <span class="tu-spacer"></span>
+    <span class="tu-label tu-label--xs">Group by</span>
+    <span class="tu-seg"><button class="tu-seg__opt is-active" type="button">Record</button><button class="tu-seg__opt" type="button">File</button></span>
+  </div>
+
+  <nav class="tu-rail" aria-label="Layout presets">
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◈</span><span class="tu-rail__label">Codex</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⋈</span><span class="tu-rail__label">Graph</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">¶</span><span class="tu-rail__label">Scripts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◫</span><span class="tu-rail__label">Concepts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">△</span><span class="tu-rail__label">Maps</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◴</span><span class="tu-rail__label">Review</span><span class="tu-rail__badge">3</span></button>
+    <button class="tu-rail__item is-active" type="button" aria-current="true"><span class="tu-rail__glyph">±</span><span class="tu-rail__label">Changes</span><span class="tu-rail__badge">5</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">&lt;/&gt;</span><span class="tu-rail__label">Code</span></button>
+    <div class="tu-rail__spacer"></div>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⚙</span><span class="tu-rail__label">Settings</span></button>
+  </nav>
+
+  <div class="tu-shell__work">
+
+    <!-- Changes and commit -->
+    <section class="tu-window" style="flex: 0 0 330px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__title">Source control <span class="tu-badge">5</span></div><div class="tu-tabbar__ctrls"><span>⋯</span></div></div>
+      <div class="tu-window__bar" style="flex-wrap: wrap;">
+        <span class="tu-mono" style="font-size: 10px; line-height: 14px; color: var(--text); flex: 1 1 200px;">↓ 1 incoming from jann-laptop · <span class="tu-kind" data-kind="perspective"></span>hearth-folk lens · merges cleanly</span>
+        <button class="tu-btn tu-btn--secondary tu-btn--sm" type="button">Pull</button>
+      </div>
+      <div class="tu-window__body">
+        <div class="tu-section__head" style="border-top: 0;"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Staged · 2</span><span class="tu-section__more">unstage all</span></div>
+
+        <div style="display: grid; grid-template-columns: 16px 18px minmax(0, 1fr) 14px; gap: 4px 8px; align-items: center; padding: 6px 10px; border-left: 2px solid var(--sig-attention); background: color-mix(in srgb, var(--sig-attention) 13%, transparent);">
+          <span class="tu-check is-on"><span class="tu-check__box"></span></span><span class="tu-kind" data-kind="floor"></span><span style="font: 600 12px/16px var(--font-ui); color: var(--text);">F04 The Choir-hall</span><span class="tu-mono tu-dim" style="font-size: 10px;">M</span>
+          <span></span><span></span><span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px; grid-column: 3 / span 2;">sky opened · 2 paragraphs · 1 concept linked</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 16px 18px minmax(0, 1fr) 14px; gap: 4px 8px; align-items: center; padding: 6px 10px; border-top: 1px dashed var(--border);">
+          <span class="tu-check is-on"><span class="tu-check__box"></span></span><span class="tu-kind" data-kind="npc"></span><span style="font: 400 12px/16px var(--font-ui); color: var(--text);">Mother Ilse</span><span class="tu-mono tu-dim" style="font-size: 10px;">M</span>
+          <span></span><span></span><span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px; grid-column: 3 / span 2;">lens · thinks from, speaks to</span>
+        </div>
+
+        <div class="tu-section__head" style="border-top: 1px solid var(--border);"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Not staged · 3</span><span class="tu-section__more">stage all</span></div>
+        <div style="display: grid; grid-template-columns: 16px 18px minmax(0, 1fr) 14px; gap: 4px 8px; align-items: center; padding: 6px 10px;">
+          <span class="tu-check"><span class="tu-check__box"></span></span><span class="tu-kind" data-kind="beat"></span><span style="font: 400 12px/16px var(--font-ui); color: var(--text);">S-004 The shrine hums</span><span class="tu-mono tu-dim" style="font-size: 10px;">M</span>
+          <span></span><span></span><span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px; grid-column: 3 / span 2;">beat 3 · the murmur rewritten</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 16px 18px minmax(0, 1fr) 14px; gap: 4px 8px; align-items: center; padding: 6px 10px; border-top: 1px dashed var(--border);">
+          <span class="tu-check"><span class="tu-check__box"></span></span><span class="tu-kind" data-kind="location"></span><span style="font: 400 12px/16px var(--font-ui); color: var(--text);">song-stair</span><span class="tu-mono tu-dim" style="font-size: 10px;">A</span>
+          <span></span><span></span><span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px; grid-column: 3 / span 2;">new location under F04 · from template</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 16px 18px minmax(0, 1fr) 14px; gap: 4px 8px; align-items: center; padding: 6px 10px; border-top: 1px dashed var(--border);">
+          <span class="tu-check"><span class="tu-check__box"></span></span><span class="tu-kind" data-kind="concept"></span><span style="font: 400 12px/16px var(--font-ui); color: var(--text);">fates-shrine</span><span class="tu-mono tu-dim" style="font-size: 10px;">M</span>
+          <span></span><span></span><span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px; grid-column: 3 / span 2;">v5 added · image goes to Drive, the record to git</span>
+        </div>
+
+        <div style="margin-top: auto; padding: 10px; border-top: 1px solid var(--border); background: var(--panel2); display: flex; flex-direction: column; gap: 8px;">
+          <div class="tu-row"><span class="tu-label tu-label--xs">Message</span><span class="tu-spacer"></span><span class="tu-ai">AI</span><span class="tu-mono" style="font-size: 10px; color: var(--sig-ai);">suggested · edit to make it yours</span></div>
+          <div style="min-height: 52px; padding: 7px 8px; background: var(--bg); border: 1px solid var(--border); font: 400 12px/17px var(--font-ui); color: var(--sig-ai);">F04: open the sky question, link the nave concept. Ilse's lens now thinks from the Fates' will.</div>
+          <div class="tu-row" style="font: 400 10px/14px var(--font-mono); color: var(--textDim);"><span class="tu-pip tu-pip--sm is-warn"></span>check on staged · 0 errors · 1 warning · commit allowed</div>
+          <button class="tu-btn tu-btn--primary tu-btn--block" type="button">Commit 2 records Ctrl+Enter</button>
+          <span class="tu-toggle"><span class="tu-toggle__track"></span>Commit on every save</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Diff -->
+    <section class="tu-window" style="flex: 1 1 520px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button"><span class="tu-kind" data-kind="floor"></span>F04 · changes</button></div><div class="tu-tabbar__ctrls"><span>⋯</span></div></div>
+      <div class="tu-window__bar" style="flex-wrap: wrap;">
+        <span class="tu-seg"><button class="tu-seg__opt is-active" type="button">Rendered</button><button class="tu-seg__opt" type="button">Markdown</button><button class="tu-seg__opt" type="button">Side by side</button></span>
+        <span class="tu-mono tu-dim" style="font-size: 10px;">world/hearth/f04-choir-hall/floor.md · vs a3f9c21</span>
+        <span class="tu-spacer"></span>
+        <button class="tu-btn tu-btn--secondary tu-btn--sm" type="button">Unstage</button>
+        <button class="tu-btn tu-btn--danger tu-btn--sm" type="button">Discard</button>
+      </div>
+      <div class="tu-window__body">
+        <div class="tu-instrument" style="margin: 16px 20px 0; border: 1px solid var(--border); background: var(--panel);">
+          <div class="tu-fm__head"><span class="tu-label tu-label--sm tu-label--strong">Front matter</span><span class="tu-mono tu-dim" style="font-size: 10px;">2 fields changed</span></div>
+          <div style="display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; padding: 6px 10px; align-items: center; font: 400 10.5px/16px var(--font-mono);">
+            <span class="tu-fm__key">sky</span><span><del class="d-del">vault</del> → <ins class="d-ins">open · art direction R1</ins></span>
+          </div>
+          <div style="display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; padding: 6px 10px; align-items: center; border-top: 1px dashed var(--border); font: 400 10.5px/16px var(--font-mono);">
+            <span class="tu-fm__key">concepts</span><span>fates-shrine, <ins class="d-ins">choir-hall-nave</ins></span>
+          </div>
+        </div>
+
+        <div class="tu-manuscript" style="padding: 18px 20px 24px; display: flex; flex-direction: column; gap: 14px;">
+          <h1 style="margin: 0; font: 600 22px/28px var(--font-ui); color: var(--text);">Floor 4 — The Choir-hall</h1>
+          <div class="tu-prose">
+            <p>A grassland floor grown over a half-buried choir-hall. The Hearth folk have farmed its slopes for generations and built the Fates' shrine on the roof of the ruin<del class="d-del">, under an open sky</del><ins class="d-ins">, where the pipes still hum at dusk</ins>. <ins class="d-ins">It is the first floor where the Tower answers back.</ins></p>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; padding: 10px 12px 12px 6px; background: color-mix(in srgb, var(--text) 5%, transparent);">
+            <span class="tu-mono tu-dim" style="font-size: 12px; line-height: 26px;">+</span>
+            <div class="tu-prose" style="color: var(--text);">
+              <h2 style="margin-top: 0;">What the player should leave with</h2>
+              <ul>
+                <li>The hum is not weather. Something in the hall responds to song.</li>
+                <li>The Hearth folk have a complete, comforting explanation for it, and it is wrong.</li>
+                <li>One word in a dead tongue, heard once under the shrine.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="tu-mono tu-dim" style="font-size: 10px; padding: 6px 0; border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border);">⋯ 2 sections unchanged · How the Hearth folk see it · Lore this floor carries</div>
+          <p class="tu-note" style="margin: 0; font: 400 13px/20px var(--font-ui); color: var(--textDim);">Prose is compared by words, not lines, so a re-wrapped paragraph shows only what was really rewritten.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- History and branches -->
+    <div style="flex: 0 0 320px; display: flex; flex-direction: column; gap: 4px; min-width: 0;">
+      <section class="tu-window" style="flex: 1 1 auto;">
+        <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button">History · F04</button><button class="tu-tab" type="button">Who wrote what</button></div></div>
+        <div class="tu-window__body">
+          <div style="display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 2px 8px; padding: 8px 10px;">
+            <span class="tu-mono tu-dim" style="font-size: 11px;">○</span><span style="font: 600 12px/16px var(--font-ui); color: var(--text);">Not committed yet</span>
+            <span></span><span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">Jann · now · sky opened, 2 paragraphs</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 2px 8px; padding: 8px 10px; border-top: 1px dashed var(--border);">
+            <span class="tu-mono" style="font-size: 11px; color: var(--text);">●</span><span style="font: 400 12px/16px var(--font-ui); color: var(--text);">F04: first pass at the choir-hall floor</span>
+            <span></span><span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">a3f9c21 · Jann · today 14:02</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 2px 8px; padding: 8px 10px; border-top: 1px dashed var(--border);">
+            <span class="tu-mono" style="font-size: 11px; color: var(--text);">●</span><span style="font: 400 12px/16px var(--font-ui); color: var(--text);">F04: place C-031 under the shrine</span>
+            <span></span><span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">7be0d14 · <span class="tu-ai">AI</span> <span style="color: var(--sig-ai);">claude</span> · approved by Jann · 13:40</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 2px 8px; padding: 8px 10px; border-top: 1px dashed var(--border);">
+            <span class="tu-mono" style="font-size: 11px; color: var(--text);">●</span><span style="font: 400 12px/16px var(--font-ui); color: var(--text);">Hearth: stub floors 1–20</span>
+            <span></span><span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">19c2e8a · Jann · 29 Oct</span>
+          </div>
+          <div style="padding: 8px 10px; display: flex; gap: 6px; border-top: 1px solid var(--border); margin-top: auto;">
+            <button class="tu-btn tu-btn--secondary tu-btn--sm" type="button" style="flex: 1;">Compare with now</button>
+            <button class="tu-btn tu-btn--secondary tu-btn--sm" type="button" style="flex: 1;">Restore</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="tu-window" style="flex: 0 0 auto;">
+        <div class="tu-tabbar"><div class="tu-tabbar__title">Branches</div></div>
+        <div class="tu-window__body">
+          <div class="tu-prop"><span class="tu-mono" style="color: var(--sig-attention);">●</span><span class="tu-prop__val" style="font-weight: 600;">main</span><span class="tu-prop__type" style="color: var(--textDim);">↑2 ↓1</span></div>
+          <div class="tu-prop"><span class="tu-ai">AI</span><span class="tu-prop__val">agent/wilds-lore-pass</span><span class="tu-prop__type" style="color: var(--textDim);">3 in review</span></div>
+          <div class="tu-prop"><span class="tu-mono tu-dim">○</span><span class="tu-prop__val">jann/f04-rework</span><span class="tu-prop__type" style="color: var(--textDim);">1 ahead · 2d</span></div>
+          <div style="padding: 8px 10px; display: flex; gap: 6px; border-top: 1px solid var(--border);">
+            <button class="tu-btn tu-btn--dashed tu-btn--sm" type="button" style="flex: 1;">+ Branch</button>
+            <button class="tu-btn tu-btn--secondary tu-btn--sm" type="button" style="flex: 1;">Merge…</button>
+          </div>
+          <p style="margin: 0; padding: 0 10px 10px; font: 400 10px/14px var(--font-mono); color: var(--textDim);">Each agent session gets its own branch. Approving in Review merges that commit into main.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="tu-statusbar">
+    <span class="tu-statusbar__brand">THEOS//EDITOR</span>
+    <span>v0.4.2 · changes layout</span>
+    <span class="tu-statuspip"><span class="tu-pip is-warn"></span>git main · 5 changed · 2 staged</span>
+    <span>↑2 ↓1</span>
+    <span class="tu-spacer"></span>
+    <span>author Jann</span>
+  </footer>
+</div>
+</body>
+</html>

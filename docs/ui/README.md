@@ -1,26 +1,35 @@
 # UI reference
 
-The eleven screens of the Theos Content Studio concept, rendered from the design canvas on
-31 Oct 2026, 1440 × 900. They show layout, density, registers and behaviour. Where their sample
-text disagrees with `docs/specs/data-model.md` (for example paths like `floor.md`, the id `F04`,
-or "Perspectives" and "Chronicles" folders), the data model wins.
+The eleven screens of the Theos Content Studio concept, exported from the design canvas on
+31 Oct 2026 at 1440 × 900.
 
-| File | Screen | Phase |
+- **`screens/NN-<name>.html` is the reference.** Each file is plain HTML that uses only
+  `design/theos-ui/tokens.css`, `design/theos-ui/components/bundle.css` and a short block of page
+  styles. Open it in a browser from a clone, or read it: the class names (`tu-*`), the structure
+  and the exact texts are what the editor should reproduce with Svelte components.
+- **`screens/NN-<name>.png` is a preview** rendered from that HTML, so GitHub and reviewers can see
+  the screen without a browser. If the two ever disagree, the HTML wins; regenerate the PNG.
+- **`assets/`** holds the sample images the screens show.
+
+Where the sample content disagrees with `docs/specs/data-model.md` (for example paths like
+`floor.md`, the id `F04`, or the "Perspectives" and "Chronicles" folders), the data model wins.
+
+| Screen | Name | Phase |
 |---|---|---|
-| `screens/01-main.png` | Codex — floor record | P11 |
-| `screens/02-lens.png` | Codex — npc and lens | P15 |
-| `screens/03-truth.png` | Codex — truth and reveal ledger | P15 |
-| `screens/04-script.png` | Scripts — beats | P15 |
-| `screens/05-graph.png` | Graph — links around a truth | P15 |
-| `screens/06-concepts.png` | Concepts — versions and pipeline | P16 |
-| `screens/07-review.png` | Review — agent proposals | P13 |
-| `screens/08-git.png` | Changes — source control | P13 |
-| `screens/09-start.png` | Start — projects | P14 |
-| `screens/10-settings.png` | Settings — git page | P14 |
-| `screens/11-maps.png` | Maps — runs, seeds, pick | P16 |
+| `01-main` | Codex — floor record | P11 |
+| `02-lens` | Codex — npc and lens | P15 |
+| `03-truth` | Codex — truth and reveal ledger | P15 |
+| `04-script` | Scripts — beats | P15 |
+| `05-graph` | Graph — links around a truth | P15 |
+| `06-concepts` | Concepts — versions, pipeline, notes | P16 |
+| `07-review` | Review — agent proposals | P13 |
+| `08-git` | Changes — source control | P13 |
+| `09-start` | Start — projects | P14 |
+| `10-settings` | Settings — git page | P14 |
+| `11-maps` | Maps — runs, seeds, pick | P16 |
 
-Notes on concepts and maps (`docs/specs/data-model.md` §9.3) are not on the screens yet; P16
-designs them in the Theos UI style.
+The Concepts screen already shows a notes panel; the Maps screen gets the same panel in P16
+(`docs/specs/data-model.md` §9.3).
 
-The design system itself is in `design/theos-ui/` (tokens, component CSS, fonts under the SIL Open
-Font License, component notes and previews).
+The design system is in `design/theos-ui/` (tokens, component CSS, fonts under the SIL Open Font
+License, component notes and previews).

@@ -22,7 +22,7 @@ its changes to the superpowers loop apply to every step below.
    about how. Present the approaches to Jann and let him choose.
 2. Write `docs/specs/phases/PNN-<slug>.md` with: goal, ACs copied verbatim, design, interfaces
    other phases will use, risks, and the "Review Focus" inputs most likely to break it.
-3. Branch `spec/PNN-<slug>`, commit, open a PR titled `[PNN-spec] <name>`. Do not enable
+3. Branch `spec/PNN-<slug>`, commit, open a PR titled `docs(spec): <name> (PNN)`. Do not enable
    auto-merge (protected path). Set the phase to `spec-pr` in `docs/status.md` in the same PR.
 4. Stop and tell Jann the spec is ready for review.
 
@@ -57,8 +57,9 @@ on) and read the output. Every phase AC must show at least one passing test in
 ## 6. PR
 
 1. Set the phase to `pr-open` in `docs/status.md`; add anything for Jann under "Needs Jann".
-2. Push, open the PR `[PNN] <name>` with the template filled: ACs met, final review rounds and
-   last verdict, every ruling, gate output summary.
+2. Push, open the PR with a Conventional Commit title ending in the phase
+   (`feat(content): <name> (PNN)`, see `CONTRIBUTING.md` §3) and the template filled: ACs met,
+   final review rounds and last verdict, every ruling, gate output summary.
 3. Enable auto-merge if the PR touches no protected path; otherwise leave it for Jann.
 4. When it is merged, set the phase to `done` in a follow-up commit on the next branch, and
    start over at step 0 if Jann asked for more than one phase.

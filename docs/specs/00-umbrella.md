@@ -51,6 +51,10 @@ generative workflows (maps, concept art) built in, including notes that feed the
 - **G15** Every AC below has at least one test tagged with its id (`docs/gate.md` §4).
 - **G16** Errors in library crates are typed (`thiserror`); `anyhow` only in binaries. Logging
   with `tracing`.
+- **G17** Branches, commits, PR titles, versions and tags follow `CONTRIBUTING.md`; releases
+  follow `docs/release.md`. One product version for all crates; tags only from the pipeline.
+- **G18** UI references are the HTML files in `docs/ui/screens/` (built only from
+  `design/theos-ui/`); the PNG files next to them are previews rendered from that HTML.
 
 ## 3. Phases
 
@@ -104,6 +108,10 @@ waits for Jann.
 - CE-08.6 `ac-trace` fails for a phase AC without a tagged test and for a tag naming an unknown AC.
 - CE-08.7 `pr-body` fails for a description missing a template section.
 - CE-08.8 `coverage` fails when a crate is below its floor or drops more than allowed below `main`.
+- CE-08.9 `pr-title` fails for a title that is not a Conventional Commit ending with `(PNN)`,
+  `(gate)`, `(docs)` or a release title.
+- CE-08.10 `commit-msg` fails when any commit of the PR is not a Conventional Commit.
+- CE-08.11 The workspace has one version in `[workspace.package]` that every crate inherits.
 
 ### P01 · Content layout and templates (tower-of-theos)
 
@@ -193,8 +201,17 @@ real records are added once the lore import exists.
 - CE-17.2 The hook refuses a commit with a never-confirm violation and checks the staged snapshot.
 - CE-17.3 A GitHub Action for tower-of-theos runs the released `theos check` and shows findings.
 
-**CE-08R Releases**
-- CE-08R.1 A tag publishes `theos` and `theos-mcp` for Windows and Linux.
+**CE-08R Release pipeline** (`docs/release.md`)
+- CE-08R.1 Pushes to `main` keep one release PR up to date with the next version and a
+  `CHANGELOG.md` section generated from the Conventional Commits since the last tag.
+- CE-08R.2 Merging the release PR creates exactly one annotated tag `vX.Y.Z` on `main`; all
+  crates carry that version; nothing is published to crates.io.
+- CE-08R.3 The tag builds `theos` and `theos-mcp` for Windows and Linux with `--locked` and
+  publishes them with `SHA256SUMS` and build provenance in a GitHub Release whose notes are the
+  changelog section.
+- CE-08R.4 A tag with `-rc.N` produces a GitHub pre-release.
+- CE-08R.5 `theos --version` and `theos-mcp --version` print the version, the commit, the data
+  model `schema_version` and the generator protocol version.
 
 **CE-18 MCP read tools**
 - CE-18.1 `project_info`, `codex_search`, `codex_read`, `codex_list`, `codex_graph`,
@@ -302,7 +319,7 @@ From this phase the gate includes `ui` (added by an approved gate PR inside this
 - CE-32.4 IPC types for the UI are generated from Rust; a mismatch fails the build.
 
 **CE-33 Codex view**
-- CE-33.1 A floor shows as on `docs/ui/screens/01-main.png`.
+- CE-33.1 A floor shows as on `docs/ui/screens/01-main.html`.
 - CE-33.2 Backlinks are derived.
 - CE-33.3 Search jumps to a record.
 
@@ -321,25 +338,25 @@ From this phase the gate includes `ui` (added by an approved gate PR inside this
 
 ### P13 · Changes and Review screens
 
-**CE-36 Changes** (`docs/ui/screens/08-git.png`)
+**CE-36 Changes** (`docs/ui/screens/08-git.html`)
 - CE-36.1 Commit is blocked on errors in the staged snapshot.
 - CE-36.2 History follows renames.
 - CE-36.3 Pull conflicts are listed by record and handed to the merge tool.
 
-**CE-37 Review** (`docs/ui/screens/07-review.png`)
+**CE-37 Review** (`docs/ui/screens/07-review.html`)
 - CE-37.1 Approve and reject behave exactly as the CLI.
 - CE-37.2 Pausing a session stops its propose calls.
 - CE-37.3 There is no bulk approve.
 
 ### P14 · Start and Settings
 
-**CE-38 Start screen** (`09-start.png`)
+**CE-38 Start screen** (`docs/ui/screens/09-start.html`)
 - CE-38.1 Recent and pinned projects; a missing project shows as missing.
 - CE-38.2 A new content project creates `theos.toml` and the tree.
 - CE-38.3 "From an existing folder" adds `theos.toml` to a folder.
 - CE-38.4 The game kind is shown and disabled.
 
-**CE-39 Settings** (`10-settings.png`)
+**CE-39 Settings** (`docs/ui/screens/10-settings.html`)
 - CE-39.1 Each value shows its layer.
 - CE-39.2 Guardrails have no Off.
 - CE-39.3 Secrets go to the OS credential store.
@@ -347,21 +364,21 @@ From this phase the gate includes `ui` (added by an approved gate PR inside this
 
 ### P15 · Lenses, Scripts, Graph
 
-**CE-40 Lenses** (`02-lens.png`)
+**CE-40 Lenses** (`docs/ui/screens/02-lens.html`)
 - CE-40.1 The effective lens shows each value's origin.
 - CE-40.2 What a holder believes is derived, not stored.
 
-**CE-41 Scripts** (`04-script.png`)
+**CE-41 Scripts** (`docs/ui/screens/04-script.html`)
 - CE-41.1 Beats reference clues through `reveals::`.
 - CE-41.2 A never-confirm finding shows on the beat that causes it.
 
-**CE-42 Graph** (`05-graph.png`)
+**CE-42 Graph** (`docs/ui/screens/05-graph.html`)
 - CE-42.1 Links around a record with kind filter and depth.
 - CE-42.2 Colours come from Theos UI tokens.
 
 ### P16 · Generative screens: Concepts, ComfyUI, Maps
 
-**CE-43 Concepts** (`06-concepts.png`)
+**CE-43 Concepts** (`docs/ui/screens/06-concepts.html`)
 - CE-43.1 Versions with lineage, rating keep/kill/mix, pick per state.
 - CE-43.2 Notes: add to the concept or a version, see open notes beside the versions, resolve a
   note from a later version.
@@ -374,7 +391,7 @@ From this phase the gate includes `ui` (added by an approved gate PR inside this
 - CE-44.3 ComfyUI being down gives a clear message within 5 seconds, not a hang.
 - CE-44.4 The same runs are available through the `gen_*` MCP tools.
 
-**CE-45 Maps** (`11-maps.png`)
+**CE-45 Maps** (`docs/ui/screens/11-maps.html`)
 - CE-45.1 Run seeds with live progress and cancel.
 - CE-45.2 Results per seed side by side; pick marks the canon version for its map.
 - CE-45.3 Notes as in Concepts.
@@ -398,7 +415,8 @@ From this phase the gate includes `ui` (added by an approved gate PR inside this
 ### P18 · Installer, first run, Code preset
 
 **CE-49 Installer and first run**
-- CE-49.1 A Windows installer is built in CI.
+- CE-49.1 The release workflow attaches a Windows installer (Tauri bundler) to every release; the
+  app's version is the workspace version.
 - CE-49.2 First run checks git, uv, the binaries folder and ComfyUI, and says what is missing.
 
 **CE-50 Code preset**

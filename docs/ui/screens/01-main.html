@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>01 · Codex — floor record — Theos Editor reference</title>
+<!--
+  Reference screen 01 of the Theos content editor, exported from the design canvas on 2026-10-31.
+  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
+-->
+<link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
+<link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<style>
+body{margin:0;background:#060810}
+a{color:#3ef0ff}a:hover{color:#e4ecff}
+.tu-shell.cs{height:900px}
+:where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
+:where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
+@media (max-width:1000px){
+.tu-shell.cs{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:var(--h-titlebar) auto auto minmax(0,1fr) var(--h-statusbar)}
+.cs .tu-rail{flex-direction:row;width:auto;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}
+.cs .tu-rail .tu-rail__item{width:60px;flex-shrink:0}
+.cs .tu-rail__spacer{display:none}
+.cs .tu-toolbar{height:auto;flex-wrap:wrap;padding:6px 10px}
+.cs .tu-shell__work{flex-wrap:wrap}
+.cs .tu-shell__work > *{flex:1 1 100% !important;min-height:320px}
+}
+</style>
+</head>
+<body>
+<div class="tu-shell cs" style="--tu-font-i: var(--font-ui)">
+
+  <header class="tu-titlebar">
+    <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <span class="tu-titlebar__sep">▸</span><span>tower-of-theos</span>
+    <span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall</span>
+    <span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>git main · 2 changed</span>
+  </header>
+
+  <div class="tu-toolbar">
+    <label class="tu-input" style="width: 300px;"><span class="tu-input__icon">~</span><input type="text" aria-label="Find record" placeholder="find record   #id   @people   :kind"></label>
+    <span class="tu-divider"></span>
+    <span class="tu-seg" aria-label="Editor mode"><button class="tu-seg__opt" type="button">Read</button><button class="tu-seg__opt is-active" type="button">Write</button><button class="tu-seg__opt" type="button">Source</button></span>
+    <span class="tu-divider"></span>
+    <button class="tu-btn tu-btn--ghost" type="button"><span class="tu-btn__icon">⋈</span>Open in graph</button>
+    <span class="tu-spacer"></span>
+    <button class="tu-btn tu-btn--secondary" type="button"><span class="tu-btn__icon">+</span>New record</button>
+    <button class="tu-btn tu-btn--accent" type="button">Save Ctrl+S</button>
+  </div>
+
+  <nav class="tu-rail" aria-label="Layout presets">
+    <button class="tu-rail__item is-active" type="button" aria-current="true"><span class="tu-rail__glyph">◈</span><span class="tu-rail__label">Codex</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⋈</span><span class="tu-rail__label">Graph</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">¶</span><span class="tu-rail__label">Scripts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◫</span><span class="tu-rail__label">Concepts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">△</span><span class="tu-rail__label">Maps</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◴</span><span class="tu-rail__label">Review</span><span class="tu-rail__badge">3</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">±</span><span class="tu-rail__label">Changes</span><span class="tu-rail__badge">2</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">&lt;/&gt;</span><span class="tu-rail__label">Code</span></button>
+    <div class="tu-rail__spacer"></div>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⚙</span><span class="tu-rail__label">Settings</span></button>
+  </nav>
+
+  <div class="tu-shell__work">
+
+    <!-- Codex tree -->
+    <section class="tu-window" style="flex: 0 0 248px;">
+      <div class="tu-tabbar">
+        <div class="tu-tabbar__tabs">
+          <button class="tu-tab is-active" type="button">Where</button>
+          <button class="tu-tab" type="button">Who</button>
+          <button class="tu-tab" type="button">Lore</button>
+          <button class="tu-tab" type="button">Things</button>
+        </div>
+        <div class="tu-tabbar__ctrls"><span>⋯</span></div>
+      </div>
+      <div class="tu-window__body">
+        <div class="tu-tree">
+          <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="tower"></span><span class="tu-tree__name">Tower of Theos</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="band"></span><span class="tu-tree__name">The Hearth</span><span class="tu-tree__tag">1–20</span></div>
+          <div class="tu-tree__row" style="--depth: 2;"><span class="tu-kind" data-kind="floor"></span><span class="tu-tree__name">F01</span><span class="tu-tree__tag">stub</span></div>
+          <div class="tu-tree__row" style="--depth: 2;"><span class="tu-kind" data-kind="floor"></span><span class="tu-tree__name">F02</span><span class="tu-tree__tag">stub</span></div>
+          <div class="tu-tree__row" style="--depth: 2;"><span class="tu-kind" data-kind="floor"></span><span class="tu-tree__name">F03</span><span class="tu-tree__tag">stub</span></div>
+          <div class="tu-tree__row is-entity is-selected" style="--depth: 2;"><span class="tu-kind" data-kind="floor"></span><span class="tu-tree__name">F04 The Choir-hall</span><span class="tu-tree__tag">draft</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 3;"><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Fates' shrine</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 3;"><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Choir-hall nave</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 3;"><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Tuning gallery</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 3;"><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Rim terraces</span></div>
+          <div class="tu-tree__row" style="--depth: 2;"><span class="tu-kind" data-kind="floor"></span><span class="tu-tree__name">F05</span><span class="tu-tree__tag">stub</span></div>
+          <div class="tu-tree__row" style="--depth: 2;"><span class="tu-kind" data-kind="floor"></span><span class="tu-tree__name">F06 … F20</span><span class="tu-tree__tag">15</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="band"></span><span class="tu-tree__name">The Wilds</span><span class="tu-tree__tag">21–50</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="band"></span><span class="tu-tree__name">The Crucible</span><span class="tu-tree__tag">51–80</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="band"></span><span class="tu-tree__name">The Apex</span><span class="tu-tree__tag">81–100</span></div>
+        </div>
+        <div style="margin-top: auto; padding: 8px 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; font: 400 10px/14px var(--font-mono); color: var(--textDim);">
+          <span>Where: one parent per place</span>
+          <span>Who: people → faction → NPC</span>
+          <span>folders follow this tree; the id is the identity</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Record -->
+    <section class="tu-window" style="flex: 1 1 560px;">
+      <div class="tu-tabbar">
+        <div class="tu-tabbar__tabs">
+          <button class="tu-tab is-active" type="button"><span class="tu-kind" data-kind="floor"></span>F04</button>
+          <button class="tu-tab" type="button"><span class="tu-kind" data-kind="location"></span>fates-shrine</button>
+          <button class="tu-tab" type="button"><span class="tu-kind" data-kind="truth"></span>T-012</button>
+        </div>
+        <div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div>
+      </div>
+      <div class="tu-window__body tu-manuscript">
+        <header class="tu-rechead">
+          <div class="tu-rechead__top">
+            <span class="tu-kind tu-rechead__glyph" data-kind="floor"></span>
+            <span class="tu-rechead__id">F04</span>
+            <span class="tu-rechead__kind">floor · in The Hearth</span>
+            <span class="tu-rechead__right"><span class="tu-status" data-status="draft">Draft</span></span>
+          </div>
+          <h1 class="tu-rechead__title">Floor 4 — The Choir-hall</h1>
+          <div class="tu-rechead__meta"><span>world/hearth/f04-choir-hall/floor.md</span><span>12 links in · 2 lenses · 2 concepts</span><span>edited 20 min ago · Jann</span></div>
+        </header>
+
+        <div style="padding: 20px 24px 28px; display: flex; flex-direction: column; gap: 20px;">
+          <div class="tu-prose">
+            <p>A grassland floor grown over a half-buried <span class="tu-link" data-kind="location"><span class="tu-kind" data-kind="location"></span><span class="tu-link__title">Choir-hall nave</span></span>. The <span class="tu-link" data-kind="people"><span class="tu-kind" data-kind="people"></span><span class="tu-link__title">Hearth folk</span></span> have farmed its slopes for generations and built the <span class="tu-link" data-kind="location"><span class="tu-kind" data-kind="location"></span><span class="tu-link__title">Fates' shrine</span></span> on the roof of the ruin, where the pipes still hum at dusk. It is the first floor where the Tower answers back.</p>
+            <h2>What the player should leave with</h2>
+            <ul>
+              <li>The hum is not weather. Something in the hall responds to song.</li>
+              <li>The Hearth folk have a complete, comforting explanation for it, and it is wrong.</li>
+              <li>One word in a dead tongue, heard once under the shrine: <span class="tu-link" data-kind="clue"><span class="tu-kind" data-kind="clue"></span><span class="tu-link__id">C-031</span><span class="tu-link__title">the murmur</span></span>.</li>
+            </ul>
+            <h2>How the Hearth folk see it</h2>
+          </div>
+
+          <figure class="tu-voice" style="margin: 0;">
+            <div class="tu-voice__head"><span class="tu-kind" data-kind="perspective"></span>In-world · Hearth folk<span class="tu-voice__head-right">B-014 · T1 lens</span></div>
+            <blockquote class="tu-voice__body" style="margin: 0;"><p>The hall sings because the Fates are at their weaving. When the hum drops low, the Cutter is near, so we light three candles and keep the children in.</p></blockquote>
+            <figcaption class="tu-voice__by">a saying on the shrine stair</figcaption>
+          </figure>
+
+          <div class="tu-prose">
+            <h2>Lore this floor carries</h2>
+          </div>
+          <div class="tu-instrument" style="max-width: 70ch; border: 1px solid var(--border); background: var(--panel);">
+            <div style="display: grid; grid-template-columns: 22px 58px minmax(0, 1fr) 150px 36px; align-items: center; gap: 8px; padding: 6px 10px; background: var(--panel2); border-bottom: 1px solid var(--border);">
+              <span></span><span class="tu-label tu-label--xs">ID</span><span class="tu-label tu-label--xs">What</span><span class="tu-label tu-label--xs">Touches</span><span class="tu-label tu-label--xs">Tier</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 22px 58px minmax(0, 1fr) 150px 36px; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px dashed var(--border); font: 400 10.5px/16px var(--font-mono);">
+              <span class="tu-kind" data-kind="clue"></span><span>C-031</span><span style="font-family: var(--font-ui); font-size: 12px; color: var(--text);">A spirit murmurs a word in a dead tongue</span><span class="tu-dim">hints ■ T-012</span><span class="tu-tiertag">T1</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 22px 58px minmax(0, 1fr) 150px 36px; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px dashed var(--border); font: 400 10.5px/16px var(--font-mono);">
+              <span class="tu-kind" data-kind="belief"></span><span>B-014</span><span style="font-family: var(--font-ui); font-size: 12px; color: var(--text);">The hum is the Fates at their weaving</span><span class="tu-dim">distorts ■ T-001</span><span class="tu-tiertag">T1</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 22px 58px minmax(0, 1fr) 150px 36px; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px dashed var(--border); font: 400 10.5px/16px var(--font-mono);">
+              <span class="tu-kind" data-kind="belief"></span><span>B-016</span><span style="font-family: var(--font-ui); font-size: 12px; color: var(--text);">Spirits are the Fates' messengers</span><span class="tu-dim">distorts ■ T-012</span><span class="tu-tiertag">T1</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 22px 58px minmax(0, 1fr) 150px 36px; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px dashed var(--border); font: 400 10.5px/16px var(--font-mono);">
+              <span class="tu-kind" data-kind="belief"></span><span>B-033</span><span style="font-family: var(--font-ui); font-size: 12px; color: var(--text);">Silence the hall and something comes in</span><span class="tu-dim">distorts ■ T-031 · never</span><span class="tu-tiertag">T1</span>
+            </div>
+          </div>
+
+          <div class="tu-prose">
+            <h2>Pictures</h2>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 70ch;">
+            <figure style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
+              <img src="../assets/shrine-v1.webp" alt="Fates' shrine on the roof of the choir-hall at dusk, concept version 1" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; border: 1px solid var(--border);">
+              <figcaption class="tu-mono" style="font-size: 10px; line-height: 14px; color: var(--textDim);">◫ fates-shrine · v1 · picked</figcaption>
+            </figure>
+            <figure style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
+              <img src="../assets/nave-t1.webp" alt="Choir-hall nave as the faithful see it, candles and ribbons" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; border: 1px solid var(--border);">
+              <figcaption class="tu-mono" style="font-size: 10px; line-height: 14px; color: var(--textDim);">◫ choir-hall-nave · T1 reading</figcaption>
+            </figure>
+            <figure style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
+              <img src="../assets/nave-t3.webp" alt="Choir-hall nave as the machine it is, resonator pipes and brass plates" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; border: 1px dashed var(--borderHi); opacity: 0.85;">
+              <figcaption class="tu-mono" style="font-size: 10px; line-height: 14px; color: var(--textDim);">◫ choir-hall-nave · T3 · not picked</figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Front matter, links, validation -->
+    <div style="flex: 0 0 320px; display: flex; flex-direction: column; gap: 4px; min-width: 0;">
+      <section class="tu-window" style="flex: 0 0 auto;">
+        <div class="tu-tabbar">
+          <div class="tu-tabbar__tabs">
+            <button class="tu-tab is-active" type="button">Front matter</button>
+            <button class="tu-tab" type="button">Links in · 12</button>
+          </div>
+        </div>
+        <div class="tu-fm" style="border: 0;">
+          <div class="tu-fm__row"><span class="tu-fm__key">id</span><span class="tu-fm__val">F04</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">kind</span><span class="tu-fm__val"><span class="tu-kindtag" data-kind="floor"><span class="tu-kind" data-kind="floor"></span>floor</span></span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">parent</span><span class="tu-fm__val"><span class="tu-link" data-kind="band"><span class="tu-kind" data-kind="band"></span><span class="tu-link__title">The Hearth</span></span></span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">number</span><span class="tu-fm__val">4</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">mode</span><span class="tu-fm__val">Ionian</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">run scale</span><span class="tu-fm__val">small · one run crosses it</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">edge</span><span class="tu-fm__val">rim drop</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">sky</span><span class="tu-fm__val"><span class="tu-link is-pending" data-kind="world"><span class="tu-link__title">open · art direction R1</span></span></span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">tiers</span><span class="tu-fm__val"><span class="tu-tier tu-tier--sm"><span class="tu-tier__opt is-active"><span class="tu-tier__n">T1</span></span><span class="tu-tier__opt"><span class="tu-tier__n">T2</span></span><span class="tu-tier__opt is-locked"><span class="tu-tier__n">T3</span></span></span></span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">concepts</span><span class="tu-fm__val"><span class="tu-link" data-kind="concept"><span class="tu-kind" data-kind="concept"></span><span class="tu-link__title">fates-shrine</span></span><span class="tu-link" data-kind="concept"><span class="tu-kind" data-kind="concept"></span><span class="tu-link__title">choir-hall-nave</span></span></span></div>
+        </div>
+        <div style="padding: 6px 10px; border-top: 1px solid var(--border); display: flex; gap: 6px;">
+          <button class="tu-btn tu-btn--dashed tu-btn--sm" type="button">+ field</button>
+          <span class="tu-spacer"></span>
+          <span class="tu-mono tu-dim" style="font-size: 10px; line-height: 22px;">schema · floor v1</span>
+        </div>
+      </section>
+
+      <section class="tu-window" style="flex: 0 0 auto;">
+        <div class="tu-tabbar"><div class="tu-tabbar__title">Used by</div></div>
+        <div class="tu-window__body">
+          <div class="tu-prop"><span class="tu-kind" data-kind="beat"></span><span class="tu-prop__val">S-004 The shrine hums</span><span class="tu-prop__type">4 beats</span></div>
+          <div class="tu-prop"><span class="tu-kind" data-kind="npc"></span><span class="tu-prop__val">Mother Ilse</span><span class="tu-prop__type">found at</span></div>
+          <div class="tu-prop"><span class="tu-kind" data-kind="clue"></span><span class="tu-prop__val">C-031 the murmur</span><span class="tu-prop__type">where</span></div>
+          <div class="tu-prop"><span class="tu-kind" data-kind="perspective"></span><span class="tu-prop__val">Hearth folk lens</span><span class="tu-prop__type">about</span></div>
+        </div>
+      </section>
+
+      <section class="tu-window" style="flex: 1 1 auto;">
+        <div class="tu-tabbar"><div class="tu-tabbar__title">Validation <span class="tu-badge is-warn">1</span></div></div>
+        <div class="tu-window__body">
+          <div class="tu-val" data-sev="warn" style="border-top: 0;"><span class="tu-val__sev"></span><span class="tu-val__msg">Choir-hall nave has a T1 picture but no picked T3 reading.</span><div class="tu-val__meta"><span class="tu-val__rule">two-state</span></div><button class="tu-btn tu-btn--secondary tu-btn--sm tu-val__act" type="button">Open</button></div>
+          <div class="tu-val" data-sev="info"><span class="tu-val__sev"></span><span class="tu-val__msg">Sky is an open decision; it waits for art direction round 1.</span><div class="tu-val__meta"><span class="tu-val__rule">open-decision</span></div></div>
+          <div class="tu-val" data-sev="pass"><span class="tu-val__sev"></span><span class="tu-val__msg">All 12 links resolve.</span><div class="tu-val__meta"><span class="tu-val__rule">no-broken-links</span></div></div>
+          <div class="tu-val" data-sev="pass"><span class="tu-val__sev"></span><span class="tu-val__msg">In-world text uses no developer words.</span><div class="tu-val__meta"><span class="tu-val__rule">inworld-vocab</span></div></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="tu-statusbar">
+    <span class="tu-statusbar__brand">THEOS//EDITOR</span>
+    <span>v0.4.2 · codex layout</span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>git main · 2 changed</span>
+    <span>214 records · 0 orphans</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-ai">AI</span>claude · mcp · propose only</span>
+    <span>ln 7 · md</span>
+  </footer>
+</div>
+</body>
+</html>

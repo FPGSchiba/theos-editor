@@ -6,7 +6,8 @@ architecture and approves documentation. Read this file fully at the start of ev
 ## Sources of truth
 
 1. `docs/specs/00-umbrella.md` — phases, acceptance criteria (ACs), global constraints.
-2. `docs/architecture.md`, `docs/specs/data-model.md`, `docs/generators.md`, `docs/gate.md`.
+2. `docs/architecture.md`, `docs/specs/data-model.md`, `docs/generators.md`, `docs/gate.md`,
+   `CONTRIBUTING.md` (branches, commits, PRs, versions, tags), `docs/release.md`.
 3. `docs/specs/phases/PNN-*.md` — the approved spec of a phase.
 4. `docs/plans/PNN-*.md` — the plan of a phase.
 5. `docs/status.md` — where the build stands.
@@ -41,6 +42,7 @@ GitHub cannot enforce them; breaking one is never acceptable, also not to unbloc
 6. Never claim a check passed without having run it and read its output
    (superpowers:verification-before-completion).
 7. Never change an AC. If an AC is wrong or impossible, stop and say so (see "When to stop").
+8. Never merge a release PR, and never create, move or delete a tag. Releases are Jann's.
 
 ## Changes to the superpowers loop (they override the skills)
 
@@ -87,8 +89,9 @@ cargo xtask generator-check -- <command…>
   lore canon in fixtures beyond what the examples show; mark synthetic fixtures as such.
 - Windows matters: paths through `std::path`, no shell assumptions, LF in files we write, Ctrl
   in the UI, processes stopped as whole trees.
-- Commit messages: Conventional Commits; PR titles `[PNN] <name>`, `[PNN-spec] <name>`,
-  `[gate] …`, `[docs] …`.
+- Branches, commits, PR titles, versions and tags follow `CONTRIBUTING.md`: Conventional
+  Commits with the `Refs:` and `Phase:` footers and the Claude trailers; PR titles like
+  `feat(content): records and grammars (P02)` and `docs(spec): records and grammars (P02)`.
 
 ## When to stop and ask Jann
 
