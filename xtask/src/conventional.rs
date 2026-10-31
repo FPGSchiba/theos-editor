@@ -151,10 +151,22 @@ pub fn header_problems(header: &Header) -> Vec<String> {
             "the summary has {length} characters; the limit is {MAX_SUMMARY}"
         ));
     }
-    if header.summary.starts_with(char::is_uppercase) {
+    problems.extend(wording_problems(&header.summary));
+    problems
+}
+
+/// The rules for the words of a summary, which [`header_problems`] applies to the whole summary:
+/// it does not start with an upper-case letter and does not end with a full stop.
+///
+/// `pr-title` applies them again to the words before the phase it ends with, which a check of
+/// the last character cannot see.
+#[must_use]
+pub fn wording_problems(summary: &str) -> Vec<String> {
+    let mut problems = Vec::new();
+    if summary.starts_with(char::is_uppercase) {
         problems.push("the summary must not start with an upper-case letter".to_owned());
     }
-    if header.summary.trim_end().ends_with('.') {
+    if summary.trim_end().ends_with('.') {
         problems.push("the summary must not end with a full stop".to_owned());
     }
     problems
@@ -572,6 +584,16 @@ mod tests {
             );
         }
         Ok(())
+    }
+
+    #[test]
+    fn the_wording_rules_are_what_header_problems_applies_to_the_summary() {
+        assert_eq!(wording_problems("add a thing"), Vec::<String>::new());
+        let upper = wording_problems("Add a thing");
+        assert!(has_problem(&upper, "upper-case"), "{upper:?}");
+        let stop = wording_problems("add a thing. ");
+        assert!(has_problem(&stop, "full stop"), "{stop:?}");
+        assert_eq!(wording_problems("Add a thing.").len(), 2);
     }
 
     // AC: CE-08.10

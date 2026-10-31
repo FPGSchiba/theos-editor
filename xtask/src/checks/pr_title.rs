@@ -2,8 +2,10 @@
 //! phase, `gate` or `docs`, matching the branch (`CONTRIBUTING.md` §1 and §3, `docs/gate.md` §1).
 //!
 //! The title becomes the squash commit on `main`, so it is held to the rules of
-//! [`header_problems`] as well. The core is [`check_title`]: a title and a branch in, a verdict
-//! out. [`run`] takes both from the pull request event.
+//! [`header_problems`] as well: the limit of 72 characters counts the whole summary, suffix
+//! included, and the rules for the words (no capital first, no full stop last) also apply to the
+//! words before the suffix. The core is [`check_title`]: a title and a branch in, a verdict out.
+//! [`run`] takes both from the pull request event.
 
 use std::fmt;
 use std::io::Write;
@@ -11,7 +13,7 @@ use std::path::Path;
 
 use crate::branch::{BranchKind, Phase, parse_branch};
 use crate::ci::CiEvent;
-use crate::conventional::{header_problems, parse_header};
+use crate::conventional::{header_problems, parse_header, wording_problems};
 use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
@@ -143,6 +145,17 @@ fn titled(title: &str, rule: &Rule) -> Vec<String> {
         Err(problem) => return vec![problem],
     };
     let mut problems = header_problems(&header);
+    // The suffix ends the summary, so `header_problems` cannot see a full stop before it, as in
+    // `add thing. (P02)`. The rules for the words apply to the summary without the suffix too;
+    // what the whole summary has already is not said twice. The limit of 72 characters stays
+    // with the whole summary, because the title becomes the squash commit.
+    if let Some((words, _)) = split_suffix(&header.summary) {
+        for problem in wording_problems(words) {
+            if !problems.contains(&problem) {
+                problems.push(problem);
+            }
+        }
+    }
     if rule.spec && !(header.kind == "docs" && header.scope.as_deref() == Some("spec")) {
         problems.push(format!(
             "a title on {} starts with `docs(spec):`",
@@ -155,7 +168,7 @@ fn titled(title: &str, rule: &Rule) -> Vec<String> {
 
 fn suffix_problem(summary: &str, rule: &Rule) -> Option<String> {
     let branch = &rule.branch;
-    match (suffix_of(summary), rule.suffix) {
+    match (split_suffix(summary).map(|(_, suffix)| suffix), rule.suffix) {
         (Some(_), None) => None,
         (Some(found), Some(wanted)) if found == wanted => None,
         (Some(found), Some(wanted)) => Some(format!(
@@ -172,14 +185,16 @@ fn suffix_problem(summary: &str, rule: &Rule) -> Option<String> {
     }
 }
 
-/// The word in parentheses that ends `summary` after a space, if it is one of the three.
-fn suffix_of(summary: &str) -> Option<Suffix> {
-    let (_, word) = summary.strip_suffix(')')?.rsplit_once(" (")?;
-    match word {
-        "gate" => Some(Suffix::Gate),
-        "docs" => Some(Suffix::Docs),
-        _ => word.parse().ok().map(Suffix::Phase),
-    }
+/// The words of `summary` before its suffix, and the suffix: the word in parentheses that ends
+/// it after a space, if it is one of the three. The space is not part of the words.
+fn split_suffix(summary: &str) -> Option<(&str, Suffix)> {
+    let (words, word) = summary.strip_suffix(')')?.rsplit_once(" (")?;
+    let suffix = match word {
+        "gate" => Suffix::Gate,
+        "docs" => Suffix::Docs,
+        _ => Suffix::Phase(word.parse().ok()?),
+    };
+    Some((words, suffix))
 }
 
 /// `chore(release): vX.Y.Z` or `chore(release): vX.Y.Z-rc.N`, with numbers of ASCII digits.
@@ -403,6 +418,38 @@ mod tests {
         // Everything wrong is reported at once: the scope, the capital and the missing suffix.
         let verdict = check("feat(nope): Records", "phase/P02-x");
         assert_eq!(verdict.findings.len(), 3, "{:?}", verdict.findings);
+    }
+
+    // AC: CE-08.9
+    #[test]
+    fn a_full_stop_before_the_suffix_fails() {
+        // The suffix ends the summary, so the full stop is hidden from a check of its last
+        // character, and the title becomes the squash commit with it.
+        for (title, branch) in [
+            ("feat(content): add thing. (P02)", "phase/P02-x"),
+            ("feat(content): x. (P02)", "phase/P02-x"),
+            ("ci(gate): add thing. (gate)", "gate/x"),
+            ("docs: add thing. (docs)", "docs/x"),
+            ("docs(spec): add thing. (P02)", "spec/P02-x"),
+            ("fix(content): add thing. (gate)", "fix/x"),
+            ("feat(content): add thing.  (P02)", "phase/P02-x"),
+        ] {
+            assert_fails(title, branch, "full stop");
+        }
+        // Only that is wrong with it, and it is said once.
+        let verdict = check("feat(content): add thing. (P02)", "phase/P02-x");
+        assert_eq!(verdict.findings.len(), 1, "{:?}", verdict.findings);
+        let verdict = check("feat(content): add thing.", "phase/P02-x");
+        let stops = messages(&verdict).matches("full stop").count();
+        assert_eq!(stops, 1, "{:?}", verdict.findings);
+        // The other rules for words are not said twice either.
+        let verdict = check("feat(content): Add thing. (P02)", "phase/P02-x");
+        assert_eq!(verdict.findings.len(), 2, "{:?}", verdict.findings);
+
+        // A full stop inside the summary, or none, is fine.
+        assert_passes("feat(content): add thing (P02)", "phase/P02-x");
+        assert_passes("feat(content): add v1.2 and more (P02)", "phase/P02-x");
+        assert_passes("feat(content): add thing.rs (P02)", "phase/P02-x");
     }
 
     // AC: CE-08.9
