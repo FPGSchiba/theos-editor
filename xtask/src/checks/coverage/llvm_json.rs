@@ -11,9 +11,9 @@
 //!
 //! The paths of the export and the root must agree about where the repository is. If a root is
 //! given through a link, a short name or a substituted drive they do not, and no file matches. An
-//! export that lists files and has none that matches is an error, not an empty result: otherwise
-//! every crate would have no instrumented lines and the check would pass without having looked at
-//! anything.
+//! export that lists files and has none that matches is an error, not an empty result, and so is
+//! an export that lists no files: otherwise every crate would have no instrumented lines and the
+//! check would pass without having looked at anything.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -86,10 +86,11 @@ const EXPORT_TYPE: &str = "llvm.coverage.json.export";
 ///
 /// # Errors
 ///
-/// Fails when `json` is not an export of `cargo llvm-cov`, and when it lists files but none of
-/// them is a source of a crate under `root`: its paths are then not the ones of this root, and
-/// every crate would look empty. The message gives the place and kind of the problem, or the
-/// number of files and the root, and never quotes the text, which can hold file names.
+/// Fails when `json` is not an export of `cargo llvm-cov`, when it lists no files at all, and when
+/// it lists files but none of them is a source of a crate under `root`: its paths are then not the
+/// ones of this root. Either way every crate would look empty. The message gives the place and kind
+/// of the problem, or the number of files and the root, and never quotes the text, which can hold
+/// file names.
 pub fn parse_llvm_cov(json: &str, root: &Path) -> Result<BTreeMap<String, CrateCoverage>> {
     parse_with(json, root, cfg!(windows))
 }
@@ -130,12 +131,17 @@ pub(crate) fn parse_with(
             total.covered = total.covered.saturating_add(covered);
         }
     }
-    if listed > 0 && crates.is_empty() {
+    if listed == 0 {
+        // A run that measured nothing: every crate would have no instrumented lines and pass.
+        return Err(parse_error("it lists no files, so nothing was measured"));
+    }
+    if crates.is_empty() {
         // The export and the root disagree about where the repository is: a root given through
         // a link, a short name or a substituted drive. Taking that for crates without lines
         // would let the check pass without having looked at anything.
         return Err(parse_error(&format!(
-            "none of its {listed} files is a source of a crate under `{root}`, so its paths do              not belong to that root"
+            "none of its {listed} files is a source of a crate under `{root}`, so its paths do not \
+             belong to that root"
         )));
     }
     Ok(crates)
@@ -357,11 +363,24 @@ mod tests {
         Ok(())
     }
 
+    // AC: CE-08.8
     #[test]
-    fn an_export_without_files_has_no_crates() -> TestResult {
-        let json = r#"{"data":[],"type":"llvm.coverage.json.export","version":"3.1.0"}"#;
-        assert_eq!(parse_with(json, Path::new("/r"), false)?, BTreeMap::new());
-        Ok(())
+    fn an_export_without_files_is_an_error_not_an_empty_map() {
+        // A run that measured nothing, say because no test ran or the instrumentation was lost,
+        // would otherwise leave every crate without lines, and every crate would pass.
+        for json in [
+            r#"{"data":[],"type":"llvm.coverage.json.export","version":"3.1.0"}"#,
+            r#"{"data":[{"files":[],"functions":[]}],"type":"llvm.coverage.json.export"}"#,
+            r#"{"data":[{"files":[]},{"files":[]}]}"#,
+        ] {
+            let result = parse_with(json, Path::new("/secret-root"), false);
+            let Err(Error::Parse { what, message }) = &result else {
+                panic!("{json}: {result:?}");
+            };
+            assert!(what.contains("llvm-cov"), "{what}");
+            assert!(message.contains("no files"), "{message}");
+            assert!(!message.contains("secret-root"), "{message}");
+        }
     }
 
     // AC: CE-08.8
