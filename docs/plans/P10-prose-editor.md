@@ -216,17 +216,25 @@ Both prototypes render through the same Svelte components, so the suites query o
 |---|---|
 | Link chip | `.tu-link[data-link-id=<id>]`, `.is-broken` when unresolved, `spellcheck="false"`, contains `.tu-kind[data-kind=<kind>]` and `.tu-link__title` (title or shown text) |
 | `[[` popover | `.tu-pop[data-link-popover]`; rows `.tu-pop__row[data-link-option=<id>][data-kind=<kind>]`; Enter or click picks; Escape closes |
-| Voice block | `[data-callout="voice"]` with class `tu-voice`; head `.tu-voice__head` (speaker title, beliefs, tier); caption `.tu-voice__by` |
-| Design callout, `Design note:` line | `[data-callout="design"]`; the line gets class `tu-note` |
+| Voice block | `[data-callout="voice"]` with class `tu-voice`; head `.tu-voice__head` (speaker title, beliefs, tier), rendered by `VoiceHead` inside the block; caption `.tu-voice__by` |
+| Design callout | `[data-callout="design"]` on the `> [!design]` block only |
+| `Design note:` line | the line's element gets class `tu-note` (no `data-callout`) |
 | Note callout | `[data-callout="note"][data-note=<n>]` with `[data-note-state=<open\|dropped\|resolved>]` |
 | Developer word | `[data-dev-word]` around the word, only inside voice blocks (look: harness CSS, dotted underline in `sig-reject` plus `title="developer word"`) |
 | Beat heading | `[data-beat=<n>]` showing `<n> · <name>` |
-| Beat row | `[data-beat-row=<n>]` with `.tu-beat`; params `[data-beat-param=<key>]`; add button `[data-beat-add]`, key choice `[data-beat-add-key=<key>]`, value field `[data-beat-input]` (Enter commits); finding `[data-beat-finding][data-finding-rule=<rule>]`; the row has `spellcheck="false"` |
+| Beat row | `[data-beat-row=<n>]` wrapping a `.tu-beat` child; params `[data-beat-param=<key>]`; add button `[data-beat-add]`, key choice `[data-beat-add-key=<key>]`, value field `[data-beat-input]` (Enter commits); finding `[data-beat-finding][data-finding-rule=<rule>]`; the row has `spellcheck="false"` |
 
 Chips are atomic: the caret steps over a chip in one press and Backspace right after a chip
 removes the whole link; a link shows raw only while it is typed (`04-script.html`). Every other
 construct (headings, emphasis, callout titles, beat headings, attribute lines) shows raw while
 the caret is on its line (live preview).
+
+A callout block (voice, design, note) is either one wrapper element or a run of line elements
+that each carry its `data-callout` (and `data-note`, `data-note-state`) attribute and, for voice,
+the `tu-voice` class: a line-based editor such as CodeMirror 6 can only decorate lines. Suites
+therefore select callouts with `.first()`, counts or the text of all matching elements, never
+with a strict single-element locator. The adapter draws the block; `VoiceHead` and `NoteHead`
+render only its head.
 
 ---
 
@@ -424,7 +432,9 @@ sources are copied into the S list). A `## Top two` section applies spec §4.4.
     present, else paper; `knockout` where spec §4.3 says so).
   - `the top two follow the rule of spec §4.4 on paper scores` (highest paper totals without
     knockout, tie to the higher byte-stability score; if fewer than two survive, the best
-    knocked-out candidate fills the gap).
+    knocked-out candidate fills the gap; a tie that rule cannot break continues down the
+    criteria in weight order, then table order (ledger ruling 11), and a tie that cannot break
+    either needs exactly one recorded line `Tie decided by Jann (<date>): <candidate>`, ruling 12).
 - [ ] **Step 2: Run** `pnpm test:unit tests/docs/comparison.test.ts` — expected: FAIL.
 - [ ] **Step 3: Write `comparison.md`** from the dossiers with the scale of spec §4.3. A claim
   without a source is not scored.
@@ -582,41 +592,85 @@ sources are copied into the S list). A `## Top two` section applies spec §4.4.
   has none) and real numbers for the long documents. That proves the checks can fail.
 - [ ] **Step 3: Commit** (`test(ui): add the P10 feature, input and long-document suites (P10)`, `Refs: CE-06.1`).
 
-### Tasks 8–11: Prototype A (named after Task 4)
+### Prototype tasks 8–16: common rules
 
-**ACs:** CE-06.2 (through the suites). **Model:** mid-tier; most capable if the first attempt
-fails. Budget: each task is one implementation attempt plus one fix round (spec §4.4); then
-record what is missing in `src/adapters/<a>/NOTES.md` and stop.
+Prototype A is **CodeMirror 6** (variant `codemirror`, folder `src/adapters/codemirror/`).
+Prototype B is **plain ProseMirror with prosemirror-markdown** (variant `prosemirror:stock`,
+folder `src/adapters/prosemirror/`), chosen by Jann on the paper tie (`comparison.md`,
+`## Top two`); it parses Markdown into a tree, so Task 16 adds `prosemirror:best-effort`.
 
-Each task follows the same steps: (1) run the task's suites with `P10_STRICT=1
-P10_VARIANTS=<a>` — expected: FAIL; (2) implement in `src/adapters/<a>/` (small files, one per
-concern); (3) run again — expected: PASS, or the remaining failures listed in `NOTES.md` with
-what was tried; (4) commit (`chore(ui): <feature> in the <a> prototype (P10)`, `Refs: CE-06.2`).
+- **ACs:** CE-06.2 (through the suites). **Model:** mid-tier; most capable for a fix round
+  after a failed first attempt, and for Task 16.
+- **Budget:** one implementation attempt plus one fix round per task (spec §4.4); then record
+  what is missing in `src/adapters/<folder>/NOTES.md` and stop.
+- **Steps of every prototype task:** (1) run the task's suites with `P10_STRICT=1
+  P10_VARIANTS=<variant>` — expected: FAIL; (2) implement in the variant's folder (small files,
+  one per concern, named after the feature so `report/adapter-size.md` can group them); (3) run
+  again — expected: PASS, or the remaining failures listed in `NOTES.md` with what was tried;
+  (4) commit (`chore(ui): <feature> in the <component> prototype (P10)`, `Refs: CE-06.2`).
+- `VariantInfo` entries go in `src/harness/variants.ts`, factories in
+  `src/harness/registry.ts`. The DOM contract above is binding, the callout-run rule included.
+- Input check ids end in `-prose`, `-chip` or `-voice` for the place they type at.
 
-| Task | Feature | Suites (`--grep`) | Scope |
-|---|---|---|---|
-| 8 · A1 | Base | `@base\|@integration\|@input` (except the input checks ending in `-chip`) | `VariantInfo` entry in the registry; every `ProseAdapter` method; whole file loaded; front matter hidden and protected in Write mode (protected range or split, spec §4.5), raw and protected in Source mode; live preview for headings and emphasis; keymap from `ctx.keymap`; `Mod-a` selects the body only |
-| 9 · A2 | Links | `@links`, and the `@input` checks ending in `-chip` (ids end in `-prose`, `-chip` or `-voice` for where they type) | chips through `LinkChip`, atomic caret and delete, `[[` popover through `LinkPopover` with `ctx.search` and the place (prose or beat key) |
-| 10 · A3 | Callouts | `@callouts` | voice, design and note callouts through `VoiceHead`/`NoteHead` with editable text; `Design note:` lines; developer words |
-| 11 · A4 | Beats | `@beats` | beat heading, `BeatRow` with edit, "+ add" and finding; raw lines under the caret |
+### Task 8: CodeMirror 6 base (A1)
 
-### Tasks 12–15: Prototype B (named after Task 4)
+Suites: `@base|@integration|@input` (except the input checks ending in `-chip`). Scope: the
+`codemirror` `VariantInfo` and factory; every `ProseAdapter` method; whole file loaded; front
+matter hidden and protected in Write mode (protected range or split, spec §4.5), raw and
+protected in Source mode; live preview for headings and emphasis; keymap from `ctx.keymap`;
+`Mod-a` selects the body only.
 
-As Tasks 8–11 for `<b>` in `src/adapters/<b>/`.
+### Task 9: CodeMirror 6 links (A2)
 
-### Task 16 (only for a WYSIWYG prototype): best-effort column
+Suites: `@links`, and the `@input` checks ending in `-chip`. Scope: chips through `LinkChip`,
+atomic caret and delete, the `[[` popover through `LinkPopover` with `ctx.search` and the place
+(prose or beat key); the adapter unmounts the popover on its `onclose`, because the popover
+swallows Escape while it is mounted.
+
+### Task 10: CodeMirror 6 callouts (A3)
+
+Suites: `@callouts`. Scope: voice, design and note callouts through `VoiceHead` and `NoteHead`
+with editable text; `Design note:` lines; developer words; a note-state edit replaces the last
+title segment, as the oracle does.
+
+### Task 11: CodeMirror 6 beats (A4)
+
+Suites: `@beats`. Scope: first key `BeatRow.svelte`'s `{#each}` by `${index}:${key}` (two lines
+with the same key while typing must not throw); then the beat heading, `BeatRow` with edit,
+"+ add" and finding, and raw lines under the caret.
+
+### Task 12: ProseMirror base (B1)
+
+As Task 8, for variant `prosemirror:stock` (`wysiwyg: true`, `column: 'stock'`) in
+`src/adapters/prosemirror/`, with the stock `prosemirror-markdown` parser and serializer.
+
+### Task 13: ProseMirror links (B2)
+
+As Task 9, for `prosemirror:stock`.
+
+### Task 14: ProseMirror callouts (B3)
+
+As Task 10, for `prosemirror:stock`.
+
+### Task 15: ProseMirror beats (B4)
+
+As Task 11, for `prosemirror:stock` (the `BeatRow` key is already fixed).
+
+### Task 16: ProseMirror best-effort column
 
 **ACs:** CE-06.2. **Model:** most capable. Budget as above.
 
-**Files:** Create `src/adapters/<slug>-best-effort/` (reuses the `<slug>` code; registry entry
-`<slug>:best-effort`, `column: 'best-effort'`; the base variant becomes `<slug>:stock`).
+**Files:** Create `src/adapters/prosemirror-best-effort/` (reuses the `prosemirror` code;
+`VariantInfo` `prosemirror:best-effort`, `column: 'best-effort'`).
 
-- [ ] **Step 1: Run** every suite with `P10_STRICT=1 P10_VARIANTS=<slug>:best-effort` — expected: FAIL.
+- [ ] **Step 1: Run** every suite with `P10_STRICT=1 P10_VARIANTS=prosemirror:best-effort` —
+  expected: FAIL.
 - [ ] **Step 2: Implement** spec §4.5 best effort: untouched blocks keep their source; inside an
   edited block the editor's change steps are mapped onto the source text as span edits; where
   the mapping fails, the block is serialized again; `lastSaveLevel()` reports which happened.
 - [ ] **Step 3: Run** — expected: PASS or listed in `NOTES.md`.
-- [ ] **Step 4: Commit** (`chore(ui): best-effort byte preservation for <slug> (P10)`, `Refs: CE-06.2`).
+- [ ] **Step 4: Commit** (`chore(ui): best-effort byte preservation for ProseMirror (P10)`,
+  `Refs: CE-06.2`).
 
 ### Task 17: Measurement run and licences
 
