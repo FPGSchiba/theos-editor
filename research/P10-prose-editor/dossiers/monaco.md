@@ -1,6 +1,7 @@
 # Monaco — dossier
 
 Researched: monaco-editor 0.57.0 (npm, read 2026-10-31) · Researcher: P10 Task 3
+Researcher probes (supporting evidence only, not reproduced): D9, D10
 
 Scope notes. "monaco.d.ts" means the file `package/monaco.d.ts` of the 0.57.0 tarball [D2]. "esm source" means files under `package/esm/vs/` of the same tarball [D4–D7]. Counts from the GitHub search API are keyword searches and include noise; the query is given each time [D11]. All dates are 2026-10-31 unless stated.
 
@@ -185,8 +186,8 @@ Scope notes. "monaco.d.ts" means the file `package/monaco.d.ts` of the 0.57.0 ta
 - D6 · same tarball, `esm/vs/editor/browser/controller/editContext/native/nativeEditContext.js`, `…/textArea/textAreaEditContext.js`, `…/textArea/textAreaEditContextInput.js`, `esm/vs/editor/browser/config/editorConfiguration.js` · input handling source · read 2026-10-31
 - D7 · same tarball, `esm/vs/editor/standalone/browser/standaloneServices.js`, `…/services/standaloneWebWorkerService.js`, `esm/vs/base/common/worker/webWorker.js`, `esm/vs/base/browser/domStylesheets.js` · telemetry, worker and style source · read 2026-10-31
 - D8 · same tarball, `LICENSE`, `ThirdPartyNotices.txt`, `package.json`, directory listings of `esm/external` and `esm/vs/base` · licence and package contents · read 2026-10-31
-- D9 · Researcher's Node run of `PieceTreeTextBufferBuilder` and `PieceTreeTextBuffer` from the 0.57.0 tarball, bundled with esbuild 0.25.0 (scripts `bundle/src/t.js`, `bundle/src/t2.js` in the session scratchpad `C:\Users\janne\AppData\Local\Temp\claude\D--Projects-theos-editor\c97b1761-fd8c-4c8f-8231-1107b43666b8\scratchpad`; outputs quoted above) · measurement · run 2026-10-31
-- D10 · Researcher's esbuild 0.25.0 bundle runs of `monaco-editor` 0.57.0 (scripts `bundle/src/a.js`, `b.js`, `c.js`, `w.js` in the same scratchpad) · measurement · run 2026-10-31
+- D9 · researcher probe, not reproduced; supporting evidence only · Node run of `PieceTreeTextBufferBuilder` and `PieceTreeTextBuffer` from the monaco-editor 0.57.0 tarball, bundled with esbuild 0.25.0 (scripts `bundle/src/t.js`, `bundle/src/t2.js` in the researcher scratch directory, not retained); input: the strings quoted in the cited bullets · run 2026-10-31
+- D10 · researcher probe, not reproduced; supporting evidence only · esbuild 0.25.0 bundle runs of monaco-editor 0.57.0 (scripts `bundle/src/a.js`, `b.js`, `c.js`, `w.js` in the researcher scratch directory, not retained); input: the entry points `monaco-editor/editor`, `monaco-editor/editor` plus `monaco-editor/features/register.all`, `monaco-editor` and `monaco-editor/editor/editor.worker.js`, built with `--bundle --minify --format=esm --loader:.ttf=file` · run 2026-10-31
 - D11 · https://api.github.com/repos/microsoft/monaco-editor (repo, `/releases`, `/commits?since=2025-10-31T00:00:00Z`, `/search/issues` queries listed in the text) · GitHub API data for microsoft/monaco-editor · read 2026-10-31
 - D12 · https://github.com/microsoft/monaco-editor/blob/main/README.md · Monaco Editor README (concepts, FAQ, versioning statement) · read 2026-10-31
 - D13 · https://github.com/microsoft/monaco-editor/blob/main/docs/integrate-esm.md · Integrating the ESM version of the Monaco Editor (webpack, Parcel, Vite `getWorker`) · read 2026-10-31

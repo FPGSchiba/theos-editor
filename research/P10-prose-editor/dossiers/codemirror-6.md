@@ -1,6 +1,7 @@
 # CodeMirror 6 — dossier
 
 Researched: @codemirror/view 6.43.15 (2026-10-19), @codemirror/state 6.7.6 (2026-09-22), @lezer/markdown 1.8.1 (2026-10-19), @codemirror/lang-markdown 6.5.2 (2026-08-04), @codemirror/language 6.13.1, @codemirror/commands 6.11.1, @codemirror/autocomplete 6.20.4, @codemirror/lint 6.9.7, @codemirror/merge 6.12.3 (npm, read 2026-10-31) · Researcher: P10 Task 3
+Researcher probes (supporting evidence only, not reproduced): D54, D56
 
 ## Byte-stable Markdown
 
@@ -174,7 +175,7 @@ IME and composition
 - Lezer: whether a front-matter block parser tolerates an unclosed fence without swallowing the document (the probe version did swallow it); whether the Theos wikilink, callout marker and attribute-line parsers keep incremental parsing correct under edits (not tested; only a first parse was probed).
 - Svelte 5 specifics: no source covers mounting Svelte components from `WidgetType.toDOM` with unmount in `destroy` under composition and viewport scrolling; widget churn (widgets destroyed when scrolled out of the viewport) and `flushSync` timing need a prototype.
 - Large-file numbers: no official size limit exists in the sources; open time, keystroke p95 and scroll behaviour on the large and stress files are for the prototype.
-- Bundle size and the real `pnpm licenses list` of the prototype (this dossier used a scratchpad install).
+- Bundle size and the real `pnpm licenses list` of the prototype (this dossier used an install in the researcher scratch directory, not retained).
 - Whether `@codemirror/lang-markdown` (pulls html, css, javascript grammars) or `@lezer/markdown` with `@codemirror/language` alone is wanted: not a fact question; sizes not measured.
 
 ## Sources
@@ -186,7 +187,7 @@ IME and composition
 - D6 · https://registry.npmjs.org/@codemirror/lang-markdown/-/lang-markdown-6.5.2.tgz · @codemirror/lang-markdown 6.5.2 package (dist/index.d.ts, CHANGELOG.md) · read 2026-10-31
 - D7 · https://registry.npmjs.org/@codemirror/language/-/language-6.13.1.tgz · @codemirror/language 6.13.1 package (d.ts, index.js) · read 2026-10-31
 - D8 · https://registry.npmjs.org/@codemirror/autocomplete/-/autocomplete-6.20.4.tgz · @codemirror/autocomplete 6.20.4 package (dist/index.d.ts) · read 2026-10-31
-- D9 · https://registry.npmjs.org/@codemirror/lint/-/lint-6.9.7.tgz · @codemirror/lint 6.9.7 package (dist/index.d.ts), installed as a dependency in the scratchpad · read 2026-10-31
+- D9 · https://registry.npmjs.org/@codemirror/lint/-/lint-6.9.7.tgz · @codemirror/lint 6.9.7 package (dist/index.d.ts), installed as a dependency in the researcher scratch directory, not retained · read 2026-10-31
 - D10 · https://registry.npmjs.org/@codemirror/merge/-/merge-6.12.3.tgz · @codemirror/merge 6.12.3 package (dist/index.d.ts) · read 2026-10-31
 - D11 · https://codemirror.net/docs/guide/ · CodeMirror System Guide · read 2026-10-31
 - D12 · https://codemirror.net/ · CodeMirror home page (licence, funding, sponsors, issue tracker, forum) · read 2026-10-31
@@ -231,7 +232,7 @@ IME and composition
 - D51 · https://github.com/touchifyapp/svelte-codemirror-editor (and /issues) · repository page and open issues · read 2026-10-31
 - D52 · https://svelte.dev/docs/svelte/imperative-component-api · Svelte docs, Imperative component API (mount, unmount) · read 2026-10-31
 - D53 · https://blog.kowalczyk.info/a-ggwg/custom-search-ui-in-codemirror-6-and-svelte-5.html · blog post, custom search UI in CodeMirror 6 and Svelte 5 (blog, secondary; undated in the fetch) · read 2026-10-31
-- D54 · C:\Users\janne\AppData\Local\Temp\claude\D--Projects-theos-editor\c97b1761-fd8c-4c8f-8231-1107b43666b8\scratchpad\probe\probe1.mjs to probe7.mjs · my own headless probes (state 6.7.6, commands 6.11.1, @lezer/markdown 1.8.1, merge 6.12.3) and a licence, network-call and install-script scan of the installed tree in the same folder · run 2026-10-31
+- D54 · researcher probe, not reproduced; supporting evidence only · seven headless Node scripts (probe1 to probe7) in the researcher scratch directory, not retained: @codemirror/state 6.7.6, @codemirror/commands 6.11.1, @lezer/markdown 1.8.1 and @codemirror/merge 6.12.3 on the short inline inputs quoted in the cited bullets, and a licence, network-call and install-script scan of the installed tree in the same directory · run 2026-10-31
 - D55 · https://registry.npmjs.org/svelte-codemirror-editor (also `npm view` of @neocodemirror/svelte, codemirror-svelte, svelte-codemirror, @sveltejs/codemirror) and https://api.npmjs.org/downloads/point/last-week/svelte-codemirror-editor · npm metadata and weekly downloads · read 2026-10-31
-- D56 · `npm search "codemirror wikilink"`, `"lezer markdown wikilink"`, `"codemirror obsidian callout"` · npm search results · run 2026-10-31
+- D56 · researcher probe, not reproduced; supporting evidence only · `npm search "codemirror wikilink"`, `npm search "lezer markdown wikilink"` and `npm search "codemirror obsidian callout"` run from the npm command line (registry search; no package version applies; results as quoted in the cited bullet) · run 2026-10-31
 - D57 · https://registry.npmjs.org/@codemirror/view/-/view-6.28.2.tgz, view-6.34.0.tgz, view-6.36.0.tgz, view-6.37.0.tgz, view-6.38.0.tgz · older view packages, source of the `window.EditContext` condition · read 2026-10-31
