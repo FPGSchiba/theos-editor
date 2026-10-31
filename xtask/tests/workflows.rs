@@ -358,10 +358,7 @@ fn every_job_only_runs_its_own_check() -> TestResult {
         Some("${{ github.event.pull_request.head.sha }}")
     );
     assert_eq!(head["fetch-depth"].as_i64(), Some(0));
-    assert_eq!(
-        steps[1]["if"].as_str(),
-        Some("hashFiles('xtask/Cargo.toml') == ''")
-    );
+    assert_eq!(steps[1]["if"].as_str(), Some(APPROVAL_FALLBACK_IF));
     // `cargo xtask approval` fetches the pull request refs with `git fetch origin`, which needs
     // the credentials the checkout leaves behind.
     for step in &steps[..2] {
@@ -369,6 +366,147 @@ fn every_job_only_runs_its_own_check() -> TestResult {
             step["with"]["persist-credentials"],
             Yaml::BadValue,
             "a checkout of the approval job changes persist-credentials"
+        );
+    }
+    Ok(())
+}
+
+/// What the workflow files may spell at their top level. A `defaults:` or an `env:` there would
+/// change every command below it.
+const WORKFLOW_KEYS: [&str; 5] = ["name", "on", "permissions", "concurrency", "jobs"];
+
+/// What a job may spell. Left out on purpose: `continue-on-error` (a failed check passes),
+/// `defaults` (another shell or folder), `strategy` and `needs` (a job that is skipped or
+/// tolerated), `container` and `services`.
+const JOB_KEYS: [&str; 7] = [
+    "name",
+    "runs-on",
+    "timeout-minutes",
+    "permissions",
+    "env",
+    "if",
+    "steps",
+];
+
+/// What a step of a job may spell. Left out on purpose: `continue-on-error`, `working-directory`,
+/// `env`, `shell`, `timeout-minutes` and `id`.
+const STEP_KEYS: [&str; 4] = ["uses", "with", "run", "if"];
+
+/// What a step of the setup action may spell on top of the keys of a job's step.
+const SETUP_STEP_KEYS: [&str; 6] = ["name", "id", "uses", "with", "run", "shell"];
+
+/// The expression of the one step of the workflows that has an `if:`: the checkout of the head of
+/// the pull request, which runs only while the base commit has no xtask.
+const APPROVAL_FALLBACK_IF: &str = "hashFiles('xtask/Cargo.toml') == ''";
+
+/// The keys of a mapping that are not in `allowed`.
+fn unexpected_keys(node: &Yaml, allowed: &[&str]) -> TestResult<Vec<String>> {
+    Ok(keys(node)?
+        .into_iter()
+        .filter(|key| !allowed.contains(&key.as_str()))
+        .collect())
+}
+
+// AC: CE-08.3, CE-08.4
+#[test]
+fn no_key_lets_a_job_pass_while_xtask_fails() -> TestResult {
+    for file in ALL_WORKFLOWS {
+        let workflow = workflow(file)?;
+        assert_eq!(
+            unexpected_keys(&workflow, &WORKFLOW_KEYS)?,
+            Vec::<String>::new(),
+            "{file}: a key at the top of the workflow that no check needs"
+        );
+        for job in jobs(&workflow)? {
+            let name = &job.name;
+            assert_eq!(
+                unexpected_keys(&job.node, &JOB_KEYS)?,
+                Vec::<String>::new(),
+                "{file}: job {name} has keys that can make it pass while xtask fails, or run \
+                 somewhere else than the root of the repository"
+            );
+            // The only job-level conditions are the label and event conditions of the macOS jobs,
+            // which are not required checks.
+            assert_eq!(
+                job.node["if"].is_badvalue(),
+                file != "macos.yml",
+                "{file}: job {name}: only the macOS jobs have an `if:`"
+            );
+            // The token goes to the two jobs that call GitHub, and to nothing else.
+            assert_eq!(
+                job.node["env"].is_badvalue(),
+                name != "approval" && name != "settings",
+                "{file}: job {name}: only approval and settings have an `env:`"
+            );
+            for (position, step) in job.steps()?.iter().enumerate() {
+                assert_eq!(
+                    unexpected_keys(step, &STEP_KEYS)?,
+                    Vec::<String>::new(),
+                    "{file}: job {name}, step {position}: keys that can make the step pass while \
+                     xtask fails, or run it somewhere else than the root of the repository"
+                );
+                let fallback = file == "approval.yml" && name == "approval" && position == 1;
+                assert_eq!(
+                    step["if"].as_str(),
+                    fallback.then_some(APPROVAL_FALLBACK_IF),
+                    "{file}: job {name}, step {position}: only the head checkout of approval has \
+                     an `if:`"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+// AC: CE-08.3, CE-08.4
+#[test]
+fn no_key_lets_a_step_of_the_setup_action_fail_silently() -> TestResult {
+    let action = parse(SETUP_ACTION)?;
+    assert_eq!(
+        unexpected_keys(&action, &["name", "description", "runs"])?,
+        Vec::<String>::new(),
+        "the setup action has a key it does not need"
+    );
+    assert_eq!(
+        unexpected_keys(&action["runs"], &["using", "steps"])?,
+        Vec::<String>::new(),
+        "the runs of the setup action has a key it does not need"
+    );
+    for (position, step) in action["runs"]["steps"]
+        .as_vec()
+        .ok_or("the setup action has no steps")?
+        .iter()
+        .enumerate()
+    {
+        assert_eq!(
+            unexpected_keys(step, &SETUP_STEP_KEYS)?,
+            Vec::<String>::new(),
+            "setup action, step {position}: keys that can make the step pass when it fails (such \
+             as `continue-on-error`), skip it or run it elsewhere than the root of the repository"
+        );
+    }
+    Ok(())
+}
+
+/// The minutes a job may run before GitHub cancels it. The default is six hours. The builds and
+/// the tests of one platform and the coverage run take the longest.
+fn timeout_of(name: &str) -> i64 {
+    match name {
+        "test (linux)" | "test (windows)" | "coverage" | "clippy (macos)" | "test (macos)" => 60,
+        _ => 30,
+    }
+}
+
+// AC: CE-08.3, CE-08.4
+#[test]
+fn every_job_has_a_timeout() -> TestResult {
+    for (file, job) in all_jobs()? {
+        assert_eq!(
+            job.node["timeout-minutes"].as_i64(),
+            Some(timeout_of(&job.name)),
+            "{file}: job {} has no `timeout-minutes` of {}, and a hung job runs for six hours",
+            job.name,
+            timeout_of(&job.name)
         );
     }
     Ok(())
