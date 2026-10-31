@@ -23,8 +23,9 @@ rustc-ice-*.txt
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# superpowers working files (ledgers, briefs, review packages)
+# superpowers working files (ledgers, briefs, review packages) and phase worktrees
 .superpowers/
+.worktrees/
 
 # UI
 node_modules/

@@ -25,6 +25,13 @@ name it (P01, P08) and for reading fixtures.
   `.claude/skills/theos-phase/SKILL.md`. Use superpowers for every step it names.
 - One phase = one phase spec PR (waits for Jann) + one implementation branch and PR.
 - Never work on `main`. Never push to `main`.
+- **Every phase runs in its own git worktree from its first step on**, the spec included, so
+  several sessions can run phases in parallel from the same clone. Consent for
+  superpowers:using-git-worktrees is hereby given; use the native worktree tool if the session
+  has one, otherwise `.worktrees/<name>` in the repo the step works in. Never switch branches in
+  the main checkout.
+- Parallel PRs touch `docs/status.md` at the same time. When a rebase conflicts there, keep the
+  newest state of every row and every list entry from both sides.
 
 ## Hard rules — the gate
 
