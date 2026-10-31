@@ -1,8 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readManifest } from '../../src/harness/manifest.ts';
-import { resolveAnchor } from '../../src/harness/anchor.ts';
-import { compareBytes } from '../../src/harness/compare.ts';
-import { editOffset, expectedAfter, expectedAfterExternalUndo, toLf } from '../../src/harness/oracle.ts';
+import { compareAtSites } from '../../src/harness/compare.ts';
+import { expectedAfter, expectedAfterExternalUndo, expectedSites, toLf } from '../../src/harness/oracle.ts';
 import type { ScriptedEdit } from '../../src/harness/types.ts';
 import { undoOnce } from './drivers.ts';
 import { edit, loadFile, record, strict, variantsUnderTest, type EditDriver } from './helpers.ts';
@@ -53,9 +52,12 @@ async function save(page: Page): Promise<Saved> {
   return level === 'span' || level === 'block' ? { text, adapterLevel: level } : { text };
 }
 
-/** The row for one comparison of saved bytes with the expected text. */
-function compared(subject: Subject, saved: Saved, expected: string, offset: number | undefined): RoundTripRow {
-  const result = compareBytes(saved.text, expected, offset);
+/**
+ * The row for one comparison of saved bytes with the expected text. `sites` are the places the
+ * edit changes (offsets into `expected`); damage that stays in the block of any one is `block`.
+ */
+function compared(subject: Subject, saved: Saved, expected: string, sites: number[]): RoundTripRow {
+  const result = compareAtSites(saved.text, expected, sites);
   const row: RoundTripRow = {
     ...subject,
     identical: result.identical,
@@ -99,13 +101,17 @@ async function measure(
   original: string,
 ): Promise<RoundTripRow> {
   await edit(page, scripted, driver, original);
-  const afterEdit = compared(subject, await save(page), expectedAfter(original, scripted), editOffset(original, scripted));
+  const afterEdit = compared(subject, await save(page), expectedAfter(original, scripted), expectedSites(original, scripted));
   if (scripted.kind !== 'external') return afterEdit;
 
   // The local edit is still unsaved; one undo must take back that edit and nothing else.
   await undoOnce(page, driver);
-  const externalAt = resolveAnchor(toLf(original), scripted.external.at);
-  const afterUndo = compared(subject, await save(page), expectedAfterExternalUndo(original, scripted), externalAt);
+  const afterUndo = compared(
+    subject,
+    await save(page),
+    expectedAfterExternalUndo(original, scripted),
+    expectedSites(original, scripted, 'undo'),
+  );
   if (!afterEdit.identical) return { ...afterEdit, stage: 'edit' };
   return afterUndo.identical ? afterEdit : { ...afterUndo, stage: 'undo' };
 }
@@ -122,7 +128,7 @@ for (const variant of variantsUnderTest()) {
       let row: RoundTripRow;
       try {
         const original = await loadFile(page, variant.name, file);
-        row = compared(subject, await save(page), toLf(original), undefined);
+        row = compared(subject, await save(page), toLf(original), []);
       } catch (error) {
         row = failed(subject, error);
       }

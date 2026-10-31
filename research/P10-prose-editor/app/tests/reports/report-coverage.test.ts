@@ -17,14 +17,24 @@ function readRows(): RoundTripRow[] {
   return (JSON.parse(readFileSync(REPORT, 'utf8')) as { rows: RoundTripRow[] }).rows;
 }
 
+/** The rows of the report, after checking there is a prototype to measure: with none, every check below would pass on nothing. */
+function readPrototypeRows(): RoundTripRow[] {
+  const rows = readRows();
+  expect(
+    variants.some((variant) => variant.baseline !== true),
+    'no prototype is registered in src/harness/variants.ts, so the report covers nothing',
+  ).toBe(true);
+  return rows;
+}
+
 describe('report/round-trip.json', () => {
   // AC: CE-06.2
   it('has a row for every prototype, engine, file, unedited check and edit with both drivers', () => {
-    expect(missingRows(readRows(), variants, readManifest().files)).toEqual([]);
+    expect(missingRows(readPrototypeRows(), variants, readManifest().files)).toEqual([]);
   });
 
   // AC: CE-06.2
   it('has both columns, stock and best-effort, of every WYSIWYG component', () => {
-    expect(missingColumns(readRows(), variants)).toEqual([]);
+    expect(missingColumns(readPrototypeRows(), variants)).toEqual([]);
   });
 });

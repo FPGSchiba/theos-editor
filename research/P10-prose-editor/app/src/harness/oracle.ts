@@ -103,7 +103,8 @@ function planBeatParam(text: string, edit: ScriptedEdit & { kind: 'beat-param' }
   );
 }
 
-const NOTE_STATE = /^(?:open|dropped|resolved by \[\[[^\]]*\]\])$/;
+/** The last segment of a note's title line when it is a state: `open`, `dropped` or `resolved by [[id]]`. */
+export const NOTE_STATE = /^(?:open|dropped|resolved by \[\[[^\]]*\]\])$/;
 
 /** `note-state`: replace the last segment of the note's title line with the new state. */
 function planNoteState(text: string, edit: ScriptedEdit & { kind: 'note-state' }): Plan {
@@ -202,4 +203,43 @@ export function expectedAfterExternalUndo(
  */
 export function editOffset(original: string, edit: ScriptedEdit): number | undefined {
   return plan(toLf(original), edit).offset;
+}
+
+/**
+ * Every place where the edit changes the text, as offsets into the LF form of `original`: the
+ * `editOffset` for a single-site edit (none when it has none), the local and then the external
+ * insert for `external`, and the site of each inner step, resolved against the original, for
+ * `undo-all` (whose expected text is the original). A comparison that asks whether damage stays
+ * in one block has to try each site.
+ */
+export function sites(original: string, edit: ScriptedEdit): number[] {
+  const text = toLf(original);
+  if (edit.kind === 'external') {
+    const { local, external } = externalChanges(text, edit);
+    return [local.from, external.from];
+  }
+  if (edit.kind === 'undo-all') return edit.edits.flatMap((step) => sites(text, step));
+  const offset = editOffset(text, edit);
+  return offset === undefined ? [] : [offset];
+}
+
+/**
+ * `sites` as offsets into the text a check expects, which is where `compareBytes` looks for the
+ * block. They only differ for `external`: after the edit (`'edit'`, expected is `expectedAfter`)
+ * both inserts are in, so a site moves by the length of every insert before it; after one undo
+ * (`'undo'`, expected is `expectedAfterExternalUndo`) only the external insert is in, and the
+ * local site is where the leftover local text would be.
+ */
+export function expectedSites(
+  original: string,
+  edit: ScriptedEdit,
+  stage: 'edit' | 'undo' = 'edit',
+): number[] {
+  const text = toLf(original);
+  if (edit.kind !== 'external') return sites(text, edit);
+  const { local, external } = externalChanges(text, edit);
+  const inserts = stage === 'edit' ? [local, external] : [external];
+  const moved = (at: number): number =>
+    inserts.reduce((sum, insert) => (insert.from < at ? sum + insert.insert.length : sum), at);
+  return [moved(local.from), moved(external.from)];
 }

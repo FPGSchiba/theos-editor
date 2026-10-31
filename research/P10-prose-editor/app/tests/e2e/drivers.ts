@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { resolveAnchor } from '../../src/harness/anchor.ts';
-import { editOffset, expectedAfter, toLf } from '../../src/harness/oracle.ts';
+import { editOffset, expectedAfter, NOTE_STATE, toLf } from '../../src/harness/oracle.ts';
 import type { ScriptedEdit } from '../../src/harness/types.ts';
 import { registerDriver, type EditDriver } from './helpers.ts';
 
@@ -46,6 +46,8 @@ const attr = (value: string | number): string => JSON.stringify(String(value));
 async function beatParam(page: Page, edit: ScriptedEdit & { kind: 'beat-param' }): Promise<void> {
   const row = page.locator(`[data-beat-row=${attr(edit.beat)}]`).first();
   await need(row, `the beat row of beat ${edit.beat}`);
+  // A row may be mounted before its params; whether the key exists is only known once they are.
+  await need(row.locator('[data-beat-param], [data-beat-add]'), `the parameters of beat ${edit.beat}`);
   const existing = row.locator(`[data-beat-param=${attr(edit.key)}]`).first();
   if ((await existing.count()) > 0) {
     // The key label is outside any chip; a click on the middle of the param may land on one.
@@ -59,8 +61,6 @@ async function beatParam(page: Page, edit: ScriptedEdit & { kind: 'beat-param' }
   await field.fill(edit.value, { timeout: FEATURE_WAIT_MS });
   await field.press('Enter');
 }
-
-const NOTE_STATE = /^(?:open|dropped|resolved by \[\[[^\]]*\]\])$/;
 
 /** `note-state`: the caret on the state segment of the title line, Shift+End, type the new state. */
 async function noteState(page: Page, source: string, edit: ScriptedEdit & { kind: 'note-state' }): Promise<void> {

@@ -156,3 +156,19 @@ export function compareBytes(saved: string, expected: string, editOffset?: numbe
   }
   return result;
 }
+
+/**
+ * `compareBytes` for an edit that changes the text in more than one place (`external`,
+ * `undo-all`): `withinBlock` is true when the damage stays inside the block around any one of
+ * `sites` (offsets into `expected`, see `expectedSites`). Without sites it is `compareBytes`
+ * without an offset.
+ */
+export function compareAtSites(saved: string, expected: string, sites: number[]): Comparison {
+  const [first, ...rest] = sites;
+  const result = compareBytes(saved, expected, first);
+  if (result.identical || result.withinBlock === true) return result;
+  for (const site of rest) {
+    if (compareBytes(saved, expected, site).withinBlock === true) return { ...result, withinBlock: true };
+  }
+  return result;
+}

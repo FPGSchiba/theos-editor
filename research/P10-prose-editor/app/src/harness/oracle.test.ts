@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { editOffset, expectedAfter, expectedAfterExternalUndo, toLf } from './oracle.ts';
+import {
+  editOffset, expectedAfter, expectedAfterExternalUndo, expectedSites, NOTE_STATE, sites, toLf,
+} from './oracle.ts';
 import type { ScriptedEdit } from './types.ts';
 
 type WithoutId<T> = T extends unknown ? Omit<T, 'id'> : never;
@@ -336,5 +338,98 @@ describe('editOffset', () => {
   it('works on the LF form of a CRLF original', () => {
     const e = edit({ kind: 'insert', at: { find: 'b' }, text: 'X' });
     expect(editOffset('a\r\nb', e)).toBe(2);
+  });
+});
+
+describe('sites', () => {
+  const text = 'AAA\nBBB\nCCC\n';
+
+  it('is the edit offset for a single-site edit', () => {
+    expect(sites(text, edit({ kind: 'insert', at: { find: 'BBB', offset: 1 }, text: 'X' }))).toEqual([5]);
+    expect(sites(`${FM}Body`, edit({ kind: 'select-all-type', text: 'x' }))).toEqual([FM.length]);
+    expect(sites(text, edit({ kind: 'delete', at: { find: 'CCC' }, length: 2 }))).toEqual([8]);
+  });
+
+  it('is the local and then the external anchor for external, in that order', () => {
+    const e = edit({
+      kind: 'external',
+      local: { at: { find: 'CCC' }, text: 'L' },
+      external: { at: { find: 'AAA', offset: 3 }, text: 'E' },
+    });
+    expect(sites(text, e)).toEqual([8, 3]);
+  });
+
+  it('is the site of every inner step, resolved against the original, for undo-all', () => {
+    const e = edit({
+      kind: 'undo-all',
+      edits: [
+        { id: 'a', kind: 'insert', at: { find: 'CCC' }, text: 'XXXX' },
+        { id: 'b', kind: 'delete', at: { find: 'AAA' }, length: 2 },
+        { id: 'c', kind: 'insert', at: { find: 'BBB', offset: 3 }, text: 'Y' },
+      ],
+    });
+    expect(sites(text, e)).toEqual([8, 0, 7]);
+  });
+
+  it('clips the site of a backward inner delete at the body start', () => {
+    const e = edit({
+      kind: 'undo-all',
+      edits: [{ id: 'a', kind: 'delete', at: { find: 'AAA', offset: 1 }, length: 5, backward: true }],
+    });
+    expect(sites(`${FM}AAA\n`, e)).toEqual([FM.length]);
+  });
+
+  it('is empty for an undo-all without steps', () => {
+    expect(sites(text, edit({ kind: 'undo-all', edits: [] }))).toEqual([]);
+  });
+
+  it('works on the LF form of a CRLF original', () => {
+    expect(sites('a\r\nb\r\nc', edit({ kind: 'insert', at: { find: 'c' }, text: 'X' }))).toEqual([4]);
+  });
+});
+
+describe('expectedSites', () => {
+  const text = 'AAA\nBBB\nCCC\n';
+  /** The local insert comes later in the text than the external one. */
+  const laterLocal = edit({
+    kind: 'external',
+    local: { at: { find: 'CCC', offset: 3 }, text: 'L' },
+    external: { at: { find: 'AAA', offset: 3 }, text: 'EXT' },
+  });
+  /** The local insert comes earlier in the text than the external one. */
+  const earlierLocal = edit({
+    kind: 'external',
+    local: { at: { find: 'AAA', offset: 1 }, text: 'LL' },
+    external: { at: { find: 'CCC', offset: 3 }, text: 'E' },
+  });
+
+  it('equals sites for every kind but external', () => {
+    const e = edit({ kind: 'insert', at: { find: 'BBB' }, text: 'X' });
+    expect(expectedSites(text, e)).toEqual(sites(text, e));
+    const undo = edit({ kind: 'undo-all', edits: [{ id: 'a', kind: 'insert', at: { find: 'CCC' }, text: 'X' }] });
+    expect(expectedSites(text, undo)).toEqual(sites(text, undo));
+  });
+
+  it('moves a site behind an insert that comes before it, after an external edit', () => {
+    // 'AAAEXT\nBBB\nCCCL\n': the local L sits at 14, the external EXT at 3.
+    expect(expectedAfter(text, laterLocal)).toBe('AAAEXT\nBBB\nCCCL\n');
+    expect(expectedSites(text, laterLocal)).toEqual([14, 3]);
+    // 'ALLAA\nBBB\nCCCE\n': LL at 1, E at 11 + 2.
+    expect(expectedAfter(text, earlierLocal)).toBe('ALLAA\nBBB\nCCCE\n');
+    expect(expectedSites(text, earlierLocal)).toEqual([1, 13]);
+  });
+
+  it('puts the local site where the leftover local text would be after one undo', () => {
+    // Only EXT is in: 'AAAEXT\nBBB\nCCC\n'; the local text would be at the end of CCC (14).
+    expect(expectedSites(text, laterLocal, 'undo')).toEqual([14, 3]);
+    // Only E is in, behind the local site: 'AAA\nBBB\nCCCE\n'.
+    expect(expectedSites(text, earlierLocal, 'undo')).toEqual([1, 11]);
+  });
+});
+
+describe('NOTE_STATE', () => {
+  it('matches the three note states and nothing else', () => {
+    for (const state of ['open', 'dropped', 'resolved by [[f04-terrain-v1]]']) expect(NOTE_STATE.test(state)).toBe(true);
+    for (const other of ['n1', '[[f04-terrain-v1]]', 'resolved', 'open now']) expect(NOTE_STATE.test(other)).toBe(false);
   });
 });
