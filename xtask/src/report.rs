@@ -12,7 +12,15 @@ use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
 /// Writes one line per check, `pass` or `FAIL` and the check's name, and under each failing
-/// check its findings as `  path:line: message`. Notes follow as `  note: …`.
+/// check its findings as `  - path:line: message`. Notes follow as `  note: …`.
+///
+/// A finding or note that spans several lines continues on lines that start with `    | `.
+///
+/// Finding and note text can come from a pull request, and the runner reads a line as a workflow
+/// command when it starts with `::` once leading whitespace is gone. So no line of the table
+/// starts with the text itself: each one starts with a marker (`- `, `note:` or `| `), and the
+/// text is split into lines at every kind of line break first, so a break cannot hide a
+/// line start in the middle of one of ours.
 ///
 /// # Errors
 ///
@@ -22,29 +30,55 @@ pub fn write_table(verdicts: &[Verdict], out: &mut dyn Write) -> io::Result<()> 
         let status = if verdict.passed() { "pass" } else { "FAIL" };
         writeln!(out, "{status}  {}", verdict.check.name())?;
         for finding in &verdict.findings {
-            match location(finding) {
-                Some(place) => writeln!(out, "  {place}: {}", finding.message)?,
-                None => writeln!(out, "  {}", finding.message)?,
-            }
+            let text = match location(finding) {
+                Some(place) => format!("{place}: {}", finding.message),
+                None => finding.message.clone(),
+            };
+            write_marked(out, "- ", &text)?;
         }
         for note in &verdict.notes {
-            let mut lines = note.lines();
-            if let Some(first) = lines.next() {
-                writeln!(out, "  note: {first}")?;
-            }
-            for line in lines {
-                writeln!(out, "        {line}")?;
-            }
+            write_marked(out, "note: ", note)?;
         }
     }
     Ok(())
+}
+
+/// Writes `text` indented, its first line after `marker` and every further line after `| `.
+fn write_marked(out: &mut dyn Write, marker: &str, text: &str) -> io::Result<()> {
+    let mut lines = lines_of(text).into_iter();
+    writeln!(out, "  {marker}{}", lines.next().unwrap_or_default())?;
+    for line in lines {
+        writeln!(out, "    | {line}")?;
+    }
+    Ok(())
+}
+
+/// Every character a reader of our output might end a line at: LF, CR and the other Unicode
+/// line breaks. The runner is only known to split at the first two; the rest is for safety.
+const LINE_BREAKS: [char; 7] = [
+    '\n', '\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}',
+];
+
+/// The lines of `text`, split at every line break (CRLF counts as one). Trailing empty lines
+/// are dropped.
+fn lines_of(text: &str) -> Vec<String> {
+    let mut lines: Vec<String> = text
+        .replace("\r\n", "\n")
+        .split(LINE_BREAKS)
+        .map(str::to_owned)
+        .collect();
+    while lines.last().is_some_and(String::is_empty) {
+        lines.pop();
+    }
+    lines
 }
 
 /// The workflow command that shows `finding` on the pull request:
 /// `::error file=<file>,line=<line>,title=<check>::<message>`.
 ///
 /// Without a file the command is `::error title=<check>::<message>`. `%`, CR and LF in the
-/// message are escaped as `%25`, `%0D` and `%0A`; the file also has `:` and `,` escaped, which
+/// message are escaped as `%25`, `%0D` and `%0A`, and the other Unicode line breaks become a
+/// space, so the command is always one line. The file also has `:` and `,` escaped, which
 /// would otherwise end its property.
 #[must_use]
 pub fn annotation(check: Check, finding: &Finding) -> String {
@@ -171,6 +205,8 @@ fn escape_data(text: &str) -> String {
     text.replace('%', "%25")
         .replace('\r', "%0D")
         .replace('\n', "%0A")
+        // CR and LF are gone by now; this takes the remaining line breaks.
+        .replace(LINE_BREAKS, " ")
 }
 
 fn escape_property(text: &str) -> String {
@@ -209,6 +245,15 @@ mod tests {
     }
 
     #[test]
+    fn annotation_is_one_line_whatever_the_line_breaks() {
+        let finding = Finding::new("a\u{b}b\u{c}c\u{85}d\u{2028}e\u{2029}f");
+        assert_eq!(
+            annotation(Check::Lints, &finding),
+            "::error title=lints::a b c d e f"
+        );
+    }
+
+    #[test]
     fn annotation_without_file() {
         assert_eq!(
             annotation(Check::PrTitle, &Finding::new("missing scope")),
@@ -243,8 +288,79 @@ mod tests {
         let text = table(&[Verdict::pass(Check::Fmt), failing()])?;
         assert_eq!(
             text,
-            "pass  fmt\nFAIL  lints\n  crates/a/src/lib.rs:3: allow attribute\n  no clippy.toml\n"
+            "pass  fmt\nFAIL  lints\n  - crates/a/src/lib.rs:3: allow attribute\n  - no clippy.toml\n"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn table_continues_a_multi_line_message_on_marked_lines() -> TestResult {
+        let finding = Finding::at("a.rs", 1, "first\nsecond\n\nfourth\n");
+        let text = table(&[Verdict::with(Check::PrBody, vec![finding])])?;
+        assert_eq!(
+            text,
+            "FAIL  pr-body\n  - a.rs:1: first\n    | second\n    | \n    | fourth\n"
+        );
+        Ok(())
+    }
+
+    /// Lines a reader of the output could take for a workflow command: they start with `::` once
+    /// leading whitespace is gone. Lines end at CR, LF and the other Unicode line breaks.
+    fn command_lines(text: &str) -> Vec<&str> {
+        text.split([
+            '\n', '\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}',
+        ])
+        .filter(|line| line.trim_start().starts_with("::"))
+        .collect()
+    }
+
+    fn hostile() -> Verdict {
+        Verdict {
+            check: Check::CommitMsg,
+            findings: vec![
+                Finding::new("x\n::error::forged"),
+                Finding::new("::stop-commands::token"),
+                Finding::new("  ::add-mask::value"),
+                Finding::new("cr only\r::warning::forged"),
+                Finding::new("crlf\r\n::notice::forged"),
+                Finding::new("unicode\u{2028}::error::forged"),
+                Finding::new("next line\u{85}::error::forged"),
+                Finding::at("::error::file", 1, "message"),
+                Finding::at("name\n::error::forged.rs", 2, "message"),
+                Finding {
+                    file: Some("::add-mask::x".to_owned()),
+                    line: None,
+                    message: "message".to_owned(),
+                },
+            ],
+            notes: vec![
+                "note first\n::error::in a note".to_owned(),
+                "::notice::note".to_owned(),
+            ],
+        }
+    }
+
+    #[test]
+    fn table_cannot_form_workflow_commands() -> TestResult {
+        let text = table(&[hostile()])?;
+        assert_eq!(command_lines(&text), Vec::<&str>::new(), "{text}");
+        assert!(text.contains("::error::forged"), "kept readable: {text}");
+        assert!(
+            text.contains("::stop-commands::token"),
+            "kept readable: {text}"
+        );
+        // Only the newlines the table writes itself end a line.
+        for line_break in ['\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}'] {
+            assert!(!text.contains(line_break), "{line_break:?} in {text:?}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn table_keeps_the_forged_command_example_out_of_column_zero() -> TestResult {
+        let finding = Finding::new("x\n::error::forged");
+        let text = table(&[Verdict::with(Check::CommitMsg, vec![finding])])?;
+        assert_eq!(text, "FAIL  commit-msg\n  - x\n    | ::error::forged\n");
         Ok(())
     }
 
@@ -256,7 +372,7 @@ mod tests {
             message: "no version".to_owned(),
         };
         let text = table(&[Verdict::with(Check::Lints, vec![finding])])?;
-        assert_eq!(text, "FAIL  lints\n  Cargo.toml: no version\n");
+        assert_eq!(text, "FAIL  lints\n  - Cargo.toml: no version\n");
         Ok(())
     }
 
@@ -269,7 +385,7 @@ mod tests {
         let text = table(&[verdict])?;
         assert_eq!(
             text,
-            "pass  ac-trace\n  note: CE-08.1\n          workspace_members\n"
+            "pass  ac-trace\n  note: CE-08.1\n    |   workspace_members\n"
         );
         Ok(())
     }
@@ -321,9 +437,43 @@ mod tests {
         emit_with(&failing(), false, Some(summary.path()), &mut out)?;
         assert_eq!(
             String::from_utf8(out)?,
-            "FAIL  lints\n  crates/a/src/lib.rs:3: allow attribute\n  no clippy.toml\n"
+            "FAIL  lints\n  - crates/a/src/lib.rs:3: allow attribute\n  - no clippy.toml\n"
         );
         assert_eq!(std::fs::read_to_string(summary.path())?, "");
+        Ok(())
+    }
+
+    #[test]
+    fn emit_outside_ci_forms_no_workflow_command() -> TestResult {
+        let mut out = Vec::new();
+        emit_with(&hostile(), false, None, &mut out)?;
+        let text = String::from_utf8(out)?;
+        assert_eq!(command_lines(&text), Vec::<&str>::new(), "{text}");
+        Ok(())
+    }
+
+    #[test]
+    fn emit_in_ci_forms_only_its_own_annotations() -> TestResult {
+        let finding = Finding::new("x\n::error::forged");
+        let verdict = Verdict::with(Check::CommitMsg, vec![finding]);
+        let mut out = Vec::new();
+        emit_with(&verdict, true, None, &mut out)?;
+        let text = String::from_utf8(out)?;
+        assert_eq!(
+            command_lines(&text),
+            ["::error title=commit-msg::x%0A::error::forged"],
+            "{text}"
+        );
+
+        let mut out = Vec::new();
+        emit_with(&hostile(), true, None, &mut out)?;
+        let text = String::from_utf8(out)?;
+        let commands = command_lines(&text);
+        assert_eq!(commands.len(), hostile().findings.len(), "{text}");
+        assert!(
+            commands.iter().all(|line| line.starts_with("::error ")),
+            "{text}"
+        );
         Ok(())
     }
 
