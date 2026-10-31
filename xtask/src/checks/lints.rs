@@ -16,22 +16,29 @@
 //!   by walking up from the crate;
 //! - in every `.rs` source, an attribute with `allow(…)`, an `expect(…)` without
 //!   `reason = "…"` or an `ignore` without `= "…"` ([`scan_attributes`]);
-//! - in every `.rs` source, a `#[path = "…"]` attribute or an `include!(…)` that leads into a
-//!   `tests/fixtures/` folder, or whose path the check cannot tell ([`scan_attributes`],
-//!   [`scan_includes`]).
+//! - a way to compile a fixture, which the scan does not read (below): a `#[path = "…"]`
+//!   attribute or an `include!(…)` that leads into a `tests/fixtures/` folder or whose path
+//!   cannot be told ([`scan_attributes`], [`scan_includes`]); a `mod fixtures;` declaration
+//!   ([`scan_fixture_modules`]); a `main.rs` or `mod.rs` directly in a `tests/fixtures/` folder;
+//!   and a `path` in a `Cargo.toml` (`[lib]`, `[[bin]]`, `[[test]]`, `[[example]]`, `[[bench]]`,
+//!   dependencies of every kind, `package.build`, workspace members) that leads there.
 //!
-//! The `.rs` sources are all that are tracked but the files under `tests/fixtures/` and under
-//! the build folder `target/` of the root; a folder called `target` or `node_modules` further
-//! down is source, because `mod target;` builds it.
+//! The `.rs` sources are all that are listed but the files under `tests/fixtures/` and under the
+//! build folder `target/` of the root; a folder called `target` or `node_modules` further down
+//! is source, because `mod target;` builds it.
 //!
 //! Files under `tests/fixtures/` are test data with deliberate violations: the check reads none
-//! of them as part of the repository. So that
-//! nothing in them is compiled unseen, a module or an include may not lead there: the path is
-//! read from the folder of the file, with `.` and `..` resolved, `\` as `/` and without regard
-//! for case. A module of a file may be called `tests`, so a path that starts in a folder
-//! `fixtures` counts too, and a path that is not one string literal, is absolute, climbs out of
-//! the repository or has an escape in it is a finding because it cannot be followed.
-//! `include_str!` and `include_bytes!` read data, and fixtures may be read that way.
+//! of them as part of the repository, and no manifest there. So that nothing in them is built
+//! unseen, every way to build one is a finding: an attribute, an include or a manifest that
+//! leads there (a path is read from the folder of the file, with `.` and `..` resolved, `\` as
+//! `/` and without regard for case; one that is not one string literal, is absolute, climbs out
+//! of the repository or has an escape in it cannot be followed, and is a finding in source), a
+//! `mod fixtures;` (any case, any visibility) that reads `tests/fixtures/mod.rs`, and the files
+//! that cargo or such a declaration find by themselves, `tests/fixtures/main.rs` and
+//! `tests/fixtures/mod.rs`. A module of a file may be called `tests`, so a path in source that
+//! starts in a folder `fixtures` counts too. `include_str!` and `include_bytes!` read data, and
+//! fixtures may be read that way. Files in folders below, such as `tests/fixtures/case/main.rs`,
+//! are the fixtures themselves, and stay allowed.
 //!
 //! The attribute scan is for attributes at the start of a line, because a text scan cannot know
 //! more: a line whose trimmed text starts with `#[` or `#![` starts an attribute, which goes on
@@ -86,6 +93,15 @@ const INCLUDE_FIXTURES: &str = "`include!` leads into a `tests/fixtures/` folder
 const INCLUDE_UNKNOWN: &str = "`include!` is not given one string literal for a path inside the \
                                repository, so the check cannot tell what it compiles: write the \
                                path out";
+const MOD_FIXTURES: &str = "`mod fixtures;` reads `tests/fixtures/mod.rs` where a `tests/` folder \
+                            has one: fixtures are test data that no check reads, so they are not \
+                            compiled; call the module something else, or give it a body";
+const FIXTURE_ENTRY_POINT: &str = "a `main.rs` or `mod.rs` directly in a `tests/fixtures/` folder: \
+                                   cargo builds it as a test and `mod fixtures;` as a module, and \
+                                   no check reads it; keep fixture files in a folder of their own \
+                                   below";
+const MANIFEST_FIXTURES: &str = "has a `path` that leads into a `tests/fixtures/` folder: fixtures \
+                                 are test data that no check reads, so no crate is built from them";
 
 /// Runs the check on the repository at `root`, on the files that git lists there (a walk
 /// outside a work tree).
@@ -114,6 +130,7 @@ pub fn check(root: &Path, files: &[String]) -> Result<Verdict> {
         mirror(root, files, copy, original, &mut findings)?;
     }
     findings.extend(stray_config(files));
+    findings.extend(fixture_entry_points(files));
     sources(root, files, &mut findings)?;
     Ok(Verdict::with(Check::Lints, findings))
 }
@@ -208,11 +225,101 @@ pub fn scan_includes(file: &str, text: &str) -> Vec<Finding> {
             },
             _ => INCLUDE_UNKNOWN,
         };
-        let before = text.get(..offset).unwrap_or(text);
-        let line = line_number(before.matches('\n').count());
-        findings.push(Finding::at(file, line, message));
+        findings.push(Finding::at(file, line_at(text, offset), message));
     }
     findings
+}
+
+/// The findings for the declarations `mod fixtures;` of the Rust source `text` of the file
+/// `file`, in file order, on the line of the `mod`.
+///
+/// A module of that name that is not written out in the file is read from a file called
+/// `fixtures.rs` or `fixtures/mod.rs`, which in `tests/` is a fixtures file that nobody scans. Any
+/// such declaration is found, whatever its visibility and wherever the file is, and the name is
+/// read without regard for case (and as `r#fixtures`) because the file system may not tell. A
+/// module with a body, `mod fixtures { … }`, reads no file and is fine. Comments and strings do
+/// not count.
+#[must_use]
+pub fn scan_fixture_modules(file: &str, text: &str) -> Vec<Finding> {
+    let tokens = located_tokens(text);
+    let mut findings = Vec::new();
+    for (index, &(offset, token)) in tokens.iter().enumerate() {
+        if token != Token::Word("mod") {
+            continue;
+        }
+        let rest = tokens.get(index + 1..).unwrap_or_default();
+        let rest = match rest {
+            [(_, Token::Word("r")), (_, Token::Symbol(b'#')), name @ ..] => name,
+            _ => rest,
+        };
+        if let [(_, Token::Word(name)), (_, Token::Symbol(b';')), ..] = rest
+            && name.eq_ignore_ascii_case("fixtures")
+        {
+            findings.push(Finding::at(file, line_at(text, offset), MOD_FIXTURES));
+        }
+    }
+    findings
+}
+
+/// The files that get built without a line of code that names them: a `main.rs` or `mod.rs`
+/// directly in a `tests/fixtures/` folder, at any depth of the repository. Cargo finds
+/// `tests/<name>/main.rs` as a test, and `mod fixtures;` in `tests/` finds `tests/fixtures/mod.rs`.
+/// The files in the case folders below are not found by either.
+fn fixture_entry_points(files: &[String]) -> Vec<Finding> {
+    files
+        .iter()
+        .filter(|path| {
+            let lower = path.to_ascii_lowercase();
+            lower.rsplit_once('/').is_some_and(|(folder, name)| {
+                matches!(name, "main.rs" | "mod.rs")
+                    && (folder == "tests/fixtures" || folder.ends_with("/tests/fixtures"))
+            })
+        })
+        .map(|path| at_file(path, FIXTURE_ENTRY_POINT))
+        .collect()
+}
+
+/// Whether the manifest `manifest` of the file `file` has a path that leads into a
+/// `tests/fixtures/` folder: a `path` value anywhere in it (`[lib]`, `[[bin]]`, `[[test]]`,
+/// `[[example]]`, `[[bench]]`, the dependency tables of every kind, `[patch]`), the build script
+/// `package.build` and the `members` of a workspace. The path is read from the folder of the
+/// manifest, as for a module. A path that cannot be followed because it is absolute or leaves the
+/// repository, as that of an engine crate does, is not found: a manifest may point anywhere else.
+fn manifest_leads_into_fixtures(file: &str, manifest: &toml::Table) -> bool {
+    let mut paths = Vec::new();
+    collect_paths(manifest, &mut paths);
+    let build = manifest
+        .get("package")
+        .and_then(|package| package.get("build"))
+        .and_then(toml::Value::as_str);
+    let members = ["members", "default-members"]
+        .into_iter()
+        .filter_map(|key| manifest.get("workspace")?.get(key)?.as_array())
+        .flatten()
+        .filter_map(toml::Value::as_str);
+    paths.extend(build);
+    paths.extend(members);
+    paths.into_iter().any(|path| {
+        normalise(path)
+            .and_then(|own| folder_of(file, &own))
+            .is_some_and(|folder| is_fixture(&folder))
+    })
+}
+
+/// Adds the value of every key `path` in `table`, in its tables and in its arrays of tables.
+fn collect_paths<'a>(table: &'a toml::Table, paths: &mut Vec<&'a str>) {
+    for (key, value) in table {
+        match value {
+            toml::Value::String(path) if key == "path" => paths.push(path),
+            toml::Value::Table(inner) => collect_paths(inner, paths),
+            toml::Value::Array(items) => {
+                for inner in items.iter().filter_map(toml::Value::as_table) {
+                    collect_paths(inner, paths);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// The text of `path` when `files` lists it; else a finding says that it is missing.
@@ -291,34 +398,41 @@ fn crate_manifests(root: &Path, files: &[String], findings: &mut Vec<Finding>) -
         .filter(|path| path.as_str() == ROOT_MANIFEST || path.ends_with("/Cargo.toml"))
         .filter(|path| !is_fixture(path));
     for path in manifests {
-        match inherits_lints(path, &read(root, path)?) {
-            Ok(true) => {}
-            Ok(false) => findings.push(at_file(
+        let manifest = match parse(path, &read(root, path)?) {
+            Ok(manifest) => manifest,
+            // `lint_tables` has read the root manifest too, and reports it.
+            Err(Error::Parse { .. }) if path == ROOT_MANIFEST => continue,
+            Err(Error::Parse { message, .. }) => {
+                findings.push(at_file(path, message));
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        if !inherits_lints(path, &manifest) {
+            findings.push(at_file(
                 path,
                 "has no `[lints]` with `workspace = true`, so the crate does not get the \
                  workspace lints",
-            )),
-            // `lint_tables` has read the root manifest too, and reports it.
-            Err(Error::Parse { .. }) if path == ROOT_MANIFEST => {}
-            Err(Error::Parse { message, .. }) => findings.push(at_file(path, message)),
-            Err(error) => return Err(error),
+            ));
+        }
+        if manifest_leads_into_fixtures(path, &manifest) {
+            findings.push(at_file(path, MANIFEST_FIXTURES));
         }
     }
     Ok(())
 }
 
-/// Whether the manifest `text` of the file `path` has `[lints]` with `workspace = true`. The root
-/// manifest of a workspace that is not a package has no crate to give lints to, and passes.
-fn inherits_lints(path: &str, text: &str) -> Result<bool> {
-    let manifest = parse(path, text)?;
+/// Whether the manifest `manifest` of the file `path` has `[lints]` with `workspace = true`. The
+/// root manifest of a workspace that is not a package has no crate to give lints to, and passes.
+fn inherits_lints(path: &str, manifest: &toml::Table) -> bool {
     if path == ROOT_MANIFEST && !manifest.contains_key("package") {
-        return Ok(true);
+        return true;
     }
     let workspace = manifest
         .get("lints")
         .and_then(|lints| lints.get("workspace"))
         .and_then(toml::Value::as_bool);
-    Ok(workspace == Some(true))
+    workspace == Some(true)
 }
 
 /// The file `copy` against its original `original`.
@@ -405,6 +519,7 @@ fn sources(root: &Path, files: &[String], findings: &mut Vec<Finding>) -> Result
         let text = String::from_utf8_lossy(&bytes);
         let mut found = scan_attributes(path, &text);
         found.extend(scan_includes(path, &text));
+        found.extend(scan_fixture_modules(path, &text));
         found.sort_by_key(|finding| finding.line);
         findings.extend(found);
     }
@@ -562,40 +677,61 @@ fn target(file: &str, literal: &str) -> Target {
     let Some(path) = string_value(literal) else {
         return Target::Unknown;
     };
-    let path = path.replace('\\', "/");
-    if path.starts_with('/') || path.as_bytes().get(1) == Some(&b':') {
+    let Some(own) = normalise(&path) else {
         return Target::Unknown;
-    }
-    // The path on its own: a `..` stays when there is nothing before it to take away.
-    let mut own: Vec<&str> = Vec::new();
-    for part in path.split('/') {
-        match part {
-            "" | "." => {}
-            ".." if own.last().is_some_and(|last| *last != "..") => {
-                own.pop();
-            }
-            other => own.push(other),
-        }
-    }
-    let mut resolved: Vec<&str> = file.split('/').collect();
-    resolved.pop();
-    for part in &own {
-        if *part == ".." {
-            if resolved.pop().is_none() {
-                return Target::Unknown;
-            }
-        } else {
-            resolved.push(part);
-        }
-    }
-    let first = own.iter().find(|part| **part != "..");
+    };
+    let Some(folder) = folder_of(file, &own) else {
+        return Target::Unknown;
+    };
+    let first = own.iter().find(|part| *part != "..");
     let starts_in_fixtures = first.is_some_and(|part| part.eq_ignore_ascii_case("fixtures"));
-    let folder = format!("{}/", resolved.join("/")).to_ascii_lowercase();
     if starts_in_fixtures || is_fixture(&folder) {
         Target::Fixtures
     } else {
         Target::Elsewhere
     }
+}
+
+/// The parts of `path` (`\` read as `/`) without `.` and without the parts that a `..` takes
+/// away. A `..` that has nothing before it to take away stays. `None` for an absolute path.
+fn normalise(path: &str) -> Option<Vec<String>> {
+    let path = path.replace('\\', "/");
+    if path.starts_with('/') || path.as_bytes().get(1) == Some(&b':') {
+        return None;
+    }
+    let mut own: Vec<String> = Vec::new();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." if own.last().is_some_and(|last| last != "..") => {
+                own.pop();
+            }
+            other => own.push(other.to_owned()),
+        }
+    }
+    Some(own)
+}
+
+/// Where the parts `own` of a path lead when they are read from the folder of the file `file`:
+/// the path in the repository, in lower case, with a `/` at the end. `None` when the path climbs
+/// out of the repository.
+fn folder_of(file: &str, own: &[String]) -> Option<String> {
+    let mut resolved: Vec<&str> = file.split('/').collect();
+    resolved.pop();
+    for part in own {
+        if part == ".." {
+            resolved.pop()?;
+        } else {
+            resolved.push(part);
+        }
+    }
+    Some(format!("{}/", resolved.join("/")).to_ascii_lowercase())
+}
+
+/// The number of the line of `text` that the byte `offset` is on, in the unit of a finding.
+fn line_at(text: &str, offset: usize) -> u32 {
+    let before = text.get(..offset).unwrap_or(text);
+    line_number(before.matches('\n').count())
 }
 
 /// The text of the string literal `literal` as written, with its quotes; `None` when it has an
@@ -1248,5 +1384,231 @@ mod tests {
             ],
         );
         assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    /// The findings of the module scan for the source file made of `lines`.
+    fn modules(lines: &[&str]) -> Vec<Finding> {
+        scan_fixture_modules("tests/main.rs", &source(lines))
+    }
+
+    #[test]
+    fn mod_fixtures_declaration_found() {
+        for line in [
+            "mod fixtures;",
+            "pub mod fixtures;",
+            "pub(crate) mod fixtures;",
+            "pub(in crate::a) mod fixtures;",
+            "#[cfg(test)] mod fixtures;",
+            "mod  fixtures ;",
+            "mod tests { mod fixtures; }",
+            "macro_rules! m { () => { mod fixtures; }; }",
+            // The file system may not tell the case, and `r#` names the same module.
+            "mod Fixtures;",
+            "mod FIXTURES;",
+            "mod r#fixtures;",
+        ] {
+            let findings = modules(&["fn a() {}", line]);
+            assert_eq!(findings.len(), 1, "{line}: {findings:?}");
+            assert_eq!(findings[0].file.as_deref(), Some("tests/main.rs"), "{line}");
+            assert_eq!(findings[0].line, Some(2), "{line}");
+            assert!(findings[0].message.contains("fixtures"), "{line}");
+        }
+
+        // Across lines, and every declaration of a file on the line of its `mod`.
+        let findings = modules(&[
+            "mod fixtures;",
+            "mod other;",
+            "mod",
+            "    fixtures",
+            ";",
+            "pub mod fixtures;",
+        ]);
+        let lines: Vec<Option<u32>> = findings.iter().map(|finding| finding.line).collect();
+        assert_eq!(lines, [Some(1), Some(3), Some(6)]);
+    }
+
+    #[test]
+    fn mod_fixtures_that_is_not_a_declaration_allowed() {
+        let findings = modules(&[
+            "mod fixtures { fn helper() {} }",
+            "mod fixture;",
+            "mod fixtures_extra;",
+            "mod my_fixtures;",
+            "mod tests;",
+            "use crate::fixtures;",
+            "use tests::fixtures as other;",
+            "let fixtures = 1;",
+            "// mod fixtures;",
+            "/// mod fixtures;",
+            "/* mod fixtures; */",
+            "let text = \"mod fixtures;\";",
+        ]);
+        assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    #[test]
+    fn fixtures_main_rs_found() {
+        for path in [
+            "tests/fixtures/main.rs",
+            "xtask/tests/fixtures/main.rs",
+            "crates/a/tests/fixtures/mod.rs",
+            "a/b/tests/fixtures/main.rs",
+            // The file system may not tell the case.
+            "crates/a/tests/Fixtures/Main.rs",
+            "crates/a/Tests/fixtures/MOD.RS",
+        ] {
+            let findings = fixture_entry_points(&paths(&[path]));
+            assert_eq!(findings.len(), 1, "{path}: {findings:?}");
+            assert_eq!(findings[0].file.as_deref(), Some(path), "{path}");
+        }
+    }
+
+    #[test]
+    fn deeper_fixture_lib_rs_allowed() {
+        let findings = fixture_entry_points(&paths(&[
+            // Below a case folder of the fixtures nothing is discovered or declared.
+            "xtask/tests/fixtures/lints/clean/crates/a/src/lib.rs",
+            "xtask/tests/fixtures/lints/clean/src/main.rs",
+            "crates/a/tests/fixtures/case/main.rs",
+            "crates/a/tests/fixtures/case/mod.rs",
+            "crates/a/tests/fixtures/case/src/lib.rs",
+            // Other files in the fixtures folder itself.
+            "crates/a/tests/fixtures/lib.rs",
+            "crates/a/tests/fixtures/data.rs",
+            // And the same names elsewhere.
+            "crates/a/src/main.rs",
+            "crates/a/tests/main.rs",
+            "crates/a/tests/mod.rs",
+            "crates/a/fixtures/main.rs",
+            "fixtures/mod.rs",
+            "crates/a/tests/fixtures.rs",
+        ]));
+        assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    #[test]
+    fn manifest_path_into_fixtures_found() -> crate::Result<()> {
+        for (file, text) in [
+            ("Cargo.toml", "[lib]\npath = \"tests/fixtures/x/lib.rs\"\n"),
+            (
+                "crates/a/Cargo.toml",
+                "[[bin]]\nname = \"x\"\npath = \"tests/fixtures/x.rs\"\n",
+            ),
+            (
+                "crates/a/Cargo.toml",
+                "[[test]]\nname = \"x\"\npath = \"tests/fixtures/x.rs\"\n",
+            ),
+            (
+                "crates/a/Cargo.toml",
+                "[[example]]\nname = \"x\"\npath = \"tests/fixtures/x.rs\"\n",
+            ),
+            (
+                "crates/a/Cargo.toml",
+                "[[bench]]\nname = \"x\"\npath = \"tests/fixtures/x.rs\"\n",
+            ),
+            (
+                "crates/a/Cargo.toml",
+                "[dependencies]\nx = { path = \"tests/fixtures/x\" }\n",
+            ),
+            (
+                "crates/a/Cargo.toml",
+                "[dependencies.x]\npath = \"tests/fixtures/x\"\n",
+            ),
+            (
+                "crates/a/Cargo.toml",
+                "[dev-dependencies]\nx = { path = \"tests/fixtures/x\" }\n",
+            ),
+            (
+                "crates/a/Cargo.toml",
+                "[build-dependencies]\nx = { path = \"tests/fixtures/x\" }\n",
+            ),
+            (
+                "crates/a/Cargo.toml",
+                "[target.'cfg(windows)'.dependencies]\nx = { path = \"tests/fixtures/x\" }\n",
+            ),
+            (
+                "Cargo.toml",
+                "[workspace.dependencies]\nx = { path = \"xtask/tests/fixtures/x\" }\n",
+            ),
+            (
+                "Cargo.toml",
+                "[patch.crates-io]\nx = { path = \"xtask/tests/fixtures/x\" }\n",
+            ),
+            // The path is read from the folder of the manifest: `..`, `\`, case.
+            (
+                "crates/a/Cargo.toml",
+                "[dependencies]\nx = { path = \"../../xtask/tests/fixtures/x\" }\n",
+            ),
+            (
+                "crates/a/Cargo.toml",
+                "[dependencies]\nx = { path = \"..\\\\..\\\\xtask\\\\tests\\\\fixtures\\\\x\" }\n",
+            ),
+            (
+                "crates/a/Cargo.toml",
+                "[dependencies]\nx = { path = 'Tests/Fixtures/x' }\n",
+            ),
+            // The build script and the members of a workspace are built from paths too.
+            (
+                "crates/a/Cargo.toml",
+                "[package]\nbuild = \"tests/fixtures/build.rs\"\n",
+            ),
+            (
+                "Cargo.toml",
+                "[workspace]\nmembers = [\"crates/*\", \"xtask/tests/fixtures/*\"]\n",
+            ),
+            (
+                "Cargo.toml",
+                "[workspace]\ndefault-members = [\"xtask/tests/fixtures/x\"]\n",
+            ),
+        ] {
+            let manifest = parse(file, text)?;
+            assert!(
+                manifest_leads_into_fixtures(file, &manifest),
+                "{file}: {text}"
+            );
+        }
+
+        for (file, text) in [
+            (
+                "Cargo.toml",
+                "[workspace]\nmembers = [\"crates/*\", \"xtask\"]\n",
+            ),
+            ("crates/a/Cargo.toml", "[lib]\npath = \"src/lib.rs\"\n"),
+            (
+                "crates/a/Cargo.toml",
+                "[[test]]\nname = \"x\"\npath = \"tests/common/x.rs\"\n",
+            ),
+            (
+                "crates/a/Cargo.toml",
+                "[dependencies]\nb = { path = \"../b\" }\nserde = \"1\"\n",
+            ),
+            // `..` leaves the folder again.
+            (
+                "crates/a/Cargo.toml",
+                "[dependencies]\nx = { path = \"tests/fixtures/../common\" }\n",
+            ),
+            // A path that goes elsewhere, outside the repository too (engine crates), is not ours.
+            (
+                "crates/a/Cargo.toml",
+                "[dependencies]\nx = { path = \"../../../Theos-Engine/crates/x\" }\n",
+            ),
+            (
+                "crates/a/Cargo.toml",
+                "[dependencies]\nx = { path = \"/abs/tests/fixtures/x\" }\n",
+            ),
+            ("crates/a/Cargo.toml", "[package]\nbuild = \"build.rs\"\n"),
+            ("crates/a/Cargo.toml", "[package]\nbuild = false\n"),
+            (
+                "crates/a/Cargo.toml",
+                "[package.metadata]\nnote = \"tests/fixtures/x\"\n",
+            ),
+        ] {
+            let manifest = parse(file, text)?;
+            assert!(
+                !manifest_leads_into_fixtures(file, &manifest),
+                "{file}: {text}"
+            );
+        }
+        Ok(())
     }
 }

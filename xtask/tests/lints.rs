@@ -303,6 +303,49 @@ fn fixture_compiled_through_path_fails() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn manifest_path_into_fixtures_fails() -> TestResult {
+    let verdict = lint_case("manifest-path-into-fixtures")?;
+    let message = only_finding(&verdict, "crates/a/Cargo.toml");
+    assert!(message.contains("tests/fixtures/"), "{message}");
+    Ok(())
+}
+
+#[test]
+fn a_main_rs_or_mod_rs_directly_in_fixtures_fails() -> TestResult {
+    // Cargo builds `tests/fixtures/main.rs` as a test called `fixtures`, and `mod fixtures;` in
+    // `tests/` builds `tests/fixtures/mod.rs`. The files are written here, because in this
+    // repository they would be findings of their own.
+    for name in ["main.rs", "mod.rs"] {
+        let dir = copy_fixture(None)?;
+        let file = format!("crates/a/tests/fixtures/{name}");
+        write(dir.path(), &file, "fn main() {}\n")?;
+        let verdict = lint(dir.path())?;
+        only_finding(&verdict, &file);
+
+        // One folder deeper, where a case of the fixtures lives, nothing builds them.
+        let dir = copy_fixture(None)?;
+        let deeper = format!("crates/a/tests/fixtures/case/{name}");
+        write(dir.path(), &deeper, "fn main() {}\n")?;
+        let verdict = lint(dir.path())?;
+        assert!(verdict.passed(), "{name}: {:?}", verdict.findings);
+    }
+    Ok(())
+}
+
+#[test]
+fn a_mod_fixtures_declaration_fails() -> TestResult {
+    let dir = copy_fixture(None)?;
+    write(
+        dir.path(),
+        "crates/a/tests/it.rs",
+        "mod helpers;\nmod fixtures;\n",
+    )?;
+    let verdict = lint(dir.path())?;
+    assert_eq!(places(&verdict), [(Some("crates/a/tests/it.rs"), Some(2))]);
+    Ok(())
+}
+
 /// `cargo xtask lints` in `root`, outside GitHub Actions.
 fn xtask_lints(root: &Path) -> TestResult<Output> {
     let mut command = Command::new(env!("CARGO_BIN_EXE_xtask"));
