@@ -18,8 +18,8 @@
 //! - [`checks`]: the checks of `docs/gate.md` §1; [`checks::cargo_cmds`] has the ones that are
 //!   cargo commands (`fmt`, `clippy`, `test`, `docs`, `deny`), [`checks::commit_msg`] the
 //!   `commit-msg` check, [`checks::pr_title`] the `pr-title` check, [`checks::pr_body`] the
-//!   `pr-body` check, [`checks::ac_trace`] the `ac-trace` check and [`checks::lints`] the `lints`
-//!   check.
+//!   `pr-body` check, [`checks::ac_trace`] the `ac-trace` check, [`checks::lints`] the `lints`
+//!   check and [`checks::engine_free`] the `engine-free` check.
 //! - [`umbrella`]: the umbrella spec's phases and acceptance criteria, which `ac-trace` and
 //!   `commit-msg` read their ids from.
 //! - [`tools`]: the pinned tools (`gate/tools.toml`) and the `tools` check.
