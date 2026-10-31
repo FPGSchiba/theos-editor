@@ -12,6 +12,7 @@ use crate::branch::{BranchKind, parse_branch};
 use crate::ci::CiEvent;
 use crate::conventional::{header_problems, message_problems, parse_message};
 use crate::git::Git;
+use crate::umbrella;
 use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
@@ -167,17 +168,17 @@ pub fn branch_kind(git: &Git, name: Option<&str>) -> Result<BranchKind> {
         })
 }
 
-/// The acceptance criteria `Refs:` footers may name.
+/// The acceptance criteria `Refs:` footers may name: every id of the umbrella spec of the
+/// repository at `root`.
 ///
-/// The list is empty until the umbrella spec is read (`umbrella.rs`, Task 7); with no ids at
-/// all, a `Refs:` entry only has to look like one.
+/// The list is never empty. A repository without criteria is an error, so a `Refs:` entry is
+/// always checked against the real ids and never only for its shape.
 ///
 /// # Errors
 ///
-/// Fails when the list cannot be read.
-pub fn known_acs(_root: &Path) -> Result<BTreeSet<String>> {
-    // AC ids come from umbrella.rs (Task 7)
-    Ok(BTreeSet::new())
+/// Fails when the umbrella spec cannot be read or parsed, or lists no criteria.
+pub fn known_acs(root: &Path) -> Result<BTreeSet<String>> {
+    Ok(umbrella::load(root)?.all_ids())
 }
 
 #[cfg(test)]
@@ -212,6 +213,19 @@ mod tests {
 
     fn run_in(root: &Path, ci: Option<&CiEvent>) -> Result<Verdict> {
         run(root, ci, &mut Vec::new())
+    }
+
+    /// A new repository with an umbrella spec, which `run` reads the known criteria from.
+    fn repo_with_umbrella() -> TestResult<tempfile::TempDir> {
+        let dir = init_repo()?;
+        let specs = dir.path().join("docs").join("specs");
+        std::fs::create_dir_all(&specs)?;
+        std::fs::write(
+            specs.join("00-umbrella.md"),
+            "| Phase | Name | Repo |\n|---|---|---|\n| P00 | Foundation | theos-editor |\n\n\
+             ### P00 · Foundation\n- CE-08.10 First.\n",
+        )?;
+        Ok(dir)
     }
 
     // AC: CE-08.10
@@ -281,7 +295,7 @@ mod tests {
     // AC: CE-08.10
     #[test]
     fn a_pull_request_event_gives_the_range_and_the_branch() -> TestResult {
-        let dir = init_repo()?;
+        let dir = repo_with_umbrella()?;
         let path = dir.path();
         let base = commit(path, "chore: base")?;
         let head = commit(path, "feat(xtask): no phase footer")?;
@@ -300,7 +314,7 @@ mod tests {
     // AC: CE-08.10
     #[test]
     fn a_push_event_gives_before_to_after() -> TestResult {
-        let dir = init_repo()?;
+        let dir = repo_with_umbrella()?;
         let path = dir.path();
         let before = commit(path, "Not checked")?;
         let after = commit(path, "Added stuff")?;
@@ -337,7 +351,7 @@ mod tests {
     // AC: CE-08.10
     #[test]
     fn locally_the_range_starts_at_the_merge_base_with_origin_main() -> TestResult {
-        let dir = init_repo()?;
+        let dir = repo_with_umbrella()?;
         let path = dir.path();
         let initial = commit(path, "Not checked, it is on origin/main")?;
         git(path, &["update-ref", "refs/remotes/origin/main", &initial])?;
@@ -397,9 +411,34 @@ mod tests {
         Ok(())
     }
 
+    // AC: CE-08.10
     #[test]
-    fn known_acs_are_not_listed_yet() -> TestResult {
-        assert!(known_acs(Path::new("."))?.is_empty());
+    fn known_acs_are_the_ids_of_the_umbrella_spec() -> TestResult {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let known = known_acs(&root)?;
+        for id in ["CE-08.1", "CE-08.10", "CE-08R.1", "CE-06.1"] {
+            assert!(known.contains(id), "{id}");
+        }
+        assert!(!known.contains("CE-99.9"));
+        // The work outside the build has ids that are not criteria.
+        assert!(!known.contains("CE-02"));
+        Ok(())
+    }
+
+    #[test]
+    fn known_acs_need_an_umbrella_spec_with_criteria() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        let result = known_acs(dir.path());
+        assert!(matches!(result, Err(Error::Io { .. })), "{result:?}");
+
+        let specs = dir.path().join("docs").join("specs");
+        std::fs::create_dir_all(&specs)?;
+        std::fs::write(
+            specs.join("00-umbrella.md"),
+            "| Phase | Name | Repo |\n|---|---|---|\n| P00 | A | theos-editor |\n",
+        )?;
+        let result = known_acs(dir.path());
+        assert!(matches!(result, Err(Error::Config { .. })), "{result:?}");
         Ok(())
     }
 }

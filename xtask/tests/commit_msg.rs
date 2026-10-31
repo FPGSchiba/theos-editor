@@ -324,11 +324,52 @@ fn xtask_commit_msg(dir: &Path, extra: &[&str]) -> TestResult<Output> {
         .output()?)
 }
 
+/// An umbrella spec with the criterion CE-08.1 in `dir`: the list `Refs:` footers are checked
+/// against comes from there.
+fn add_umbrella(dir: &Path) -> TestResult {
+    let specs = dir.join("docs").join("specs");
+    std::fs::create_dir_all(&specs)?;
+    std::fs::write(
+        specs.join("00-umbrella.md"),
+        "| Phase | Name | Repo |\n|---|---|---|\n| P00 | Foundation | theos-editor |\n\n\
+         ### P00 · Foundation\n- CE-08.1 First.\n",
+    )?;
+    Ok(())
+}
+
+// AC: CE-08.10
+#[test]
+fn refs_are_checked_against_the_umbrella_spec() -> TestResult {
+    let (dir, base) = phase_branch()?;
+    let path = dir.path();
+    add_umbrella(path)?;
+    let known = commit(path, "feat(xtask): fine\n\nRefs: CE-08.1\nPhase: P00")?;
+    // It looks like an id, but the umbrella does not have it.
+    let unknown = commit(
+        path,
+        "feat(xtask): fine\n\nRefs: CE-08.1, CE-99.9\nPhase: P00",
+    )?;
+
+    let pass = xtask_commit_msg(path, &["--base", &base, "--head", &known])?;
+    assert_eq!(pass.status.code(), Some(0), "{pass:?}");
+
+    let fail = xtask_commit_msg(path, &["--base", &known, "--head", &unknown])?;
+    assert_eq!(fail.status.code(), Some(1), "{fail:?}");
+    assert!(String::from_utf8_lossy(&fail.stdout).contains("CE-99.9"));
+
+    // Without an umbrella spec there is no list to check against: an error, not a pass.
+    std::fs::remove_dir_all(path.join("docs"))?;
+    let broken = xtask_commit_msg(path, &["--base", &base, "--head", &known])?;
+    assert_eq!(broken.status.code(), Some(2), "{broken:?}");
+    Ok(())
+}
+
 // AC: CE-08.10
 #[test]
 fn command_line_flags_choose_the_range_and_the_branch() -> TestResult {
     let (dir, base) = phase_branch()?;
     let path = dir.path();
+    add_umbrella(path)?;
     let good = commit(path, "feat(xtask): fine\n\nPhase: P00")?;
     let bad = commit(path, "Added stuff")?;
 

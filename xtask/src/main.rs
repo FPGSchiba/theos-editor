@@ -15,7 +15,8 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
-use xtask::checks::{cargo_cmds, commit_msg, pr_body, pr_title};
+use xtask::branch::Phase;
+use xtask::checks::{ac_trace, cargo_cmds, commit_msg, pr_body, pr_title};
 use xtask::git::Git;
 use xtask::verdict::{Check, Verdict};
 use xtask::{Error, ci, report, tools};
@@ -60,8 +61,17 @@ enum Command {
     Coverage,
     /// Check the lint list, the tool configuration and the attributes in the sources.
     Lints,
-    /// Check that every acceptance criterion of the phase has a tagged test.
-    AcTrace,
+    /// Check that every acceptance criterion of the phase has a tagged test, and that every tag
+    /// names a criterion.
+    ///
+    /// The phase is the one of the branch: the head branch of the pull request under GitHub
+    /// Actions, else the branch that is checked out. Only `phase/PNN-…` has a phase; elsewhere
+    /// only the rules for tags are checked.
+    AcTrace {
+        /// The phase to check, instead of the phase of the branch.
+        #[arg(long, value_name = "PNN")]
+        phase: Option<Phase>,
+    },
     /// Check that every commit of the branch is a Conventional Commit.
     ///
     /// Under GitHub Actions the commits and the branch come from the event. Any flag here
@@ -166,7 +176,8 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         Command::EngineFree => not_built("engine-free")?,
         Command::Coverage => not_built("coverage")?,
         Command::Lints => not_built("lints")?,
-        Command::AcTrace => not_built("ac-trace")?,
+        Command::AcTrace { phase: None } => ac_trace::run(&root, ci.as_ref(), &mut out)?,
+        Command::AcTrace { phase } => ac_trace::run_phase(&root, *phase, ci.is_some(), &mut out)?,
         Command::CommitMsg {
             base: None,
             head: None,
