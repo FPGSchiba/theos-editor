@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>07 · Review — agent proposals — Theos Editor reference</title>
+<!--
+  Reference screen 07 of the Theos content editor, exported from the design canvas on 2026-10-31.
+  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
+-->
+<link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
+<link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<style>
+body{margin:0;background:#060810}
+a{color:#3ef0ff}a:hover{color:#e4ecff}
+.tu-shell.cs{height:900px}
+:where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
+:where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
+.diff-add{color:var(--sig-ai)}
+.diff-del{color:var(--textDim);text-decoration:line-through}
+@media (max-width:1000px){
+.tu-shell.cs{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:var(--h-titlebar) auto auto minmax(0,1fr) var(--h-statusbar)}
+.cs .tu-rail{flex-direction:row;width:auto;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}
+.cs .tu-rail .tu-rail__item{width:60px;flex-shrink:0}
+.cs .tu-rail__spacer{display:none}
+.cs .tu-toolbar{height:auto;flex-wrap:wrap;padding:6px 10px}
+.cs .tu-shell__work{flex-wrap:wrap}
+.cs .tu-shell__work > *{flex:1 1 100% !important;min-height:320px}
+}
+</style>
+</head>
+<body>
+<div class="tu-shell cs" style="--tu-font-i: var(--font-ui)">
+
+  <header class="tu-titlebar">
+    <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <span class="tu-titlebar__sep">▸</span><span>tower-of-theos</span>
+    <span class="tu-titlebar__sep">▸</span><span>review</span>
+    <span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Review</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-ai">AI</span>1 agent connected</span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>git main · clean</span>
+  </header>
+
+  <div class="tu-toolbar">
+    <span class="tu-filter is-attention">Pending · 3</span>
+    <span class="tu-filter is-off">Decided</span>
+    <span class="tu-divider"></span>
+    <span class="tu-label tu-label--xs">Sort</span>
+    <span class="tu-select" style="width: 130px;">significance</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-mono tu-dim" style="font-size: 10px;">same queue as <code>theos review list</code></span>
+  </div>
+
+  <nav class="tu-rail" aria-label="Layout presets">
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◈</span><span class="tu-rail__label">Codex</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⋈</span><span class="tu-rail__label">Graph</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">¶</span><span class="tu-rail__label">Scripts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◫</span><span class="tu-rail__label">Concepts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">△</span><span class="tu-rail__label">Maps</span></button>
+    <button class="tu-rail__item is-active" type="button" aria-current="true"><span class="tu-rail__glyph">◴</span><span class="tu-rail__label">Review</span><span class="tu-rail__badge">3</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">±</span><span class="tu-rail__label">Changes</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">&lt;/&gt;</span><span class="tu-rail__label">Code</span></button>
+    <div class="tu-rail__spacer"></div>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⚙</span><span class="tu-rail__label">Settings</span></button>
+  </nav>
+
+  <div class="tu-shell__work">
+
+    <!-- Queue -->
+    <section class="tu-window is-hot" style="flex: 0 0 400px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__title">Review <span class="tu-badge">3</span></div><div class="tu-tabbar__ctrls"><span>⋯</span></div></div>
+      <div style="padding: 10px; background: var(--panel2); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px;">
+        <div class="tu-row"><span class="tu-label tu-label--strong">Design review queue</span><span class="tu-spacer"></span><span class="tu-mono tu-mute" style="font-size: 10px;">since 13:50</span></div>
+        <div class="tu-review-sum"><span class="is-attention" style="flex: 3 1 80px;">3 PENDING</span><span class="is-approve" style="flex: 12 1 90px;">22 APPROVED</span><span class="is-reject" style="flex: 2 1 80px;">2 REJECTED</span></div>
+      </div>
+      <div class="tu-window__body">
+        <article class="tu-review" style="background: color-mix(in srgb, var(--sig-attention) 8%, transparent); box-shadow: inset 2px 0 0 var(--sig-attention);">
+          <div class="tu-review__head"><span class="tu-review__time">14:31:07</span><span class="tu-status" data-status="pending">Pending</span><span class="tu-ai">AI</span><span class="tu-review__cmd">LoreDraft</span><span class="tu-review__arrow">→</span><span class="tu-review__target">B-021</span><span class="tu-review__sig"><span class="tu-review__sigval">MED</span></span></div>
+          <div class="tu-review__body">new belief · Throat-Kin · 1 warning</div>
+        </article>
+        <article class="tu-review">
+          <div class="tu-review__head"><span class="tu-review__time">14:29:40</span><span class="tu-status" data-status="pending">Pending</span><span class="tu-ai">AI</span><span class="tu-review__cmd">ScriptEdit</span><span class="tu-review__arrow">→</span><span class="tu-review__target">S-004 beat 4</span><span class="tu-review__sig"><span class="tu-review__sigval is-high">HIGH</span></span></div>
+          <div class="tu-review__body">says B-033 instead of revealing T-031 · fixes never-confirm · touches a never truth</div>
+        </article>
+        <article class="tu-review">
+          <div class="tu-review__head"><span class="tu-review__time">14:24:12</span><span class="tu-status" data-status="pending">Pending</span><span class="tu-ai">AI</span><span class="tu-review__cmd">ConceptVersion</span><span class="tu-review__arrow">→</span><span class="tu-review__target">fates-shrine v5</span><span class="tu-review__sig"><span class="tu-review__sigval">LOW</span></span></div>
+          <div class="tu-review__body">z-image-turbo finish of v1</div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Proposal detail -->
+    <section class="tu-window" style="flex: 1 1 520px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button">Preview</button><button class="tu-tab" type="button">Diff · 1 file</button><button class="tu-tab" type="button">Context the agent read · 6</button></div><div class="tu-tabbar__ctrls"><span>⋯</span></div></div>
+      <div class="tu-window__body">
+        <div style="padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--panel2); border-bottom: 1px solid var(--border); font: 400 10px/14px var(--font-mono); color: var(--textDim);">
+          <span class="tu-status" data-status="pending">Pending</span><span class="tu-ai">AI</span><span style="color: var(--sig-ai);">claude</span><span>via theos-mcp · session "Wilds lore pass" · 14:31</span>
+        </div>
+
+        <div class="tu-manuscript" style="padding: 16px 20px 6px; display: flex; flex-direction: column; gap: 12px;">
+          <div class="tu-rechead__top"><span class="tu-kind tu-rechead__glyph" data-kind="belief"></span><span class="tu-rechead__id">B-021</span><span class="tu-rechead__kind">belief · held by Throat-Kin binders · distorts T-012 · T2</span></div>
+          <h2 style="margin: 0; font: 600 22px/28px var(--font-ui); color: var(--text);">A Listener that will not answer has forgotten its own name</h2>
+          <div class="tu-prose"><p>Binders blame silence on memory, not on the spirit's will. It keeps them singing to the stubborn ones instead of giving up, which is how they find the old registers.</p></div>
+          <figure class="tu-voice" style="margin: 0;">
+            <div class="tu-voice__head"><span class="tu-kind" data-kind="perspective"></span>In-world · Throat-Kin binders<span class="tu-voice__head-right">B-021 · T2 lens</span></div>
+            <blockquote class="tu-voice__body" style="margin: 0;"><p>If it will not turn when you sing, it is not deaf. It has lost the name. Sing it every name you know, slowly, and listen for the one it flinches at.</p></blockquote>
+            <figcaption class="tu-voice__by">a binder's advice to an apprentice</figcaption>
+          </figure>
+        </div>
+
+        <div style="padding: 10px 20px 4px;" class="tu-row"><span class="tu-label tu-label--sm">Diff</span><span class="tu-mono tu-dim" style="font-size: 10px;">lore/beliefs/b-021.md (new) · Throat-Kin's lens lists it through held_by</span><span class="tu-spacer"></span><span class="tu-mono" style="font-size: 10px; color: var(--sig-ai);">+ lines written by AI</span></div>
+<pre class="tu-code" style="margin: 0 20px;"><span class="diff-add">+ id: B-021</span>
+<span class="diff-add">+ kind: belief</span>
+<span class="diff-add">+ held_by: [throat-kin]</span>
+<span class="diff-add">+ distorts: T-012</span>
+<span class="diff-add">+ accuracy: partial</span>
+<span class="diff-add">+ tier: T2</span></pre>
+
+        <div style="margin-top: 10px;">
+          <div class="tu-val" data-sev="warn"><span class="tu-val__sev"></span><span class="tu-val__msg">Close to B-020 (similarity 0.82). Keep both, or merge into B-020?</span><div class="tu-val__meta"><span class="tu-val__rule">near-duplicate</span></div><button class="tu-btn tu-btn--secondary tu-btn--sm tu-val__act" type="button">Compare</button></div>
+          <div class="tu-val" data-sev="pass"><span class="tu-val__sev"></span><span class="tu-val__msg">In-world text uses no developer words.</span><div class="tu-val__meta"><span class="tu-val__rule">inworld-vocab</span></div></div>
+          <div class="tu-val" data-sev="info"><span class="tu-val__sev"></span><span class="tu-val__msg">Nothing reaches main until you approve. The agent works on its own branch; approving re-checks the merged result and merges this commit into main.</span><div class="tu-val__meta"><span class="tu-val__rule">review</span></div></div>
+        </div>
+
+        <div style="padding: 10px 14px; margin-top: auto; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border-top: 1px solid var(--border); background: var(--panel2);">
+          <label class="tu-input" style="flex: 1 1 220px;"><span class="tu-input__icon">›</span><input type="text" aria-label="Note to the agent" placeholder="note to the agent (sent with your verdict)"></label>
+          <button class="tu-btn tu-btn--secondary" type="button">Edit first</button>
+          <button class="tu-btn tu-btn--danger" type="button">✕ Reject</button>
+          <button class="tu-btn tu-btn--approve" type="button">✓ Approve and commit</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Agent session -->
+    <section class="tu-window" style="flex: 0 0 330px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button">Agent</button><button class="tu-tab" type="button">MCP tools</button></div></div>
+      <div class="tu-window__body">
+        <div class="tu-entity">
+          <div class="tu-entity__name"><span class="tu-ai">AI</span>claude<span class="tu-spacer"></span><span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>connected 42m</span></div>
+          <div class="tu-entity__meta"><span>theos-mcp · stdio</span><span>session "Wilds lore pass"</span></div>
+        </div>
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Your brief</span></div>
+          <p style="margin: 0; padding: 8px 10px; font: 400 12.5px/19px var(--font-ui); color: var(--textProse);">Fill out Throat-Kin beliefs for the Wilds. Stay at T2. Never touch T-031. Queue a Z-Image finish for the shrine pick.</p>
+        </div>
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Scope</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">read</span><span class="tu-prop__val">everything</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">propose</span><span class="tu-prop__val">lore/** · story/** · concepts/**</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">write</span><span class="tu-prop__val is-attention">nothing without review</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">locked</span><span class="tu-prop__val">T-031 · canon truths</span></div>
+        </div>
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Log</span><span class="tu-section__more">58 calls</span></div>
+          <div class="tu-console" style="padding: 4px 8px;">
+            <div class="tu-console__row"><span class="tu-console__time">14:22:10</span><span class="tu-console__src is-ai">ai</span><span class="tu-console__msg">codex_search "Throat-Kin Listener" · 6 hits</span></div>
+            <div class="tu-console__row"><span class="tu-console__time">14:22:31</span><span class="tu-console__src is-ai">ai</span><span class="tu-console__msg">codex_read T-012 · B-020 · lens</span></div>
+            <div class="tu-console__row"><span class="tu-console__time">14:24:12</span><span class="tu-console__src is-ai">ai</span><span class="tu-console__msg">concepts_queue fates-shrine v1 → v5</span></div>
+            <div class="tu-console__row"><span class="tu-console__time">14:29:40</span><span class="tu-console__src is-ai">ai</span><span class="tu-console__msg">ledger_check S-004 · 1 error</span></div>
+            <div class="tu-console__row"><span class="tu-console__time">14:31:07</span><span class="tu-console__src is-ai">ai</span><span class="tu-console__msg">codex_propose B-021</span></div>
+            <div class="tu-console__row"><span class="tu-console__time">14:31:07</span><span class="tu-console__src">review</span><span class="tu-console__msg">queued LoreDraft B-021 · med</span></div>
+          </div>
+        </div>
+        <div style="padding: 10px; margin-top: auto; display: flex; gap: 6px; border-top: 1px solid var(--border);">
+          <button class="tu-btn tu-btn--secondary" type="button" style="flex: 1;">Pause session</button>
+          <button class="tu-btn tu-btn--danger" type="button" style="flex: 1;">End session</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="tu-statusbar">
+    <span class="tu-statusbar__brand">THEOS//EDITOR</span>
+    <span>v0.4.2 · review layout</span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>authoring</span>
+    <span>3 waiting for you</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-ai">AI</span>claude · theos-mcp · propose only</span>
+  </footer>
+</div>
+</body>
+</html>

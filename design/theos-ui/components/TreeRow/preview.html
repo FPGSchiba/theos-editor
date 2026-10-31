@@ -1,0 +1,29 @@
+<!-- @dsCard group="Rows" height=250 subtitle="scene tree and codex tree, same row" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>TreeRow — preview</title></head>
+<body>
+<div class="tu-demo" style="align-items:flex-start;flex-wrap:nowrap">
+  <div class="tu-window" style="flex:1"><div class="tu-tabbar"><div class="tu-tabbar__title">Hierarchy</div></div>
+  <div class="tu-tree">
+    <div class="tu-tree__row is-root"><span class="tu-tree__idx">001</span><span class="tu-tree__name">Hollowbrook</span><span class="tu-tree__tag">scn</span></div>
+    <div class="tu-tree__row" style="--depth:1"><span class="tu-tree__idx">004</span><span class="tu-tree__name">NPCs</span><span class="tu-tree__tag">grp</span></div>
+    <div class="tu-tree__row is-entity is-selected" style="--depth:2"><span class="tu-tree__idx">005</span><span class="tu-tree__name">Captain Vespera</span><span class="tu-tree__tag">npc</span></div>
+    <div class="tu-tree__row is-schema" style="--depth:3"><span class="tu-tree__idx">006</span><span class="tu-tree__name">⤷ Transform</span><span class="tu-tree__tag">cmp</span></div>
+    <div class="tu-tree__row is-schema" style="--depth:3"><span class="tu-tree__idx">008</span><span class="tu-tree__name">⤷ BehaviorTree</span><span class="tu-tree__tag"><span class="tu-ai">AI</span>cmp</span></div>
+    <div class="tu-tree__row is-entity" style="--depth:2"><span class="tu-tree__idx">009</span><span class="tu-tree__name">Guard Patrol Alpha</span><span class="tu-tree__tag"><span class="tu-pip tu-pip--sm tu-pip--glow is-ai"></span>npc</span></div>
+    <div class="tu-tree__row is-entity" style="--depth:2"><span class="tu-tree__idx">010</span><span class="tu-tree__name">Guard Patrol Beta</span><span class="tu-tree__tag">npc</span></div>
+  </div></div>
+  <div class="tu-window" style="flex:1"><div class="tu-tabbar"><div class="tu-tabbar__title">Codex</div></div>
+  <div class="tu-tree">
+    <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="band"></span><span class="tu-tree__name">Wilds</span><span class="tu-tree__tag">band</span></div>
+    <div class="tu-tree__row is-entity" style="--depth:1"><span class="tu-kind" data-kind="people"></span><span class="tu-tree__name">Throat-Kin binders</span><span class="tu-tree__tag">people</span></div>
+    <div class="tu-tree__row is-entity is-selected" style="--depth:2"><span class="tu-kind" data-kind="belief"></span><span class="tu-tree__name">B-020 Listeners answer to the right song</span><span class="tu-tree__tag">belief</span></div>
+    <div class="tu-tree__row is-entity" style="--depth:2"><span class="tu-kind" data-kind="perspective"></span><span class="tu-tree__name">Binder lens</span><span class="tu-tree__tag">lens</span></div>
+    <div class="tu-tree__row is-entity" style="--depth:1"><span class="tu-kind" data-kind="truth"></span><span class="tu-tree__name">T-012 Listeners are unwoven Tuners</span><span class="tu-tree__tag">truth</span></div>
+    <div class="tu-tree__row is-entity" style="--depth:2"><span class="tu-kind" data-kind="clue"></span><span class="tu-tree__name">C-032 echo-vault</span><span class="tu-tree__tag">T2</span></div>
+    <div class="tu-tree__row is-entity" style="--depth:1"><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Fates' shrine</span><span class="tu-tree__tag">F4</span></div>
+  </div></div>
+</div>
+</body>
+</html>

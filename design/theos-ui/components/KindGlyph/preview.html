@@ -1,0 +1,54 @@
+<!-- @dsCard group="Content Studio" height=400 width=720 subtitle="glyph + kind colour per record kind" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>KindGlyph — preview</title>
+<style>
+  .g { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0 24px; }
+  .k { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--border); font: 400 11px/16px var(--font-ui); color: var(--text); }
+  .k .tu-kind { font-size: 15px; }
+  .k code { margin-left: auto; font: 400 9.5px/1 var(--font-mono); color: var(--textMute); }
+  h4 { margin: 0 0 4px; }
+</style></head>
+<body>
+<div class="tu-demo tu-demo--col" style="gap:14px">
+  <div class="g">
+    <div>
+      <h4 class="tu-label tu-label--xs">World entity · kind-world</h4>
+      <div class="k"><span class="tu-kind" data-kind="tower"></span>Tower<code>tower</code></div>
+      <div class="k"><span class="tu-kind" data-kind="band"></span>Band<code>band</code></div>
+      <div class="k"><span class="tu-kind" data-kind="floor"></span>Floor<code>floor</code></div>
+      <div class="k"><span class="tu-kind" data-kind="location"></span>Location<code>location</code></div>
+      <div class="k"><span class="tu-kind" data-kind="people"></span>People<code>people</code></div>
+      <div class="k"><span class="tu-kind" data-kind="faction"></span>Faction<code>faction</code></div>
+      <div class="k"><span class="tu-kind" data-kind="npc"></span>NPC<code>npc</code></div>
+      <div class="k"><span class="tu-kind" data-kind="artifact"></span>Artifact<code>artifact</code></div>
+      <div class="k"><span class="tu-kind" data-kind="document"></span>Document<code>document</code></div>
+      <div class="k"><span class="tu-kind" data-kind="creature"></span>Creature<code>creature</code></div>
+    </div>
+    <div>
+      <h4 class="tu-label tu-label--xs">Lore, story and production</h4>
+      <div class="k"><span class="tu-kind" data-kind="truth"></span>Truth<code>truth · T-xxx</code></div>
+      <div class="k"><span class="tu-kind" data-kind="belief"></span>Belief<code>belief · B-xxx</code></div>
+      <div class="k"><span class="tu-kind" data-kind="clue"></span>Clue<code>clue · C-xxx</code></div>
+      <div class="k"><span class="tu-kind" data-kind="perspective"></span>Perspective<code>perspective</code></div>
+      <div class="k"><span class="tu-kind" data-kind="chronicle"></span>Chronicle<code>chronicle</code></div>
+      <div class="k"><span class="tu-kind" data-kind="beat"></span>Script / Beat<code>beat</code></div>
+      <div class="k"><span class="tu-kind" data-kind="concept"></span>Concept / Version<code>concept</code></div>
+      <div class="k"><span class="tu-kind" data-kind="template"></span>Template<code>template</code></div>
+      <div class="k"><span class="tu-kind" data-kind="world"></span>World entity, untyped<code>world</code></div>
+    </div>
+  </div>
+  <div class="tu-row">
+    <span class="tu-kindtag" data-kind="truth"><span class="tu-kind" data-kind="truth"></span>Truth</span>
+    <span class="tu-kindtag" data-kind="belief"><span class="tu-kind" data-kind="belief"></span>Belief</span>
+    <span class="tu-kindtag" data-kind="npc"><span class="tu-kind" data-kind="npc"></span>NPC</span>
+    <span class="tu-kindtag" data-kind="beat"><span class="tu-kind" data-kind="beat"></span>Beat</span>
+    <span class="tu-mono tu-mute" style="font-size:10px">kind: glyph, hairline, mono, mixed case</span>
+  </div>
+  <div class="tu-row">
+    <span class="tu-status" data-status="proposed">Proposed</span><span class="tu-chip is-ai">AI-drafted</span><span class="tu-status" data-status="canon">Canon</span>
+    <span class="tu-mono tu-mute" style="font-size:10px">status: signal colour, filled, uppercase. Never a kind colour.</span>
+  </div>
+</div>
+</body>
+</html>

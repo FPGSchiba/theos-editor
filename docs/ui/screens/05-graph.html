@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>05 · Graph — links around a truth — Theos Editor reference</title>
+<!--
+  Reference screen 05 of the Theos content editor, exported from the design canvas on 2026-10-31.
+  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
+-->
+<link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
+<link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<style>
+body{margin:0;background:#060810}
+a{color:#3ef0ff}a:hover{color:#e4ecff}
+.tu-shell.cs{height:900px}
+:where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
+:where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
+.g-node{position:absolute;transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:6px;padding:4px 8px;white-space:nowrap;background:var(--panel);border:1px solid color-mix(in srgb,var(--k) 40%,transparent);font:400 10.5px/16px var(--font-mono);color:var(--text)}
+.g-node .g-t{font:400 11px/16px var(--font-ui);color:var(--textDim)}
+.g-node.is-focus{border-color:var(--sig-attention);background:color-mix(in srgb,var(--sig-attention) 13%,var(--panel));box-shadow:var(--shadow-hot);padding:6px 10px}
+.g-node.is-focus .g-t{color:var(--text);font-weight:600}
+.g-lbl{position:absolute;transform:translate(-50%,-50%);padding:0 4px;background:var(--bg);font:400 9px/12px var(--font-mono);color:var(--textMute)}
+@media (max-width:1000px){
+.tu-shell.cs{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:var(--h-titlebar) auto auto minmax(0,1fr) var(--h-statusbar)}
+.cs .tu-rail{flex-direction:row;width:auto;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}
+.cs .tu-rail .tu-rail__item{width:60px;flex-shrink:0}
+.cs .tu-rail__spacer{display:none}
+.cs .tu-toolbar{height:auto;flex-wrap:wrap;padding:6px 10px}
+.cs .tu-shell__work{flex-wrap:wrap}
+.cs .tu-shell__work > *{flex:1 1 100% !important;min-height:320px}
+}
+</style>
+</head>
+<body>
+<div class="tu-shell cs" style="--tu-font-i: var(--font-ui)">
+
+  <header class="tu-titlebar">
+    <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <span class="tu-titlebar__sep">▸</span><span>tower-of-theos</span>
+    <span class="tu-titlebar__sep">▸</span><span>graph · T-012</span>
+    <span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Graph</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>index fresh</span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>git main · clean</span>
+  </header>
+
+  <div class="tu-toolbar">
+    <label class="tu-input" style="width: 220px;"><span class="tu-input__icon">◎</span><input type="text" aria-label="Focus record" value="T-012"></label>
+    <span class="tu-divider"></span>
+    <span class="tu-label tu-label--xs">Depth</span>
+    <span class="tu-seg"><button class="tu-seg__opt" type="button">1</button><button class="tu-seg__opt is-active" type="button">2</button><button class="tu-seg__opt" type="button">3</button></span>
+    <span class="tu-divider"></span>
+    <span class="tu-label tu-label--xs">Layout</span>
+    <span class="tu-select" style="width: 120px;">around focus</span>
+    <span class="tu-select" style="width: 140px;">by floor (ledger)</span>
+    <span class="tu-spacer"></span>
+    <button class="tu-btn tu-btn--secondary" type="button">Save view</button>
+  </div>
+
+  <nav class="tu-rail" aria-label="Layout presets">
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◈</span><span class="tu-rail__label">Codex</span></button>
+    <button class="tu-rail__item is-active" type="button" aria-current="true"><span class="tu-rail__glyph">⋈</span><span class="tu-rail__label">Graph</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">¶</span><span class="tu-rail__label">Scripts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◫</span><span class="tu-rail__label">Concepts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">△</span><span class="tu-rail__label">Maps</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◴</span><span class="tu-rail__label">Review</span><span class="tu-rail__badge">3</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">±</span><span class="tu-rail__label">Changes</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">&lt;/&gt;</span><span class="tu-rail__label">Code</span></button>
+    <div class="tu-rail__spacer"></div>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⚙</span><span class="tu-rail__label">Settings</span></button>
+  </nav>
+
+  <div class="tu-shell__work">
+
+    <!-- Filters -->
+    <section class="tu-window" style="flex: 0 0 210px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__title">Show</div></div>
+      <div class="tu-window__body" style="padding: 10px; gap: 7px;">
+        <span class="tu-label tu-label--xs">Kinds</span>
+        <span class="tu-check is-on"><span class="tu-check__box"></span><span class="tu-kind" data-kind="truth"></span>Truths · 2</span>
+        <span class="tu-check is-on"><span class="tu-check__box"></span><span class="tu-kind" data-kind="belief"></span>Beliefs · 3</span>
+        <span class="tu-check is-on"><span class="tu-check__box"></span><span class="tu-kind" data-kind="clue"></span>Clues · 3</span>
+        <span class="tu-check is-on"><span class="tu-check__box"></span><span class="tu-kind" data-kind="world"></span>World · 7</span>
+        <span class="tu-check is-on"><span class="tu-check__box"></span><span class="tu-kind" data-kind="beat"></span>Scripts · 1</span>
+        <span class="tu-check"><span class="tu-check__box"></span><span class="tu-kind" data-kind="perspective"></span>Lenses · 2</span>
+        <span class="tu-check"><span class="tu-check__box"></span><span class="tu-kind" data-kind="concept"></span>Concepts · 1</span>
+        <span class="tu-label tu-label--xs" style="margin-top: 8px;">Links</span>
+        <span class="tu-check is-on"><span class="tu-check__box"></span>requires</span>
+        <span class="tu-check is-on"><span class="tu-check__box"></span>distorts</span>
+        <span class="tu-check is-on"><span class="tu-check__box"></span>held by</span>
+        <span class="tu-check is-on"><span class="tu-check__box"></span>reveals · where</span>
+        <span class="tu-check is-on"><span class="tu-check__box"></span>places · believes</span>
+        <span class="tu-check"><span class="tu-check__box"></span>mentions in prose</span>
+      </div>
+    </section>
+
+    <!-- Graph viewport -->
+    <section class="tu-window" style="flex: 1 1 640px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button">Graph</button><button class="tu-tab" type="button">Ledger</button></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
+      <div style="flex: 1; position: relative; min-height: 0; overflow: auto; background-color: var(--bg); background-image: linear-gradient(var(--border) 0.5px, transparent 0.5px), linear-gradient(90deg, var(--border) 0.5px, transparent 0.5px); background-size: 24px 24px;">
+        <div style="position: relative; width: 960px; height: 640px; margin: 0 auto;">
+          <svg width="960" height="640" viewBox="0 0 960 640" aria-hidden="true" style="position: absolute; inset: 0;">
+            <g style="stroke: var(--borderHi)" stroke-width="1" fill="none">
+              <line x1="480" y1="320" x2="480" y2="100"></line>
+              <line x1="480" y1="320" x2="270" y2="200"></line>
+              <line x1="480" y1="320" x2="270" y2="330"></line>
+              <line x1="480" y1="320" x2="270" y2="460"></line>
+              <line x1="270" y1="200" x2="90" y2="200"></line>
+              <line x1="270" y1="330" x2="90" y2="330"></line>
+              <line x1="270" y1="460" x2="90" y2="460"></line>
+              <line x1="480" y1="320" x2="700" y2="200"></line>
+              <line x1="480" y1="320" x2="700" y2="330"></line>
+              <line x1="480" y1="320" x2="700" y2="460"></line>
+              <line x1="700" y1="200" x2="880" y2="200"></line>
+              <line x1="700" y1="330" x2="880" y2="330"></line>
+              <line x1="700" y1="460" x2="880" y2="460"></line>
+              <line x1="620" y1="575" x2="700" y2="200"></line>
+              <line x1="300" y1="575" x2="270" y2="200"></line>
+            </g>
+            <g style="stroke: var(--borderHi)" stroke-width="1" stroke-dasharray="3 3" fill="none">
+              <line x1="740" y1="345" x2="740" y2="445"></line>
+            </g>
+            <g style="stroke: var(--textDim)" stroke-width="1.2" fill="none">
+              <line x1="480" y1="320" x2="480" y2="100"></line>
+              <line x1="480" y1="320" x2="270" y2="330"></line>
+              <line x1="480" y1="320" x2="700" y2="200"></line>
+            </g>
+          </svg>
+
+          <span class="g-lbl" style="left: 480px; top: 210px;">requires</span>
+          <span class="g-lbl" style="left: 375px; top: 262px;">distorts</span>
+          <span class="g-lbl" style="left: 180px; top: 186px;">held by</span>
+          <span class="g-lbl" style="left: 590px; top: 262px;">reveals</span>
+          <span class="g-lbl" style="left: 790px; top: 186px;">where</span>
+          <span class="g-lbl" style="left: 770px; top: 395px;">after</span>
+          <span class="g-lbl" style="left: 640px; top: 520px;">places</span>
+          <span class="g-lbl" style="left: 284px; top: 520px;">believes</span>
+
+          <div class="g-node" data-kind="truth" style="left: 480px; top: 100px;"><span class="tu-kind" data-kind="truth"></span>T-001<span class="g-t">The Tower is a resonator</span></div>
+          <div class="g-node is-focus" data-kind="truth" style="left: 480px; top: 320px;"><span class="tu-kind" data-kind="truth"></span>T-012<span class="g-t">The Listeners are the unwoven Tuners</span></div>
+
+          <div class="g-node" data-kind="belief" style="left: 270px; top: 200px;"><span class="tu-kind" data-kind="belief"></span>B-016<span class="g-t">messengers</span></div>
+          <div class="g-node" data-kind="belief" style="left: 270px; top: 330px;"><span class="tu-kind" data-kind="belief"></span>B-020<span class="g-t">ancestors</span></div>
+          <div class="g-node" data-kind="belief" style="left: 270px; top: 460px;"><span class="tu-kind" data-kind="belief"></span>B-022<span class="g-t">never left</span></div>
+
+          <div class="g-node" data-kind="people" style="left: 90px; top: 200px;"><span class="tu-kind" data-kind="people"></span><span class="g-t">Hearth folk</span></div>
+          <div class="g-node" data-kind="people" style="left: 90px; top: 330px;"><span class="tu-kind" data-kind="people"></span><span class="g-t">Throat-Kin</span></div>
+          <div class="g-node" data-kind="people" style="left: 90px; top: 460px;"><span class="tu-kind" data-kind="people"></span><span class="g-t">Concordance</span></div>
+
+          <div class="g-node" data-kind="clue" style="left: 700px; top: 200px;"><span class="tu-kind" data-kind="clue"></span>C-031<span class="g-t">hinted · T1</span></div>
+          <div class="g-node" data-kind="clue" style="left: 700px; top: 330px;"><span class="tu-kind" data-kind="clue"></span>C-032<span class="g-t">suspected · T2</span></div>
+          <div class="g-node" data-kind="clue" style="left: 700px; top: 460px;"><span class="tu-kind" data-kind="clue"></span>C-033<span class="g-t">confirmed · T2</span></div>
+
+          <div class="g-node" data-kind="floor" style="left: 880px; top: 200px;"><span class="tu-kind" data-kind="floor"></span>F04</div>
+          <div class="g-node" data-kind="floor" style="left: 880px; top: 330px;"><span class="tu-kind" data-kind="floor"></span>F21</div>
+          <div class="g-node" data-kind="floor" style="left: 880px; top: 460px;"><span class="tu-kind" data-kind="floor"></span>F57</div>
+
+          <div class="g-node" data-kind="beat" style="left: 620px; top: 575px;"><span class="tu-kind" data-kind="beat"></span>S-004<span class="g-t">The shrine hums</span></div>
+          <div class="g-node" data-kind="npc" style="left: 300px; top: 575px;"><span class="tu-kind" data-kind="npc"></span><span class="g-t">Mother Ilse</span></div>
+        </div>
+        <div style="position: sticky; left: 0; bottom: 0; padding: 6px 10px; display: flex; gap: 16px; border-top: 1px solid var(--border); background: var(--bg); font: 400 10px/14px var(--font-mono); color: var(--textDim); white-space: nowrap; overflow: hidden;">
+          <span>16 nodes · 17 links · depth 2</span><span>click to focus · double-click to open</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Inspector -->
+    <section class="tu-window" style="flex: 0 0 300px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button">Focus</button><button class="tu-tab" type="button">Paths</button></div></div>
+      <div class="tu-window__body">
+        <div class="tu-entity">
+          <div class="tu-entity__name"><span class="tu-kind" data-kind="truth"></span>T-012<span class="tu-spacer"></span><span class="tu-status" data-status="canon">canon</span></div>
+          <div style="font: 400 13px/20px var(--font-ui); color: var(--text);">The Listeners are the unwoven Tuners</div>
+          <div class="tu-entity__meta"><span>lore/truths/t-012.md</span><span>reveal confirmed</span></div>
+        </div>
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Links</span><span class="tu-section__more">17</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">requires</span><span class="tu-prop__val">T-001</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">distorted by</span><span class="tu-prop__val">B-016 · B-020 · B-022</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">revealed by</span><span class="tu-prop__val">C-031 · C-032 · C-033</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">unaware</span><span class="tu-prop__val">2 lenses</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">scripts</span><span class="tu-prop__val">S-004 · S-019</span></div>
+        </div>
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Gaps</span></div>
+          <div class="tu-val" data-sev="warn" style="border-top: 0;"><span class="tu-val__sev"></span><span class="tu-val__msg">Only one clue confirms.</span><div class="tu-val__meta"><span class="tu-val__rule">three-clue</span></div></div>
+          <div class="tu-val" data-sev="info"><span class="tu-val__sev"></span><span class="tu-val__msg">No Crucible people hold a belief about it yet.</span><div class="tu-val__meta"><span class="tu-val__rule">coverage</span></div></div>
+        </div>
+        <div style="padding: 10px; display: flex; gap: 6px; border-top: 1px solid var(--border); margin-top: auto;">
+          <button class="tu-btn tu-btn--primary" type="button" style="flex: 1;">Open in Codex</button>
+          <button class="tu-btn tu-btn--secondary" type="button">Focus here</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="tu-statusbar">
+    <span class="tu-statusbar__brand">THEOS//EDITOR</span>
+    <span>v0.4.2 · graph layout</span>
+    <span>214 records · 702 links</span>
+    <span class="tu-spacer"></span>
+    <span>focus T-012 · depth 2</span>
+  </footer>
+</div>
+</body>
+</html>

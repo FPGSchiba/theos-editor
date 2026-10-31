@@ -1,0 +1,125 @@
+<!-- @dsCard group="Samples" height=660 width=1280 subtitle="Instrument register: Review preset, built only from the system" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Sample: Instrument — preview</title>
+<style>
+  html, body { height: 100%; }
+  .vp { flex: 1; position: relative; min-height: 0;
+    background-color: #050810;
+    background-image: linear-gradient(var(--border) 0.5px, transparent 0.5px), linear-gradient(90deg, var(--border) 0.5px, transparent 0.5px);
+    background-size: 24px 24px; }
+  .vp__sel { position: absolute; left: 46%; top: 30%; width: 44px; height: 96px; border: 1.2px solid var(--sig-attention); background: color-mix(in srgb, var(--sig-attention) 10%, transparent); }
+  .vp__tag { position: absolute; left: calc(46% + 60px); top: calc(30% - 20px); padding: 3px 6px; background: var(--bg); border: 1px solid var(--sig-attention); font: 700 10px/12px var(--font-mono); color: var(--sig-attention); }
+  .vp__views { position: absolute; top: 10px; left: 10px; }
+  .vp__foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 6px 10px; display: flex; gap: 16px; border-top: 1px solid var(--border); background: var(--bg); font: 400 10px/14px var(--font-mono); color: var(--textDim); white-space: nowrap; overflow: hidden; }
+</style></head>
+<body>
+<div class="tu-shell" style="height:660px">
+  <div class="tu-titlebar">
+    <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <span class="tu-titlebar__sep">▸</span><span>hollowbrook · dirty</span>
+    <span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Review</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>authoring</span>
+    <span class="tu-statuspip"><span class="tu-pip is-warn"></span>pie idle</span>
+  </div>
+  <div class="tu-toolbar">
+    <span class="tu-seg"><button class="tu-seg__opt">Select</button><button class="tu-seg__opt is-active">Move</button><button class="tu-seg__opt">Rotate</button></span>
+    <span class="tu-divider"></span>
+    <button class="tu-btn tu-btn--approve"><span class="tu-btn__icon">▶</span>Play</button>
+    <button class="tu-btn tu-btn--secondary">Step</button>
+    <span class="tu-mono tu-mute" style="font-size:10px;margin-left:6px">spawn · theos-game --from-editor</span>
+    <span class="tu-spacer"></span>
+    <button class="tu-btn tu-btn--accent">Save scene ⌘S</button>
+  </div>
+  <nav class="tu-rail">
+    <div class="tu-rail__item"><span class="tu-rail__glyph">≡</span><span class="tu-rail__label">Layout</span></div>
+    <div class="tu-rail__item"><span class="tu-rail__glyph">◈</span><span class="tu-rail__label">Codex</span></div>
+    <div class="tu-rail__item is-active"><span class="tu-rail__glyph">◴</span><span class="tu-rail__label">Review</span><span class="tu-rail__badge">4</span></div>
+    <div class="tu-rail__item"><span class="tu-rail__glyph">✱</span><span class="tu-rail__label">AI</span></div>
+    <div class="tu-rail__item"><span class="tu-rail__glyph">⊞</span><span class="tu-rail__label">Assets</span></div>
+    <div class="tu-rail__spacer"></div>
+    <div class="tu-rail__item"><span class="tu-rail__glyph">⚙</span><span class="tu-rail__label">Settings</span></div>
+  </nav>
+  <div class="tu-shell__work">
+    <div style="flex:1.05;display:flex;flex-direction:column;gap:4px;min-width:0">
+      <section class="tu-window" style="flex:1.4">
+        <div class="tu-tabbar"><div class="tu-tabbar__tabs"><div class="tu-tab is-active">Scene</div><div class="tu-tab">Game</div><div class="tu-tab">PIE</div></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
+        <div class="vp">
+          <span class="tu-seg vp__views"><button class="tu-seg__opt is-active">Persp</button><button class="tu-seg__opt">Top</button><button class="tu-seg__opt">Front</button></span>
+          <div class="vp__sel"></div><div class="vp__tag">▸ CAPT. VESPERA</div>
+          <div class="vp__foot"><span>cam (0.00, 4.20, 12.50)</span><span>fov 60°</span><span>tris 61,204 · draws 218</span><span>16.4 ms</span></div>
+        </div>
+      </section>
+      <section class="tu-window" style="flex:1">
+        <div class="tu-tabbar"><div class="tu-tabbar__tabs"><div class="tu-tab is-active">Console</div><div class="tu-tab">AI monitor</div></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
+        <div class="tu-window__body"><div class="tu-console">
+          <div class="tu-console__row"><span class="tu-console__time">14:02:31</span><span class="tu-console__lv" data-lv="WARN">WARN</span><span class="tu-console__src is-ai">ai</span><span class="tu-console__msg">AiRequest(id=req-17b) timeout 640ms · fallback BT</span></div>
+          <div class="tu-console__row"><span class="tu-console__time">14:02:58</span><span class="tu-console__lv" data-lv="INFO">INFO</span><span class="tu-console__src">review</span><span class="tu-console__msg">queued LoreDraft B-021 (sig 0.74)</span></div>
+          <div class="tu-console__row"><span class="tu-console__time">14:03:12</span><span class="tu-console__lv" data-lv="ERR">ERR</span><span class="tu-console__src">plugin</span><span class="tu-console__msg">tier-2: audio_backend.dll catch_unwind → handled</span></div>
+          <div class="tu-console__row"><span class="tu-console__time">14:03:48</span><span class="tu-console__lv" data-lv="INFO">INFO</span><span class="tu-console__src">review</span><span class="tu-console__msg">queued SpawnEntity r-8f21 (sig 0.91)</span></div>
+        </div></div>
+      </section>
+    </div>
+    <section class="tu-window is-hot" style="flex:1.25">
+      <div class="tu-tabbar"><div class="tu-tabbar__title">Review <span class="tu-badge">4</span></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
+      <div style="padding:10px;background:var(--panel2);border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px">
+        <div class="tu-row"><span class="tu-label tu-label--strong">Design review queue</span><span class="tu-spacer"></span><span class="tu-mono tu-mute" style="font-size:10px">since 14:00:00</span></div>
+        <div class="tu-review-sum"><span class="is-attention" style="flex:4 1 90px">4 PENDING</span><span class="is-info" style="flex:12 1 78px">12 AUTO</span><span class="is-approve" style="flex:38 1 104px">38 APPROVED</span><span class="is-reject" style="flex:3 1 96px">3 REJECTED</span></div>
+      </div>
+      <div class="tu-window__body">
+        <article class="tu-review">
+          <div class="tu-review__head"><span class="tu-review__time">14:03:48</span><span class="tu-status" data-status="pending">Pending</span><span class="tu-ai">AI</span><span class="tu-review__cmd">SpawnEntity</span><span class="tu-review__arrow">→</span><span class="tu-review__target">Captain Vespera</span><span class="tu-review__sig"><span class="tu-meter is-attention"><span class="tu-meter__fill" style="width:91%"></span></span><span class="tu-review__sigval is-high">0.91</span></span></div>
+          <div class="tu-review__body">archetype="Story.Beacon" · @(12.48, 2.00, −5.62)</div>
+          <div class="tu-review__detail">
+<pre class="tu-code">EngineCommand::SpawnEntity {
+  archetype: "Story.Beacon",
+  location:  [12.48, 2.00, -5.62],
+  rag_sig:   0.91  (MissionCritical),
+}</pre>
+            <div class="tu-review__actions"><button class="tu-btn tu-btn--approve">✓ Approve</button><button class="tu-btn tu-btn--danger">✕ Reject</button><button class="tu-btn tu-btn--secondary">Diff</button></div>
+          </div>
+        </article>
+        <article class="tu-review">
+          <div class="tu-review__head"><span class="tu-review__time">14:02:58</span><span class="tu-status" data-status="pending">Pending</span><span class="tu-ai">AI</span><span class="tu-review__cmd">LoreDraft</span><span class="tu-review__arrow">→</span><span class="tu-review__target">B-021 · Throat-Kin binders</span><span class="tu-review__sig"><span class="tu-meter is-attention"><span class="tu-meter__fill" style="width:74%"></span></span><span class="tu-review__sigval is-high">0.74</span></span></div>
+          <div class="tu-review__body">new belief · distorts T-012 · validation: 1 warning</div>
+        </article>
+        <article class="tu-review">
+          <div class="tu-review__head"><span class="tu-review__time">14:02:10</span><span class="tu-status" data-status="pending">Pending</span><span class="tu-ai">AI</span><span class="tu-review__cmd">ModifyComponent</span><span class="tu-review__arrow">→</span><span class="tu-review__target">Guard Patrol Alpha</span><span class="tu-review__sig"><span class="tu-meter is-warn"><span class="tu-meter__fill" style="width:67%"></span></span><span class="tu-review__sigval">0.67</span></span></div>
+          <div class="tu-review__body">Health { regen: 0.5 → 1.5 }</div>
+        </article>
+        <article class="tu-review">
+          <div class="tu-review__head"><span class="tu-review__time">14:01:45</span><span class="tu-status" data-status="auto">Auto-apv</span><span class="tu-ai">AI</span><span class="tu-review__cmd">ModifyComponent</span><span class="tu-review__arrow">→</span><span class="tu-review__target">Guard Patrol Beta</span><span class="tu-review__sig"><span class="tu-meter is-info"><span class="tu-meter__fill" style="width:12%"></span></span><span class="tu-review__sigval">0.12</span></span></div>
+          <div class="tu-review__body">Transform.position += (0.2, 0.0, 0.1)</div>
+        </article>
+      </div>
+    </section>
+    <section class="tu-window" style="flex:0.85">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><div class="tu-tab is-active">Inspector</div><div class="tu-tab">Schema</div></div><div class="tu-tabbar__ctrls"><span>⋯</span></div></div>
+      <div class="tu-window__body">
+        <div class="tu-entity">
+          <div class="tu-entity__name"><span style="width:4px;height:22px;background:var(--sig-attention)"></span>Captain Vespera<span class="tu-spacer"></span><span class="tu-chip is-ai">AI-driven</span></div>
+          <div class="tu-entity__meta"><span>e#4f12</span><span>archetype <span style="color:var(--sig-info)">Npc.Officer</span></span></div>
+        </div>
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Transform</span><span class="tu-section__more">⋯</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">position</span><span class="tu-prop__val">(12.48, 0.00, −5.62)</span><span class="tu-prop__type">vec3</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">rotation</span><span class="tu-prop__val">(0.0°, 142.6°, 0.0°)</span><span class="tu-prop__type">euler</span></div>
+        </div>
+        <div class="tu-section is-hot">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">BehaviorTree</span><span class="tu-ai">AI</span><span class="tu-section__more">⋯</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">source</span><span class="tu-prop__val is-ai">llm · 2m ago</span><span class="tu-prop__type">str</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">root</span><span class="tu-prop__val">Selector (fallback)</span><span class="tu-prop__type">node</span></div>
+          <div style="padding:8px 10px;display:flex;gap:6px;border-top:1px dashed var(--border)"><button class="tu-btn tu-btn--primary" style="flex:1">Open in BT viewer</button></div>
+        </div>
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Health</span><span class="tu-section__more">⋯</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">current</span><span class="tu-prop__val is-approve">180 / 180</span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div class="tu-statusbar"><span class="tu-statusbar__brand">THEOS//EDITOR</span><span>v0.4.2 · review layout</span><span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>authoring</span><span>ipc ok · hb 500ms</span><span class="tu-spacer"></span><span>ram 612MB · vram 1.2GB</span></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>03 · Codex — truth and reveal ledger — Theos Editor reference</title>
+<!--
+  Reference screen 03 of the Theos content editor, exported from the design canvas on 2026-10-31.
+  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
+-->
+<link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
+<link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<style>
+body{margin:0;background:#060810}
+a{color:#3ef0ff}a:hover{color:#e4ecff}
+.tu-shell.cs{height:900px}
+:where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
+:where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
+@media (max-width:1000px){
+.tu-shell.cs{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:var(--h-titlebar) auto auto minmax(0,1fr) var(--h-statusbar)}
+.cs .tu-rail{flex-direction:row;width:auto;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}
+.cs .tu-rail .tu-rail__item{width:60px;flex-shrink:0}
+.cs .tu-rail__spacer{display:none}
+.cs .tu-toolbar{height:auto;flex-wrap:wrap;padding:6px 10px}
+.cs .tu-shell__work{flex-wrap:wrap}
+.cs .tu-shell__work > *{flex:1 1 100% !important;min-height:320px}
+}
+</style>
+</head>
+<body>
+<div class="tu-shell cs" style="--tu-font-i: var(--font-ui)">
+
+  <header class="tu-titlebar">
+    <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <span class="tu-titlebar__sep">▸</span><span>tower-of-theos</span>
+    <span class="tu-titlebar__sep">▸</span><span>lore/truths</span>
+    <span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>git main · clean</span>
+  </header>
+
+  <div class="tu-toolbar">
+    <label class="tu-input" style="width: 300px;"><span class="tu-input__icon">~</span><input type="text" aria-label="Find record" placeholder="find record   #id   @people   :kind"></label>
+    <span class="tu-divider"></span>
+    <span class="tu-seg" aria-label="Editor mode"><button class="tu-seg__opt is-active" type="button">Read</button><button class="tu-seg__opt" type="button">Write</button><button class="tu-seg__opt" type="button">Source</button></span>
+    <span class="tu-divider"></span>
+    <button class="tu-btn tu-btn--ghost" type="button"><span class="tu-btn__icon">⋈</span>Open in graph</button>
+    <span class="tu-spacer"></span>
+    <button class="tu-btn tu-btn--secondary" type="button"><span class="tu-btn__icon">+</span>New record</button>
+    <button class="tu-btn tu-btn--accent" type="button">Save Ctrl+S</button>
+  </div>
+
+  <nav class="tu-rail" aria-label="Layout presets">
+    <button class="tu-rail__item is-active" type="button" aria-current="true"><span class="tu-rail__glyph">◈</span><span class="tu-rail__label">Codex</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⋈</span><span class="tu-rail__label">Graph</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">¶</span><span class="tu-rail__label">Scripts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◫</span><span class="tu-rail__label">Concepts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">△</span><span class="tu-rail__label">Maps</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◴</span><span class="tu-rail__label">Review</span><span class="tu-rail__badge">3</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">±</span><span class="tu-rail__label">Changes</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">&lt;/&gt;</span><span class="tu-rail__label">Code</span></button>
+    <div class="tu-rail__spacer"></div>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⚙</span><span class="tu-rail__label">Settings</span></button>
+  </nav>
+
+  <div class="tu-shell__work">
+
+    <!-- Lore tree -->
+    <section class="tu-window" style="flex: 0 0 236px;">
+      <div class="tu-tabbar">
+        <div class="tu-tabbar__tabs">
+          <button class="tu-tab" type="button">Where</button>
+          <button class="tu-tab" type="button">Who</button>
+          <button class="tu-tab is-active" type="button">Lore</button>
+          <button class="tu-tab" type="button">Things</button>
+        </div>
+      </div>
+      <div class="tu-window__body">
+        <div class="tu-tree">
+          <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="truth"></span><span class="tu-tree__name">Truths</span><span class="tu-tree__tag">38</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="truth"></span><span class="tu-tree__name">T-001 The Tower is a resonator</span></div>
+          <div class="tu-tree__row is-entity is-selected" style="--depth: 1;"><span class="tu-kind" data-kind="truth"></span><span class="tu-tree__name">T-012 Listeners are…</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 2;"><span class="tu-kind" data-kind="belief"></span><span class="tu-tree__name">B-016 messengers</span><span class="tu-tree__tag">false</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 2;"><span class="tu-kind" data-kind="belief"></span><span class="tu-tree__name">B-020 ancestors</span><span class="tu-tree__tag">partial</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 2;"><span class="tu-kind" data-kind="belief"></span><span class="tu-tree__name">B-022 never left</span><span class="tu-tree__tag">close</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 2;"><span class="tu-kind" data-kind="clue"></span><span class="tu-tree__name">C-031 dead tongue</span><span class="tu-tree__tag">T1</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 2;"><span class="tu-kind" data-kind="clue"></span><span class="tu-tree__name">C-032 echo-vault</span><span class="tu-tree__tag">T2</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 2;"><span class="tu-kind" data-kind="clue"></span><span class="tu-tree__name">C-033 operator-plate</span><span class="tu-tree__tag">T2</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="truth"></span><span class="tu-tree__name">T-031 The Seal is false</span><span class="tu-tree__tag">never</span></div>
+          <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="belief"></span><span class="tu-tree__name">Beliefs</span><span class="tu-tree__tag">61</span></div>
+          <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="clue"></span><span class="tu-tree__name">Clues</span><span class="tu-tree__tag">74</span></div>
+          <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="perspective"></span><span class="tu-tree__name">Perspectives</span><span class="tu-tree__tag">9</span></div>
+          <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="chronicle"></span><span class="tu-tree__name">Chronicles</span><span class="tu-tree__tag">6</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Truth record -->
+    <section class="tu-window" style="flex: 1 1 560px;">
+      <div class="tu-tabbar">
+        <div class="tu-tabbar__tabs">
+          <button class="tu-tab is-active" type="button"><span class="tu-kind" data-kind="truth"></span>T-012</button>
+          <button class="tu-tab" type="button"><span class="tu-kind" data-kind="belief"></span>B-020</button>
+        </div>
+        <div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div>
+      </div>
+      <div class="tu-window__body tu-manuscript">
+        <header class="tu-rechead">
+          <div class="tu-rechead__top">
+            <span class="tu-kind tu-rechead__glyph" data-kind="truth"></span>
+            <span class="tu-rechead__id">T-012</span>
+            <span class="tu-rechead__kind">truth · explaining lore</span>
+            <span class="tu-rechead__right"><span class="tu-status" data-status="canon">Canon</span></span>
+          </div>
+          <h1 class="tu-rechead__title">The Listeners are the unwoven Tuners</h1>
+          <div class="tu-rechead__meta"><span>lore/truths/t-012.md</span><span>requires T-001</span><span>3 beliefs · 3 clues · 2 scripts</span></div>
+        </header>
+
+        <div style="padding: 20px 24px 28px; display: flex; flex-direction: column; gap: 18px;">
+          <div class="tu-prose">
+            <p>The drifting spirits the peoples call Listeners are the Tuners who were unwoven in the Great Discord. Spirit Magic works because of it: the binders bind the builders. This fixes what Spirit Magic's entities are.</p>
+            <h2>How it is held</h2>
+          </div>
+
+          <div class="tu-instrument" style="max-width: 70ch; border: 1px solid var(--border); background: var(--panel);">
+            <div style="display: grid; grid-template-columns: 20px 50px minmax(0, 1fr) 150px 96px; gap: 8px; align-items: center; padding: 6px 10px; background: var(--panel2); border-bottom: 1px solid var(--border);">
+              <span></span><span class="tu-label tu-label--xs">ID</span><span class="tu-label tu-label--xs">Belief</span><span class="tu-label tu-label--xs">Held by</span><span class="tu-label tu-label--xs">Accuracy</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 20px 50px minmax(0, 1fr) 150px 96px; gap: 8px; align-items: center; padding: 6px 10px; border-top: 1px dashed var(--border); font: 400 10.5px/16px var(--font-mono);">
+              <span class="tu-kind" data-kind="belief"></span><span>B-016</span><span style="font: 400 12px/16px var(--font-ui); color: var(--text);">Spirits are the Fates' messengers</span><span><span class="tu-link" data-kind="people"><span class="tu-kind" data-kind="people"></span><span class="tu-link__title">Hearth folk</span></span></span><span class="tu-dim">false · 0/3</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 20px 50px minmax(0, 1fr) 150px 96px; gap: 8px; align-items: center; padding: 6px 10px; border-top: 1px dashed var(--border); font: 400 10.5px/16px var(--font-mono); background: color-mix(in srgb, var(--kind-belief) 8%, transparent);">
+              <span class="tu-kind" data-kind="belief"></span><span>B-020</span><span style="font: 400 12px/16px var(--font-ui); color: var(--text);">Listeners are ancestors who answer to the right song</span><span><span class="tu-link" data-kind="people"><span class="tu-kind" data-kind="people"></span><span class="tu-link__title">Throat-Kin</span></span></span><span class="tu-dim">partial · 1/3</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 20px 50px minmax(0, 1fr) 150px 96px; gap: 8px; align-items: center; padding: 6px 10px; border-top: 1px dashed var(--border); font: 400 10.5px/16px var(--font-mono);">
+              <span class="tu-kind" data-kind="belief"></span><span>B-022</span><span style="font: 400 12px/16px var(--font-ui); color: var(--text);">The plates name their makers, and the makers never left</span><span><span class="tu-link" data-kind="people"><span class="tu-kind" data-kind="people"></span><span class="tu-link__title">Concordance</span></span></span><span class="tu-dim">close · 2/3</span>
+            </div>
+          </div>
+
+          <figure class="tu-voice" style="margin: 0;">
+            <div class="tu-voice__head"><span class="tu-kind" data-kind="perspective"></span>In-world · Throat-Kin binders<span class="tu-voice__head-right">B-020 · T2 lens</span></div>
+            <blockquote class="tu-voice__body" style="margin: 0;"><p>Sing a name the way it was first sung and they lean close to hear it. Sing it wrong and you have only made noise in an empty hall.</p></blockquote>
+            <figcaption class="tu-voice__by">a binder, teaching the naming-song</figcaption>
+          </figure>
+
+          <div class="tu-prose">
+            <h2>How it is revealed</h2>
+            <p class="tu-note">Generated from the clue records. A beat that uses a clue must match its floor and gate.</p>
+          </div>
+
+          <div class="tu-instrument" style="max-width: 70ch; border: 1px solid var(--border); background: var(--bg); padding: 14px 12px 12px;">
+            <div style="position: relative; height: 96px;">
+              <div style="position: absolute; left: 0; right: 0; top: 40px; height: 18px; display: flex; border: 1px solid var(--border);">
+                <div style="flex: 20; background: var(--panel2); border-right: 1px solid var(--border); padding: 2px 6px; font: 700 9px/12px var(--tu-font-i); letter-spacing: 0.8px; text-transform: uppercase; color: var(--textDim);">Hearth</div>
+                <div style="flex: 30; background: var(--panel); border-right: 1px solid var(--border); padding: 2px 6px; font: 700 9px/12px var(--tu-font-i); letter-spacing: 0.8px; text-transform: uppercase; color: var(--textDim);">Wilds</div>
+                <div style="flex: 30; background: var(--panel2); border-right: 1px solid var(--border); padding: 2px 6px; font: 700 9px/12px var(--tu-font-i); letter-spacing: 0.8px; text-transform: uppercase; color: var(--textDim);">Crucible</div>
+                <div style="flex: 20; background: var(--panel); padding: 2px 6px; font: 700 9px/12px var(--tu-font-i); letter-spacing: 0.8px; text-transform: uppercase; color: var(--textDim);">Apex</div>
+              </div>
+              <div style="position: absolute; left: 3%; top: 0; height: 66px; border-left: 1px solid var(--kind-clue);"></div>
+              <div style="position: absolute; left: 3%; top: 0; padding-left: 6px; font: 400 10px/14px var(--font-mono); color: var(--text); white-space: nowrap;"><span style="color: var(--kind-clue);">◌</span> C-031 hinted · F04 · T1</div>
+              <div style="position: absolute; left: 20%; top: 40px; height: 56px; border-left: 1px solid var(--kind-clue);"></div>
+              <div style="position: absolute; left: 20%; top: 80px; padding-left: 6px; font: 400 10px/14px var(--font-mono); color: var(--text); white-space: nowrap;"><span style="color: var(--kind-clue);">○</span> C-032 suspected · F21 · T2</div>
+              <div style="position: absolute; left: 56%; top: 0; height: 66px; border-left: 1px solid var(--kind-clue);"></div>
+              <div style="position: absolute; left: 56%; top: 0; padding-left: 6px; font: 400 10px/14px var(--font-mono); color: var(--text); white-space: nowrap;"><span style="color: var(--kind-clue);">●</span> C-033 confirmed · F57 · T2</div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font: 400 9px/12px var(--font-mono); color: var(--textMute); margin-top: 4px;"><span>F1</span><span>F25</span><span>F50</span><span>F75</span><span>F100</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Front matter, ledger, validation -->
+    <div style="flex: 0 0 316px; display: flex; flex-direction: column; gap: 4px; min-width: 0;">
+      <section class="tu-window" style="flex: 0 0 auto;">
+        <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button">Front matter</button><button class="tu-tab" type="button">Links in · 11</button></div></div>
+        <div class="tu-fm" style="border: 0;">
+          <div class="tu-fm__row"><span class="tu-fm__key">id</span><span class="tu-fm__val">T-012</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">status</span><span class="tu-fm__val"><span class="tu-status" data-status="canon">canon</span></span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">reveal</span><span class="tu-fm__val">confirmed</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">requires</span><span class="tu-fm__val"><span class="tu-link" data-kind="truth"><span class="tu-kind" data-kind="truth"></span><span class="tu-link__id">T-001</span></span></span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">tags</span><span class="tu-fm__val">[CANON] spirit-magic</span></div>
+        </div>
+      </section>
+
+      <section class="tu-window" style="flex: 0 0 auto;">
+        <div class="tu-tabbar"><div class="tu-tabbar__title">Ledger · generated</div></div>
+        <div class="tu-window__body">
+          <div class="tu-prop"><span class="tu-prop__key">hinted</span><span class="tu-prop__val">F04 · T1 · C-031</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">suspected</span><span class="tu-prop__val">F21 · T2 · C-032</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">confirmed</span><span class="tu-prop__val">F57 · T2 · C-033</span></div>
+          <div class="tu-prop"><span class="tu-prop__key">placed by</span><span class="tu-prop__val"><span class="tu-kind" data-kind="beat"></span> S-004 · S-019</span></div>
+        </div>
+      </section>
+
+      <section class="tu-window" style="flex: 1 1 auto;">
+        <div class="tu-tabbar"><div class="tu-tabbar__title">Validation <span class="tu-badge is-warn">1</span></div></div>
+        <div class="tu-window__body">
+          <div class="tu-val" data-sev="warn" style="border-top: 0;"><span class="tu-val__sev"></span><span class="tu-val__msg">Only one clue moves T-012 to confirmed. The three-clue rule asks for three.</span><div class="tu-val__meta"><span class="tu-val__rule">three-clue</span></div><button class="tu-btn tu-btn--secondary tu-btn--sm tu-val__act" type="button">Add clue</button></div>
+          <div class="tu-val" data-sev="pass"><span class="tu-val__sev"></span><span class="tu-val__msg">C-033 comes after C-032 on every path.</span><div class="tu-val__meta"><span class="tu-val__rule">reveal-order</span></div></div>
+          <div class="tu-val" data-sev="pass"><span class="tu-val__sev"></span><span class="tu-val__msg">T-001 is confirmed before F57.</span><div class="tu-val__meta"><span class="tu-val__rule">requires</span></div></div>
+          <div class="tu-val" data-sev="pass"><span class="tu-val__sev"></span><span class="tu-val__msg">Every belief names who holds it.</span><div class="tu-val__meta"><span class="tu-val__rule">belief-holder</span></div></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="tu-statusbar">
+    <span class="tu-statusbar__brand">THEOS//EDITOR</span>
+    <span>v0.4.2 · codex layout</span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>git main · clean</span>
+    <span>38 truths · 61 beliefs · 74 clues</span>
+    <span class="tu-spacer"></span>
+    <span>ledger synced 14:02</span>
+  </footer>
+</div>
+</body>
+</html>

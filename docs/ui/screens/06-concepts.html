@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>06 · Concepts — versions and pipeline — Theos Editor reference</title>
+<!--
+  Reference screen 06 of the Theos content editor, exported from the design canvas on 2026-10-31.
+  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
+-->
+<link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
+<link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<style>
+body{margin:0;background:#060810}
+a{color:#3ef0ff}a:hover{color:#e4ecff}
+.tu-shell.cs{height:900px}
+:where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
+:where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
+@media (max-width:1000px){
+.tu-shell.cs{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:var(--h-titlebar) auto auto minmax(0,1fr) var(--h-statusbar)}
+.cs .tu-rail{flex-direction:row;width:auto;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}
+.cs .tu-rail .tu-rail__item{width:60px;flex-shrink:0}
+.cs .tu-rail__spacer{display:none}
+.cs .tu-toolbar{height:auto;flex-wrap:wrap;padding:6px 10px}
+.cs .tu-shell__work{flex-wrap:wrap}
+.cs .tu-shell__work > *{flex:1 1 100% !important;min-height:320px}
+}
+</style>
+</head>
+<body>
+<div class="tu-shell cs" style="--tu-font-i: var(--font-ui)">
+
+  <header class="tu-titlebar">
+    <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <span class="tu-titlebar__sep">▸</span><span>tower-of-theos</span>
+    <span class="tu-titlebar__sep">▸</span><span>concepts/fates-shrine</span>
+    <span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Concepts</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>comfyui · RTX 5080 · 1 running</span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>git main · clean</span>
+  </header>
+
+  <div class="tu-toolbar">
+    <label class="tu-input" style="width: 240px;"><span class="tu-input__icon">~</span><input type="text" aria-label="Find concept" placeholder="find concept or version"></label>
+    <span class="tu-divider"></span>
+    <span class="tu-label tu-label--xs">Style</span>
+    <span class="tu-select" style="width: 190px;">placeholder · not locked</span>
+    <span class="tu-divider"></span>
+    <span class="tu-seg"><button class="tu-seg__opt is-active" type="button">Grid</button><button class="tu-seg__opt" type="button">Lineage</button><button class="tu-seg__opt" type="button">Compare</button></span>
+    <span class="tu-spacer"></span>
+    <button class="tu-btn tu-btn--secondary" type="button"><span class="tu-btn__icon">+</span>New concept</button>
+  </div>
+
+  <nav class="tu-rail" aria-label="Layout presets">
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◈</span><span class="tu-rail__label">Codex</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⋈</span><span class="tu-rail__label">Graph</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">¶</span><span class="tu-rail__label">Scripts</span></button>
+    <button class="tu-rail__item is-active" type="button" aria-current="true"><span class="tu-rail__glyph">◫</span><span class="tu-rail__label">Concepts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">△</span><span class="tu-rail__label">Maps</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◴</span><span class="tu-rail__label">Review</span><span class="tu-rail__badge">3</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">±</span><span class="tu-rail__label">Changes</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">&lt;/&gt;</span><span class="tu-rail__label">Code</span></button>
+    <div class="tu-rail__spacer"></div>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⚙</span><span class="tu-rail__label">Settings</span></button>
+  </nav>
+
+  <div class="tu-shell__work">
+
+    <!-- Concept list -->
+    <section class="tu-window" style="flex: 0 0 236px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__title">Concepts <span class="tu-mono tu-dim" style="font-weight: 400;">12</span></div></div>
+      <div class="tu-window__body">
+        <div style="padding: 8px; display: flex; flex-direction: column; gap: 8px; border-left: 2px solid var(--textDim); background: var(--panel2);">
+          <img src="../assets/shrine-v1.webp" alt="Fates' shrine concept thumbnail" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block;">
+          <div style="display: flex; gap: 6px; align-items: center; font: 700 10.5px/14px var(--font-mono); color: var(--text);"><span class="tu-kind" data-kind="concept"></span>fates-shrine</div>
+          <div class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">⌂ Fates' shrine · 4 versions · 1 running</div>
+        </div>
+        <div style="padding: 8px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border);">
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px;">
+            <img src="../assets/nave-t1.webp" alt="Choir-hall nave, T1 reading" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block;">
+            <img src="../assets/nave-t3.webp" alt="Choir-hall nave, T3 reading" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; opacity: 0.7;">
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center; font: 600 10.5px/14px var(--font-mono); color: var(--text);"><span class="tu-kind" data-kind="concept"></span>choir-hall-nave</div>
+          <div class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">two-state · T1 picked · T3 open</div>
+        </div>
+        <div style="padding: 8px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border);">
+          <img src="../assets/vista.webp" alt="Wilds vista concept thumbnail" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block;">
+          <div style="display: flex; gap: 6px; align-items: center; font: 600 10.5px/14px var(--font-mono); color: var(--text);"><span class="tu-kind" data-kind="concept"></span>wilds-vista</div>
+          <div class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">≣ The Wilds · 2 versions</div>
+        </div>
+        <div style="padding: 8px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border);">
+          <img src="../assets/weaver.webp" alt="Weaver casting concept thumbnail" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block;">
+          <div style="display: flex; gap: 6px; align-items: center; font: 600 10.5px/14px var(--font-mono); color: var(--text);"><span class="tu-kind" data-kind="concept"></span>weaver-cast</div>
+          <div class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">spell readability · 2 versions</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Concept board -->
+    <section class="tu-window" style="flex: 1 1 600px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button"><span class="tu-kind" data-kind="concept"></span>fates-shrine</button></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
+      <div class="tu-window__body">
+        <header class="tu-rechead tu-manuscript" style="padding: 16px 20px 12px;">
+          <div class="tu-rechead__top">
+            <span class="tu-kind tu-rechead__glyph" data-kind="concept"></span>
+            <span class="tu-rechead__id">fates-shrine</span>
+            <span class="tu-rechead__kind">concept · for Fates' shrine</span>
+            <span class="tu-rechead__right"><span class="tu-status" data-status="pending">1 to rate</span></span>
+          </div>
+          <h1 class="tu-rechead__title" style="font-size: 22px; line-height: 28px;">Fates' shrine on the choir-hall</h1>
+          <p style="margin: 0; max-width: 70ch; font: 400 13px/20px var(--font-ui); color: var(--textProse);">Serves one decision: what does the Hearth's holiest place look like when you first climb to it? Village faith built on the roof of a machine nobody remembers.</p>
+        </header>
+
+        <div style="padding: 10px 12px; display: flex; align-items: stretch; gap: 0; border-bottom: 1px solid var(--border); background: var(--panel2); overflow-x: auto;">
+          <div style="flex: 1 0 150px; padding: 6px 10px; border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; gap: 3px;">
+            <span class="tu-label tu-label--xs">1 · Compose</span>
+            <span class="tu-mono" style="font-size: 10px; color: var(--text);">FLUX 3 Klein base</span>
+            <span class="tu-mono tu-dim" style="font-size: 9.5px;">50 steps · cfg 3.5 · ✓ 4 done</span>
+          </div>
+          <span class="tu-mono tu-dim" style="align-self: center; padding: 0 6px;">→</span>
+          <div style="flex: 1 0 150px; padding: 6px 10px; border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; gap: 3px;">
+            <span class="tu-label tu-label--xs">2 · Compare</span>
+            <span class="tu-mono" style="font-size: 10px; color: var(--text);">Krea-2 Turbo, same seeds</span>
+            <span class="tu-mono tu-dim" style="font-size: 9.5px;">8 steps · ✓ 2 done</span>
+          </div>
+          <span class="tu-mono tu-dim" style="align-self: center; padding: 0 6px;">→</span>
+          <div style="flex: 1 0 150px; padding: 6px 10px; border: 1px solid color-mix(in srgb, var(--sig-ai) 50%, transparent); background: var(--panel); display: flex; flex-direction: column; gap: 3px;">
+            <span class="tu-label tu-label--xs">3 · Finish <span class="tu-ai">AI</span></span>
+            <span class="tu-mono" style="font-size: 10px; color: var(--text);">Z-Image-Turbo i2i 0.40</span>
+            <span class="tu-mono" style="font-size: 9.5px; color: var(--sig-ai);">running · step 6 of 8</span>
+          </div>
+          <span class="tu-mono tu-dim" style="align-self: center; padding: 0 6px;">→</span>
+          <div style="flex: 1 0 130px; padding: 6px 10px; border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; gap: 3px;">
+            <span class="tu-label tu-label--xs">4 · Pick</span>
+            <span class="tu-mono" style="font-size: 10px; color: var(--text);">you</span>
+            <span class="tu-mono tu-dim" style="font-size: 9.5px;">v4 not rated</span>
+          </div>
+        </div>
+
+        <div style="padding: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;">
+          <article style="border: 1px solid color-mix(in srgb, var(--sig-approve) 55%, transparent); background: var(--panel); display: flex; flex-direction: column;">
+            <img src="../assets/shrine-v1.webp" alt="Version 1, FLUX 3 Klein seed 1101" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block;">
+            <div style="padding: 7px 8px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; gap: 6px; align-items: center; font: 400 10px/14px var(--font-mono); color: var(--textDim);"><span style="font-weight: 700; color: var(--text);">v1</span><span class="tu-ai">AI</span>flux3-klein · s1101<span class="tu-spacer"></span><span style="color: var(--sig-approve);">✓ picked</span></div>
+              <span class="tu-rate"><button class="tu-rate__opt is-on" data-rate="keep" type="button">Keep</button><button class="tu-rate__opt" data-rate="kill" type="button">Kill</button><button class="tu-rate__opt" data-rate="mix" type="button">Mix</button></span>
+            </div>
+          </article>
+          <article style="border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column;">
+            <img src="../assets/shrine-v2.webp" alt="Version 2, FLUX 3 Klein seed 2202" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block;">
+            <div style="padding: 7px 8px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; gap: 6px; align-items: center; font: 400 10px/14px var(--font-mono); color: var(--textDim);"><span style="font-weight: 700; color: var(--text);">v2</span><span class="tu-ai">AI</span>flux3-klein · s2202</div>
+              <span class="tu-rate"><button class="tu-rate__opt" data-rate="keep" type="button">Keep</button><button class="tu-rate__opt" data-rate="kill" type="button">Kill</button><button class="tu-rate__opt is-on" data-rate="mix" type="button">Mix</button></span>
+            </div>
+          </article>
+          <article style="border: 1px dashed color-mix(in srgb, var(--sig-ai) 55%, transparent); background: var(--panel3); display: flex; flex-direction: column;">
+            <div style="width: 100%; aspect-ratio: 16 / 9; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background-color: var(--bg); background-image: linear-gradient(var(--border) 0.5px, transparent 0.5px), linear-gradient(90deg, var(--border) 0.5px, transparent 0.5px); background-size: 12px 12px;">
+              <span class="tu-ai">AI</span>
+              <span class="tu-mono" style="font-size: 10px; color: var(--sig-ai);">finishing v1 · 6 / 8</span>
+              <span class="tu-meter is-ai"><span class="tu-meter__fill" style="width: 75%;"></span></span>
+            </div>
+            <div style="padding: 7px 8px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; gap: 6px; align-items: center; font: 400 10px/14px var(--font-mono); color: var(--textDim);"><span style="font-weight: 700; color: var(--text);">v5</span>z-image-turbo · from v1 · 0.40</div>
+              <span class="tu-mono tu-dim" style="font-size: 10px; line-height: 24px;">lands here when done</span>
+            </div>
+          </article>
+          <article style="border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; opacity: 0.6;">
+            <img src="../assets/shrine-v3.webp" alt="Version 3, Krea-2 seed 1101" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block;">
+            <div style="padding: 7px 8px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; gap: 6px; align-items: center; font: 400 10px/14px var(--font-mono); color: var(--textDim);"><span style="font-weight: 700; color: var(--text);">v3</span><span class="tu-ai">AI</span>krea2 · s1101</div>
+              <span class="tu-rate"><button class="tu-rate__opt" data-rate="keep" type="button">Keep</button><button class="tu-rate__opt is-on" data-rate="kill" type="button">Kill</button><button class="tu-rate__opt" data-rate="mix" type="button">Mix</button></span>
+            </div>
+          </article>
+          <article style="border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column;">
+            <img src="../assets/shrine-v4.webp" alt="Version 4, Krea-2 seed 2202" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block;">
+            <div style="padding: 7px 8px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; gap: 6px; align-items: center; font: 400 10px/14px var(--font-mono); color: var(--textDim);"><span style="font-weight: 700; color: var(--text);">v4</span><span class="tu-ai">AI</span>krea2 · s2202<span class="tu-spacer"></span><span class="tu-status" data-status="pending">rate</span></div>
+              <span class="tu-rate"><button class="tu-rate__opt" data-rate="keep" type="button">Keep</button><button class="tu-rate__opt" data-rate="kill" type="button">Kill</button><button class="tu-rate__opt" data-rate="mix" type="button">Mix</button></span>
+            </div>
+          </article>
+          <div style="border: 1px dashed var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; min-height: 140px;">
+            <span class="tu-mono tu-dim" style="font-size: 18px;">⊕</span>
+            <span class="tu-mono tu-dim" style="font-size: 10px; text-align: center;">mix v1 + v2 · or vary a pick</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Version detail -->
+    <section class="tu-window" style="flex: 0 0 318px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button">v1</button><button class="tu-tab" type="button">Decisions</button></div></div>
+      <div class="tu-window__body">
+        <div class="tu-fm" style="border: 0;">
+          <div class="tu-fm__row"><span class="tu-fm__key">version</span><span class="tu-fm__val">v1 · no parent</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">generator</span><span class="tu-fm__val">flux3-image-klein-base int8</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">settings</span><span class="tu-fm__val">s1101 · 50 steps · cfg 3.5 · 1360×768</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">workflow</span><span class="tu-fm__val">t2i_flux3-klein-base.json</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">prompt</span><span class="tu-fm__val">prompts/compose.md@3</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">file</span><span class="tu-fm__val">concepts/fates-shrine/v1.png</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">carries</span><span class="tu-fm__val"><span class="tu-link" data-kind="location"><span class="tu-kind" data-kind="location"></span><span class="tu-link__title">Fates' shrine</span></span><span class="tu-link" data-kind="clue"><span class="tu-kind" data-kind="clue"></span><span class="tu-link__id">C-031</span></span></span></div>
+        </div>
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Decision</span></div>
+          <div style="padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;">
+            <div class="tu-row"><span class="tu-status" data-status="approved">Picked</span><span class="tu-mono tu-dim" style="font-size: 10px;">for F04 · Jann · 30 Oct</span></div>
+            <p style="margin: 0; font: 400 12.5px/19px var(--font-ui); color: var(--textProse);">Best read of "faith on top of a machine": the ribs stay huge, the shrine stays small. Keep the three figures readable at this distance.</p>
+          </div>
+        </div>
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Notes</span><span class="tu-section__more">2</span></div>
+          <div style="padding: 8px 10px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; flex-direction: column; gap: 3px;"><span class="tu-mono tu-dim" style="font-size: 10px;">Jann · 14:20</span><span style="font: 400 12.5px/19px var(--font-ui); color: var(--textProse);">The stair crowd in v2 is better. Mix it in when we finish.</span></div>
+            <div style="display: flex; flex-direction: column; gap: 3px;"><span class="tu-mono" style="font-size: 10px; color: var(--sig-ai);"><span class="tu-ai">AI</span> claude · 14:31</span><span style="font: 400 12.5px/19px var(--font-ui); color: var(--textProse);">Queued v5: v1 finished with Z-Image at 0.40. A mix with v2 is ready to queue after it.</span></div>
+          </div>
+        </div>
+        <div style="padding: 10px; margin-top: auto; display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--border);">
+          <button class="tu-btn tu-btn--primary" type="button" style="flex: 1 1 100%;">Make the T3 reading</button>
+          <button class="tu-btn tu-btn--secondary" type="button" style="flex: 1;">Vary</button>
+          <button class="tu-btn tu-btn--secondary" type="button" style="flex: 1;">Finish with Krea</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="tu-statusbar">
+    <span class="tu-statusbar__brand">THEOS//EDITOR</span>
+    <span>v0.4.2 · concepts layout</span>
+    <span class="tu-statuspip"><span class="tu-ai">AI</span>comfyui queue · 1 running · 1 waiting</span>
+    <span class="tu-spacer"></span>
+    <span>images in Drive · records in git</span>
+  </footer>
+</div>
+</body>
+</html>

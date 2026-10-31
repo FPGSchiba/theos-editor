@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>11 · Maps — runs, seeds, pick — Theos Editor reference</title>
+<!--
+  Reference screen 11 of the Theos content editor, exported from the design canvas on 2026-10-31.
+  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
+-->
+<link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
+<link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<style>
+body{margin:0;background:#060810}
+a{color:#3ef0ff}a:hover{color:#e4ecff}
+.tu-shell.cs{height:900px}
+:where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
+:where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
+.bad{color:var(--sig-reject)}
+@media (max-width:1000px){
+.tu-shell.cs{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:var(--h-titlebar) auto auto minmax(0,1fr) var(--h-statusbar)}
+.cs .tu-rail{flex-direction:row;width:auto;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}
+.cs .tu-rail .tu-rail__item{width:60px;flex-shrink:0}
+.cs .tu-rail__spacer{display:none}
+.cs .tu-toolbar{height:auto;flex-wrap:wrap;padding:6px 10px}
+.cs .tu-shell__work{flex-wrap:wrap}
+.cs .tu-shell__work > *{flex:1 1 100% !important;min-height:320px}
+}
+</style>
+</head>
+<body>
+<div class="tu-shell cs" style="--tu-font-i: var(--font-ui)">
+
+  <header class="tu-titlebar">
+    <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <span class="tu-titlebar__sep">▸</span><span>tower-of-theos</span>
+    <span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall/maps</span>
+    <span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Maps</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>theos_maps 0.3.0 · Python 3.12 (uv)</span>
+    <span class="tu-statuspip"><span class="tu-pip is-warn"></span>1 of 4 seeds passes</span>
+  </header>
+
+  <div class="tu-toolbar">
+    <span class="tu-label tu-label--xs">Recipe</span>
+    <span class="tu-select" style="width: 170px;">hearth-valley.yaml</span>
+    <span class="tu-label tu-label--xs">Seeds</span>
+    <label class="tu-input" style="width: 110px;"><input type="text" aria-label="Seeds" value="1 2 3 4"></label>
+    <span class="tu-divider"></span>
+    <span class="tu-seg"><button class="tu-seg__opt is-active" type="button">Terrain</button><button class="tu-seg__opt" type="button">Interior</button><button class="tu-seg__opt" type="button">Settlement</button></span>
+    <span class="tu-spacer"></span>
+    <button class="tu-btn tu-btn--secondary" type="button">Edit recipe</button>
+    <button class="tu-btn tu-btn--accent" type="button"><span class="tu-btn__icon">▶</span>Run 4 seeds Ctrl+R</button>
+  </div>
+
+  <nav class="tu-rail" aria-label="Layout presets">
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◈</span><span class="tu-rail__label">Codex</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⋈</span><span class="tu-rail__label">Graph</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">¶</span><span class="tu-rail__label">Scripts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◫</span><span class="tu-rail__label">Concepts</span></button>
+    <button class="tu-rail__item is-active" type="button" aria-current="true"><span class="tu-rail__glyph">△</span><span class="tu-rail__label">Maps</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◴</span><span class="tu-rail__label">Review</span><span class="tu-rail__badge">3</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">±</span><span class="tu-rail__label">Changes</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">&lt;/&gt;</span><span class="tu-rail__label">Code</span></button>
+    <div class="tu-rail__spacer"></div>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⚙</span><span class="tu-rail__label">Settings</span></button>
+  </nav>
+
+  <div class="tu-shell__work">
+
+    <!-- Map list -->
+    <section class="tu-window" style="flex: 0 0 236px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button">Maps</button><button class="tu-tab" type="button">Recipes</button><button class="tu-tab" type="button">Stages</button></div></div>
+      <div class="tu-window__body">
+        <div class="tu-tree">
+          <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="floor"></span><span class="tu-tree__name">F04 The Choir-hall</span></div>
+          <div class="tu-tree__row is-entity is-selected" style="--depth: 1;"><span class="tu-mono">△</span><span class="tu-tree__name">hearth-valley</span><span class="tu-tree__tag">terrain</span></div>
+          <div class="tu-tree__row" style="--depth: 2;"><span class="tu-tree__name">run 29 Oct · s1–s4</span><span class="tu-tree__tag">1 ok</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-mono">△</span><span class="tu-tree__name">choir-hall-ruin</span><span class="tu-tree__tag">interior</span></div>
+          <div class="tu-tree__row" style="--depth: 2;"><span class="tu-tree__name">run 29 Oct · s1–s4</span><span class="tu-tree__tag">4 ok</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-mono">△</span><span class="tu-tree__name">details</span><span class="tu-tree__tag">9 plans</span></div>
+          <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="band"></span><span class="tu-tree__name">The Wilds</span><span class="tu-tree__tag">no maps yet</span></div>
+        </div>
+        <div class="tu-section__head" style="border-top: 1px solid var(--border); margin-top: 8px;"><span class="tu-label tu-label--sm tu-label--strong">Extension stages</span></div>
+        <div class="tu-prop"><span class="tu-prop__val">omega_detuning</span><span class="tu-prop__type">terrain</span></div>
+        <div style="margin-top: auto; padding: 8px 10px; border-top: 1px solid var(--border); font: 400 10px/14px var(--font-mono); color: var(--textDim);">the toolset in tools/theos_maps runs in its own Python 3.12 venv; the editor sends a recipe and reads back images, summaries and engine packages</div>
+      </div>
+    </section>
+
+    <!-- Run review -->
+    <section class="tu-window" style="flex: 1 1 580px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button">Runs</button><button class="tu-tab" type="button">Recipe</button><button class="tu-tab" type="button">Stage catalogue</button></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
+      <div class="tu-window__bar" style="flex-wrap: wrap; font: 400 10px/14px var(--font-mono); color: var(--textDim);">
+        <span style="color: var(--text);">hearth-valley · terrain · 24 × 24 km · 4 seeds · 29 Oct</span>
+        <span class="tu-spacer"></span>
+        <span>wants relief 800–2200 m · lakes 0–8 % · vegetation 25–75 %</span>
+      </div>
+      <div class="tu-window__body" style="padding: 10px; gap: 10px;">
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;">
+          <article style="border: 1px solid var(--sig-attention); background: var(--panel); display: flex; flex-direction: column;">
+            <img src="../assets/hearth-valley_s1_truth.webp" alt="Seed 1 terrain render" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block;">
+            <div style="padding: 6px 7px; display: flex; flex-direction: column; gap: 4px; font: 400 10px/14px var(--font-mono); color: var(--textDim);">
+              <div class="tu-row"><span style="font-weight: 700; color: var(--text);">s1</span><span class="tu-spacer"></span><span class="tu-chip is-approve">✓ 5 of 5</span></div>
+              <span>relief 1234 m · lakes 3.0 %</span>
+            </div>
+          </article>
+          <article style="border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column;">
+            <img src="../assets/hearth-valley_s2_truth.webp" alt="Seed 2 terrain render" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block;">
+            <div style="padding: 6px 7px; display: flex; flex-direction: column; gap: 4px; font: 400 10px/14px var(--font-mono); color: var(--textDim);">
+              <div class="tu-row"><span style="font-weight: 700; color: var(--text);">s2</span><span class="tu-spacer"></span><span class="tu-chip is-reject">✕ 2 fail</span></div>
+              <span>relief <span class="bad">2804 m</span> · lakes <span class="bad">10.5 %</span></span>
+            </div>
+          </article>
+          <article style="border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column;">
+            <img src="../assets/hearth-valley_s3_truth.webp" alt="Seed 3 terrain render" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block;">
+            <div style="padding: 6px 7px; display: flex; flex-direction: column; gap: 4px; font: 400 10px/14px var(--font-mono); color: var(--textDim);">
+              <div class="tu-row"><span style="font-weight: 700; color: var(--text);">s3</span><span class="tu-spacer"></span><span class="tu-chip is-reject">✕ 1 fail</span></div>
+              <span>relief 1612 m · lakes <span class="bad">21.7 %</span></span>
+            </div>
+          </article>
+          <article style="border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column;">
+            <img src="../assets/hearth-valley_s4_truth.webp" alt="Seed 4 terrain render" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block;">
+            <div style="padding: 6px 7px; display: flex; flex-direction: column; gap: 4px; font: 400 10px/14px var(--font-mono); color: var(--textDim);">
+              <div class="tu-row"><span style="font-weight: 700; color: var(--text);">s4</span><span class="tu-spacer"></span><span class="tu-chip is-reject">✕ 1 fail</span></div>
+              <span>relief 2075 m · lakes <span class="bad">8.3 %</span></span>
+            </div>
+          </article>
+        </div>
+
+        <div style="display: flex; gap: 10px; min-height: 0; flex: 1; flex-wrap: wrap;">
+          <div style="flex: 1 1 300px; display: flex; flex-direction: column; gap: 6px; min-width: 0;">
+            <div class="tu-row"><span class="tu-seg"><button class="tu-seg__opt is-active" type="button">Truth</button><button class="tu-seg__opt" type="button">In-world</button><button class="tu-seg__opt" type="button">Geology</button><button class="tu-seg__opt" type="button">Resources</button></span><span class="tu-spacer"></span><span class="tu-mono tu-dim" style="font-size: 10px;">s1 · 990 px</span></div>
+            <img src="../assets/hearth-valley_s1_truth.webp" alt="Seed 1, full truth render with rivers, settlements, roads and ruins" style="width: 100%; max-width: 430px; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: 1px solid var(--border);">
+          </div>
+          <div style="flex: 0 1 190px; display: flex; flex-direction: column; gap: 6px; min-width: 160px;">
+            <span class="tu-label tu-label--xs">In-world map · what locals know</span>
+            <img src="../assets/hearth-valley_s1_inworld.webp" alt="Seed 1 in-world map, drawn as locals know it" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; border: 1px solid var(--line-inworld);">
+            <span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">leaves out the ruins; can itself carry a clue</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Seed detail -->
+    <section class="tu-window" style="flex: 0 0 330px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button">Seed s1</button><button class="tu-tab" type="button">Engine package</button></div></div>
+      <div class="tu-window__body">
+        <div class="tu-prop"><span class="tu-prop__key">relief</span><span class="tu-prop__val">1234 m</span></div>
+        <div class="tu-prop"><span class="tu-prop__key">water</span><span class="tu-prop__val">17 lakes · 2.99 % · rivers 0.99 %</span></div>
+        <div class="tu-prop"><span class="tu-prop__key">vegetation</span><span class="tu-prop__val">53.7 % · rain 877 mm/yr</span></div>
+        <div class="tu-prop"><span class="tu-prop__key">people</span><span class="tu-prop__val">1 city · 2 towns · 5 villages · 6 hamlets</span></div>
+        <div class="tu-prop"><span class="tu-prop__key">sites</span><span class="tu-prop__val">2 ruins · 2 extractions · 2 shrines</span></div>
+        <div class="tu-prop"><span class="tu-prop__key">walk</span><span class="tu-prop__val">extraction ↔ extraction 99 min</span></div>
+
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Constraints</span><span class="tu-section__more">5 of 5</span></div>
+          <div class="tu-val" data-sev="pass" style="border-top: 0;"><span class="tu-val__sev"></span><span class="tu-val__msg">Relief 1234 m, wanted 800–2200.</span></div>
+          <div class="tu-val" data-sev="pass"><span class="tu-val__sev"></span><span class="tu-val__msg">Lakes 2.99 %, wanted 0–8.</span></div>
+          <div class="tu-val" data-sev="pass"><span class="tu-val__sev"></span><span class="tu-val__msg">2 ruins and 2 extractions placed.</span></div>
+        </div>
+
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Places in the Codex</span></div>
+          <div style="padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; font: 400 10.5px/16px var(--font-mono); color: var(--textDim);">
+            <span class="tu-row">ruin-1 → <span class="tu-link" data-kind="location"><span class="tu-kind" data-kind="location"></span><span class="tu-link__title">Choir-hall nave</span></span> <span class="tu-link" data-kind="clue"><span class="tu-kind" data-kind="clue"></span><span class="tu-link__id">C-031</span></span></span>
+            <span class="tu-row">shrine-1 → <span class="tu-link" data-kind="location"><span class="tu-kind" data-kind="location"></span><span class="tu-link__title">Fates' shrine</span></span></span>
+            <span class="tu-row">city-1 → <button class="tu-btn tu-btn--dashed tu-btn--sm" type="button">+ create location</button></span>
+          </div>
+        </div>
+
+        <div style="margin-top: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border);">
+          <button class="tu-btn tu-btn--primary tu-btn--block" type="button">Pick s1 for F04</button>
+          <div class="tu-row"><button class="tu-btn tu-btn--secondary" type="button" style="flex: 1;">Detail maps</button><button class="tu-btn tu-btn--secondary" type="button" style="flex: 1;">Vary s1</button></div>
+          <span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">Pick writes maps/hearth-valley/map.md (recipe, seed, package) and files the renders and package in Drive.</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="tu-statusbar">
+    <span class="tu-statusbar__brand">THEOS//EDITOR</span>
+    <span>v0.4.2 · maps layout</span>
+    <span class="tu-statuspip"><span class="tu-pip is-neutral"></span>python sidecar idle</span>
+    <span>~20 s per seed · package theos-map 0.1</span>
+    <span class="tu-spacer"></span>
+    <span>git main · clean</span>
+  </footer>
+</div>
+</body>
+</html>
