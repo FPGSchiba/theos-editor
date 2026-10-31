@@ -16,7 +16,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map toolset as a generator | tower-of-theos | todo | | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
-| P10 | Prose editor research | theos-editor | spec-pr | | |
+| P10 | Prose editor research | theos-editor | spec-pr | #3 | |
 | P11 | Editor shell and Codex | theos-editor | todo | | |
 | P12 | Manuscript editor | theos-editor | todo | | |
 | P13 | Changes and Review screens | theos-editor | todo | | |
