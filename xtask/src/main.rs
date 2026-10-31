@@ -15,7 +15,8 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
-use xtask::checks::cargo_cmds;
+use xtask::checks::{cargo_cmds, commit_msg};
+use xtask::git::Git;
 use xtask::verdict::{Check, Verdict};
 use xtask::{Error, ci, report, tools};
 
@@ -62,7 +63,22 @@ enum Command {
     /// Check that every acceptance criterion of the phase has a tagged test.
     AcTrace,
     /// Check that every commit of the branch is a Conventional Commit.
-    CommitMsg,
+    ///
+    /// Under GitHub Actions the commits and the branch come from the event. Any flag here
+    /// replaces the event and takes the rest from git instead.
+    CommitMsg {
+        /// The commit before the first one to check. Default: the merge base of the head and
+        /// `origin/main`.
+        #[arg(long, value_name = "REV")]
+        base: Option<String>,
+        /// The last commit to check. Default: `HEAD`.
+        #[arg(long, value_name = "REV")]
+        head: Option<String>,
+        /// The branch the commits are on, which decides whether `Phase:` is needed. Default:
+        /// the branch that is checked out.
+        #[arg(long, value_name = "NAME")]
+        branch: Option<String>,
+    },
     /// Check that the pull request title is a Conventional Commit that matches the branch.
     PrTitle,
     /// Check that the pull request description has every section of the template.
@@ -132,7 +148,18 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         Command::Coverage => not_built("coverage")?,
         Command::Lints => not_built("lints")?,
         Command::AcTrace => not_built("ac-trace")?,
-        Command::CommitMsg => not_built("commit-msg")?,
+        Command::CommitMsg {
+            base: None,
+            head: None,
+            branch: None,
+        } => commit_msg::run(&root, ci.as_ref(), &mut out)?,
+        Command::CommitMsg { base, head, branch } => {
+            let git = Git::new(&root);
+            let range = commit_msg::local_range(&git, base.as_deref(), head.as_deref())?;
+            let branch = commit_msg::branch_kind(&git, branch.as_deref())?;
+            let known_acs = commit_msg::known_acs(&root)?;
+            commit_msg::check(&git, &range, &branch, &known_acs)?
+        }
         Command::PrTitle => not_built("pr-title")?,
         Command::PrBody => not_built("pr-body")?,
         Command::Approval => not_built("approval")?,

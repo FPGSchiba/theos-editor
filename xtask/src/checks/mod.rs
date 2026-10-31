@@ -4,3 +4,4 @@
 //! `run` function that gathers the real inputs. `main` and the gate call `run`.
 
 pub mod cargo_cmds;
+pub mod commit_msg;
