@@ -244,6 +244,20 @@ fn bad_attributes_in_sources_fail() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn fixture_compiled_through_path_fails() -> TestResult {
+    // `#[path]` on line 3 and `include!` on line 6; `include_str!` on line 9 is data.
+    let verdict = lint_case("fixture-compiled-through-path")?;
+    assert_eq!(
+        places(&verdict),
+        [
+            (Some("crates/a/src/lib.rs"), Some(3)),
+            (Some("crates/a/src/lib.rs"), Some(6)),
+        ]
+    );
+    Ok(())
+}
+
 /// `cargo xtask lints` in `root`, outside GitHub Actions.
 fn xtask_lints(root: &Path) -> TestResult<Output> {
     let mut command = Command::new(env!("CARGO_BIN_EXE_xtask"));

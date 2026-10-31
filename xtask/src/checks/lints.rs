@@ -15,10 +15,19 @@
 //!   and `gate/clippy.toml` are the only exceptions), because clippy and cargo find these files
 //!   by walking up from the crate;
 //! - in every `.rs` source, an attribute with `allow(…)`, an `expect(…)` without
-//!   `reason = "…"` or an `ignore` without `= "…"` ([`scan_attributes`]).
+//!   `reason = "…"` or an `ignore` without `= "…"` ([`scan_attributes`]);
+//! - in every `.rs` source, a `#[path = "…"]` attribute or an `include!(…)` that leads into a
+//!   `tests/fixtures/` folder, or whose path the check cannot tell ([`scan_attributes`],
+//!   [`scan_includes`]).
 //!
 //! Files under `tests/fixtures/` are test data with deliberate violations: the check reads none
-//! of them as part of the repository, the same files that `ac-trace` leaves alone.
+//! of them as part of the repository, the same files that `ac-trace` leaves alone. So that
+//! nothing in them is compiled unseen, a module or an include may not lead there: the path is
+//! read from the folder of the file, with `.` and `..` resolved, `\` as `/` and without regard
+//! for case. A module of a file may be called `tests`, so a path that starts in a folder
+//! `fixtures` counts too, and a path that is not one string literal, is absolute, climbs out of
+//! the repository or has an escape in it is a finding because it cannot be followed.
+//! `include_str!` and `include_bytes!` read data, and fixtures may be read that way.
 //!
 //! The attribute scan is for attributes at the start of a line, because a text scan cannot know
 //! more: a line whose trimmed text starts with `#[` or `#![` starts an attribute, which goes on
@@ -62,6 +71,17 @@ const ALLOW_FOUND: &str = "`allow(…)` in an attribute: a lint is not silenced;
                            use `#[expect(…, reason = \"…\")]` for a lint that is expected";
 const EXPECT_FOUND: &str = "`expect(…)` without `reason = \"…\"`: say why the lint is expected";
 const IGNORE_FOUND: &str = "`ignore` without a reason: write `#[ignore = \"…\"]`";
+const PATH_FIXTURES: &str = "`#[path]` leads into a `tests/fixtures/` folder: fixtures are test \
+                             data that no check reads, so they are not compiled; read one as \
+                             data with `include_str!`";
+const PATH_UNKNOWN: &str = "`#[path]` is not a string literal for a path inside the repository, \
+                            so the check cannot tell where it leads: write the path out";
+const INCLUDE_FIXTURES: &str = "`include!` leads into a `tests/fixtures/` folder: fixtures are \
+                                test data that no check reads, so they are not compiled; read \
+                                one as data with `include_str!`";
+const INCLUDE_UNKNOWN: &str = "`include!` is not given one string literal for a path inside the \
+                               repository, so the check cannot tell what it compiles: write the \
+                               path out";
 
 /// Runs the check on the repository at `root`, on the files that git lists there (a walk
 /// outside a work tree).
@@ -123,8 +143,9 @@ pub fn same_text(a: &str, b: &str) -> bool {
 ///
 /// An attribute is found when it has `allow(` (also inside `cfg_attr`), when it has `expect(`
 /// and no `reason = "…"` with something in it, or when it is `ignore` (also inside `cfg_attr`)
-/// and has no `= "…"` with something in it. Only whole words count, and words in comments and
-/// strings do not.
+/// and has no `= "…"` with something in it. A `path = …` of an attribute (also inside `cfg_attr`)
+/// is found when it leads into a `tests/fixtures/` folder or cannot be followed. Only whole words
+/// count, and words in comments and strings do not.
 #[must_use]
 pub fn scan_attributes(file: &str, text: &str) -> Vec<Finding> {
     let lines: Vec<&str> = text.lines().collect();
@@ -135,6 +156,57 @@ pub fn scan_attributes(file: &str, text: &str) -> Vec<Finding> {
             index = scan_attribute_line(file, &lines, index, &mut findings);
         }
         index += 1;
+    }
+    findings
+}
+
+/// The findings for the `include!` macros of the Rust source `text` of the file `file`, in file
+/// order, on the line where each starts.
+///
+/// An `include!` is found when its path leads into a `tests/fixtures/` folder, and when it is
+/// not given one string literal, such as `concat!(env!("OUT_DIR"), …)`: nothing is compiled
+/// that the check has not been able to look at. `include_str!` and `include_bytes!` read data
+/// and are fine. The macro is looked for in the whole text, not only at the start of a line;
+/// comments and strings do not count.
+#[must_use]
+pub fn scan_includes(file: &str, text: &str) -> Vec<Finding> {
+    let tokens = located_tokens(text);
+    let mut findings = Vec::new();
+    for (index, &(offset, token)) in tokens.iter().enumerate() {
+        if token != Token::Word("include") {
+            continue;
+        }
+        let rest = tokens.get(index + 1..).unwrap_or_default();
+        let [
+            (_, Token::Symbol(b'!')),
+            (_, Token::Symbol(open @ (b'(' | b'[' | b'{'))),
+            arguments @ ..,
+        ] = rest
+        else {
+            continue;
+        };
+        let close = match open {
+            b'(' => b')',
+            b'[' => b']',
+            _ => b'}',
+        };
+        let message = match arguments {
+            [(_, Token::Text(path)), (_, Token::Symbol(end)), ..]
+            | [
+                (_, Token::Text(path)),
+                (_, Token::Symbol(b',')),
+                (_, Token::Symbol(end)),
+                ..,
+            ] if *end == close => match target(file, path) {
+                Target::Elsewhere => continue,
+                Target::Fixtures => INCLUDE_FIXTURES,
+                Target::Unknown => INCLUDE_UNKNOWN,
+            },
+            _ => INCLUDE_UNKNOWN,
+        };
+        let before = text.get(..offset).unwrap_or(text);
+        let line = line_number(before.matches('\n').count());
+        findings.push(Finding::at(file, line, message));
     }
     findings
 }
@@ -321,7 +393,11 @@ fn sources(root: &Path, files: &[String], findings: &mut Vec<Finding>) -> Result
     {
         let full = root.join(path);
         let bytes = fs::read(&full).map_err(|source| Error::Io { path: full, source })?;
-        findings.extend(scan_attributes(path, &String::from_utf8_lossy(&bytes)));
+        let text = String::from_utf8_lossy(&bytes);
+        let mut found = scan_attributes(path, &text);
+        found.extend(scan_includes(path, &text));
+        found.sort_by_key(|finding| finding.line);
+        findings.extend(found);
     }
     Ok(())
 }
@@ -378,6 +454,14 @@ enum Token<'a> {
 
 /// The tokens of the attribute `text`.
 fn tokens(text: &str) -> Vec<Token<'_>> {
+    located_tokens(text)
+        .into_iter()
+        .map(|(_, token)| token)
+        .collect()
+}
+
+/// The tokens of `text`, each with the byte it starts at.
+fn located_tokens(text: &str) -> Vec<(usize, Token<'_>)> {
     let is_word = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'_';
     let bytes = text.as_bytes();
     let mut tokens = Vec::new();
@@ -394,7 +478,7 @@ fn tokens(text: &str) -> Vec<Token<'_>> {
         } else if let Some(end) = literal_end(text, i) {
             let literal = &text[i..end];
             if literal.starts_with(['"', 'r']) {
-                tokens.push(Token::Text(literal));
+                tokens.push((i, Token::Text(literal)));
             }
             i = end;
         } else if is_word(bytes[i]) {
@@ -402,10 +486,10 @@ fn tokens(text: &str) -> Vec<Token<'_>> {
             while i < bytes.len() && is_word(bytes[i]) {
                 i += 1;
             }
-            tokens.push(Token::Word(&text[start..i]));
+            tokens.push((start, Token::Word(&text[start..i])));
         } else {
             if bytes[i].is_ascii() {
-                tokens.push(Token::Symbol(bytes[i]));
+                tokens.push((i, Token::Symbol(bytes[i])));
             }
             i += 1;
         }
@@ -434,11 +518,111 @@ fn judge(file: &str, line: u32, attribute: &str) -> Vec<Finding> {
             "ignore" if (name == Some(index) || conditional) && !has_value(after) => {
                 Some(IGNORE_FOUND)
             }
+            "path"
+                if (name == Some(index) || conditional)
+                    && after.first() == Some(&Token::Symbol(b'=')) =>
+            {
+                path_problem(file, &after[1..])
+            }
             _ => None,
         };
         findings.extend(message.map(|message| Finding::at(file, line, message)));
     }
     findings
+}
+
+/// Where a path in the source leads.
+enum Target {
+    /// Somewhere that is not a fixtures folder.
+    Elsewhere,
+    /// Into a `tests/fixtures/` folder.
+    Fixtures,
+    /// Nowhere the check can tell.
+    Unknown,
+}
+
+/// Where the string literal `literal`, as written (with quotes) in the file `file`, leads when it
+/// is the path of a module or of an `include!`.
+///
+/// The path is read from the folder of `file`, with `.` and `..` resolved, `\` as `/` and without
+/// regard for case, as Windows and macOS read it. A path that is absolute, that climbs out of the
+/// repository or that has an escape other than `\\` in it is `Unknown`. A module of the file may
+/// be called `tests`, so a path that starts in a folder `fixtures` (after any `..`) leads into
+/// fixtures too.
+fn target(file: &str, literal: &str) -> Target {
+    let Some(path) = string_value(literal) else {
+        return Target::Unknown;
+    };
+    let path = path.replace('\\', "/");
+    if path.starts_with('/') || path.as_bytes().get(1) == Some(&b':') {
+        return Target::Unknown;
+    }
+    // The path on its own: a `..` stays when there is nothing before it to take away.
+    let mut own: Vec<&str> = Vec::new();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." if own.last().is_some_and(|last| *last != "..") => {
+                own.pop();
+            }
+            other => own.push(other),
+        }
+    }
+    let mut resolved: Vec<&str> = file.split('/').collect();
+    resolved.pop();
+    for part in &own {
+        if *part == ".." {
+            if resolved.pop().is_none() {
+                return Target::Unknown;
+            }
+        } else {
+            resolved.push(part);
+        }
+    }
+    let first = own.iter().find(|part| **part != "..");
+    let starts_in_fixtures = first.is_some_and(|part| part.eq_ignore_ascii_case("fixtures"));
+    let folder = format!("{}/", resolved.join("/")).to_ascii_lowercase();
+    if starts_in_fixtures || is_fixture(&folder) {
+        Target::Fixtures
+    } else {
+        Target::Elsewhere
+    }
+}
+
+/// The text of the string literal `literal` as written, with its quotes; `None` when it has an
+/// escape other than `\\`, or is not closed.
+fn string_value(literal: &str) -> Option<String> {
+    let open = literal.find('"')?;
+    let close = literal.rfind('"').filter(|close| *close > open)?;
+    let body = &literal[open + 1..close];
+    if literal.starts_with('r') {
+        return Some(body.to_owned());
+    }
+    let mut value = String::new();
+    let mut chars = body.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            value.push(c);
+        } else if chars.next()? == '\\' {
+            value.push('\\');
+        } else {
+            return None;
+        }
+    }
+    Some(value)
+}
+
+/// What is wrong with `path = <value>` in an attribute of the file `file`, where `value` is what
+/// follows the `=`.
+fn path_problem(file: &str, value: &[Token<'_>]) -> Option<&'static str> {
+    match value.first() {
+        Some(Token::Text(literal)) => match target(file, literal) {
+            Target::Elsewhere => None,
+            Target::Fixtures => Some(PATH_FIXTURES),
+            Target::Unknown => Some(PATH_UNKNOWN),
+        },
+        _ => Some(PATH_UNKNOWN),
+    }
 }
 
 /// Whether `tokens` start with `= "…"`, a string that says something.
@@ -849,5 +1033,185 @@ mod tests {
             .map(|finding| finding.file.as_deref())
             .collect();
         assert_eq!(files, [Some("crates/a/.cargo"), Some("crates/b/.cargo")]);
+    }
+
+    /// The findings of `attribute` above a module, in the file `file`.
+    fn path_findings(file: &str, attribute: &str) -> Vec<Finding> {
+        scan_attributes(file, &source(&[attribute, "mod a;"]))
+    }
+
+    /// The findings of the include scan for the source file made of `lines`.
+    fn includes(file: &str, lines: &[&str]) -> Vec<Finding> {
+        scan_includes(file, &source(lines))
+    }
+
+    #[test]
+    fn path_attribute_into_fixtures_found() {
+        for (file, attribute) in [
+            // The path is read from the folder of the file.
+            ("src/lib.rs", "#[path = \"../tests/fixtures/a.rs\"]"),
+            (
+                "crates/a/src/lib.rs",
+                "#[path = \"../tests/./fixtures/a.rs\"]",
+            ),
+            ("tests/main.rs", "#[path = \"fixtures/a.rs\"]"),
+            (
+                "crates/a/tests/main.rs",
+                "#[path = \"fixtures/deep/er/a.rs\"]",
+            ),
+            (
+                "crates/a/tests/main.rs",
+                "#[path = \"helpers/../fixtures/a.rs\"]",
+            ),
+            ("src/lib.rs", "#![path = \"../tests/fixtures/a.rs\"]"),
+            (
+                "src/lib.rs",
+                "#[cfg_attr(windows, path = \"../tests/fixtures/a.rs\")]",
+            ),
+            // Backslashes, raw strings and case: Windows and macOS read all of these.
+            (
+                "src/lib.rs",
+                "#[path = \"..\\\\tests\\\\fixtures\\\\a.rs\"]",
+            ),
+            ("src/lib.rs", "#[path = r\"..\\tests\\fixtures\\a.rs\"]"),
+            ("src/lib.rs", "#[path = \"../Tests/Fixtures/a.rs\"]"),
+            // A module in the file may be called `tests`, so a path that starts in `fixtures` may
+            // lead into `tests/fixtures`.
+            ("src/lib.rs", "#[path = \"fixtures/a.rs\"]"),
+            // What cannot be told is a finding too.
+            (
+                "src/lib.rs",
+                "#[path = concat!(\"../tests/\", \"fixtures/a.rs\")]",
+            ),
+            ("src/lib.rs", "#[path = \"/abs/tests/fixtures/a.rs\"]"),
+            ("src/lib.rs", "#[path = \"C:/repo/tests/fixtures/a.rs\"]"),
+            ("src/lib.rs", "#[path = \"../../tests/fixtures/a.rs\"]"),
+            ("src/lib.rs", "#[path = \"a\\x2f../tests/fixtures/a.rs\"]"),
+            ("src/lib.rs", "#[path = b\"../tests/fixtures/a.rs\"]"),
+        ] {
+            let findings = path_findings(file, attribute);
+            assert_eq!(findings.len(), 1, "{file}: {attribute}: {findings:?}");
+            assert_eq!(findings[0].line, Some(1), "{attribute}");
+            assert!(findings[0].message.contains("path"), "{attribute}");
+        }
+
+        // On several lines, the finding is at the first.
+        let findings = scan_attributes(
+            "src/lib.rs",
+            &source(&[
+                "mod b;",
+                "#[path =",
+                "    \"../tests/fixtures/a.rs\"",
+                "]",
+                "mod a;",
+            ]),
+        );
+        assert_eq!(lines_of(&findings), [Some(2)]);
+    }
+
+    #[test]
+    fn path_attribute_elsewhere_allowed() {
+        for (file, attribute) in [
+            ("src/lib.rs", "#[path = \"helpers.rs\"]"),
+            ("src/lib.rs", "#[path = \"../src/other.rs\"]"),
+            ("crates/a/tests/main.rs", "#[path = \"common/mod.rs\"]"),
+            (
+                "crates/a/tests/main.rs",
+                "#[path = \"../src/generated.rs\"]",
+            ),
+            // `..` leaves the folder again.
+            (
+                "src/lib.rs",
+                "#[path = \"../tests/fixtures/../common/mod.rs\"]",
+            ),
+            ("src/lib.rs", "#[path = \"fixtures/../helpers.rs\"]"),
+            ("src/lib.rs", "#[cfg_attr(windows, path = \"windows.rs\")]"),
+            // Words that are not the attribute `path`.
+            ("src/lib.rs", "#[cfg(feature = \"path\")]"),
+            ("src/lib.rs", "#[doc(alias = \"path\")]"),
+            (
+                "src/lib.rs",
+                "#[cfg_attr(test, derive(Debug), my_attr(path))]",
+            ),
+            ("src/lib.rs", "#[derive(Debug)]"),
+        ] {
+            let findings = path_findings(file, attribute);
+            assert!(findings.is_empty(), "{file}: {attribute}: {findings:?}");
+        }
+    }
+
+    #[test]
+    fn include_macro_into_fixtures_found() {
+        for line in [
+            "include!(\"../tests/fixtures/a.rs\");",
+            "include![\"../tests/fixtures/a.rs\"];",
+            "include!{\"../tests/fixtures/a.rs\"}",
+            "include ! ( \"../tests/fixtures/a.rs\" );",
+            "include!(\"../tests/fixtures/a.rs\",);",
+            "std::include!(\"../tests/fixtures/a.rs\");",
+            "fn f() { include!(\"../tests/fixtures/a.rs\"); }",
+            "include!(\"..\\\\tests\\\\fixtures\\\\a.rs\");",
+            "include!(r\"..\\tests\\fixtures\\a.rs\");",
+            "include!(\"../tests/./fixtures/../fixtures/a.rs\");",
+            // What cannot be told is a finding too: nothing is compiled that was not looked at.
+            "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/tests/fixtures/a.rs\"));",
+            "include!(env!(\"OUT_DIR\"));",
+            "include!(PATH);",
+            "include!();",
+            "include!(\"a.rs\", \"b.rs\");",
+            "include!(\"/abs/a.rs\");",
+            "include!(\"../../../a.rs\");",
+        ] {
+            let findings = includes("src/lib.rs", &["fn a() {}", "", line]);
+            assert_eq!(findings.len(), 1, "{line}: {findings:?}");
+            assert_eq!(findings[0].file.as_deref(), Some("src/lib.rs"), "{line}");
+            assert_eq!(findings[0].line, Some(3), "{line}");
+            assert!(findings[0].message.contains("include!"), "{line}");
+        }
+
+        // The path is read from the folder of the file.
+        let findings = includes("tests/main.rs", &["include!(\"fixtures/a.rs\");"]);
+        assert_eq!(lines_of(&findings), [Some(1)]);
+        let findings = includes("crates/a/tests/main.rs", &["include!(\"fixtures/a.rs\");"]);
+        assert_eq!(lines_of(&findings), [Some(1)]);
+
+        // Every include of a file is found, on the line it starts.
+        let findings = includes(
+            "src/lib.rs",
+            &[
+                "include!(\"../tests/fixtures/a.rs\");",
+                "include!(\"b.rs\");",
+                "include!(",
+                "    \"../tests/fixtures/c.rs\"",
+                ");",
+            ],
+        );
+        assert_eq!(lines_of(&findings), [Some(1), Some(3)]);
+    }
+
+    #[test]
+    fn include_str_of_fixture_allowed() {
+        let findings = includes(
+            "src/lib.rs",
+            &[
+                "const A: &str = include_str!(\"../tests/fixtures/a.txt\");",
+                "const B: &[u8] = include_bytes!(\"../tests/fixtures/a.bin\");",
+                "const C: &str = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/tests/fixtures/a.txt\"));",
+                // Other files may be included as code.
+                "include!(\"helpers.rs\");",
+                "include!(\"../src/generated.rs\");",
+                "include!(\"../tests/fixtures/../common.rs\");",
+                // Not an invocation: comments, strings, other words.
+                "// include!(\"../tests/fixtures/a.rs\");",
+                "/// include!(\"../tests/fixtures/a.rs\");",
+                "/* include!(\"../tests/fixtures/a.rs\"); */",
+                "let text = \"include!(\\\"../tests/fixtures/a.rs\\\")\";",
+                "let include = 1;",
+                "let same = include != 2;",
+                "fn include() {}",
+                "macro_rules! include { () => {} }",
+            ],
+        );
+        assert!(findings.is_empty(), "{findings:?}");
     }
 }
