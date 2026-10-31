@@ -5,3 +5,4 @@
 
 pub mod cargo_cmds;
 pub mod commit_msg;
+pub mod pr_title;

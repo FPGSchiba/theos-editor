@@ -15,7 +15,7 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
-use xtask::checks::{cargo_cmds, commit_msg};
+use xtask::checks::{cargo_cmds, commit_msg, pr_title};
 use xtask::git::Git;
 use xtask::verdict::{Check, Verdict};
 use xtask::{Error, ci, report, tools};
@@ -80,7 +80,18 @@ enum Command {
         branch: Option<String>,
     },
     /// Check that the pull request title is a Conventional Commit that matches the branch.
-    PrTitle,
+    ///
+    /// Under GitHub Actions the title and the branch come from the pull request event. A title
+    /// only exists on a pull request, so anywhere else `--title` is needed; it replaces the event.
+    PrTitle {
+        /// The title to check.
+        #[arg(long, value_name = "TEXT")]
+        title: Option<String>,
+        /// The branch the pull request is from, which decides how the title must end. Default:
+        /// the branch that is checked out.
+        #[arg(long, value_name = "NAME", requires = "title")]
+        branch: Option<String>,
+    },
     /// Check that the pull request description has every section of the template.
     PrBody,
     /// Check that a pull request touching a protected path has the label `approved`.
@@ -160,7 +171,14 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
             let known_acs = commit_msg::known_acs(&root)?;
             commit_msg::check(&git, &range, &branch, &known_acs)?
         }
-        Command::PrTitle => not_built("pr-title")?,
+        Command::PrTitle { title: None, .. } => pr_title::run(&root, ci.as_ref(), &mut out)?,
+        Command::PrTitle {
+            title: Some(title),
+            branch,
+        } => {
+            let branch = commit_msg::branch_kind(&Git::new(&root), branch.as_deref())?;
+            pr_title::check_title(title, &branch)
+        }
         Command::PrBody => not_built("pr-body")?,
         Command::Approval => not_built("approval")?,
         Command::Gate => not_built("gate")?,

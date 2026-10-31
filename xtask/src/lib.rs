@@ -16,8 +16,8 @@
 //! And the checks built on it:
 //!
 //! - [`checks`]: the checks of `docs/gate.md` §1; [`checks::cargo_cmds`] has the ones that are
-//!   cargo commands (`fmt`, `clippy`, `test`, `docs`, `deny`) and [`checks::commit_msg`] the
-//!   `commit-msg` check.
+//!   cargo commands (`fmt`, `clippy`, `test`, `docs`, `deny`), [`checks::commit_msg`] the
+//!   `commit-msg` check and [`checks::pr_title`] the `pr-title` check.
 //! - [`tools`]: the pinned tools (`gate/tools.toml`) and the `tools` check.
 
 pub mod branch;
