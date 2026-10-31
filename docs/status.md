@@ -7,7 +7,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | Phase | Name | Repo | State | Spec PR | Build PR |
 |---|---|---|---|---|---|
 | P00 | Foundation and gate | theos-editor | spec-pr | | |
-| P01 | Content layout and templates | tower-of-theos | todo | | |
+| P01 | Content layout and templates | tower-of-theos | spec-pr | #4 | |
 | P02 | Records and grammars | theos-editor | todo | | |
 | P03 | Kinds, index, search, lenses | theos-editor | todo | | |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | todo | | |
@@ -16,7 +16,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map toolset as a generator | tower-of-theos | todo | | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
-| P10 | Prose editor research | theos-editor | todo | | |
+| P10 | Prose editor research | theos-editor | spec-pr | #3 | |
 | P11 | Editor shell and Codex | theos-editor | todo | | |
 | P12 | Manuscript editor | theos-editor | todo | | |
 | P13 | Changes and Review screens | theos-editor | todo | | |
@@ -28,7 +28,11 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 
 ## Needs Jann
 
-- (none)
+- Data model §3/§4: a slug id such as `true`, `false` or `42` matches the id pattern, but as an
+  unquoted plain scalar it is not text. Should such ids be forbidden by the pattern, or should ids
+  always be read as text? Needed by P02/P03 (found in the P01 spec, §5).
+- P00 spec: `ac-trace` has to find `// AC:` tags in the TypeScript tests under `research/**`, or
+  P10 cannot pass it (P10 spec §5).
 
 ## Needs a private session (Confluence, Jira, plugin)
 
