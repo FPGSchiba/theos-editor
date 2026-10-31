@@ -44,6 +44,7 @@
       ],
       "edits": [
         {"id":"body-start-backspace","kind":"delete","at":{"find":"The player's first night"},"length":1,"backward":true},
+        {"id":"paste-body-start","kind":"paste","at":{"find":"The player's first night"},"plain":"A pasted opening. "},
         {"id":"voice-end-sentence","kind":"insert","at":{"find":"and they will hear you.","offset":23},"text":" A synthetic closing sentence."},
         {"id":"beat-param-add","kind":"beat-param","beat":2,"key":"with","value":"[[mother-ilse]]"},
         {"id":"beat-param-change","kind":"beat-param","beat":1,"key":"when","value":"T2"},
@@ -122,7 +123,7 @@
         "link-prose-mother-ilse", "emphasis-star", "emphasis-underscore", "strong-star"
       ],
       "edits": [
-        {"id":"link-insert-popover","kind":"link-insert","at":{"find":"names a Listener","offset":16},"query":"Listen","pick":"T-012"},
+        {"id":"link-insert-popover","kind":"link-insert","at":{"find":"names a Listener","offset":6},"query":"Listen","pick":"T-012"},
         {"id":"link-chip-delete","kind":"link-delete","link":{"find":"[[mother-ilse]]!"}}
       ]
     },

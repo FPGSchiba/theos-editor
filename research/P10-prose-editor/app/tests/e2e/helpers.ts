@@ -47,7 +47,8 @@ export async function loadFile(page: Page, variant: string, file: CorpusFile): P
 
 /** How a scripted edit gets into the editor: its own commands (`api`) or real input (`input`). */
 export type EditDriver = 'api' | 'input';
-type DriverFunction = (page: Page, edit: ScriptedEdit) => Promise<void>;
+/** `original` is the file's text as `loadFile` returned it; a driver that needs offsets resolves anchors against it. */
+type DriverFunction = (page: Page, edit: ScriptedEdit, original?: string) => Promise<void>;
 
 const drivers: Partial<Record<EditDriver, DriverFunction>> = {
   api: async (page, scripted) => {
@@ -60,11 +61,19 @@ export function registerDriver(name: EditDriver, driver: DriverFunction): void {
   drivers[name] = driver;
 }
 
-/** Run a scripted edit on the loaded editor through the named driver. */
-export async function edit(page: Page, scripted: ScriptedEdit, driver: EditDriver = 'api'): Promise<void> {
+/**
+ * Run a scripted edit on the loaded editor through the named driver. Pass `original` (what
+ * `loadFile` returned) so the offsets come from the file and not from what the editor shows.
+ */
+export async function edit(
+  page: Page,
+  scripted: ScriptedEdit,
+  driver: EditDriver = 'api',
+  original?: string,
+): Promise<void> {
   const run = drivers[driver];
   if (run === undefined) {
     throw new Error(`helpers: no "${driver}" driver is registered (import ./drivers.ts first)`);
   }
-  await run(page, scripted);
+  await run(page, scripted, original);
 }

@@ -330,6 +330,11 @@ describe('scripted edits', () => {
     expect(html.html).toMatch(/<\w+/);
     expect(html.plain).not.toMatch(/[<>]/);
 
+    // The link goes in after a space, as when the author types "[[Listen" after "names ".
+    const popover = editNamed('link-insert-popover');
+    const popoverAt = editOffset(textOf(popover.file), popover.edit) ?? -1;
+    expect(lfOf(popover.file)[popoverAt - 1]).toBe(' ');
+
     // An undo-all edit lists the edits to undo, each of them an insert or a delete.
     const undo = editNamed('undo-all').edit;
     if (undo.kind !== 'undo-all') throw new Error('undo-all is not an undo-all edit');
@@ -349,6 +354,13 @@ describe('scripted edits', () => {
     expect(DETECTORS['no-final-newline']?.(partsOf(textOf(eof.file)), { ids })).toBe(true);
     if (eof.edit.kind !== 'insert') throw new Error('eof-insert is not an insert');
     expect(resolveAnchor(lfOf(eof.file), eof.edit.at)).toBe(lfOf(eof.file).length);
+
+    // A paste at the first body character, directly after the closing fence.
+    const pasteStart = editNamed('paste-body-start');
+    expect(pasteStart.edit.kind).toBe('paste');
+    if (pasteStart.edit.kind !== 'paste') throw new Error('paste-body-start is not a paste');
+    const startLf = lfOf(pasteStart.file);
+    expect(resolveAnchor(startLf, pasteStart.edit.at)).toBe(splitFrontMatter(startLf).frontMatter.length);
 
     const afterBreak = editNamed('after-thematic-break');
     expect(afterBreak.edit.kind).toBe('insert');
