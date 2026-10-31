@@ -185,7 +185,8 @@ fn append(path: &Path, text: &str) -> Result<()> {
         })
 }
 
-fn output_error(source: io::Error) -> Error {
+/// The error for an output that cannot be written.
+pub(crate) fn output_error(source: io::Error) -> Error {
     Error::Io {
         path: PathBuf::from("<output>"),
         source,

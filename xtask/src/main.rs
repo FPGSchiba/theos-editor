@@ -1,11 +1,12 @@
 //! The `cargo xtask` command line: gate tooling (`docs/gate.md`).
 //!
 //! Every check is a subcommand named like the check. Exit code 0 means the check passed, 1 that
-//! it found something, and 2 that it could not run. A subcommand that is not built yet is an
-//! error, so a gate that depends on it cannot pass by accident.
+//! it found something, and 2 that it could not run.
 //!
 //! Adding a check is one arm in `run`: call the check's `run(root, ci, out)`, which gathers its
-//! own inputs and returns a verdict, and let `report::emit` write it.
+//! own inputs and returns a verdict, and let `report::emit` write it. Also add it to
+//! `gate::run_check`, which the compiler asks for. `gate` is the one subcommand with many
+//! verdicts: `gate::run` writes its own table, so its arm does not go through `report::emit`.
 
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
@@ -19,6 +20,7 @@ use xtask::branch::Phase;
 use xtask::checks::{
     ac_trace, approval, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title,
 };
+use xtask::gate;
 use xtask::git::Git;
 use xtask::github::settings;
 use xtask::verdict::{Check, Verdict};
@@ -131,7 +133,13 @@ enum Command {
     /// `GITHUB_REPOSITORY` set: it reads and changes the labels and comments of the pull request.
     /// Run from the base commit, it reads `gate/protected-paths.toml` there.
     Approval,
-    /// Run every check of the gate that needs no pull request, as CI does.
+    /// Run every check that needs no pull request, in order, and print one verdict table.
+    ///
+    /// Runs `tools`, `fmt`, `lints`, `engine-free`, `ac-trace`, `commit-msg`, `clippy`, `docs`,
+    /// `deny`, `test` and `coverage` with the same code as their CI jobs, and goes on after a
+    /// check fails. It leaves out `pr-title`, `pr-body` and `approval`. When a tool is not the
+    /// pinned version, nothing but `tools` runs, because versions decide verdicts. Exit code 1
+    /// when any check failed.
     Gate,
     /// Check or apply the repository settings: the rulesets, the merge settings and the labels
     /// kept in `gate/` (`docs/gate.md` §6).
@@ -242,7 +250,10 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
             pr_body::check_body(&template, Some(&body))
         }
         Command::Approval => approval::run(&root, ci.as_ref(), &mut out)?,
-        Command::Gate => not_built("gate")?,
+        Command::Gate => {
+            let verdicts = gate::run(&root, ci.as_ref(), &mut out)?;
+            return Ok(verdicts.iter().all(Verdict::passed));
+        }
         Command::Github {
             repo,
             action: GithubAction::Check,
@@ -254,12 +265,6 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
     };
     report::emit(&verdict, ci.is_some(), &mut out)?;
     Ok(verdict.passed())
-}
-
-fn not_built(command: &str) -> xtask::Result<Verdict> {
-    Err(Error::Missing {
-        what: format!("the `{command}` command (not built yet)"),
-    })
 }
 
 /// The workspace root: the parent of the directory this xtask was built from.

@@ -27,6 +27,8 @@
 //! - [`umbrella`]: the umbrella spec's phases and acceptance criteria, which `ac-trace` and
 //!   `commit-msg` read their ids from.
 //! - [`tools`]: the pinned tools (`gate/tools.toml`) and the `tools` check.
+//! - [`gate`]: `cargo xtask gate`, which runs the checks above that need no pull request, in
+//!   order, and writes one verdict table.
 
 pub mod branch;
 pub mod checks;
@@ -34,6 +36,7 @@ pub mod ci;
 pub mod conventional;
 pub mod error;
 pub mod files;
+pub mod gate;
 pub mod git;
 pub mod github;
 pub mod process;
