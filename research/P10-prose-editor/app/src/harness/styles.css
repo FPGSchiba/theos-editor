@@ -1,0 +1,70 @@
+/* The design system, by relative path from the repo (never copied): tokens, then components. */
+@import '../../../../../design/theos-ui/tokens.css';
+@import '../../../../../design/theos-ui/components/bundle.css';
+
+/* ── Harness shell ──────────────────────────────────────────────────── */
+body { min-height: 100vh; display: flex; flex-direction: column; }
+.hx-toolbar {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 8px 16px;
+  background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.hx-toolbar__brand { font: 700 10.5px/14px var(--font-ui); letter-spacing: 1px; text-transform: uppercase; color: var(--textDim); }
+.hx-select {
+  height: var(--h-control); padding: 0 8px; background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); font: 400 10.5px/1 var(--font-mono); border-radius: 0;
+}
+.hx-error { color: var(--sig-reject); font: 400 11px/16px var(--font-mono); }
+#editor-host { flex: 1; min-height: 0; padding: 16px 24px; }
+.hx-adapter { max-width: calc(var(--measure-prose) + 8ch); }
+
+/* ── The baseline adapter ───────────────────────────────────────────── */
+.hx-baseline {
+  box-sizing: border-box; width: 100%; min-height: 70vh; padding: 12px; resize: vertical;
+  background: var(--panel); color: var(--textProse); border: 1px solid var(--border); border-radius: 0;
+  font: 400 13px/20px var(--font-mono); tab-size: 4;
+}
+
+/* ── Looks the design system does not have: callouts and developer words ───────── */
+.tu-note { font: 400 13px/20px var(--font-ui); color: var(--textDim); }
+.hx-callout {
+  box-sizing: border-box; max-width: var(--measure-prose); margin: 12px 0; padding: 8px 14px;
+  background: var(--panel); border: 1px dashed var(--border); border-left: 2px solid var(--textMute);
+  font: 400 13px/20px var(--font-ui); color: var(--textDim);
+}
+.hx-callout > p { margin: 0; }
+.hx-callout[data-callout="design"] { border-left-color: var(--sig-info); }
+.hx-callout[data-callout="note"] { border-left-color: var(--sig-attention); }
+.hx-callout[data-note-state="resolved"] { border-left-color: var(--sig-approve); }
+.hx-callout[data-note-state="dropped"] { border-left-color: var(--textMute); opacity: 0.7; }
+.hx-note__head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font: 400 10.5px/16px var(--font-mono); color: var(--textDim); }
+.hx-note__id { font-weight: 600; color: var(--text); }
+.hx-note__state { display: inline-flex; align-items: center; gap: 6px; }
+.hx-note__label { text-transform: uppercase; letter-spacing: 0.4px; }
+[data-dev-word] {
+  text-decoration: underline dotted var(--sig-reject); text-decoration-thickness: 1px; text-underline-offset: 3px;
+}
+
+/* ── Beats ──────────────────────────────────────────────────────────── */
+.hx-beat-heading { margin: 24px 0 8px; font: 600 15px/24px var(--font-ui); color: var(--text); }
+.hx-beat-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.tu-beat__param { cursor: default; }
+.hx-beat-add { padding: 0; font: inherit; color: var(--textMute); }
+.hx-beat-input {
+  min-width: 18ch; padding: 0 8px; background: var(--bg); color: var(--text);
+  border: 0; outline: 0; font: 400 11px/1 var(--font-mono);
+}
+.tu-beat__param.is-editing { border-color: var(--sig-attention); }
+.hx-beat-keys { display: inline-flex; gap: 4px; }
+.hx-finding { --c: var(--sig-info); display: flex; align-items: center; gap: 8px; font: 400 11px/16px var(--font-mono); color: var(--text); }
+.hx-finding.is-error { --c: var(--sig-reject); }
+.hx-finding.is-warn { --c: var(--sig-warn); }
+.hx-finding .tu-pip { --c: inherit; background: var(--c); }
+.hx-finding__rule { color: var(--c); font-weight: 600; }
+
+/* ── For adapters: a popover placed over the editor ─────────────────── */
+.hx-floating { position: absolute; z-index: 20; }
+
+/* ── The component showcase ─────────────────────────────────────────── */
+.hx-showcase { display: flex; flex-direction: column; gap: 24px; padding: 20px 28px 48px; }
+.hx-showcase h1 { margin: 0; font: 600 26px/32px var(--font-ui); }
+.hx-showcase__title { margin: 0 0 8px; font: 700 10.5px/14px var(--font-ui); letter-spacing: 1px; text-transform: uppercase; color: var(--textDim); }
