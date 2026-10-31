@@ -1,7 +1,7 @@
 //! The files of the repository, for the checks that scan them.
 //!
-//! In a git work tree that is what git lists: tracked files and files it does not ignore. In a
-//! directory that is not a work tree, such as a test fixture or an unpacked archive, it is a
+//! In a git work tree that is what git lists: tracked files and files it does not ignore, minus
+//! tracked files that are deleted from disk. In a directory that is not a work tree, such as a test fixture or an unpacked archive, it is a
 //! walk that skips `.git`, `target` and `node_modules`. Paths are relative to the root and use
 //! `/`, and the list is sorted.
 
@@ -22,7 +22,10 @@ const SKIPPED: [&str; 3] = [".git", "target", "node_modules"];
 pub fn repo_files(root: &Path) -> Result<Vec<String>> {
     let git = Git::new(root);
     let mut files = if git.is_inside_work_tree() {
-        git.ls_files()?
+        let mut listed = git.ls_files()?;
+        // `--cached` still lists a tracked file that was deleted from disk and not yet staged.
+        listed.retain(|path| root.join(path).exists());
+        listed
     } else {
         walk(root)?
     };
@@ -137,6 +140,22 @@ mod tests {
         commit(root, "feat: start")?;
         fs::write(root.join(".gitignore"), "build/\n")?;
         assert_eq!(repo_files(root)?, [".gitignore", "build/kept.rs"]);
+        Ok(())
+    }
+
+    #[test]
+    fn repo_files_skips_deleted_tracked_files() -> TestResult {
+        let dir = init_repo()?;
+        let root = dir.path();
+        write(root, "kept.rs")?;
+        write(root, "src/gone.rs")?;
+        commit(root, "feat: start")?;
+        fs::remove_file(root.join("src").join("gone.rs"))?;
+        write(root, "fresh.rs")?;
+
+        // `gone.rs` is still in the index, but the scanners must see the tree as it is.
+        assert_eq!(git(root, &["ls-files", "src/gone.rs"])?, "src/gone.rs");
+        assert_eq!(repo_files(root)?, ["fresh.rs", "kept.rs"]);
         Ok(())
     }
 
