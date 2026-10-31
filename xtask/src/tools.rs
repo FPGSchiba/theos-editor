@@ -47,13 +47,26 @@ struct ToolsFile {
 /// Fails when the file cannot be read, is not the expected TOML, lacks one of the three tools,
 /// pins another tool, or has a version that is not one.
 pub fn load_pins(root: &Path) -> Result<Vec<ToolPin>> {
-    let path = root.join("gate").join("tools.toml");
+    let path = root.join(TOOLS_FILE);
     let text = std::fs::read_to_string(&path).map_err(|source| Error::Io { path, source })?;
     parse_pins(&text)
 }
 
+/// The pins in `text`. A TOML error is reported by its line and nothing of the text, because the
+/// parser's own message quotes the lines it complains about.
 fn parse_pins(text: &str) -> Result<Vec<ToolPin>> {
-    let file: ToolsFile = toml::from_str(text).map_err(|error| config_error(error.to_string()))?;
+    let file: ToolsFile = toml::from_str(text).map_err(|error| {
+        let line = error.span().map(|span| {
+            let before = text.get(..span.start).unwrap_or(text);
+            before.matches('\n').count() + 1
+        });
+        let shape = "it has the table `[tools]` that maps `cargo-nextest`, `cargo-deny` and \
+                     `cargo-llvm-cov` to versions, and nothing else";
+        config_error(match line {
+            Some(line) => format!("not the expected TOML, near line {line}: {shape}"),
+            None => format!("not the expected TOML: {shape}"),
+        })
+    })?;
     if let Some(unknown) = file
         .tools
         .keys()
@@ -322,7 +335,10 @@ mod tests {
                 format!("[tools]\n{complete}cargo-fuzz = \"0.12.0\"\n"),
                 "cargo-fuzz",
             ),
-            (format!("[tools]\n{complete}\n[other]\nx = 1\n"), "other"),
+            (
+                format!("[tools]\n{complete}\n[other]\nx = 1\n"),
+                "near line 6",
+            ),
             (
                 "[tools]\ncargo-nextest = \"--git\"\ncargo-deny = \"0.20.2\"\ncargo-llvm-cov = \"0.9.1\"\n"
                     .to_owned(),
@@ -337,6 +353,35 @@ mod tests {
                     if file == "gate/tools.toml" && message.contains(mentions)),
                 "{text:?}: {result:?}"
             );
+        }
+    }
+
+    #[test]
+    fn a_tools_file_that_is_not_the_expected_toml_is_reported_by_line_only() {
+        // The error of the TOML parser quotes the lines it complains about, so the message is
+        // built from the line number alone, as it is for the other files of `gate/`.
+        let cases = [
+            ("[tools\nSECRET = \"x\"\n", 1),
+            (
+                "[tools]\ncargo-nextest = \"0.9.150\"\n\n[SECRET]\nx = 1\n",
+                4,
+            ),
+            ("tools = \"SECRET\"\n", 1),
+            ("[tools]\ncargo-nextest = [\"SECRET\"]\n", 2),
+            ("# SECRET\n[tools]\nSECRET = 5\n", 3),
+        ];
+        for (text, line) in cases {
+            let result = parse_pins(text);
+            let Err(crate::Error::Config { file, message }) = &result else {
+                panic!("{text:?}: {result:?}");
+            };
+            assert_eq!(file, "gate/tools.toml");
+            assert!(
+                message.starts_with(&format!("not the expected TOML, near line {line}")),
+                "{text:?}: {message}"
+            );
+            assert!(!message.contains("SECRET"), "{message}");
+            assert!(!message.contains('\n'), "{message:?}");
         }
     }
 
