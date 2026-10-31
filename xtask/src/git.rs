@@ -155,6 +155,16 @@ impl Git {
         Ok(Some(Self::stdout_of(&args, &output)?.trim().to_owned()))
     }
 
+    /// The URL the remote `name` fetches from (`git remote get-url`).
+    ///
+    /// # Errors
+    ///
+    /// Fails when there is no such remote or git cannot run.
+    pub fn remote_url(&self, name: &str) -> Result<String> {
+        refuse_option(name)?;
+        Ok(self.run(&["remote", "get-url", name])?.trim().to_owned())
+    }
+
     /// Checks out `sha` in a new work tree at `dir`, with `HEAD` detached. A relative `dir` is
     /// relative to the repository root.
     ///
@@ -383,6 +393,21 @@ mod tests {
         assert_eq!(repo.rev_list("main..topic")?, [two, one]);
         assert_eq!(repo.rev_list("topic..topic")?, Vec::<String>::new());
         assert_eq!(repo.rev_list(&format!("{base}..{tip}"))?, [tip]);
+        Ok(())
+    }
+
+    #[test]
+    fn git_names_the_url_of_a_remote() -> TestResult {
+        let dir = init_repo()?;
+        let path = dir.path();
+        let repo = Git::new(path);
+        assert!(repo.remote_url("origin").is_err());
+        git(
+            path,
+            &["remote", "add", "origin", "git@github.com:owner/name.git"],
+        )?;
+        assert_eq!(repo.remote_url("origin")?, "git@github.com:owner/name.git");
+        assert!(matches!(repo.remote_url("--all"), Err(Error::Parse { .. })));
         Ok(())
     }
 

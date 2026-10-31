@@ -34,6 +34,9 @@ pub enum Check {
     PrBody,
     /// A PR that touches a protected path carries the label `approved`.
     Approval,
+    /// The rulesets, settings and labels of the repository on GitHub are those of `gate/`. Not a
+    /// check of the gate: it needs GitHub and is run on its own.
+    Github,
 }
 
 impl Check {
@@ -55,6 +58,7 @@ impl Check {
             Self::PrTitle => "pr-title",
             Self::PrBody => "pr-body",
             Self::Approval => "approval",
+            Self::Github => "github",
         }
     }
 }
@@ -153,7 +157,7 @@ impl Verdict {
 mod tests {
     use super::*;
 
-    const ALL: [Check; 14] = [
+    const ALL: [Check; 15] = [
         Check::Tools,
         Check::Fmt,
         Check::Clippy,
@@ -168,6 +172,7 @@ mod tests {
         Check::PrTitle,
         Check::PrBody,
         Check::Approval,
+        Check::Github,
     ];
 
     fn names(checks: &[Check]) -> Vec<&'static str> {
@@ -221,6 +226,7 @@ mod tests {
                 "pr-title",
                 "pr-body",
                 "approval",
+                "github",
             ]
         );
     }
@@ -247,6 +253,11 @@ mod tests {
         for check in ALL {
             let in_gate = GATE_ORDER.contains(&check);
             let pr_only = PR_ONLY.contains(&check);
+            if check == Check::Github {
+                // The settings of the repository are compared with `cargo xtask github check`.
+                assert!(!in_gate && !pr_only, "github is in a list of the gate");
+                continue;
+            }
             assert!(
                 in_gate != pr_only,
                 "{} is in both lists or neither",

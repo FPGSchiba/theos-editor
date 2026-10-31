@@ -20,6 +20,7 @@ use xtask::checks::{
     ac_trace, approval, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title,
 };
 use xtask::git::Git;
+use xtask::github::settings;
 use xtask::verdict::{Check, Verdict};
 use xtask::{Error, ci, report, tools};
 
@@ -132,8 +133,13 @@ enum Command {
     Approval,
     /// Run every check of the gate that needs no pull request, as CI does.
     Gate,
-    /// Check or apply the repository settings of `docs/gate.md`.
+    /// Check or apply the repository settings: the rulesets, the merge settings and the labels
+    /// kept in `gate/` (`docs/gate.md` §6).
     Github {
+        /// The repository as `owner/name`. Default: `GITHUB_REPOSITORY`, else the URL of the
+        /// remote `origin`.
+        #[arg(long, global = true, value_name = "OWNER/NAME")]
+        repo: Option<String>,
         #[command(subcommand)]
         action: GithubAction,
     },
@@ -141,9 +147,17 @@ enum Command {
 
 #[derive(Subcommand)]
 enum GithubAction {
-    /// Compare the repository settings with `docs/gate.md` and report the differences.
+    /// Compare the repository on GitHub with `gate/ruleset-*.json` and `gate/repo-settings.toml`
+    /// and report every difference.
+    ///
+    /// Only reads. `gh` takes its token from `GH_TOKEN`, or else uses the login it has stored.
+    /// Settings that the token cannot read are reported as not checked.
     Check,
-    /// Change the repository settings to match `docs/gate.md`.
+    /// Change the repository on GitHub to match `gate/ruleset-*.json` and
+    /// `gate/repo-settings.toml`: create or replace both rulesets, patch the merge settings and
+    /// set the labels.
+    ///
+    /// This changes security settings of the live repository. Run it only after Jann has agreed.
     Apply,
 }
 
@@ -230,11 +244,13 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         Command::Approval => approval::run(&root, ci.as_ref(), &mut out)?,
         Command::Gate => not_built("gate")?,
         Command::Github {
+            repo,
             action: GithubAction::Check,
-        } => not_built("github check")?,
+        } => settings::run_check(&root, repo.as_deref())?,
         Command::Github {
+            repo,
             action: GithubAction::Apply,
-        } => not_built("github apply")?,
+        } => settings::run_apply(&root, repo.as_deref())?,
     };
     report::emit(&verdict, ci.is_some(), &mut out)?;
     Ok(verdict.passed())

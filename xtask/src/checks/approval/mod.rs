@@ -3,8 +3,8 @@
 //! §5; spec §5.7, decisions D2 and D3).
 //!
 //! The check runs from the base commit of the pull request, with that commit's
-//! `gate/protected-paths.toml` (D3), so a pull request cannot change the rules it is judged by. It
-//! reads the pull request's side only as git objects. The steps are:
+//! `gate/protected-paths.toml` and `gate/repo-settings.toml` (D3), so a pull request cannot change
+//! the rules it is judged by. It reads the pull request's side only as git objects. The steps are:
 //!
 //! 1. [`protected::touched`]: the protected paths and tables the pull request changes. None: pass.
 //! 2. [`fingerprint::compute`]: the fingerprint of its changes (D2).
@@ -21,8 +21,8 @@ use std::path::Path;
 
 use crate::ci::{CiEvent, PullRequestEvent};
 use crate::git::Git;
-use crate::github::PullRequests;
 use crate::github::gh_cli::GhCli;
+use crate::github::{LabelSpec, PullRequests, settings};
 use crate::verdict::Verdict;
 use crate::{Error, Result};
 
@@ -40,26 +40,30 @@ use protected::ProtectedPaths;
 ///
 /// [`Error::Missing`] when there is no pull request event or `GH_TOKEN` or `GITHUB_REPOSITORY` is
 /// not set, which is the case outside GitHub Actions. Otherwise the errors of [`check`] and of
-/// reading the rules.
+/// reading the rules and the labels.
 pub fn run(root: &Path, ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<Verdict> {
     let pr = pull_request(ci)?;
     let gh = client(|name| std::env::var(name).ok())?;
     let rules = ProtectedPaths::load(root)?;
-    check(&Git::new(root), &rules, pr, &gh)
+    let labels = settings::labels(root)?;
+    check(&Git::new(root), &rules, &labels, pr, &gh)
 }
 
 /// Checks `pr` in the repository `git` reads, with the rules `rules`, and reads and changes its
-/// labels and comments through `gh`.
+/// labels and comments through `gh`. `labels` say how the labels of the gate look, for the case
+/// that the repository lacks one.
 ///
 /// When the head commit of the pull request is not in the repository (the job checks out the
 /// base commit), it is fetched as `refs/pull/<n>/head` first.
 ///
 /// # Errors
 ///
-/// Fails when git or GitHub fails, or the head commit cannot be found.
+/// Fails when git or GitHub fails, the head commit cannot be found, or `labels` lack a label that
+/// the check wants to create.
 pub fn check(
     git: &Git,
     rules: &ProtectedPaths,
+    labels: &[LabelSpec],
     pr: &PullRequestEvent,
     gh: &dyn PullRequests,
 ) -> Result<Verdict> {
@@ -70,18 +74,18 @@ pub fn check(
     let current = fingerprint::compute(git, &merge_base, &head)?;
     let comments = gh.comments(pr.number)?;
     // Labels last, so that they are as fresh as they can be.
-    let labels = gh.labels(pr.number)?;
+    let on_pr = gh.labels(pr.number)?;
     let recorded = decide::recorded(&comments);
     let (verdict, actions) = decide::decide(
         &touched,
         &Event::from_pull_request(pr),
-        &labels,
+        &on_pr,
         recorded.as_ref(),
         &current,
         &head,
     );
     for action in &actions {
-        apply(gh, pr.number, action)?;
+        apply(gh, pr.number, action, labels)?;
     }
     Ok(verdict)
 }
@@ -100,13 +104,24 @@ fn resolve_head(git: &Git, pr: &PullRequestEvent) -> Result<String> {
     }
 }
 
-fn apply(gh: &dyn PullRequests, pr: u64, action: &Action) -> Result<()> {
+fn apply(gh: &dyn PullRequests, pr: u64, action: &Action, labels: &[LabelSpec]) -> Result<()> {
     match action {
-        Action::EnsureLabel(spec) => gh.ensure_label(spec),
+        Action::EnsureLabel(name) => gh.ensure_label(label_spec(labels, name)?),
         Action::AddLabel(name) => gh.add_label(pr, name),
         Action::RemoveLabel(name) => gh.remove_label(pr, name),
         Action::Comment(body) => gh.comment(pr, body),
     }
+}
+
+/// How the label `name` looks, from `gate/repo-settings.toml`.
+fn label_spec<'a>(labels: &'a [LabelSpec], name: &str) -> Result<&'a LabelSpec> {
+    labels
+        .iter()
+        .find(|spec| spec.name == name)
+        .ok_or_else(|| Error::Config {
+            file: settings::FILE.to_owned(),
+            message: format!("has no label `{name}`, which `approval` puts on a pull request"),
+        })
 }
 
 /// The pull request event, or [`Error::Missing`] when the run has none.
@@ -143,7 +158,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    use super::decide::{BOT, NEEDS_JANN, marker};
+    use super::decide::{BOT, marker};
     use super::*;
     use crate::git::testing::{TestResult, commit, git, init_repo};
     use crate::github::Comment;
@@ -194,11 +209,28 @@ mod tests {
         commit(dir, "feat: change")
     }
 
-    fn needs_jann_calls() -> Vec<Call> {
-        vec![
-            Call::EnsureLabel(NEEDS_JANN.spec()),
+    /// The labels of `gate/repo-settings.toml` of this repository.
+    fn labels() -> TestResult<Vec<LabelSpec>> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .ok_or("xtask has no parent folder")?;
+        Ok(settings::labels(root)?)
+    }
+
+    /// What `needs-jann` looks like, as the settings say.
+    fn needs_jann() -> TestResult<LabelSpec> {
+        let spec = labels()?
+            .into_iter()
+            .find(|spec| spec.name == "needs-jann")
+            .ok_or("the settings have no `needs-jann`")?;
+        Ok(spec)
+    }
+
+    fn needs_jann_calls() -> TestResult<Vec<Call>> {
+        Ok(vec![
+            Call::EnsureLabel(needs_jann()?),
             Call::AddLabel(7, "needs-jann".to_owned()),
-        ]
+        ])
     }
 
     // AC: CE-08.5
@@ -212,6 +244,7 @@ mod tests {
         let verdict = check(
             &Git::new(dir.path()),
             &rules()?,
+            &labels()?,
             &event("opened", None, &base, &head),
             &gh,
         )?;
@@ -230,7 +263,7 @@ mod tests {
         let git_repo = Git::new(dir.path());
         let pr = event("opened", None, &base, &head);
 
-        let verdict = check(&git_repo, &rules()?, &pr, &gh)?;
+        let verdict = check(&git_repo, &rules()?, &labels()?, &pr, &gh)?;
         assert!(!verdict.passed());
         assert_eq!(
             verdict.findings[0].message,
@@ -238,14 +271,14 @@ mod tests {
         );
         // Reads first, labels last; then the writes.
         let mut expected = vec![Call::Comments(7), Call::Labels(7)];
-        expected.extend(needs_jann_calls());
+        expected.extend(needs_jann_calls()?);
         assert_eq!(gh.calls(), expected);
         assert_eq!(gh.current_labels(), ["needs-jann"]);
 
         // A second run finds the label there and changes nothing.
-        let verdict = check(&git_repo, &rules()?, &pr, &gh)?;
+        let verdict = check(&git_repo, &rules()?, &labels()?, &pr, &gh)?;
         assert!(!verdict.passed());
-        assert_eq!(gh.writes(), needs_jann_calls());
+        assert_eq!(gh.writes(), needs_jann_calls()?);
         Ok(())
     }
 
@@ -264,6 +297,7 @@ mod tests {
         let verdict = check(
             &git_repo,
             &rules()?,
+            &labels()?,
             &event("labeled", Some("approved"), &base, &first),
             &gh,
         )?;
@@ -287,6 +321,7 @@ mod tests {
         let verdict = check(
             &git_repo,
             &rules()?,
+            &labels()?,
             &event("synchronize", None, &tip, &rebased),
             &gh,
         )?;
@@ -298,6 +333,7 @@ mod tests {
         let verdict = check(
             &git_repo,
             &rules()?,
+            &labels()?,
             &event("synchronize", None, &tip, &changed),
             &gh,
         )?;
@@ -322,6 +358,7 @@ mod tests {
         let verdict = check(
             &git_repo,
             &rules()?,
+            &labels()?,
             &event("synchronize", None, &tip, &changed),
             &gh,
         )?;
@@ -356,6 +393,7 @@ mod tests {
             let verdict = check(
                 &git_repo,
                 &rules()?,
+                &labels()?,
                 &event("synchronize", None, &base, &head),
                 &gh,
             )?;
@@ -377,10 +415,33 @@ mod tests {
         let result = check(
             &Git::new(dir.path()),
             &rules()?,
+            &labels()?,
             &event("labeled", Some("approved"), &base, &head),
             &gh,
         );
         assert!(matches!(result, Err(Error::GitHub { .. })), "{result:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn a_label_the_settings_lack_is_an_error_and_is_not_created() -> TestResult {
+        let (dir, base) = main_repo()?;
+        git(dir.path(), &["switch", "-q", "-c", "topic"])?;
+        let head = change(dir.path(), "docs/a.md", "two\n")?;
+        let gh = FakeGitHub::new();
+        let result = check(
+            &Git::new(dir.path()),
+            &rules()?,
+            &[],
+            &event("opened", None, &base, &head),
+            &gh,
+        );
+        let Err(Error::Config { file, message }) = &result else {
+            return Err(format!("expected a config error, got {result:?}").into());
+        };
+        assert_eq!(file, "gate/repo-settings.toml");
+        assert!(message.contains("`needs-jann`"), "{message}");
+        assert_eq!(gh.writes(), []);
         Ok(())
     }
 
@@ -422,6 +483,7 @@ mod tests {
         let verdict = check(
             &git_repo,
             &rules()?,
+            &labels()?,
             &event("opened", None, &base, &head),
             &gh,
         )?;
@@ -438,6 +500,7 @@ mod tests {
         let result = check(
             &Git::new(dir.path()),
             &rules()?,
+            &labels()?,
             &event("opened", None, &base, &"0".repeat(40)),
             &gh,
         );

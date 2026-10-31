@@ -11,7 +11,9 @@
 //! - [`conventional`]: the commit message rules of `CONTRIBUTING.md` §2, as a parser and the
 //!   list of what it forbids; `commit-msg` and `pr-title` share it.
 //! - [`git`], [`files`] and [`process`]: the only places that start git and cargo or walk the tree.
-//! - [`github`]: the labels and comments of a pull request, through the `gh` command line.
+//! - [`github`]: the labels and comments of a pull request, and the rulesets, settings and labels
+//!   of the repository, through the `gh` command line; [`github::settings`] keeps the latter as
+//!   files in `gate/` and compares them with the live repository.
 //! - [`error`]: the one error type of the library.
 //!
 //! And the checks built on it:

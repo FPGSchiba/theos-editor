@@ -22,7 +22,7 @@
 
 use super::fingerprint::Fingerprint;
 use crate::ci::PullRequestEvent;
-use crate::github::{Comment, LabelSpec};
+use crate::github::Comment;
 use crate::verdict::{Check, Finding, Verdict};
 
 /// The start of the line that records a fingerprint in a comment.
@@ -37,49 +37,13 @@ const RECORDED_SENTENCE: &str = "Approval recorded for this content of the PR.";
 /// The failure of a protected pull request without the label `approved`.
 const WAITS: &str = "waits for Jann: add the label `approved` after review";
 
-/// How a label of the gate looks, until `gate/repo-settings.toml` holds it.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct LabelDefault {
-    /// The name of the label.
-    pub name: &'static str,
-    /// The colour as six hex digits.
-    pub color: &'static str,
-    /// What the label means.
-    pub description: &'static str,
-}
+/// Added by CI to a pull request that touches a protected path; never removed by CI. The colour
+/// and the description of the label are in `gate/repo-settings.toml`.
+pub const NEEDS_JANN: &str = "needs-jann";
 
-impl LabelDefault {
-    /// The label as the GitHub client takes it.
-    #[must_use]
-    pub fn spec(self) -> LabelSpec {
-        LabelSpec {
-            name: self.name.to_owned(),
-            color: self.color.to_owned(),
-            description: self.description.to_owned(),
-        }
-    }
-}
-
-/// Added by CI to a pull request that touches a protected path; never removed by CI.
-pub const NEEDS_JANN: LabelDefault = LabelDefault {
-    name: "needs-jann",
-    color: "d93f0b",
-    description: "Touches a protected path: waits for Jann",
-};
-
-/// Added by Jann after review; the only label that CI removes.
-pub const APPROVED: LabelDefault = LabelDefault {
-    name: "approved",
-    color: "0e8a16",
-    description: "Jann reviewed the protected changes",
-};
-
-/// Added to a pull request to run the macOS checks on it.
-pub const MACOS: LabelDefault = LabelDefault {
-    name: "macos",
-    color: "5319e7",
-    description: "Run the macOS checks on this pull request",
-};
+/// Added by Jann after review; the only label that CI removes. The colour and the description of
+/// the label are in `gate/repo-settings.toml`.
+pub const APPROVED: &str = "approved";
 
 /// What happened to the pull request, as far as `approval` cares.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -104,8 +68,9 @@ impl Event {
 /// One change `approval` makes on GitHub.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Action {
-    /// Make sure the repository has this label.
-    EnsureLabel(LabelSpec),
+    /// Make sure the repository has the label with this name, looking as
+    /// `gate/repo-settings.toml` says.
+    EnsureLabel(String),
     /// Put the label on the pull request.
     AddLabel(String),
     /// Take the label off the pull request.
@@ -179,16 +144,16 @@ pub fn decide(
     }
     let has = |name: &str| labels.iter().any(|label| label == name);
     let mut actions = Vec::new();
-    if !has(NEEDS_JANN.name) {
-        actions.push(Action::EnsureLabel(NEEDS_JANN.spec()));
-        actions.push(Action::AddLabel(NEEDS_JANN.name.to_owned()));
+    if !has(NEEDS_JANN) {
+        actions.push(Action::EnsureLabel(NEEDS_JANN.to_owned()));
+        actions.push(Action::AddLabel(NEEDS_JANN.to_owned()));
     }
     // Row 2: the labels are the ones read just now, so a label already undone is not here.
-    if !has(APPROVED.name) {
+    if !has(APPROVED) {
         return (fail(WAITS), actions);
     }
     // Row 3.
-    if matches!(event, Event::Labeled(label) if label == APPROVED.name) {
+    if matches!(event, Event::Labeled(label) if label == APPROVED) {
         actions.push(Action::Comment(marker(current, head)));
         return (Verdict::pass(Check::Approval), actions);
     }
@@ -202,7 +167,7 @@ pub fn decide(
         "approval removed: the PR changed after approval ({old} → {})",
         current.0
     );
-    actions.push(Action::RemoveLabel(APPROVED.name.to_owned()));
+    actions.push(Action::RemoveLabel(APPROVED.to_owned()));
     actions.push(Action::Comment(reason.clone()));
     (fail(&reason), actions)
 }
@@ -235,7 +200,7 @@ mod tests {
 
     fn needs_jann_actions() -> Vec<Action> {
         vec![
-            Action::EnsureLabel(NEEDS_JANN.spec()),
+            Action::EnsureLabel("needs-jann".to_owned()),
             Action::AddLabel("needs-jann".to_owned()),
         ]
     }
@@ -454,21 +419,9 @@ mod tests {
     }
 
     #[test]
-    fn the_gate_labels_have_their_colours() {
-        assert_eq!(
-            (NEEDS_JANN.name, NEEDS_JANN.color),
-            ("needs-jann", "d93f0b")
-        );
-        assert_eq!((APPROVED.name, APPROVED.color), ("approved", "0e8a16"));
-        assert_eq!((MACOS.name, MACOS.color), ("macos", "5319e7"));
-        let spec = NEEDS_JANN.spec();
-        assert_eq!(spec.name, "needs-jann");
-        assert_eq!(spec.color, "d93f0b");
-        assert_eq!(spec.description, NEEDS_JANN.description);
-        assert!(
-            spec.description.len() <= 100,
-            "GitHub allows 100 characters"
-        );
+    fn the_gate_labels_are_the_ones_the_workflows_and_the_settings_name() {
+        assert_eq!(NEEDS_JANN, "needs-jann");
+        assert_eq!(APPROVED, "approved");
     }
 
     #[test]
