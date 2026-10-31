@@ -21,6 +21,7 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+yaml-rust2.workspace = true
 
 [lints]
 workspace = true

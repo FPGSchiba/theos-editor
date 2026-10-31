@@ -1,0 +1,129 @@
+# One job per check of docs/gate.md section 1. A job checks out, sets up and runs
+# `cargo xtask <check>`; xtask decides every verdict. The job name is the required status check
+# of `main` (gate/ruleset-main.json), and `cargo xtask gate` runs the same checks locally.
+name: ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  # The push to main fills the caches the next pull requests restore, among them the coverage
+  # baseline.
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: cargo xtask fmt
+
+  clippy-linux:
+    name: clippy (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: cargo xtask clippy
+
+  clippy-windows:
+    name: clippy (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: cargo xtask clippy
+
+  test-linux:
+    name: test (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: cargo xtask test
+
+  test-windows:
+    name: test (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: cargo xtask test
+
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: cargo xtask docs
+
+  deny:
+    name: deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: cargo xtask deny
+
+  engine-free:
+    name: engine-free
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: cargo xtask engine-free
+
+  # The baseline of `main` is measured at the merge base, which needs the history, and is cached
+  # by commit: a pull request finds the result its base commit stored when it was pushed to main.
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/xtask/coverage/cache
+          key: coverage-${{ github.event.pull_request.base.sha || github.sha }}-${{ hashFiles('rust-toolchain.toml', 'gate/tools.toml') }}
+          restore-keys: coverage-
+      - run: cargo xtask coverage
+
+  lints:
+    name: lints
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: cargo xtask lints
+
+  ac-trace:
+    name: ac-trace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: cargo xtask ac-trace
+
+  # The commits of the pull request are read from git, so all of them must be there.
+  commit-msg:
+    name: commit-msg
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - run: cargo xtask commit-msg
