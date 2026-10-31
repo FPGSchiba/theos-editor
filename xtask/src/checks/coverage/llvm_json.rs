@@ -8,6 +8,12 @@
 //! The export gives file names as the compiler wrote them: absolute, and on Windows with `\`.
 //! Both sides of a comparison are first written with `/` and without the `\\?\` prefix, and on
 //! Windows, whose file names do not care about case, the comparison ignores it.
+//!
+//! The paths of the export and the root must agree about where the repository is. If a root is
+//! given through a link, a short name or a substituted drive they do not, and no file matches. An
+//! export that lists files and has none that matches is an error, not an empty result: otherwise
+//! every crate would have no instrumented lines and the check would pass without having looked at
+//! anything.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -80,8 +86,10 @@ const EXPORT_TYPE: &str = "llvm.coverage.json.export";
 ///
 /// # Errors
 ///
-/// Fails when `json` is not an export of `cargo llvm-cov`. The message names the place and kind
-/// of the problem and never quotes the text, which can hold file names.
+/// Fails when `json` is not an export of `cargo llvm-cov`, and when it lists files but none of
+/// them is a source of a crate under `root`: its paths are then not the ones of this root, and
+/// every crate would look empty. The message gives the place and kind of the problem, or the
+/// number of files and the root, and never quotes the text, which can hold file names.
 pub fn parse_llvm_cov(json: &str, root: &Path) -> Result<BTreeMap<String, CrateCoverage>> {
     parse_with(json, root, cfg!(windows))
 }
@@ -108,7 +116,9 @@ pub(crate) fn parse_with(
     }
     let root = normal(&root.to_string_lossy());
     let mut crates: BTreeMap<String, CrateCoverage> = BTreeMap::new();
+    let mut listed = 0_usize;
     for file in export.data.iter().flat_map(|data| &data.files) {
+        listed += 1;
         let Lines { count, covered } = file.summary.lines;
         if covered > count {
             return Err(parse_error("a file has more covered lines than lines"));
@@ -119,6 +129,14 @@ pub(crate) fn parse_with(
             total.count = total.count.saturating_add(count);
             total.covered = total.covered.saturating_add(covered);
         }
+    }
+    if listed > 0 && crates.is_empty() {
+        // The export and the root disagree about where the repository is: a root given through
+        // a link, a short name or a substituted drive. Taking that for crates without lines
+        // would let the check pass without having looked at anything.
+        return Err(parse_error(&format!(
+            "none of its {listed} files is a source of a crate under `{root}`, so its paths do              not belong to that root"
+        )));
     }
     Ok(crates)
 }
@@ -251,8 +269,12 @@ mod tests {
             ("/home/me/.cargo/registry/src/x/serde/src/lib.rs", 9, 9),
             ("crates/a/src/lib.rs", 9, 9),
             ("", 9, 9),
+            ("/r/crates/ok/src/lib.rs", 2, 1),
         ]);
-        assert_eq!(parse_with(&json, Path::new("/r"), false)?, BTreeMap::new());
+        assert_eq!(
+            parse_with(&json, Path::new("/r"), false)?,
+            BTreeMap::from([("ok".to_owned(), cov(1, 2))])
+        );
         Ok(())
     }
 
@@ -297,7 +319,7 @@ mod tests {
             (r"d:\repo\Crates\b\SRC\lib.rs", 10, 10),
         ]);
         let root = Path::new(r"d:\repo");
-        assert_eq!(parse_with(&json, root, false)?, BTreeMap::new());
+        assert!(parse_with(&json, root, false).is_err());
         assert_eq!(
             parse_with(&json, root, true)?,
             BTreeMap::from([("a".to_owned(), cov(5, 10)), ("b".to_owned(), cov(10, 10))])
@@ -308,8 +330,12 @@ mod tests {
     #[test]
     fn the_real_function_follows_the_operating_system() -> TestResult {
         let json = export(&[("/R/crates/a/src/lib.rs", 4, 2)]);
-        let crates = parse_llvm_cov(&json, Path::new("/r"))?;
-        assert_eq!(crates.len(), usize::from(cfg!(windows)));
+        let result = parse_llvm_cov(&json, Path::new("/r"));
+        if cfg!(windows) {
+            assert_eq!(result?, BTreeMap::from([("a".to_owned(), cov(2, 4))]));
+        } else {
+            assert!(result.is_err(), "{result:?}");
+        }
         Ok(())
     }
 
@@ -335,6 +361,49 @@ mod tests {
     fn an_export_without_files_has_no_crates() -> TestResult {
         let json = r#"{"data":[],"type":"llvm.coverage.json.export","version":"3.1.0"}"#;
         assert_eq!(parse_with(json, Path::new("/r"), false)?, BTreeMap::new());
+        Ok(())
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn files_that_all_belong_elsewhere_are_an_error_not_an_empty_map() {
+        // The export and the root disagree about where the repository is, as they do for a root
+        // given through a link or a short name. Every crate would look empty and the check
+        // would pass, so that is an error.
+        let files = [
+            ("/work/repo/crates/a/src/lib.rs", 10, 9),
+            ("/work/repo/xtask/src/lib.rs", 10, 9),
+            ("/work/repo/secret-token/other.rs", 10, 9),
+        ];
+        for root in [
+            "/other",
+            "/work/rep",
+            "/work/repo/crates",
+            "work/repo",
+            "/x",
+        ] {
+            let result = parse_with(&export(&files), Path::new(root), false);
+            let Err(Error::Parse { what, message }) = &result else {
+                panic!("{root}: {result:?}");
+            };
+            assert!(what.contains("llvm-cov"), "{what}");
+            assert!(message.contains("3 files"), "{message}");
+            assert!(message.contains(root), "{root}: {message}");
+            assert!(!message.contains("secret-token"), "{message}");
+            assert!(!message.contains("/work/repo/crates/a"), "{message}");
+        }
+    }
+
+    #[test]
+    fn one_matching_file_is_enough_to_have_a_map() -> TestResult {
+        let json = export(&[
+            ("/elsewhere/crates/a/src/lib.rs", 4, 4),
+            ("/r/crates/b/src/lib.rs", 4, 2),
+        ]);
+        assert_eq!(
+            parse_with(&json, Path::new("/r"), false)?,
+            BTreeMap::from([("b".to_owned(), cov(2, 4))])
+        );
         Ok(())
     }
 

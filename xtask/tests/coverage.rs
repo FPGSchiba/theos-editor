@@ -59,17 +59,18 @@ fn parses_llvm_cov_fixture() -> TestResult {
 }
 
 #[test]
-fn another_root_finds_nothing_in_the_fixture() -> TestResult {
+fn another_root_does_not_fit_the_fixture_and_is_an_error() -> TestResult {
+    // Not an empty map: that would let every crate pass as having no lines.
     for root in [
         "/work/other",
         "/work",
         "/work/repo/crates",
         "/work/repo-other/x",
     ] {
-        assert_eq!(
-            parse_llvm_cov(&fixture()?, Path::new(root))?,
-            BTreeMap::new(),
-            "{root}"
+        let result = parse_llvm_cov(&fixture()?, Path::new(root));
+        assert!(
+            matches!(&result, Err(xtask::Error::Parse { .. })),
+            "{root}: {result:?}"
         );
     }
     Ok(())

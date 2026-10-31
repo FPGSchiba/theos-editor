@@ -15,10 +15,10 @@
 //!
 //! The baseline is the coverage of the merge base of `HEAD` and the base revision (the base of
 //! the pull request, else `origin/main`), measured by [`baseline`] in a temporary work tree and
-//! cached by commit, toolchain and cargo-llvm-cov version. When the merge base is `HEAD` itself
-//! the baseline is the head result, and when it has no `xtask/Cargo.toml` (the pull request that
-//! adds the gate) there is no baseline and only the floors are checked. A push to `main` stores
-//! its head result in the cache, so that the next pull requests find it.
+//! cached by commit, measuring toolchain and cargo-llvm-cov version. When the merge base is
+//! `HEAD` itself the baseline is the head result, and when it has no `xtask/Cargo.toml` (the pull
+//! request that adds the gate) there is no baseline and only the floors are checked. A push to
+//! `main` stores its head result in the cache, so that the next pull requests find it.
 //!
 //! The pure core is [`verdict`]. The steps around it are in one function that only reaches
 //! `cargo llvm-cov` through a trait, so that its tests do not run it.
@@ -37,7 +37,7 @@ pub use llvm_json::{CrateCoverage, parse_llvm_cov};
 use crate::checks::engine_free;
 use crate::ci::CiEvent;
 use crate::git::Git;
-use crate::process::{CargoCommand, capture_cargo, run_cargo};
+use crate::process::{CargoCommand, capture_cargo, capture_rustc_version, run_cargo};
 use crate::tools::parse_version;
 use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
@@ -253,6 +253,10 @@ pub(crate) trait Llvm {
     /// The version of `cargo llvm-cov`, such as `0.9.1`.
     fn version(&self, root: &Path) -> Result<String>;
 
+    /// Names the toolchain that measures: the lines `release: ` and `commit-hash: ` of
+    /// `rustc -vV` of the rustc that belongs to the cargo that runs the gate.
+    fn toolchain(&self, root: &Path) -> Result<String>;
+
     /// Runs the tests of the workspace in `dir` with instrumentation and writes the export to
     /// `output`. The build directory is `target_dir` when there is one. Says whether the tests
     /// passed, which they must for there to be an export.
@@ -274,9 +278,36 @@ impl Llvm for CargoLlvm {
         })
     }
 
+    fn toolchain(&self, root: &Path) -> Result<String> {
+        let output = capture_rustc_version(root)?.unwrap_or_default();
+        rustc_identity(&output).ok_or_else(|| Error::Missing {
+            what: "the toolchain: `rustc -vV` gave no release".to_owned(),
+        })
+    }
+
     fn run(&self, dir: &Path, output: &Path, target_dir: Option<&Path>) -> Result<bool> {
         run_cargo(dir, &llvm_cov_command(output, target_dir))
     }
+}
+
+/// The lines of the output of `rustc -vV` that name a toolchain, `release: <version>` and
+/// `commit-hash: <hash>` in this order, joined with a line feed. `None` when there is no release.
+/// A build without a commit has only the release line.
+fn rustc_identity(output: &str) -> Option<String> {
+    let line = |key: &str| {
+        output.lines().find_map(|line| {
+            let value = line.trim().strip_prefix(key)?.trim();
+            (!value.is_empty()).then(|| format!("{key} {value}"))
+        })
+    };
+    let release = line("release:")?;
+    Some(match line("commit-hash:") {
+        Some(commit) => format!(
+            "{release}
+{commit}"
+        ),
+        None => release,
+    })
 }
 
 /// `cargo llvm-cov nextest --workspace --locked --json --output-path <output>`, with
@@ -783,6 +814,46 @@ mod tests {
         assert!(message.contains("near line 8"), "{message}");
     }
 
+    const RUSTC_VV: &str = "rustc 1.99.1 (5f94df478 2026-08-27)\nbinary: rustc\n\
+        commit-hash: 5f94df4780000000000000000000000000000000\ncommit-date: 2026-08-27\n\
+        host: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 21.1.0\n";
+
+    #[test]
+    fn the_toolchain_is_named_by_its_release_and_commit() {
+        assert_eq!(
+            rustc_identity(RUSTC_VV).as_deref(),
+            Some("release: 1.99.1\ncommit-hash: 5f94df4780000000000000000000000000000000")
+        );
+        // The order of the lines and CRLF do not matter, and nothing else is in the name.
+        let windows = "release: 1.99.1\r\nhost: x\r\ncommit-hash: abc\r\n";
+        assert_eq!(
+            rustc_identity(windows).as_deref(),
+            Some("release: 1.99.1\ncommit-hash: abc")
+        );
+        // A build without a commit is named by its release.
+        assert_eq!(
+            rustc_identity("release: 1.99.1\ncommit-hash: unknown\n").as_deref(),
+            Some("release: 1.99.1\ncommit-hash: unknown")
+        );
+        assert_eq!(
+            rustc_identity("release: 1.99.1\n").as_deref(),
+            Some("release: 1.99.1")
+        );
+    }
+
+    #[test]
+    fn output_without_a_release_names_no_toolchain() {
+        for output in [
+            "",
+            "rustc 1.99.1\n",
+            "commit-hash: abc\n",
+            "release:\n",
+            "release: \n",
+        ] {
+            assert_eq!(rustc_identity(output), None, "{output:?}");
+        }
+    }
+
     #[test]
     fn the_command_is_the_documented_one() {
         let output = Path::new("some").join("head.json");
@@ -861,6 +932,8 @@ mod tests {
         runs: RefCell<Vec<PathBuf>>,
         head_fails: bool,
         baseline_fails: bool,
+        /// Writes the paths of a repository somewhere else than where it ran.
+        elsewhere: bool,
     }
 
     fn is_worktree(dir: &Path) -> bool {
@@ -870,6 +943,10 @@ mod tests {
     impl Llvm for FakeLlvm {
         fn version(&self, _root: &Path) -> Result<String> {
             Ok("0.9.1".to_owned())
+        }
+
+        fn toolchain(&self, _root: &Path) -> Result<String> {
+            Ok("release: 1.99.1".to_owned())
         }
 
         fn run(&self, dir: &Path, output: &Path, target_dir: Option<&Path>) -> Result<bool> {
@@ -886,10 +963,15 @@ mod tests {
             let (Some(Ok(covered)), Some(Ok(count))) = (numbers.next(), numbers.next()) else {
                 panic!("cov.txt is `<covered> <count>`");
             };
+            let place = if self.elsewhere {
+                "/elsewhere".to_owned()
+            } else {
+                dir.display().to_string()
+            };
             let export = json!({
                 "type": "llvm.coverage.json.export",
                 "data": [{ "files": [{
-                    "filename": format!("{}/crates/theos-content/src/lib.rs", dir.display()),
+                    "filename": format!("{place}/crates/theos-content/src/lib.rs"),
                     "summary": { "lines": { "count": count, "covered": covered } },
                 }]}],
             });
@@ -908,8 +990,8 @@ mod tests {
         }
     }
 
-    /// A repository on `main` whose first commit has the thresholds, the toolchain and
-    /// `cov.txt` with `cov`, and `xtask/Cargo.toml` when `with_xtask`.
+    /// A repository on `main` whose first commit has the thresholds and `cov.txt` with `cov`,
+    /// and `xtask/Cargo.toml` when `with_xtask`.
     fn repo(cov: &str, with_xtask: bool) -> TestResult<tempfile::TempDir> {
         let dir = init_repo()?;
         let path = dir.path();
@@ -919,10 +1001,6 @@ mod tests {
             .join("thresholds.toml");
         fs::create_dir(path.join("gate"))?;
         fs::copy(thresholds, path.join("gate").join("thresholds.toml"))?;
-        fs::write(
-            path.join("rust-toolchain.toml"),
-            "[toolchain]\nchannel = \"1.99.1\"\n",
-        )?;
         fs::write(path.join(".gitignore"), "target\n")?;
         fs::write(path.join("cov.txt"), cov)?;
         if with_xtask {
@@ -1131,12 +1209,32 @@ mod tests {
         Ok(())
     }
 
+    // AC: CE-08.8
+    #[test]
+    fn an_export_that_does_not_fit_the_root_is_an_error_not_a_pass() -> TestResult {
+        // If the paths of the export and the root disagree (a root given through a link, a short
+        // name or a substituted drive) every crate would have no instrumented lines and the
+        // check would pass without having looked at anything.
+        let dir = repo("90 100", true)?;
+        let llvm = FakeLlvm {
+            elsewhere: true,
+            ..FakeLlvm::default()
+        };
+        let result = evaluate(&llvm, dir.path(), "main", false, &the_member());
+        assert!(matches!(result, Err(Error::Parse { .. })), "{result:?}");
+        assert_eq!(llvm.ran_in(), ["head"]);
+        Ok(())
+    }
+
     #[test]
     fn an_export_that_is_not_one_is_an_error() -> TestResult {
         struct Garbage;
         impl Llvm for Garbage {
             fn version(&self, _root: &Path) -> Result<String> {
                 Ok("0.9.1".to_owned())
+            }
+            fn toolchain(&self, _root: &Path) -> Result<String> {
+                Ok("release: 1.99.1".to_owned())
             }
             fn run(&self, _dir: &Path, output: &Path, _target: Option<&Path>) -> Result<bool> {
                 fs::write(output, "not json").map_err(io_error(output))?;
@@ -1155,6 +1253,9 @@ mod tests {
         impl Llvm for Silent {
             fn version(&self, _root: &Path) -> Result<String> {
                 Ok("0.9.1".to_owned())
+            }
+            fn toolchain(&self, _root: &Path) -> Result<String> {
+                Ok("release: 1.99.1".to_owned())
             }
             fn run(&self, _dir: &Path, _output: &Path, _target: Option<&Path>) -> Result<bool> {
                 Ok(true)
