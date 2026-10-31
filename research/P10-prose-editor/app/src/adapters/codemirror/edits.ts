@@ -3,6 +3,7 @@ import type { EditorView } from '@codemirror/view';
 import { resolveAnchor } from '../../harness/anchor.ts';
 import type { ScriptedEdit } from '../../harness/types.ts';
 import { bodyStart } from './frontmatter.ts';
+import { setNoteState } from './notestate.ts';
 import { completeLink } from './typing.ts';
 
 /** The select-all of the keymap: the body only, the front matter is not the author's text. */
@@ -66,6 +67,9 @@ export function applyEdit(view: EditorView, edit: ScriptedEdit): void {
       view.dispatch({ changes: { from, to: close + 2 }, selection: { anchor: from }, userEvent: 'delete.backward', scrollIntoView: true });
       return;
     }
+    case 'note-state':
+      setNoteState(view, edit.note, edit.state);
+      return;
     default:
       throw new Error(`codemirror: the base does not make "${edit.kind}" edits yet`);
   }

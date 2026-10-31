@@ -60,7 +60,7 @@ class ChipWidget extends WidgetType {
 type Tree = ReturnType<typeof syntaxTree>;
 
 /** Whether a position is in code, where `[[` is not a link. */
-function inCode(tree: Tree, pos: number): boolean {
+export function inCode(tree: Tree, pos: number): boolean {
   for (let node: ReturnType<Tree['resolveInner']> | null = tree.resolveInner(pos, 1); node !== null; node = node.parent) {
     if (CODE.test(node.name)) return true;
   }

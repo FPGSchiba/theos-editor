@@ -1,22 +1,23 @@
 # CodeMirror 6 prototype: notes
 
-Variant `codemirror`, `@codemirror/view` 6.43.15. State after Task 8 (the base), its fix round 1, and Task 9 (links).
+Variant `codemirror`, `@codemirror/view` 6.43.15. State after Task 8 (the base), its fix round 1, Task 9 (links) and Task 10 (callouts).
 `tests/e2e/codemirror-probes.spec.ts` (`@harness`) probes what the measured suites cannot see.
 
 ## Still failing under `P10_STRICT=1`
 
-Run: `P10_STRICT=1 pnpm exec playwright test --grep "@base|@integration|@input" --grep-invert "I-[a-z-]*-chip"` with
+Run: `P10_STRICT=1 pnpm exec playwright test --grep "@base|@integration|@input|@links"` with
 `P10_VARIANTS=codemirror`. Chromium and WebKit fail the same two checks, and both ask for a feature that a later task of this
-prototype builds. Neither is a defect of the links, and nothing was tried against them here, because the feature does not exist yet.
-The links suites (`@links`, `I-[a-z-]*-chip`, `N-remount`, `N-reactive`) pass in both engines (30 passed, 4 skipped by engine).
+prototype builds. Neither is a defect of the links or the callouts, and nothing was tried against them here, because the feature does not exist yet.
+The links suites (`@links`, `I-[a-z-]*-chip`, `N-remount`, `N-reactive`) and the callouts suites (`@callouts`, `I-[a-z-]*-voice`)
+pass in both engines.
 
 | Check | Why it fails | Closed by |
 |---|---|---|
 | `@base F-live-preview` | The caret-on-the-line half passes (the raw `## Beat 1 — Arrival` shows). It also wants beat 2 rendered as `[data-beat="2"]` showing `2 · The murmur`, and beat 1 as `1 · Arrival` once the caret leaves. Headings are rendered with their markers hidden, but not as beat headings. | Task 11 (beats) |
 | `@input I-spellcheck-off` | The chip half passes now (every `.tu-link` has `spellcheck` off). It still wants `[data-beat-row]` rows with `spellcheck` off; there are none. | Task 11 (beats) |
 
-The two `ScriptedEdit` kinds that are not made yet (`note-state`, `beat-param`) throw from `apply`; their `@callouts` and
-`@beats` round-trip edits are not in the suites of Tasks 8 and 9.
+The one `ScriptedEdit` kind that is not made yet (`beat-param`) throws from `apply`; its `@beats` round-trip edits are not in the
+suites of Tasks 8 to 10.
 
 ## What the base does, and how
 
@@ -87,6 +88,52 @@ Chips, the typing state and the popover are part of the Write set of `modes.ts`;
 
 Known limits of the links: an IME composition inside `[[query` was not tried (the composition guard of the component only stops its keys); undoing a pick gives back the typed text without reopening the popover; the spell-check half of `I-spellcheck-off` for
 beat rows is Task 11; nothing was run on WebView2, WKWebView or WebKitGTK.
+
+## Callouts (Task 10)
+
+Files: `callouts.ts` (the block lines, the heads, the hidden markers), `calloutlook.ts` (the box look), `devwords.ts`, `notestate.ts`
+(`note-state`), `rawlines.ts` (which lines a selection touches; `livepreview.ts` uses it now too), `wholedoc.ts`. The callout plugin
+and its look are part of the Write set of `modes.ts`; Source mode shows every callout raw.
+
+- **A block is a run of lines.** The blocks come from the Lezer tree (`Blockquote` whose first line is `> [!voice|design|note]`), so a lazy
+  line (`and they will hear you.`, no `>`) belongs to its block, and a block in code is not one. Every line of the block gets one
+  `Decoration.line` with `data-callout`, the classes `cm-callout`, `cm-callout-<kind>`, `-first`, `-last` and, for voice, `tu-voice`; the
+  note lines also get `data-note` and `data-note-state` (`open` when the title has no state). The box is drawn per line in
+  `calloutlook.ts` from the design tokens: the sides on every line, the top on the first, the bottom on the last.
+- **Voice.** The title line is replaced (`Decoration.replace`, inline, the whole line content) by a widget that mounts the shared
+  `VoiceHead` in `toDOM` and unmounts it in `destroy` (found by element in a `WeakMap`, as the chips are). The last line that starts
+  with `— ` is the caption: it gets `tu-voice__by`, its `> — ` is hidden and the design system's `::before` draws the dash (raw, the dash
+  is text and the `::before` is switched off). `-- text` is voice text. `VoiceHead` shows the speaker's title only, not chips, so the
+  links of a voice title are chips only while the title is raw (the caret on it).
+- **Design.** The title line becomes a small `design` label (no shared head exists); the text lines carry `data-callout="design"`.
+  **`Design note:`.** A line that starts with it (outside code) gets the class `tu-note`, no `data-callout`.
+- **Note.** The title line is replaced by `NoteHead` (id, version chip, state, resolving version chip). The state is the last segment when
+  it is `open`, `dropped` or `resolved by [[id]]`; `data-note-state` is `open`, `dropped` or `resolved`.
+- **Developer words** (`devwords.ts`). The words of `ctx.developerWords` are marked with `[data-dev-word]` and `title="developer word"` in the
+  text lines of voice blocks (caption included) as whole words (`tier` is not marked in `frontier`), case-insensitive. Not in prose, in
+  the title, in design or note callouts or in `Design note:` lines.
+- **Live preview.** `touchedLines` (whole lines under every selection range) decides per line: untouched, the `> ` marker is a hidden
+  replace decoration and the title line is its head; touched, the line shows raw (the title with its link chips, as Task 9 draws them).
+  Because a selection always touches its lines, a marker that is hidden is never under the caret or inside a selection: Backspace at the
+  start of a body line joins it to the line above (one newline, the `> ` stays and is drawn), Delete at the end of the line above takes
+  one newline, and a Shift selection into a hidden line draws it first (probed). A click on a head puts the caret on the title line.
+- **`note-state`** (`notestate.ts`). One transaction (`input.type`, one undo step) replaces the last ` · ` segment of the title line
+  `> [!note] <note> …` when it is a state and appends ` · <state>` when it is not, as the oracle does; the caret ends behind it on the
+  title line, which then shows raw. A note id that is not there throws.
+- **The viewport** (`wholedoc.ts`). CodeMirror draws only the lines around what is on screen and decides it from line heights it has not
+  measured at the first frame. A callout page is taller than that estimate, so on a 1280 x 720 page the lines below the fold (blocks
+  five to seven of `synthetic-voices-in-world.md`) were not in the DOM and `F-voice`, `F-design` and `F-dev-word` could not see them.
+  `mount` now makes the first measure at once (reading the layout) and asks for the end of the document with a negative scroll margin
+  (the page does not move); a document that fits the window plus CodeMirror's margin (about 500 px past the fold) is then drawn in full.
+  A taller document returns to the usual viewport at the next measure, and one over 20 000 characters is left alone. This is a
+  CodeMirror-specific accommodation to checks that read the DOM without scrolling (a measure of the harness, not of the editor); a person
+  scrolling sees no difference.
+
+Known limits of the callouts: Enter in a callout does not continue the `> ` marker (the base's Enter copies nothing), so a new line is a
+lazy line of the block until the author types `> `; a nested quote (`> > `) is one callout line with a hidden outer marker; the voice head
+has no chips, see above; a `Design note:` line inside a callout is callout text; callouts in lists are not recognised (the title has to
+start at column 0); an IME composition in a callout title was not tried (the `-voice` checks compose in a text line); nothing was run on
+WebView2, WKWebView or WebKitGTK.
 
 ## Known limits of the base
 

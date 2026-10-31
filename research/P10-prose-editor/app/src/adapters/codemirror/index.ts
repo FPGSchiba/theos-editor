@@ -13,6 +13,7 @@ import { keymapExtension, rebind } from './keymap.ts';
 import { modeExtension, switchMode } from './modes.ts';
 import { spellcheck } from './spellcheck.ts';
 import { theme } from './theme.ts';
+import { drawWhole } from './wholedoc.ts';
 
 const markdown = new Language(defineLanguageFacet(), parser, [], 'markdown');
 
@@ -45,6 +46,7 @@ class CodeMirrorAdapter implements ProseAdapter {
       parent: target,
       state: state.update({ selection: { anchor: state.field(bodyStart) } }).state,
     });
+    drawWhole(this.view);
   }
 
   text(): string {

@@ -1,6 +1,7 @@
 import { syntaxTree } from '@codemirror/language';
 import type { Range } from '@codemirror/state';
 import { Decoration, ViewPlugin, type DecorationSet, type EditorView, type ViewUpdate } from '@codemirror/view';
+import { touchedLines } from './rawlines.ts';
 
 /**
  * Live preview of headings and emphasis: the text is styled, the markers (`##`, `*`, `_`) are
@@ -18,9 +19,7 @@ const strong = Decoration.mark({ class: 'tu-strong' });
 function build(view: EditorView): DecorationSet {
   const { state } = view;
   const { doc } = state;
-  // Whole lines under the selection, as [from, to] pairs.
-  const raw = state.selection.ranges.map((range) => [doc.lineAt(range.from).from, doc.lineAt(range.to).to] as const);
-  const isRaw = (from: number, to: number): boolean => raw.some(([start, end]) => start <= to && end >= from);
+  const isRaw = touchedLines(state);
   const found: Array<Range<Decoration>> = [];
   const tree = syntaxTree(state);
   for (const { from, to } of view.visibleRanges) {

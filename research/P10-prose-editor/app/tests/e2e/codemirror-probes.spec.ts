@@ -10,6 +10,7 @@ import { loadFile } from './helpers.ts';
 // and none of them changes a shared suite.
 
 const SCRIPT = corpusFile('records/story/scripts/S-004.md');
+const VOICES = corpusFile('records/lore/topics/synthetic-voices-in-world.md');
 const EMPTY_BODY = corpusFile('records/people/hearth-folk/fates-cult/mother-ilse.md');
 
 /** Mount the `codemirror` variant on a text that is not a corpus file. */
@@ -314,8 +315,268 @@ test.describe('@harness codemirror · links', () => {
   test('chips in a callout title and a beat attribute keep their bytes', async ({ page }) => {
     const script = toLf(await loadFile(page, 'codemirror', SCRIPT));
     const links = script.match(/\[\[[^\]\n]+\]\]/g)!.length;
+    // A voice title is drawn by its head (no chips) until the caret is on it, then it is raw with its chips (Task 10).
+    const titleLinks = script.match(/> \[!voice\][^\n]*/)![0].match(/\[\[[^\]\n]+\]\]/g)!.length;
+    await settle(page);
+    expect(await page.locator(chips).count()).toBe(links - titleLinks);
+    await page.evaluate((at) => { window.__harness!.focus(); window.__harness!.caretTo(at); }, script.indexOf('> [!voice]') + 3);
     await settle(page);
     expect(await page.locator(chips).count()).toBe(links);
     expect(await text(page)).toBe(script);
+  });
+});
+
+test.describe('@harness codemirror · callouts', () => {
+  const dot = '·';
+  const dash = '—';
+  const sample = [
+    'Intro paragraph.',
+    '',
+    `> [!voice] [[mother-ilse]] ${dot} [[B-016]] ${dot} T1`,
+    '> The Fates spin for those who climb, says the ledger of the frontier.',
+    'and they will hear you.',
+    '>',
+    `> ${dash} a caption`,
+    '',
+    '> [!design]',
+    '> A remark about the tier of it.',
+    '',
+    'Design note: the tier is a ledger.',
+    '',
+    `> [!note] n1 ${dot} [[f04-terrain-v1]] ${dot} open`,
+    '> Body of the note.',
+    '',
+    'last',
+  ].join('\n');
+  const at = (page: Page, offset: number): Promise<void> =>
+    page.evaluate((to) => { window.__harness!.focus(); window.__harness!.caretTo(to); }, offset);
+  const lines = (page: Page, selector: string): Promise<string[]> =>
+    page.locator(`#editor-host .cm-line${selector}`).evaluateAll((all) => all.map((line) => line.textContent ?? ''));
+  const voiceLines = (page: Page): Promise<string[]> => lines(page, '[data-callout="voice"]');
+
+  test('a voice block is a run of lines with the contract, a head and a caption, and the markers are hidden', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, 0);
+    await settle(page);
+    expect(await page.locator('#editor-host [data-callout="voice"].tu-voice').count()).toBe(5);
+    expect((await page.locator('#editor-host .tu-voice__head').allTextContents()).map((head) => head.trim())).toEqual([
+      `In-world ${dot} Mother Ilse B-016 ${dot} T1 lens`,
+    ]);
+    expect(await lines(page, '.tu-voice__by')).toEqual(['a caption']);
+    // Every line is drawn without its marker; the lazy line has none.
+    expect((await voiceLines(page)).slice(1)).toEqual([
+      'The Fates spin for those who climb, says the ledger of the frontier.', 'and they will hear you.', '', 'a caption',
+    ]);
+    expect(await text(page)).toBe(sample);
+  });
+
+  test('a line the caret is on shows its raw Markdown: the markers, the title and its chips', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, sample.indexOf('The Fates') + 4);
+    await settle(page);
+    expect((await voiceLines(page))[1]).toBe('> The Fates spin for those who climb, says the ledger of the frontier.');
+    expect((await voiceLines(page))[0]).not.toContain('> ');
+    await at(page, sample.indexOf('[!voice]') + 3);
+    await settle(page);
+    const title = page.locator('#editor-host .cm-line[data-callout="voice"]').first();
+    await expect(title).toContainText('> [!voice]');
+    await expect(title.locator('.tu-link')).toHaveCount(2);
+    await expect(page.locator('#editor-host .tu-voice__head')).toHaveCount(0);
+    // The caption shows its dash once: as text when raw, as the design system's mark when drawn.
+    await at(page, sample.indexOf(`${dash} a caption`) + 3);
+    await settle(page);
+    expect((await lines(page, '.tu-voice__by'))[0]).toBe(`> ${dash} a caption`);
+    expect(await page.locator('#editor-host .tu-voice__by').evaluate((line) => getComputedStyle(line, '::before').content)).toBe('none');
+    await at(page, 0);
+    await settle(page);
+    expect(await page.locator('#editor-host .tu-voice__by').evaluate((line) => getComputedStyle(line, '::before').content)).toContain(dash);
+  });
+
+  test('wherever the caret is, its line is raw: no marker hides under the caret', async ({ page }) => {
+    await openText(page, sample);
+    const start = sample.indexOf('> [!voice]');
+    const end = sample.indexOf('last');
+    for (let offset = start; offset <= end; offset += 3) {
+      await at(page, offset);
+      const where = await page.evaluate(() => {
+        const node = window.getSelection()?.anchorNode;
+        const line = (node instanceof Element ? node : node?.parentElement)?.closest('.cm-line');
+        const doc = window.__harness!.text();
+        const head = window.__harness!.caret();
+        const from = doc.lastIndexOf('\n', head - 1) + 1;
+        const next = doc.indexOf('\n', head);
+        return { shown: line?.textContent ?? null, marker: doc.slice(from, next === -1 ? doc.length : next).startsWith('>') };
+      });
+      if (where.marker) expect(where.shown, `the line at ${offset}`).toMatch(/^>/);
+    }
+  });
+
+  test('Backspace, Delete and a Shift selection take only what is drawn, never a hidden marker', async ({ page }) => {
+    await openText(page, sample);
+    const body = sample.indexOf('> The Fates');
+    // Backspace at the start of a body line joins it to the title: one newline goes, the marker stays.
+    await at(page, body);
+    await page.keyboard.press('Backspace');
+    expect(await text(page)).toBe(sample.slice(0, body - 1) + sample.slice(body));
+    await page.keyboard.press('ControlOrMeta+z');
+    expect(await text(page)).toBe(sample);
+    // Delete at the end of the line above a block: one newline goes (the marker is drawn once the caret joins the line).
+    const above = sample.indexOf('\n> [!design]') - 1;
+    await at(page, above);
+    await page.keyboard.press('Delete');
+    expect(await text(page)).toBe(sample.slice(0, above) + sample.slice(above + 1));
+    await page.keyboard.press('ControlOrMeta+z');
+    expect(await text(page)).toBe(sample);
+    // A selection from the end of a line into the next shows that line raw before anything is deleted.
+    const titleEnd = sample.indexOf('\n', sample.indexOf('> [!voice]'));
+    await at(page, titleEnd);
+    await page.keyboard.press('Shift+ArrowRight');
+    await page.keyboard.press('Shift+ArrowRight');
+    await settle(page);
+    expect((await voiceLines(page))[1]).toMatch(/^> The Fates/);
+    await page.keyboard.press('Delete');
+    expect(await text(page)).toBe(sample.slice(0, titleEnd) + sample.slice(titleEnd + 2));
+  });
+
+  test('the arrow keys walk through a block line by line, and the bytes stay the file', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, 0);
+    const heads: number[] = [];
+    for (let step = 0; step < 12; step++) {
+      await page.keyboard.press('ArrowDown');
+      heads.push(await caret(page));
+    }
+    expect(heads).toEqual([...heads].sort((a, b) => a - b));
+    expect(new Set(heads).size).toBe(heads.length);
+    for (let step = 0; step < 12; step++) await page.keyboard.press('ArrowUp');
+    expect(await caret(page)).toBeLessThanOrEqual(sample.indexOf('\n'));
+    expect(await text(page)).toBe(sample);
+  });
+
+  test('a click on a head puts the caret on the title line, which turns raw', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, 0);
+    await settle(page);
+    await page.locator('#editor-host .tu-voice__head').click();
+    await expect(page.locator('#editor-host .tu-voice__head')).toHaveCount(0);
+    const head = await caret(page);
+    expect(head).toBeGreaterThanOrEqual(sample.indexOf('> [!voice]'));
+    expect(head).toBeLessThanOrEqual(sample.indexOf('\n', sample.indexOf('> [!voice]')));
+    expect(await text(page)).toBe(sample);
+  });
+
+  test('design callouts, Design note lines and note callouts follow the contract', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, 0);
+    await settle(page);
+    const design = page.locator('#editor-host [data-callout="design"]');
+    await expect(design).toHaveCount(2);
+    await expect(design.last()).toHaveText('A remark about the tier of it.');
+    await expect(page.locator('#editor-host .tu-note')).toHaveText('Design note: the tier is a ledger.');
+    await expect(page.locator('#editor-host .tu-note[data-callout]')).toHaveCount(0);
+    const note = page.locator('#editor-host [data-callout="note"][data-note="n1"][data-note-state="open"]');
+    await expect(note).toHaveCount(2);
+    await expect(page.locator('#editor-host .hx-note__head .tu-link')).toHaveCount(1);
+  });
+
+  test('developer words are marked in voice text only, as whole words', async ({ page }) => {
+    await openText(page, sample.replace('Intro paragraph.', 'A ledger in the intro.'));
+    await at(page, 0);
+    await settle(page);
+    // Voice text has "ledger" (and "frontier", which holds "tier" but is another word); the design callout,
+    // the Design note line and the prose are not voice text.
+    expect(await page.locator('#editor-host [data-dev-word]').allTextContents()).toEqual(['ledger']);
+    expect(await page.locator('#editor-host [data-dev-word]').first().getAttribute('title')).toBe('developer word');
+    expect(await page.locator('#editor-host [data-callout="voice"] [data-dev-word]').count()).toBe(1);
+  });
+
+  test('a block in code is not a callout, and a Design note line in code is plain', async ({ page }) => {
+    const code = '```\n> [!voice] [[mother-ilse]]\n> text\nDesign note: x\n```\n\nafter';
+    await openText(page, code);
+    await at(page, code.length);
+    await settle(page);
+    await expect(page.locator('#editor-host [data-callout]')).toHaveCount(0);
+    await expect(page.locator('#editor-host .tu-note')).toHaveCount(0);
+  });
+
+  test('note-state replaces the last segment of the title when it is a state, and appends one when it is not', async ({ page }) => {
+    const notes = [
+      `> [!note] n1 ${dot} open`, '> a', '',
+      `> [!note] n2 ${dot} [[f04-terrain-v1]]`, '> b', '',
+      `> [!note] n3 ${dot} resolved by [[f04-terrain-v1]]`, '> c', '',
+      '> [!note] n4', '> d', '',
+      `> [!note] n10 ${dot} dropped`, '> e',
+    ].join('\n');
+    await openText(page, notes);
+    const apply = (note: string, state: string): Promise<void> =>
+      page.evaluate(([n, s]) => window.__harness!.apply({ id: 'probe', kind: 'note-state', note: n!, state: s! }), [note, state]);
+    await apply('n1', 'resolved by [[x]]');
+    await apply('n2', 'open');
+    await apply('n3', 'dropped');
+    await apply('n4', 'open');
+    await apply('n1', 'dropped');
+    expect(await text(page)).toBe([
+      `> [!note] n1 ${dot} dropped`, '> a', '',
+      `> [!note] n2 ${dot} [[f04-terrain-v1]] ${dot} open`, '> b', '',
+      `> [!note] n3 ${dot} dropped`, '> c', '',
+      `> [!note] n4 ${dot} open`, '> d', '',
+      `> [!note] n10 ${dot} dropped`, '> e',
+    ].join('\n'));
+    await at(page, 0);
+    await settle(page);
+    const states = await page.locator('#editor-host .cm-line[data-callout="note"]').evaluateAll((all) =>
+      all.map((line) => `${line.getAttribute('data-note')}=${line.getAttribute('data-note-state')}`));
+    expect(states).toEqual(['n1=dropped', 'n1=dropped', 'n2=open', 'n2=open', 'n3=dropped', 'n3=dropped', 'n4=open', 'n4=open', 'n10=dropped', 'n10=dropped']);
+    await expect(page.evaluate(() => window.__harness!.apply({ id: 'probe', kind: 'note-state', note: 'n9', state: 'open' }))).rejects.toThrow(/no note/);
+    for (let n = 0; n < 5; n++) await page.keyboard.press('ControlOrMeta+z');
+    expect(await text(page)).toBe(notes);
+  });
+
+  test('a note head and a voice head follow the index, and the text stays', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, 0);
+    await settle(page);
+    await page.evaluate(() => window.__harness!.updateIndex([
+      { id: 'mother-ilse', kind: 'npc', title: 'Ilse, renamed' }, { id: 'f04-terrain-v1', kind: 'concept-version', title: 'Terrain, renamed' },
+    ]));
+    await expect(page.locator('#editor-host .tu-voice__head')).toContainText('Ilse, renamed');
+    await expect(page.locator('#editor-host .hx-note__head .tu-link__title')).toHaveText('Terrain, renamed');
+    expect(await text(page)).toBe(sample);
+  });
+
+  test('Source mode shows every callout raw, Write mode draws them again', async ({ page }) => {
+    await openText(page, sample);
+    await page.evaluate(() => window.__harness!.setMode('source'));
+    await settle(page);
+    expect(await page.locator('#editor-host [data-callout], #editor-host .tu-note, #editor-host [data-dev-word]').count()).toBe(0);
+    expect(await visibleText(page)).toContain('> [!voice]');
+    await page.evaluate(() => window.__harness!.setMode('write'));
+    await at(page, 0);
+    await expect(page.locator('#editor-host .tu-voice__head')).toHaveCount(1);
+    expect(await text(page)).toBe(sample);
+  });
+
+  test('typing in a voice line keeps its markers and its developer words', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, sample.indexOf('says the ledger'));
+    await page.keyboard.type('and loudly ');
+    expect(await text(page)).toBe(sample.replace('says the ledger', 'and loudly says the ledger'));
+    await settle(page);
+    expect((await voiceLines(page))[1]).toMatch(/^> The Fates spin .*and loudly says the ledger/);
+    await expect(page.locator('#editor-host [data-callout="voice"] [data-dev-word]')).toHaveText('ledger');
+  });
+
+  test('a document that fits the window and the margin of CodeMirror is drawn in full, a long one keeps the viewport', async ({ page }) => {
+    // The voices record has six voice blocks, taller than the estimate of the first frame but within the margin:
+    // all six heads are in the DOM at once (a check reads the page right after the load) and later, and the page has not scrolled.
+    await openFile(page, VOICES);
+    expect(await page.locator('#editor-host .tu-voice__head').count()).toBe(6);
+    await settle(page);
+    expect(await page.locator('#editor-host .tu-voice__head').count()).toBe(6);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    await openText(page, Array.from({ length: 4000 }, (_, n) => `Line ${n} of a long document that holds some words.`).join('\n'));
+    await settle(page);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    expect(await page.locator('#editor-host .cm-line').count()).toBeLessThan(1000);
   });
 });
