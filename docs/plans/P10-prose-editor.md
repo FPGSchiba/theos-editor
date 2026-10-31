@@ -234,8 +234,10 @@ the caret is on its line (live preview).
 **ACs:** none directly; the oracle and comparison back CE-06.2. **Model:** mid-tier.
 
 **Files:**
-- Create: `research/P10-prose-editor/.gitignore`; `app/package.json`, `app/tsconfig.json`,
-  `app/vite.config.ts` (Vitest config inside), `app/svelte.config.js`
+- Create: `research/P10-prose-editor/.gitignore`; `research/P10-prose-editor/.gitattributes`
+  (`* text=auto eol=lf` and `corpus/records/** -text`, so `core.autocrlf` never rewrites corpus
+  bytes on commit or checkout, and the CRLF fixture keeps its CRLF); `app/package.json`,
+  `app/tsconfig.json`, `app/vite.config.ts` (Vitest config inside), `app/svelte.config.js`
 - Create: `app/src/harness/{types,frontmatter,anchor,oracle,compare}.ts`
 - Test: `app/src/harness/{frontmatter,anchor,oracle,compare}.test.ts`
 
@@ -319,6 +321,7 @@ the caret is on its line (live preview).
   - `every file has the synthetic marker`: the front matter contains the line
     `# synthetic fixture (P10), not canon`.
   - `line ends match the manifest`: `lf` files contain no `\r`; the `crlf` file has only `\r\n`.
+  - `git keeps corpus bytes`: `git check-attr text -- corpus/records/<any file>` reports `unset`.
   - `every edit kind is used` (all ten `ScriptedEdit` kinds) and `every edit resolves`:
     `expectedAfter` runs without throwing on the LF form of its file.
   - `the spec's edits exist` (spec §4.6): ids `word-insert`, `word-delete` (mid-paragraph),
