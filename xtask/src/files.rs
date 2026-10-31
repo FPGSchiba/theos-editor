@@ -1,9 +1,9 @@
 //! The files of the repository, for the checks that scan them.
 //!
 //! In a git work tree that is what git lists: tracked files and files it does not ignore, minus
-//! tracked files that are deleted from disk. In a directory that is not a work tree, such as a test fixture or an unpacked archive, it is a
-//! walk that skips `.git`, `target` and `node_modules`. Paths are relative to the root and use
-//! `/`, and the list is sorted.
+//! tracked files that are deleted from disk. In a directory that is not a work tree, such as a
+//! test fixture or an unpacked archive, it is a walk that skips `.git`, `target` and
+//! `node_modules`. Paths are relative to the root and use `/`, and the list is sorted.
 
 use std::fs;
 use std::path::Path;

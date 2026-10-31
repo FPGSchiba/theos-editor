@@ -302,10 +302,7 @@ fn rustc_identity(output: &str) -> Option<String> {
     };
     let release = line("release:")?;
     Some(match line("commit-hash:") {
-        Some(commit) => format!(
-            "{release}
-{commit}"
-        ),
+        Some(commit) => format!("{release}\n{commit}"),
         None => release,
     })
 }

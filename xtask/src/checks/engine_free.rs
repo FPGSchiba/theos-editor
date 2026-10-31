@@ -66,7 +66,7 @@ impl EngineCrates {
     /// `sources` and `names`, and nothing else), or has an empty list or an empty entry. The
     /// message gives the line and nothing of the text.
     pub fn load(root: &Path) -> Result<Self> {
-        let path = root.join("gate").join("engine-crates.toml");
+        let path = root.join(ENGINE_FILE);
         let text = fs::read_to_string(&path).map_err(|source| Error::Io { path, source })?;
         Self::parse(&text)
     }

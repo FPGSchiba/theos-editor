@@ -1,6 +1,6 @@
 //! The coverage of the commit a pull request is compared with.
 //!
-//! [`measure`] gives the per-crate coverage of a commit, which is the merge base of the pull
+//! `measure_with` gives the per-crate coverage of a commit, which is the merge base of the pull
 //! request and `main`. The commit is checked out in a temporary work tree at
 //! `target/xtask/coverage/wt`, the tests run there under `cargo llvm-cov` with their own build
 //! directory (`target/xtask/coverage/target`, so that the head's build is left alone), and the
@@ -20,7 +20,7 @@
 //! entry that cannot be read is measured again.
 //!
 //! A commit without `xtask/Cargo.toml` has no baseline: it is the one before the gate existed,
-//! and there is nothing to run there, so [`measure`] gives `None`.
+//! and there is nothing to run there, so `measure_with` gives `None`.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
-use super::{CargoLlvm, CrateCoverage, Llvm, io_error, llvm_cov_command, parse_llvm_cov, work_dir};
+use super::{CrateCoverage, Llvm, io_error, llvm_cov_command, parse_llvm_cov, work_dir};
 use crate::git::Git;
 use crate::{Error, Result};
 
@@ -38,18 +38,15 @@ type Coverage = BTreeMap<String, CrateCoverage>;
 /// The file whose presence says that the commit has the gate.
 const XTASK_MANIFEST: &str = "xtask/Cargo.toml";
 
-/// The coverage of the commit `sha` per crate, from the cache in `cache_dir` or measured in a
-/// temporary work tree, and `None` when the commit has no `xtask/Cargo.toml`. A relative `root`
-/// is taken from the current directory, because the paths in the export are absolute.
+/// The coverage of the commit `sha` per crate, from the cache in `cache_dir` or measured with
+/// `llvm` in a temporary work tree, and `None` when the commit has no `xtask/Cargo.toml`. A
+/// relative `root` is taken from the current directory, because the paths in the export are
+/// absolute.
 ///
 /// # Errors
 ///
 /// Fails when `sha` is unknown, git or cargo cannot run, the tests fail at the commit, or the
 /// export is not what cargo-llvm-cov writes or has none of the files of the work tree.
-pub fn measure(root: &Path, sha: &str, cache_dir: &Path) -> Result<Option<Coverage>> {
-    measure_with(&CargoLlvm, root, sha, cache_dir)
-}
-
 pub(crate) fn measure_with(
     llvm: &dyn Llvm,
     root: &Path,
@@ -95,7 +92,7 @@ pub(crate) fn measure_with(
     Ok(Some(measured))
 }
 
-/// Puts `coverage`, the head result of the commit `sha`, in the cache where [`measure`] looks
+/// Puts `coverage`, the head result of the commit `sha`, in the cache where `measure_with` looks
 /// for a baseline.
 pub(crate) fn store(
     llvm: &dyn Llvm,
