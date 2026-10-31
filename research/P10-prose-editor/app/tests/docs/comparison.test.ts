@@ -30,6 +30,22 @@ const LICENCE = 'Licence';
 const TOTAL = 'Weighted total';
 const BYTES = 'Byte-stable Markdown';
 const FRONT_MATTER = 'Front matter untouched';
+/**
+ * Equal totals: spec §4.4 prefers the higher byte-stability score; controller ruling 11 (P10
+ * ledger) continues down the criteria in weight order, then table order. The first criterion
+ * with different scores decides.
+ */
+const TIE_ORDER = [
+  BYTES,
+  FRONT_MATTER,
+  'Inline link chips',
+  'Callouts with their own look',
+  'Beat headings with attribute lines',
+  'Spell check and IME',
+  'Svelte 5 integration',
+  'Maintenance',
+  'Long documents',
+] as const;
 
 const read = (): string => {
   if (!existsSync(COMPARISON)) throw new Error(`${COMPARISON} is missing`);
@@ -62,7 +78,19 @@ const standing = (matrix: Map<string, string[]>, candidate: number, use: 'paper'
   let total = 0;
   for (const { name, weight } of CRITERIA) if (name !== LICENCE) total += Number(weight) * Number(score(name));
   const knockout = score(BYTES) === '0' || score(FRONT_MATTER) === '0' || score(LICENCE) === 'fail';
-  return { name: CANDIDATES[candidate] as string, total, bytes: Number(score(BYTES)), knockout };
+  const ties = TIE_ORDER.map((name) => Number(score(name)));
+  return { name: CANDIDATES[candidate] as string, total, ties, knockout };
+};
+type Standing = ReturnType<typeof standing>;
+
+/** Rank order: higher total first, then the tie order of spec §4.4 and controller ruling 11; 0 = undecided. */
+const byRank = (a: Standing, b: Standing): number => {
+  if (a.total !== b.total) return b.total - a.total;
+  for (const [index] of TIE_ORDER.entries()) {
+    const difference = (b.ties[index] ?? 0) - (a.ties[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
 };
 
 /** The paragraphs (blank-line separated) of a text. */
@@ -137,18 +165,17 @@ describe('comparison.md (CE-06.1)', () => {
   });
 
   // AC: CE-06.1
-  it('the top two follow the rule of spec §4.4 on paper scores', () => {
+  it('the top two follow spec §4.4 and controller ruling 11 on paper scores', () => {
     const md = read();
     const matrix = matrixOf(md);
-    const byRank = (a: { total: number; bytes: number }, b: { total: number; bytes: number }): number =>
-      b.total - a.total || b.bytes - a.bytes;
     const all = CANDIDATES.map((_, index) => standing(matrix, index, 'paper'));
     // Survivors first; if fewer than two survive, the best knocked-out candidates fill the gap.
     const ranked = [...all.filter((s) => !s.knockout).sort(byRank), ...all.filter((s) => s.knockout).sort(byRank)];
     const [, second, third] = ranked;
+    // Every tie-order cell equal: the rule cannot pick, so the document must not name a second.
     const undecided = second !== undefined && third !== undefined && second.knockout === third.knockout
-      && second.total === third.total && second.bytes === third.bytes;
-    expect(undecided, `spec §4.4 does not decide between ${second?.name} and ${third?.name}`).toBe(false);
+      && byRank(second, third) === 0;
+    expect(undecided, `spec §4.4 and ruling 11 do not decide between ${second?.name} and ${third?.name}`).toBe(false);
 
     const lines = md.split('\n').filter((line) => line.startsWith('Top two: '));
     expect(lines).toHaveLength(1);
