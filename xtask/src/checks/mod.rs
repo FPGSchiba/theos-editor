@@ -4,6 +4,7 @@
 //! `run` function that gathers the real inputs. `main` and the gate call `run`.
 
 pub mod ac_trace;
+pub mod approval;
 pub mod cargo_cmds;
 pub mod commit_msg;
 pub mod coverage;

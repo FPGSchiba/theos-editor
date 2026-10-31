@@ -11,6 +11,7 @@
 //! - [`conventional`]: the commit message rules of `CONTRIBUTING.md` §2, as a parser and the
 //!   list of what it forbids; `commit-msg` and `pr-title` share it.
 //! - [`git`], [`files`] and [`process`]: the only places that start git and cargo or walk the tree.
+//! - [`github`]: the labels and comments of a pull request, through the `gh` command line.
 //! - [`error`]: the one error type of the library.
 //!
 //! And the checks built on it:
@@ -19,8 +20,8 @@
 //!   cargo commands (`fmt`, `clippy`, `test`, `docs`, `deny`), [`checks::commit_msg`] the
 //!   `commit-msg` check, [`checks::pr_title`] the `pr-title` check, [`checks::pr_body`] the
 //!   `pr-body` check, [`checks::ac_trace`] the `ac-trace` check, [`checks::lints`] the `lints`
-//!   check, [`checks::engine_free`] the `engine-free` check and [`checks::coverage`] the
-//!   `coverage` check.
+//!   check, [`checks::engine_free`] the `engine-free` check, [`checks::coverage`] the
+//!   `coverage` check and [`checks::approval`] the `approval` check.
 //! - [`umbrella`]: the umbrella spec's phases and acceptance criteria, which `ac-trace` and
 //!   `commit-msg` read their ids from.
 //! - [`tools`]: the pinned tools (`gate/tools.toml`) and the `tools` check.
@@ -32,6 +33,7 @@ pub mod conventional;
 pub mod error;
 pub mod files;
 pub mod git;
+pub mod github;
 pub mod process;
 pub mod report;
 pub mod tools;

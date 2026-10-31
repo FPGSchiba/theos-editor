@@ -128,6 +128,19 @@ impl Git {
         Ok(Some(self.run(&["cat-file", "blob", id.trim()])?))
     }
 
+    /// Fetches the head of pull request `number` from `origin`, which makes its commits available
+    /// here (`git fetch --no-tags origin refs/pull/<number>/head`). No ref is created. The
+    /// refspec is made from a number, so it cannot be read as an option.
+    ///
+    /// # Errors
+    ///
+    /// Fails when there is no `origin` or it has no such pull request.
+    pub fn fetch_pull_head(&self, number: u64) -> Result<()> {
+        let refspec = format!("refs/pull/{number}/head");
+        self.run(&["fetch", "--no-tags", "origin", refspec.as_str()])?;
+        Ok(())
+    }
+
     /// The branch `HEAD` is on, or `None` when `HEAD` is detached.
     ///
     /// # Errors
@@ -443,6 +456,58 @@ mod tests {
         assert!(
             matches!(bad_revision, Err(Error::Command { .. })),
             "{bad_revision:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn git_fetches_the_head_of_a_pull_request_from_origin() -> TestResult {
+        let origin = init_repo()?;
+        let first = commit(origin.path(), "feat: first")?;
+        git(origin.path(), &["switch", "-q", "-c", "topic"])?;
+        let pr_head = commit(origin.path(), "feat: the pull request")?;
+        git(origin.path(), &["update-ref", "refs/pull/7/head", &pr_head])?;
+        git(origin.path(), &["switch", "-q", "main"])?;
+        git(origin.path(), &["branch", "-q", "-D", "topic"])?;
+
+        let clone = tempfile::tempdir()?;
+        let from = origin
+            .path()
+            .to_str()
+            .ok_or("temporary path is not UTF-8")?;
+        let to = clone.path().to_str().ok_or("temporary path is not UTF-8")?;
+        git(
+            origin.path(),
+            // `--no-local` makes a real fetch: a plain local clone copies every object.
+            &[
+                "clone",
+                "-q",
+                "--no-local",
+                "--no-tags",
+                "--single-branch",
+                "--branch",
+                "main",
+                from,
+                to,
+            ],
+        )?;
+        let repo = Git::new(clone.path());
+        let commit_of = |rev: &str| repo.rev_parse(&format!("{rev}^{{commit}}"));
+        assert_eq!(commit_of(&first)?, first);
+        assert!(commit_of(&pr_head).is_err(), "the clone lacks the head");
+
+        repo.fetch_pull_head(7)?;
+        assert_eq!(commit_of(&pr_head)?, pr_head);
+        // The commits are here, but no branch or tag was made for them.
+        assert_eq!(git(clone.path(), &["tag", "--list"])?, "");
+        assert_eq!(git(clone.path(), &["branch", "--list"])?, "* main");
+
+        let missing = repo.fetch_pull_head(8);
+        assert!(matches!(missing, Err(Error::Command { .. })), "{missing:?}");
+        let no_origin = Git::new(origin.path()).fetch_pull_head(7);
+        assert!(
+            matches!(no_origin, Err(Error::Command { .. })),
+            "{no_origin:?}"
         );
         Ok(())
     }

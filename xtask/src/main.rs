@@ -17,7 +17,7 @@ use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
 use xtask::branch::Phase;
 use xtask::checks::{
-    ac_trace, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title,
+    ac_trace, approval, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title,
 };
 use xtask::git::Git;
 use xtask::verdict::{Check, Verdict};
@@ -123,7 +123,12 @@ enum Command {
         #[arg(long, value_name = "PATH")]
         body_file: Option<PathBuf>,
     },
-    /// Check that a pull request touching a protected path has the label `approved`.
+    /// Check that a pull request touching a protected path has the label `approved`, given for
+    /// the content it has now.
+    ///
+    /// Only runs under GitHub Actions for a pull request, with `GH_TOKEN` and
+    /// `GITHUB_REPOSITORY` set: it reads and changes the labels and comments of the pull request.
+    /// Run from the base commit, it reads `gate/protected-paths.toml` there.
     Approval,
     /// Run every check of the gate that needs no pull request, as CI does.
     Gate,
@@ -222,7 +227,7 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
             })?;
             pr_body::check_body(&template, Some(&body))
         }
-        Command::Approval => not_built("approval")?,
+        Command::Approval => approval::run(&root, ci.as_ref(), &mut out)?,
         Command::Gate => not_built("gate")?,
         Command::Github {
             action: GithubAction::Check,

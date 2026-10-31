@@ -353,7 +353,7 @@ fn at_file(file: &str, message: impl Into<String>) -> Finding {
 }
 
 /// `text` as a TOML table. The error does not quote it; `what` names the file.
-fn parse(what: &str, text: &str) -> Result<toml::Table> {
+pub(crate) fn parse(what: &str, text: &str) -> Result<toml::Table> {
     text.parse().map_err(|error: toml::de::Error| {
         let message = match error.span() {
             Some(span) => {
