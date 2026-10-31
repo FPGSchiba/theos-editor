@@ -46,6 +46,8 @@ const TIE_ORDER = [
   'Maintenance',
   'Long documents',
 ] as const;
+/** Controller ruling 12 (P10 ledger): Jann's recorded decision on a tie that ruling 11 cannot break. */
+const DECISION = /^Tie decided by Jann \((\d{4}-\d{2}-\d{2})\): (.+)$/;
 
 const read = (): string => {
   if (!existsSync(COMPARISON)) throw new Error(`${COMPARISON} is missing`);
@@ -165,23 +167,35 @@ describe('comparison.md (CE-06.1)', () => {
   });
 
   // AC: CE-06.1
-  it('the top two follow spec §4.4 and controller ruling 11 on paper scores', () => {
+  it('the top two follow spec §4.4 and controller rulings 11 and 12 on paper scores', () => {
     const md = read();
     const matrix = matrixOf(md);
     const all = CANDIDATES.map((_, index) => standing(matrix, index, 'paper'));
     // Survivors first; if fewer than two survive, the best knocked-out candidates fill the gap.
     const ranked = [...all.filter((s) => !s.knockout).sort(byRank), ...all.filter((s) => s.knockout).sort(byRank)];
-    const [, second, third] = ranked;
-    // Every tie-order cell equal: the rule cannot pick, so the document must not name a second.
-    const undecided = second !== undefined && third !== undefined && second.knockout === third.knockout
-      && byRank(second, third) === 0;
-    expect(undecided, `spec §4.4 and ruling 11 do not decide between ${second?.name} and ${third?.name}`).toBe(false);
-
+    const [first, second, third] = ranked;
+    expect(section(md, 'Top two'), 'the "## Top two" section').toBeDefined();
     const lines = md.split('\n').filter((line) => line.startsWith('Top two: '));
     expect(lines).toHaveLength(1);
     const named = (lines[0] ?? '').slice('Top two: '.length).split(', ');
-    expect(new Set(named)).toEqual(new Set(ranked.slice(0, 2).map((s) => s.name)));
-    expect(section(md, 'Top two'), 'the "## Top two" section').toBeDefined();
+
+    // Every tie-order cell equal at the second place: ruling 11 cannot pick.
+    const undecided = second !== undefined && third !== undefined && second.knockout === third.knockout
+      && byRank(second, third) === 0;
+    if (!undecided) {
+      expect(new Set(named)).toEqual(new Set(ranked.slice(0, 2).map((s) => s.name)));
+      return;
+    }
+    // Ruling 12: such a tie is settled by exactly one recorded decision of Jann, listed second.
+    const tied = ranked.filter((s) => s.knockout === second.knockout && byRank(s, second) === 0).map((s) => s.name);
+    const decisions = md.split('\n').map((line) => DECISION.exec(line)).filter((m): m is RegExpExecArray => m !== null);
+    expect(decisions, `spec §4.4 and ruling 11 do not decide between ${tied.join(' and ')}, and no single `
+      + '"Tie decided by Jann (<YYYY-MM-DD>): <candidate>" line settles it').toHaveLength(1);
+    const [, date, pick] = decisions[0] ?? [];
+    expect(Number.isNaN(Date.parse(date ?? '')), `the decision has no valid date: ${date}`).toBe(false);
+    expect(tied, `the decision names "${pick}", which is not in the tie`).toContain(pick);
+    expect(tied, 'ruling 12 settles the second slot; this tie includes the first place').not.toContain(first?.name);
+    expect(named, 'the "Top two:" line lists the first place, then the decided candidate').toEqual([first?.name, pick]);
   });
 
   // AC: CE-06.1
