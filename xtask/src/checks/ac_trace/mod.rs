@@ -672,6 +672,31 @@ mod tests {
                 );
             }
         }
+
+        // The umbrella is part of the pull request too, and the name and the repository of the
+        // phase go into the heading of the table and into a note. The parser does not let them
+        // hold a line break or a control character, so no such line can be written.
+        let p90 = "| P90 | Fixture phase | theos-editor | S2 | – |";
+        let p91 = "| P91 | Elsewhere | tower-of-theos | S1 | – |";
+        assert!(UMBRELLA.contains(p90) && UMBRELLA.contains(p91));
+        for cell in [
+            "A\r::error::x",
+            "A\u{2028}::error",
+            "A\u{85}::error",
+            "A\t::error",
+        ] {
+            for hostile in [
+                UMBRELLA.replace(p90, &format!("| P90 | {cell} | theos-editor | S2 | – |")),
+                UMBRELLA.replace(p90, &format!("| P90 | Fixture phase | {cell} | S2 | – |")),
+                UMBRELLA.replace(p91, &format!("| P91 | Elsewhere | {cell} | S1 | – |")),
+            ] {
+                let result = umbrella::parse(&hostile);
+                assert!(
+                    matches!(result, Err(Error::Parse { .. })),
+                    "{cell:?}: {result:?}"
+                );
+            }
+        }
         Ok(())
     }
 

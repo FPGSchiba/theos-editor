@@ -80,8 +80,9 @@ pub fn load(root: &Path) -> Result<Umbrella> {
 /// # Errors
 ///
 /// Fails, naming the line, when the phase table has no `Name` and `Repo` column, a row of it is
-/// too short or names a phase twice, a phase has two sections, a section has no row in the table,
-/// an item starting `- CE-` does not start with an id, or an id is listed twice.
+/// too short, names a phase twice or has a control character or line break (a lone CR, for
+/// instance) in its name or repository, a phase has two sections, a section has no row in the
+/// table, an item starting `- CE-` does not start with an id, or an id is listed twice.
 pub fn parse(text: &str) -> Result<Umbrella> {
     let mut columns: Option<Columns> = None;
     let mut rows: Vec<(Phase, String, String)> = Vec::new();
@@ -114,6 +115,14 @@ pub fn parse(text: &str) -> Result<Umbrella> {
                         "the row of {phase} in the phase table (line {number}) is too short"
                     )));
                 };
+                // Names and repositories are written to the output of checks, and the umbrella
+                // is part of a pull request. The line is named, the cell is not quoted.
+                if !is_plain(name) || !is_plain(repo) {
+                    return Err(error(format!(
+                        "the name or the repository of {phase} in the phase table (line {number}) \
+                         has a control character or a line break in it"
+                    )));
+                }
                 if rows.iter().any(|(known, _, _)| *known == phase) {
                     return Err(error(format!(
                         "{phase} is in the phase table twice (line {number})"
@@ -200,6 +209,15 @@ fn section_phase(title: &str) -> Option<Phase> {
     let (word, rest) = title.split_once(' ')?;
     let phase = word.parse().ok()?;
     rest.trim_start().starts_with('·').then_some(phase)
+}
+
+/// Whether `text` has no control character and no Unicode line break. `str::lines` only ends a
+/// line at LF, so a lone CR can be in the middle of a cell, and a reader that ends lines at CR
+/// would see the text after it as a line of its own.
+fn is_plain(text: &str) -> bool {
+    !text
+        .chars()
+        .any(|c| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}'))
 }
 
 /// The trimmed cells of a table row, without the bars at both ends.
@@ -372,6 +390,45 @@ mod tests {
                 "{name}: {result:?}"
             );
         }
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn control_characters_in_the_name_or_the_repository_are_an_error() {
+        // `str::lines` leaves a lone CR (and the other breaks) in the middle of a cell.
+        for hostile in [
+            "\r", "\u{b}", "\u{c}", "\u{85}", "\u{2028}", "\u{2029}", "\t", "\u{0}",
+        ] {
+            let cells = [
+                (format!("A{hostile}::error::x"), "theos-editor".to_owned()),
+                (
+                    "A".to_owned(),
+                    format!("theos-editor{hostile}::stop-commands::x"),
+                ),
+            ];
+            for (name, repo) in cells {
+                let text =
+                    format!("| Phase | Name | Repo |\n|---|---|---|\n| P90 | {name} | {repo} |\n");
+                let result = parse(&text);
+                // The error names the line and quotes nothing of the cell.
+                assert!(
+                    matches!(&result, Err(Error::Parse { message, .. })
+                        if message.contains("line 3") && !message.contains("::")),
+                    "{hostile:?}: {result:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn names_and_repositories_may_use_any_printable_character() -> TestResult {
+        let text =
+            "| Phase | Name | Repo |\n|---|---|---|\n| P90 | Äußere Phase · ünï | théos-éditor |\n";
+        let umbrella = parse(text)?;
+        let info = umbrella.phase(phase("P90")?).ok_or("no P90")?;
+        assert_eq!(info.name, "Äußere Phase · ünï");
+        assert_eq!(info.repo, "théos-éditor");
+        Ok(())
     }
 
     #[test]
