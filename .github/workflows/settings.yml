@@ -15,6 +15,11 @@ jobs:
   settings:
     name: settings
     runs-on: ubuntu-latest
+    # Listing the labels needs `issues: read` in a private repository. A job-level `permissions:`
+    # replaces the top-level one, so `contents` is named again. Nothing here writes.
+    permissions:
+      contents: read
+      issues: read
     env:
       GH_TOKEN: ${{ github.token }}
     steps:

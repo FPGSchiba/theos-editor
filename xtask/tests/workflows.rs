@@ -504,11 +504,21 @@ fn no_pull_request_target_and_least_privilege() -> TestResult {
                     ]),
                     "the permissions of the approval job"
                 );
+            } else if file == "settings.yml" && job.name == "settings" {
+                // A job-level `permissions:` replaces the top-level one and sets every scope it
+                // does not name to none. The drift check lists the labels of the repository,
+                // which needs `issues: read` in a private repository. It reads, and writes
+                // nothing.
+                assert_eq!(
+                    string_map(&job.node["permissions"])?,
+                    map(&[("contents", "read"), ("issues", "read")]),
+                    "the permissions of the settings job"
+                );
             } else {
                 assert_eq!(
                     job.node["permissions"],
                     Yaml::BadValue,
-                    "{file}: job {} sets permissions, and only approval may add write scopes",
+                    "{file}: job {} sets permissions, and only approval and settings may",
                     job.name
                 );
             }
