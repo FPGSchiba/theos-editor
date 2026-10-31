@@ -9,6 +9,9 @@ use std::path::PathBuf;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// A file or directory could not be read or written.
+    ///
+    /// The message already has the text of `source`, which is also the source of the error. Print
+    /// it with `{}`: `{:#}` adds the chain of sources and would say it twice.
     #[error("{}: {source}", path.display())]
     Io {
         /// The file or directory involved.

@@ -12,7 +12,6 @@ use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use anyhow::Context;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
@@ -176,8 +175,12 @@ fn main() -> ExitCode {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::from(1),
         Err(error) => {
+            // `{error}`, not `{error:#}`: the alternate form adds the chain of sources, and
+            // `Error::Io` already has its source in its own message, so it would be said twice.
+            // Nothing is lost, because no error here is wrapped by anyhow: `run` folds the
+            // cause into the message where it adds context.
             // If stderr is closed there is nobody left to tell.
-            let _ = writeln!(std::io::stderr(), "error: {error:#}");
+            let _ = writeln!(std::io::stderr(), "error: {error}");
             ExitCode::from(2)
         }
     }
@@ -187,7 +190,9 @@ fn main() -> ExitCode {
 fn run(cli: &Cli) -> anyhow::Result<bool> {
     let root = cli.root.clone().unwrap_or_else(default_root);
     tracing::debug!(root = %root.display(), "repository root");
-    let ci = ci::from_env().context("cannot read the GitHub Actions event")?;
+    // The cause goes into the message, so that the plain `{error}` of `main` shows it.
+    let ci = ci::from_env()
+        .map_err(|error| anyhow::anyhow!("cannot read the GitHub Actions event: {error}"))?;
     let mut out = std::io::stdout().lock();
     // One arm per subcommand. A built check reads `<module>::run(&root, ci.as_ref(), &mut out)?`.
     let verdict: Verdict = match &cli.command {
