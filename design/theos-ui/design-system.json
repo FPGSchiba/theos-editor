@@ -1,0 +1,25 @@
+{
+ "v": 3,
+ "layout": "files",
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-10-30T18:00:51Z"
+ },
+ "title": "Theos UI",
+ "namespace": "TheosUI",
+ "libraries": [],
+ "sections": {},
+ "groups": [],
+ "assetGroups": {},
+ "blobs": {},
+ "docs": {
+  "readme": "project/README.md",
+  "sections": []
+ },
+ "lastChange": {
+  "by": "Jann Erhardt",
+  "at": "2026-10-30T18:00:51Z",
+  "via": "Claude (chat)",
+  "note": "First version: Grid Noir tokens, Instrument and Manuscript registers, Content Studio components, two sample screens."
+ }
+}

@@ -1,0 +1,26 @@
+<!-- @dsCard group="Chrome" height=400 width=260 subtitle="layout presets with badge" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ActivityRail — preview</title></head>
+<body>
+<div class="tu-demo" style="align-items:stretch;height:400px;box-sizing:border-box;flex-wrap:nowrap">
+  <nav class="tu-rail" aria-label="Layout presets">
+    <div class="tu-rail__item" title="Layout — default authoring, 3D-first"><span class="tu-rail__glyph">≡</span><span class="tu-rail__label">Layout</span></div>
+    <div class="tu-rail__item" title="Code — editor and terminal"><span class="tu-rail__glyph">&lt;/&gt;</span><span class="tu-rail__label">Code</span></div>
+    <div class="tu-rail__item is-active" title="Review — review queue front and centre"><span class="tu-rail__glyph">◴</span><span class="tu-rail__label">Review</span><span class="tu-rail__badge">4</span></div>
+    <div class="tu-rail__item" title="AI — AI monitor and behaviour trees"><span class="tu-rail__glyph">✱</span><span class="tu-rail__label">AI</span></div>
+    <div class="tu-rail__item" title="Assets — asset browser"><span class="tu-rail__glyph">⊞</span><span class="tu-rail__label">Assets</span></div>
+    <div class="tu-rail__spacer"></div>
+    <div class="tu-rail__item" title="Settings"><span class="tu-rail__glyph">⚙</span><span class="tu-rail__label">Settings</span></div>
+  </nav>
+  <nav class="tu-rail" aria-label="Layout presets, Magic sandbox">
+    <div class="tu-rail__item is-active" title="Stage"><span class="tu-rail__glyph">◎</span><span class="tu-rail__label">Stage</span></div>
+    <div class="tu-rail__item" title="Pipeline"><span class="tu-rail__glyph">→</span><span class="tu-rail__label">Pipe</span></div>
+    <div class="tu-rail__item" title="Caster and environment"><span class="tu-rail__glyph">⊙</span><span class="tu-rail__label">Caster</span><span class="tu-rail__badge is-reject">!</span></div>
+    <div class="tu-rail__spacer"></div>
+    <div class="tu-rail__item" title="Settings"><span class="tu-rail__glyph">⚙</span><span class="tu-rail__label">Settings</span></div>
+  </nav>
+  <div class="tu-mono" style="font-size:10px;line-height:15px;color:var(--textDim);max-width:120px;align-self:flex-start">Left: editor presets.<br><br>Right: the Magic sandbox, same rail, own presets.</div>
+</div>
+</body>
+</html>
