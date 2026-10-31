@@ -25,21 +25,23 @@ class CodeMirrorAdapter implements ProseAdapter {
 
   mount(target: HTMLElement, text: string, ctx: EditorContext): void {
     this.ctx = ctx;
+    const state = EditorState.create({
+      doc: text,
+      extensions: [
+        markdown.extension,
+        theme,
+        spellcheck,
+        bodyStart,
+        protectFrontMatter,
+        historyExtension,
+        keymapExtension(ctx.keymap, this.save, selectBody),
+        modeExtension('write'),
+      ],
+    });
+    // The caret starts in the body: the front matter is hidden, and a selection filter only sees transactions.
     this.view = new EditorView({
       parent: target,
-      state: EditorState.create({
-        doc: text,
-        extensions: [
-          markdown.extension,
-          theme,
-          spellcheck,
-          bodyStart,
-          protectFrontMatter,
-          historyExtension,
-          keymapExtension(ctx.keymap, this.save, selectBody),
-          modeExtension('write'),
-        ],
-      }),
+      state: state.update({ selection: { anchor: state.field(bodyStart) } }).state,
     });
   }
 

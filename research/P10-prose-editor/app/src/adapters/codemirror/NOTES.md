@@ -1,7 +1,7 @@
 # CodeMirror 6 prototype: notes
 
-Variant `codemirror`, `@codemirror/view` 6.43.15. State after Task 8 (the base): one implementation
-attempt, no fix round yet.
+Variant `codemirror`, `@codemirror/view` 6.43.15. State after Task 8 (the base) and its fix round 1.
+`tests/e2e/codemirror-probes.spec.ts` (`@harness`) probes what the measured suites cannot see.
 
 ## Still failing under `P10_STRICT=1`
 
@@ -24,14 +24,20 @@ task's suites.
 ## What the base does, and how
 
 - **Front matter** (`frontmatter.ts`). It stays in the document, so every offset is a document offset and
-  `text()` is `doc.toString()`. `bodyStart` is a state field that looks again only when a change reaches the front matter.
-  Write mode hides `[0, bodyStart]` with a `Decoration.replace` from a direct decoration set, adds it to
-  `atomicRanges`, and a transaction filter keeps every selection in the body. Both modes share one
+  `text()` is `doc.toString()`. `bodyStart` is a state field that looks again only when a change reaches the front matter or its end.
+  Write mode hides it with a `Decoration.replace` from a direct decoration set, makes `[0, bodyStart]` an
+  atomic range, and a transaction filter keeps every selection in the body. Both modes share one
   `transactionFilter`: a change inside the front matter is dropped, a change that starts inside and ends in the body starts
   at the body instead. The dossier suggested `changeFilter`; it was not used because its measured behaviour
   lets an insertion at offset 0 through and loses the typed text of a select-all-and-type. Undo and redo
   run with `filter: false`, so no filter sees them; none is needed, because they only invert changes that
   already passed. The filter lets a change through that carries the `fromOutside` annotation (`applyExternal`).
+  Write mode hides the lines of the front matter as one empty block, so the first body line is a line of its own and keeps its
+  line decoration (an inline replace over the line breaks merged it with the front matter and lost the heading class). The
+  caret starts at the body start, because a selection filter only sees transactions and a state created at offset 0 would be
+  inside the hidden range. Front matter that is the last thing in the file, without a newline behind the closing fence, is hidden
+  inline instead: WebKit puts the caret nowhere after a block that ends the document. Typing at its end gets a newline in front of it
+  in the same change, so the closing fence keeps its line and one undo takes both back.
 - **Source mode** (`modes.ts`). One compartment holds the Write extensions (hide, live preview) or the Source
   ones (front matter drawn raw with a line class). The same view, text, history and selection carry over;
   switching to Write moves a caret that is in the front matter to the body start.
@@ -53,7 +59,5 @@ task's suites.
 ## Known limits of the base
 
 - A setext heading is styled, but its `====` underline stays raw (hiding it would leave an empty line).
-- Front matter without a trailing newline and with nothing after it (`---` at the very end of the file): typing at the body start
-  would land on the closing fence line (read from the code, not run). No corpus file has this shape.
 - An unclosed leading `---` is not front matter (as in `splitFrontMatter`), and `bodyStart` then looks again on every change; that costs a scan of the document.
 - Nothing in this base has been run on WebView2, WKWebView or WebKitGTK; only the two Playwright engines.
