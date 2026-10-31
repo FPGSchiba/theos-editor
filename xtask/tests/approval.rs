@@ -22,11 +22,18 @@ struct Repo {
 impl Repo {
     /// Line endings are left as written (`core.autocrlf` off) and every call carries an
     /// identity, because CI runners have none.
+    ///
+    /// `core.filemode` is off in the repository, as `git init` sets it on Windows: the
+    /// executable bit of a file on disk is then not read, and `git add` keeps the mode that is
+    /// in the index. So a mode set with `git update-index --chmod` is the mode that `commit`
+    /// stores on Linux, macOS and Windows alike. With `core.filemode` on (what `git init` does
+    /// on Linux and macOS) `git add -A` would put the on-disk mode, 0644, back.
     fn new() -> TestResult<Self> {
         let repo = Self {
             dir: tempfile::tempdir()?,
         };
         repo.git(&["init", "-q", "-b", "main"])?;
+        repo.git(&["config", "core.filemode", "false"])?;
         Ok(repo)
     }
 
@@ -74,6 +81,16 @@ impl Repo {
         self.git(&["add", "-A"])?;
         self.git(&["commit", "-q", "--allow-empty", "-m", message])?;
         self.git(&["rev-parse", "HEAD"])
+    }
+
+    /// The mode and the blob id `path` has in the commit `rev`, as the commit stores them.
+    fn entry(&self, rev: &str, path: &str) -> TestResult<(String, String)> {
+        let line = self.git(&["ls-tree", rev, "--", path])?;
+        // `<mode> blob <id>	<path>`
+        let mut words = line.split_whitespace();
+        let mode = words.next().ok_or("ls-tree printed nothing")?;
+        let id = words.nth(1).ok_or("ls-tree has no blob id")?;
+        Ok((mode.to_owned(), id.to_owned()))
     }
 
     fn switch_new(&self, branch: &str) -> TestResult {
@@ -167,9 +184,8 @@ fn rename_into_docs_and_other_changes_of_docs_are_protected() -> TestResult {
     let head = repo.commit("docs: move keep into docs")?;
     assert_eq!(repo.touched(&base, &head)?, ["docs/keep.md"]);
 
-    // A deletion counts, and so does a change of the mode alone.
+    // A deletion counts too.
     repo.git(&["rm", "-q", "docs/a.md"])?;
-    repo.git(&["update-index", "--chmod=+x", "docs/keep.md"])?;
     let head = repo.commit("docs: delete a")?;
     assert_eq!(repo.touched(&base, &head)?, ["docs/a.md", "docs/keep.md"]);
     Ok(())
@@ -180,6 +196,12 @@ fn a_mode_change_of_a_protected_file_is_protected() -> TestResult {
     let (repo, base) = base_repo()?;
     repo.git(&["update-index", "--chmod=+x", "docs/a.md"])?;
     let head = repo.commit("docs: make a executable")?;
+    // The commit really holds a mode change and nothing else, whatever the platform does with
+    // the executable bit of files on disk.
+    let (before, blob_before) = repo.entry(&base, "docs/a.md")?;
+    let (after, blob_after) = repo.entry(&head, "docs/a.md")?;
+    assert_eq!((before.as_str(), after.as_str()), ("100644", "100755"));
+    assert_eq!(blob_before, blob_after);
     assert_eq!(repo.touched(&base, &head)?, ["docs/a.md"]);
     Ok(())
 }
@@ -400,6 +422,12 @@ fn fingerprint_changes_on_mode_change() -> TestResult {
     let first = repo.commit("docs: change a")?;
     repo.git(&["update-index", "--chmod=+x", "docs/a.md"])?;
     let executable = repo.commit("docs: make a executable")?;
+    // The commit really holds a mode change and nothing else, whatever the platform does with
+    // the executable bit of files on disk.
+    let (before, blob_before) = repo.entry(&first, "docs/a.md")?;
+    let (after, blob_after) = repo.entry(&executable, "docs/a.md")?;
+    assert_eq!((before.as_str(), after.as_str()), ("100644", "100755"));
+    assert_eq!(blob_before, blob_after);
     assert_eq!(
         repo.git(&["diff", "--name-only", &first, &executable])?,
         "docs/a.md"
