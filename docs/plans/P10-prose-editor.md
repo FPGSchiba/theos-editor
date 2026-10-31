@@ -140,7 +140,8 @@ research/P10-prose-editor/
     src/adapters/baseline/      plain <textarea>, validates the harness       Task 5
     src/adapters/<variant>/     prototypes                                    Tasks 8–16
     scripts/licences.ts         Task 17
-    tests/docs/*.test.ts        document checks (Vitest)                      Tasks 2, 4, 6, 18, 19
+    tests/docs/*.test.ts        document checks (Vitest)                      Tasks 2, 4, 18, 19
+    tests/reports/*.test.ts     report coverage (Vitest, `pnpm test:reports`) Task 6
     tests/e2e/*.spec.ts, helpers.ts, drivers.ts, record.ts, write-reports.ts  Tasks 5–7
 ```
 
@@ -246,13 +247,18 @@ the caret is on its line (live preview).
   `resolveAnchor(text: string, anchor: Anchor): number`; `toLf(text: string): string`;
   `expectedAfter(original: string, edit: ScriptedEdit): string`;
   `expectedAfterExternalUndo(original: string, edit: ScriptedEdit & { kind: 'external' }): string`;
+  `editOffset(original: string, edit: ScriptedEdit): number | undefined` (where the edit's change
+  starts in `original`: the anchor for anchored kinds, the changed line for `beat-param` and
+  `note-state`, the body start for `select-all-type`, `undefined` for `undo-all`);
   `compareBytes(saved: string, expected: string, editOffset?: number): Comparison`.
 
 - [ ] **Step 1: Scaffold.** `corepack enable`, `corepack use pnpm@latest` in `app/`, then
   `pnpm add -E -D svelte vite @sveltejs/vite-plugin-svelte typescript vitest @playwright/test diff`.
   `package.json`: `"private": true`, `"type": "module"`, `"engines": {"node": ">=24"}`, scripts
   `dev` (`vite --port 5179 --strictPort`), `test:unit` (`vitest run`), `test:e2e`
-  (`playwright test`), `test` (`pnpm test:unit && pnpm test:e2e`). tsconfig: `strict`,
+  (`playwright test`), `test:reports` (`vitest run --config vitest.reports.config.ts`, which
+  includes only `tests/reports/**/*.test.ts`), `test`
+  (`pnpm test:unit && pnpm test:e2e && pnpm test:reports`). tsconfig: `strict`,
   `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, `allowImportingTsExtensions`, `noEmit`,
   `moduleResolution: "bundler"`. Vite: Svelte plugin, `server.fs.allow` = the repo root
   (`../../..`), Vitest `include: ['src/**/*.test.ts', 'tests/docs/**/*.test.ts']`, environment node.
@@ -281,6 +287,8 @@ the caret is on its line (live preview).
   - `paste inserts the plain text with LF line ends` (`'a\r\nb'` → `'a\nb'`; `html` ignored).
   - `external applies both inserts`; `expectedAfterExternalUndo keeps only the external insert`.
   - `undo-all expects the original`.
+  - `editOffset` gives the anchor offset for `insert`, the start of the `at::` line for a
+    `beat-param` change, and `undefined` for `undo-all`.
   - `compareBytes reports identical`; `reports the first differing line and column` (1-based);
     `counts extraBytes in UTF-8`: saved `'xéy'` vs expected `'xéy'` → `identical: false`,
     `extraBytes: 3` (the larger differing middle after common prefix and suffix);
@@ -484,7 +492,8 @@ sources are copied into the S list). A `## Top two` section applies spec §4.4.
 **Files:**
 - Create: `app/tests/e2e/round-trip.spec.ts`, `app/tests/e2e/drivers.ts`
 - Modify: `app/tests/e2e/write-reports.ts` (round-trip Markdown section)
-- Test: `app/tests/docs/report-coverage.test.ts`
+- Test: `app/tests/reports/report-coverage.test.ts` (run by `pnpm test:reports`, not by
+  `test:unit`, because it can pass only once Task 17 has written the reports)
 
 **Interfaces:**
 - Consumes: bridge and helpers (Task 5), oracle and `compareBytes` (Task 1), manifest (Task 2).
@@ -514,7 +523,7 @@ sources are copied into the S list). A `## Top two` section applies spec §4.4.
     non-baseline variant × engine × file × (unedited + every edit × both drivers), and both
     columns for every WYSIWYG component.
 - [ ] **Step 2: Run** `P10_STRICT=1 P10_VARIANTS=baseline pnpm exec playwright test round-trip --grep @base`
-  — expected before Step 3: FAIL (spec missing). The coverage check fails until Task 17.
+  — expected before Step 3: FAIL (spec missing). `pnpm test:reports` fails until Task 17.
 - [ ] **Step 3: Implement** the spec, drivers and the round-trip report section (counts per
   variant × engine: unedited identical N/M, edits matching N/M; then one entry per mismatch
   with file, edit, driver, line:column, extra bytes, level and the hunk).
@@ -562,7 +571,9 @@ sources are copied into the S list). A `## Top two` section applies spec §4.4.
     (`ControlOrMeta+s` raises `saveCount()` by 1), `N-keymap-undo-redo`, `N-remount` (20 loads:
     chip count equals the current file's links, no console errors), `N-reactive` (`updateIndex`
     with a new title updates the chip; the editor's root node is the same object).
-  - `long-docs.spec.ts` (`@long`, serial): per size, load to first paint (double
+  - `long-docs.spec.ts` (`@long`, serial): texts from `generateLong(5_000 | 250_000 |
+    2_500_000)` imported from `corpus/generate-long.ts` (no generated files needed); per size,
+    load to first paint (double
     `requestAnimationFrame`), 200 keystrokes at start, middle and end (latency from the
     keydown's `timeStamp` to the next animation frame after the editor's DOM changed), scroll
     to the end, heap via `performance.memory` in Chromium.
@@ -624,7 +635,8 @@ As Tasks 8–11 for `<b>` in `src/adapters/<b>/`.
   licence outside MIT, ISC, BSD-2-Clause, BSD-3-Clause, Apache-2.0, 0BSD, BlueOak-1.0.0, CC0-1.0.
   The same script writes `report/adapter-size.md`: non-blank lines per file of every
   `src/adapters/<variant>/` folder, grouped by feature (the file names say the concern).
-- [ ] **Step 4:** `pnpm test:unit` — expected: PASS, including `report-coverage.test.ts`.
+- [ ] **Step 4:** `pnpm test:unit && pnpm test:reports` — expected: PASS, including
+  `report-coverage.test.ts`.
 - [ ] **Step 5: Commit** the reports (`docs(ui): record the P10 measurements (P10)`, `Refs: CE-06.2`).
 
 ### Task 18: Measured scores
