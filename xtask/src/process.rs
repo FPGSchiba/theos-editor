@@ -2,7 +2,8 @@
 //!
 //! The checks that are cargo commands (`fmt`, `clippy`, `test`, `docs`, `deny`) describe what to
 //! run as [`CargoCommand`] values, which keeps their arguments testable without running them.
-//! The child gets an argument list, never a shell.
+//! The child gets an argument list, never a shell. [`run_cargo`] shows the child's output;
+//! [`capture_cargo`] reads it.
 
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
@@ -32,6 +33,41 @@ pub struct CargoCommand {
 pub fn run_cargo(root: &Path, cmd: &CargoCommand) -> Result<bool> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
     run_program(&cargo, root, cmd)
+}
+
+/// Runs cargo in `root` like [`run_cargo`], but captures stdout instead of showing it, drops
+/// stderr, and gives cargo no stdin. This is for asking a question, such as a tool's version.
+///
+/// Returns what cargo wrote to stdout when it exited with 0, and `None` when it exited with
+/// anything else, which is what cargo does for a subcommand that is not installed.
+///
+/// # Errors
+///
+/// Fails when cargo cannot be started.
+pub fn capture_cargo(root: &Path, cmd: &CargoCommand) -> Result<Option<String>> {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
+    capture_program(&cargo, root, cmd)
+}
+
+fn capture_program(program: &OsStr, root: &Path, cmd: &CargoCommand) -> Result<Option<String>> {
+    tracing::debug!(
+        program = %program.to_string_lossy(),
+        args = ?cmd.args,
+        root = %root.display(),
+        "capture"
+    );
+    let output = command(program, root, cmd)
+        .output()
+        .map_err(|source| Error::Command {
+            program: program.to_string_lossy().into_owned(),
+            args: cmd.args.clone(),
+            status: None,
+            stderr: source.to_string(),
+        })?;
+    Ok(output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).into_owned()))
 }
 
 fn run_program(program: &OsStr, root: &Path, cmd: &CargoCommand) -> Result<bool> {
@@ -115,6 +151,35 @@ mod tests {
             &root,
             &cmd(&["check-ref-format", "refs/heads/.."], &[])
         )?);
+        Ok(())
+    }
+
+    #[test]
+    fn the_output_of_a_successful_program_is_captured() -> crate::Result<()> {
+        let root = std::env::current_dir().map_err(|source| crate::Error::Io {
+            path: PathBuf::from("."),
+            source,
+        })?;
+        let output = capture_program(OsStr::new("git"), &root, &cmd(&["--version"], &[]))?;
+        assert!(
+            output.is_some_and(|text| text.starts_with("git version")),
+            "git --version did not say `git version`"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_program_that_exits_with_failure_has_no_output() -> crate::Result<()> {
+        let root = std::env::current_dir().map_err(|source| crate::Error::Io {
+            path: PathBuf::from("."),
+            source,
+        })?;
+        let output = capture_program(
+            OsStr::new("git"),
+            &root,
+            &cmd(&["check-ref-format", "refs/heads/.."], &[]),
+        )?;
+        assert_eq!(output, None);
         Ok(())
     }
 

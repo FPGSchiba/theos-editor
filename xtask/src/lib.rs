@@ -10,14 +10,22 @@
 //! - [`branch`]: the branch naming rules of `CONTRIBUTING.md` §1.
 //! - [`git`], [`files`] and [`process`]: the only places that start git and cargo or walk the tree.
 //! - [`error`]: the one error type of the library.
+//!
+//! And the checks built on it:
+//!
+//! - [`checks`]: the checks of `docs/gate.md` §1; [`checks::cargo_cmds`] has the ones that are
+//!   cargo commands (`fmt`, `clippy`, `test`, `docs`, `deny`).
+//! - [`tools`]: the pinned tools (`gate/tools.toml`) and the `tools` check.
 
 pub mod branch;
+pub mod checks;
 pub mod ci;
 pub mod error;
 pub mod files;
 pub mod git;
 pub mod process;
 pub mod report;
+pub mod tools;
 pub mod verdict;
 
 pub use error::{Error, Result};

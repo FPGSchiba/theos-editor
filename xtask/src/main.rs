@@ -15,8 +15,9 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
-use xtask::verdict::Verdict;
-use xtask::{Error, ci, report};
+use xtask::checks::cargo_cmds;
+use xtask::verdict::{Check, Verdict};
+use xtask::{Error, ci, report, tools};
 
 /// Gate tooling for the theos-editor workspace (`docs/gate.md`).
 #[derive(Parser)]
@@ -32,7 +33,16 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Check that the installed tools have the versions pinned in `gate/tools.toml`.
-    Tools,
+    Tools {
+        /// Install the pinned tools that are missing or at another version (takes minutes and
+        /// needs the network), then check them.
+        #[arg(long, conflicts_with = "print_install_spec")]
+        install: bool,
+        /// Print the pins as `name@version,…`, the form the setup action takes, and nothing
+        /// else.
+        #[arg(long)]
+        print_install_spec: bool,
+    },
     /// Check the formatting of every crate.
     Fmt,
     /// Run clippy on every crate with warnings denied.
@@ -98,12 +108,26 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
     let mut out = std::io::stdout().lock();
     // One arm per subcommand. A built check reads `<module>::run(&root, ci.as_ref(), &mut out)?`.
     let verdict: Verdict = match &cli.command {
-        Command::Tools => not_built("tools")?,
-        Command::Fmt => not_built("fmt")?,
-        Command::Clippy => not_built("clippy")?,
-        Command::Test => not_built("test")?,
-        Command::Docs => not_built("docs")?,
-        Command::Deny => not_built("deny")?,
+        Command::Tools {
+            print_install_spec: true,
+            ..
+        } => {
+            // Only the spec line goes to stdout: the setup action captures it.
+            let pins = tools::load_pins(&root)?;
+            writeln!(out, "{}", tools::install_spec(&pins))?;
+            return Ok(true);
+        }
+        Command::Tools { install, .. } => {
+            if *install {
+                tools::install_missing(&root)?;
+            }
+            tools::run(&root, ci.as_ref(), &mut out)?
+        }
+        Command::Fmt => cargo_cmds::run(Check::Fmt, &root, ci.as_ref(), &mut out)?,
+        Command::Clippy => cargo_cmds::run(Check::Clippy, &root, ci.as_ref(), &mut out)?,
+        Command::Test => cargo_cmds::run(Check::Test, &root, ci.as_ref(), &mut out)?,
+        Command::Docs => cargo_cmds::run(Check::Docs, &root, ci.as_ref(), &mut out)?,
+        Command::Deny => cargo_cmds::run(Check::Deny, &root, ci.as_ref(), &mut out)?,
         Command::EngineFree => not_built("engine-free")?,
         Command::Coverage => not_built("coverage")?,
         Command::Lints => not_built("lints")?,
