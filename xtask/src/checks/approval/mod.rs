@@ -6,7 +6,8 @@
 //! `gate/protected-paths.toml` and `gate/repo-settings.toml` (D3), so a pull request cannot change
 //! the rules it is judged by. It reads the pull request's side only as git objects. The steps are:
 //!
-//! 1. [`protected::touched`]: the protected paths and tables the pull request changes. None: pass.
+//! 1. [`protected::touched`]: the protected paths and tables the pull request changes. None: pass,
+//!    and nothing is read from or written to GitHub.
 //! 2. [`fingerprint::compute`]: the fingerprint of its changes (D2).
 //! 3. The comments and the labels as they are now, read from GitHub (the event may be stale).
 //! 4. [`decide::decide`]: a verdict, and the actions to make on GitHub, which are made in order.
@@ -23,7 +24,7 @@ use crate::ci::{CiEvent, PullRequestEvent};
 use crate::git::Git;
 use crate::github::gh_cli::GhCli;
 use crate::github::{LabelSpec, PullRequests, settings};
-use crate::verdict::Verdict;
+use crate::verdict::{Check, Verdict};
 use crate::{Error, Result};
 
 pub mod decide;
@@ -54,12 +55,13 @@ pub fn run(root: &Path, ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<Ve
 /// that the repository lacks one.
 ///
 /// When the head commit of the pull request is not in the repository (the job checks out the
-/// base commit), it is fetched as `refs/pull/<n>/head` first.
+/// base commit), it is fetched as `refs/pull/<n>/head` first. A pull request that touches no
+/// protected path passes before `gh` is called at all.
 ///
 /// # Errors
 ///
-/// Fails when git or GitHub fails, the head commit cannot be found, or `labels` lack a label that
-/// the check wants to create.
+/// Fails when git fails, the head commit cannot be found, or, for a protected pull request, when
+/// GitHub fails or `labels` lack a label that the check wants to create.
 pub fn check(
     git: &Git,
     rules: &ProtectedPaths,
@@ -71,6 +73,11 @@ pub fn check(
     let head = resolve_head(git, pr)?;
     let merge_base = git.merge_base(&pr.base_sha, &head)?;
     let touched = protected::touched(git, rules, &merge_base, &head)?;
+    // Nothing protected: pass before anything else is read, so that a pull request that needs no
+    // approval does not depend on GitHub being up.
+    if touched.is_empty() {
+        return Ok(Verdict::pass(Check::Approval));
+    }
     let current = fingerprint::compute(git, &merge_base, &head)?;
     let comments = gh.comments(pr.number)?;
     // Labels last, so that they are as fresh as they can be.
@@ -249,7 +256,8 @@ mod tests {
             &gh,
         )?;
         assert!(verdict.passed(), "{verdict:?}");
-        assert_eq!(gh.writes(), []);
+        // Not a read either: an unprotected PR does not depend on GitHub being up.
+        assert_eq!(gh.calls(), []);
         Ok(())
     }
 

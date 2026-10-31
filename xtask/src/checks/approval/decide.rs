@@ -6,7 +6,7 @@
 //! one. It returns the verdict and the [`Action`]s to run, in order, and runs nothing itself.
 //! Rows are tried from the top and the first that fits decides:
 //!
-//! 1. nothing protected is touched: pass;
+//! 1. nothing protected is touched: pass (`check` already stops there, before it reads GitHub);
 //! 2. the PR lacks `approved`: fail, "waits for Jann";
 //! 3. `approved` was just added: record the fingerprint in a comment, pass;
 //! 4. the recorded fingerprint is the current one: pass;
