@@ -7,7 +7,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | Phase | Name | Repo | State | Spec PR | Build PR |
 |---|---|---|---|---|---|
 | P00 | Foundation and gate | theos-editor | todo | | |
-| P01 | Content layout and templates | tower-of-theos | spec-pr | | |
+| P01 | Content layout and templates | tower-of-theos | spec-pr | #4 | |
 | P02 | Records and grammars | theos-editor | todo | | |
 | P03 | Kinds, index, search, lenses | theos-editor | todo | | |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | todo | | |
