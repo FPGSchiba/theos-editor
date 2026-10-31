@@ -328,7 +328,7 @@ fn a_changed_value_names_both_sides() -> TestResult {
 }
 
 #[test]
-fn a_bypass_actor_is_a_difference() -> TestResult {
+fn ruleset_key_that_differs_is_a_difference() -> TestResult {
     let (desired, mut live) = load()?;
     let actor = json!({"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"});
     live_ruleset(&mut live, "main")?["bypass_actors"] = json!([actor.clone()]);
@@ -342,15 +342,50 @@ fn a_bypass_actor_is_a_difference() -> TestResult {
 }
 
 #[test]
-fn a_ruleset_key_that_github_does_not_return_is_a_difference() -> TestResult {
+fn ruleset_key_hidden_from_the_token_is_not_checked() -> TestResult {
+    let (desired, mut live) = load()?;
+    // A token without admin rights gets a ruleset without its bypass actors.
+    live_ruleset(&mut live, "main")?
+        .as_object_mut()
+        .ok_or("not an object")?
+        .remove("bypass_actors");
+    let comparison = compare(&desired, &live);
+    assert_eq!(comparison.differences, Vec::<String>::new());
+    assert_eq!(
+        comparison.notes,
+        ["ruleset main: bypass_actors: not checked, GitHub did not return it"]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_key_hidden_deeper_in_a_ruleset_is_not_checked_either() -> TestResult {
     let (desired, mut live) = load()?;
     let tags = live_ruleset(&mut live, "tags")?;
-    tags.as_object_mut()
+    tags["conditions"]["ref_name"]
+        .as_object_mut()
         .ok_or("not an object")?
-        .remove("target");
+        .remove("exclude");
+    let main = live_ruleset(&mut live, "main")?;
+    let rules = main["rules"].as_array_mut().ok_or("rules is not a list")?;
+    for rule in rules
+        .iter_mut()
+        .filter(|rule| rule["type"] == "pull_request")
+    {
+        rule["parameters"]
+            .as_object_mut()
+            .ok_or("not an object")?
+            .remove("allowed_merge_methods");
+    }
+    let comparison = compare(&desired, &live);
+    assert_eq!(comparison.differences, Vec::<String>::new());
     assert_eq!(
-        differences(&desired, &live),
-        [r#"ruleset tags: target is missing, expected "tag""#]
+        comparison.notes,
+        [
+            "ruleset main: rule pull_request: parameters.allowed_merge_methods: not checked, \
+             GitHub did not return it",
+            "ruleset tags: conditions.ref_name.exclude: not checked, GitHub did not return it",
+        ]
     );
     Ok(())
 }

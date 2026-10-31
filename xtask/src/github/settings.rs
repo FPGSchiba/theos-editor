@@ -10,9 +10,11 @@
 //!   (ids, timestamps, links) does not matter. Lists are compared without regard to order, and an
 //!   item on either side only is a difference, so a bypass actor that GitHub has and the file
 //!   does not is found. `rules` is a set keyed by `type`, and the required status checks are a set
-//!   of `(context, integration_id)`.
-//! - Settings of the repository are compared one by one. A setting that GitHub does not return,
-//!   as with a token that cannot read it, is a note ("not checked"), not a difference.
+//!   of `(context, integration_id)`. A key the file has and GitHub does not return, as with a
+//!   token that cannot read it, is a note ("not checked"); a ruleset that is not there at all is
+//!   a difference.
+//! - Settings of the repository are compared one by one. A setting that GitHub does not return
+//!   is a note too, not a difference.
 //! - Labels are matched by name in any case, and compared by name, colour and description. Labels
 //!   that only GitHub has, such as its defaults, are left alone.
 //!
@@ -259,7 +261,7 @@ pub struct Comparison {
 pub fn compare(desired: &Desired, live: &Live) -> Comparison {
     let mut found = Comparison::default();
     for want in &desired.rulesets {
-        compare_ruleset(want, &live.rulesets, &mut found.differences);
+        compare_ruleset(want, &live.rulesets, &mut found);
     }
     compare_repo(&desired.repo, &live.repo, &mut found);
     compare_labels(&desired.labels, &live.labels, &mut found.differences);
@@ -291,21 +293,23 @@ fn show_text(text: &str) -> String {
     show(&Value::String(text.to_owned()))
 }
 
-fn compare_ruleset(want: &Value, live: &[Value], out: &mut Vec<String>) {
+fn compare_ruleset(want: &Value, live: &[Value], found: &mut Comparison) {
     let name = want["name"].as_str().unwrap_or_default();
     let prefix = format!("ruleset {name}");
-    let found = live
+    let have = live
         .iter()
         .find(|ruleset| ruleset["name"].as_str() == Some(name));
-    match found {
-        Some(have) => compare_value(&prefix, "", want, have, out),
-        None => out.push(format!("{prefix}: not on GitHub")),
+    match have {
+        Some(have) => compare_value(&prefix, "", want, have, found),
+        None => found.differences.push(format!("{prefix}: not on GitHub")),
     }
 }
 
 /// Every difference between `want` and `have`, each starting with `prefix` and saying where in
-/// the value it is by `path`, such as `conditions.ref_name.include`.
-fn compare_value(prefix: &str, path: &str, want: &Value, have: &Value, out: &mut Vec<String>) {
+/// the value it is by `path`, such as `conditions.ref_name.include`. A key of `want` that `have`
+/// lacks is a note, not a difference: GitHub leaves out what the token may not read, such as the
+/// bypass actors for a token without admin rights. A key that both have is compared.
+fn compare_value(prefix: &str, path: &str, want: &Value, have: &Value, found: &mut Comparison) {
     match (want, have) {
         (Value::Object(want), Value::Object(have)) => {
             for (key, want) in want {
@@ -315,26 +319,25 @@ fn compare_value(prefix: &str, path: &str, want: &Value, have: &Value, out: &mut
                     format!("{path}.{key}")
                 };
                 let Some(have) = have.get(key) else {
-                    out.push(format!(
-                        "{prefix}: {path} is missing, expected {}",
-                        show(want)
+                    found.notes.push(format!(
+                        "{prefix}: {path}: not checked, GitHub did not return it"
                     ));
                     continue;
                 };
                 match (key.as_str(), want, have) {
                     ("rules", Value::Array(want), Value::Array(have)) => {
-                        compare_rules(prefix, want, have, out);
+                        compare_rules(prefix, want, have, found);
                     }
                     ("required_status_checks", Value::Array(want), Value::Array(have)) => {
-                        compare_checks(prefix, want, have, out);
+                        compare_checks(prefix, want, have, &mut found.differences);
                     }
-                    _ => compare_value(prefix, &path, want, have, out),
+                    _ => compare_value(prefix, &path, want, have, found),
                 }
             }
         }
         (Value::Array(want_items), Value::Array(have_items)) => {
             if !same_items(want_items, have_items) {
-                out.push(format!(
+                found.differences.push(format!(
                     "{prefix}: {path} is {}, expected {}",
                     show(have),
                     show(want)
@@ -343,7 +346,7 @@ fn compare_value(prefix: &str, path: &str, want: &Value, have: &Value, out: &mut
         }
         _ => {
             if want != have {
-                out.push(format!(
+                found.differences.push(format!(
                     "{prefix}: {path} is {}, expected {}",
                     show(have),
                     show(want)
@@ -370,21 +373,23 @@ fn kind(rule: &Value) -> &str {
 
 /// Rules are a set keyed by `type`: a type on one side only is a difference, and the parameters
 /// of a type that the file gives are compared like any other value.
-fn compare_rules(prefix: &str, want: &[Value], have: &[Value], out: &mut Vec<String>) {
+fn compare_rules(prefix: &str, want: &[Value], have: &[Value], found: &mut Comparison) {
     for rule in want {
         let name = kind(rule);
         match have.iter().find(|other| kind(other) == name) {
-            Some(found) => {
+            Some(live) => {
                 let prefix = format!("{prefix}: rule {}", clip(name));
-                compare_value(&prefix, "", rule, found, out);
+                compare_value(&prefix, "", rule, live, found);
             }
-            None => out.push(format!("{prefix}: rule {} is missing", clip(name))),
+            None => found
+                .differences
+                .push(format!("{prefix}: rule {} is missing", clip(name))),
         }
     }
     for rule in have {
         let name = kind(rule);
         if !want.iter().any(|other| kind(other) == name) {
-            out.push(format!(
+            found.differences.push(format!(
                 "{prefix}: rule {} is on GitHub but not in the file",
                 clip(name)
             ));
