@@ -1,0 +1,7 @@
+# theos-content
+
+Library. Record model, front-matter patcher, body grammars (beats, voice, notes), kind registry,
+index, search, effective lenses, validators, lore rules and ledger. Pure filesystem; no async; no
+UI.
+
+Empty until phases P02 to P04.
