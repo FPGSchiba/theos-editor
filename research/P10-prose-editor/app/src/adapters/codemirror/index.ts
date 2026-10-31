@@ -4,6 +4,7 @@ import { EditorView } from '@codemirror/view';
 import { parser } from '@lezer/markdown';
 import { resolveAnchor } from '../../harness/anchor.ts';
 import type { EditorContext, Mode, ProseAdapter, ScriptedEdit, TextChange } from '../../harness/types.ts';
+import { contextExtension, setContext } from './context.ts';
 import { applyEdit, selectBody } from './edits.ts';
 import { applyExternal } from './external.ts';
 import { bodyStart, protectFrontMatter } from './frontmatter.ts';
@@ -31,6 +32,7 @@ class CodeMirrorAdapter implements ProseAdapter {
         markdown.extension,
         theme,
         spellcheck,
+        contextExtension(ctx),
         bodyStart,
         protectFrontMatter,
         historyExtension,
@@ -110,7 +112,10 @@ class CodeMirrorAdapter implements ProseAdapter {
   updateContext(ctx: EditorContext): void {
     const keysChanged = JSON.stringify(ctx.keymap) !== JSON.stringify(this.ctx?.keymap);
     this.ctx = ctx;
-    if (keysChanged) this.editor().dispatch({ effects: rebind(ctx.keymap, this.save, selectBody) });
+    // The chips and the popover read the context from the state, so a new index redraws them in place.
+    this.editor().dispatch({
+      effects: keysChanged ? [setContext.of(ctx), rebind(ctx.keymap, this.save, selectBody)] : [setContext.of(ctx)],
+    });
   }
 
   destroy(): void {

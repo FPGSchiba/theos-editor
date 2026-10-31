@@ -1,25 +1,22 @@
 # CodeMirror 6 prototype: notes
 
-Variant `codemirror`, `@codemirror/view` 6.43.15. State after Task 8 (the base) and its fix round 1.
+Variant `codemirror`, `@codemirror/view` 6.43.15. State after Task 8 (the base), its fix round 1, and Task 9 (links).
 `tests/e2e/codemirror-probes.spec.ts` (`@harness`) probes what the measured suites cannot see.
 
 ## Still failing under `P10_STRICT=1`
 
-Run: `P10_STRICT=1 P10_VARIANTS=codemirror pnpm exec playwright test --grep "@base|@integration|@input" --grep-invert "I-[a-z-]*-chip"`.
-Chromium and WebKit fail the same four checks, and every one of them asks for a feature that a later
-task of this prototype builds. None of them is a defect of the base, and nothing was tried against
-them here, because the feature does not exist yet.
+Run: `P10_STRICT=1 pnpm exec playwright test --grep "@base|@integration|@input" --grep-invert "I-[a-z-]*-chip"` with
+`P10_VARIANTS=codemirror`. Chromium and WebKit fail the same two checks, and both ask for a feature that a later task of this
+prototype builds. Neither is a defect of the links, and nothing was tried against them here, because the feature does not exist yet.
+The links suites (`@links`, `I-[a-z-]*-chip`, `N-remount`, `N-reactive`) pass in both engines (30 passed, 4 skipped by engine).
 
 | Check | Why it fails | Closed by |
 |---|---|---|
 | `@base F-live-preview` | The caret-on-the-line half passes (the raw `## Beat 1 — Arrival` shows). It also wants beat 2 rendered as `[data-beat="2"]` showing `2 · The murmur`, and beat 1 as `1 · Arrival` once the caret leaves. Headings are rendered with their markers hidden, but not as beat headings. | Task 11 (beats) |
-| `@input I-spellcheck-off` | Wants `.tu-link` chips and `[data-beat-row]` rows with `spellcheck` off; there are none. `I-spellcheck-prose` passes. | Tasks 9 and 11 |
-| `@integration N-remount` | Wants one `.tu-link` chip per link of the file after 20 loads (0 now, 13 expected). Mount, teardown, one editor in `.hx-adapter` and a clean console pass. | Task 9 (links) |
-| `@integration N-reactive` | Wants the chip of `[[mother-ilse]]` to show the title the index pushes in. Text, caret and undo depth are not judged until a chip exists. | Task 9 (links) |
+| `@input I-spellcheck-off` | The chip half passes now (every `.tu-link` has `spellcheck` off). It still wants `[data-beat-row]` rows with `spellcheck` off; there are none. | Task 11 (beats) |
 
-The four `ScriptedEdit` kinds the base does not make (`link-insert`, `link-delete`, `note-state`,
-`beat-param`) throw from `apply`; the `@links`, `@callouts` and `@beats` round-trip edits are not in this
-task's suites.
+The two `ScriptedEdit` kinds that are not made yet (`note-state`, `beat-param`) throw from `apply`; their `@callouts` and
+`@beats` round-trip edits are not in the suites of Tasks 8 and 9.
 
 ## What the base does, and how
 
@@ -55,6 +52,41 @@ task's suites.
 - **Input** (`spellcheck.ts`). `contentAttributes` sets `spellcheck="true"` on the content element (CodeMirror's default is `false`).
 - **`apply`** (`edits.ts`, `index.ts`). Each kind is a transaction with the user event of typing, pasting or deleting. `external` is the
   local insert plus `applyExternal` at the shifted offset; `undo-all` applies each edit and then undoes until `canUndo()` is false.
+
+## Links (Task 9)
+
+Files: `links.ts` (chips), `typing.ts` (the link being typed), `popover.ts` (the `[[` popover), `context.ts`.
+Chips, the typing state and the popover are part of the Write set of `modes.ts`; Source mode shows every link raw.
+
+- **Chips** (`links.ts`). A view plugin scans the visible lines for `[[id]]` and `[[id|shown]]` and replaces each with a
+  `Decoration.replace` whose widget mounts the shared `LinkChip` with `mount` from `svelte` (`toDOM`) and unmounts it in
+  `destroy`. The widget is found by its element in a `WeakMap`, because CodeMirror keeps the element of an equal widget and
+  hands it on to the newer instance. `eq` compares id, alias, kind and title, so a rebuild of the decorations (every document
+  change, every new index) leaves a chip that draws the same thing alone. CodeMirror redraws the whole changed range, so a chip
+  next to a changed one may be rebuilt with it (probed). Links in inline code and code blocks stay raw (found by the Lezer tree).
+  The bytes are never touched; the chip is drawn over `[[...]]`. Chips appear in prose, callout titles and beat attribute lines.
+- **Atomic.** The same decoration set is `EditorView.atomicRanges`. ArrowLeft and ArrowRight, Shift+Arrow, and the deletion commands
+  of the keymap (`deleteCharBackwardStrict`, `deleteCharForward`) skip it, so one Backspace behind a chip or one Delete before it
+  removes the whole link and one arrow press steps over it. A click on a chip puts the caret before or behind it
+  (`ignoreEvent` is false). `caretTo` (programmatic) is not snapped out of a chip: a caret placed inside `[[...]]` stays there.
+- **Typing** (`typing.ts`). A state field holds the `[[query` that ends at the caret. It starts when typed text (`input.type`)
+  completes a `[[` whose query has no `]`, `[` or `|` and at most 80 characters, goes on while the caret stays in that `[[`, and
+  ends otherwise. The text shows raw with the reference screen's `tu-typing__q` mark and no chip is drawn over it; a finished link
+  (`]]` typed) becomes a chip at once. Escape sets `dismissed`: the typed text stays plain text and no popover comes back for that `[[`.
+- **Popover** (`popover.ts`). One `LinkPopover` is mounted while the typing state is open and not dismissed, into an element on
+  `document.body` (position fixed, below the caret from `coordsAtPos` in the measure phase, above it when the page ends too soon,
+  moved again on scroll). Options come from `ctx.search(query, place)`; the place is `{ in: 'beat', key }` when the line starts
+  with `at::`, `with::`, `says::`, `reveals::` or `when::`, else prose. Picking (Enter or a click) replaces `[[query` with `[[id]]`
+  in one transaction (`input.complete`). The component swallows ArrowUp, ArrowDown, Enter and Escape in the capture phase; the editor
+  keeps the focus. `onclose` (Escape) dispatches the dismissal and the plugin unmounts the component. The popover is also unmounted
+  when typing ends (caret leaves, text changes shape), when the editor loses the focus (otherwise it would keep Enter), and in `destroy`.
+- **`apply`** (`edits.ts`). `link-insert` is the typed `[[query` (`input.type`) and then the same completion the popover makes.
+  `link-delete` removes `[[` through `]]` in one transaction (`delete.backward`) with the caret where the link was.
+- **`updateContext`** (`index.ts`, `context.ts`). The context is a state field set by an effect; the plugin rebuilds the decorations
+  on it, so an index change redraws the changed chips and keeps the editor, its history and its caret (`N-reactive`).
+
+Known limits of the links: an IME composition inside `[[query` was not tried (the composition guard of the component only stops its keys); undoing a pick gives back the typed text without reopening the popover; the spell-check half of `I-spellcheck-off` for
+beat rows is Task 11; nothing was run on WebView2, WKWebView or WebKitGTK.
 
 ## Known limits of the base
 

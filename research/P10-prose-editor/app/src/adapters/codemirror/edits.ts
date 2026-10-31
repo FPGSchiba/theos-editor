@@ -3,6 +3,7 @@ import type { EditorView } from '@codemirror/view';
 import { resolveAnchor } from '../../harness/anchor.ts';
 import type { ScriptedEdit } from '../../harness/types.ts';
 import { bodyStart } from './frontmatter.ts';
+import { completeLink } from './typing.ts';
 
 /** The select-all of the keymap: the body only, the front matter is not the author's text. */
 export function selectBody(view: EditorView): boolean {
@@ -48,6 +49,21 @@ export function applyEdit(view: EditorView, edit: ScriptedEdit): void {
     case 'select-all-type': {
       selectBody(view);
       view.dispatch(view.state.update(view.state.replaceSelection(edit.text), { userEvent: 'input.type', scrollIntoView: true }));
+      return;
+    }
+    case 'link-insert': {
+      // As the author does it: the typed `[[query` first, then the pick takes its place.
+      const at = resolveAnchor(text, edit.at);
+      change(view, at, at, `[[${edit.query}`, 'input.type');
+      completeLink(view, at, at + 2 + edit.query.length, edit.pick);
+      return;
+    }
+    case 'link-delete': {
+      // The whole link goes in one step, as one Backspace behind its chip does.
+      const from = resolveAnchor(text, edit.link);
+      const close = text.indexOf(']]', from + 2);
+      if (!text.startsWith('[[', from) || close === -1) throw new Error('link-delete: the anchor is not at a complete link');
+      view.dispatch({ changes: { from, to: close + 2 }, selection: { anchor: from }, userEvent: 'delete.backward', scrollIntoView: true });
       return;
     }
     default:

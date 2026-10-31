@@ -2,12 +2,17 @@ import { Compartment, EditorSelection, type Extension } from '@codemirror/state'
 import { EditorView } from '@codemirror/view';
 import type { Mode } from '../../harness/types.ts';
 import { bodyStart, hideFrontMatter, showFrontMatter } from './frontmatter.ts';
+import { linkChips } from './links.ts';
 import { livePreview } from './livepreview.ts';
+import { linkPopover } from './popover.ts';
+import { typingField } from './typing.ts';
 
 /** Write and Source mode are two sets of extensions in one compartment of the same view. */
 const slot = new Compartment();
 
-const write: Extension = [hideFrontMatter, livePreview, EditorView.editorAttributes.of({ class: 'cm-mode-write' })];
+const write: Extension = [
+  hideFrontMatter, livePreview, typingField, linkChips, linkPopover, EditorView.editorAttributes.of({ class: 'cm-mode-write' }),
+];
 const source: Extension = [showFrontMatter, EditorView.editorAttributes.of({ class: 'cm-mode-source' })];
 const forMode = (mode: Mode): Extension => (mode === 'write' ? write : source);
 
