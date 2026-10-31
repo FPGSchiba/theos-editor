@@ -1,4 +1,5 @@
 import { createBaselineAdapter } from '../adapters/baseline/index.ts';
+import { createCodeMirrorAdapter } from '../adapters/codemirror/index.ts';
 import type { ProseAdapter } from './types.ts';
 import { variants } from './variants.ts';
 
@@ -7,6 +8,7 @@ export { variants };
 /** The factory of every variant, by the `name` of its entry in `variants.ts`. */
 const factories: Record<string, () => ProseAdapter> = {
   baseline: createBaselineAdapter,
+  codemirror: createCodeMirrorAdapter,
 };
 
 /** A new, unmounted adapter of the named variant. */

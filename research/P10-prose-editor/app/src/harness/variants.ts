@@ -15,4 +15,11 @@ export const variants: VariantInfo[] = [
     baseline: true,
     packages: [],
   },
+  {
+    name: 'codemirror',
+    component: 'CodeMirror 6',
+    version: '6.43.15',
+    wysiwyg: false,
+    packages: ['@codemirror/commands', '@codemirror/language', '@codemirror/state', '@codemirror/view', '@lezer/markdown'],
+  },
 ];
