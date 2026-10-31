@@ -17,20 +17,26 @@ its changes to the superpowers loop apply to every step below.
 
 ## 1. Phase spec (state `todo` → `spec-pr`)
 
-1. Use superpowers:brainstorming, starting from the phase's umbrella entry, the documents it
+1. superpowers:using-git-worktrees: worktree `.worktrees/PNN-<slug>-spec` on a new branch
+   `spec/PNN-<slug>` from current `origin/main` (consent is given in `CLAUDE.md`). All work of
+   this step happens there, never in the main checkout.
+2. Use superpowers:brainstorming, starting from the phase's umbrella entry, the documents it
    names and the code that exists. Scope and ACs are fixed by the umbrella; the questions are
    about how. Present the approaches to Jann and let him choose.
-2. Write `docs/specs/phases/PNN-<slug>.md` with: goal, ACs copied verbatim, design, interfaces
+3. Write `docs/specs/phases/PNN-<slug>.md` with: goal, ACs copied verbatim, design, interfaces
    other phases will use, risks, and the "Review Focus" inputs most likely to break it.
-3. Branch `spec/PNN-<slug>`, commit, open a PR titled `docs(spec): <name> (PNN)`. Do not enable
-   auto-merge (protected path). Set the phase to `spec-pr` in `docs/status.md` in the same PR.
-4. Stop and tell Jann the spec is ready for review.
+4. Commit, push, open a PR titled `docs(spec): <name> (PNN)`. Do not enable auto-merge
+   (protected path). Set the phase to `spec-pr` in `docs/status.md` in the same PR.
+5. Stop and tell Jann the spec is ready for review. Remove the spec worktree once the PR is
+   merged.
 
 ## 2. Plan (state `spec-approved` → `in-progress`)
 
 Start only when the spec PR is merged.
 
-1. superpowers:using-git-worktrees: worktree on branch `phase/PNN-<slug>` from current `main`.
+1. superpowers:using-git-worktrees: worktree `.worktrees/PNN-<slug>` on a new branch
+   `phase/PNN-<slug>` from current `origin/main`. Phases in tower-of-theos create it in
+   `../tower-of-theos/.worktrees/`.
 2. superpowers:writing-plans → `docs/plans/PNN-<slug>.md`. Global Constraints = umbrella G1–G16
    plus the phase ACs, verbatim. Each task lists the AC ids its tests prove.
 3. Self-review the plan against the phase spec, then continue without waiting (the approved spec
