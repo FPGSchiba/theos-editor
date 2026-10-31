@@ -3,7 +3,7 @@ import { compareBytes } from './compare.ts';
 
 describe('compareBytes', () => {
   it('reports identical', () => {
-    expect(compareBytes('a\né\n', 'a\né\n')).toEqual({ identical: true, extraBytes: 0 });
+    expect(compareBytes('a\n\u00e9\n', 'a\n\u00e9\n')).toEqual({ identical: true, extraBytes: 0 });
   });
 
   it('reports identical without a hunk, a position or withinBlock', () => {
@@ -34,8 +34,8 @@ describe('compareBytes', () => {
 
   it('counts extraBytes in UTF-8', () => {
     // saved has a decomposed é (e + U+0301: 3 bytes), expected the composed é (2 bytes)
-    const saved = 'xéy';
-    const expected = 'xéy';
+    const saved = 'xe\u0301y';
+    const expected = 'x\u00e9y';
     expect(saved).not.toBe(expected);
     const result = compareBytes(saved, expected);
     expect(result.identical).toBe(false);
@@ -46,7 +46,7 @@ describe('compareBytes', () => {
   it('takes the larger differing middle after the common prefix and suffix', () => {
     expect(compareBytes('abc', 'aXXc').extraBytes).toBe(2);
     expect(compareBytes('aXXc', 'abc').extraBytes).toBe(2);
-    expect(compareBytes('a€b', 'aXb').extraBytes).toBe(3);
+    expect(compareBytes('a\u20acb', 'aXb').extraBytes).toBe(3);
     expect(compareBytes('ab', 'a').extraBytes).toBe(1);
   });
 
@@ -93,6 +93,27 @@ describe('compareBytes', () => {
       expect(compareBytes('A\n\nLast', text, text.indexOf('Last')).withinBlock).toBe(true);
     });
 
+    describe('with front matter directly above the first body block', () => {
+      const expected = '---\nid: x\n---\n# Title\nBody text\n\nNext para\n';
+      const at = expected.indexOf('Body');
+
+      it('is false when only the front matter is damaged', () => {
+        expect(compareBytes(expected.replace('id: x', 'id: y'), expected, at).withinBlock).toBe(false);
+        expect(compareBytes(expected.replace('---\n#', '--\n#'), expected, at).withinBlock).toBe(false);
+        expect(compareBytes(expected.replace('---\nid', '-\nid'), expected, at).withinBlock).toBe(false);
+      });
+
+      it('is true when only the body block is damaged', () => {
+        expect(compareBytes(expected.replace('Body', 'Bxdy'), expected, at).withinBlock).toBe(true);
+        expect(compareBytes(expected.replace('# Title', '#Title'), expected, at).withinBlock).toBe(true);
+      });
+
+      it('is false when the damage spans the front matter and the body block', () => {
+        const saved = expected.replace('x\n---\n# Title\nBody', 'x\nBody');
+        expect(compareBytes(saved, expected, at).withinBlock).toBe(false);
+      });
+    });
+
     it('treats a blank line at editOffset as its own block', () => {
       const text = 'A\n\nB\n';
       expect(compareBytes('A\nX\nB\n', text, 2).withinBlock).toBe(true);
@@ -102,17 +123,17 @@ describe('compareBytes', () => {
 
   describe('hunk', () => {
     it('shows whitespace', () => {
-      const result = compareBytes('x y\t\r\nnext\n', 'x y\nnext\n');
+      const result = compareBytes('x\u00a0y\t\r\nnext\n', 'x y\nnext\n');
       expect(result.identical).toBe(false);
       expect(result.hunk).toContain('-x␣y');
       expect(result.hunk).toContain('+x⍽y⇥␍');
     });
 
     it('maps spaces, tabs, CR and U+00A0 and leaves other text alone', () => {
-      const hunk = compareBytes(' \t\r z\n', 'q\n').hunk ?? '';
+      const hunk = compareBytes(' \t\r\u00a0z\n', 'q\n').hunk ?? '';
       expect(hunk).toContain('+␣⇥␍⍽z');
       expect(hunk).toContain('-q');
-      expect(hunk).not.toMatch(/[\t\r ]/);
+      expect(hunk).not.toMatch(/[\t\r\u00a0]/);
     });
 
     it('stays short and fast when every line differs', () => {

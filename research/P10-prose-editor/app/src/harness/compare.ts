@@ -1,4 +1,5 @@
 import { createTwoFilesPatch } from 'diff';
+import { splitFrontMatter } from './frontmatter.ts';
 import type { Comparison } from './types.ts';
 
 const encoder = new TextEncoder();
@@ -60,16 +61,19 @@ function lineAt(text: string, pos: number): { start: number; end: number } {
 
 /**
  * The block around `offset`: the run of non-blank lines that holds it, from the start of its
- * first line through the newline of its last line. On a blank line the block is that line.
+ * first line through the newline of its last line. On a blank line the block is that line. The
+ * front matter is never part of a block, also when the body follows the closing fence directly.
  */
 function blockAround(text: string, offset: number): { start: number; end: number } {
+  const bodyStart = splitFrontMatter(text).frontMatter.length;
   let { start, end } = lineAt(text, Math.min(Math.max(offset, 0), text.length));
   if (isBlank(text.slice(start, end))) return { start, end: Math.min(end + 1, text.length) };
-  while (start > 0) {
+  while (start > bodyStart) {
     const previous = lineAt(text, start - 1);
     if (isBlank(text.slice(previous.start, previous.end))) break;
     start = previous.start;
   }
+  start = Math.max(start, bodyStart);
   while (end < text.length) {
     const next = lineAt(text, end + 1);
     if (isBlank(text.slice(next.start, next.end))) break;
@@ -78,11 +82,11 @@ function blockAround(text: string, offset: number): { start: number; end: number
   return { start, end: Math.min(end + 1, text.length) };
 }
 
-const VISIBLE: Record<string, string> = { ' ': '␣', '\t': '⇥', '\r': '␍', ' ': '⍽' };
+const VISIBLE: Record<string, string> = { ' ': '␣', '\t': '⇥', '\r': '␍', '\u00a0': '⍽' };
 
 /** Spaces, tabs, CR and U+00A0 shown as ␣ ⇥ ␍ ⍽; line feeds stay, so the diff keeps its lines. */
 function showWhitespace(text: string): string {
-  return text.replace(/[ \t\r ]/g, (char) => VISIBLE[char] ?? char);
+  return text.replace(/[ \t\r\u00a0]/g, (char) => VISIBLE[char] ?? char);
 }
 
 /** A diff with more changed lines than this is too slow to compute and too long to read. */

@@ -25,8 +25,8 @@ describe('expectedAfter insert and delete', () => {
   });
 
   it('insert keeps U+00A0 and decomposed letters as given', () => {
-    const e = edit({ kind: 'insert', at: { find: 'a', offset: 1 }, text: ' é' });
-    expect(expectedAfter('ab', e)).toBe('a éb');
+    const e = edit({ kind: 'insert', at: { find: 'a', offset: 1 }, text: '\u00a0e\u0301' });
+    expect(expectedAfter('ab', e)).toBe('a\u00a0e\u0301b');
   });
 
   it('delete forward removes length characters from the anchor', () => {
