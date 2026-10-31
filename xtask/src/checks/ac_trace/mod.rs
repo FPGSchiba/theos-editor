@@ -306,8 +306,8 @@ fn scan_files(root: &Path) -> Result<(Vec<Tag>, Vec<Finding>)> {
 
 /// Whether the scanners read the file `path` (repo-relative, with `/`): Rust and TypeScript
 /// sources, except fixtures (`tests/fixtures/`) and anything under `target/` or `node_modules/`.
-/// Research folders are read like any other. The `lints` check reads the same Rust files.
-pub(crate) fn is_scanned(path: &str) -> bool {
+/// Research folders are read like any other.
+fn is_scanned(path: &str) -> bool {
     let source = matches!(extension(path), Some("rs" | "ts"));
     let built = path
         .split('/')

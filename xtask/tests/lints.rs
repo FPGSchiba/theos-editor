@@ -244,6 +244,51 @@ fn bad_attributes_in_sources_fail() -> TestResult {
     Ok(())
 }
 
+/// Writes `text` to the file `relative` (joined with `/`) below `root`, and the folders it needs.
+fn write(root: &Path, relative: &str, text: &str) -> TestResult {
+    let path = root.join(relative);
+    if let Some(folder) = path.parent() {
+        fs::create_dir_all(folder)?;
+    }
+    fs::write(path, text)?;
+    Ok(())
+}
+
+/// The verdict of `lints` on the repository at `root`, with the files `extra` listed as well:
+/// the walk that lists a copy leaves out every folder called `target`.
+fn lint_listing(root: &Path, extra: &[&str]) -> TestResult<Verdict> {
+    let mut files = repo_files(root)?;
+    files.extend(extra.iter().map(|file| (*file).to_owned()));
+    Ok(lints::check(root, &files)?)
+}
+
+#[test]
+fn source_in_a_folder_named_target_or_node_modules_is_scanned() -> TestResult {
+    // `mod target;` builds `src/target/mod.rs`, so it is source however it is called.
+    let allow = "#[allow(dead_code)]\nfn f() {}\n";
+    let dir = copy_fixture(None)?;
+    write(dir.path(), "crates/a/src/target/x.rs", allow)?;
+    write(dir.path(), "crates/a/src/node_modules/x.rs", allow)?;
+    let verdict = lint_listing(
+        dir.path(),
+        &["crates/a/src/target/x.rs", "crates/a/src/node_modules/x.rs"],
+    )?;
+    assert_eq!(
+        places(&verdict),
+        [
+            (Some("crates/a/src/target/x.rs"), Some(1)),
+            (Some("crates/a/src/node_modules/x.rs"), Some(1)),
+        ]
+    );
+
+    // The build folder of the root is the only `target` that is left alone.
+    let dir = copy_fixture(None)?;
+    write(dir.path(), "target/debug/build/x.rs", allow)?;
+    let verdict = lint_listing(dir.path(), &["target/debug/build/x.rs"])?;
+    assert!(verdict.passed(), "{:?}", verdict.findings);
+    Ok(())
+}
+
 #[test]
 fn fixture_compiled_through_path_fails() -> TestResult {
     // `#[path]` on line 3 and `include!` on line 6; `include_str!` on line 9 is data.

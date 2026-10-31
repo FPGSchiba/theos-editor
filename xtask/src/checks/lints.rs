@@ -20,8 +20,12 @@
 //!   `tests/fixtures/` folder, or whose path the check cannot tell ([`scan_attributes`],
 //!   [`scan_includes`]).
 //!
+//! The `.rs` sources are all that are tracked but the files under `tests/fixtures/` and under
+//! the build folder `target/` of the root; a folder called `target` or `node_modules` further
+//! down is source, because `mod target;` builds it.
+//!
 //! Files under `tests/fixtures/` are test data with deliberate violations: the check reads none
-//! of them as part of the repository, the same files that `ac-trace` leaves alone. So that
+//! of them as part of the repository. So that
 //! nothing in them is compiled unseen, a module or an include may not lead there: the path is
 //! read from the folder of the file, with `.` and `..` resolved, `\` as `/` and without regard
 //! for case. A module of a file may be called `tests`, so a path that starts in a folder
@@ -46,7 +50,7 @@ use std::io::Write;
 use std::path::Path;
 
 use super::ac_trace::rust_tags::{attribute_end, literal_end};
-use super::ac_trace::{extension, is_fixture, is_scanned, line_number};
+use super::ac_trace::{extension, is_fixture, line_number};
 use crate::ci::CiEvent;
 use crate::files::repo_files;
 use crate::verdict::{Check, Finding, Verdict};
@@ -385,12 +389,17 @@ fn stray_config(files: &[String]) -> Vec<Finding> {
     findings
 }
 
+/// Whether `path` is a Rust source that is scanned: any `.rs` file but the fixtures and the
+/// build folder `target/` of the root. A folder called `target` or `node_modules` further down
+/// is source like any other: `mod target;` builds the code in it. The listing of the files
+/// already leaves out the build folder, so this is for lists that came from elsewhere.
+fn is_source(path: &str) -> bool {
+    extension(path) == Some("rs") && !is_fixture(path) && !path.starts_with("target/")
+}
+
 /// The attribute findings of every Rust source that is scanned.
 fn sources(root: &Path, files: &[String], findings: &mut Vec<Finding>) -> Result<()> {
-    for path in files
-        .iter()
-        .filter(|path| extension(path) == Some("rs") && is_scanned(path))
-    {
+    for path in files.iter().filter(|path| is_source(path)) {
         let full = root.join(path);
         let bytes = fs::read(&full).map_err(|source| Error::Io { path: full, source })?;
         let text = String::from_utf8_lossy(&bytes);
@@ -1033,6 +1042,32 @@ mod tests {
             .map(|finding| finding.file.as_deref())
             .collect();
         assert_eq!(files, [Some("crates/a/.cargo"), Some("crates/b/.cargo")]);
+    }
+
+    #[test]
+    fn sources_are_rust_files_but_fixtures_and_the_root_target() {
+        for path in [
+            "build.rs",
+            "src/lib.rs",
+            "crates/a/src/target/mod.rs",
+            "crates/a/src/node_modules/x.rs",
+            "crates/a/target/x.rs",
+            "node_modules/x.rs",
+            "crates/a/tests/fixtures.rs",
+            "crates/a/tests/fixturesX/x.rs",
+            "research/prose/x.rs",
+        ] {
+            assert!(is_source(path), "{path}");
+        }
+        for path in [
+            "README.md",
+            "crates/a/src/lib.rs.bak",
+            "target/debug/build/x.rs",
+            "tests/fixtures/x.rs",
+            "crates/a/tests/fixtures/case/src/lib.rs",
+        ] {
+            assert!(!is_source(path), "{path}");
+        }
     }
 
     /// The findings of `attribute` above a module, in the file `file`.
