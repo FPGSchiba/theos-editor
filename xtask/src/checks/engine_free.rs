@@ -174,7 +174,12 @@ pub fn check(root: &Path, engine: &EngineCrates, locked: bool, offline: bool) ->
 }
 
 /// The metadata of the workspace at `root`, without the dependencies when `no_deps`.
-fn metadata(root: &Path, no_deps: bool, locked: bool, offline: bool) -> Result<Metadata> {
+pub(crate) fn metadata(
+    root: &Path,
+    no_deps: bool,
+    locked: bool,
+    offline: bool,
+) -> Result<Metadata> {
     let mut args = vec!["metadata", "--format-version", "1"];
     for (wanted, flag) in [
         (no_deps, "--no-deps"),

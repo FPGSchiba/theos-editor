@@ -176,6 +176,16 @@ impl Git {
         Ok(())
     }
 
+    /// Forgets the work trees whose directories are gone (`git worktree prune`).
+    ///
+    /// # Errors
+    ///
+    /// Fails when git cannot run or the root is not a repository.
+    pub fn worktree_prune(&self) -> Result<()> {
+        self.run(&["worktree", "prune"])?;
+        Ok(())
+    }
+
     /// Whether the root is inside a git work tree. Any failure means it is not.
     pub(crate) fn is_inside_work_tree(&self) -> bool {
         self.run(&["rev-parse", "--is-inside-work-tree"])
@@ -469,6 +479,28 @@ mod tests {
 
         repo.worktree_remove(&worktree)?;
         assert!(!worktree.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn git_forgets_worktrees_whose_directory_is_gone() -> TestResult {
+        let dir = init_repo()?;
+        let path = dir.path();
+        let first = commit(path, "feat: first")?;
+        let repo = Git::new(path);
+        let parent = tempfile::tempdir()?;
+        let kept = parent.path().join("kept");
+        let gone = parent.path().join("gone");
+        repo.worktree_add_detached(&kept, &first)?;
+        repo.worktree_add_detached(&gone, &first)?;
+        fs::remove_dir_all(&gone)?;
+        assert_eq!(git(path, &["worktree", "list"])?.lines().count(), 3);
+
+        repo.worktree_prune()?;
+        let listed = git(path, &["worktree", "list"])?;
+        assert_eq!(listed.lines().count(), 2, "{listed}");
+        assert!(!listed.contains("gone"), "{listed}");
+        assert!(kept.exists());
         Ok(())
     }
 

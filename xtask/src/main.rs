@@ -16,7 +16,9 @@ use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
 use xtask::branch::Phase;
-use xtask::checks::{ac_trace, cargo_cmds, commit_msg, engine_free, lints, pr_body, pr_title};
+use xtask::checks::{
+    ac_trace, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title,
+};
 use xtask::git::Git;
 use xtask::verdict::{Check, Verdict};
 use xtask::{Error, ci, report, tools};
@@ -58,7 +60,16 @@ enum Command {
     /// Check that no engine crate is a dependency without the feature `engine`.
     EngineFree,
     /// Measure line coverage per crate and compare it with the floors and the baseline.
-    Coverage,
+    ///
+    /// The baseline is the merge base of `HEAD` and the base revision, measured in a temporary
+    /// work tree and cached in `target/xtask/coverage/cache`. Under GitHub Actions a push to
+    /// `main` also stores its own result there.
+    Coverage {
+        /// The revision to compare with. Default: the base commit of the pull request under
+        /// GitHub Actions, else `origin/main`.
+        #[arg(long, value_name = "REV")]
+        base: Option<String>,
+    },
     /// Check the lint list, the tool configuration and the attributes in the sources.
     Lints,
     /// Check that every acceptance criterion of the phase has a tagged test, and that every tag
@@ -174,7 +185,9 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         Command::Docs => cargo_cmds::run(Check::Docs, &root, ci.as_ref(), &mut out)?,
         Command::Deny => cargo_cmds::run(Check::Deny, &root, ci.as_ref(), &mut out)?,
         Command::EngineFree => engine_free::run(&root, ci.as_ref(), &mut out)?,
-        Command::Coverage => not_built("coverage")?,
+        Command::Coverage { base } => {
+            coverage::run_with_base(&root, ci.as_ref(), base.as_deref(), &mut out)?
+        }
         Command::Lints => lints::run(&root, ci.as_ref(), &mut out)?,
         Command::AcTrace { phase: None } => ac_trace::run(&root, ci.as_ref(), &mut out)?,
         Command::AcTrace { phase } => ac_trace::run_phase(&root, *phase, ci.is_some(), &mut out)?,

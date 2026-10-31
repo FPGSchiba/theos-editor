@@ -1,0 +1,1171 @@
+//! The `coverage` check: line coverage per crate against floors and against `main`
+//! (`docs/gate.md` §1 and §3, CE-08.8).
+//!
+//! The check [`check`] runs `cargo llvm-cov nextest --workspace --locked --json` and reads the
+//! line coverage of every crate from its export ([`llvm_json`]). A crate fails when
+//!
+//! - it is below the floor of its class in `gate/thresholds.toml`,
+//! - it has no class there (every workspace member needs one, so a new crate cannot escape the
+//!   floors), or
+//! - it has dropped by more than `max_drop` percentage points below the baseline.
+//!
+//! A crate without instrumented lines passes and is reported as such: the crates of P00 are
+//! empty, and the floors apply as soon as code arrives. The numbers of every crate are in the
+//! notes of the verdict.
+//!
+//! The baseline is the coverage of the merge base of `HEAD` and the base revision (the base of
+//! the pull request, else `origin/main`), measured by [`baseline`] in a temporary work tree and
+//! cached by commit, toolchain and cargo-llvm-cov version. When the merge base is `HEAD` itself
+//! the baseline is the head result, and when it has no `xtask/Cargo.toml` (the pull request that
+//! adds the gate) there is no baseline and only the floors are checked. A push to `main` stores
+//! its head result in the cache, so that the next pull requests find it.
+//!
+//! The pure core is [`verdict`]. The steps around it are in one function that only reaches
+//! `cargo llvm-cov` through a trait, so that its tests do not run it.
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+
+use serde::Deserialize;
+
+pub mod baseline;
+pub mod llvm_json;
+
+pub use llvm_json::{CrateCoverage, parse_llvm_cov};
+
+use crate::checks::engine_free;
+use crate::ci::CiEvent;
+use crate::git::Git;
+use crate::process::{CargoCommand, capture_cargo, run_cargo};
+use crate::tools::parse_version;
+use crate::verdict::{Check, Finding, Verdict};
+use crate::{Error, Result};
+
+/// The file with the floors, relative to the repository root.
+const THRESHOLDS_FILE: &str = "gate/thresholds.toml";
+
+/// The revision a run compares with when nothing else says.
+const DEFAULT_BASE: &str = "origin/main";
+
+/// The folder of the check below `target/`, with `head.json` and `base.json` (the exports),
+/// `wt` (the work tree of the baseline), `target` (its build directory) and `cache`.
+const WORK_DIR: [&str; 3] = ["target", "xtask", "coverage"];
+
+/// Percentages are ratios of line counts and carry rounding noise, so a comparison with a limit
+/// allows this much. A real difference is at least one line of tens of thousands.
+const EPSILON: f64 = 1e-9;
+
+/// What a crate is, which decides its floor.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CrateClass {
+    /// A library crate.
+    Library,
+    /// A binary crate.
+    Binary,
+}
+
+impl CrateClass {
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Library => "library",
+            Self::Binary => "binary",
+        }
+    }
+}
+
+/// The contents of `gate/thresholds.toml`.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Thresholds {
+    /// The largest drop of a crate below the baseline, in percentage points.
+    pub max_drop: f64,
+    /// The floor of library crates, in percent.
+    pub library: f64,
+    /// The floor of binary crates, in percent.
+    pub binary: f64,
+    /// The class of every workspace member, by crate name.
+    pub crates: BTreeMap<String, CrateClass>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ThresholdsFile {
+    max_drop: f64,
+    floors: Floors,
+    crates: BTreeMap<String, CrateClass>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Floors {
+    library: f64,
+    binary: f64,
+}
+
+impl Thresholds {
+    /// Reads `gate/thresholds.toml` of the repository at `root`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the file cannot be read, is not the expected TOML (`max_drop`, the table
+    /// `[floors]` with `library` and `binary`, and the table `[crates]` that maps names to
+    /// `"library"` or `"binary"`, and nothing else), or has a number outside 0 to 100 or no
+    /// crate. The message gives the line and nothing of the text.
+    pub fn load(root: &Path) -> Result<Self> {
+        let path = root.join("gate").join("thresholds.toml");
+        let text = std::fs::read_to_string(&path).map_err(|source| Error::Io { path, source })?;
+        Self::parse(&text)
+    }
+
+    pub(crate) fn parse(text: &str) -> Result<Self> {
+        let file: ThresholdsFile = toml::from_str(text).map_err(|error| {
+            let line = error.span().map(|span| {
+                let before = text.get(..span.start).unwrap_or(text);
+                before.matches('\n').count() + 1
+            });
+            let shape = "it has `max_drop`, the table `[floors]` with `library` and `binary`, \
+                         and the table `[crates]` that maps names to \"library\" or \"binary\", \
+                         and nothing else";
+            config_error(match line {
+                Some(line) => format!("not the expected TOML, near line {line}: {shape}"),
+                None => format!("not the expected TOML: {shape}"),
+            })
+        })?;
+        for (name, value) in [
+            ("max_drop", file.max_drop),
+            ("floors.library", file.floors.library),
+            ("floors.binary", file.floors.binary),
+        ] {
+            if !(0.0..=100.0).contains(&value) {
+                return Err(config_error(format!(
+                    "`{name}` must be a number from 0 to 100"
+                )));
+            }
+        }
+        if file.crates.is_empty() {
+            return Err(config_error(
+                "`[crates]` is empty, so no member would have a class".to_owned(),
+            ));
+        }
+        Ok(Self {
+            max_drop: file.max_drop,
+            library: file.floors.library,
+            binary: file.floors.binary,
+            crates: file.crates,
+        })
+    }
+
+    /// The floor of a class, in percent.
+    #[must_use]
+    pub const fn floor(&self, class: CrateClass) -> f64 {
+        match class {
+            CrateClass::Library => self.library,
+            CrateClass::Binary => self.binary,
+        }
+    }
+}
+
+fn config_error(message: String) -> Error {
+    Error::Config {
+        file: THRESHOLDS_FILE.to_owned(),
+        message,
+    }
+}
+
+/// Judges the coverage `head` of the crates against the floors in `thresholds` and, when there is
+/// a `baseline`, against its drops. `members` are the names of the workspace members: each must
+/// have a class, and one without lines in `head` has no instrumented lines.
+///
+/// A crate with a class and no instrumented lines passes with a note. A crate that is not in
+/// `baseline` (new in the pull request) has no drop check, and without a baseline no crate has
+/// one.
+#[must_use]
+pub fn verdict(
+    head: &BTreeMap<String, CrateCoverage>,
+    baseline: Option<&BTreeMap<String, CrateCoverage>>,
+    thresholds: &Thresholds,
+    members: &[String],
+) -> Verdict {
+    let mut findings = Vec::new();
+    let mut notes = Vec::new();
+    let names: BTreeSet<&str> = members
+        .iter()
+        .map(String::as_str)
+        .chain(head.keys().map(String::as_str))
+        .collect();
+    for name in names {
+        let Some(&class) = thresholds.crates.get(name) else {
+            findings.push(Finding::new(format!(
+                "`{name}` has no class in `{THRESHOLDS_FILE}`; list it under `[crates]` as \
+                 \"library\" or \"binary\", so that it has a coverage floor"
+            )));
+            continue;
+        };
+        let now = head.get(name).copied().unwrap_or_default();
+        let Some(percent) = now.percent() else {
+            notes.push(format!("{name}: no instrumented lines"));
+            continue;
+        };
+        let floor = thresholds.floor(class);
+        if percent + EPSILON < floor {
+            findings.push(Finding::new(format!(
+                "`{name}` has {percent:.1} % line coverage, below the {floor:.1} % floor of \
+                 {} crates in `{THRESHOLDS_FILE}`; add tests",
+                class.name()
+            )));
+        }
+        let before = baseline
+            .and_then(|crates| crates.get(name))
+            .and_then(CrateCoverage::percent);
+        if let Some(before) = before {
+            let drop = before - percent;
+            if drop > thresholds.max_drop + EPSILON {
+                findings.push(Finding::new(format!(
+                    "`{name}` dropped from {before:.1} % on the baseline to {percent:.1} %, \
+                     {drop:.1} points, and at most {:.1} are allowed; add tests",
+                    thresholds.max_drop
+                )));
+            }
+        }
+        let against = before.map_or_else(String::new, |before| format!(", baseline {before:.1} %"));
+        notes.push(format!(
+            "{name}: {percent:.1} % of {} lines ({} floor {floor:.1} %{against})",
+            now.count,
+            class.name()
+        ));
+    }
+    if baseline.is_none() {
+        notes.push(
+            "no baseline: the merge base has no xtask to measure with, so drops were not checked"
+                .to_owned(),
+        );
+    }
+    Verdict {
+        check: Check::Coverage,
+        findings,
+        notes,
+    }
+}
+
+/// What the check needs from `cargo llvm-cov`.
+pub(crate) trait Llvm {
+    /// The version of `cargo llvm-cov`, such as `0.9.1`.
+    fn version(&self, root: &Path) -> Result<String>;
+
+    /// Runs the tests of the workspace in `dir` with instrumentation and writes the export to
+    /// `output`. The build directory is `target_dir` when there is one. Says whether the tests
+    /// passed, which they must for there to be an export.
+    fn run(&self, dir: &Path, output: &Path, target_dir: Option<&Path>) -> Result<bool>;
+}
+
+/// `cargo llvm-cov` as it is installed.
+struct CargoLlvm;
+
+impl Llvm for CargoLlvm {
+    fn version(&self, root: &Path) -> Result<String> {
+        let command = CargoCommand {
+            args: vec!["llvm-cov".to_owned(), "--version".to_owned()],
+            env: Vec::new(),
+        };
+        let output = capture_cargo(root, &command)?.unwrap_or_default();
+        parse_version("cargo-llvm-cov", &output).ok_or_else(|| Error::Missing {
+            what: "cargo-llvm-cov; run `cargo xtask tools --install`".to_owned(),
+        })
+    }
+
+    fn run(&self, dir: &Path, output: &Path, target_dir: Option<&Path>) -> Result<bool> {
+        run_cargo(dir, &llvm_cov_command(output, target_dir))
+    }
+}
+
+/// `cargo llvm-cov nextest --workspace --locked --json --output-path <output>`, with
+/// `CARGO_TARGET_DIR` set to `target_dir` when there is one.
+pub(crate) fn llvm_cov_command(output: &Path, target_dir: Option<&Path>) -> CargoCommand {
+    let mut args: Vec<String> = [
+        "llvm-cov",
+        "nextest",
+        "--workspace",
+        "--locked",
+        "--json",
+        "--output-path",
+    ]
+    .map(str::to_owned)
+    .into();
+    args.push(output.to_string_lossy().into_owned());
+    let env = target_dir
+        .map(|dir| {
+            (
+                "CARGO_TARGET_DIR".to_owned(),
+                dir.to_string_lossy().into_owned(),
+            )
+        })
+        .into_iter()
+        .collect();
+    CargoCommand { args, env }
+}
+
+/// The folder of the check below `root`.
+pub(crate) fn work_dir(root: &Path) -> PathBuf {
+    WORK_DIR
+        .iter()
+        .fold(root.to_path_buf(), |dir, part| dir.join(part))
+}
+
+fn io_error(path: &Path) -> impl FnOnce(std::io::Error) -> Error + '_ {
+    move |source| Error::Io {
+        path: path.to_path_buf(),
+        source,
+    }
+}
+
+/// The names of the workspace members at `root`.
+fn workspace_members(root: &Path) -> Result<Vec<String>> {
+    let metadata = engine_free::metadata(root, true, true, false)?;
+    Ok(metadata
+        .workspace_packages()
+        .iter()
+        .map(|package| package.name.to_string())
+        .collect())
+}
+
+/// Measures the head in `root` with `llvm`, the baseline at the merge base of `HEAD` and
+/// `base_rev`, and judges both. With `store_head` the head result goes to the cache under the
+/// commit of `HEAD`.
+pub(crate) fn evaluate(
+    llvm: &dyn Llvm,
+    root: &Path,
+    base_rev: &str,
+    store_head: bool,
+    members: &[String],
+) -> Result<Verdict> {
+    // The paths in the export are absolute.
+    let root = std::path::absolute(root).map_err(io_error(root))?;
+    let thresholds = Thresholds::load(&root)?;
+    let git = Git::new(&root);
+    let head_sha = git.rev_parse("HEAD")?;
+    let base_sha = git.merge_base("HEAD", base_rev)?;
+
+    let work = work_dir(&root);
+    std::fs::create_dir_all(&work).map_err(io_error(&work))?;
+    let export = work.join("head.json");
+    // An export of an earlier run must not be taken for this one.
+    if export.exists() {
+        std::fs::remove_file(&export).map_err(io_error(&export))?;
+    }
+    if !llvm.run(&root, &export, None)? {
+        return Ok(Verdict::with(
+            Check::Coverage,
+            vec![Finding::new(
+                "the tests failed under instrumentation, so coverage could not be measured; \
+                 `cargo xtask test` shows the failing tests and cargo's output is above",
+            )],
+        ));
+    }
+    let json = std::fs::read_to_string(&export).map_err(io_error(&export))?;
+    let head = parse_llvm_cov(&json, &root)?;
+
+    let cache_dir = work.join("cache");
+    if store_head {
+        baseline::store(llvm, &root, &head_sha, &cache_dir, &head)?;
+    }
+    let same_commit = base_sha == head_sha;
+    let baseline = if same_commit {
+        Some(head.clone())
+    } else {
+        baseline::measure_with(llvm, &root, &base_sha, &cache_dir)?
+    };
+    let mut result = verdict(&head, baseline.as_ref(), &thresholds, members);
+    if same_commit {
+        result
+            .notes
+            .push("the baseline is this commit, so no drop was measured".to_owned());
+    }
+    Ok(result)
+}
+
+/// Checks the coverage of the workspace at `root` against the merge base of `HEAD` and
+/// `base_rev`.
+///
+/// # Errors
+///
+/// Fails when the thresholds or the workspace cannot be read, git or cargo cannot run,
+/// `base_rev` is unknown, the baseline's tests fail, or an export is not what cargo-llvm-cov
+/// writes. Failing tests of the head are a failing verdict.
+pub fn check(root: &Path, base_rev: &str) -> Result<Verdict> {
+    evaluate(&CargoLlvm, root, base_rev, false, &workspace_members(root)?)
+}
+
+/// The revision to compare with: `base` when given, else the base commit of a pull request,
+/// else `origin/main`.
+fn base_rev(ci: Option<&CiEvent>, base: Option<&str>) -> String {
+    match (base, ci) {
+        (Some(base), _) => base.to_owned(),
+        (None, Some(CiEvent::PullRequest(event))) => event.base_sha.clone(),
+        _ => DEFAULT_BASE.to_owned(),
+    }
+}
+
+/// Whether the run is for a push to `main`, whose head result later pull requests compare with.
+/// `github_ref` is `$GITHUB_REF`.
+fn stores_head(ci: Option<&CiEvent>, github_ref: Option<&str>) -> bool {
+    matches!(ci, Some(CiEvent::Push(_))) && github_ref == Some("refs/heads/main")
+}
+
+/// The `coverage` check as `cargo xtask coverage` runs it: the base revision is the base of the
+/// pull request under GitHub Actions and `origin/main` elsewhere, and a push to `main` also
+/// stores its result for the pull requests to come. `_out` is not used.
+///
+/// # Errors
+///
+/// As [`check`].
+pub fn run(root: &Path, ci: Option<&CiEvent>, out: &mut dyn Write) -> Result<Verdict> {
+    run_with_base(root, ci, None, out)
+}
+
+/// [`run`], comparing with `base` instead when it is given.
+///
+/// # Errors
+///
+/// As [`check`].
+pub fn run_with_base(
+    root: &Path,
+    ci: Option<&CiEvent>,
+    base: Option<&str>,
+    _out: &mut dyn Write,
+) -> Result<Verdict> {
+    let store = stores_head(ci, std::env::var("GITHUB_REF").ok().as_deref());
+    evaluate(
+        &CargoLlvm,
+        root,
+        &base_rev(ci, base),
+        store,
+        &workspace_members(root)?,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ci::{PullRequestEvent, PushEvent};
+    use crate::git::testing::{TestResult, commit, git, init_repo};
+    use serde_json::json;
+    use std::cell::RefCell;
+    use std::fs;
+
+    fn cov(covered: u64, count: u64) -> CrateCoverage {
+        CrateCoverage { covered, count }
+    }
+
+    /// A crate with `tenths` covered of 1000 lines, so `799` is 79.9 %.
+    fn tenths(tenths: u64) -> CrateCoverage {
+        cov(tenths, 1000)
+    }
+
+    fn gate() -> Thresholds {
+        let class = |name: &str, class| (name.to_owned(), class);
+        Thresholds {
+            max_drop: 1.0,
+            library: 80.0,
+            binary: 60.0,
+            crates: BTreeMap::from([
+                class("theos-content", CrateClass::Library),
+                class("theos-vcs", CrateClass::Library),
+                class("theos-studio", CrateClass::Library),
+                class("xtask", CrateClass::Library),
+                class("theos", CrateClass::Binary),
+                class("theos-mcp", CrateClass::Binary),
+                class("theos-editor", CrateClass::Binary),
+            ]),
+        }
+    }
+
+    fn members() -> Vec<String> {
+        gate().crates.keys().cloned().collect()
+    }
+
+    fn map(crates: &[(&str, CrateCoverage)]) -> BTreeMap<String, CrateCoverage> {
+        crates
+            .iter()
+            .map(|(name, coverage)| ((*name).to_owned(), *coverage))
+            .collect()
+    }
+
+    fn messages(verdict: &Verdict) -> Vec<&str> {
+        verdict
+            .findings
+            .iter()
+            .map(|finding| finding.message.as_str())
+            .collect()
+    }
+
+    fn has_note(verdict: &Verdict, parts: &[&str]) -> bool {
+        verdict
+            .notes
+            .iter()
+            .any(|note| parts.iter().all(|part| note.contains(part)))
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn crate_below_floor_fails() {
+        let head = map(&[("theos-content", tenths(799)), ("xtask", tenths(800))]);
+        let result = verdict(&head, None, &gate(), &members());
+        assert!(!result.passed(), "{result:?}");
+        let messages = messages(&result);
+        assert_eq!(messages.len(), 1, "{messages:?}");
+        for part in ["theos-content", "79.9", "80.0", "library"] {
+            assert!(
+                messages[0].contains(part),
+                "{part} is not in {}",
+                messages[0]
+            );
+        }
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn binary_floor_is_60() {
+        let passes = verdict(&map(&[("theos", tenths(600))]), None, &gate(), &members());
+        assert!(passes.passed(), "{passes:?}");
+        let fails = verdict(&map(&[("theos", tenths(599))]), None, &gate(), &members());
+        assert!(!fails.passed(), "{fails:?}");
+        let messages = messages(&fails);
+        assert_eq!(messages.len(), 1, "{messages:?}");
+        for part in ["theos", "59.9", "60.0", "binary"] {
+            assert!(
+                messages[0].contains(part),
+                "{part} is not in {}",
+                messages[0]
+            );
+        }
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn drop_over_max_fails() {
+        let head = map(&[("theos-content", tenths(809))]);
+        let base = map(&[("theos-content", tenths(820))]);
+        let result = verdict(&head, Some(&base), &gate(), &members());
+        assert!(!result.passed(), "{result:?}");
+        let messages = messages(&result);
+        assert_eq!(messages.len(), 1, "{messages:?}");
+        for part in ["theos-content", "82.0", "80.9", "1.1", "1.0"] {
+            assert!(
+                messages[0].contains(part),
+                "{part} is not in {}",
+                messages[0]
+            );
+        }
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn drop_within_max_passes() {
+        let head = map(&[("theos-content", tenths(810))]);
+        let base = map(&[("theos-content", tenths(820))]);
+        let result = verdict(&head, Some(&base), &gate(), &members());
+        assert!(result.passed(), "{result:?}");
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn unlisted_member_fails() {
+        let mut members = members();
+        members.push("theos-new".to_owned());
+        let result = verdict(&map(&[]), None, &gate(), &members);
+        assert!(!result.passed(), "{result:?}");
+        let messages = messages(&result);
+        assert_eq!(messages.len(), 1, "{messages:?}");
+        assert!(messages[0].contains("theos-new"), "{}", messages[0]);
+        assert!(
+            messages[0].contains("gate/thresholds.toml"),
+            "{}",
+            messages[0]
+        );
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn empty_crate_passes() {
+        let head = map(&[("theos-vcs", cov(0, 0))]);
+        let result = verdict(&head, None, &gate(), &members());
+        assert!(result.passed(), "{result:?}");
+        assert!(
+            has_note(&result, &["theos-vcs", "no instrumented lines"]),
+            "{result:?}"
+        );
+        // A crate that the export does not list at all has no instrumented lines either.
+        assert!(
+            has_note(&result, &["theos-studio", "no instrumented lines"]),
+            "{result:?}"
+        );
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn crate_new_in_pr_has_no_drop_check() {
+        let head = map(&[("theos-vcs", tenths(805)), ("theos-content", tenths(900))]);
+        let base = map(&[("theos-content", tenths(900))]);
+        let result = verdict(&head, Some(&base), &gate(), &members());
+        assert!(result.passed(), "{result:?}");
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn a_new_crate_still_has_its_floor() {
+        let head = map(&[("theos-vcs", tenths(700))]);
+        let base = map(&[("theos-content", tenths(900))]);
+        let result = verdict(&head, Some(&base), &gate(), &members());
+        assert!(!result.passed(), "{result:?}");
+    }
+
+    #[test]
+    fn a_crate_that_lost_all_its_lines_passes_as_empty() {
+        let head = map(&[("theos-content", cov(0, 0))]);
+        let base = map(&[("theos-content", tenths(900))]);
+        let result = verdict(&head, Some(&base), &gate(), &members());
+        assert!(result.passed(), "{result:?}");
+        assert!(has_note(
+            &result,
+            &["theos-content", "no instrumented lines"]
+        ));
+    }
+
+    #[test]
+    fn a_crate_that_is_empty_on_the_baseline_has_no_drop_check() {
+        let head = map(&[("theos-content", tenths(900))]);
+        let base = map(&[("theos-content", cov(0, 0))]);
+        let result = verdict(&head, Some(&base), &gate(), &members());
+        assert!(result.passed(), "{result:?}");
+    }
+
+    #[test]
+    fn rounding_noise_does_not_decide_a_limit() {
+        // 64.4 - 63.4 is 1.000000000000007 in floating point, and the drop is exactly 1.0.
+        let head = map(&[("theos", tenths(634))]);
+        let base = map(&[("theos", tenths(644))]);
+        let result = verdict(&head, Some(&base), &gate(), &members());
+        assert!(result.passed(), "{result:?}");
+    }
+
+    #[test]
+    fn a_crate_that_has_lines_but_is_not_a_member_needs_a_class_too() {
+        let head = map(&[("stray", tenths(900))]);
+        let result = verdict(&head, None, &gate(), &members());
+        let messages = messages(&result);
+        assert_eq!(messages.len(), 1, "{messages:?}");
+        assert!(messages[0].contains("stray"), "{}", messages[0]);
+    }
+
+    #[test]
+    fn the_notes_have_the_numbers_of_every_crate() {
+        let head = map(&[("theos-content", tenths(851)), ("theos", cov(3, 4))]);
+        let base = map(&[("theos-content", tenths(860))]);
+        let result = verdict(&head, Some(&base), &gate(), &members());
+        assert!(result.passed(), "{result:?}");
+        assert!(has_note(
+            &result,
+            &[
+                "theos-content",
+                "85.1 %",
+                "1000 lines",
+                "library floor 80.0 %",
+                "baseline 86.0 %"
+            ]
+        ));
+        assert!(has_note(
+            &result,
+            &["theos:", "75.0 %", "4 lines", "binary floor 60.0 %"]
+        ));
+        assert!(!has_note(&result, &["no baseline"]), "{result:?}");
+        let without = verdict(&head, None, &gate(), &members());
+        assert!(has_note(&without, &["no baseline"]), "{without:?}");
+    }
+
+    const THRESHOLDS: &str = "max_drop = 1.0\n\n[floors]\nlibrary = 80.0\nbinary = 60.0\n\n\
+        [crates]\ntheos-content = \"library\"\ntheos = \"binary\"\n";
+
+    #[test]
+    fn thresholds_have_the_shape_of_the_file() -> TestResult {
+        let thresholds = Thresholds::parse(THRESHOLDS)?;
+        assert_eq!(thresholds.max_drop, 1.0);
+        assert_eq!(thresholds.floor(CrateClass::Library), 80.0);
+        assert_eq!(thresholds.floor(CrateClass::Binary), 60.0);
+        assert_eq!(
+            thresholds.crates,
+            BTreeMap::from([
+                ("theos".to_owned(), CrateClass::Binary),
+                ("theos-content".to_owned(), CrateClass::Library),
+            ])
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn thresholds_of_the_repository_load_from_its_root() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        fs::create_dir(dir.path().join("gate"))?;
+        fs::write(dir.path().join("gate").join("thresholds.toml"), THRESHOLDS)?;
+        assert_eq!(
+            Thresholds::load(dir.path())?,
+            Thresholds::parse(THRESHOLDS)?
+        );
+        let missing = Thresholds::load(&dir.path().join("nowhere"));
+        assert!(matches!(missing, Err(Error::Io { .. })), "{missing:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn thresholds_that_are_wrong_are_a_config_error_that_quotes_nothing() {
+        let wrong = [
+            ("", "an empty file"),
+            ("secret-token", "not TOML"),
+            (
+                &THRESHOLDS.replace("max_drop = 1.0", "max_drop = \"secret-token\""),
+                "text",
+            ),
+            (&THRESHOLDS.replace("max_drop = 1.0\n", ""), "no max_drop"),
+            (
+                &THRESHOLDS.replace("max_drop = 1.0", "max_drop = -1.0"),
+                "negative drop",
+            ),
+            (
+                &THRESHOLDS.replace("max_drop = 1.0", "max_drop = nan"),
+                "nan",
+            ),
+            (
+                &THRESHOLDS.replace("library = 80.0", "library = 100.5"),
+                "floor over 100",
+            ),
+            (
+                &THRESHOLDS.replace("binary = 60.0", "binary = -0.5"),
+                "negative floor",
+            ),
+            (
+                &THRESHOLDS.replace("binary = 60.0\n", ""),
+                "no binary floor",
+            ),
+            (
+                &THRESHOLDS.replace("\"binary\"", "\"secret-token\""),
+                "unknown class",
+            ),
+            (
+                &format!("{THRESHOLDS}secret-token = 1\n"),
+                "unknown crate value",
+            ),
+            (&format!("secret-token = 1\n{THRESHOLDS}"), "unknown key"),
+            (
+                &THRESHOLDS.replace("[floors]", "[floors]\nsecret-token = 1.0"),
+                "unknown floor",
+            ),
+            (
+                "max_drop = 1.0\n[floors]\nlibrary = 80.0\nbinary = 60.0\n[crates]\n",
+                "no crates",
+            ),
+        ];
+        for (text, what) in wrong {
+            let result = Thresholds::parse(text);
+            let Err(Error::Config { file, message }) = &result else {
+                panic!("{what}: {result:?}");
+            };
+            assert_eq!(file, "gate/thresholds.toml", "{what}");
+            assert!(!message.contains("secret-token"), "{what}: {message}");
+        }
+    }
+
+    #[test]
+    fn a_wrong_file_is_reported_near_its_line() {
+        let result = Thresholds::parse(&THRESHOLDS.replace("[crates]", "[crates]\nx = 5"));
+        let Err(Error::Config { message, .. }) = &result else {
+            panic!("{result:?}");
+        };
+        assert!(message.contains("near line 8"), "{message}");
+    }
+
+    #[test]
+    fn the_command_is_the_documented_one() {
+        let output = Path::new("some").join("head.json");
+        let command = llvm_cov_command(&output, None);
+        assert_eq!(
+            command.args,
+            [
+                "llvm-cov",
+                "nextest",
+                "--workspace",
+                "--locked",
+                "--json",
+                "--output-path",
+                &output.to_string_lossy(),
+            ]
+        );
+        assert_eq!(command.env, Vec::<(String, String)>::new());
+        let target = Path::new("some").join("target");
+        let command = llvm_cov_command(&output, Some(&target));
+        assert_eq!(
+            command.env,
+            [(
+                "CARGO_TARGET_DIR".to_owned(),
+                target.to_string_lossy().into_owned()
+            )]
+        );
+    }
+
+    fn pull_request(base_sha: &str) -> CiEvent {
+        CiEvent::PullRequest(PullRequestEvent {
+            action: "synchronize".to_owned(),
+            number: 7,
+            title: "t".to_owned(),
+            body: None,
+            base_sha: base_sha.to_owned(),
+            head_sha: "head".to_owned(),
+            head_ref: "phase/P00-x".to_owned(),
+            label: None,
+        })
+    }
+
+    fn push() -> CiEvent {
+        CiEvent::Push(PushEvent {
+            before: "a".to_owned(),
+            after: "b".to_owned(),
+        })
+    }
+
+    #[test]
+    fn the_base_comes_from_the_flag_then_the_pull_request_then_origin_main() {
+        let pr = pull_request("abc123");
+        assert_eq!(base_rev(Some(&pr), Some("v1")), "v1");
+        assert_eq!(base_rev(None, Some("v1")), "v1");
+        assert_eq!(base_rev(Some(&pr), None), "abc123");
+        assert_eq!(base_rev(Some(&push()), None), "origin/main");
+        assert_eq!(base_rev(Some(&CiEvent::Other), None), "origin/main");
+        assert_eq!(base_rev(None, None), "origin/main");
+    }
+
+    #[test]
+    fn only_a_push_to_main_stores_its_result() {
+        let main = Some("refs/heads/main");
+        assert!(stores_head(Some(&push()), main));
+        assert!(!stores_head(Some(&push()), Some("refs/heads/phase/P00-x")));
+        assert!(!stores_head(Some(&push()), Some("refs/tags/main")));
+        assert!(!stores_head(Some(&push()), None));
+        assert!(!stores_head(Some(&pull_request("a")), main));
+        assert!(!stores_head(Some(&CiEvent::Other), main));
+        assert!(!stores_head(None, main));
+    }
+
+    /// A `cargo llvm-cov` that writes an export for `crates/theos-content` from the file
+    /// `cov.txt` of the directory it runs in (`<covered> <count>`), and notes where it ran.
+    #[derive(Default)]
+    struct FakeLlvm {
+        runs: RefCell<Vec<PathBuf>>,
+        head_fails: bool,
+        baseline_fails: bool,
+    }
+
+    fn is_worktree(dir: &Path) -> bool {
+        dir.file_name().is_some_and(|name| name == "wt")
+    }
+
+    impl Llvm for FakeLlvm {
+        fn version(&self, _root: &Path) -> Result<String> {
+            Ok("0.9.1".to_owned())
+        }
+
+        fn run(&self, dir: &Path, output: &Path, target_dir: Option<&Path>) -> Result<bool> {
+            self.runs.borrow_mut().push(dir.to_path_buf());
+            let baseline = is_worktree(dir);
+            // The baseline is built apart from the head, so that they do not share a directory.
+            assert_eq!(target_dir.is_some(), baseline, "{dir:?} {target_dir:?}");
+            if (baseline && self.baseline_fails) || (!baseline && self.head_fails) {
+                return Ok(false);
+            }
+            let path = dir.join("cov.txt");
+            let text = fs::read_to_string(&path).map_err(io_error(&path))?;
+            let mut numbers = text.split_whitespace().map(str::parse::<u64>);
+            let (Some(Ok(covered)), Some(Ok(count))) = (numbers.next(), numbers.next()) else {
+                panic!("cov.txt is `<covered> <count>`");
+            };
+            let export = json!({
+                "type": "llvm.coverage.json.export",
+                "data": [{ "files": [{
+                    "filename": format!("{}/crates/theos-content/src/lib.rs", dir.display()),
+                    "summary": { "lines": { "count": count, "covered": covered } },
+                }]}],
+            });
+            fs::write(output, export.to_string()).map_err(io_error(output))?;
+            Ok(true)
+        }
+    }
+
+    impl FakeLlvm {
+        fn ran_in(&self) -> Vec<&'static str> {
+            self.runs
+                .borrow()
+                .iter()
+                .map(|dir| if is_worktree(dir) { "baseline" } else { "head" })
+                .collect()
+        }
+    }
+
+    /// A repository on `main` whose first commit has the thresholds, the toolchain and
+    /// `cov.txt` with `cov`, and `xtask/Cargo.toml` when `with_xtask`.
+    fn repo(cov: &str, with_xtask: bool) -> TestResult<tempfile::TempDir> {
+        let dir = init_repo()?;
+        let path = dir.path();
+        let thresholds = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("gate")
+            .join("thresholds.toml");
+        fs::create_dir(path.join("gate"))?;
+        fs::copy(thresholds, path.join("gate").join("thresholds.toml"))?;
+        fs::write(
+            path.join("rust-toolchain.toml"),
+            "[toolchain]\nchannel = \"1.99.1\"\n",
+        )?;
+        fs::write(path.join(".gitignore"), "target\n")?;
+        fs::write(path.join("cov.txt"), cov)?;
+        if with_xtask {
+            fs::create_dir(path.join("xtask"))?;
+            fs::write(path.join("xtask").join("Cargo.toml"), "[package]\n")?;
+        }
+        commit(path, "feat: first")?;
+        Ok(dir)
+    }
+
+    fn set_cov(dir: &Path, cov: &str) -> TestResult {
+        fs::write(dir.join("cov.txt"), cov)?;
+        commit(dir, "feat: change coverage")?;
+        Ok(())
+    }
+
+    fn the_member() -> Vec<String> {
+        vec!["theos-content".to_owned()]
+    }
+
+    fn worktrees(dir: &Path) -> TestResult<usize> {
+        Ok(git(dir, &["worktree", "list"])?.lines().count())
+    }
+
+    fn cache_files(dir: &Path) -> TestResult<Vec<String>> {
+        let cache = work_dir(dir).join("cache");
+        let mut names = Vec::new();
+        if cache.exists() {
+            for entry in fs::read_dir(cache)? {
+                names.push(entry?.file_name().to_string_lossy().into_owned());
+            }
+        }
+        names.sort();
+        Ok(names)
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn the_first_pull_request_with_xtask_is_checked_against_the_floors_only() -> TestResult {
+        let dir = repo("90 100", false)?;
+        git(dir.path(), &["switch", "-q", "-c", "phase/P00-x"])?;
+        fs::create_dir(dir.path().join("xtask"))?;
+        fs::write(dir.path().join("xtask").join("Cargo.toml"), "[package]\n")?;
+        set_cov(dir.path(), "50 100")?;
+        let llvm = FakeLlvm::default();
+        let result = evaluate(&llvm, dir.path(), "main", false, &the_member())?;
+        assert_eq!(llvm.ran_in(), ["head"]);
+        assert_eq!(worktrees(dir.path())?, 1);
+        let messages = messages(&result);
+        assert_eq!(messages.len(), 1, "{messages:?}");
+        assert!(
+            messages[0].contains("below the 80.0 % floor"),
+            "{}",
+            messages[0]
+        );
+        assert!(has_note(&result, &["no baseline"]), "{result:?}");
+        Ok(())
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn a_drop_below_the_merge_base_fails_and_leaves_no_work_tree() -> TestResult {
+        let dir = repo("90 100", true)?;
+        git(dir.path(), &["switch", "-q", "-c", "phase/P00-x"])?;
+        set_cov(dir.path(), "80 100")?;
+        let llvm = FakeLlvm::default();
+        let result = evaluate(&llvm, dir.path(), "main", false, &the_member())?;
+        assert_eq!(llvm.ran_in(), ["head", "baseline"]);
+        let messages = messages(&result);
+        assert_eq!(messages.len(), 1, "{messages:?}");
+        for part in ["theos-content", "90.0", "80.0", "10.0"] {
+            assert!(
+                messages[0].contains(part),
+                "{part} is not in {}",
+                messages[0]
+            );
+        }
+        assert_eq!(worktrees(dir.path())?, 1);
+        assert!(!work_dir(dir.path()).join("wt").exists());
+        assert_eq!(cache_files(dir.path())?.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn the_baseline_is_measured_once_per_commit() -> TestResult {
+        let dir = repo("90 100", true)?;
+        git(dir.path(), &["switch", "-q", "-c", "phase/P00-x"])?;
+        set_cov(dir.path(), "89 100")?;
+        let llvm = FakeLlvm::default();
+        let first = evaluate(&llvm, dir.path(), "main", false, &the_member())?;
+        assert!(first.passed(), "{first:?}");
+        set_cov(dir.path(), "89 100")?;
+        let second = evaluate(&llvm, dir.path(), "main", false, &the_member())?;
+        assert!(second.passed(), "{second:?}");
+        set_cov(dir.path(), "88 100")?;
+        let third = evaluate(&llvm, dir.path(), "main", false, &the_member())?;
+        assert!(!third.passed(), "{third:?}");
+        assert_eq!(llvm.ran_in(), ["head", "baseline", "head", "head"]);
+        Ok(())
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn a_branch_behind_main_is_compared_with_the_merge_base() -> TestResult {
+        let dir = repo("85 100", true)?;
+        git(dir.path(), &["switch", "-q", "-c", "phase/P00-x"])?;
+        set_cov(dir.path(), "85 100")?;
+        git(dir.path(), &["switch", "-q", "main"])?;
+        set_cov(dir.path(), "99 100")?;
+        git(dir.path(), &["switch", "-q", "phase/P00-x"])?;
+        let llvm = FakeLlvm::default();
+        let result = evaluate(&llvm, dir.path(), "main", false, &the_member())?;
+        // Against the tip of `main` (99 %) this would be a drop of 14 points.
+        assert!(result.passed(), "{result:?}");
+        assert_eq!(llvm.ran_in(), ["head", "baseline"]);
+        Ok(())
+    }
+
+    #[test]
+    fn the_head_is_its_own_baseline_on_the_commit_of_main() -> TestResult {
+        let dir = repo("90 100", true)?;
+        let llvm = FakeLlvm::default();
+        let result = evaluate(&llvm, dir.path(), "main", false, &the_member())?;
+        assert!(result.passed(), "{result:?}");
+        assert_eq!(llvm.ran_in(), ["head"]);
+        assert!(
+            has_note(&result, &["the baseline is this commit"]),
+            "{result:?}"
+        );
+        Ok(())
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn failing_tests_are_a_failing_verdict() -> TestResult {
+        let dir = repo("90 100", true)?;
+        let llvm = FakeLlvm {
+            head_fails: true,
+            ..FakeLlvm::default()
+        };
+        let result = evaluate(&llvm, dir.path(), "main", false, &the_member())?;
+        assert!(!result.passed(), "{result:?}");
+        assert!(messages(&result)[0].contains("failed under instrumentation"));
+        Ok(())
+    }
+
+    #[test]
+    fn failing_tests_on_the_baseline_are_an_error_and_the_work_tree_goes() -> TestResult {
+        let dir = repo("90 100", true)?;
+        git(dir.path(), &["switch", "-q", "-c", "phase/P00-x"])?;
+        set_cov(dir.path(), "90 100")?;
+        let llvm = FakeLlvm {
+            baseline_fails: true,
+            ..FakeLlvm::default()
+        };
+        let result = evaluate(&llvm, dir.path(), "main", false, &the_member());
+        assert!(matches!(result, Err(Error::Command { .. })), "{result:?}");
+        assert_eq!(worktrees(dir.path())?, 1);
+        assert!(!work_dir(dir.path()).join("wt").exists());
+        assert_eq!(cache_files(dir.path())?, Vec::<String>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn a_push_to_main_stores_its_result_for_the_next_pull_request() -> TestResult {
+        let dir = repo("85 100", true)?;
+        let llvm = FakeLlvm::default();
+        let pushed = evaluate(&llvm, dir.path(), "origin/main", true, &the_member());
+        // There is no `origin/main` in this repository, which is an error, not a verdict.
+        assert!(pushed.is_err(), "{pushed:?}");
+        assert_eq!(cache_files(dir.path())?, Vec::<String>::new());
+
+        let pushed = evaluate(&llvm, dir.path(), "main", true, &the_member())?;
+        assert!(pushed.passed(), "{pushed:?}");
+        assert_eq!(cache_files(dir.path())?.len(), 1);
+
+        git(dir.path(), &["switch", "-q", "-c", "phase/P00-x"])?;
+        set_cov(dir.path(), "80 100")?;
+        let pull_request = evaluate(&llvm, dir.path(), "main", false, &the_member())?;
+        assert!(!pull_request.passed(), "{pull_request:?}");
+        // The baseline came from the cache that the push filled.
+        assert_eq!(llvm.ran_in(), ["head", "head"]);
+        Ok(())
+    }
+
+    #[test]
+    fn an_unknown_base_is_an_error_before_anything_runs() -> TestResult {
+        let dir = repo("90 100", true)?;
+        let llvm = FakeLlvm::default();
+        let result = evaluate(&llvm, dir.path(), "no-such-branch", false, &the_member());
+        assert!(matches!(result, Err(Error::Command { .. })), "{result:?}");
+        assert_eq!(llvm.ran_in(), Vec::<&str>::new());
+        let flag = evaluate(&llvm, dir.path(), "--output=x", false, &the_member());
+        assert!(matches!(flag, Err(Error::Parse { .. })), "{flag:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn a_missing_thresholds_file_is_an_error_before_anything_runs() -> TestResult {
+        let dir = repo("90 100", true)?;
+        fs::remove_file(dir.path().join("gate").join("thresholds.toml"))?;
+        let llvm = FakeLlvm::default();
+        let result = evaluate(&llvm, dir.path(), "main", false, &the_member());
+        assert!(matches!(result, Err(Error::Io { .. })), "{result:?}");
+        assert_eq!(llvm.ran_in(), Vec::<&str>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn an_export_that_is_not_one_is_an_error() -> TestResult {
+        struct Garbage;
+        impl Llvm for Garbage {
+            fn version(&self, _root: &Path) -> Result<String> {
+                Ok("0.9.1".to_owned())
+            }
+            fn run(&self, _dir: &Path, output: &Path, _target: Option<&Path>) -> Result<bool> {
+                fs::write(output, "not json").map_err(io_error(output))?;
+                Ok(true)
+            }
+        }
+        let dir = repo("90 100", true)?;
+        let result = evaluate(&Garbage, dir.path(), "main", false, &the_member());
+        assert!(matches!(result, Err(Error::Parse { .. })), "{result:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn a_run_that_writes_no_export_is_an_error() -> TestResult {
+        struct Silent;
+        impl Llvm for Silent {
+            fn version(&self, _root: &Path) -> Result<String> {
+                Ok("0.9.1".to_owned())
+            }
+            fn run(&self, _dir: &Path, _output: &Path, _target: Option<&Path>) -> Result<bool> {
+                Ok(true)
+            }
+        }
+        let dir = repo("90 100", true)?;
+        // An export left by an earlier run is not taken for this one.
+        fs::create_dir_all(work_dir(dir.path()))?;
+        fs::write(work_dir(dir.path()).join("head.json"), "{\"data\": []}")?;
+        let result = evaluate(&Silent, dir.path(), "main", false, &the_member());
+        assert!(matches!(result, Err(Error::Io { .. })), "{result:?}");
+        Ok(())
+    }
+}
