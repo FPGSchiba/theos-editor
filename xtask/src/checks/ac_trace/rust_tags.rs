@@ -213,7 +213,7 @@ fn fn_name(line: &str) -> Option<String> {
 
 /// The byte after the `]` that closes the attribute `text` starts with, or `None` when it is not
 /// closed. Brackets in strings, characters and line comments do not count.
-fn attribute_end(text: &str) -> Option<usize> {
+pub(crate) fn attribute_end(text: &str) -> Option<usize> {
     let bytes = text.as_bytes();
     let mut depth = 0_usize;
     let mut i = 0;
@@ -268,7 +268,7 @@ fn identifiers(text: &str) -> Vec<&str> {
 
 /// The byte after the string or character literal that starts at byte `start` of `text`, or
 /// `None` when no literal starts there (a lifetime is not one).
-fn literal_end(text: &str, start: usize) -> Option<usize> {
+pub(crate) fn literal_end(text: &str, start: usize) -> Option<usize> {
     let bytes = text.as_bytes();
     match *bytes.get(start)? {
         b'"' => Some(string_end(bytes, start + 1)),

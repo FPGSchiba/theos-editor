@@ -6,5 +6,6 @@
 pub mod ac_trace;
 pub mod cargo_cmds;
 pub mod commit_msg;
+pub mod lints;
 pub mod pr_body;
 pub mod pr_title;

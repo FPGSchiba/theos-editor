@@ -16,7 +16,7 @@ use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
 use xtask::branch::Phase;
-use xtask::checks::{ac_trace, cargo_cmds, commit_msg, pr_body, pr_title};
+use xtask::checks::{ac_trace, cargo_cmds, commit_msg, lints, pr_body, pr_title};
 use xtask::git::Git;
 use xtask::verdict::{Check, Verdict};
 use xtask::{Error, ci, report, tools};
@@ -175,7 +175,7 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         Command::Deny => cargo_cmds::run(Check::Deny, &root, ci.as_ref(), &mut out)?,
         Command::EngineFree => not_built("engine-free")?,
         Command::Coverage => not_built("coverage")?,
-        Command::Lints => not_built("lints")?,
+        Command::Lints => lints::run(&root, ci.as_ref(), &mut out)?,
         Command::AcTrace { phase: None } => ac_trace::run(&root, ci.as_ref(), &mut out)?,
         Command::AcTrace { phase } => ac_trace::run_phase(&root, *phase, ci.is_some(), &mut out)?,
         Command::CommitMsg {

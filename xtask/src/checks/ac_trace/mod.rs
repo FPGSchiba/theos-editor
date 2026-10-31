@@ -306,18 +306,23 @@ fn scan_files(root: &Path) -> Result<(Vec<Tag>, Vec<Finding>)> {
 
 /// Whether the scanners read the file `path` (repo-relative, with `/`): Rust and TypeScript
 /// sources, except fixtures (`tests/fixtures/`) and anything under `target/` or `node_modules/`.
-/// Research folders are read like any other.
-fn is_scanned(path: &str) -> bool {
+/// Research folders are read like any other. The `lints` check reads the same Rust files.
+pub(crate) fn is_scanned(path: &str) -> bool {
     let source = matches!(extension(path), Some("rs" | "ts"));
-    let fixture = path.starts_with("tests/fixtures/") || path.contains("/tests/fixtures/");
     let built = path
         .split('/')
         .any(|part| part == "target" || part == "node_modules");
-    source && !fixture && !built
+    source && !is_fixture(path) && !built
+}
+
+/// Whether `path` (repo-relative, with `/`) is under a `tests/fixtures/` folder: test data that
+/// holds deliberate violations, which no check reads as part of the repository.
+pub(crate) fn is_fixture(path: &str) -> bool {
+    path.starts_with("tests/fixtures/") || path.contains("/tests/fixtures/")
 }
 
 /// The extension of `path`, such as `rs`.
-fn extension(path: &str) -> Option<&str> {
+pub(crate) fn extension(path: &str) -> Option<&str> {
     Path::new(path)
         .extension()
         .and_then(|extension| extension.to_str())
@@ -383,7 +388,7 @@ fn is_tag_id(id: &str) -> bool {
 }
 
 /// The number of the line at `index` (counting from 0) in the unit of a finding: from 1.
-fn line_number(index: usize) -> u32 {
+pub(crate) fn line_number(index: usize) -> u32 {
     u32::try_from(index + 1).unwrap_or(u32::MAX)
 }
 
