@@ -212,7 +212,10 @@ Fixed values:
   `repository.workspace = true`, `[lints] workspace = true`.
 - `crates/theos-editor/Cargo.toml`: `[features] engine = []`, with a comment saying it is
   reserved for the engine part and must stay empty until then.
-- `.cargo/config.toml`: `[alias] xtask = "run --locked --package xtask --"`.
+- `.cargo/config.toml`: `[alias] xtask = "run --locked --package xtask --target-dir
+  target/xtask-bin --"`. The running `xtask.exe` lives in its own build directory, so that the
+  cargo commands it starts (`test`, `clippy`) never relink it (Windows cannot replace a running
+  executable).
 - `.gitattributes`: `* text=auto eol=lf`.
 - `gate/clippy.toml`, with the root `clippy.toml` byte-identical: the clippy test exemptions for
   unwrap, expect, panic, print and dbg (keys valid for clippy 1.99; drop a key clippy reports as
@@ -275,7 +278,10 @@ it).
     (true when there are no findings).
 - `report.rs`:
   - `pub fn write_table(verdicts: &[Verdict], out: &mut dyn Write) -> io::Result<()>`: one line
-    per check with `pass`/`FAIL`, then each finding as `  path:line: message`.
+    per check with `pass`/`FAIL`, then each finding as `  - path:line: message` and each note
+    as `  note: …`. Every line after the first line of a finding or note is `    | …`. The text
+    is split at every kind of line break, and no line starts with the text itself, so the runner
+    cannot read a line of a pull request as a workflow command.
   - `pub fn annotation(check: Check, f: &Finding) -> String`: `::error
     file=<f>,line=<n>,title=<check>::<msg>` with `%`, CR and LF escaped as `%25`, `%0D` and
     `%0A`; without a file it is `::error title=<check>::<msg>`.
@@ -823,8 +829,10 @@ Rules:
     there (with `CARGO_TARGET_DIR=target/xtask/coverage/target`), and always remove the
     worktree afterwards;
   - a baseline without `xtask/Cargo.toml` gives `None` (P00's own PR);
-  - cache: `target/xtask/coverage/cache/<sha>-<sha256 of the baseline's rust-toolchain.toml,
-    first 12 hex>-<llvm-cov version>.json`.
+  - cache: `target/xtask/coverage/cache/<sha>-<toolchain>-<llvm-cov version>.json`, where
+    `<toolchain>` is the first 12 hex digits of the sha256 of the `release:` and `commit-hash:`
+    lines of `rustc -vV`. It is the toolchain that measures, which is the one of the cargo that
+    runs the gate, and not the `rust-toolchain.toml` of the baseline commit.
 - On a push to `main`, also copy the head result into the cache under `HEAD`'s sha, so the next
   PRs find it.
 
@@ -1091,7 +1099,8 @@ Fixed values:
   - `Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3`
   - `taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1`
 - Setup action (composite, `shell: bash` on every step):
-  1. `rustup show`;
+  1. `rustup toolchain install` (without arguments it installs the toolchain of
+     `rust-toolchain.toml`; since rustup 1.28 `rustup show` no longer does);
   2. rust-cache;
   3. a step `id: tools` that runs `cargo xtask tools --print-install-spec` and writes
      `spec=<line>` to `$GITHUB_OUTPUT`;
@@ -1120,7 +1129,10 @@ Fixed values:
     1"`, `workflow_dispatch`, and `pull_request: types: [labeled]`, with job-level `if:
     github.event_name != 'pull_request' || github.event.label.name == 'macos'`.
   - `settings.yml`: job `settings` with `cargo xtask github check`, triggered weekly by `cron "0
-    5 * * 1"` and by `workflow_dispatch`, with `GH_TOKEN` as above.
+    5 * * 1"` and by `workflow_dispatch`, with `GH_TOKEN` as above. Its permissions are
+    `contents: read` and `issues: read`: the check lists the labels of the repository, which
+    needs `issues: read` in a private repository, and a job-level `permissions:` replaces the
+    top-level one. It writes nothing.
 - **Triggers and permissions:**
   - triggers as spec §5.6;
   - top-level `permissions: contents: read`;
