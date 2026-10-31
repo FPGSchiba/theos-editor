@@ -15,7 +15,7 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
-use xtask::checks::{cargo_cmds, commit_msg, pr_title};
+use xtask::checks::{cargo_cmds, commit_msg, pr_body, pr_title};
 use xtask::git::Git;
 use xtask::verdict::{Check, Verdict};
 use xtask::{Error, ci, report, tools};
@@ -92,8 +92,16 @@ enum Command {
         #[arg(long, value_name = "NAME", requires = "title")]
         branch: Option<String>,
     },
-    /// Check that the pull request description has every section of the template.
-    PrBody,
+    /// Check that the pull request description has every section of the template, filled.
+    ///
+    /// Under GitHub Actions the description comes from the pull request event. A description
+    /// only exists on a pull request, so anywhere else `--body-file` is needed; it replaces the
+    /// event.
+    PrBody {
+        /// A file with the description to check.
+        #[arg(long, value_name = "PATH")]
+        body_file: Option<PathBuf>,
+    },
     /// Check that a pull request touching a protected path has the label `approved`.
     Approval,
     /// Run every check of the gate that needs no pull request, as CI does.
@@ -179,7 +187,17 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
             let branch = commit_msg::branch_kind(&Git::new(&root), branch.as_deref())?;
             pr_title::check_title(title, &branch)
         }
-        Command::PrBody => not_built("pr-body")?,
+        Command::PrBody { body_file: None } => pr_body::run(&root, ci.as_ref(), &mut out)?,
+        Command::PrBody {
+            body_file: Some(path),
+        } => {
+            let template = pr_body::read_template(&root)?;
+            let body = std::fs::read_to_string(path).map_err(|source| Error::Io {
+                path: path.clone(),
+                source,
+            })?;
+            pr_body::check_body(&template, Some(&body))
+        }
         Command::Approval => not_built("approval")?,
         Command::Gate => not_built("gate")?,
         Command::Github {
