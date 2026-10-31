@@ -160,8 +160,9 @@ const checks: Check[] = [
   {
     id: 'N-reactive',
     file: LINKS,
-    async run(page) {
-      // The host pushes a changed index in; the editor redraws the chip and is not re-created.
+    async run(page, source) {
+      // The host pushes a changed index in; the editor redraws the chip and is not re-created: its
+      // elements, its text, its caret and its undo history are what they were before.
       const title = 'Mother Ilse (renamed by the index)';
       const marked = await page.evaluate(() => {
         const host = document.getElementById('editor-host')!;
@@ -175,9 +176,19 @@ const checks: Check[] = [
       });
       if (!marked) return judge(['the editor rendered no root element to mark']);
 
+      // A local edit (so there is something to undo), then a caret in front of it. A redraw that
+      // replaces the whole document would lose the history or move the caret.
+      await caretAt(page, resolveAnchor(source, { find: 'operator-plate names' }));
+      await page.keyboard.insertText('edit ');
+      await caretAt(page, resolveAnchor(source, { find: 'A link to a record:', offset: 5 }));
+      await settle(page);
+      const before = { text: await savedText(page), caret: await caretOf(page), canUndo: await canUndo(page) };
+
       await page.evaluate((info) => window.__harness!.updateIndex([info]), { id: 'mother-ilse', kind: 'npc' as const, title });
       const sel = '.tu-link[data-link-id="mother-ilse"] .tu-link__title';
       const redrawn = await eventually(async () => (await texts(page, sel)).includes(title));
+      await settle(page);
+      const after = { text: await savedText(page), caret: await caretOf(page), canUndo: await canUndo(page) };
 
       const same = await page.evaluate(() => {
         const host = document.getElementById('editor-host')!;
@@ -186,13 +197,18 @@ const checks: Check[] = [
         return { root: root?.p10RootMark === true, surface: surface === null || surface.p10SurfaceMark === true };
       });
       const problems: string[] = [];
+      if (before.text === source) problems.push('the local edit did not change the text, so updateIndex() cannot be judged against it');
+      if (!before.canUndo) problems.push('canUndo() is false after a local edit, so the undo history cannot be judged');
       if (!redrawn) {
         const shown = (await texts(page, sel))[0];
         problems.push(shown === undefined ? 'no chip for mother-ilse is rendered' : `the chip of mother-ilse still shows ${JSON.stringify(shown)}, not the new title`);
       }
       if (!same.root) problems.push('the editor root element is a different object after updateIndex()');
       if (!same.surface) problems.push('the editable element is a different object after updateIndex()');
-      return judge(problems, 'the chip shows the new title in the same editor element');
+      if (after.text !== before.text) problems.push('updateIndex() changed the text');
+      if (after.caret !== before.caret) problems.push(`updateIndex() moved the caret from ${before.caret} to ${after.caret}`);
+      if (after.canUndo !== before.canUndo) problems.push(`updateIndex() changed canUndo() from ${before.canUndo} to ${after.canUndo}`);
+      return judge(problems, 'the chip shows the new title; elements, text, caret and undo history are unchanged');
     },
   },
 ];

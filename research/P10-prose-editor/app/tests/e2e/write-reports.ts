@@ -75,8 +75,13 @@ export interface LongDocRow {
   bytes: number;
   /** From `load()` to the second animation frame after it. */
   loadMs?: number;
-  /** Keydown (`event.timeStamp`) to the next animation frame after the editor's DOM changed. */
+  /**
+   * Keydown (`event.timeStamp`) to the end of the main-thread style, layout and paint of the frame
+   * after the editor's DOM changed (a MessageChannel task posted from its animation frame callback).
+   */
   typing?: { start: Latency; middle: Latency; end: Latency };
+  /** The same keystrokes, ended earlier: in the animation frame callback, before style, layout and paint. */
+  typingFrame?: { start: Latency; middle: Latency; end: Latency };
   /** From jumping to the end of the document to the last line being drawn. */
   scrollMs?: number;
   scrollReachedEnd?: boolean;
@@ -291,14 +296,14 @@ export function longDocsSection(rows: LongDocRow[], machine: string = describeMa
     (a, b) => a.variant.localeCompare(b.variant) || a.engine.localeCompare(b.engine) || a.size - b.size,
   );
   const table = [
-    '| variant | engine | file | load ms | typing start (median / p95 ms) | typing middle | typing end | scroll ms | heap MB |',
-    '|---|---|---|---|---|---|---|---|---|',
+    '| variant | engine | file | load ms | typing start (median / p95 ms) | typing middle | typing end | typingFrame start | typingFrame middle | typingFrame end | scroll ms | heap MB |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|',
   ];
   for (const row of ordered) {
     const scroll = row.scrollMs === undefined ? '-' : `${row.scrollReachedEnd === false ? '>' : ''}${ms(row.scrollMs)}`;
     const heap = row.heapBytes === undefined ? '-' : (row.heapBytes / 1_000_000).toFixed(1);
     table.push(
-      `| ${row.variant} | ${row.engine} | ${sizeLabel(row)} | ${ms(row.loadMs)} | ${latency(row.typing?.start)} | ${latency(row.typing?.middle)} | ${latency(row.typing?.end)} | ${scroll} | ${heap} |`,
+      `| ${row.variant} | ${row.engine} | ${sizeLabel(row)} | ${ms(row.loadMs)} | ${latency(row.typing?.start)} | ${latency(row.typing?.middle)} | ${latency(row.typing?.end)} | ${latency(row.typingFrame?.start)} | ${latency(row.typingFrame?.middle)} | ${latency(row.typingFrame?.end)} | ${scroll} | ${heap} |`,
     );
   }
   const errors = ordered.filter((row) => row.error !== undefined);
@@ -306,15 +311,21 @@ export function longDocsSection(rows: LongDocRow[], machine: string = describeMa
   return [
     `Machine: ${machine}.`,
     '',
-    'Load is the time from `load()` to the second animation frame after it. Typing is the time from the',
-    "keydown's `timeStamp` to the next animation frame after the editor's DOM changed (a form field's",
-    '`input` event counts as a change), over 200 keystrokes typed at the start, middle and end of the',
-    'prose, each sent to an idle page after a pause of 0 to 16 ms. It stops before that frame is laid out',
-    'and painted, so it is a lower bound, and the headless browsers draw a frame on demand, so a light',
-    'editor measures about 1 ms here, not the interval of a 60 Hz display. Scroll is the time from',
-    'jumping to the end of the document until its last line is drawn (`>` when it never was within the',
-    'limit). Heap is `performance.memory.usedJSHeapSize` after a garbage collection, Chromium only. The',
-    'numbers are evidence, not a gate (spec §4.8); a headless run on a loaded machine is slower than the app.',
+    'Load is the time from `load()` to the second animation frame after it. Typing (median / p95 in ms) is',
+    "the time from the keydown's `timeStamp` until the main thread has styled, laid out and painted the",
+    "frame after the editor's DOM changed (a form field's `input` event counts as a change), before GPU",
+    'raster and present. `typingFrame` is the same keystroke ended earlier, in the animation frame callback',
+    'of that frame, which runs before its style, layout and paint: a lower bound for `typing`. WebKit',
+    'delivers the message that ends `typing` about two frames after that callback, so its `typing` has a',
+    'floor of about 30 ms (see the typical file): compare it between variants, and read the cost of the',
+    'editor itself from `typingFrame`. There are 200 keystrokes per position, typed into prose: the start (the intro',
+    'paragraph), the middle and the end (the paragraph of the last beat), in the order end, middle, start so',
+    'that earlier typing does not move the later places. Each keystroke is sent to an idle page after a',
+    'pause of 0 to 16 ms.',
+    'Scroll is the time from jumping to the end of the document until its last line is drawn (`>` when it never',
+    'was within the limit). Heap is `performance.memory.usedJSHeapSize` after a garbage collection, Chromium',
+    'only. The numbers are evidence, not a gate (spec §4.8); a headless run on a loaded machine is slower than',
+    'the app.',
     '',
     '## Results',
     '',

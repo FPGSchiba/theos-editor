@@ -31,7 +31,7 @@ const PLACES: Place[] = [
   { name: 'prose', file: LINKS, at: { find: 'operator-plate names' } },
   // Right behind the first chip of the file: "A link to a record: [[fates-shrine]]|."
   { name: 'chip', file: LINKS, at: { find: link, offset: link.length } },
-  // In the middle of a voice line: "Sing it wrong and you have only |made noise…"
+  // In the middle of a voice line, before "only": "Sing it wrong and you have |only made noise…"
   { name: 'voice', file: VOICES, at: { find: 'only made noise' } },
 ];
 
@@ -58,6 +58,29 @@ async function compose(page: Page, steps: string[], commit: string): Promise<voi
     await client.detach().catch(() => undefined);
   }
 }
+
+/** How many composition events the page saw since `watchComposition`. */
+interface CompositionCounts {
+  start: number;
+  end: number;
+}
+
+/**
+ * Count `compositionstart` and `compositionend` on the page from now on, in the capture phase on
+ * the window so that the editor cannot hide them. A check that composes has to see both: without
+ * them `Input.insertText` was a plain insert, which would pass the byte comparison all the same.
+ */
+function watchComposition(page: Page): Promise<void> {
+  return page.evaluate(() => {
+    const counts = { start: 0, end: 0 };
+    window.addEventListener('compositionstart', () => { counts.start += 1; }, true);
+    window.addEventListener('compositionend', () => { counts.end += 1; }, true);
+    Object.assign(window, { p10Composition: counts });
+  });
+}
+
+const compositionCounts = (page: Page): Promise<CompositionCounts> =>
+  page.evaluate(() => ({ ...(window as unknown as { p10Composition: CompositionCounts }).p10Composition }));
 
 /** Compare what the editor saves with the original plus `text` at the anchor, byte by byte. */
 async function againstOracle(page: Page, source: string, id: string, at: Anchor, text: string): Promise<Verdict> {
@@ -133,8 +156,15 @@ for (const variant of variantsUnderTest()) {
         await runCheck('input', subject(variant.name, browserName, method.check), async () => {
           const source = toLf(await loadFile(page, variant.name, place.file));
           await caretAt(page, resolveAnchor(source, place.at));
+          await watchComposition(page);
           await compose(page, method.steps, method.commit);
-          return againstOracle(page, source, method.check, place.at, method.commit);
+          await settle(page);
+          const counts = await compositionCounts(page);
+          const seen = `compositionstart ${counts.start}, compositionend ${counts.end}`;
+          // Without a composition the check did not test composition: it could not run.
+          if (counts.start === 0 || counts.end === 0) throw new Error(`no composition events (${seen})`);
+          const verdict = await againstOracle(page, source, method.check, place.at, method.commit);
+          return { ...verdict, detail: `${seen}; ${verdict.detail ?? ''}` };
         });
       });
     }

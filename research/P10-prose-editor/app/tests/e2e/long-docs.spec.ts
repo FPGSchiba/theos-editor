@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { splitFrontMatter } from '../../src/harness/frontmatter.ts';
 import { corpusFile } from './checks.ts';
 import { loadFile, record, strict, variantsUnderTest } from './helpers.ts';
 import type { Latency, LongDocRow } from './write-reports.ts';
@@ -53,17 +54,33 @@ function longText(size: number): string {
   return text;
 }
 
+/** The three places the typing happens, in the order they are typed (see `positions`). */
+const PLACES = ['end', 'middle', 'start'] as const;
+
 /**
- * Where the typing happens, as offsets into the text: inside the intro paragraph (start), a
- * paragraph of a beat in the middle of the file, and the paragraph of the last beat (end).
+ * Where the typing happens, as offsets into the text: inside the intro paragraph (start), the
+ * paragraph of a beat near the middle of the file (middle), and the paragraph of the last beat
+ * (end), each in plain prose. The offsets are into the original text, so the places are typed
+ * from the end of the file backwards (`PLACES`): what is typed at one place never moves a place
+ * that is still to come. Each offset is checked to lie in a prose line (not a heading, an
+ * attribute line, a callout or the front matter).
  */
-function positions(text: string): Record<'start' | 'middle' | 'end', number> {
+function positions(text: string): Record<(typeof PLACES)[number], number> {
   const prose = 'The stair is crowded';
   const middle = text.indexOf(prose, Math.floor(text.length / 2));
   const end = text.lastIndexOf(prose);
   const start = text.indexOf('Mother Ilse welcomes');
   if (start === -1 || middle === -1 || end === -1) throw new Error('long-docs: the generated text has no prose to type in');
-  return { start: start + 6, middle: middle + 12, end: end + 12 };
+  const found = { start: start + 6, middle: middle + 12, end: end + 12 };
+  const bodyStart = splitFrontMatter(text).frontMatter.length;
+  for (const place of PLACES) {
+    const offset = found[place];
+    const line = text.slice(text.lastIndexOf('\n', offset - 1) + 1, text.indexOf('\n', offset));
+    if (offset < bodyStart || /^(>|#|[a-z]+::)/.test(line)) {
+      throw new Error(`long-docs: the ${place} position is not in a prose line: ${JSON.stringify(line.slice(0, 40))}`);
+    }
+  }
+  return found;
 }
 
 function summarise(samples: number[]): Latency {
@@ -78,30 +95,52 @@ function summarise(samples: number[]): Latency {
 
 // ── In-page instruments ─────────────────────────────────────────────────────
 
-/** The probe that lives in the page: one sample per keystroke, taken in the page's own clock. */
+/** The samples of one position: per keystroke, in ms since its keydown, in the page's own clock. */
+interface Samples {
+  /** Until the main thread has styled, laid out and painted the frame after the change. */
+  paint: number[];
+  /** Until the animation frame callback of that frame, which runs before style, layout and paint. */
+  frame: number[];
+}
+
+/** The probe that lives in the page. */
 interface Probe {
   reset(): void;
   waitFor(count: number, limitMs: number): Promise<number>;
-  take(): number[];
+  take(): Samples;
 }
 
 /**
  * Install the probe. A keydown stores `event.timeStamp`; when the editor's DOM changes (a
  * MutationObserver) or a form field reports an `input`, the next animation frame ends the
- * measurement of every keydown that was waiting.
+ * measurement of every keydown that was waiting. That callback runs before the frame's style,
+ * layout and paint, so it only gives the `frame` sample; it posts a message on a MessageChannel,
+ * a task that runs after the frame's main-thread work, and the `paint` sample is taken there.
  */
 function installProbe(page: Page): Promise<void> {
   return page.evaluate(() => {
     const host = document.getElementById('editor-host')!;
-    let samples: number[] = [];
+    let samples: Samples = { paint: [], frame: [] };
     let waiting: number[] = [];
+    // The frames whose message has not arrived yet, oldest first (messages arrive in order).
+    const posted: Array<{ starts: number[]; frame: number }> = [];
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      const paint = performance.now();
+      const done = posted.shift();
+      if (done === undefined) return;
+      for (const start of done.starts) {
+        samples.paint.push(paint - start);
+        samples.frame.push(done.frame - start);
+      }
+    };
     const changed = (): void => {
       if (waiting.length === 0) return;
       const starts = waiting;
       waiting = [];
       requestAnimationFrame(() => {
-        const frame = performance.now();
-        for (const start of starts) samples.push(frame - start);
+        posted.push({ starts, frame: performance.now() });
+        channel.port2.postMessage(0);
       });
     };
     document.addEventListener(
@@ -116,21 +155,22 @@ function installProbe(page: Page): Promise<void> {
     host.addEventListener('input', changed, true);
     const probe: Probe = {
       reset() {
-        samples = [];
+        samples = { paint: [], frame: [] };
         waiting = [];
+        posted.length = 0;
       },
-      // Resolves with the number of samples once there are `count`, or after the limit.
+      // Resolves with the number of finished samples once there are `count`, or after the limit.
       waitFor(count, limitMs) {
         return new Promise((resolve) => {
           const started = performance.now();
           const tick = (): void => {
-            if (samples.length >= count || performance.now() - started > limitMs) resolve(samples.length);
+            if (samples.paint.length >= count || performance.now() - started > limitMs) resolve(samples.paint.length);
             else requestAnimationFrame(tick);
           };
           tick();
         });
       },
-      take: () => [...samples],
+      take: () => ({ paint: [...samples.paint], frame: [...samples.frame] }),
     };
     Object.assign(window, { p10Probe: probe });
   });
@@ -143,8 +183,16 @@ const probe = {
   take: (page: Page) => page.evaluate(() => (window as unknown as { p10Probe: Probe }).p10Probe.take()),
 };
 
-/** Type `KEYSTROKES` letters at `offset`, one at a time, and summarise the latency of each. */
-async function typeAt(page: Page, offset: number): Promise<Latency> {
+/** The letters `typeAt` types: `KEYSTROKES` of them, cycling through `LETTERS`. */
+const TYPED = Array.from({ length: KEYSTROKES }, (_, key) => LETTERS[key % LETTERS.length]).join('');
+
+/**
+ * Type `KEYSTROKES` letters at `offset`, one at a time, and summarise the latency of each
+ * (`paint`: until the frame after the change is styled, laid out and painted; `frame`: until its
+ * animation frame callback). The letters must end up at `offset`, else the position was not the
+ * one the report names and the sample is no use.
+ */
+async function typeAt(page: Page, offset: number): Promise<{ paint: Latency; frame: Latency }> {
   await page.evaluate((at) => {
     const harness = window.__harness!;
     harness.focus();
@@ -163,7 +211,10 @@ async function typeAt(page: Page, offset: number): Promise<Latency> {
     if (key === 4 && seen === 0) throw new Error('long-docs: five keystrokes led to no DOM change and no frame');
   }
   await probe.waitFor(page, KEYSTROKES);
-  return summarise(await probe.take(page));
+  const landed = await page.evaluate(([at, typed]) => window.__harness!.text().startsWith(typed, at), [offset, TYPED] as const);
+  if (!landed) throw new Error(`long-docs: the typed letters are not at offset ${offset}`);
+  const samples = await probe.take(page);
+  return { paint: summarise(samples.paint), frame: summarise(samples.frame) };
 }
 
 /**
@@ -243,10 +294,11 @@ for (const variant of variantsUnderTest()) {
 
         await installProbe(page);
         const where = positions(text);
-        const start = await typeAt(page, where.start);
-        const middle = await typeAt(page, where.middle);
-        const end = await typeAt(page, where.end);
-        row.typing = { start, middle, end };
+        // From the end backwards, so that typing at one place does not move the next one.
+        const typed = {} as Record<(typeof PLACES)[number], { paint: Latency; frame: Latency }>;
+        for (const place of PLACES) typed[place] = await typeAt(page, where[place]);
+        row.typing = { start: typed.start.paint, middle: typed.middle.paint, end: typed.end.paint };
+        row.typingFrame = { start: typed.start.frame, middle: typed.middle.frame, end: typed.end.frame };
 
         if (browserName === 'chromium') {
           const heap = await heapBytes(page);

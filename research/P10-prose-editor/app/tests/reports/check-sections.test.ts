@@ -73,6 +73,11 @@ describe('the long-documents section', () => {
       middle: { median: 4.1, p95: 14.1, n: 200 },
       end: { median: 45.7, p95: 53.9, n: 200 },
     },
+    typingFrame: {
+      start: { median: 1.2, p95: 9.9, n: 200 },
+      middle: { median: 2.4, p95: 10.1, n: 200 },
+      end: { median: 30.2, p95: 41.6, n: 200 },
+    },
     scrollMs: 8.4,
     scrollReachedEnd: true,
     heapBytes: 10_600_000,
@@ -86,7 +91,10 @@ describe('the long-documents section', () => {
     );
     expect(text).toContain('Machine: Test CPU, 8 logical cores, 16.0 GiB RAM.');
     expect(text.indexOf('typical (5 KB)')).toBeLessThan(text.indexOf('large (250 KB)'));
-    expect(text).toContain('| codemirror | chromium | large (250 KB) | 66 | 3.5 / 14 | 4.1 / 14 | 46 / 54 | 8.4 | 10.6 |');
+    expect(text).toContain('typingFrame start | typingFrame middle | typingFrame end');
+    expect(text).toContain(
+      '| codemirror | chromium | large (250 KB) | 66 | 3.5 / 14 | 4.1 / 14 | 46 / 54 | 1.2 / 9.9 | 2.4 / 10 | 30 / 42 | 8.4 | 10.6 |',
+    );
   });
 
   it('shows what is missing as a dash, a scroll that never ended with ">", and lists the errors', () => {
@@ -100,7 +108,9 @@ describe('the long-documents section', () => {
       ],
       'Test CPU',
     );
-    expect(text).toContain('| codemirror | webkit | stress (2.5 MB) | 66 | 3.5 / 14 | 4.1 / 14 | 46 / 54 | >10000 | - |');
+    expect(text).toContain(
+      '| codemirror | webkit | stress (2.5 MB) | 66 | 3.5 / 14 | 4.1 / 14 | 46 / 54 | 1.2 / 9.9 | 2.4 / 10 | 30 / 42 | >10000 | - |',
+    );
     expect(text).toContain('- codemirror · webkit · broken (250 KB): long-docs: five keystrokes led to no DOM change');
   });
 });
