@@ -300,7 +300,7 @@ mod tests {
         // The suffix is still the phase of the branch.
         assert_fails("docs(spec): x (P01)", "spec/P00-x", "(P00)");
         assert_fails("docs(spec): x (gate)", "spec/P00-x", "(P00)");
-        // And `docs(spec)` is for spec branches only.
+        // Only a spec branch requires `docs(spec)`; the title of another branch may have it.
         assert_passes("docs(spec): x (docs)", "docs/x");
     }
 

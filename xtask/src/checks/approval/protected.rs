@@ -226,11 +226,8 @@ mod tests {
         ProtectedPaths::load(root.unwrap_or_else(|| Path::new(".")))
     }
 
-    fn rules(text: &str) -> ProtectedPaths {
-        match ProtectedPaths::parse(text) {
-            Ok(rules) => rules,
-            Err(error) => panic!("rules do not parse: {error}"),
-        }
+    fn rules(text: &str) -> Result<ProtectedPaths> {
+        ProtectedPaths::parse(text)
     }
 
     // AC: CE-08.5
@@ -275,8 +272,8 @@ mod tests {
 
     // AC: CE-08.5
     #[test]
-    fn star_does_not_cross_slash() {
-        let rules = rules("protected = [\"a/*.md\", \"b/**\"]\nexcept = [\"b/*.tmp\"]");
+    fn star_does_not_cross_slash() -> Result<()> {
+        let rules = rules("protected = [\"a/*.md\", \"b/**\"]\nexcept = [\"b/*.tmp\"]")?;
         assert!(rules.matches("a/x.md"));
         assert!(!rules.matches("a/deeper/x.md"));
         assert!(!rules.matches("x.md"));
@@ -284,6 +281,7 @@ mod tests {
         assert!(rules.matches("b/deeper/x.md"));
         assert!(!rules.matches("b/x.tmp"));
         assert!(rules.matches("b/deeper/x.tmp"));
+        Ok(())
     }
 
     #[test]

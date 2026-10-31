@@ -237,14 +237,21 @@ fn path_outside_the_workspace_is_engine_without_the_name_list() -> TestResult {
 // AC: CE-08.2
 #[test]
 fn git_dependency_on_the_engine_repo_fails_whatever_its_name() -> TestResult {
-    // Offline the graph cannot be resolved, for the repo cannot be read; the source of the
-    // dependency is what makes it an engine crate, and the name is in no list.
+    // The URL of the dependency holds the source of the engine repository and names a repository
+    // that does not exist, so the graph cannot be resolved offline, whatever cargo's git cache
+    // holds on this machine. The source of the dependency is what makes it an engine crate, and
+    // the name is in no list.
     let verdict = check_case("git-engine-dep")?;
     assert_fails_with(
         &verdict,
         &["`not-in-the-list`", "not optional", "from a source"],
     );
     assert_eq!(verdict.notes.len(), 1, "{:?}", verdict.notes);
+    assert!(
+        verdict.notes[0].contains("resolved level did not run"),
+        "{:?}",
+        verdict.notes
+    );
     Ok(())
 }
 
