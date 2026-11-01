@@ -6,7 +6,8 @@ import type { CorpusFile } from '../../src/harness/manifest.ts';
 import { expectedAfter, toLf } from '../../src/harness/oracle.ts';
 import type { Anchor } from '../../src/harness/types.ts';
 import {
-  caretAt, corpusFile, count, eventually, judge, runCheck, savedText, settle, texts, visibleText,
+  caretAt, collectRows, collectTexts, corpusFile, count, eventually, judge, runCheck, savedText,
+  settle, texts, visibleText,
   type Verdict,
 } from './checks.ts';
 import { loadFile, variantsUnderTest } from './helpers.ts';
@@ -42,19 +43,14 @@ interface ChipInfo {
   broken: boolean;
 }
 
-/** Every chip of the editor with this link id. */
+/** Every chip of the editor with this link id, over the whole scroll range. */
 function chipsOf(page: Page, id: string): Promise<ChipInfo[]> {
-  return page.evaluate(
-    (wanted) =>
-      [...document.getElementById('editor-host')!.querySelectorAll('.tu-link')]
-        .filter((chip) => chip.getAttribute('data-link-id') === wanted)
-        .map((chip) => ({
-          kind: chip.querySelector('.tu-kind')?.getAttribute('data-kind') ?? null,
-          title: (chip.querySelector('.tu-link__title')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
-          broken: chip.classList.contains('is-broken'),
-        })),
-    id,
-  );
+  return collectRows(page, '.tu-link', (chip) => ({
+    id: chip.getAttribute('data-link-id'),
+    kind: chip.querySelector('.tu-kind')?.getAttribute('data-kind') ?? null,
+    title: (chip.querySelector('.tu-link__title')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    broken: chip.classList.contains('is-broken'),
+  })).then((rows) => rows.filter((row) => row.id === id));
 }
 
 /** Wait for a chip with this id to be rendered; a variant that draws none never gets one. */
@@ -78,15 +74,21 @@ function popoverRows(page: Page): Promise<Array<{ id: string; kind: string }>> {
 const beatHeading = async (page: Page, beat: number): Promise<string | undefined> =>
   (await texts(page, `[data-beat="${beat}"]`))[0];
 
-/** The (note, state) pairs of every note callout; a note drawn as a run of lines shows up once. */
-function notesOf(page: Page): Promise<Array<[string, string]>> {
-  return page.evaluate(() => {
-    const found = new Map<string, string>();
-    for (const node of document.getElementById('editor-host')!.querySelectorAll('[data-callout="note"]')) {
-      found.set(node.getAttribute('data-note') ?? '', node.getAttribute('data-note-state') ?? '');
-    }
-    return [...found];
-  });
+/** The same over the whole scroll range, for a heading that is not under the caret. */
+const beatHeadingAnywhere = async (page: Page, beat: number): Promise<string | undefined> =>
+  (await collectTexts(page, `[data-beat="${beat}"]`))[0];
+
+/** Whether any element of the editor matches, wherever it is scrolled to. */
+const existsAnywhere = async (page: Page, selector: string): Promise<boolean> =>
+  (await collectRows(page, selector, () => ({}))).length > 0;
+
+/** The (note, state) pairs of every note callout, over the whole scroll range; a note drawn as a run of lines shows up once. */
+async function notesOf(page: Page): Promise<Array<[string, string]>> {
+  const rows = await collectRows(page, '[data-callout="note"]', (node) => ({
+    note: node.getAttribute('data-note') ?? '',
+    state: node.getAttribute('data-note-state') ?? '',
+  }));
+  return [...new Map(rows.map((row) => [row.note, row.state] as [string, string]))];
 }
 
 /** The end of a line, as an anchor: its text found once, the caret behind it. */
@@ -125,7 +127,7 @@ const checks: Check[] = [
       if (!titles.includes('Listeners answer to the right song')) {
         problems.push(`no B-020 chip shows the alias (titles: ${titles.map((t) => JSON.stringify(t)).join(', ')})`);
       }
-      const raw = (await texts(page, '.tu-link__title')).find((title) => title.includes('|') || title.includes('[['));
+      const raw = (await collectTexts(page, '.tu-link__title')).find((title) => title.includes('|') || title.includes('[['));
       if (raw !== undefined) problems.push(`a chip shows link syntax: ${JSON.stringify(raw)}`);
       return judge(problems, 'the alias is the shown text');
     },
@@ -229,17 +231,18 @@ const checks: Check[] = [
     tag: '@callouts',
     file: VOICES,
     async run(page) {
-      if (!(await eventually(async () => (await count(page, '[data-callout="voice"]')) > 0))) {
-        return judge(['no [data-callout="voice"] element is rendered']);
-      }
+      const voiceRows = () =>
+        collectRows(page, '[data-callout="voice"]', (node) => ({ tuVoice: node.classList.contains('tu-voice') }));
+      let voices = await voiceRows();
+      if (voices.length === 0 && (await eventually(async () => (await voiceRows()).length > 0))) voices = await voiceRows();
+      if (voices.length === 0) return judge(['no [data-callout="voice"] element is rendered']);
       const problems: string[] = [];
-      const voices = await count(page, '[data-callout="voice"]');
-      if ((await count(page, '.tu-voice[data-callout="voice"]')) !== voices) problems.push('a voice element lacks the tu-voice class');
-      const heads = await texts(page, '.tu-voice__head');
+      if (voices.some((voice) => !voice.tuVoice)) problems.push('a voice element lacks the tu-voice class');
+      const heads = await collectTexts(page, '.tu-voice__head');
       for (const speaker of ['Hearth folk', 'Throat-Kin binders', 'Mother Ilse']) {
         if (!heads.some((head) => head.includes(speaker))) problems.push(`no .tu-voice__head names ${speaker}`);
       }
-      const captions = await texts(page, '.tu-voice__by');
+      const captions = await collectTexts(page, '.tu-voice__by');
       for (const caption of ['a binder, teaching the naming-song', 'a saying on the shrine stair', 'a real caption after it']) {
         if (!captions.some((shown) => shown.includes(caption))) problems.push(`no .tu-voice__by shows "${caption}"`);
       }
@@ -253,15 +256,15 @@ const checks: Check[] = [
     tag: '@callouts',
     file: VOICES,
     async run(page) {
-      if (!(await eventually(async () => (await count(page, '[data-callout="design"]')) > 0))) {
+      if (!(await eventually(() => existsAnywhere(page, '[data-callout="design"]')))) {
         return judge(['no [data-callout="design"] element is rendered']);
       }
       const problems: string[] = [];
-      const design = (await texts(page, '[data-callout="design"]')).join(' ');
+      const design = (await collectTexts(page, '[data-callout="design"]')).join(' ');
       if (!design.includes('A synthetic designer remark inside an in-world text.')) problems.push('the design callout does not show its text');
-      const notes = await texts(page, '.tu-note');
+      const notes = await collectTexts(page, '.tu-note');
       if (!notes.some((line) => line.includes('the player first meets this belief'))) problems.push('no .tu-note element holds the "Design note:" line');
-      if ((await count(page, '.tu-note[data-callout]')) > 0) problems.push('the "Design note:" line carries data-callout');
+      if (await existsAnywhere(page, '.tu-note[data-callout]')) problems.push('the "Design note:" line carries data-callout');
       return judge(problems, 'design callout and "Design note:" line');
     },
   },
@@ -270,7 +273,7 @@ const checks: Check[] = [
     tag: '@callouts',
     file: NOTES,
     async run(page) {
-      if (!(await eventually(async () => (await count(page, '[data-callout="note"]')) > 0))) {
+      if (!(await eventually(() => existsAnywhere(page, '[data-callout="note"]')))) {
         return judge(['no [data-callout="note"] element is rendered']);
       }
       const found = new Map(await notesOf(page));
@@ -290,11 +293,12 @@ const checks: Check[] = [
     async run(page) {
       // The only developer word inside voice text is "ledger"; T-012 sits in the design note and
       // "canon" in the (hidden) front matter, so neither may be flagged.
-      const words = await page.evaluate(() =>
-        [...document.getElementById('editor-host')!.querySelectorAll('[data-dev-word]')].map((node) => ({
-          text: (node.textContent ?? '').trim(),
-          inVoice: node.closest('[data-callout="voice"]') !== null,
-        })));
+      const words = await collectRows(
+        page,
+        '[data-dev-word]',
+        (node) => ({ text: (node.textContent ?? '').trim(), inVoice: node.closest('[data-callout="voice"]') !== null }),
+        (row) => `${row.text}|${row.inVoice}`,
+      );
       if (words.length === 0) return judge(['no [data-dev-word] element is rendered']);
       const problems: string[] = [];
       const listed = developerWords.map((word) => word.toLowerCase());
@@ -313,10 +317,10 @@ const checks: Check[] = [
     tag: '@beats',
     file: SCRIPT,
     async run(page) {
-      if (!(await eventually(async () => (await count(page, '[data-beat]')) > 0))) return judge(['no [data-beat] heading is rendered']);
+      if (!(await eventually(() => existsAnywhere(page, '[data-beat]')))) return judge(['no [data-beat] heading is rendered']);
       const problems: string[] = [];
-      const first = await beatHeading(page, 1);
-      const second = await beatHeading(page, 2);
+      const first = await beatHeadingAnywhere(page, 1);
+      const second = await beatHeadingAnywhere(page, 2);
       if (first !== '1 · Arrival') problems.push(`beat 1 shows ${JSON.stringify(first)}, not "1 · Arrival"`);
       if (second !== '2 · The murmur') problems.push(`beat 2 shows ${JSON.stringify(second)}, not "2 · The murmur"`);
       return judge(problems, '"1 · Arrival" and "2 · The murmur"');
@@ -327,11 +331,11 @@ const checks: Check[] = [
     tag: '@beats',
     file: SCRIPT,
     async run(page) {
-      if (!(await eventually(async () => (await count(page, '[data-beat-row="1"]')) > 0))) return judge(['no [data-beat-row="1"] is rendered']);
+      if (!(await eventually(() => existsAnywhere(page, '[data-beat-row="1"]')))) return judge(['no [data-beat-row="1"] is rendered']);
       const problems: string[] = [];
-      if ((await count(page, '[data-beat-row="1"] .tu-beat')) === 0) problems.push('the row has no .tu-beat');
-      const chips = await count(page, '[data-beat-row="1"] [data-beat-param="at"] .tu-link[data-link-id="fates-shrine"]');
-      if (chips === 0) problems.push('the at param holds no chip for fates-shrine');
+      if (!(await existsAnywhere(page, '[data-beat-row="1"] .tu-beat'))) problems.push('the row has no .tu-beat');
+      const chips = await existsAnywhere(page, '[data-beat-row="1"] [data-beat-param="at"] .tu-link[data-link-id="fates-shrine"]');
+      if (!chips) problems.push('the at param holds no chip for fates-shrine');
       return judge(problems, 'the at param holds the fates-shrine chip');
     },
   },
@@ -340,11 +344,11 @@ const checks: Check[] = [
     tag: '@beats',
     file: SCRIPT,
     async run(page) {
-      if (!(await eventually(async () => (await count(page, '[data-beat-row="2"]')) > 0))) return judge(['no [data-beat-row="2"] is rendered']);
+      if (!(await eventually(() => existsAnywhere(page, '[data-beat-row="2"]')))) return judge(['no [data-beat-row="2"] is rendered']);
       const problems: string[] = [];
       const own = '[data-beat-row="2"] [data-beat-finding][data-finding-rule="never-confirm"]';
-      if ((await count(page, own)) === 0) problems.push('beat 2 shows no never-confirm finding');
-      if ((await count(page, '[data-beat-row="1"] [data-beat-finding]')) > 0) problems.push('beat 1 shows a finding it does not have');
+      if (!(await existsAnywhere(page, own))) problems.push('beat 2 shows no never-confirm finding');
+      if (await existsAnywhere(page, '[data-beat-row="1"] [data-beat-finding]')) problems.push('beat 1 shows a finding it does not have');
       return judge(problems, 'never-confirm on beat 2 only');
     },
   },

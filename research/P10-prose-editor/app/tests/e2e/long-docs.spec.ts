@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import { splitFrontMatter } from '../../src/harness/frontmatter.ts';
-import { corpusFile } from './checks.ts';
+import { corpusFile, findScrollers, inPage } from './checks.ts';
 import { loadFile, record, strict, variantsUnderTest } from './helpers.ts';
 import type { Latency, LongDocRow } from './write-reports.ts';
 
@@ -218,19 +218,15 @@ async function typeAt(page: Page, offset: number): Promise<{ paint: Latency; fra
 }
 
 /**
- * Jump to the end of the document and wait until its last line is drawn. The scrollers are the
- * focused editing element and its ancestors that have something to scroll, and the page itself.
+ * Jump to the end of the document and wait until its last line is drawn. The scrollers are found by
+ * `findScrollers` (checks.ts).
  */
 function scrollToEnd(page: Page): Promise<{ ms: number; reached: boolean }> {
   return page.evaluate(
-    async ([marker, limit]) => {
+    async ([marker, limit, finder]) => {
       const host = document.getElementById('editor-host')!;
       window.__harness!.focus();
-      const scrollers = new Set<Element>();
-      for (let node: Element | null = document.activeElement ?? host; node !== null; node = node.parentElement) {
-        if (node.scrollHeight > node.clientHeight + 1) scrollers.add(node);
-      }
-      if (document.scrollingElement !== null) scrollers.add(document.scrollingElement);
+      const scrollers = new Set<Element>((0, eval)(finder)() as Element[]);
       const atBottom = (node: Element): boolean => node.scrollTop + node.clientHeight >= node.scrollHeight - 2;
       const frame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -244,7 +240,7 @@ function scrollToEnd(page: Page): Promise<{ ms: number; reached: boolean }> {
         if (performance.now() - started > limit) return { ms: performance.now() - started, reached: false };
       }
     },
-    [LAST_LINE, SCROLL_LIMIT_MS] as const,
+    [LAST_LINE, SCROLL_LIMIT_MS, inPage(findScrollers)] as const,
   );
 }
 

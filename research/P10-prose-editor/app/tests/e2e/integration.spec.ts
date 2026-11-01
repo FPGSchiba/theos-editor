@@ -4,7 +4,7 @@ import { splitFrontMatter } from '../../src/harness/frontmatter.ts';
 import type { CorpusFile } from '../../src/harness/manifest.ts';
 import { toLf } from '../../src/harness/oracle.ts';
 import {
-  caretAt, corpusFile, count, eventually, judge, runCheck, savedText, settle, texts, type Verdict,
+  caretAt, collectRows, corpusFile, count, eventually, judge, runCheck, savedText, settle, texts, type Verdict,
 } from './checks.ts';
 import { loadFile, variantsUnderTest } from './helpers.ts';
 
@@ -147,8 +147,12 @@ const checks: Check[] = [
       await loadFile(page, variant, LINKS);
 
       const links = splitFrontMatter(source).body.match(/\[\[[^\]\n]+\]\]/g)?.length ?? 0;
-      const shown = await eventually(async () => (await count(page, '.tu-link')) === links);
-      const chips = await count(page, '.tu-link');
+      // A viewport editor draws only the chips near the window: count them over the whole scroll
+      // range, each at its document-absolute position, so a recycled element counts once.
+      const chipsDrawn = async (): Promise<number> =>
+        (await collectRows(page, '.tu-link', (chip) => ({ id: chip.getAttribute('data-link-id') }))).length;
+      const shown = await eventually(async () => (await chipsDrawn()) === links);
+      const chips = await chipsDrawn();
       const problems: string[] = [];
       if (!shown) problems.push(`after 20 loads the editor shows ${chips} chips, the file has ${links} links`);
       const adapters = await count(page, '.hx-adapter');
