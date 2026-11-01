@@ -57,6 +57,10 @@ fn write_marked(out: &mut dyn Write, marker: &str, text: &str) -> io::Result<()>
 ///
 /// An error may hold text a pull request controls (a file name, a revision), and the runner reads
 /// stderr for workflow commands too, so no line of it may start with the text itself.
+///
+/// # Errors
+///
+/// Fails when `out` cannot be written to.
 pub fn write_error(out: &mut dyn Write, error: &dyn std::fmt::Display) -> io::Result<()> {
     let mut lines = lines_of(&error.to_string()).into_iter();
     writeln!(out, "error: {}", lines.next().unwrap_or_default())?;
@@ -324,7 +328,7 @@ mod tests {
         write_error(&mut out, &"a\n::error::x.rs: gone\r\nlast\n")?;
         let text = String::from_utf8(out)?;
         assert_eq!(text, "error: a\n  | ::error::x.rs: gone\n  | last\n");
-        assert!(command_lines(&text).is_empty());
+        assert_eq!(command_lines(&text), Vec::<&str>::new());
         Ok(())
     }
 
