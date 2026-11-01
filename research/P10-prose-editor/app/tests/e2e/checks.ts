@@ -162,6 +162,19 @@ export const inPage = (fn: (...args: never[]) => unknown): string => `(${fn.toSt
 
 const MAX_STEPS = 400;
 
+/** Scroll every scroller of the editor to `step` half-windows from the top; true when all are at their end. */
+function scrollEditorTo(page: Page, step: number): Promise<boolean> {
+  return page.evaluate(
+    ([finder, index]) => {
+      const scrollers = (0, eval)(finder)() as Element[];
+      const half = window.innerHeight / 2;
+      for (const node of scrollers) node.scrollTop = index * half;
+      return scrollers.every((node) => node.scrollTop + node.clientHeight >= node.scrollHeight - 2);
+    },
+    [inPage(findScrollers), step] as const,
+  );
+}
+
 /**
  * Run `read` with the editor scrolled to the top and then down in half-window steps (two frames
  * at each), and return the union of what it found; the editor is scrolled back to the top at the
@@ -180,16 +193,7 @@ export async function collectWhileScrolling<T>(
   const take = async (): Promise<void> => {
     for (const item of await read()) if (!found.has(key(item))) found.set(key(item), item);
   };
-  const scrollTo = (step: number): Promise<boolean> =>
-    page.evaluate(
-      ([finder, index]) => {
-        const scrollers = (0, eval)(finder)() as Element[];
-        const half = window.innerHeight / 2;
-        for (const node of scrollers) node.scrollTop = index * half;
-        return scrollers.every((node) => node.scrollTop + node.clientHeight >= node.scrollHeight - 2);
-      },
-      [inPage(findScrollers), step] as const,
-    );
+  const scrollTo = (step: number): Promise<boolean> => scrollEditorTo(page, step);
   try {
     await scrollTo(0);
     await settle(page);
@@ -220,30 +224,27 @@ export async function collectWhileScrolling<T>(
  */
 export async function revealElement(page: Page, selector: string, waitMs = 0): Promise<void> {
   const present = (): Promise<boolean> =>
-    page.evaluate((sel) => document.querySelector(sel) !== null, selector);
-  const scrollTo = (step: number): Promise<boolean> =>
-    page.evaluate(
-      ([finder, index]) => {
-        const scrollers = (0, eval)(finder)() as Element[];
-        const half = window.innerHeight / 2;
-        for (const node of scrollers) node.scrollTop = index * half;
-        return scrollers.every((node) => node.scrollTop + node.clientHeight >= node.scrollHeight - 2);
-      },
-      [inPage(findScrollers), step] as const,
+    page.evaluate((sel) => document.getElementById('editor-host')?.querySelector(sel) != null, selector);
+  const show = async (): Promise<boolean> => {
+    await page.evaluate(
+      (sel) => document.getElementById('editor-host')?.querySelector(sel)?.scrollIntoView({ block: 'center' }),
+      selector,
     );
+    await settle(page);
+    return present();
+  };
   const deadline = Date.now() + waitMs;
   for (;;) {
-    await scrollTo(0);
+    // An element that is already drawn is only brought into view: scrolling to the top first could
+    // push it out of a viewport editor's window and drop the UI state it holds.
+    if ((await present()) && (await show())) return;
+    await scrollEditorTo(page, 0);
     await settle(page);
     let reachedEnd = false;
     for (let step = 1; step <= MAX_STEPS; step++) {
-      if (await present()) {
-        await page.evaluate((sel) => document.querySelector(sel)?.scrollIntoView({ block: 'center' }), selector);
-        await settle(page);
-        if (await present()) return;
-      }
+      if ((await present()) && (await show())) return;
       if (reachedEnd) break;
-      reachedEnd = await scrollTo(step);
+      reachedEnd = await scrollEditorTo(page, step);
       await settle(page);
     }
     if (!reachedEnd) throw new Error(`revealElement: the end was not reached in ${MAX_STEPS} half-window steps`);

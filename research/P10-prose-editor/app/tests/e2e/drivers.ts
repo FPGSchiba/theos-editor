@@ -62,17 +62,17 @@ async function beatParam(page: Page, edit: ScriptedEdit & { kind: 'beat-param' }
   const paramSelector = `${rowSelector} [data-beat-param=${attr(edit.key)}]`;
   const existing = row.locator(`[data-beat-param=${attr(edit.key)}]`).first();
   if ((await existing.count()) > 0) {
-    await revealElement(page, paramSelector);
+    await reveal(paramSelector, `the parameter ${edit.key} of beat ${edit.beat}`);
     // The key label is outside any chip; a click on the middle of the param may land on one.
     const label = existing.locator('.tu-beat__key').first();
     await ((await label.count()) > 0 ? label : existing).click({ timeout: FEATURE_WAIT_MS });
   } else {
-    await revealElement(page, `${rowSelector} [data-beat-add]`);
+    await reveal(`${rowSelector} [data-beat-add]`, `the add button of beat ${edit.beat}`);
     await row.locator('[data-beat-add]').first().click({ timeout: FEATURE_WAIT_MS });
-    await revealElement(page, `${rowSelector} [data-beat-add-key=${attr(edit.key)}]`, FEATURE_WAIT_MS);
+    await reveal(`${rowSelector} [data-beat-add-key=${attr(edit.key)}]`, `the key choice ${edit.key}`);
     await row.locator(`[data-beat-add-key=${attr(edit.key)}]`).first().click({ timeout: FEATURE_WAIT_MS });
   }
-  await revealElement(page, `${rowSelector} [data-beat-input]`, FEATURE_WAIT_MS);
+  await reveal(`${rowSelector} [data-beat-input]`, `the value field of beat ${edit.beat}`);
   const field = row.locator('[data-beat-input]').first();
   await field.fill(edit.value, { timeout: FEATURE_WAIT_MS });
   await field.press('Enter');
