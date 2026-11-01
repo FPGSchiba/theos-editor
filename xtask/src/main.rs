@@ -179,8 +179,9 @@ fn main() -> ExitCode {
             // `Error::Io` already has its source in its own message, so it would be said twice.
             // Nothing is lost, because no error here is wrapped by anyhow: `run` folds the
             // cause into the message where it adds context.
+            // `write_error` marks every line, so no text of an error can start a workflow command.
             // If stderr is closed there is nobody left to tell.
-            let _ = writeln!(std::io::stderr(), "error: {error}");
+            let _ = report::write_error(&mut std::io::stderr(), &error);
             ExitCode::from(2)
         }
     }

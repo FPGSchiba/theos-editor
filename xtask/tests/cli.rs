@@ -48,3 +48,21 @@ fn an_error_with_a_context_keeps_the_context_and_the_cause() -> TestResult {
     );
     Ok(())
 }
+
+// AC: CE-08.4
+#[test]
+fn no_line_of_an_error_can_start_a_workflow_command() -> TestResult {
+    // A revision name is text the caller controls, and git's complaint repeats it.
+    let output = xtask(
+        &["commit-msg", "--base", "no-such\n::error::forged"],
+        |_| {},
+    )?;
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(stderr.contains("forged"), "{stderr}");
+    assert!(stderr.starts_with("error: "), "{stderr}");
+    for line in stderr.lines() {
+        assert!(!line.starts_with("::"), "{stderr}");
+    }
+    Ok(())
+}

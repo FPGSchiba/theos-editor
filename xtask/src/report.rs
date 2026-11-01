@@ -53,6 +53,19 @@ fn write_marked(out: &mut dyn Write, marker: &str, text: &str) -> io::Result<()>
     Ok(())
 }
 
+/// Writes `error` for stderr: the first line after `error: `, every further line after `  | `.
+///
+/// An error may hold text a pull request controls (a file name, a revision), and the runner reads
+/// stderr for workflow commands too, so no line of it may start with the text itself.
+pub fn write_error(out: &mut dyn Write, error: &dyn std::fmt::Display) -> io::Result<()> {
+    let mut lines = lines_of(&error.to_string()).into_iter();
+    writeln!(out, "error: {}", lines.next().unwrap_or_default())?;
+    for line in lines {
+        writeln!(out, "  | {line}")?;
+    }
+    Ok(())
+}
+
 /// Every character a reader of our output might end a line at: LF, CR and the other Unicode
 /// line breaks. The runner is only known to split at the first two; the rest is for safety.
 const LINE_BREAKS: [char; 7] = [
@@ -302,6 +315,16 @@ mod tests {
             text,
             "FAIL  pr-body\n  - a.rs:1: first\n    | second\n    | \n    | fourth\n"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn an_error_continues_on_marked_lines() -> TestResult {
+        let mut out = Vec::new();
+        write_error(&mut out, &"a\n::error::x.rs: gone\r\nlast\n")?;
+        let text = String::from_utf8(out)?;
+        assert_eq!(text, "error: a\n  | ::error::x.rs: gone\n  | last\n");
+        assert!(command_lines(&text).is_empty());
         Ok(())
     }
 
