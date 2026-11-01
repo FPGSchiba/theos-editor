@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
+import { defaultMarkdownParser } from 'prosemirror-markdown';
+import { parseBody } from '../../src/adapters/prosemirror/markdown.ts';
 import { resolveAnchor } from '../../src/harness/anchor.ts';
 import { splitFrontMatter } from '../../src/harness/frontmatter.ts';
 import { toLf } from '../../src/harness/oracle.ts';
@@ -349,6 +351,22 @@ test.describe('@harness prosemirror · links', () => {
     expect(await page.locator(chips).count()).toBe(0);
     await page.evaluate(() => window.__harness!.setMode('write'));
     await expect(page.locator(chips)).toHaveCount(3);
+  });
+
+  test('the stock defaultMarkdownParser is not changed by the adapter: it still parses [[x]]', () => {
+    expect(parseBody('a [[x]] b').firstChild!.childCount).toBe(3);
+    expect(() => defaultMarkdownParser.parse('a [[x]] b')).not.toThrow();
+    expect(defaultMarkdownParser.parse('a [[x]] b').textContent).toBe('a [[x]] b');
+  });
+
+  test('the place after a hard break reads the key of the new line', async ({ page }) => {
+    const beat = 'at:: [[fates-shrine]]  \nwith:: ';
+    await openText(page, beat);
+    await caretTo(page, beat.length);
+    await focus(page);
+    await page.keyboard.type('[[mo');
+    await expect(page.locator(popover)).toHaveCount(1);
+    await expect(page.locator(`${popover} .tu-pop__head`)).toContainText('with:: only');
   });
 
   test('link-insert and link-delete through apply act on the right place', async ({ page }) => {

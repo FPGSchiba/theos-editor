@@ -1,15 +1,13 @@
 import { defaultMarkdownParser, defaultMarkdownSerializer, MarkdownParser, MarkdownSerializer } from 'prosemirror-markdown';
 import type { Node } from 'prosemirror-model';
-import { installWikilinkRule, linkSource, wikilinkToken } from './links.ts';
+import { linkSource, wikilinkToken, wikilinkTokenizer } from './links.ts';
 import { schema } from './schema.ts';
 
 /** The Markdown tokens of a body, with the `map` line ranges markdown-it gives block tokens. */
 export type MarkdownToken = ReturnType<typeof defaultMarkdownParser.tokenizer.parse>[number];
 
-installWikilinkRule(defaultMarkdownParser.tokenizer);
-
-/** The stock parser (markdown-it "commonmark", no HTML, the library's token handlers) plus the wikilink token. */
-const parser = new MarkdownParser(schema, defaultMarkdownParser.tokenizer, {
+/** The stock parser setup (markdown-it "commonmark", no HTML, the library's token handlers) on its own tokenizer, plus the wikilink token. */
+const parser = new MarkdownParser(schema, wikilinkTokenizer(), {
   ...defaultMarkdownParser.tokens,
   wikilink: wikilinkToken,
 });

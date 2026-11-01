@@ -1,4 +1,4 @@
-import { defaultMarkdownParser } from 'prosemirror-markdown';
+import MarkdownIt from 'markdown-it';
 import type { Node, NodeSpec } from 'prosemirror-model';
 
 /**
@@ -8,8 +8,7 @@ import type { Node, NodeSpec } from 'prosemirror-model';
  * back. (The serializer rule is part of the feature: without it the syntax would not survive.)
  */
 
-type Tokenizer = typeof defaultMarkdownParser.tokenizer;
-type InlineRule = Parameters<Tokenizer['inline']['ruler']['before']>[2];
+type InlineRule = Parameters<MarkdownIt['inline']['ruler']['before']>[2];
 
 /** The link as it is written in Markdown. */
 export function linkSource(id: string, shown: string | null | undefined): string {
@@ -50,13 +49,15 @@ const rule: InlineRule = (state, silent) => {
   return true;
 };
 
-let installed = false;
-
-/** Teach the stock tokenizer the wikilink; it runs before the link rule, after code spans have been read. */
-export function installWikilinkRule(tokenizer: Tokenizer): void {
-  if (installed) return;
-  installed = true;
+/**
+ * Our own markdown-it, configured as `defaultMarkdownParser`'s is (commonmark, no HTML), with the
+ * wikilink rule before the link rule (code spans are read before it). The library's shared
+ * instance stays untouched.
+ */
+export function wikilinkTokenizer(): MarkdownIt {
+  const tokenizer = new MarkdownIt('commonmark', { html: false });
   tokenizer.inline.ruler.before('link', 'wikilink', rule);
+  return tokenizer;
 }
 
 /** The token-to-node mapping for the parser. */

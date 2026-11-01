@@ -30,7 +30,7 @@ export const variants: VariantInfo[] = [
     column: 'stock',
     packages: [
       'prosemirror-commands', 'prosemirror-history', 'prosemirror-keymap', 'prosemirror-markdown', 'prosemirror-model',
-      'prosemirror-state', 'prosemirror-view',
+      'prosemirror-state', 'prosemirror-view', 'markdown-it',
     ],
   },
 ];

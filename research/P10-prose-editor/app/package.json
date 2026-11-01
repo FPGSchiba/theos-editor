@@ -16,6 +16,7 @@
   "devDependencies": {
     "@playwright/test": "1.64.1",
     "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@types/markdown-it": "14.2.0",
     "@types/node": "26.6.6",
     "diff": "9.0.0",
     "svelte": "5.57.3",
@@ -29,6 +30,7 @@
     "@codemirror/state": "6.7.6",
     "@codemirror/view": "6.43.15",
     "@lezer/markdown": "1.8.1",
+    "markdown-it": "14.3.3",
     "prosemirror-commands": "1.7.2",
     "prosemirror-history": "1.5.1",
     "prosemirror-keymap": "1.2.3",
