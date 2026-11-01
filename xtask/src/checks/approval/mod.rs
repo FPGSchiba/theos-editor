@@ -39,6 +39,7 @@ use protected::ProtectedPaths;
 /// The failure of a run whose event is not for the current head of the pull request.
 const STALE_RUN: &str =
     "this run is for an earlier commit of the pull request; the run for its newest commit decides";
+
 /// Runs the check on the checkout at `root` for the pull request of `ci`, reading and changing the
 /// labels and comments of the repository in `GITHUB_REPOSITORY` with the token in `GH_TOKEN`.
 ///
