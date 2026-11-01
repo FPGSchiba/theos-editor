@@ -1,5 +1,5 @@
-# Nextest profiles for the gate. `.config/nextest.toml` is a byte copy of this file, which is
-# where nextest looks; `cargo xtask lints` keeps the two identical.
+# Nextest profiles for the gate. `gate/nextest.toml` is the original and `.config/nextest.toml`
+# its copy, which is where nextest looks; `cargo xtask lints` keeps the two identical.
 # Reports are written to `target/nextest/<profile>/junit.xml`.
 
 [profile.default]
