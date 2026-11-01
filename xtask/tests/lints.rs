@@ -387,9 +387,9 @@ fn lint_lib(lib_rs: &str) -> TestResult<Verdict> {
     lint(dir.path())
 }
 
+// AC: CE-08.8
 #[test]
 fn code_reached_from_src_but_outside_it_fails() -> TestResult {
-    // AC: CE-08.8
     // The floor of `coverage` counts `crates/<name>/src/**` only, so code that a crate builds
     // from anywhere else would be out of its reach: `#[path]` and `include!` stay in `src/`.
     for lib_rs in [
@@ -413,9 +413,9 @@ fn code_reached_from_src_but_outside_it_fails() -> TestResult {
     Ok(())
 }
 
+// AC: CE-08.8
 #[test]
 fn code_reached_from_src_inside_it_passes() -> TestResult {
-    // AC: CE-08.8
     for lib_rs in [
         "#[path = \"inner.rs\"]\nmod renamed;\n",
         "#[path = \"../src/inner.rs\"]\nmod renamed;\n",
@@ -430,9 +430,9 @@ fn code_reached_from_src_inside_it_passes() -> TestResult {
     Ok(())
 }
 
+// AC: CE-08.8
 #[test]
 fn xtask_source_leaving_src_fails() -> TestResult {
-    // AC: CE-08.8
     let dir = copy_fixture(None)?;
     write(
         dir.path(),
@@ -459,9 +459,9 @@ fn lint_manifest(extra: &str) -> TestResult<Verdict> {
     lint(dir.path())
 }
 
+// AC: CE-08.8
 #[test]
 fn manifest_target_outside_src_fails() -> TestResult {
-    // AC: CE-08.8
     for extra in [
         "[lib]\npath = \"lib/lib.rs\"\n",
         "[lib]\npath = \"lib.rs\"\n",
@@ -477,9 +477,9 @@ fn manifest_target_outside_src_fails() -> TestResult {
     Ok(())
 }
 
+// AC: CE-08.8
 #[test]
 fn manifest_target_inside_src_or_not_measured_passes() -> TestResult {
-    // AC: CE-08.8
     for extra in [
         "[lib]\npath = \"src/lib.rs\"\n",
         "[lib]\npath = \"src/core/lib.rs\"\n",

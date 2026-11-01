@@ -166,7 +166,7 @@ mod tests {
         }
         // Manifests of other things are not judged.
         let outside = parse("Cargo.toml", "[lib]\npath = \"lib.rs\"\n")?;
-        assert!(manifest_findings("Cargo.toml", &outside).is_empty());
+        assert_eq!(manifest_findings("Cargo.toml", &outside).len(), 0);
         assert_eq!(manifest_findings("xtask/Cargo.toml", &outside).len(), 1);
         Ok(())
     }
