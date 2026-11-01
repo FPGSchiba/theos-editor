@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import { readManifest, type CorpusFile } from '../../src/harness/manifest.ts';
+import { chipKeys } from './chip-key.ts';
 import { record, strict } from './helpers.ts';
 import type { CheckRow } from './write-reports.ts';
 
@@ -193,12 +194,14 @@ export async function collectWhileScrolling<T>(
     await scrollTo(0);
     await settle(page);
     await take();
-    for (let step = 1; step <= MAX_STEPS; step++) {
-      const atEnd = await scrollTo(step);
+    let reachedEnd = false;
+    for (let step = 1; step <= MAX_STEPS && !reachedEnd; step++) {
+      reachedEnd = await scrollTo(step);
       await settle(page);
       await take();
-      if (atEnd) break;
     }
+    // A truncated read would be a wrong verdict; an error row says the check could not run.
+    if (!reachedEnd) throw new Error(`collectWhileScrolling: the end was not reached in ${MAX_STEPS} half-window steps`);
   } finally {
     await scrollTo(0);
     await settle(page);
@@ -240,4 +243,43 @@ export function collectRows<T extends object>(
 export async function collectTexts(page: Page, selector: string): Promise<string[]> {
   const rows = await collectRows(page, selector, (node) => ({ text: (node.textContent ?? '').replace(/\s+/g, ' ').trim() }));
   return rows.map((row) => row.text);
+}
+
+/**
+ * The content keys of every chip of the editor over the whole scroll range, one per chip (see
+ * `chipKeys`): the link id, the text of its line around it, and its occurrence on the line. The
+ * line is the nearest block ancestor; other chips of it read as their link id.
+ */
+export async function collectChipKeys(page: Page): Promise<string[]> {
+  const rows = await collectWhileScrolling(
+    page,
+    () =>
+      page.evaluate(
+        ([keysSource]) => {
+          const keysOf = (0, eval)(keysSource) as (parts: Array<string | { chip: string }>) => string[];
+          const host = document.getElementById('editor-host')!;
+          const lines = new Map<Element, Element[]>();
+          for (const chip of host.querySelectorAll('.tu-link')) {
+            let line: Element = chip.parentElement ?? host;
+            while (line !== host && getComputedStyle(line).display.startsWith('inline')) line = line.parentElement ?? host;
+            lines.set(line, [...(lines.get(line) ?? []), chip]);
+          }
+          const keys: string[] = [];
+          for (const line of lines.keys()) {
+            const parts: Array<string | { chip: string }> = [];
+            const walk = (node: Node): void => {
+              if (node.nodeType === Node.TEXT_NODE) parts.push((node.textContent ?? '').replace(/\s+/g, ' '));
+              else if (node instanceof Element && node.classList.contains('tu-link')) parts.push({ chip: node.getAttribute('data-link-id') ?? '' });
+              else node.childNodes.forEach(walk);
+            };
+            walk(line);
+            keys.push(...keysOf(parts));
+          }
+          return keys.map((key) => ({ key }));
+        },
+        [inPage(chipKeys)] as const,
+      ),
+    (row) => row.key,
+  );
+  return rows.map((row) => row.key);
 }

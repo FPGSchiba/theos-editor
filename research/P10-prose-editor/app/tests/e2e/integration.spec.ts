@@ -4,7 +4,7 @@ import { splitFrontMatter } from '../../src/harness/frontmatter.ts';
 import type { CorpusFile } from '../../src/harness/manifest.ts';
 import { toLf } from '../../src/harness/oracle.ts';
 import {
-  caretAt, collectRows, corpusFile, count, eventually, judge, runCheck, savedText, settle, texts, type Verdict,
+  caretAt, collectChipKeys, corpusFile, count, eventually, judge, runCheck, savedText, settle, texts, type Verdict,
 } from './checks.ts';
 import { loadFile, variantsUnderTest } from './helpers.ts';
 
@@ -148,9 +148,9 @@ const checks: Check[] = [
 
       const links = splitFrontMatter(source).body.match(/\[\[[^\]\n]+\]\]/g)?.length ?? 0;
       // A viewport editor draws only the chips near the window: count them over the whole scroll
-      // range, each at its document-absolute position, so a recycled element counts once.
-      const chipsDrawn = async (): Promise<number> =>
-        (await collectRows(page, '.tu-link', (chip) => ({ id: chip.getAttribute('data-link-id') }))).length;
+      // range by a content key (chip-key.ts), so a recycled element counts once and two chips
+      // of the same link on one line count twice.
+      const chipsDrawn = async (): Promise<number> => (await collectChipKeys(page)).length;
       const shown = await eventually(async () => (await chipsDrawn()) === links);
       const chips = await chipsDrawn();
       const problems: string[] = [];

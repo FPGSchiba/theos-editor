@@ -71,10 +71,7 @@ function popoverRows(page: Page): Promise<Array<{ id: string; kind: string }>> {
     })), POPOVER);
 }
 
-const beatHeading = async (page: Page, beat: number): Promise<string | undefined> =>
-  (await texts(page, `[data-beat="${beat}"]`))[0];
-
-/** The same over the whole scroll range, for a heading that is not under the caret. */
+/** The text of the heading of a beat, read over the whole scroll range. */
 const beatHeadingAnywhere = async (page: Page, beat: number): Promise<string | undefined> =>
   (await collectTexts(page, `[data-beat="${beat}"]`))[0];
 
@@ -367,11 +364,11 @@ const checks: Check[] = [
       const showsRaw = async (): Promise<boolean> => (await visibleText(page)).toLowerCase().includes(raw.toLowerCase());
       const rawShown = await eventually(showsRaw);
       if (!rawShown) problems.push(`with the caret on it, "${raw}" is not shown raw`);
-      if ((await beatHeading(page, 2)) !== '2 · The murmur') problems.push('with the caret on beat 1, beat 2 is not rendered as "2 · The murmur"');
+      if ((await beatHeadingAnywhere(page, 2)) !== '2 · The murmur') problems.push('with the caret on beat 1, beat 2 is not rendered as "2 · The murmur"');
 
       // The caret elsewhere: beat 1 is rendered again and its raw heading is gone.
       await caretAt(page, resolveAnchor(source, { find: "The player's first night", offset: 4 }));
-      const rendered = await eventually(async () => (await beatHeading(page, 1)) === '1 · Arrival');
+      const rendered = await eventually(async () => (await beatHeadingAnywhere(page, 1)) === '1 · Arrival');
       if (!rendered) problems.push('with the caret elsewhere, beat 1 is not rendered as "1 · Arrival"');
       else if (await showsRaw()) problems.push(`with the caret elsewhere, "${raw}" is still shown raw`);
       return judge(problems, 'raw under the caret, rendered elsewhere');
@@ -387,7 +384,7 @@ const checks: Check[] = [
       await settle(page);
       const shown = await visibleText(page);
       if (!shown.includes('id: S-004') || !shown.includes('kind: script')) problems.push('Source mode does not show the front matter');
-      const chips = await count(page, '.tu-link');
+      const chips = (await collectRows(page, '.tu-link', () => ({}))).length;
       if (chips > 0) problems.push(`Source mode renders ${chips} chip(s), it has to show the raw text`);
 
       // The front matter is protected: typing into it leaves the text as it was.
