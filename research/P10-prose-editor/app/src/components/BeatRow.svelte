@@ -90,7 +90,7 @@
 {/if}
 <div class="hx-beat-row" data-beat-row={beat} spellcheck="false">
   <div class="tu-beat">
-    {#each params as param, index (param.key)}
+    {#each params as param, index (`${index}:${param.key}`)}
       {#if index > 0}<span class="tu-beat__sep">·</span>{/if}
       {#if editing !== undefined && !editing.isNew && editing.key === param.key}
         <span class="tu-beat__param is-editing" data-beat-param={param.key}>

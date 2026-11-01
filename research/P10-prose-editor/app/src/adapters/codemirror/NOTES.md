@@ -1,23 +1,17 @@
 # CodeMirror 6 prototype: notes
 
-Variant `codemirror`, `@codemirror/view` 6.43.15. State after Task 8 (the base), its fix round 1, Task 9 (links) and Task 10 (callouts).
+Variant `codemirror`, `@codemirror/view` 6.43.15. State after Task 8 (the base), its fix round 1, Task 9 (links), Task 10 (callouts) and Task 11 (beats).
 `tests/e2e/codemirror-probes.spec.ts` (`@harness`) probes what the measured suites cannot see.
 
 ## Still failing under `P10_STRICT=1`
 
-Run: `P10_STRICT=1 pnpm exec playwright test --grep "@base|@integration|@input|@links"` with
-`P10_VARIANTS=codemirror`. Chromium and WebKit fail the same two checks, and both ask for a feature that a later task of this
-prototype builds. Neither is a defect of the links or the callouts, and nothing was tried against them here, because the feature does not exist yet.
-The links suites (`@links`, `I-[a-z-]*-chip`, `N-remount`, `N-reactive`) and the callouts suites (`@callouts`, `I-[a-z-]*-voice`)
-pass in both engines.
+Run: `P10_STRICT=1 P10_VARIANTS=codemirror pnpm exec playwright test --grep "@beats|@base|@integration|@input|@links|@callouts"`. Chromium and WebKit fail the same two checks;
+everything else passes (`F-live-preview` and `I-spellcheck-off` included).
 
-| Check | Why it fails | Closed by |
+| Check | Why it fails | Tried |
 |---|---|---|
-| `@base F-live-preview` | The caret-on-the-line half passes (the raw `## Beat 1 — Arrival` shows). It also wants beat 2 rendered as `[data-beat="2"]` showing `2 · The murmur`, and beat 1 as `1 · Arrival` once the caret leaves. Headings are rendered with their markers hidden, but not as beat headings. | Task 11 (beats) |
-| `@input I-spellcheck-off` | The chip half passes now (every `.tu-link` has `spellcheck` off). It still wants `[data-beat-row]` rows with `spellcheck` off; there are none. | Task 11 (beats) |
-
-The one `ScriptedEdit` kind that is not made yet (`beat-param`) throws from `apply`; its `@beats` round-trip edits are not in the
-suites of Tasks 8 to 10.
+| `@beats beat-param-add-order via input` (S-901, beat 4) | The `input` driver waits 3 s for `[data-beat-row="4"]` and does not scroll. CodeMirror draws the viewport only (about 13 lines of the 45 of the record, up to beat 3); beat 4 is below the fold, so its row is not in the DOM. | Nothing beyond the feature itself: the whole-document render of Task 9 was dropped on purpose (ruling 19), and the driver may not change (ruling 17). The `api` driver passes. |
+| `@beats beat-param-add-no-dash via input` (S-901, beat 5) | The same, for beat 5. | The same. |
 
 ## What the base does, and how
 
@@ -127,6 +121,30 @@ lazy line of the block until the author types `> `; a nested quote (`> > `) is o
 has no chips, see above; a `Design note:` line inside a callout is callout text; callouts in lists are not recognised (the title has to
 start at column 0); an IME composition in a callout title was not tried (the `-voice` checks compose in a text line); nothing was run on
 WebView2, WKWebView or WebKitGTK.
+
+## Beats (Task 11)
+
+Files: `beats.ts` (finds the beats, plans a `beat-param` change by the oracle's rule), `beatrow.ts` (the widgets and the state field).
+`BeatRow.svelte` is keyed by `${index}:${key}` now (a second `at::` while typing no longer throws `each_key_duplicate`).
+
+- **Block decorations come from a state field** (a view plugin cannot provide them); the field is in the Write set of `modes.ts` and is also
+  `atomicRanges`. It scans the whole body for `## Beat <n>` (not in code) and the `key:: value` lines directly after it, on every document,
+  selection or context change.
+- **Heading.** `## Beat <n> — <name>` becomes an inline replace of the line content by `span[data-beat=<n>]` showing `<n> · <name>`. A heading
+  without the dash (`## Beat 5 - …`) stays a plain heading line (raw), but its attribute lines still get the row.
+- **Row.** One block `Decoration.replace` over the attribute lines (first line start to last line end) mounts the shared `BeatRow` (`mount` in
+  `toDOM`, `unmount` in `destroy`); `ignoreEvent` is true, so keys and clicks in the row's input never reach the editor. A beat with no attribute line gets a
+  block widget after its heading so that "+ add" has a row. `eq` compares beat, params and the context object: a new index or new findings redraw the
+  row (findings come from `ctx.findings`, shown by the component).
+- **Raw lines.** `touchedLines` decides: the heading is raw while a selection touches it, and the row gives way to the raw attribute lines while a selection
+  touches any of them. A selection that crosses the block touches it, so no delete takes lines the author did not see (probed). The caret stepping into the
+  row lands on its edge and turns it raw.
+- **Edits.** `oncommit(key, value)` and `apply({ kind: 'beat-param' })` both call `setBeatParam`: one transaction (`input.beat-param`) that replaces the value of an
+  existing line (keeping `key::` and its blanks) or inserts `key:: value` after the last present key that precedes it in at, with, says, reveals, when (else after the
+  heading). Nothing else changes. The selection is not moved.
+
+Known limits of the beats: a row that is redrawn (context change, edit elsewhere in its lines) loses an open input; the editor does not take the focus back after a
+commit; an unknown key (`synthetic::`) is shown but cannot be edited from the row; the rows below the fold are not in the DOM (see the table above).
 
 ## Known limits of the base
 

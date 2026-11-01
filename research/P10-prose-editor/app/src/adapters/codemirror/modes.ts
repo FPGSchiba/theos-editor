@@ -1,6 +1,7 @@
 import { Compartment, EditorSelection, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import type { Mode } from '../../harness/types.ts';
+import { beats } from './beatrow.ts';
 import { calloutLook } from './calloutlook.ts';
 import { callouts } from './callouts.ts';
 import { bodyStart, hideFrontMatter, showFrontMatter } from './frontmatter.ts';
@@ -13,7 +14,7 @@ import { typingField } from './typing.ts';
 const slot = new Compartment();
 
 const write: Extension = [
-  hideFrontMatter, livePreview, callouts, calloutLook, typingField, linkChips, linkPopover,
+  hideFrontMatter, livePreview, callouts, calloutLook, beats, typingField, linkChips, linkPopover,
   EditorView.editorAttributes.of({ class: 'cm-mode-write' }),
 ];
 const source: Extension = [showFrontMatter, EditorView.editorAttributes.of({ class: 'cm-mode-source' })];

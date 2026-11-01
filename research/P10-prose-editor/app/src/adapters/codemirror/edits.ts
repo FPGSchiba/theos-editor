@@ -3,6 +3,7 @@ import type { EditorView } from '@codemirror/view';
 import { resolveAnchor } from '../../harness/anchor.ts';
 import type { ScriptedEdit } from '../../harness/types.ts';
 import { bodyStart } from './frontmatter.ts';
+import { setBeatParam } from './beatrow.ts';
 import { setNoteState } from './notestate.ts';
 import { completeLink } from './typing.ts';
 
@@ -67,6 +68,9 @@ export function applyEdit(view: EditorView, edit: ScriptedEdit): void {
       view.dispatch({ changes: { from, to: close + 2 }, selection: { anchor: from }, userEvent: 'delete.backward', scrollIntoView: true });
       return;
     }
+    case 'beat-param':
+      setBeatParam(view, edit.beat, edit.key, edit.value);
+      return;
     case 'note-state':
       setNoteState(view, edit.note, edit.state);
       return;

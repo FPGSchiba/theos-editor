@@ -579,3 +579,86 @@ test.describe('@harness codemirror · callouts', () => {
     expect(await text(page)).toBe(note);
   });
 });
+
+test.describe('@harness codemirror · beats', () => {
+  const sample = [
+    'Intro.',
+    '',
+    '## Beat 1 — Arrival',
+    'at:: [[fates-shrine]]',
+    'when:: T1',
+    '',
+    'Prose after the beat.',
+    '',
+    '## Beat 2 — Bare',
+    '',
+    'More prose.',
+  ].join('\n');
+  const at = (page: Page, offset: number): Promise<void> =>
+    page.evaluate((to) => { window.__harness!.focus(); window.__harness!.caretTo(to); }, offset);
+  const row1 = '[data-beat-row="1"]';
+
+  test('the heading and the lines show raw under the caret and rendered elsewhere', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, 0);
+    await settle(page);
+    await expect(page.locator('[data-beat="1"]')).toHaveText('1 · Arrival');
+    await expect(page.locator(row1)).toHaveCount(1);
+    await at(page, sample.indexOf('when::'));
+    await settle(page);
+    await expect(page.locator(row1)).toHaveCount(0);
+    expect(await visibleText(page)).toContain('at:: ');
+    await at(page, sample.indexOf('## Beat 1') + 3);
+    await settle(page);
+    await expect(page.locator('[data-beat="1"]')).toHaveCount(0);
+    expect(await visibleText(page)).toContain('## Beat 1 — Arrival');
+    await expect(page.locator(row1)).toHaveCount(1);
+  });
+
+  test('Backspace after the row and a select-all delete never take unseen lines', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, sample.indexOf('\nProse after') + 1);
+    await page.keyboard.press('Backspace');
+    // One newline is gone (the blank line); both attribute lines are still in the text.
+    const after = await text(page);
+    expect(after).toBe(sample.replace('T1\n\nProse', 'T1\nProse'));
+    await at(page, sample.indexOf('## Beat 1') - 1);
+    await page.keyboard.press('Shift+ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+    await settle(page);
+    // The selection touches the heading and the first attribute lines, which are drawn raw.
+    await expect(page.locator(row1)).toHaveCount(0);
+  });
+
+  test('typing in the row never reaches the editor, and a repeated key does not throw', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await openText(page, sample);
+    await at(page, 0);
+    await page.locator(`${row1} [data-beat-param="at"] .tu-beat__key`).click();
+    await page.locator(`${row1} [data-beat-input]`).fill('x');
+    await page.keyboard.type('yz');
+    expect(await text(page)).toBe(sample);
+    await page.locator(`${row1} [data-beat-input]`).press('Enter');
+    expect(await text(page)).toBe(sample.replace('at:: [[fates-shrine]]', 'at:: xyz'));
+    // A second `at::` line (a duplicate key) draws without an error.
+    await page.evaluate(() => window.__harness!.focus());
+    await at(page, (await text(page)).indexOf('when::'));
+    await page.keyboard.type('at:: dup\n');
+    await at(page, 0);
+    await settle(page);
+    expect(errors).toEqual([]);
+    await expect(page.locator(`${row1} [data-beat-param="at"]`)).toHaveCount(2);
+  });
+
+  test('a bare beat gets a row with "+ add" and the line goes after the heading', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, 0);
+    const row = page.locator('[data-beat-row="2"]');
+    await row.locator('[data-beat-add]').click();
+    await row.locator('[data-beat-add-key="says"]').click();
+    await row.locator('[data-beat-input]').fill('[[B-016]]');
+    await row.locator('[data-beat-input]').press('Enter');
+    expect(await text(page)).toBe(sample.replace('## Beat 2 — Bare\n', '## Beat 2 — Bare\nsays:: [[B-016]]\n'));
+  });
+});
