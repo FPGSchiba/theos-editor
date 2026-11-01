@@ -1,8 +1,12 @@
 import { schema as markdownSchema } from 'prosemirror-markdown';
 import { Schema } from 'prosemirror-model';
+import { wikilinkSpec } from './links.ts';
 
-/** Write mode: the stock schema of prosemirror-markdown, unchanged (this is the stock column). */
-export const schema = markdownSchema;
+/** Write mode: the stock schema of prosemirror-markdown plus one node, the wikilink. */
+export const schema = new Schema({
+  nodes: markdownSchema.spec.nodes.addToEnd('wikilink', wikilinkSpec),
+  marks: markdownSchema.spec.marks,
+});
 
 /**
  * Source mode: the whole file as the text of one code-like block, so the offsets of the file

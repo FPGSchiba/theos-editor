@@ -1,7 +1,7 @@
 # ProseMirror prototype: notes
 
 Variant `prosemirror:stock` (column `stock`), `prosemirror-view` 1.42.9, `prosemirror-markdown` 1.13.9 with its own parser and serializer, unchanged.
-State after Task 12 (the base). `tests/e2e/prosemirror-probes.spec.ts` (`@harness`) probes what the measured suites cannot see:
+State after Task 13 (the base plus links). `tests/e2e/prosemirror-probes.spec.ts` (`@harness`) probes what the measured suites cannot see:
 caret mapping, typing position, front matter protection, undo, external changes, live preview, composition.
 
 ## Still failing under `P10_STRICT=1`
@@ -30,7 +30,7 @@ What the stock parser and serializer change, file by file (`fm + serialize(parse
 Identical in all rows: fates-shrine-v5, C-031, f04-terrain-v1, mother-ilse (empty body) and synthetic-no-final-newline (each short, plain, or without a body). `synthetic-characters` differs only by the dropped final newline (its edit rows are block level for that reason).
 
 **2. Features that belong to later tasks (ruling 18).** `F-live-preview` fails only on the beat headings (`2 · The murmur` rendered, Task 15); the raw `## Beat 1 — Arrival` under the caret passes.
-`I-spellcheck-off` (no chips, no beat rows), `N-reactive` and `N-remount` (no chips), Tasks 13 and 15.
+`I-spellcheck-off` (the beat rows, Task 15). `N-reactive` and `N-remount` pass since Task 13 (chips).
 
 **3. The WebKit gap row** `I-ime-webkit` is a recorded gap and never fails.
 
@@ -62,8 +62,30 @@ Nothing else fails: no harness error, no timeout, no console error in `N-remount
   `updateContext` swaps the plugins with `state.reconfigure`, which keeps the history instance.
 - **Input** (`index.ts`). The editable root has `spellcheck="true"` in Write mode.
 - **`apply`** (`edits.ts`). `insert` is `tr.insertText`, `delete` is `tr.delete`, `paste` is `view.pasteText` (plain text), `select-all-type` is an `AllSelection` replaced by the text, `external` is the local insert plus `applyExternal`,
-  `undo-all` applies each edit and then undoes until `canUndo()` is false. Link, callout and beat kinds throw until Tasks 13 to 15.
+  `undo-all` applies each edit and then undoes until `canUndo()` is false. Callout and beat kinds throw until Tasks 14 and 15; `link-insert` and `link-delete` are in the Links section.
 
 ## Not done in the base
 
 Enter in a list item splits the block instead of the item (no `prosemirror-schema-list`); Tab, input rules and marks by shortcut are not bound. Neither is part of the measured suites.
+
+## Links (Task 13)
+
+Strict run `--grep "@links|I-[a-z-]*-chip|N-remount|N-reactive"`: before 15 failures per engine; after, chromium 8 of 17 and WebKit 6 of 14 fail, all on bytes (below). All feature checks pass (`F-link-chip`, `-alias`, `-broken`, `-atomic`, `-popover-prose`, `-popover-kind-filter`), and `N-remount`, `N-reactive`.
+
+- **Node** (`links.ts`, `schema.ts`). The stock schema plus one inline atom `wikilink` with `id` and `shown`. (Not named `link`: that is the stock mark.) `leafText` is the link syntax.
+- **Parse** (`links.ts`, `markdown.ts`). A markdown-it inline rule `wikilink`, added to the stock tokenizer before `link`: `[[id]]` and `[[id|shown]]` (no brackets or bars in the id, no brackets in the shown text, one line). Code spans and fences are read before it, so links in code stay raw. A `MarkdownParser` over the same tokenizer with the stock token table plus `wikilink`.
+- **Serialize** (`markdown.ts`). The stock serializer plus a `wikilink` rule that writes `[[id]]` or `[[id|shown]]` with `state.write` (never escaped). The probe `every link of the links file survives the serializer` compares every link of the file with the saved text: identical, alias included. Every link-row mismatch in the round trip is a hunk elsewhere in the file (soft breaks, `_` to `*`, final newline); the edited spots are exact.
+- **Positions** (`positions.ts`). A chip is one position and as many source characters as its syntax; `charTable` maps between them, `sourceLeaf` is the `leafText` for `textBetween`. Offsets inside a link map to the position before it.
+- **Node view** (`linkview.ts`). A wrapper span mounts `LinkChip` in the constructor and unmounts in `destroy`; `update` is true for unchanged markup; `ignoreMutation` is true; `stopEvent` false. `updateContext` calls `refresh` on every chip, which redraws only when `ctx.resolve(id)` changed (JSON compare). No editor re-creation.
+- **Caret and delete** (`linkkeys.ts`, `keymap.ts`). Commands before the base keymap: ArrowLeft/Right step over a chip, Backspace and Delete take it whole. Done as commands, so no engine's native caret rules matter.
+- **Typing** (`typing.ts`, `linkkeys.ts`). A plugin state `{from, to, query, dismissed}` for the `[[query` before the caret (no `[ ] |`, at most 80 characters, not in code), started by an insertion transaction (undo, paste and external changes do not start it), kept while the caret stays in the same text, marked `tu-typing__q`. It stays plain text. A hand-typed closing `]]` turns it into a chip (`handleTextInput`).
+- **Popover** (`popover.ts`). A plugin view mounts `LinkPopover` into a fixed element on `document.body`, below the caret (above when no room); unmounted on its `onclose` (Escape), on blur, when typing ends and with the editor. Options: `ctx.search(query, place)`. Picking replaces `[[query` with the node. A new `ctx` object makes it search again.
+- **Place** (`typing.ts`). The stock parser makes the line breaks of a paragraph spaces, so the lines `at::`, `with::` ... of a beat are one paragraph. The place is the last `key::` (at the start of the text or after a space) before the caret in the textblock, not the key of the caret's line. Approximation: a `key::` typed in a sentence would count.
+- **apply** (`edits.ts`). `link-insert` inserts the node at the anchor (what typing `[[query` and picking leaves); `link-delete` deletes the node at the `[[` offset. In Source mode both edit the text.
+- **Callout titles and beat lines.** Links there are chips: the stock parser keeps them as text of a paragraph or quote, and the wikilink rule runs inside it. The probe on S-004 finds a chip for every link of the file, the voice title included, and the saved text has the same links. (What the stock parser does to the lines themselves is the soft-break item above.)
+
+Still failing under strict (all bytes, none from the link node):
+
+- `F-link-popover-escape` (both engines): the typed `[[son` stays text, but the stock serializer escapes the brackets (`\[\[son`), and the rest of the file differs (soft breaks). The popover is closed, the text is kept (probe).
+- `I-ime-ja-chip`, `I-deadkey-circ-chip`, `I-deadkey-uml-chip` (chromium), `I-insert-chip` (WebKit): the text lands behind the chip (probes pass); the saved file differs by 389 bytes elsewhere (soft breaks, `_`, final newline).
+- Round-trip `link-insert-popover` and `link-chip-delete`, via api and via input, both engines: hunks only elsewhere in the file (the soft-wrapped lines, `_` to `*`, the dropped final newline).

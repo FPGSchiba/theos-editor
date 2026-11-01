@@ -215,3 +215,148 @@ test.describe('@harness prosemirror · input methods', () => {
     });
   }
 });
+
+// ── Links (Task 13) ──────────────────────────────────────────────────────────
+
+async function openText(page: Page, content: string): Promise<void> {
+  if (page.url() === 'about:blank') await page.goto('/');
+  await page.waitForFunction(() => window.__harness !== undefined);
+  await page.evaluate((body) => window.__harness!.load('prosemirror:stock', body, 'records/probe.md'), content);
+}
+
+const WIKILINK = /\[\[[^\]\n]+\]\]/g;
+
+test.describe('@harness prosemirror · links', () => {
+  const sample = 'Go to [[fates-shrine]] now, [[mother-ilse]][[B-020|a song]] end.\n\n`[[fates-shrine]]` stays code.\n\n```\n[[mother-ilse]]\n```\n\nlast';
+  const chips = '#editor-host .tu-link';
+  const popover = '.tu-pop[data-link-popover]';
+  const focus = (page: Page): Promise<void> => page.evaluate(() => window.__harness!.focus());
+
+  test('the link node writes [[id]] and [[id|shown]] back exactly; links in code stay raw', async ({ page }) => {
+    await openText(page, sample);
+    await settle(page);
+    expect(await page.locator(chips).evaluateAll((all) => all.map((chip) => chip.getAttribute('data-link-id')))).toEqual(
+      ['fates-shrine', 'mother-ilse', 'B-020'],
+    );
+    expect(await text(page)).toBe(sample);
+  });
+
+  test('every link of the links file survives the serializer, alias included', async ({ page }) => {
+    const source = toLf(await loadFile(page, VARIANT, corpusFile('records/lore/topics/synthetic-links-explaining.md')));
+    expect((await text(page)).match(WIKILINK)).toEqual(source.match(WIKILINK));
+  });
+
+  test('links in a callout title and in beat attribute lines are chips as far as the parser keeps the line', async ({ page }) => {
+    const script = toLf(await loadFile(page, VARIANT, SCRIPT));
+    await settle(page);
+    // Chips are atoms in the document: the voice title and every attribute line keep theirs.
+    expect(await page.locator(chips).count()).toBe(script.match(WIKILINK)!.length);
+    expect((await text(page)).match(WIKILINK)).toEqual(script.match(WIKILINK));
+  });
+
+  test('the caret steps over a chip both ways; Backspace and Delete take it whole', async ({ page }) => {
+    await openText(page, sample);
+    const link = '[[mother-ilse]]';
+    const alias = '[[B-020|a song]]';
+    const start = sample.indexOf(link);
+    await caretTo(page, start);
+    await focus(page);
+    await page.keyboard.press('ArrowRight');
+    expect(await caret(page)).toBe(start + link.length);
+    await page.keyboard.press('ArrowRight');
+    expect(await caret(page)).toBe(start + link.length + alias.length);
+    await page.keyboard.press('ArrowLeft');
+    expect(await caret(page)).toBe(start + link.length);
+    await page.keyboard.press('Backspace');
+    expect(await text(page)).toBe(sample.replace(link, ''));
+    await page.keyboard.press('Delete');
+    expect(await text(page)).toBe(sample.replace(link, '').replace(alias, ''));
+    expect(await page.locator(chips).count()).toBe(1);
+  });
+
+  test('a link typed by hand is raw while typed and a chip when the ]] is typed', async ({ page }) => {
+    await openText(page, sample);
+    await caretTo(page, sample.length);
+    await focus(page);
+    await page.keyboard.type(' [[mother-ilse');
+    expect(await page.locator(chips).count()).toBe(3);
+    expect(await visibleText(page)).toContain('[[mother-ilse');
+    await page.keyboard.type(']]');
+    await expect(page.locator(chips)).toHaveCount(4);
+    await page.keyboard.type('!');
+    expect((await text(page)).endsWith('last [[mother-ilse]]!')).toBe(true);
+  });
+
+  test('the popover offers options, Enter picks, and the typed [[query becomes the link', async ({ page }) => {
+    await openText(page, sample);
+    await caretTo(page, sample.length);
+    await focus(page);
+    await page.keyboard.type(' [[Listen');
+    await expect(page.locator(popover)).toHaveCount(1);
+    const rows = await page.locator(`${popover} .tu-pop__row`).evaluateAll((all) => all.map((row) => row.getAttribute('data-link-option')));
+    expect(rows.length).toBeGreaterThan(1);
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator(`${popover} .tu-pop__row.is-active`)).toHaveAttribute('data-link-option', rows[1]!);
+    await page.keyboard.press('Enter');
+    await expect(page.locator(popover)).toHaveCount(0);
+    expect(await text(page)).toBe(`${sample} [[${rows[1]}]]`);
+    await page.keyboard.type('!');
+    expect((await text(page)).endsWith(`[[${rows[1]}]]!`)).toBe(true);
+  });
+
+  test('Escape keeps the typed text plain, with no popover for what follows', async ({ page }) => {
+    await openText(page, sample);
+    await caretTo(page, sample.length);
+    await focus(page);
+    await page.keyboard.type(' [[son');
+    await expect(page.locator(popover)).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(page.locator(popover)).toHaveCount(0);
+    await page.keyboard.type('g');
+    await expect(page.locator(popover)).toHaveCount(0);
+    expect(await visibleText(page)).toContain('[[song');
+    // The text stays text; the stock serializer escapes the brackets when it writes it (a measurement).
+    expect(await text(page)).toContain(String.raw`last \[\[song`);
+    await page.keyboard.type(' [[mo');
+    await expect(page.locator(popover)).toHaveCount(1);
+  });
+
+  test('the popover closes on blur and sits outside the editor DOM', async ({ page }) => {
+    await openText(page, sample);
+    await caretTo(page, sample.length);
+    await focus(page);
+    await page.keyboard.type(' [[mo');
+    await expect(page.locator(popover)).toHaveCount(1);
+    expect(await page.locator(`#editor-host ${popover}`).count()).toBe(0);
+    await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+    await expect(page.locator(popover)).toHaveCount(0);
+  });
+
+  test('chips keep their DOM across typing', async ({ page }) => {
+    await openText(page, sample);
+    await settle(page);
+    await page.evaluate(() => document.querySelectorAll('#editor-host .tu-link').forEach((chip) => Object.assign(chip, { p10: true })));
+    await caretTo(page, sample.length);
+    await focus(page);
+    await page.keyboard.type(' more');
+    expect(await page.locator(chips).evaluateAll((all) => all.every((chip) => (chip as HTMLElement & { p10?: boolean }).p10 === true))).toBe(true);
+  });
+
+  test('Source mode shows the links raw, Write mode draws the chips again', async ({ page }) => {
+    await openText(page, sample);
+    await page.evaluate(() => window.__harness!.setMode('source'));
+    await settle(page);
+    expect(await page.locator(chips).count()).toBe(0);
+    await page.evaluate(() => window.__harness!.setMode('write'));
+    await expect(page.locator(chips)).toHaveCount(3);
+  });
+
+  test('link-insert and link-delete through apply act on the right place', async ({ page }) => {
+    await openText(page, sample);
+    await page.evaluate(() => window.__harness!.apply({ id: 'i', kind: 'link-insert', at: { find: ' now' }, query: 'ilse', pick: 'mother-ilse' }));
+    expect((await text(page)).startsWith('Go to [[fates-shrine]][[mother-ilse]] now')).toBe(true);
+    await page.evaluate(() => window.__harness!.apply({ id: 'd', kind: 'link-delete', link: { find: '[[B-020' } }));
+    expect(await text(page)).not.toContain('[[B-020');
+    expect(await page.locator(chips).count()).toBe(3);
+  });
+});

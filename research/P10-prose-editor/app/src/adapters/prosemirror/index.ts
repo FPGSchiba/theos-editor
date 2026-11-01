@@ -7,12 +7,16 @@ import { applyChanges, externalTransaction } from './external.ts';
 import { joinFrontMatter, splitFrontMatter } from './frontmatter.ts';
 import { canUndo, history, undo, withoutHistory } from './history.ts';
 import { keymapPlugins } from './keymap.ts';
+import { finishTypedLink } from './linkkeys.ts';
+import { LinkView } from './linkview.ts';
 import { livePreview } from './livepreview.ts';
 import { parseBody, serializeBody } from './markdown.ts';
+import { popoverPlugin } from './popover.ts';
 import { PositionMap, Tracker } from './positions.ts';
 import { schema } from './schema.ts';
 import { guard, selectSourceBody, sourceDoc, sourceState } from './source.ts';
 import { installTheme } from './theme.ts';
+import { typingPlugin } from './typing.ts';
 
 const toLf = (text: string): string => text.replace(/\r\n?/g, '\n');
 
@@ -31,6 +35,8 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
   /** Source mode: how many characters at the start of the file are the protected front matter. */
   private protectedEnd = 0;
   private historyPlugin: Plugin = history();
+  /** The chips on the page, so a new index can redraw them without a new editor. */
+  private readonly chips = new Set<LinkView>();
 
   mount(target: HTMLElement, text: string, ctx: EditorContext): void {
     installTheme();
@@ -42,6 +48,7 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
     this.tracker = new Tracker(file, frontMatter.length, doc);
     this.view = new EditorView(target, {
       state: this.stateOf(doc),
+      nodeViews: { wikilink: (node) => new LinkView(node, () => this.ctx!, this.chips) },
       attributes: (state) => (state.doc.type === schema.nodes.doc
         ? { class: 'pm-write', spellcheck: 'true' }
         : { class: 'pm-source-mode', spellcheck: 'false' }),
@@ -135,6 +142,9 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
     this.ctx = ctx;
     // The history and the other plugins keep their instances: only the keymap is swapped.
     if (keysChanged) this.view.updateState(this.view.state.reconfigure({ plugins: this.plugins() }));
+    for (const chip of this.chips) chip.refresh();
+    // An open popover searches again with the new index.
+    this.view.dispatch(this.view.state.tr.setMeta('p10-context', true));
   }
 
   destroy(): void {
@@ -173,7 +183,7 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
     return [
       this.historyPlugin,
       ...keymapPlugins(this.ctx!.keymap, () => this.ctx?.save(), selectBody),
-      ...(write ? [livePreview()] : [guard(this.protectedEnd)]),
+      ...(write ? [finishTypedLink(), typingPlugin(), popoverPlugin(() => this.ctx!), livePreview()] : [guard(this.protectedEnd)]),
     ];
   }
 

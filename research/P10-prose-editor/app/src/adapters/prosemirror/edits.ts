@@ -81,6 +81,31 @@ export function applyEdit(target: EditTarget, edit: ScriptedEdit): void {
       for (const step of edit.edits) applyEdit(target, step);
       for (let n = 0; n < 50 && target.canUndo(); n++) target.undo();
       return;
+    case 'link-insert': {
+      // What typing "[[query" and picking the record leaves: the link in place of the typed text.
+      const at = resolveAnchor(text, edit.at);
+      if (!target.writing()) {
+        insertAt(target, at, `[[${edit.pick}]]`);
+        return;
+      }
+      const pos = target.toPos(at);
+      const tr = view.state.tr.insert(pos, view.state.schema.nodes.wikilink!.create({ id: edit.pick }));
+      view.dispatch(tr.setSelection(TextSelection.create(tr.doc, pos + 1)).scrollIntoView());
+      return;
+    }
+    case 'link-delete': {
+      const at = resolveAnchor(text, edit.link);
+      if (!target.writing()) {
+        deleteRange(target, at, text.indexOf(']]', at + 2) + 2);
+        return;
+      }
+      const pos = target.toPos(at);
+      const node = view.state.doc.resolve(pos).nodeAfter;
+      if (node?.type.name !== 'wikilink') throw new Error(`link-delete: no link at offset ${at}`);
+      const tr = view.state.tr.delete(pos, pos + node.nodeSize);
+      view.dispatch(tr.setSelection(TextSelection.near(tr.doc.resolve(tr.mapping.map(pos)))).scrollIntoView());
+      return;
+    }
     default:
       throw new Error(`prosemirror: the base does not make "${edit.kind}" edits yet`);
   }

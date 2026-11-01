@@ -1,4 +1,5 @@
 import type { Node } from 'prosemirror-model';
+import { sourceLeaf } from './links.ts';
 import { tokenize } from './markdown.ts';
 
 /**
@@ -28,6 +29,8 @@ interface Block {
   to: number;
   fenced: boolean;
   aligned?: number[];
+  /** For each position of the block's content, how many text characters of the source stand before it. */
+  chars?: number[];
   firstContent?: number;
 }
 
@@ -90,7 +93,7 @@ export class PositionMap {
     const index = this.blockAt(pos);
     const block = this.blocks[index]!;
     if (pos < block.start) return block.from + this.firstContent(block);
-    return this.offsetIn(block, Math.min(pos, block.start + block.size) - block.start);
+    return this.offsetIn(block, this.charsBefore(block, Math.min(pos, block.start + block.size) - block.start));
   }
 
   /** The document position of source offset `offset`. */
@@ -117,7 +120,7 @@ export class PositionMap {
       if (aligned[mid]! >= inBlock) last = mid;
       else first = mid + 1;
     }
-    return block.start + first;
+    return block.start + this.positionOf(block, first);
   }
 
   /** The nearest block at or after `pos` that contains it, else the next one, else the last. */
@@ -145,6 +148,39 @@ export class PositionMap {
     return block.from + aligned[aligned.length - 1]! + 1;
   }
 
+  /** Text characters before each position: a link is one position and as many characters as its syntax. */
+  private charTable(block: Block): number[] {
+    if (block.chars !== undefined) return block.chars;
+    const table = [0];
+    let count = 0;
+    block.node.forEach((child) => {
+      if (child.isText) for (let i = 0; i < child.nodeSize; i++) table.push(++count);
+      else {
+        count += sourceLeaf(child).length;
+        table.push(count);
+      }
+    });
+    block.chars = table;
+    return table;
+  }
+
+  private charsBefore(block: Block, index: number): number {
+    return this.charTable(block)[index] ?? index;
+  }
+
+  /** The position (relative to the block start) at character `char`: inside a link it is the one before it. */
+  private positionOf(block: Block, char: number): number {
+    const table = this.charTable(block);
+    let low = 0;
+    let high = table.length - 1;
+    while (low < high) {
+      const mid = (low + high + 1) >> 1;
+      if (table[mid]! <= char) low = mid;
+      else high = mid - 1;
+    }
+    return low;
+  }
+
   private firstContent(block: Block): number {
     this.align(block);
     return block.firstContent ?? 0;
@@ -154,7 +190,7 @@ export class PositionMap {
   private align(block: Block): number[] {
     if (block.aligned !== undefined) return block.aligned;
     const text = this.source.slice(block.from, block.to);
-    const chars = block.node.textBetween(0, block.size, '', '\n');
+    const chars = block.node.textBetween(0, block.size, '', sourceLeaf);
     const starts = lineStartsOf(text);
     const contents = new Map<number, number>();
     const contentStart = (line: number): number => {
@@ -241,7 +277,7 @@ export class Tracker {
     const map = this.current();
     const from = map.toOffset(start);
     const to = Math.max(map.toOffset(endOld), from);
-    this.source = this.source.slice(0, from) + doc.textBetween(start, endNew, '\n\n', '\n') + this.source.slice(to);
+    this.source = this.source.slice(0, from) + doc.textBetween(start, endNew, '\n\n', sourceLeaf) + this.source.slice(to);
     this.base = doc;
     this.map = undefined;
   }

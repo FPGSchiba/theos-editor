@@ -1,20 +1,40 @@
-import { defaultMarkdownParser, defaultMarkdownSerializer } from 'prosemirror-markdown';
+import { defaultMarkdownParser, defaultMarkdownSerializer, MarkdownParser, MarkdownSerializer } from 'prosemirror-markdown';
 import type { Node } from 'prosemirror-model';
+import { installWikilinkRule, linkSource, wikilinkToken } from './links.ts';
+import { schema } from './schema.ts';
 
 /** The Markdown tokens of a body, with the `map` line ranges markdown-it gives block tokens. */
 export type MarkdownToken = ReturnType<typeof defaultMarkdownParser.tokenizer.parse>[number];
 
-/** The stock parser of prosemirror-markdown: markdown-it "commonmark", no HTML, the library's token handlers. */
+installWikilinkRule(defaultMarkdownParser.tokenizer);
+
+/** The stock parser (markdown-it "commonmark", no HTML, the library's token handlers) plus the wikilink token. */
+const parser = new MarkdownParser(schema, defaultMarkdownParser.tokenizer, {
+  ...defaultMarkdownParser.tokens,
+  wikilink: wikilinkToken,
+});
+
+/** The stock serializer plus the wikilink rule: `[[id]]` or `[[id|shown]]`, written raw (never escaped). */
+const serializer = new MarkdownSerializer(
+  {
+    ...defaultMarkdownSerializer.nodes,
+    wikilink(state, node) {
+      state.write(linkSource(node.attrs.id as string, node.attrs.shown as string | null));
+    },
+  },
+  defaultMarkdownSerializer.marks,
+);
+
 export function parseBody(body: string): Node {
-  return defaultMarkdownParser.parse(body) as Node;
+  return parser.parse(body) as Node;
 }
 
-/** The stock serializer; it writes the tree out again and keeps nothing of the source. */
+/** Write the tree out again; nothing of the source is kept. */
 export function serializeBody(doc: Node): string {
-  return defaultMarkdownSerializer.serialize(doc);
+  return serializer.serialize(doc);
 }
 
 /** The block tokens of `body` (what `parseBody` is built from), for the line ranges of the blocks. */
 export function tokenize(body: string): MarkdownToken[] {
-  return defaultMarkdownParser.tokenizer.parse(body, {});
+  return parser.tokenizer.parse(body, {});
 }
