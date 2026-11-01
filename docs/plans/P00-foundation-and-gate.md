@@ -201,7 +201,7 @@ Fixed values:
   "llvm-tools-preview"]`, `profile = "minimal"`.
 - Root `Cargo.toml`:
   - `[workspace]`: `resolver = "3"`, `members = ["crates/*", "xtask"]`.
-  - `[workspace.package]`: `version = "0.0.0"`, `edition = "2024"`, `rust-version = "1.99"`,
+  - `[workspace.package]`: `version = "0.0.0"`, `edition = "2024"`, `rust-version = "1.99.1"`,
     `publish = false`, `repository = "https://github.com/FPGSchiba/theos-editor"`.
   - `[workspace.lints]`: the spec §5.2 list, byte-for-byte the same tables as `gate/lints.toml`
     (which holds them as `[rust]`, `[rustdoc]`, `[clippy]`).
