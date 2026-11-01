@@ -45,7 +45,7 @@ export function setNoteState(view: EditorView, note: string, state: string): voi
     view.dispatch({
       changes: { from, to: line.to, insert },
       selection: { anchor: from + insert.length },
-      userEvent: 'input.type',
+      userEvent: 'input.note-state',
       scrollIntoView: true,
     });
     return;

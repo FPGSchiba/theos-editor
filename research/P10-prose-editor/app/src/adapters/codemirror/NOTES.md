@@ -92,7 +92,7 @@ beat rows is Task 11; nothing was run on WebView2, WKWebView or WebKitGTK.
 ## Callouts (Task 10)
 
 Files: `callouts.ts` (the block lines, the heads, the hidden markers), `calloutlook.ts` (the box look), `devwords.ts`, `notestate.ts`
-(`note-state`), `rawlines.ts` (which lines a selection touches; `livepreview.ts` uses it now too), `wholedoc.ts`. The callout plugin
+(`note-state`), `rawlines.ts` (which lines a selection touches; `livepreview.ts` uses it now too). The callout plugin
 and its look are part of the Write set of `modes.ts`; Source mode shows every callout raw.
 
 - **A block is a run of lines.** The blocks come from the Lezer tree (`Blockquote` whose first line is `> [!voice|design|note]`), so a lazy
@@ -117,17 +117,10 @@ and its look are part of the Write set of `modes.ts`; Source mode shows every ca
   Because a selection always touches its lines, a marker that is hidden is never under the caret or inside a selection: Backspace at the
   start of a body line joins it to the line above (one newline, the `> ` stays and is drawn), Delete at the end of the line above takes
   one newline, and a Shift selection into a hidden line draws it first (probed). A click on a head puts the caret on the title line.
-- **`note-state`** (`notestate.ts`). One transaction (`input.type`, one undo step) replaces the last ` · ` segment of the title line
+- **`note-state`** (`notestate.ts`). One transaction (`input.note-state`, never joined: one undo step) replaces the last ` · ` segment of the title line
   `> [!note] <note> …` when it is a state and appends ` · <state>` when it is not, as the oracle does; the caret ends behind it on the
   title line, which then shows raw. A note id that is not there throws.
-- **The viewport** (`wholedoc.ts`). CodeMirror draws only the lines around what is on screen and decides it from line heights it has not
-  measured at the first frame. A callout page is taller than that estimate, so on a 1280 x 720 page the lines below the fold (blocks
-  five to seven of `synthetic-voices-in-world.md`) were not in the DOM and `F-voice`, `F-design` and `F-dev-word` could not see them.
-  `mount` now makes the first measure at once (reading the layout) and asks for the end of the document with a negative scroll margin
-  (the page does not move); a document that fits the window plus CodeMirror's margin (about 500 px past the fold) is then drawn in full.
-  A taller document returns to the usual viewport at the next measure, and one over 20 000 characters is left alone. This is a
-  CodeMirror-specific accommodation to checks that read the DOM without scrolling (a measure of the harness, not of the editor); a person
-  scrolling sees no difference.
+- **The viewport.** CodeMirror draws the viewport only; the harness checks scroll the record to read the whole of it (ruling 19).
 
 Known limits of the callouts: Enter in a callout does not continue the `> ` marker (the base's Enter copies nothing), so a new line is a
 lazy line of the block until the author types `> `; a nested quote (`> > `) is one callout line with a hidden outer marker; the voice head

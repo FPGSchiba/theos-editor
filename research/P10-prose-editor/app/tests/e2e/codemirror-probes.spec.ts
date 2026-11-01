@@ -566,17 +566,16 @@ test.describe('@harness codemirror · callouts', () => {
     await expect(page.locator('#editor-host [data-callout="voice"] [data-dev-word]')).toHaveText('ledger');
   });
 
-  test('a document that fits the window and the margin of CodeMirror is drawn in full, a long one keeps the viewport', async ({ page }) => {
-    // The voices record has six voice blocks, taller than the estimate of the first frame but within the margin:
-    // all six heads are in the DOM at once (a check reads the page right after the load) and later, and the page has not scrolled.
-    await openFile(page, VOICES);
-    expect(await page.locator('#editor-host .tu-voice__head').count()).toBe(6);
-    await settle(page);
-    expect(await page.locator('#editor-host .tu-voice__head').count()).toBe(6);
-    expect(await page.evaluate(() => window.scrollY)).toBe(0);
-    await openText(page, Array.from({ length: 4000 }, (_, n) => `Line ${n} of a long document that holds some words.`).join('\n'));
-    await settle(page);
-    expect(await page.evaluate(() => window.scrollY)).toBe(0);
-    expect(await page.locator('#editor-host .cm-line').count()).toBeLessThan(1000);
+  test('a note-state right after typing on the same title is its own undo step', async ({ page }) => {
+    const note = '> [!note] n1 · [[v]]\n> a';
+    await openText(page, note);
+    await at(page, note.indexOf('\n'));
+    await page.keyboard.type('x');
+    await page.evaluate(() => window.__harness!.apply({ id: 'probe', kind: 'note-state', note: 'n1', state: 'dropped' }));
+    expect(await text(page)).toBe('> [!note] n1 · [[v]]x · dropped\n> a');
+    await page.keyboard.press('ControlOrMeta+z');
+    expect(await text(page)).toBe('> [!note] n1 · [[v]]x\n> a');
+    await page.keyboard.press('ControlOrMeta+z');
+    expect(await text(page)).toBe(note);
   });
 });
