@@ -210,6 +210,48 @@ export async function collectWhileScrolling<T>(
 }
 
 /**
+ * Scroll the editor until an element matching `selector` is attached, then scroll it into view
+ * (centred). For a driver or a check that has to click or fill a rendered element that is not
+ * under the caret: a viewport editor draws only what is near the window, so a person would scroll
+ * to it first. It starts at the top and goes down in half-window steps (two frames at each), over
+ * the whole range; when `waitMs` is given it repeats the pass until that time is up, for an
+ * element that is mounted late. It throws when the end is reached without the element. The caret
+ * is never moved (moving it would turn the construct raw) and the viewport is never enlarged.
+ */
+export async function revealElement(page: Page, selector: string, waitMs = 0): Promise<void> {
+  const present = (): Promise<boolean> =>
+    page.evaluate((sel) => document.querySelector(sel) !== null, selector);
+  const scrollTo = (step: number): Promise<boolean> =>
+    page.evaluate(
+      ([finder, index]) => {
+        const scrollers = (0, eval)(finder)() as Element[];
+        const half = window.innerHeight / 2;
+        for (const node of scrollers) node.scrollTop = index * half;
+        return scrollers.every((node) => node.scrollTop + node.clientHeight >= node.scrollHeight - 2);
+      },
+      [inPage(findScrollers), step] as const,
+    );
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    await scrollTo(0);
+    await settle(page);
+    let reachedEnd = false;
+    for (let step = 1; step <= MAX_STEPS; step++) {
+      if (await present()) {
+        await page.evaluate((sel) => document.querySelector(sel)?.scrollIntoView({ block: 'center' }), selector);
+        await settle(page);
+        if (await present()) return;
+      }
+      if (reachedEnd) break;
+      reachedEnd = await scrollTo(step);
+      await settle(page);
+    }
+    if (!reachedEnd) throw new Error(`revealElement: the end was not reached in ${MAX_STEPS} half-window steps`);
+    if (Date.now() >= deadline) throw new Error(`revealElement: nothing matches ${selector}`);
+  }
+}
+
+/**
  * Every element of the editor matching `selector`, described by `pick` (which runs in the page)
  * and given `at`, its document-absolute top. Collected over the whole scroll range. The `at` in
  * the default key is what tells two equal constructs apart and stops one construct that is read

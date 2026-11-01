@@ -2,6 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { resolveAnchor } from '../../src/harness/anchor.ts';
 import { editOffset, expectedAfter, NOTE_STATE, toLf } from '../../src/harness/oracle.ts';
 import type { ScriptedEdit } from '../../src/harness/types.ts';
+import { revealElement } from './checks.ts';
 import { registerDriver, type EditDriver } from './helpers.ts';
 
 // The `input` driver: a scripted edit as a person would make it, with the keyboard and the mouse
@@ -44,19 +45,34 @@ const attr = (value: string | number): string => JSON.stringify(String(value));
 
 /** `beat-param`: click the parameter (or "+ add" and the key), type the value, Enter. */
 async function beatParam(page: Page, edit: ScriptedEdit & { kind: 'beat-param' }): Promise<void> {
-  const row = page.locator(`[data-beat-row=${attr(edit.beat)}]`).first();
-  await need(row, `the beat row of beat ${edit.beat}`);
+  const rowSelector = `[data-beat-row=${attr(edit.beat)}]`;
+  // A viewport editor draws only the rows near the window: scroll to the row, as a person would.
+  // Never move the caret there (the beat would turn raw and the row would go).
+  const reveal = async (selector: string, what: string): Promise<void> => {
+    try {
+      await revealElement(page, selector, FEATURE_WAIT_MS);
+    } catch {
+      throw new Error(`feature missing: ${what} is not rendered`);
+    }
+  };
+  await reveal(rowSelector, `the beat row of beat ${edit.beat}`);
+  const row = page.locator(rowSelector).first();
   // A row may be mounted before its params; whether the key exists is only known once they are.
-  await need(row.locator('[data-beat-param], [data-beat-add]'), `the parameters of beat ${edit.beat}`);
+  await reveal(`${rowSelector} [data-beat-param], ${rowSelector} [data-beat-add]`, `the parameters of beat ${edit.beat}`);
+  const paramSelector = `${rowSelector} [data-beat-param=${attr(edit.key)}]`;
   const existing = row.locator(`[data-beat-param=${attr(edit.key)}]`).first();
   if ((await existing.count()) > 0) {
+    await revealElement(page, paramSelector);
     // The key label is outside any chip; a click on the middle of the param may land on one.
     const label = existing.locator('.tu-beat__key').first();
     await ((await label.count()) > 0 ? label : existing).click({ timeout: FEATURE_WAIT_MS });
   } else {
+    await revealElement(page, `${rowSelector} [data-beat-add]`);
     await row.locator('[data-beat-add]').first().click({ timeout: FEATURE_WAIT_MS });
+    await revealElement(page, `${rowSelector} [data-beat-add-key=${attr(edit.key)}]`, FEATURE_WAIT_MS);
     await row.locator(`[data-beat-add-key=${attr(edit.key)}]`).first().click({ timeout: FEATURE_WAIT_MS });
   }
+  await revealElement(page, `${rowSelector} [data-beat-input]`, FEATURE_WAIT_MS);
   const field = row.locator('[data-beat-input]').first();
   await field.fill(edit.value, { timeout: FEATURE_WAIT_MS });
   await field.press('Enter');
