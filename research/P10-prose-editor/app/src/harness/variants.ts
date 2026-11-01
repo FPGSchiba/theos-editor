@@ -22,4 +22,15 @@ export const variants: VariantInfo[] = [
     wysiwyg: false,
     packages: ['@codemirror/commands', '@codemirror/language', '@codemirror/state', '@codemirror/view', '@lezer/markdown'],
   },
+  {
+    name: 'prosemirror:stock',
+    component: 'ProseMirror',
+    version: '1.42.9',
+    wysiwyg: true,
+    column: 'stock',
+    packages: [
+      'prosemirror-commands', 'prosemirror-history', 'prosemirror-keymap', 'prosemirror-markdown', 'prosemirror-model',
+      'prosemirror-state', 'prosemirror-view',
+    ],
+  },
 ];
