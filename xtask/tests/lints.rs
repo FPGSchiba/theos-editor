@@ -375,3 +375,123 @@ fn the_command_passes_a_clean_repository_and_fails_a_dirty_one() -> TestResult {
     assert!(table.contains("crates/a/src/lib.rs:5: "), "{table}");
     Ok(())
 }
+
+/// Lays `lib_rs` over the `src/lib.rs` of the crate `a` of `clean`, with code outside `src/`
+/// that it reaches, and checks the copy.
+fn lint_lib(lib_rs: &str) -> TestResult<Verdict> {
+    let dir = copy_fixture(None)?;
+    write(dir.path(), "crates/a/src/lib.rs", lib_rs)?;
+    write(dir.path(), "crates/a/lib/real.rs", "pub fn real() {}\n")?;
+    write(dir.path(), "crates/a/tests/helpers.rs", "pub fn h() {}\n")?;
+    write(dir.path(), "crates/a/src/inner.rs", "pub fn inner() {}\n")?;
+    lint(dir.path())
+}
+
+#[test]
+fn code_reached_from_src_but_outside_it_fails() -> TestResult {
+    // AC: CE-08.8
+    // The floor of `coverage` counts `crates/<name>/src/**` only, so code that a crate builds
+    // from anywhere else would be out of its reach: `#[path]` and `include!` stay in `src/`.
+    for lib_rs in [
+        "#[path = \"../lib/real.rs\"]\nmod real;\n",
+        "#[path = \"../tests/helpers.rs\"]\nmod helpers;\n",
+        "#[path = \"..\\\\lib\\\\real.rs\"]\nmod real;\n",
+        "#[path = \"../../a/lib/real.rs\"]\nmod real;\n",
+        "include!(\"../lib/real.rs\");\n",
+        "include!(\"../tests/helpers.rs\");\n",
+        "include!(\"../src/../lib/real.rs\");\n",
+    ] {
+        let verdict = lint_lib(lib_rs)?;
+        assert_eq!(
+            places(&verdict),
+            [(Some("crates/a/src/lib.rs"), Some(1))],
+            "{lib_rs}"
+        );
+        let message = &verdict.findings[0].message;
+        assert!(message.contains("src/"), "{lib_rs}: {message}");
+    }
+    Ok(())
+}
+
+#[test]
+fn code_reached_from_src_inside_it_passes() -> TestResult {
+    // AC: CE-08.8
+    for lib_rs in [
+        "#[path = \"inner.rs\"]\nmod renamed;\n",
+        "#[path = \"../src/inner.rs\"]\nmod renamed;\n",
+        "include!(\"inner.rs\");\n",
+        "include!(\"../../a/src/inner.rs\");\n",
+        // Data, not code: it stays allowed.
+        "const A: &str = include_str!(\"../lib/real.rs\");\nconst B: &[u8] = include_bytes!(\"../tests/helpers.rs\");\n",
+    ] {
+        let verdict = lint_lib(lib_rs)?;
+        assert!(verdict.passed(), "{lib_rs}: {:?}", verdict.findings);
+    }
+    Ok(())
+}
+
+#[test]
+fn xtask_source_leaving_src_fails() -> TestResult {
+    // AC: CE-08.8
+    let dir = copy_fixture(None)?;
+    write(
+        dir.path(),
+        "xtask/Cargo.toml",
+        "[package]\nname = \"xtask\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[lints]\nworkspace = true\n",
+    )?;
+    write(
+        dir.path(),
+        "xtask/src/main.rs",
+        "include!(\"../real.rs\");\n",
+    )?;
+    write(dir.path(), "xtask/real.rs", "fn main() {}\n")?;
+    let verdict = lint(dir.path())?;
+    assert_eq!(places(&verdict), [(Some("xtask/src/main.rs"), Some(1))]);
+    Ok(())
+}
+
+/// The verdict for the crate `a` of `clean` with `extra` added to its manifest.
+fn lint_manifest(extra: &str) -> TestResult<Verdict> {
+    let dir = copy_fixture(None)?;
+    let manifest = dir.path().join("crates").join("a").join("Cargo.toml");
+    let text = fs::read_to_string(&manifest)?;
+    fs::write(&manifest, format!("{text}\n{extra}\n"))?;
+    lint(dir.path())
+}
+
+#[test]
+fn manifest_target_outside_src_fails() -> TestResult {
+    // AC: CE-08.8
+    for extra in [
+        "[lib]\npath = \"lib/lib.rs\"\n",
+        "[lib]\npath = \"lib.rs\"\n",
+        "[lib]\npath = \"src/../lib/lib.rs\"\n",
+        "[[bin]]\nname = \"x\"\npath = \"bin/x.rs\"\n",
+        "[[bin]]\nname = \"y\"\npath = \"src/y.rs\"\n\n[[bin]]\nname = \"x\"\npath = \"tests/x.rs\"\n",
+        "[lib]\npath = \"/abs/lib.rs\"\n",
+    ] {
+        let verdict = lint_manifest(extra)?;
+        let message = only_finding(&verdict, "crates/a/Cargo.toml");
+        assert!(message.contains("src/"), "{extra}: {message}");
+    }
+    Ok(())
+}
+
+#[test]
+fn manifest_target_inside_src_or_not_measured_passes() -> TestResult {
+    // AC: CE-08.8
+    for extra in [
+        "[lib]\npath = \"src/lib.rs\"\n",
+        "[lib]\npath = \"src/core/lib.rs\"\n",
+        "[[bin]]\nname = \"x\"\npath = \"src/bin/x.rs\"\n",
+        "[lib]\nname = \"a\"\n",
+        // Tests, benches and examples are not measured code.
+        "[[test]]\nname = \"t\"\npath = \"tests/t.rs\"\n",
+        "[[bench]]\nname = \"b\"\npath = \"benches/b.rs\"\n",
+        "[[example]]\nname = \"e\"\npath = \"examples/e.rs\"\n",
+    ] {
+        let verdict = lint_manifest(extra)?;
+        assert!(verdict.passed(), "{extra}: {:?}", verdict.findings);
+    }
+    Ok(())
+}

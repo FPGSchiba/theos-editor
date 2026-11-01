@@ -22,6 +22,11 @@
 //!   ([`scan_fixture_modules`]); a `main.rs` or `mod.rs` directly in a `tests/fixtures/` folder;
 //!   and a `path` in a `Cargo.toml` (`[lib]`, `[[bin]]`, `[[test]]`, `[[example]]`, `[[bench]]`,
 //!   dependencies of every kind, `package.build`, workspace members) that leads there.
+//! - code outside the `src/` of its crate, which `coverage` does not count: a `#[path]` or an
+//!   `include!` in a file under `crates/<name>/src/` or `xtask/src/` that leads out of that
+//!   `src/`, and a `[lib]` or `[[bin]]` `path` in the manifest of such a crate that does not
+//!   lead into it (`src_bounds.rs`). `include_str!` and `include_bytes!` are data and stay
+//!   allowed.
 //!
 //! The `.rs` sources are all that are listed but the files under `tests/fixtures/` and under the
 //! build folder `target/` of the root; a folder called `target` or `node_modules` further down
@@ -51,10 +56,11 @@
 //! Findings name the file and the line and say what is wrong, never what is written there: the
 //! repository is the pull request's, and what a check prints is read by the runner.
 //!
-//! The code is in four files: this one has the rules for the lint tables, the manifests and the
+//! The code is in five files: this one has the rules for the lint tables, the manifests and the
 //! mirrored configuration files, `attributes.rs` the attribute scan, `fixture_routes.rs` the ways
 //! to compile a fixture (the name avoids `mod fixtures;`, which this check forbids), and
-//! `tokens.rs` the tokens that both of them read.
+//! `src_bounds.rs` the rule that code stays in `src/`, and
+//! `tokens.rs` the tokens that these read.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -69,11 +75,13 @@ use crate::{Error, Result};
 
 mod attributes;
 mod fixture_routes;
+mod src_bounds;
 mod tokens;
 
 pub use attributes::scan_attributes;
 use fixture_routes::{MANIFEST_FIXTURES, fixture_entry_points, manifest_leads_into_fixtures};
 pub use fixture_routes::{scan_fixture_modules, scan_includes};
+use src_bounds::manifest_findings;
 
 /// The root manifest, which holds `[workspace.lints]`.
 const ROOT_MANIFEST: &str = "Cargo.toml";
@@ -243,6 +251,7 @@ fn crate_manifests(root: &Path, files: &[String], findings: &mut Vec<Finding>) -
         if manifest_leads_into_fixtures(path, &manifest) {
             findings.push(at_file(path, MANIFEST_FIXTURES));
         }
+        findings.extend(manifest_findings(path, &manifest));
     }
     Ok(())
 }

@@ -692,6 +692,7 @@ Rules (spec §5.4):
   - an `ignore` attribute without `= "…"` is a finding.
   - Lines starting with `//` are skipped.
 
+- Code stays in `src/` (final review round 3): a `#[path]` or `include!` in a file under `crates/<name>/src/` or `xtask/src/`, and a `[lib]` or `[[bin]]` `path` of such a crate's manifest, must lead into that `src/` (`src_bounds.rs`); `include_str!` and `include_bytes!` stay allowed.
 - [ ] **Step 1: Write the failing tests.** Unit tests:
   - `allow_attribute_found`, `inner_allow_found`, `cfg_attr_allow_found`;
   - `expect_without_reason_found`, `expect_with_reason_passes`;

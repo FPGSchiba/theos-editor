@@ -4,6 +4,7 @@
 //! builds would be built unseen.
 
 use super::at_file;
+use super::src_bounds::{INCLUDE_OUTSIDE_SRC, PATH_OUTSIDE_SRC, leaves_src};
 use super::tokens::{Token, located_tokens};
 use crate::checks::ac_trace::{is_fixture, line_number};
 use crate::verdict::Finding;
@@ -68,7 +69,8 @@ pub fn scan_includes(file: &str, text: &str) -> Vec<Finding> {
                 (_, Token::Symbol(end)),
                 ..,
             ] if *end == close => match target(file, path) {
-                Target::Elsewhere => continue,
+                Target::Elsewhere if !leaves_src(file, path) => continue,
+                Target::Elsewhere => INCLUDE_OUTSIDE_SRC,
                 Target::Fixtures => INCLUDE_FIXTURES,
                 Target::Unknown => INCLUDE_UNKNOWN,
             },
@@ -210,7 +212,7 @@ fn target(file: &str, literal: &str) -> Target {
 
 /// The parts of `path` (`\` read as `/`) without `.` and without the parts that a `..` takes
 /// away. A `..` that has nothing before it to take away stays. `None` for an absolute path.
-fn normalise(path: &str) -> Option<Vec<String>> {
+pub(super) fn normalise(path: &str) -> Option<Vec<String>> {
     let path = path.replace('\\', "/");
     if path.starts_with('/') || path.as_bytes().get(1) == Some(&b':') {
         return None;
@@ -231,7 +233,7 @@ fn normalise(path: &str) -> Option<Vec<String>> {
 /// Where the parts `own` of a path lead when they are read from the folder of the file `file`:
 /// the path in the repository, in lower case, with a `/` at the end. `None` when the path climbs
 /// out of the repository.
-fn folder_of(file: &str, own: &[String]) -> Option<String> {
+pub(super) fn folder_of(file: &str, own: &[String]) -> Option<String> {
     let mut resolved: Vec<&str> = file.split('/').collect();
     resolved.pop();
     for part in own {
@@ -252,7 +254,7 @@ fn line_at(text: &str, offset: usize) -> u32 {
 
 /// The text of the string literal `literal` as written, with its quotes; `None` when it has an
 /// escape other than `\\`, or is not closed.
-fn string_value(literal: &str) -> Option<String> {
+pub(super) fn string_value(literal: &str) -> Option<String> {
     let open = literal.find('"')?;
     let close = literal.rfind('"').filter(|close| *close > open)?;
     let body = &literal[open + 1..close];
@@ -278,7 +280,7 @@ fn string_value(literal: &str) -> Option<String> {
 pub(super) fn path_problem(file: &str, value: &[Token<'_>]) -> Option<&'static str> {
     match value.first() {
         Some(Token::Text(literal)) => match target(file, literal) {
-            Target::Elsewhere => None,
+            Target::Elsewhere => leaves_src(file, literal).then_some(PATH_OUTSIDE_SRC),
             Target::Fixtures => Some(PATH_FIXTURES),
             Target::Unknown => Some(PATH_UNKNOWN),
         },
