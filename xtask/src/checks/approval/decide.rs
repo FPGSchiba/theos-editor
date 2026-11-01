@@ -37,6 +37,10 @@ const RECORDED_SENTENCE: &str = "Approval recorded for this content of the PR.";
 /// The failure of a protected pull request without the label `approved`.
 const WAITS: &str = "waits for Jann: add the label `approved` after review";
 
+/// The failure of a pull request that has `approved` but no recorded approval: nothing changed
+/// after an approval, because none was recorded. Spec §5.7 step 7 words only the changed case.
+const NOT_RECORDED: &str = "approval removed: no approval was recorded for this content (the label was added while a check was running, or without a run); add `approved` again once this run has finished";
+
 /// Added by CI to a pull request that touches a protected path; never removed by CI. The colour
 /// and the description of the label are in `gate/repo-settings.toml`.
 pub const NEEDS_JANN: &str = "needs-jann";
@@ -162,10 +166,14 @@ pub fn decide(
         return (Verdict::pass(Check::Approval), actions);
     }
     // Row 5.
-    let old = recorded.map_or("none recorded", |fingerprint| fingerprint.0.as_str());
-    let reason = format!(
-        "approval removed: the PR changed after approval ({old} → {})",
-        current.0
+    let reason = recorded.map_or_else(
+        || NOT_RECORDED.to_owned(),
+        |old| {
+            format!(
+                "approval removed: the PR changed after approval ({} → {})",
+                old.0, current.0
+            )
+        },
     );
     actions.push(Action::RemoveLabel(APPROVED.to_owned()));
     actions.push(Action::Comment(reason.clone()));
@@ -358,14 +366,16 @@ mod tests {
             &fp('a'),
             HEAD,
         );
-        let reason = format!(
-            "approval removed: the PR changed after approval (none recorded → {})",
-            "a".repeat(64)
+        // Nothing changed after an approval, because none was recorded: the text says so.
+        let reason = concat!(
+            "approval removed: no approval was recorded for this content (the label was added ",
+            "while a check was running, or without a run); add `approved` again once this run ",
+            "has finished"
         );
-        assert_eq!(messages(&verdict), [reason.as_str()]);
+        assert_eq!(messages(&verdict), [reason]);
         let mut expected = needs_jann_actions();
         expected.push(Action::RemoveLabel("approved".to_owned()));
-        expected.push(Action::Comment(reason));
+        expected.push(Action::Comment(reason.to_owned()));
         assert_eq!(actions, expected);
     }
 
