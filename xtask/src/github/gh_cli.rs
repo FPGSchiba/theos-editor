@@ -223,6 +223,11 @@ impl PullRequests for GhCli {
         label_names(&request.describe(), &call(&request)?)
     }
 
+    fn head_sha(&self, pr: u64) -> Result<String> {
+        let request = Request::get(format!("repos/{}/pulls/{pr}", self.repo));
+        head_sha_from(&request.describe(), &call(&request)?)
+    }
+
     fn add_label(&self, pr: u64, name: &str) -> Result<()> {
         let request = Request::post(self.issue(pr, "labels"), vec![format!("labels[]={name}")]);
         call(&request).map(drop)
@@ -491,6 +496,15 @@ fn object(request: &str, json: &str) -> Result<Value> {
     }
 }
 
+/// The id of the head commit in the pull request `json` describes: `head.sha`.
+fn head_sha_from(request: &str, json: &str) -> Result<String> {
+    let pull = object(request, json)?;
+    match pull["head"]["sha"].as_str() {
+        Some(sha) if !sha.is_empty() => Ok(sha.to_owned()),
+        _ => Err(failed(request, "the answer has no head commit")),
+    }
+}
+
 /// The comments `json` lists. A comment of a deleted account has no author, which no check
 /// trusts: it gets the empty string.
 fn comments_from(request: &str, json: &str) -> Result<Vec<Comment>> {
@@ -640,6 +654,24 @@ mod tests {
         assert_eq!(label_names(request, "[]")?, Vec::<String>::new());
         assert_eq!(label_names(request, "")?, Vec::<String>::new());
         Ok(())
+    }
+
+    #[test]
+    fn the_head_is_read_from_the_pull_request() {
+        let json = r#"{"number": 7, "head": {"sha": "abc123", "ref": "x"}}"#;
+        assert_eq!(head_sha_from("GET p", json).ok().as_deref(), Some("abc123"));
+        for bad in [
+            "{}",
+            r#"{"head": {}}"#,
+            r#"{"head": {"sha": ""}}"#,
+            "[]",
+            "x",
+        ] {
+            assert!(
+                matches!(head_sha_from("GET p", bad), Err(Error::GitHub { .. })),
+                "{bad}"
+            );
+        }
     }
 
     #[test]

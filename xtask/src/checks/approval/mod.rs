@@ -8,6 +8,8 @@
 //!
 //! 1. [`protected::touched`]: the protected paths and tables the pull request changes. None: pass,
 //!    and nothing is read from or written to GitHub.
+//!    Then the head of the pull request as GitHub has it: an event for an earlier commit fails and
+//!    changes nothing.
 //! 2. [`fingerprint::compute`]: the fingerprint of its changes (D2).
 //! 3. The comments and the labels as they are now, read from GitHub (the event may be stale).
 //! 4. [`decide::decide`]: a verdict, and the actions to make on GitHub, which are made in order.
@@ -24,7 +26,7 @@ use crate::ci::{CiEvent, PullRequestEvent};
 use crate::git::Git;
 use crate::github::gh_cli::GhCli;
 use crate::github::{LabelSpec, PullRequests, settings};
-use crate::verdict::{Check, Verdict};
+use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
 pub mod decide;
@@ -34,6 +36,9 @@ pub mod protected;
 use decide::{Action, Event};
 use protected::ProtectedPaths;
 
+/// The failure of a run whose event is not for the current head of the pull request.
+const STALE_RUN: &str =
+    "this run is for an earlier commit of the pull request; the run for its newest commit decides";
 /// Runs the check on the checkout at `root` for the pull request of `ci`, reading and changing the
 /// labels and comments of the repository in `GITHUB_REPOSITORY` with the token in `GH_TOKEN`.
 ///
@@ -56,7 +61,9 @@ pub fn run(root: &Path, ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<Ve
 ///
 /// When the head commit of the pull request is not in the repository (the job checks out the
 /// base commit), it is fetched as `refs/pull/<n>/head` first. A pull request that touches no
-/// protected path passes before `gh` is called at all.
+/// protected path passes before `gh` is called at all. For one that does, the head GitHub has now
+/// is read first: when it is not the head of the event, the run is for an earlier commit and fails
+/// without recording, removing or writing anything.
 ///
 /// # Errors
 ///
@@ -77,6 +84,14 @@ pub fn check(
     // approval does not depend on GitHub being up.
     if touched.is_empty() {
         return Ok(Verdict::pass(Check::Approval));
+    }
+    // A run for an earlier commit (an old event run again) must not record or undo anything: what
+    // it would write belongs to a head that is no longer the pull request.
+    if !gh.head_sha(pr.number)?.eq_ignore_ascii_case(&pr.head_sha) {
+        return Ok(Verdict::with(
+            Check::Approval,
+            vec![Finding::new(STALE_RUN)],
+        ));
     }
     let current = fingerprint::compute(git, &merge_base, &head)?;
     let comments = gh.comments(pr.number)?;
@@ -267,7 +282,7 @@ mod tests {
         let (dir, base) = main_repo()?;
         git(dir.path(), &["switch", "-q", "-c", "topic"])?;
         let head = change(dir.path(), "docs/a.md", "two\n")?;
-        let gh = FakeGitHub::new();
+        let gh = FakeGitHub::new().with_head(&head);
         let git_repo = Git::new(dir.path());
         let pr = event("opened", None, &base, &head);
 
@@ -278,7 +293,7 @@ mod tests {
             "waits for Jann: add the label `approved` after review"
         );
         // Reads first, labels last; then the writes.
-        let mut expected = vec![Call::Comments(7), Call::Labels(7)];
+        let mut expected = vec![Call::HeadSha(7), Call::Comments(7), Call::Labels(7)];
         expected.extend(needs_jann_calls()?);
         assert_eq!(gh.calls(), expected);
         assert_eq!(gh.current_labels(), ["needs-jann"]);
@@ -298,7 +313,9 @@ mod tests {
         let git_repo = Git::new(path);
         git(path, &["switch", "-q", "-c", "topic"])?;
         let first = change(path, "docs/a.md", "two\n")?;
-        let gh = FakeGitHub::new().with_labels(&["needs-jann"]);
+        let gh = FakeGitHub::new()
+            .with_labels(&["needs-jann"])
+            .with_head(&first);
 
         // Jann adds `approved`: the fingerprint is recorded and the check passes.
         gh.add_label(7, "approved")?;
@@ -325,6 +342,7 @@ mod tests {
         git(path, &["rebase", "-q", "main"])?;
         let rebased = git(path, &["rev-parse", "HEAD"])?;
         assert_ne!(rebased, first);
+        gh.set_head(&rebased);
         let writes_before = gh.writes().len();
         let verdict = check(
             &git_repo,
@@ -338,6 +356,7 @@ mod tests {
 
         // A push that changes the PR: the approval goes, `needs-jann` stays.
         let changed = change(path, "docs/a.md", "three\n")?;
+        gh.set_head(&changed);
         let verdict = check(
             &git_repo,
             &rules()?,
@@ -379,6 +398,52 @@ mod tests {
 
     // AC: CE-08.5
     #[test]
+    fn a_run_for_an_earlier_commit_changes_nothing() -> TestResult {
+        let (dir, base) = main_repo()?;
+        let path = dir.path();
+        let git_repo = Git::new(path);
+        git(path, &["switch", "-q", "-c", "topic"])?;
+        let old = change(path, "docs/a.md", "two\n")?;
+        let new = change(path, "docs/a.md", "three\n")?;
+        // Jann approved `new`; someone re-runs the run of the `labeled` event of `old`.
+        let gh = FakeGitHub::new()
+            .with_labels(&["needs-jann", "approved"])
+            .with_head(&new);
+        let verdict = check(
+            &git_repo,
+            &rules()?,
+            &labels()?,
+            &event("labeled", Some("approved"), &base, &old),
+            &gh,
+        )?;
+        assert!(!verdict.passed());
+        assert_eq!(
+            verdict.findings[0].message,
+            concat!(
+                "this run is for an earlier commit of the pull request; ",
+                "the run for its newest commit decides"
+            )
+        );
+        // One read of the head, then nothing: no record, no label change, no comment.
+        assert_eq!(gh.calls(), [Call::HeadSha(7)]);
+        assert_eq!(gh.current_labels(), ["needs-jann", "approved"]);
+        assert_eq!(gh.current_comments(), []);
+
+        // The run for the current head records and passes.
+        let verdict = check(
+            &git_repo,
+            &rules()?,
+            &labels()?,
+            &event("labeled", Some("approved"), &base, &new),
+            &gh,
+        )?;
+        assert!(verdict.passed(), "{verdict:?}");
+        assert_eq!(gh.current_comments().len(), 1);
+        Ok(())
+    }
+
+    // AC: CE-08.5
+    #[test]
     fn a_comment_by_someone_else_does_not_keep_an_approval() -> TestResult {
         let (dir, base) = main_repo()?;
         git(dir.path(), &["switch", "-q", "-c", "topic"])?;
@@ -397,6 +462,7 @@ mod tests {
         for comment in [forged("jann", at), forged(BOT, "2026-10-31T10:05:00Z")] {
             let gh = FakeGitHub::new()
                 .with_labels(&["needs-jann", "approved"])
+                .with_head(&head)
                 .with_comment(comment);
             let verdict = check(
                 &git_repo,
@@ -419,6 +485,7 @@ mod tests {
         let head = change(dir.path(), "docs/a.md", "two\n")?;
         let gh = FakeGitHub::new()
             .with_labels(&["needs-jann", "approved"])
+            .with_head(&head)
             .with_failing_comments();
         let result = check(
             &Git::new(dir.path()),
@@ -436,7 +503,7 @@ mod tests {
         let (dir, base) = main_repo()?;
         git(dir.path(), &["switch", "-q", "-c", "topic"])?;
         let head = change(dir.path(), "docs/a.md", "two\n")?;
-        let gh = FakeGitHub::new();
+        let gh = FakeGitHub::new().with_head(&head);
         let result = check(
             &Git::new(dir.path()),
             &rules()?,
@@ -487,7 +554,7 @@ mod tests {
         let git_repo = Git::new(checkout.path());
         assert!(git_repo.rev_parse(&format!("{head}^{{commit}}")).is_err());
 
-        let gh = FakeGitHub::new();
+        let gh = FakeGitHub::new().with_head(&head);
         let verdict = check(
             &git_repo,
             &rules()?,

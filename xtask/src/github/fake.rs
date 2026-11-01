@@ -18,6 +18,8 @@ use crate::Result;
 pub enum Call {
     /// `labels(pr)`.
     Labels(u64),
+    /// `head_sha(pr)`.
+    HeadSha(u64),
     /// `add_label(pr, name)`.
     AddLabel(u64, String),
     /// `remove_label(pr, name)`.
@@ -52,6 +54,7 @@ struct State {
     comments: Vec<Comment>,
     calls: Vec<Call>,
     comments_fail: bool,
+    head: Option<String>,
     rulesets: Vec<(u64, Value)>,
     repo: Map<String, Value>,
     repo_labels: Vec<LabelSpec>,
@@ -83,6 +86,18 @@ impl FakeGitHub {
     pub fn with_comment(self, comment: Comment) -> Self {
         self.state.borrow_mut().comments.push(comment);
         self
+    }
+
+    /// The pull request has this commit at its head now. Without it, reading the head fails.
+    #[must_use]
+    pub fn with_head(self, sha: &str) -> Self {
+        self.state.borrow_mut().head = Some(sha.to_owned());
+        self
+    }
+
+    /// The head of the pull request moves to this commit.
+    pub fn set_head(&self, sha: &str) {
+        self.state.borrow_mut().head = Some(sha.to_owned());
     }
 
     /// Writing a comment fails, as it does when GitHub is down.
@@ -120,6 +135,7 @@ impl FakeGitHub {
             !matches!(
                 call,
                 Call::Labels(_)
+                    | Call::HeadSha(_)
                     | Call::Comments(_)
                     | Call::Rulesets
                     | Call::Ruleset(_)
@@ -173,6 +189,15 @@ impl PullRequests for FakeGitHub {
         let mut state = self.state.borrow_mut();
         state.calls.push(Call::Labels(pr));
         Ok(state.labels.clone())
+    }
+
+    fn head_sha(&self, pr: u64) -> Result<String> {
+        let mut state = self.state.borrow_mut();
+        state.calls.push(Call::HeadSha(pr));
+        state
+            .head
+            .clone()
+            .ok_or_else(|| failed("GET pull request", "HTTP 404"))
     }
 
     fn add_label(&self, pr: u64, name: &str) -> Result<()> {

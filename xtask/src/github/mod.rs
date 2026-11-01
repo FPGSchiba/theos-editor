@@ -54,6 +54,14 @@ pub trait PullRequests {
     /// Fails when GitHub cannot be reached or refuses the request.
     fn labels(&self, pr: u64) -> Result<Vec<String>>;
 
+    /// The id of the commit at the head of pull request `pr`, as it is now.
+    ///
+    /// # Errors
+    ///
+    /// Fails when GitHub cannot be reached, refuses the request or answers with something else
+    /// than a pull request.
+    fn head_sha(&self, pr: u64) -> Result<String>;
+
     /// Puts the label `name` on pull request `pr`.
     ///
     /// # Errors
