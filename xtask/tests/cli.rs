@@ -52,9 +52,16 @@ fn an_error_with_a_context_keeps_the_context_and_the_cause() -> TestResult {
 // AC: CE-08.4
 #[test]
 fn no_line_of_an_error_can_start_a_workflow_command() -> TestResult {
-    // A revision name is text the caller controls, and git's complaint repeats it.
+    // A revision name is text the caller controls, and git's complaint repeats it. The branch is
+    // named so that the run reaches git whatever is checked out: CI checks out a detached HEAD.
     let output = xtask(
-        &["commit-msg", "--base", "no-such\n::error::forged"],
+        &[
+            "commit-msg",
+            "--branch",
+            "phase/P00-foundation-and-gate",
+            "--base",
+            "no-such\n::error::forged",
+        ],
         |_| {},
     )?;
     assert_eq!(output.status.code(), Some(2));
