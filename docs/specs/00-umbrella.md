@@ -28,8 +28,8 @@ generative workflows (maps, concept art) built in, including notes that feed the
   content project and the map toolset. `Theos-Engine` is never a dependency, except behind the
   cargo feature `engine`, which no phase here builds.
 - **G2** Platforms: Windows 11 x64 (primary), Linux x64, and macOS 13 or later on Apple silicon
-  and Intel (universal builds). Every PR is checked on Windows and Linux; macOS is tested weekly
-  and before every release (`docs/gate.md` §1).
+  and Intel (universal builds). Every PR is checked on Linux; Windows and macOS are tested
+  weekly, on demand (a label on the PR) and before every release (`docs/gate.md` §1).
 - **G3** Rust: stable toolchain pinned in `rust-toolchain.toml`, edition 2024, `unsafe_code`
   forbidden, `Cargo.lock` committed, all builds `--locked`.
 - **G4** Crates: `theos-content`, `theos-vcs`, `theos-studio` (libs); `theos`, `theos-mcp`,
