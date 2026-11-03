@@ -119,7 +119,10 @@ every subagent; put them in subagent briefs.
   lore canon in fixtures beyond what the examples show; mark synthetic fixtures as such.
 - Windows matters most, and macOS ships too: paths through `std::path`, no shell assumptions, LF
   in files we write, Ctrl in the UI (Cmd on macOS), processes stopped as whole trees. Code paths
-  that differ per OS get a test on each OS; macOS is tested by the weekly `macos` workflow.
+  that differ per OS get a test on each OS. Per PR, CI runs on Linux only; Windows and macOS are
+  tested by the weekly `platforms` workflow. A PR with OS-specific code gets the labels `windows`
+  and `macos` and links their runs, and `cargo xtask gate` runs on Windows before any phase is
+  claimed done.
 - Branches, commits, PR titles, versions and tags follow `CONTRIBUTING.md`: Conventional
   Commits with the `Refs:` and `Phase:` footers and the Claude trailers; PR titles like
   `feat(content): records and grammars (P02)` and `docs(spec): records and grammars (P02)`.

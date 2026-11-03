@@ -32,9 +32,9 @@ tag vX.Y.Z   ──► release.yml: tests on windows-latest, ubuntu-latest and m
 2. **Tag.** Merging the release PR makes release-plz create the tag `vX.Y.Z`. Only the
    `theos-editor` package creates a tag; all crates are in one version group.
 3. **Build and publish.** The tag starts `release.yml`. It first runs the full test suite on
-   Windows, Linux and macOS (macOS is not part of the per-PR gate, so this is where a macOS-only
-   break is caught before anything ships). Then it builds, checksums, attests and creates the
-   GitHub Release. If any platform fails, no release is created; the fix goes to `main` and a new
+   Windows, Linux and macOS (Windows and macOS are not part of the per-PR gate, so this is where a
+   break on one of them is caught before anything ships). Then it builds, checksums, attests and
+   creates the GitHub Release. If any platform fails, no release is created; the fix goes to `main` and a new
    patch version is cut. Nothing is published to crates.io.
 4. **Consumers.** The GitHub Action in tower-of-theos that runs `theos check` pins a released
    version; moving it to a new release is a normal pull request there.
