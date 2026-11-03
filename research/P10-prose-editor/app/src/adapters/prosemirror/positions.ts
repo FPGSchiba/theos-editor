@@ -37,7 +37,10 @@ interface Block {
 /** What precedes the text on a source line: quote marks, list markers, an ATX heading's hashes. */
 const PREFIX = /^(?:[ \t]*>[ \t]?)*[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*(?:#{1,6}(?:[ \t]+|$))?/;
 
-const BLOCK_TOKENS = new Set(['paragraph_open', 'heading_open', 'fence', 'code_block']);
+const BLOCK_TOKENS = new Set(['paragraph_open', 'heading_open', 'fence', 'code_block', 'callout_title_open', 'callout_caption_open']);
+
+/** After the line prefix, the title of a callout starts behind `[!type] ` and a caption behind the dash. */
+const AFTER_PREFIX: Record<string, RegExp> = { callout_title: /^\[![a-z]+\][ \t]?/i, callout_caption: /^—[ \t]?/ };
 
 /**
  * The next place of `char` in `text`. A soft line break is a space in the stock tree, so a space
@@ -193,12 +196,18 @@ export class PositionMap {
     const chars = block.node.textBetween(0, block.size, '', sourceLeaf);
     const starts = lineStartsOf(text);
     const contents = new Map<number, number>();
+    const extra = AFTER_PREFIX[block.node.type.name];
     const contentStart = (line: number): number => {
       let known = contents.get(line);
       if (known === undefined) {
         const begin = starts[line]!;
         const end = starts[line + 1] === undefined ? text.length : starts[line + 1]! - 1;
-        known = block.fenced ? begin : begin + (PREFIX.exec(text.slice(begin, end))?.[0].length ?? 0);
+        if (block.fenced) known = begin;
+        else {
+          const line = text.slice(begin, end);
+          const prefix = PREFIX.exec(line)?.[0].length ?? 0;
+          known = begin + prefix + (extra?.exec(line.slice(prefix))?.[0].length ?? 0);
+        }
         contents.set(line, known);
       }
       return known;

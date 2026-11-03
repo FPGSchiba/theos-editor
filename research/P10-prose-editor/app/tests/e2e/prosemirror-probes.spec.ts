@@ -248,11 +248,13 @@ test.describe('@harness prosemirror · links', () => {
     expect((await text(page)).match(WIKILINK)).toEqual(source.match(WIKILINK));
   });
 
-  test('links in a callout title and in beat attribute lines are chips as far as the parser keeps the line', async ({ page }) => {
+  test('links in beat attribute lines are chips; the callout title keeps its links as raw text (the head draws them)', async ({ page }) => {
     const script = toLf(await loadFile(page, VARIANT, SCRIPT));
     await settle(page);
-    // Chips are atoms in the document: the voice title and every attribute line keep theirs.
-    expect(await page.locator(chips).count()).toBe(script.match(WIKILINK)!.length);
+    // Chips are atoms in the document: every attribute line keeps its. A callout title is raw text of the callout node.
+    const titles = script.split('\n').filter((line) => line.startsWith('> [!'));
+    const inTitles = titles.join('\n').match(WIKILINK)?.length ?? 0;
+    expect(await page.locator(chips).count()).toBe(script.match(WIKILINK)!.length - inTitles);
     expect((await text(page)).match(WIKILINK)).toEqual(script.match(WIKILINK));
   });
 
@@ -376,5 +378,94 @@ test.describe('@harness prosemirror · links', () => {
     await page.evaluate(() => window.__harness!.apply({ id: 'd', kind: 'link-delete', link: { find: '[[B-020' } }));
     expect(await text(page)).not.toContain('[[B-020');
     expect(await page.locator(chips).count()).toBe(3);
+  });
+});
+
+test.describe('@harness prosemirror · callouts', () => {
+  const VOICES_FILE = corpusFile('records/lore/topics/synthetic-voices-in-world.md');
+  const NOTES_FILE = corpusFile('records/maps/synthetic-notes.md');
+
+  test('the callout node alone loses nothing: titles, "> " lines, empty ">" lines and captions are written back', async ({ page }) => {
+    await open(page, VOICES_FILE);
+    const saved = await text(page);
+    for (const line of [
+      '> [!voice] [[throat-kin]] · [[B-020]] · T2',
+      '> — a binder, teaching the naming-song',
+      '> — a saying on the shrine stair',
+      '> — a real caption after it',
+      '> [!design]',
+      '> A synthetic designer remark inside an in-world text.',
+      '> [!voice] [[mother-ilse]] · [[B-016]] · T1',
+    ]) expect(saved.split('\n'), line).toContain(line);
+    // The caption that ended a paragraph sits directly under the line before it; the other keeps its empty line.
+    expect(saved).toContain('empty hall.\n> — a binder');
+    expect(saved).toContain('>\n> — a saying');
+    // The stock serializer is what turns the "--" line into "\--" and joins soft lines.
+    expect(saved).toContain('> \\-- a line that starts with two hyphens is not a caption.\n> — a real caption after it');
+  });
+
+  test('every note callout keeps its title through the serializer', async ({ page }) => {
+    const source = await open(page, NOTES_FILE);
+    const saved = await text(page);
+    const titles = source.split('\n').filter((line) => line.startsWith('> [!note]'));
+    expect(titles.length).toBe(5);
+    for (const title of titles) expect(saved.split('\n')).toContain(title);
+  });
+
+  test('the title shows raw while the caret is in it, the head otherwise', async ({ page }) => {
+    const source = await open(page, VOICES_FILE);
+    const title = '.pm-callout-title.is-raw';
+    await expect(page.locator(title)).toHaveCount(0);
+    await caretTo(page, resolveAnchor(source, { find: '[[throat-kin]] · [[B-020]]', offset: 4 }));
+    await expect(page.locator(title)).toHaveCount(1);
+    await expect(page.locator(title)).toHaveText('[[throat-kin]] · [[B-020]] · T2');
+    expect(await caret(page)).toBe(resolveAnchor(source, { find: '[[throat-kin]] · [[B-020]]', offset: 4 }));
+    await caretTo(page, resolveAnchor(source, { find: 'Sing a name', offset: 3 }));
+    await expect(page.locator(title)).toHaveCount(0);
+  });
+
+  test('note-state through apply is its own undo step, keeps the head in step and the other notes alone', async ({ page }) => {
+    const source = await open(page, NOTES_FILE);
+    await page.evaluate(() => window.__harness!.apply({ id: 'x', kind: 'insert', at: { find: 'A note that was dropped.' }, text: 'Q' }));
+    await page.evaluate(() => window.__harness!.apply({ id: 's', kind: 'note-state', note: 'n2', state: 'dropped' }));
+    const after = await text(page);
+    expect(after).toContain('> [!note] n2 · [[f04-terrain-v1]] · dropped');
+    expect(after).toContain('> [!note] n1 · open');
+    await expect(page.locator('[data-callout="note"][data-note="n2"]')).toHaveAttribute('data-note-state', 'dropped');
+    await page.evaluate(() => window.__harness!.undo());
+    const undone = await text(page);
+    expect(undone).toContain('> [!note] n2 · [[f04-terrain-v1]] · open');
+    expect(undone).toContain('QA note that was dropped.');
+    expect(source).toContain('n2 · [[f04-terrain-v1]] · open');
+  });
+
+  test('developer words are flagged in voice text only, and a typed one is flagged too', async ({ page }) => {
+    await open(page, VOICES_FILE);
+    const words = page.locator('[data-dev-word]');
+    await expect(words).toHaveCount(1);
+    await expect(words.first()).toHaveText('ledger');
+    expect(await words.first().evaluate((node) => node.closest('[data-callout="voice"]') !== null)).toBe(true);
+    await page.evaluate(() => window.__harness!.apply({ id: 'w', kind: 'insert', at: { find: 'only made noise' }, text: 'ledger ' }));
+    await expect(words).toHaveCount(2);
+  });
+
+  test('the heads are mounted once per callout and redrawn when the index says something else', async ({ page }) => {
+    await open(page, VOICES_FILE);
+    await expect(page.locator('.tu-voice__head')).toHaveCount(6);
+    await page.evaluate(() => window.__harness!.apply({ id: 'x', kind: 'insert', at: { find: 'A synthetic voice line' }, text: 'Z' }));
+    await expect(page.locator('.tu-voice__head')).toHaveCount(6);
+  });
+});
+
+test.describe('@harness prosemirror · typing in callouts', () => {
+  test('typing in voice text and in the raw title lands next to the same characters', async ({ page }) => {
+    const source = await open(page, corpusFile('records/lore/topics/synthetic-voices-in-world.md'));
+    await caretTo(page, resolveAnchor(source, { find: 'only made noise' }));
+    await page.keyboard.type('QQ');
+    expect(await text(page)).toContain('you have QQonly made noise');
+    await caretTo(page, resolveAnchor(source, { find: 'T2' }));
+    await page.keyboard.type('x');
+    expect(await text(page)).toContain('> [!voice] [[throat-kin]] · [[B-020]] · xT2\n');
+    await expect(page.locator('[data-callout="voice"]').nth(1)).toHaveClass(/has-raw-title/);
   });
 });

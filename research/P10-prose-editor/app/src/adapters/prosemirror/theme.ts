@@ -11,6 +11,13 @@ const STYLE = `
 .pm-write h3, .pm-write h4, .pm-write h5, .pm-write h6 { margin: 8px 0; color: var(--text); font: 600 15px/24px var(--font-ui); }
 .pm-write strong { font-weight: 700; color: var(--text); }
 .pm-write blockquote { margin: 0 0 12px; padding-left: 12px; border-left: 2px solid var(--border); }
+.pm-write .hx-callout p, .pm-write .tu-voice p { margin: 0; }
+.pm-callout-head { user-select: none; }
+.pm-callout-label { font: 700 10.5px/16px var(--font-mono); letter-spacing: 0.4px; text-transform: uppercase; color: var(--textDim); }
+.pm-callout-title { display: none; }
+.pm-callout-title.is-raw { display: block; margin: 0; font: 400 12px/20px var(--font-mono); color: var(--textMute); white-space: pre-wrap; }
+.has-raw-title > .pm-callout-head { display: none; }
+.pm-callout-title:not(.is-raw) + * { margin-top: 0; }
 .pm-marker { color: var(--textMute); font-weight: 400; font-style: normal; }
 .pm-source-mode { font: 400 13px/20px var(--font-mono); }
 .pm-source { margin: 0; white-space: pre-wrap; font: inherit; }

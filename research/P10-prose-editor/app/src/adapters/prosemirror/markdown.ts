@@ -1,5 +1,6 @@
 import { defaultMarkdownParser, defaultMarkdownSerializer, MarkdownParser, MarkdownSerializer } from 'prosemirror-markdown';
 import type { Node } from 'prosemirror-model';
+import { calloutRules, calloutTokens, withCallouts } from './callouts.ts';
 import { linkSource, wikilinkToken, wikilinkTokenizer } from './links.ts';
 import { schema } from './schema.ts';
 
@@ -7,15 +8,17 @@ import { schema } from './schema.ts';
 export type MarkdownToken = ReturnType<typeof defaultMarkdownParser.tokenizer.parse>[number];
 
 /** The stock parser setup (markdown-it "commonmark", no HTML, the library's token handlers) on its own tokenizer, plus the wikilink token. */
-const parser = new MarkdownParser(schema, wikilinkTokenizer(), {
+const parser = new MarkdownParser(schema, withCallouts(wikilinkTokenizer()), {
   ...defaultMarkdownParser.tokens,
   wikilink: wikilinkToken,
+  ...calloutTokens,
 });
 
 /** The stock serializer plus the wikilink rule: `[[id]]` or `[[id|shown]]`, written raw (never escaped). */
 const serializer = new MarkdownSerializer(
   {
     ...defaultMarkdownSerializer.nodes,
+    ...calloutRules,
     wikilink(state, node) {
       state.write(linkSource(node.attrs.id as string, node.attrs.shown as string | null));
     },

@@ -2,6 +2,9 @@ import { selectAll } from 'prosemirror-commands';
 import { EditorState, TextSelection, type Plugin } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import type { EditorContext, Mode, ProseAdapter, ScriptedEdit, TextChange } from '../../harness/types.ts';
+import { CalloutView } from './calloutview.ts';
+import { calloutRaw } from './calloutraw.ts';
+import { devWords } from './devwords.ts';
 import { applyEdit, type EditTarget } from './edits.ts';
 import { applyChanges, externalTransaction } from './external.ts';
 import { joinFrontMatter, splitFrontMatter } from './frontmatter.ts';
@@ -37,6 +40,8 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
   private historyPlugin: Plugin = history();
   /** The chips on the page, so a new index can redraw them without a new editor. */
   private readonly chips = new Set<LinkView>();
+  /** The callouts on the page, so a new index can redraw their heads. */
+  private readonly callouts = new Set<CalloutView>();
 
   mount(target: HTMLElement, text: string, ctx: EditorContext): void {
     installTheme();
@@ -48,7 +53,10 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
     this.tracker = new Tracker(file, frontMatter.length, doc);
     this.view = new EditorView(target, {
       state: this.stateOf(doc),
-      nodeViews: { wikilink: (node) => new LinkView(node, () => this.ctx!, this.chips) },
+      nodeViews: {
+        wikilink: (node) => new LinkView(node, () => this.ctx!, this.chips),
+        callout: (node, view, getPos) => new CalloutView(node, view, getPos, () => this.ctx!, this.callouts),
+      },
       attributes: (state) => (state.doc.type === schema.nodes.doc
         ? { class: 'pm-write', spellcheck: 'true' }
         : { class: 'pm-source-mode', spellcheck: 'false' }),
@@ -143,6 +151,7 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
     // The history and the other plugins keep their instances: only the keymap is swapped.
     if (keysChanged) this.view.updateState(this.view.state.reconfigure({ plugins: this.plugins() }));
     for (const chip of this.chips) chip.refresh();
+    for (const callout of this.callouts) callout.refresh();
     // An open popover searches again with the new index.
     this.view.dispatch(this.view.state.tr.setMeta('p10-context', true));
   }
@@ -182,8 +191,9 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
     const selectBody = write ? selectAll : selectSourceBody(this.protectedEnd);
     return [
       this.historyPlugin,
+      ...(write ? calloutRaw() : []),
       ...keymapPlugins(this.ctx!.keymap, () => this.ctx?.save(), selectBody),
-      ...(write ? [finishTypedLink(), typingPlugin(), popoverPlugin(() => this.ctx!), livePreview()] : [guard(this.protectedEnd)]),
+      ...(write ? [finishTypedLink(), typingPlugin(), popoverPlugin(() => this.ctx!), livePreview(), devWords(() => this.ctx?.developerWords ?? [])] : [guard(this.protectedEnd)]),
     ];
   }
 

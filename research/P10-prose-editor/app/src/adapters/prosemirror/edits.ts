@@ -2,6 +2,7 @@ import { AllSelection, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { resolveAnchor } from '../../harness/anchor.ts';
 import type { ScriptedEdit, TextChange } from '../../harness/types.ts';
+import { setNoteState } from './notestate.ts';
 
 /** What the scripted edits need from the adapter, in either mode. */
 export interface EditTarget {
@@ -106,6 +107,10 @@ export function applyEdit(target: EditTarget, edit: ScriptedEdit): void {
       view.dispatch(tr.setSelection(TextSelection.near(tr.doc.resolve(tr.mapping.map(pos)))).scrollIntoView());
       return;
     }
+    case 'note-state':
+      if (!target.writing()) throw new Error('note-state: only Write mode has note callouts');
+      setNoteState(view, edit.note, edit.state);
+      return;
     default:
       throw new Error(`prosemirror: the base does not make "${edit.kind}" edits yet`);
   }

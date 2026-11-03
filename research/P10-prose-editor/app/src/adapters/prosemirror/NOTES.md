@@ -1,7 +1,7 @@
 # ProseMirror prototype: notes
 
 Variant `prosemirror:stock` (column `stock`), `prosemirror-view` 1.42.9, `prosemirror-markdown` 1.13.9 with its own parser and serializer, unchanged.
-State after Task 13 (the base plus links). `tests/e2e/prosemirror-probes.spec.ts` (`@harness`) probes what the measured suites cannot see:
+State after Task 14 (the base, links and callouts). `tests/e2e/prosemirror-probes.spec.ts` (`@harness`) probes what the measured suites cannot see:
 caret mapping, typing position, front matter protection, undo, external changes, live preview, composition.
 
 ## Still failing under `P10_STRICT=1`
@@ -42,7 +42,7 @@ Nothing else fails: no harness error, no timeout, no console error in `N-remount
 - **Parse and serialize** (`markdown.ts`). `defaultMarkdownParser.parse` and `defaultMarkdownSerializer.serialize`. `text()` is the front matter bytes plus the serializer's output; no source text is returned.
   A front matter without its final newline gets one when a body follows.
 - **Positions** (`positions.ts`). The harness speaks offsets into the whole file, ProseMirror positions in a tree. `PositionMap` pairs each textblock with the line range markdown-it gives its block token
-  (`map`, read from `defaultMarkdownParser.tokenizer`) and aligns the block's text with its source lines character by character: the characters no text character matches (`## `, `> `, `- `, `**`, `\`) are the markers.
+  (`map`, read from the adapter's own tokenizer, `links.ts`) and aligns the block's text with its source lines character by character: the characters no text character matches (`## `, `> `, `- `, `**`, `\`) are the markers.
   Line prefixes (quote marks, list markers, ATX hashes) are skipped by a regular expression, a soft break (a space in the tree) matches a source line end, a fence's first line is skipped.
   `Tracker` keeps the position source, the file text the offsets refer to, in step with the document: at the next query it takes the minimal diff between the document it last saw and the current one
   (`findDiffStart`/`findDiffEnd`) and splices the changed text (`textBetween`) into it, as the oracle does with the file. The position source is used for offsets only, never returned.
@@ -62,7 +62,7 @@ Nothing else fails: no harness error, no timeout, no console error in `N-remount
   `updateContext` swaps the plugins with `state.reconfigure`, which keeps the history instance.
 - **Input** (`index.ts`). The editable root has `spellcheck="true"` in Write mode.
 - **`apply`** (`edits.ts`). `insert` is `tr.insertText`, `delete` is `tr.delete`, `paste` is `view.pasteText` (plain text), `select-all-type` is an `AllSelection` replaced by the text, `external` is the local insert plus `applyExternal`,
-  `undo-all` applies each edit and then undoes until `canUndo()` is false. Callout and beat kinds throw until Tasks 14 and 15; `link-insert` and `link-delete` are in the Links section.
+  `undo-all` applies each edit and then undoes until `canUndo()` is false. `note-state` is in the Callouts section; the beat kind throws until Task 15; `link-insert` and `link-delete` are in the Links section.
 
 ## Not done in the base
 
@@ -73,7 +73,7 @@ Enter in a list item splits the block instead of the item (no `prosemirror-schem
 Strict run `--grep "@links|I-[a-z-]*-chip|N-remount|N-reactive"`: before 15 failures per engine; after, chromium 8 of 17 and WebKit 6 of 14 fail, all on bytes (below). All feature checks pass (`F-link-chip`, `-alias`, `-broken`, `-atomic`, `-popover-prose`, `-popover-kind-filter`), and `N-remount`, `N-reactive`.
 
 - **Node** (`links.ts`, `schema.ts`). The stock schema plus one inline atom `wikilink` with `id` and `shown`. (Not named `link`: that is the stock mark.) `leafText` is the link syntax.
-- **Parse** (`links.ts`, `markdown.ts`). A markdown-it inline rule `wikilink`, added to the stock tokenizer before `link`: `[[id]]` and `[[id|shown]]` (no brackets or bars in the id, no brackets in the shown text, one line). Code spans and fences are read before it, so links in code stay raw. A `MarkdownParser` over the same tokenizer with the stock token table plus `wikilink`.
+- **Parse** (`links.ts`, `markdown.ts`). A markdown-it inline rule `wikilink`, added before `link` to the adapter's own markdown-it instance (configured as the library's: commonmark, no HTML): `[[id]]` and `[[id|shown]]` (no brackets or bars in the id, no brackets in the shown text, one line). Code spans and fences are read before it, so links in code stay raw. A `MarkdownParser` over that instance with the stock token table plus `wikilink`.
 - **Serialize** (`markdown.ts`). The stock serializer plus a `wikilink` rule that writes `[[id]]` or `[[id|shown]]` with `state.write` (never escaped). The probe `every link of the links file survives the serializer` compares every link of the file with the saved text: identical, alias included. Every link-row mismatch in the round trip is a hunk elsewhere in the file (soft breaks, `_` to `*`, final newline); the edited spots are exact.
 - **Positions** (`positions.ts`). A chip is one position and as many source characters as its syntax; `charTable` maps between them, `sourceLeaf` is the `leafText` for `textBetween`. Offsets inside a link map to the position before it.
 - **Node view** (`linkview.ts`). A wrapper span mounts `LinkChip` in the constructor and unmounts in `destroy`; `update` is true for unchanged markup; `ignoreMutation` is true; `stopEvent` false. `updateContext` calls `refresh` on every chip, which redraws only when `ctx.resolve(id)` changed (JSON compare). No editor re-creation.
@@ -82,10 +82,31 @@ Strict run `--grep "@links|I-[a-z-]*-chip|N-remount|N-reactive"`: before 15 fail
 - **Popover** (`popover.ts`). A plugin view mounts `LinkPopover` into a fixed element on `document.body`, below the caret (above when no room); unmounted on its `onclose` (Escape), on blur, when typing ends and with the editor. Options: `ctx.search(query, place)`. Picking replaces `[[query` with the node. A new `ctx` object makes it search again.
 - **Place** (`typing.ts`). The stock parser makes the line breaks of a paragraph spaces, so the lines `at::`, `with::` ... of a beat are one paragraph. The place is the last `key::` (at the start of the text or after a space) before the caret in the textblock, not the key of the caret's line. Approximation: a `key::` typed in a sentence would count.
 - **apply** (`edits.ts`). `link-insert` inserts the node at the anchor (what typing `[[query` and picking leaves); `link-delete` deletes the node at the `[[` offset. In Source mode both edit the text.
-- **Callout titles and beat lines.** Links there are chips: the stock parser keeps them as text of a paragraph or quote, and the wikilink rule runs inside it. The probe on S-004 finds a chip for every link of the file, the voice title included, and the saved text has the same links. (What the stock parser does to the lines themselves is the soft-break item above.)
+- **Callout titles and beat lines.** Links in beat lines are chips. Since Task 14 a callout title is raw text of the callout node (the head draws its links), so it has no chips. (What the stock parser does to the lines themselves is the soft-break item above.)
 
 Still failing under strict (all bytes, none from the link node):
 
 - `F-link-popover-escape` (both engines): the typed `[[son` stays text, but the stock serializer escapes the brackets (`\[\[son`), and the rest of the file differs (soft breaks). The popover is closed, the text is kept (probe).
 - `I-ime-ja-chip`, `I-deadkey-circ-chip`, `I-deadkey-uml-chip` (chromium), `I-insert-chip` (WebKit): the text lands behind the chip (probes pass); the saved file differs by 389 bytes elsewhere (soft breaks, `_`, final newline).
 - Round-trip `link-insert-popover` and `link-chip-delete`, via api and via input, both engines: hunks only elsewhere in the file (the soft-wrapped lines, `_` to `*`, the dropped final newline).
+
+## Callouts (Task 14)
+
+Strict run `--grep "@callouts|I-[a-z-]*-voice"`: before 12 failures per engine; after the four checks `F-voice`, `F-design`, `F-note`, `F-dev-word` pass on both engines; chromium fails 9 and WebKit 7, all on bytes (below).
+
+- **Nodes** (`callouts.ts`, `schema.ts`). `callout` (attr `type`; content `callout_title block* callout_caption?`), `callout_title` (a code-like textblock holding the raw title behind `[!type] `; code, so the `[[` popover and chip typing stay out of it) and `callout_caption` (attr `tight`; the `— ` line that ends a voice block).
+- **Parse** (`callouts.ts`). A markdown-it core rule, run after the inline rules on the adapter's own instance: a blockquote whose first line is `[!voice|design|note]` becomes `callout_open`, a title block, the rest of the first paragraph as its own paragraph (map lines shifted by one), the other blocks, `callout_close`. For voice, a final line starting with `— ` becomes the caption: a paragraph that is only the caption, or the last line of a paragraph (split off, `tight`). A line starting with `--` stays text. A lazy continuation line stays in its paragraph (stock soft break).
+- **Serialize** (`callouts.ts`). `> [!type] title`, then each child with `> ` as the line prefix (the stock `state.delim`), so empty `>` lines between paragraphs come from the stock block separation. A `tight` caption uses `flushClose(1)`, so it follows its lines directly. Probe: every title, `> ` line, empty `>` line and caption of the voices and notes files is written back.
+- **Positions** (`positions.ts`). `callout_title_open` and `callout_caption_open` are block tokens of their own; the alignment skips `[!type] ` for a title and the dash for a caption. `caretTo` and `caret` agree on the title line.
+- **Node view** (`calloutview.ts`). A wrapper (`tu-voice` or `hx-callout`) with `data-callout` (and `data-note`, `data-note-state` read from the title), a head host drawn by `VoiceHead`, `NoteHead` or a label (design), and the content DOM. `update` keeps the DOM for the same type and redraws the head when its signature changed; `refresh` (from `updateContext`) does the same for a new index; `destroy` unmounts; `ignoreMutation` ignores everything outside the content; `stopEvent` takes the head's events; a mousedown on the head puts the caret at the end of the title.
+- **Raw title** (`calloutraw.ts`, `theme.ts`). A decoration plugin: while the selection touches the title, the title gets `is-raw` (shown, monospace) and the callout `has-raw-title` (head hidden). Keys, because a hidden title has no caret in the browser: Backspace, ArrowLeft and ArrowUp at the start of the first block go to the end of the title; Enter in the title goes to the text.
+- **`Design note:`** (`calloutraw.ts`). A paragraph that starts with `Design note:` gets `tu-note` (no `data-callout`). The stock parser joins lines of a paragraph, so a `Design note:` line that follows prose lines directly is part of that paragraph and is not marked.
+- **Developer words** (`devwords.ts`). Inline decorations `[data-dev-word]` with `title="developer word"` on whole-word matches of `ctx.developerWords` in the text blocks and caption of voice callouts; not in titles or in `Design note:` paragraphs.
+- **`note-state`** (`notestate.ts`, `edits.ts`). One transaction replaces the last title segment when it is `open`, `dropped` or `resolved by [[id]]`, else appends ` · state`; `closeHistory` makes it its own undo step; the caret ends behind it. Probe: one undo restores the title, the earlier edit stays.
+
+Still failing under strict (all bytes, none from the callout node):
+
+- `note-state-change`, `note-state-to-dropped`, `note-state-from-resolved`, api and input, both engines: the title line is exact; the hunks are the dropped final newline and the joined `— Jann` line (a soft break, stock).
+- `I-ime-ja-voice`, `I-deadkey-circ-voice`, `I-deadkey-uml-voice` (chromium), `I-insert-voice` (WebKit): the text lands in the voice line (probe); the file differs by about 880 bytes elsewhere (soft breaks, `_`, final newline).
+
+Known limits: a multi-line paste into the title would put a line break in the title text (not guarded); the head of a callout nested in a list or quote is not special-cased.

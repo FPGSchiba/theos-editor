@@ -10,7 +10,7 @@ import { BEAT_KEY_ORDER, type LinkPlace } from '../../harness/types.ts';
 
 /** The longest query that still counts as a search; a longer text behind `[[` is just text. */
 const MAX_QUERY = 80;
-const BEAT_KEY = /(?:^|[\s￼])(at|with|says|reveals|when)::/g;
+const BEAT_KEY = /(?:^|[\s\uFFFC])(at|with|says|reveals|when)::/g;
 
 export interface Typing {
   /** Where the `[[` starts, and where the typed text ends (the caret). */

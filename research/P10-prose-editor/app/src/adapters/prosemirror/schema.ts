@@ -1,10 +1,15 @@
 import { schema as markdownSchema } from 'prosemirror-markdown';
 import { Schema } from 'prosemirror-model';
+import { calloutCaptionSpec, calloutSpec, calloutTitleSpec } from './callouts.ts';
 import { wikilinkSpec } from './links.ts';
 
-/** Write mode: the stock schema of prosemirror-markdown plus one node, the wikilink. */
+/** Write mode: the stock schema of prosemirror-markdown plus the wikilink and the callout nodes. */
 export const schema = new Schema({
-  nodes: markdownSchema.spec.nodes.addToEnd('wikilink', wikilinkSpec),
+  nodes: markdownSchema.spec.nodes
+    .addToEnd('wikilink', wikilinkSpec)
+    .addToEnd('callout', calloutSpec)
+    .addToEnd('callout_title', calloutTitleSpec)
+    .addToEnd('callout_caption', calloutCaptionSpec),
   marks: markdownSchema.spec.marks,
 });
 
