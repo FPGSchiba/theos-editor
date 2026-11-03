@@ -15,25 +15,29 @@ All checks are required status checks on `main` (branch protection, administrato
 | Check | What it runs | OS |
 |---|---|---|
 | `fmt` | `cargo fmt --all --check` | Linux |
-| `clippy` | `cargo clippy --workspace --all-targets --locked -- -D warnings` | Linux, Windows |
-| `test` | `cargo nextest run --workspace --locked` and `cargo test --doc --workspace --locked` | Linux, Windows |
+| `clippy` | `cargo clippy --workspace --all-targets --locked -- -D warnings` | Linux |
+| `test` | `cargo nextest run --workspace --locked` (profile `ci` in CI, `default` locally) and `cargo test --doc --workspace --locked` | Linux |
 | `docs` | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked` | Linux |
-| `deny` | `cargo deny check` (licences, advisories, bans, sources) | Linux |
+| `deny` | `cargo deny --locked check` (licences, advisories, bans, sources) | Linux |
 | `engine-free` | `cargo xtask engine-free`: no engine crate in the tree without feature `engine` | Linux |
 | `coverage` | `cargo xtask coverage`: per-crate line coverage ≥ floor in `gate/thresholds.toml`, and no crate drops more than the allowed amount below `main` | Linux |
-| `lints` | `cargo xtask lints`: `[workspace.lints]` in the root `Cargo.toml` equals `gate/lints.toml`; every `#[expect]` carries a `reason`; no `#[allow]`; every `#[ignore]` carries a reason | Linux |
+| `lints` | `cargo xtask lints`: `[workspace.lints]` in the root `Cargo.toml` equals `gate/lints.toml`; the config files equal their `gate/` copies and exist nowhere else; library and binary code comes only from its crate's `src/`; `cfg` names only what `gate/cfg-names.toml` allows; no `allow` attribute anywhere, outer or inner; no reasonless `#[expect]` or `#[ignore]` in macro input (P00 spec §5.10). The rest of the attribute rules is clippy's (§2). | Linux |
 | `ac-trace` | `cargo xtask ac-trace`: every acceptance criterion of the PR's phase has at least one test tagged `AC: <id>`; no tag names an unknown criterion | Linux |
 | `pr-body` | `cargo xtask pr-body`: the PR description has every section of the template, filled | Linux |
 | `pr-title` | `cargo xtask pr-title`: the title is a Conventional Commit ending with `(PNN)`, `(gate)`, `(docs)` or a release title (`CONTRIBUTING.md` §3) | Linux |
 | `commit-msg` | `cargo xtask commit-msg`: every commit of the PR is a Conventional Commit (`CONTRIBUTING.md` §2) | Linux |
 | `approval` | fails while the PR touches a protected path and lacks the label `approved` | Linux |
-| `ui` | from P11: `pnpm install --frozen-lockfile`, `svelte-check`, `eslint`, `vitest`, Playwright component tests | Linux, Windows |
+| `ui` | from P11: `pnpm install --frozen-lockfile`, `svelte-check`, `eslint`, `vitest`, Playwright component tests | Linux |
 
-**macOS** is not in the per-PR matrix, because macOS runner minutes are expensive on a private
-repository. Instead a scheduled workflow `macos` runs `clippy`, `test` and (from P11) `ui` on
-`macos-latest` for `main` once a week and on demand, and `release.yml` runs the same before every
-release (`docs/release.md`). A red `macos` run is fixed before the next release; it is listed in
-`docs/status.md` under "Needs Jann" until then.
+**Windows and macOS** are not in the per-PR checks, because their runner minutes cost two and ten
+times as much as Linux on a private repository. Instead the workflow `platforms` runs `clippy`,
+`test`, `lints`, `ac-trace` and (from P11) `ui` on `windows-latest` and `macos-latest`: for `main`
+once a week, on demand, and on a PR when the label `windows` or `macos` is added (each label runs
+its own OS). `release.yml` runs the tests on all three before every release (`docs/release.md`).
+These runs are not required checks. A red run is fixed before the next release; it is listed in
+`docs/status.md` under "Needs Jann" until then. `lints` and `ac-trace` run there too because
+they read what the compiler builds on the machine they run on, and code behind `#[cfg(windows)]`
+or `#[cfg(target_os = "macos")]` is only built there.
 
 `cargo xtask gate` runs every check except `pr-body`, `pr-title` and `approval` locally, on
 Windows and Linux, with the same results as CI (`commit-msg` checks the commits since `main`).
@@ -45,8 +49,11 @@ At least: `unsafe_code = "forbid"`, `missing_docs = "deny"`, `clippy::all` and
 `clippy::pedantic` as warnings (errors under `-D warnings`), `clippy::unwrap_used`,
 `clippy::expect_used`, `clippy::panic`, `clippy::todo`, `clippy::unimplemented`,
 `clippy::dbg_macro`, `clippy::print_stdout`, `clippy::print_stderr` denied outside tests and
-binaries' `main`, `clippy::allow_attributes` and `clippy::allow_attributes_without_reason` denied
-(use `#[expect(…, reason = "…")]`). P00 writes the final list; later changes need approval.
+binaries' `main` (use `#[expect(…, reason = "…")]` where one is justified). `unexpected_cfgs`,
+`clippy::allow_attributes`, `clippy::allow_attributes_without_reason` and
+`clippy::ignore_without_reason` are forbidden, so no `allow` or `expect` can switch them off: no
+`#[allow]` anywhere, a reason on every `#[expect]` and `#[ignore]`, and no unknown cfg name. P00
+writes the final list; later changes need approval.
 
 ## 3. Thresholds (`gate/thresholds.toml`)
 

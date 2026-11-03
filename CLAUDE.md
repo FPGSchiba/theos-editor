@@ -86,6 +86,29 @@ cargo nextest run --workspace
 cargo xtask generator-check -- <command…>
 ```
 
+## Engineering directives
+
+These decide how something gets built, before any code is written. They bind every session and
+every subagent; put them in subagent briefs.
+
+1. **Maintainability and extendability come first.** Code is easy to read, change and extend:
+   small modules with one job, shared inputs built in one place, and a new rule or check is one
+   new module plus one line that registers it.
+2. **Use what exists before building anything.** Before writing a parser, checker or tool, find
+   out whether rustc, clippy, cargo, an existing tool or a maintained crate already does it, and
+   confirm that with a quick probe on the pinned toolchain. Prefer, in this order: configuring a
+   standard tool, a well-known crate, custom code. Never hand-write a lexer or parser for a
+   format that has a real one (Rust: rustc, clippy, `syn`; TOML, YAML, JSON, Markdown, XML: their
+   crates). Every design and plan names, for each part, the tool or crate that does it, or says
+   why custom code is needed.
+3. **When fixes keep leaking, change the approach.** If reviews keep finding new variants of the
+   same problem, stop patching single cases. Step back, name the class, and run the full
+   superpowers loop for a new approach (brainstorming, written design, plan, build, review)
+   instead of improvising.
+4. **The gate keeps code quality high; it is not a fortress.** It must reliably catch the everyday
+   shortcuts (silencing a lint, hiding code from coverage, skipping a test) and never flag
+   ordinary code. Deliberate, exotic evasion that any diff shows is left to the reviews.
+
 ## Code conventions
 
 - Rust edition 2024, toolchain from `rust-toolchain.toml`. Library errors with `thiserror`;
@@ -96,7 +119,10 @@ cargo xtask generator-check -- <command…>
   lore canon in fixtures beyond what the examples show; mark synthetic fixtures as such.
 - Windows matters most, and macOS ships too: paths through `std::path`, no shell assumptions, LF
   in files we write, Ctrl in the UI (Cmd on macOS), processes stopped as whole trees. Code paths
-  that differ per OS get a test on each OS; macOS is tested by the weekly `macos` workflow.
+  that differ per OS get a test on each OS. Per PR, CI runs on Linux only; Windows and macOS are
+  tested by the weekly `platforms` workflow. A PR with OS-specific code gets the labels `windows`
+  and `macos` and links their runs, and `cargo xtask gate` runs on Windows before any phase is
+  claimed done.
 - Branches, commits, PR titles, versions and tags follow `CONTRIBUTING.md`: Conventional
   Commits with the `Refs:` and `Phase:` footers and the Claude trailers; PR titles like
   `feat(content): records and grammars (P02)` and `docs(spec): records and grammars (P02)`.

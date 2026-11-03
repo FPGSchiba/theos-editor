@@ -15,7 +15,7 @@ Engine integration (later) is described on the Confluence pages "Tauri-Based Edi
 | Human and agent, one API | UI, CLI and MCP call the same command layer; every write passes the same validation. |
 | Plain files, git history | Markdown records in git; indexes and generated views are rebuilt, never committed; binaries stay outside git. |
 | Built by Claude, owned by Jann | Small PRs, rustdoc, decision log, strict gate (`docs/gate.md`). |
-| Windows first | Primary platform; every PR is checked on Windows and Linux; macOS is tested weekly and before every release, and ships as universal builds. |
+| Windows first | Primary platform; every PR is checked on Linux; Windows and macOS are tested weekly, on demand and before every release; macOS ships as universal builds. |
 
 ## 2. Repositories
 

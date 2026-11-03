@@ -38,12 +38,11 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
   not name `number: 1` and `floors: [1, 1]` as values to replace, and the sample id `f100-summit`
   implies lore. Manual checks before merging: open the vault in Obsidian 1.14 and see `git status`
   stay clean; make one record with *Insert template* and one with a VS Code snippet.
-- P00 build PR #7 is a draft labelled `needs-jann`: the final review loop reached its cap of 5
-  rounds. Round 5 left two Important findings and one Minor open (listed in the PR): an unprotected
-  legacy `rust-toolchain` file wins over `rust-toolchain.toml`; `#[cfg(not(coverage))]` drops items
-  from the coverage floor; `tools` does not check the active toolchain. Decide whether a further fix
-  round runs on the branch. Also waiting: the go-ahead for `cargo xtask github apply` (spec §10),
-  and a docs PR for the spec and `docs/gate.md` drift listed in the PR.
+- P00 build PR #7 is a draft labelled `needs-jann`. P00 spec revision 1 (#9, merged) is being
+  built on it: the plan is appended to `docs/plans/P00-foundation-and-gate.md`. When it lands,
+  `cargo xtask github apply` needs Jann's go-ahead again (the required check names lose their OS
+  suffix, and the label `windows` is new). Jann adds `approved` only once Claude reports the
+  branch final.
 
 ## Needs a private session (Confluence, Jira, plugin)
 
