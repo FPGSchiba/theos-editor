@@ -30,9 +30,11 @@
 //!   lead into it (`src_bounds.rs`). `include_str!` and `include_bytes!` are data and stay
 //!   allowed.
 //!
-//! - code that `coverage` would not measure: `coverage` or `coverage_nightly` in a `cfg(…)` or
-//!   `cfg_attr(…)` attribute, or an attribute named `coverage`, anywhere in a source, whatever
-//!   it is nested in (`coverage_cfg.rs`). `#[cfg(not(test))]` stays allowed.
+//! - code that a check would not build or measure: a `cfg(…)` or `cfg_attr(…)` predicate with a
+//!   name other than `test`, `doc`, `unix`, `windows`, `feature = "…"` and `target_*`, combined
+//!   with `all`, `any` and `not`, a predicate that cannot be read, or an attribute named
+//!   `coverage`, anywhere in a source, whatever it is nested in (`cfg_names.rs`).
+//!   `#[cfg(not(test))]` stays allowed.
 //!
 //! The `.rs` sources are all that are listed but the files under `tests/fixtures/` and under the
 //! build folder `target/` of the root; a folder called `target` or `node_modules` further down
@@ -64,7 +66,7 @@
 //! The code is in seven files: this one has the rules for the lint tables, the manifests and the
 //! mirrored configuration files, `attributes.rs` the attribute scan, `fixture_routes.rs` the ways
 //! to compile a fixture (the name avoids `mod fixtures;`, which this check forbids), and
-//! `src_bounds.rs` the rule that code stays in `src/`, `coverage_cfg.rs` the rule on coverage
+//! `src_bounds.rs` the rule that code stays in `src/`, `cfg_names.rs` the rule on coverage
 //! cfgs, `attribute_reader.rs` the reader of attributes that the rules share, and `tokens.rs` the
 //! tokens that these read.
 
@@ -81,7 +83,7 @@ use crate::{Error, Result};
 
 mod attribute_reader;
 mod attributes;
-mod coverage_cfg;
+mod cfg_names;
 mod fixture_routes;
 mod src_bounds;
 mod tokens;
@@ -368,7 +370,7 @@ fn sources(root: &Path, files: &[String], findings: &mut Vec<Finding>) -> Result
         let text = String::from_utf8_lossy(&bytes);
         let mut found = scan_attributes(path, &text);
         found.extend(scan_includes(path, &text));
-        found.extend(coverage_cfg::scan_coverage_cfg(path, &text));
+        found.extend(cfg_names::scan_cfg_names(path, &text));
         found.extend(scan_fixture_modules(path, &text));
         found.sort_by_key(|finding| finding.line);
         findings.extend(found);

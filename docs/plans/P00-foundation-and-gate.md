@@ -685,8 +685,7 @@ Rules (spec §5.4):
   `gate/nextest.toml`, both by `same_text`.
 - None of these exist anywhere else in `files`: a `clippy.toml` or `.clippy.toml` outside the
   root, any `rustfmt.toml` or `.rustfmt.toml`, or any `.cargo/` outside the root.
-- In every `.rs` file except `tests/fixtures`, only attribute lines count, meaning lines whose
-  trimmed text starts with `#[` or `#![`, joined until the brackets balance:
+- In every `.rs` file except `tests/fixtures`, every attribute counts (final review round 7: read from the token stream by `attribute_reader.rs`, inner and outer, anywhere in a line, across lines, in function and macro bodies; strings, character literals and comments never count; block comments nest):
   - any `allow(` in the attribute (including inside `cfg_attr`) is a finding;
   - any `expect(` without `reason =` is a finding;
   - an `ignore` attribute without `= "…"` is a finding.
@@ -694,7 +693,7 @@ Rules (spec §5.4):
 
 - Code stays in `src/` (final review round 3): a `#[path]` or `include!` in a file under `crates/<name>/src/` or `xtask/src/`, and a `[lib]` or `[[bin]]` `path` of such a crate's manifest, must lead into that `src/` (`src_bounds.rs`); `include_str!` and `include_bytes!` stay allowed.
 - No legacy `rust-toolchain` file anywhere (final review round 5): rustup reads it instead of the protected `rust-toolchain.toml`.
-- No `coverage` or `coverage_nightly` in a `cfg(…)` or `cfg_attr(…)` attribute and no `coverage` attribute, anywhere in a source (final review round 5, `coverage_cfg.rs`); `#[cfg(not(test))]` stays allowed.
+- A `cfg(…)` or `cfg_attr(…)` predicate may use only `test`, `doc`, `unix`, `windows`, `feature = "…"` and `target_*` keys, with `all`, `any` and `not`; any other name, a predicate that cannot be read, and an attribute named `coverage` are findings (final review round 7, replacing the round 5 `coverage` denylist; `cfg_names.rs`); `#[cfg(not(test))]` stays allowed.
 - [ ] **Step 1: Write the failing tests.** Unit tests:
   - `allow_attribute_found`, `inner_allow_found`, `cfg_attr_allow_found`;
   - `expect_without_reason_found`, `expect_with_reason_passes`;

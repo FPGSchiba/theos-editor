@@ -668,3 +668,122 @@ fn a_path_attribute_after_code_is_judged_by_the_src_rule() -> TestResult {
     assert!(verdict.passed(), "{:?}", verdict.findings);
     Ok(())
 }
+
+// AC: CE-08.8
+#[test]
+fn a_cfg_outside_the_allowlist_fails() -> TestResult {
+    // Each name is set by a tool or a profile, so code under it is not compiled by every check:
+    // `clippy` is set only by clippy, the profile cfgs only by some profiles, and a `build.rs`
+    // can set any name.
+    for (lib_rs, name) in [
+        (
+            "#[cfg(not(clippy))]
+pub fn f() {}
+",
+            "clippy",
+        ),
+        (
+            "#[cfg(debug_assertions)]
+pub fn f() {}
+",
+            "debug_assertions",
+        ),
+        (
+            "#[cfg(any(test, miri))]
+pub fn f() {}
+",
+            "miri",
+        ),
+        (
+            "#[cfg_attr(overflow_checks, inline)]
+pub fn f() {}
+",
+            "overflow_checks",
+        ),
+        (
+            "#[cfg(my_flag)]
+pub fn f() {}
+",
+            "my_flag",
+        ),
+        (
+            "#[cfg(ub_checks)]
+pub fn f() {}
+",
+            "ub_checks",
+        ),
+        (
+            "#[cfg(panic = \"abort\")]
+pub fn f() {}
+",
+            "panic",
+        ),
+        (
+            "#![cfg(not(coverage))]
+pub fn f() {}
+",
+            "coverage",
+        ),
+        (
+            "pub fn a() {} #[cfg(not(clippy))] pub fn f() {}
+",
+            "clippy",
+        ),
+        (
+            "#[cfg_attr(test, cfg(not(clippy)))]
+pub fn f() {}
+",
+            "clippy",
+        ),
+    ] {
+        let verdict = lint_source(lib_rs)?;
+        let message = only_finding(&verdict, "crates/a/src/lib.rs");
+        assert!(
+            message.contains(&format!("`{name}`")),
+            "{lib_rs}: {message}"
+        );
+        assert!(message.contains("gate change"), "{lib_rs}: {message}");
+    }
+    let verdict = lint_source(
+        "#![coverage(off)]
+pub fn f() {}
+",
+    )?;
+    assert!(only_finding(&verdict, "crates/a/src/lib.rs").contains("coverage"));
+    Ok(())
+}
+
+// AC: CE-08.8
+#[test]
+fn a_cfg_inside_the_allowlist_passes() -> TestResult {
+    for lib_rs in [
+        "#[cfg(test)]
+mod tests {}
+",
+        "#[cfg(not(test))]
+pub fn f() {}
+",
+        "#[cfg(all(unix, feature = \"x\"))]
+pub fn f() {}
+",
+        "#[cfg(target_os = \"windows\")]
+pub fn f() {}
+",
+        "#[cfg(doc)]
+pub fn f() {}
+",
+        "#[cfg(any(windows, all(not(unix), target_pointer_width = \"64\")))]
+pub fn f() {}
+",
+        "#[cfg_attr(test, derive(Debug))]
+pub struct S;
+",
+        "#[cfg_attr(feature = \"x\", derive(Debug), derive(Clone))]
+pub struct S;
+",
+    ] {
+        let verdict = lint_source(lib_rs)?;
+        assert!(verdict.passed(), "{lib_rs}: {:?}", verdict.findings);
+    }
+    Ok(())
+}
