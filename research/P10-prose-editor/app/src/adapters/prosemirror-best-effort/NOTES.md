@@ -2,8 +2,8 @@
 
 Variant `prosemirror:best-effort` (column `best-effort`), `prosemirror-view` 1.42.9, `prosemirror-markdown` 1.13.9. The same editor as
 `prosemirror:stock`: schema, parser, node views, plugins, keymap and history are imported from `../prosemirror/`, nothing is copied. Only what
-Write mode saves and what the harness offsets refer to differ. State after Task 16 and its fix round 1 (the round-trip counts below are the
-same before and after the fix round). `tests/e2e/prosemirror-best-effort-probes.spec.ts`
+Write mode saves and what the harness offsets refer to differ. State after Task 16, its fix rounds 1 and 2 and the notes round 3 (the
+round-trip counts below are the same in all of them). `tests/e2e/prosemirror-best-effort-probes.spec.ts`
 (`@harness`) and `sourcebody.test.ts` (Vitest) probe what the measured suites cannot see.
 
 ## Result
@@ -118,7 +118,8 @@ may have none, and a block added behind it gives it one); a document equal to th
 
 **`lastSaveLevel()`** maps the queue first, then says `block` while any block of the saved text was written by the serializer since the load
 (or the last external change or mode switch), else `span`. A block a change makes from others (a join, a split) counts as written when any
-of the blocks it came from was. Bytes in the gaps between blocks carry no flag (variant O2 of the finding below).
+of the blocks it came from was, also when the change removed all of that block's written bytes (an over-report, see Limits). Bytes in the
+gaps between blocks carry no flag (variant O2 of the finding below), and neither does a line end a restore keeps (M1 after an undo).
 
 **Offsets** (`offsets.ts`). `caretTo`, `caret` and `apply` use the stock `PositionMap`, built per run on demand on the source text, which is
 the exact file. A query reads one run instead of tokenizing the whole file, and a run that does not pair only guesses inside itself. The
@@ -133,6 +134,17 @@ the history (the stock code path) and makes the result the new loaded state. Sou
 
 - The verification parses a run alone; a reference definition elsewhere in the file, or a block that becomes a list continuation by its
   indentation, is not seen (none in the corpus). A run containing reference-style links never verifies, so every change there falls back.
+- `lastSaveLevel` is not exact in either direction, so criterion 1 is scored on the level measured from the bytes (the round-trip `level`,
+  from the comparison with the oracle), not on `adapterLevel`:
+  - **It says `span` while the file holds bytes nobody typed:** gap bytes (O2), and a line end a restore keeps (M1 after an undo). Repro of
+    the second: load `Words here.\n\nLast paragraph.` (no final newline), type X elsewhere, press Enter at the end, save, type `New one.`;
+    one undo gives `Words hereX.\n\nLast paragraph.\n` at `span`. That final newline was never typed; it is not a gap byte, and `restore()`
+    keeps the current line end and clears the flag.
+  - **It says `block` where every byte is raw or typed** (a conservative over-report): a new changed block counts as written when any old
+    changed block was, also when the change removed all of that block's written bytes. Repros, each after `Y` typed into `_under_` made
+    `Words Y*under* tail.`: `Keep this line.\n\n…` and a delete from after "Keep" to the end of that block (`Keep\n`); `Alpha one here.\n\n…\n\nGamma three here.\n`
+    and a delete from after "Alpha" to before "three" (`Alphathree here.\n`); select the text of both blocks and type (`All new.\n`). The false
+    `block` stays until the document is back at the loaded one.
 - A mode switch, an external change and a load start a new loaded state: the level and the undo restore count from there. So the `external`
   round-trip rows can never report `block`: `applyExternal` resets the level, so whatever the local edit did before it is not counted. Those
   rows are blind by construction; their bytes are still compared with the oracle.
@@ -162,8 +174,8 @@ tree editor byte stability at block boundaries is not a property of the editor b
 | E1. Enter at the end of a paragraph, a save, typing | The empty paragraph's guessed range swallowed the blank line in front of the next block; typing merged the new paragraph into it (`…\n\nNew one.\nNext.`, which parses to another document). | Fixed (round 1): span, exact bytes, mid-file and on the last block (probes). |
 | E2. A block added behind the last block | The diff's overlap correction stretched the change past the last block to the end of the file; the final newline was lost, at `span`. Also for a node or text inserted at the document end. | Fixed (round 1): span, final newline kept (probes and unit tests). |
 | Undo line end | The undo restore put back a block's loaded line end, so the last line of a file without a final newline stayed without one after a block was added behind it (`Words here.\nNew one.`). | Fixed (round 1). |
-| M1. A file without a final newline: Enter at the end of its last paragraph, a save, typing | `blankLine` counts only lines that end in `\n`, so the empty paragraph sits on the separator line, its run joins the paragraph before, and the rewrite adds a newline: `…graph.\n\nNew one.\n` instead of `…graph.\n\nNew one.`; offsets in that run are guesses (`toOffset` of "Last" 15 instead of 14). | block level, one byte beyond the edit (a final newline the file did not have). |
-| M2. Captions in callouts | Enter at the end of the last paragraph of a voice, design or note callout makes a `callout_caption` (stock `splitBlock`). For design the saved `> — New one.` does not parse back to the document (the design parser has no caption; it reloads as a paragraph); the empty caption `> — ` saved between Enter and typing does not parse back for any type. In a plain quote the save is span (`> A quote.\n>\n> \n`) and only the keystroke after it is block. | block level; for design a saved file that reloads as a different document. |
+| M1. A file without a final newline: Enter at the end of its last paragraph, a save, typing | `blankLine` counts only lines that end in `\n`, so the empty paragraph sits on the separator line, its run joins the paragraph before, and the rewrite adds a newline: `…graph.\n\nNew one.\n` instead of `…graph.\n\nNew one.`; offsets in that run are guesses (`toOffset` of "Last" 15 instead of 14). After another edit and one undo of the new paragraph, the added final newline stays and the level says `span` (`Words hereX.\n\nLast paragraph.\n`; Limits). | block level, one byte beyond the edit (a final newline the file did not have); after such an undo that byte at a level that says span. |
+| M2. Captions in callouts | Enter at the end of the last paragraph of a voice, design or note callout makes a `callout_caption` (stock `splitBlock`). For design the saved `> — New one.` does not parse back to the document (the design parser has no caption; it reloads as a paragraph); the empty caption `> — ` saved between Enter and typing does not parse back for any type. In a plain quote the save is span (`> A quote.\n>\n> \n`) and only the keystroke after it is block. | block level; a save between Enter and typing reloads the empty caption as a `—` paragraph for voice, design and note alike; for design the typed caption also reloads as a paragraph. |
 | O2. Enter in a callout title when the callout holds nothing else, a save | `leaveTitle` adds an empty paragraph to the callout; the rewrite leaves a blank line behind the callout: `> [!design] Title\n\n\nAfter.` at block. An undo that cannot go back to the loaded document (after another edit) leaks a second blank line (`\n\n\n\n`) and reports span: the leaked bytes sit in a gap, which has no block and so no `serialized` flag. The O1 rule of fix round 2 does not change that (the callout block itself is back to its loaded text). An undo straight back to the loaded document restores the loaded bytes, at span. | block level after the save; after such an undo extra blank lines at a level that says span. |
 
 The rules of fix round 1 (all variants above share them): a block is whole lines and separators stay outside block ranges, guessed ranges
@@ -180,7 +192,8 @@ Existing APIs used: markdown-it's token `map` for the block lines, ProseMirror's
 
 One implementation attempt and two fix rounds: round 1 the separator class (above), round 2 the level of joined and split rewritten
 blocks (a new changed block is `serialized` when the edit wrote it or any old changed block was; before, a join kept only the first block's
-flag and the new half of a split reported span; probes for both). Tried and kept: raw text first, serializer's inline form second; offsets on both sides of markers; the loose
+flag and the new half of a split reported span; probes for both). Round 3 corrected these notes only (the limits of `lastSaveLevel` in both
+directions, the M1 and M2 costs). Tried and kept: raw text first, serializer's inline form second; offsets on both sides of markers; the loose
 whitespace pass; the container prefix for paragraph breaks in callouts; per-run offset maps (after a probe showed that one block that no
 Markdown stands for turned every offset of the file into a guess); trimming the blank line markdown-it gives a list (after a unit test showed
 the fallback lost the blank line behind a list). Not tried: paste as plain text and a soft-break node (editor and parser changes shared with

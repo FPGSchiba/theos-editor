@@ -195,7 +195,8 @@ export class SourceBody implements BodyModel {
     const old = this.blocks;
     const fresh = blocksOf(edit.text, edit.runFrom, tokenize(edit.text), nodes) ?? guessed(edit, old, grown, changed, endAfter);
     // Which changed block's text a new changed block holds is not known (a join holds both, a split shares one), so each new changed
-    // block holds serializer bytes when the edit wrote it, or when any of the old changed blocks held them.
+    // block counts as written when the edit wrote it or when any of the old changed blocks was written. That over-reports: the edit may
+    // have removed every serializer byte (a deletion through a written block), and the flag says `block` all the same (NOTES.md, Limits).
     const heldWritten = old.slice(changed, endBefore).some((block) => block.serialized);
     fresh.forEach((block, offset) => {
       const index = edit.first + offset;
