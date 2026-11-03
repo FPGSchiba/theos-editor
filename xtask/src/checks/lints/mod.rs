@@ -57,11 +57,17 @@
 //! inner and outer, anywhere in a line, over several lines, in function bodies and inside
 //! `macro_rules!` arms. Comments, strings and character literals are not tokens, so what they
 //! hold never counts; block comments nest as in rustc. An attribute-like token sequence in a
-//! macro body that never becomes an attribute is read as one, so the rules over-report there and
-//! never under-report.
+//! macro body that never becomes an attribute is read as one, so the rules over-report there.
+//! One gap remains, ruled as such: an attribute that a `macro_rules!` arm forwards whole
+//! (`#[$m]` or `#![$m]`, the `$(#[$m:meta])*` idiom) has no rule word in it, so it is not
+//! judged, and neither is what the invocation passes as `$m`. Failing it closed would reject
+//! that common idiom.
 //!
-//! Findings name the file and the line and say what is wrong, never what is written there: the
-//! repository is the pull request's, and what a check prints is read by the runner.
+//! Findings name the file and the line and say what is wrong, never what is written there, with
+//! one exception: the cfg rule repeats a rejected cfg name, as ASCII letters, digits and `_`
+//! only (every other character as `?`) and at most 40 characters. That cannot carry a format
+//! or bidi character, `::`, a newline or a `%`, so it cannot form a workflow command or an
+//! option. The repository is the pull request's, and what a check prints is read by the runner.
 //!
 //! The code is in seven files: this one has the rules for the lint tables, the manifests and the
 //! mirrored configuration files, `attributes.rs` the attribute scan, `fixture_routes.rs` the ways

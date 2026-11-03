@@ -496,7 +496,7 @@ fn manifest_target_inside_src_or_not_measured_passes() -> TestResult {
     Ok(())
 }
 
-// AC: CE-08.5
+// AC: CE-08.8
 #[test]
 fn a_legacy_rust_toolchain_file_fails() -> TestResult {
     // rustup reads `rust-toolchain` before the protected `rust-toolchain.toml`.
@@ -517,7 +517,7 @@ fn a_legacy_rust_toolchain_file_fails() -> TestResult {
     Ok(())
 }
 
-// AC: CE-08.5
+// AC: CE-08.8
 #[test]
 fn rust_toolchain_toml_and_fixture_copies_pass() -> TestResult {
     let dir = copy_fixture(None)?;
@@ -584,7 +584,7 @@ fn cfgs_that_keep_code_measured_pass() -> TestResult {
     Ok(())
 }
 
-// AC: CE-08.5
+// AC: CE-08.8
 #[test]
 fn an_attribute_anywhere_in_a_source_is_judged() -> TestResult {
     // Each of these once escaped a scan that read attributes only at the start of a line.
@@ -628,7 +628,7 @@ pub fn f() {}
     Ok(())
 }
 
-// AC: CE-08.5
+// AC: CE-08.8
 #[test]
 fn attribute_like_text_in_strings_and_comments_passes() -> TestResult {
     for lib_rs in [
