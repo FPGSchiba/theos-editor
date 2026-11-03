@@ -2,6 +2,8 @@ import { selectAll } from 'prosemirror-commands';
 import { EditorState, TextSelection, type Plugin } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import type { EditorContext, Mode, ProseAdapter, ScriptedEdit, TextChange } from '../../harness/types.ts';
+import { BeatAttrsView, BeatHeadingView } from './beatview.ts';
+import { beatRaw } from './beatraw.ts';
 import { CalloutView } from './calloutview.ts';
 import { calloutRaw } from './calloutraw.ts';
 import { devWords } from './devwords.ts';
@@ -42,6 +44,8 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
   private readonly chips = new Set<LinkView>();
   /** The callouts on the page, so a new index can redraw their heads. */
   private readonly callouts = new Set<CalloutView>();
+  /** The beat rows on the page, redrawn by a new index or new findings. */
+  private readonly beatRows = new Set<BeatAttrsView>();
 
   mount(target: HTMLElement, text: string, ctx: EditorContext): void {
     installTheme();
@@ -56,6 +60,8 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
       nodeViews: {
         wikilink: (node) => new LinkView(node, () => this.ctx!, this.chips),
         callout: (node, view, getPos) => new CalloutView(node, view, getPos, () => this.ctx!, this.callouts),
+        beat_heading: (node, view, getPos) => new BeatHeadingView(node, view, getPos),
+        beat_attrs: (node, view, getPos) => new BeatAttrsView(node, view, getPos, () => this.ctx!, this.beatRows),
       },
       attributes: (state) => (state.doc.type === schema.nodes.doc
         ? { class: 'pm-write', spellcheck: 'true' }
@@ -152,6 +158,7 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
     if (keysChanged) this.view.updateState(this.view.state.reconfigure({ plugins: this.plugins() }));
     for (const chip of this.chips) chip.refresh();
     for (const callout of this.callouts) callout.refresh();
+    for (const row of this.beatRows) row.refresh();
     // An open popover searches again with the new index.
     this.view.dispatch(this.view.state.tr.setMeta('p10-context', true));
   }
@@ -192,6 +199,7 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
     return [
       this.historyPlugin,
       ...(write ? calloutRaw() : []),
+      ...(write ? beatRaw() : []),
       ...keymapPlugins(this.ctx!.keymap, () => this.ctx?.save(), selectBody),
       ...(write ? [finishTypedLink(), typingPlugin(), popoverPlugin(() => this.ctx!), livePreview(), devWords(() => this.ctx?.developerWords ?? [])] : [guard(this.protectedEnd)]),
     ];

@@ -1,5 +1,6 @@
 import { schema as markdownSchema } from 'prosemirror-markdown';
 import { Schema } from 'prosemirror-model';
+import { beatAttrsSpec, beatHeadingSpec } from './beats.ts';
 import { calloutCaptionSpec, calloutSpec, calloutTitleSpec } from './callouts.ts';
 import { wikilinkSpec } from './links.ts';
 
@@ -9,7 +10,9 @@ export const schema = new Schema({
     .addToEnd('wikilink', wikilinkSpec)
     .addToEnd('callout', calloutSpec)
     .addToEnd('callout_title', calloutTitleSpec)
-    .addToEnd('callout_caption', calloutCaptionSpec),
+    .addToEnd('callout_caption', calloutCaptionSpec)
+    .addToEnd('beat_heading', beatHeadingSpec)
+    .addToEnd('beat_attrs', beatAttrsSpec),
   marks: markdownSchema.spec.marks,
 });
 

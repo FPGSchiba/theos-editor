@@ -2,6 +2,7 @@ import { AllSelection, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { resolveAnchor } from '../../harness/anchor.ts';
 import type { ScriptedEdit, TextChange } from '../../harness/types.ts';
+import { setBeatParam } from './beatparam.ts';
 import { setNoteState } from './notestate.ts';
 
 /** What the scripted edits need from the adapter, in either mode. */
@@ -111,7 +112,13 @@ export function applyEdit(target: EditTarget, edit: ScriptedEdit): void {
       if (!target.writing()) throw new Error('note-state: only Write mode has note callouts');
       setNoteState(view, edit.note, edit.state);
       return;
-    default:
-      throw new Error(`prosemirror: the base does not make "${edit.kind}" edits yet`);
+    case 'beat-param':
+      if (!target.writing()) throw new Error('beat-param: only Write mode has beat rows');
+      setBeatParam(view, edit.beat, edit.key, edit.value);
+      return;
+    default: {
+      const unknown: never = edit;
+      throw new Error(`prosemirror: unknown edit ${JSON.stringify(unknown)}`);
+    }
   }
 }

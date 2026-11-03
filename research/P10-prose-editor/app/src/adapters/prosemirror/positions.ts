@@ -37,7 +37,7 @@ interface Block {
 /** What precedes the text on a source line: quote marks, list markers, an ATX heading's hashes. */
 const PREFIX = /^(?:[ \t]*>[ \t]?)*[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*(?:#{1,6}(?:[ \t]+|$))?/;
 
-const BLOCK_TOKENS = new Set(['paragraph_open', 'heading_open', 'fence', 'code_block', 'callout_title_open', 'callout_caption_open']);
+const BLOCK_TOKENS = new Set(['paragraph_open', 'heading_open', 'fence', 'code_block', 'callout_title_open', 'callout_caption_open', 'beat_heading_open', 'beat_attrs_open']);
 
 /** After the line prefix, the title of a callout starts behind `[!type] ` and a caption behind the dash. */
 const AFTER_PREFIX: Record<string, RegExp> = { callout_title: /^\[![a-z]+\][ \t]?/i, callout_caption: /^—[ \t]?/ };

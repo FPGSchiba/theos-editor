@@ -478,3 +478,113 @@ test.describe('@harness prosemirror · typing in callouts', () => {
     await expect(page.locator('[data-callout="voice"]').nth(1)).toHaveClass(/has-raw-title/);
   });
 });
+
+test.describe('@harness prosemirror · beats', () => {
+  const sample = [
+    'Intro.',
+    '',
+    '## Beat 1 — Arrival',
+    'at::   [[fates-shrine]]',
+    'when:: T1',
+    '',
+    'Prose after the beat.',
+    '',
+    '## Beat 2 — Bare',
+    '',
+    'More prose.',
+    '',
+    '## Beat 3 — Tight',
+    'says:: [[B-016]]',
+    '> [!design]',
+    '> Directly under.',
+    '',
+    '## Beat 4 — Rest',
+    'with:: [[mother-ilse]]',
+    'Prose on the next line.',
+  ].join('\n');
+  const openText = async (page: Page, content: string): Promise<void> => {
+    if (page.url() === 'about:blank') await page.goto('/');
+    await page.waitForFunction(() => window.__harness !== undefined);
+    await page.evaluate((body) => window.__harness!.load('prosemirror:stock', body, 'records/probe.md'), content);
+  };
+  const at = (page: Page, offset: number): Promise<void> =>
+    page.evaluate((to) => { window.__harness!.focus(); window.__harness!.caretTo(to); }, offset);
+  const row1 = '[data-beat-row="1"]';
+
+  for (const path of ['records/story/scripts/S-004.md', 'records/story/scripts/S-901.md']) {
+    test(`every beat of ${path} keeps its heading and attribute lines exactly`, async ({ page }) => {
+      const source = await open(page, corpusFile(path));
+      const saved = await text(page);
+      const blocks = source.match(/^## Beat \d+\b.*\n(?:[a-z]+::.*\n?)*/gm) ?? [];
+      expect(blocks.length).toBeGreaterThan(0);
+      for (const block of blocks) expect(saved).toContain(block.replace(/\n$/, ''));
+    });
+  }
+
+  test('the beat block of a sample survives, tight and not tight', async ({ page }) => {
+    await openText(page, sample);
+    // Only the stock effects are left: the blank line before "Prose on the next line" is the rest-of-paragraph rule (tight).
+    expect(await text(page)).toBe(sample);
+  });
+
+  test('the heading and the lines show raw under the caret and rendered elsewhere', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, 0);
+    await settle(page);
+    await expect(page.locator('[data-beat="1"]')).toHaveText('1 · Arrival');
+    await expect(page.locator(row1)).toBeVisible();
+    await at(page, sample.indexOf('when::'));
+    await settle(page);
+    await expect(page.locator(row1)).toBeHidden();
+    expect(await visibleText(page)).toContain('at::   [[fates-shrine]]');
+    await at(page, sample.indexOf('## Beat 1') + 3);
+    await settle(page);
+    await expect(page.locator('[data-beat="1"]')).toBeHidden();
+    expect(await visibleText(page)).toContain('## Beat 1 — Arrival');
+  });
+
+  test('arrow keys and Backspace step into a hidden beat block', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, sample.indexOf('\nProse after') + 1);
+    await page.keyboard.press('ArrowLeft');
+    expect(await caret(page)).toBe(sample.indexOf('when:: T1') + 'when:: T1'.length);
+    await page.keyboard.press('Backspace');
+    expect(await text(page)).toContain('when:: T\n');
+  });
+
+  test('typing in the row never reaches the editor and the edit changes one line', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await openText(page, sample);
+    await at(page, 0);
+    await page.locator(`${row1} [data-beat-param="at"] .tu-beat__key`).click();
+    await page.locator(`${row1} [data-beat-input]`).fill('x');
+    await page.keyboard.type('yz');
+    expect(await text(page)).toBe(sample);
+    await page.locator(`${row1} [data-beat-input]`).press('Enter');
+    expect(await text(page)).toBe(sample.replace('at::   [[fates-shrine]]', 'at::   xyz'));
+    expect(errors).toEqual([]);
+  });
+
+  test('"+ add" on a bare beat and in the order puts the line where the oracle does', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, 0);
+    const row = page.locator('[data-beat-row="2"]');
+    await row.locator('[data-beat-add]').click();
+    await row.locator('[data-beat-add-key="says"]').click();
+    await row.locator('[data-beat-input]').fill('[[B-016]]');
+    await row.locator('[data-beat-input]').press('Enter');
+    expect(await text(page)).toBe(sample.replace('## Beat 2 — Bare\n', '## Beat 2 — Bare\nsays:: [[B-016]]\n'));
+    await page.evaluate(() => window.__harness!.apply({ id: 'o', kind: 'beat-param', beat: 1, key: 'with', value: '[[mother-ilse]]' }));
+    expect(await text(page)).toContain('at::   [[fates-shrine]]\nwith:: [[mother-ilse]]\nwhen:: T1\n');
+    await page.evaluate(() => window.__harness!.apply({ id: 'p', kind: 'beat-param', beat: 4, key: 'at', value: 'X' }));
+    expect(await text(page)).toContain('## Beat 4 — Rest\nat:: X\nwith:: [[mother-ilse]]\n');
+  });
+
+  test('every beat has one row, and the rows have spellcheck off', async ({ page }) => {
+    await openText(page, sample);
+    await expect(page.locator('[data-beat-row]')).toHaveCount(4);
+    await expect(page.locator('[data-beat-row] [data-beat-param]')).toHaveCount(4);
+    expect(await page.locator('[data-beat-row]').first().evaluate((node) => (node as HTMLElement).spellcheck)).toBe(false);
+  });
+});

@@ -1,7 +1,7 @@
 # ProseMirror prototype: notes
 
 Variant `prosemirror:stock` (column `stock`), `prosemirror-view` 1.42.9, `prosemirror-markdown` 1.13.9 with its own parser and serializer, unchanged.
-State after Task 14 (the base, links and callouts). `tests/e2e/prosemirror-probes.spec.ts` (`@harness`) probes what the measured suites cannot see:
+State after Task 15 (the base, links, callouts and beats). `tests/e2e/prosemirror-probes.spec.ts` (`@harness`) probes what the measured suites cannot see:
 caret mapping, typing position, front matter protection, undo, external changes, live preview, composition.
 
 ## Still failing under `P10_STRICT=1`
@@ -29,8 +29,7 @@ What the stock parser and serializer change, file by file (`fm + serialize(parse
 
 Identical in all rows: fates-shrine-v5, C-031, f04-terrain-v1, mother-ilse (empty body) and synthetic-no-final-newline (each short, plain, or without a body). `synthetic-characters` differs only by the dropped final newline (its edit rows are block level for that reason).
 
-**2. Features that belong to later tasks (ruling 18).** `F-live-preview` fails only on the beat headings (`2 · The murmur` rendered, Task 15); the raw `## Beat 1 — Arrival` under the caret passes.
-`I-spellcheck-off` (the beat rows, Task 15). `N-reactive` and `N-remount` pass since Task 13 (chips).
+**2. Features that belonged to later tasks (ruling 18).** `F-live-preview` and `I-spellcheck-off` pass since Task 15 (beats). `N-reactive` and `N-remount` pass since Task 13 (chips).
 
 **3. The WebKit gap row** `I-ime-webkit` is a recorded gap and never fails.
 
@@ -62,7 +61,7 @@ Nothing else fails: no harness error, no timeout, no console error in `N-remount
   `updateContext` swaps the plugins with `state.reconfigure`, which keeps the history instance.
 - **Input** (`index.ts`). The editable root has `spellcheck="true"` in Write mode.
 - **`apply`** (`edits.ts`). `insert` is `tr.insertText`, `delete` is `tr.delete`, `paste` is `view.pasteText` (plain text), `select-all-type` is an `AllSelection` replaced by the text, `external` is the local insert plus `applyExternal`,
-  `undo-all` applies each edit and then undoes until `canUndo()` is false. `note-state` is in the Callouts section; the beat kind throws until Task 15; `link-insert` and `link-delete` are in the Links section.
+  `undo-all` applies each edit and then undoes until `canUndo()` is false. `note-state` is in the Callouts section; `link-insert` and `link-delete` are in the Links section.
 
 ## Not done in the base
 
@@ -110,3 +109,18 @@ Still failing under strict (all bytes, none from the callout node):
 - `I-ime-ja-voice`, `I-deadkey-circ-voice`, `I-deadkey-uml-voice` (chromium), `I-insert-voice` (WebKit): the text lands in the voice line (probe); the file differs by about 880 bytes elsewhere (soft breaks, `_`, final newline).
 
 A paste into the title is flattened to one line (`transformPasted` in `calloutraw.ts`; probe). Known limits: the head of a callout nested in a list or quote is not special-cased.
+
+## Beats (Task 15)
+
+Strict run `--grep "@beats|F-live-preview|I-spellcheck-off"`: before 34 failed in total (17 per engine); after, the 5 feature checks (`F-beat-heading`, `F-beat-row`, `F-beat-finding`, `F-live-preview`, `I-spellcheck-off`) pass on both engines. The 12 `beat-param` round-trip rows per engine (6 edits, api and input) still fail strict, and every one of them has one hunk: the dropped final newline of the stock serializer (`when:: T1` or the last prose line of S-901). The beat node itself leaves no hunk.
+
+- **Nodes** (`beats.ts`, `schema.ts`). `beat_heading` (code-like text, the line behind `## `) and `beat_attrs` (code-like text, the attribute lines joined by `
+`, attrs `beat` and `tight`). A beat with no attribute line has an empty `beat_attrs` (the row needs a place for "+ add"); the serializer writes nothing for it.
+- **Parse.** A markdown-it core rule on the own instance, after the callout rule: a top-level ATX `## Beat <n>` heading becomes `beat_heading`; the lines directly under it that look like `key:: value` are cut from the top of the following paragraph (raw from `state.src`, so extra spaces after `::` stay) into `beat_attrs`; the rest of that paragraph stays a paragraph. `tight` is set when a block starts on the very next line (the corpus has a voice callout right behind the attributes of beat 4).
+- **Serialize.** `## ` + text; the attribute lines follow with one newline (`flushClose(1)`), and a `tight` block is not separated by a blank line. Nothing is escaped.
+- **Node views** (`beatview.ts`). The heading draws `[data-beat=n]` (`n · name`) and hides the raw text; a heading without the dash stays raw. The attribute block mounts the shared `BeatRow` (`mount` in the constructor, redrawn when params, findings of the beat or the resolved links change, `unmount` in `destroy`; `refresh` from `updateContext`). `stopEvent` is true inside the row host, so its field never leaks keystrokes (probe), `ignoreMutation` is true outside the content.
+- **Row edits** (`beats.ts`, `beatparam.ts`). `beatParamChange(text, key, value)` is the oracle's rule on the node text: existing key keeps `key::` and the blanks (bare line gets one space), a new line goes after the last present key that precedes it in the order, else first. One `insertText` transaction. `apply('beat-param')` uses the same function on the first beat with that number.
+- **Raw lines** (`beatraw.ts`). Node decoration `is-raw` and a `## ` marker while the selection touches the node. Hidden blocks have no browser caret, so ArrowLeft/Right/Up/Down, Backspace and Delete at a block edge step into the neighbouring beat block (empty attribute blocks are skipped); Enter in a heading goes on to the lines or a new paragraph.
+- **Positions.** `beat_heading_open` and `beat_attrs_open` are block tokens of the position map; the attribute block is multi-line text.
+
+Limits: the `beat` attr of an attribute block is set at parse time, so raw-editing the number in a heading does not renumber its row; a blank line is not kept between attribute lines and a following block that was separated by one is written as the stock separation (one blank line); the position source after the first line is added to a bare beat lacks the newline (offsets stay usable; the next external change or mode switch rebuilds it).
