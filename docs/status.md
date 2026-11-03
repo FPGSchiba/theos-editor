@@ -6,7 +6,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 
 | Phase | Name | Repo | State | Spec PR | Build PR |
 |---|---|---|---|---|---|
-| P00 | Foundation and gate | theos-editor | in-progress | #5 | |
+| P00 | Foundation and gate | theos-editor | pr-open | #5 | #7 |
 | P01 | Content layout and templates | tower-of-theos | pr-open | #4 | tower-of-theos#2 |
 | P02 | Records and grammars | theos-editor | todo | | |
 | P03 | Kinds, index, search, lenses | theos-editor | todo | | |
@@ -38,6 +38,12 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
   not name `number: 1` and `floors: [1, 1]` as values to replace, and the sample id `f100-summit`
   implies lore. Manual checks before merging: open the vault in Obsidian 1.14 and see `git status`
   stay clean; make one record with *Insert template* and one with a VS Code snippet.
+- P00 build PR #7 is a draft labelled `needs-jann`: the final review loop reached its cap of 5
+  rounds. Round 5 left two Important findings and one Minor open (listed in the PR): an unprotected
+  legacy `rust-toolchain` file wins over `rust-toolchain.toml`; `#[cfg(not(coverage))]` drops items
+  from the coverage floor; `tools` does not check the active toolchain. Decide whether a further fix
+  round runs on the branch. Also waiting: the go-ahead for `cargo xtask github apply` (spec §10),
+  and a docs PR for the spec and `docs/gate.md` drift listed in the PR.
 
 ## Needs a private session (Confluence, Jira, plugin)
 
