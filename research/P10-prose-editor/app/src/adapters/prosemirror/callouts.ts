@@ -10,7 +10,7 @@ import type { Node, NodeSpec } from 'prosemirror-model';
  *   `callout_caption`.
  * - `callout_title` is the raw title line behind `[!type]`, a code-like textblock: it is drawn as
  *   a head (see `calloutview.ts`) and shows raw while the caret is in it.
- * - `callout_caption` is the `— ` line that ends a voice block (the dash is drawn by the CSS).
+ * - `callout_caption` is the `— ` line that ends a voice or note block (the dash is drawn by the CSS).
  *
  * The markdown-it core rule below turns the blockquote tokens of such a block into these nodes;
  * the serializer rules write `> [!type] title` and the `> `-prefixed content back. That is the
@@ -22,7 +22,7 @@ export type CalloutType = 'voice' | 'design' | 'note';
 
 /** The first line of a callout: `[!type]`, then a space and the title. */
 const HEAD = /^\[!(voice|design|note)\](?: (.*))?$/i;
-/** The caption is the last line of a voice block, starting with an em dash and a space (`--` is voice text). */
+/** The caption is the last line of a voice or note block, starting with an em dash and a space (`--` is voice text). */
 const CAPTION = '— ';
 
 export const calloutSpec: NodeSpec = {
@@ -82,7 +82,7 @@ function paragraph(state: StateCore, level: number, map: Lines, children: Token[
 }
 
 /**
- * The last line of a voice block is its caption when it starts with `— `. A paragraph that is
+ * The last line of a voice or note block is its caption when it starts with `— `. A paragraph that is
  * only the caption becomes a caption; a paragraph that ends with it is split in two, the lines
  * before it and the caption, which is written back directly under them.
  */
@@ -138,7 +138,8 @@ function rewrite(state: StateCore): void {
       ...(rest.length === 0 ? [] : paragraph(state, level, [line + 1, end], rest, inline.content.slice(inline.content.indexOf('\n') + 1))),
       ...tokens.slice(at + 4, close),
     ];
-    if (type === 'voice') body = splitCaption(state, body, level);
+    // Data model 9.1 and 9.3 show a caption line on voice blocks and on notes; 9.2 has none for design.
+    if (type !== 'design') body = splitCaption(state, body, level);
     tokens.splice(
       at,
       close - at + 1,

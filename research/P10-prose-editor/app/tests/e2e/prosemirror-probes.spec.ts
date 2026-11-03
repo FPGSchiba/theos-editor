@@ -410,6 +410,15 @@ test.describe('@harness prosemirror · callouts', () => {
     const titles = source.split('\n').filter((line) => line.startsWith('> [!note]'));
     expect(titles.length).toBe(5);
     for (const title of titles) expect(saved.split('\n')).toContain(title);
+    // The caption line of a note stays a line of its own (data model 9.3).
+    expect(saved).toContain('> [!note] n1 · open\n> A note that is still open.\n> — Jann\n');
+  });
+
+  test('a paste with line breaks into a callout title stays one line, and saves as one line', async ({ page }) => {
+    await open(page, VOICES_FILE);
+    await page.evaluate(() => window.__harness!.apply({ id: 'p', kind: 'paste', at: { find: 'T2' }, plain: 'a\nb\r\nc' }));
+    expect(await text(page)).toContain('> [!voice] [[throat-kin]] · [[B-020]] · a b cT2\n');
+    expect((await text(page)).split('\n').filter((line) => line === 'b' || line === 'c')).toEqual([]);
   });
 
   test('the title shows raw while the caret is in it, the head otherwise', async ({ page }) => {

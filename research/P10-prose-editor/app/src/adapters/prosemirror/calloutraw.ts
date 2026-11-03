@@ -1,4 +1,5 @@
 import type { Node } from 'prosemirror-model';
+import { Fragment, Slice } from 'prosemirror-model';
 import { Plugin, TextSelection, type Command } from 'prosemirror-state';
 import { keymap } from 'prosemirror-keymap';
 import { Decoration, DecorationSet } from 'prosemirror-view';
@@ -65,5 +66,15 @@ export const calloutRaw = (): Plugin[] => [
     ArrowLeft: toTitle(() => true),
     ArrowUp: toTitle((view) => view?.endOfTextblock('up') ?? true),
   }),
-  new Plugin({ props: { decorations: (state) => build(state.doc, state.selection.from, state.selection.to) } }),
+  new Plugin({
+    props: {
+      decorations: (state) => build(state.doc, state.selection.from, state.selection.to),
+      // The title is one line: a paste into it becomes one line of text (a break would end the line when saved).
+      transformPasted: (slice, view) => {
+        if (view.state.selection.$from.parent.type.name !== 'callout_title') return slice;
+        const line = slice.content.textBetween(0, slice.content.size, ' ', ' ').replace(/\s*[\r\n]+\s*/g, ' ');
+        return line === '' ? Slice.empty : new Slice(Fragment.from(view.state.schema.text(line)), 0, 0);
+      },
+    },
+  }),
 ];
