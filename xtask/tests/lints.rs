@@ -536,3 +536,50 @@ fn rust_toolchain_toml_and_fixture_copies_pass() -> TestResult {
     assert!(verdict.passed(), "{:?}", verdict.findings);
     Ok(())
 }
+
+/// The verdict for the crate `a` of `clean` with `lib_rs` as its `src/lib.rs`.
+fn lint_source(lib_rs: &str) -> TestResult<Verdict> {
+    let dir = copy_fixture(None)?;
+    write(dir.path(), "crates/a/src/lib.rs", lib_rs)?;
+    lint(dir.path())
+}
+
+// AC: CE-08.8
+#[test]
+fn a_cfg_that_hides_code_from_coverage_fails() -> TestResult {
+    // cargo-llvm-cov builds with `--cfg coverage`: code under `not(coverage)` would be built and
+    // shipped, but never counted against the floor.
+    for lib_rs in [
+        "#[cfg(not(coverage))]\npub fn f() {}\n",
+        "#[cfg(any(test, coverage_nightly))]\npub fn f() {}\n",
+        "#[cfg_attr(coverage, derive(Debug))]\npub struct S;\n",
+        "#![coverage(off)]\npub fn f() {}\n",
+        "#![cfg(not(coverage))]\npub fn f() {}\n",
+        "pub fn a() {} #[cfg(not(coverage))] pub fn f() {}\n",
+        "#[cfg(\n    not(coverage)\n)]\npub fn f() {}\n",
+    ] {
+        let verdict = lint_source(lib_rs)?;
+        let message = only_finding(&verdict, "crates/a/src/lib.rs");
+        assert!(message.contains("coverage"), "{lib_rs}: {message}");
+    }
+
+    let verdict = lint_case("coverage-cfg")?;
+    assert_eq!(places(&verdict), [(Some("crates/a/src/lib.rs"), Some(3))]);
+    Ok(())
+}
+
+// AC: CE-08.8
+#[test]
+fn cfgs_that_keep_code_measured_pass() -> TestResult {
+    for lib_rs in [
+        "#[cfg(not(test))]\npub fn f() {}\n",
+        "#[cfg(test)]\nmod tests {}\n",
+        "/// Do not use `#[cfg(not(coverage))]` here.\npub fn f() {}\n",
+        "pub const S: &str = \"#[cfg(coverage)]\";\n",
+        "pub fn f() -> bool { cfg!(coverage) }\n",
+    ] {
+        let verdict = lint_source(lib_rs)?;
+        assert!(verdict.passed(), "{lib_rs}: {:?}", verdict.findings);
+    }
+    Ok(())
+}

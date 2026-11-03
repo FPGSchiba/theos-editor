@@ -247,7 +247,7 @@ pub(super) fn folder_of(file: &str, own: &[String]) -> Option<String> {
 }
 
 /// The number of the line of `text` that the byte `offset` is on, in the unit of a finding.
-fn line_at(text: &str, offset: usize) -> u32 {
+pub(super) fn line_at(text: &str, offset: usize) -> u32 {
     let before = text.get(..offset).unwrap_or(text);
     line_number(before.matches('\n').count())
 }

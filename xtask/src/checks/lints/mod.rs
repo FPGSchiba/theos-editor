@@ -30,6 +30,10 @@
 //!   lead into it (`src_bounds.rs`). `include_str!` and `include_bytes!` are data and stay
 //!   allowed.
 //!
+//! - code that `coverage` would not measure: `coverage` or `coverage_nightly` in a `cfg(…)` or
+//!   `cfg_attr(…)` attribute, or an attribute named `coverage`, anywhere in a source, whatever
+//!   it is nested in (`coverage_cfg.rs`). `#[cfg(not(test))]` stays allowed.
+//!
 //! The `.rs` sources are all that are listed but the files under `tests/fixtures/` and under the
 //! build folder `target/` of the root; a folder called `target` or `node_modules` further down
 //! is source, because `mod target;` builds it.
@@ -58,10 +62,11 @@
 //! Findings name the file and the line and say what is wrong, never what is written there: the
 //! repository is the pull request's, and what a check prints is read by the runner.
 //!
-//! The code is in five files: this one has the rules for the lint tables, the manifests and the
+//! The code is in six files: this one has the rules for the lint tables, the manifests and the
 //! mirrored configuration files, `attributes.rs` the attribute scan, `fixture_routes.rs` the ways
 //! to compile a fixture (the name avoids `mod fixtures;`, which this check forbids), and
-//! `src_bounds.rs` the rule that code stays in `src/`, and
+//! `src_bounds.rs` the rule that code stays in `src/`, `coverage_cfg.rs` the rule on coverage
+//! cfgs, and
 //! `tokens.rs` the tokens that these read.
 
 use std::collections::BTreeSet;
@@ -76,6 +81,7 @@ use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
 mod attributes;
+mod coverage_cfg;
 mod fixture_routes;
 mod src_bounds;
 mod tokens;
@@ -362,6 +368,7 @@ fn sources(root: &Path, files: &[String], findings: &mut Vec<Finding>) -> Result
         let text = String::from_utf8_lossy(&bytes);
         let mut found = scan_attributes(path, &text);
         found.extend(scan_includes(path, &text));
+        found.extend(coverage_cfg::scan_coverage_cfg(path, &text));
         found.extend(scan_fixture_modules(path, &text));
         found.sort_by_key(|finding| finding.line);
         findings.extend(found);
