@@ -32,6 +32,9 @@ interface Block {
   /** For each position of the block's content, how many text characters of the source stand before it. */
   chars?: number[];
   firstContent?: number;
+  /** For each source line of the block (relative to `from`): where it starts, and where its text starts behind the prefix. */
+  lineStarts?: number[];
+  contentStarts?: Map<number, number>;
 }
 
 /** What precedes the text on a source line: quote marks, list markers, an ATX heading's hashes. */
@@ -126,6 +129,37 @@ export class PositionMap {
     return block.start + this.positionOf(block, first);
   }
 
+  /**
+   * Every source offset at which the point `pos` inside a textblock can be written, in order:
+   * from right behind the character before it to the character after it, so the markers between
+   * the two (`*`, `**`, `]]`, a backslash) are inside the range, without the offsets in a line
+   * prefix (`> `, list markers). At the end of a textblock the range runs to the end of its line.
+   * Undefined when the map is not exact or `pos` is not inside a textblock.
+   */
+  offsets(pos: number): number[] | undefined {
+    if (!this.exact || this.blocks.length === 0) return undefined;
+    const block = this.blocks[this.blockAt(pos)]!;
+    if (pos < block.start || pos > block.start + block.size) return undefined;
+    const aligned = this.align(block);
+    const before = this.charsBefore(block, pos - block.start);
+    const text = this.source.slice(block.from, block.to);
+    const first = before === 0 ? (block.firstContent ?? 0) : aligned[before - 1]! + 1;
+    let last: number;
+    if (before < aligned.length) last = aligned[before]!;
+    else {
+      const newline = text.indexOf('\n', first);
+      last = newline === -1 ? text.length : newline;
+    }
+    const found: number[] = [];
+    const starts = block.lineStarts ?? [0];
+    let line = 0;
+    for (let at = first; at <= last; at++) {
+      while (line + 1 < starts.length && starts[line + 1]! <= at) line++;
+      if (at >= (block.contentStarts?.get(line) ?? this.contentStart(block, text, starts, line))) found.push(block.from + at);
+    }
+    return found.length === 0 ? [block.from + first] : found;
+  }
+
   /** The nearest block at or after `pos` that contains it, else the next one, else the last. */
   private blockAt(pos: number): number {
     let low = 0;
@@ -189,6 +223,17 @@ export class PositionMap {
     return block.firstContent ?? 0;
   }
 
+  /** Where the text of source line `line` of the block starts, behind its prefix (relative to `from`). */
+  private contentStart(block: Block, text: string, starts: number[], line: number): number {
+    const begin = starts[line]!;
+    const end = starts[line + 1] === undefined ? text.length : starts[line + 1]! - 1;
+    if (block.fenced) return begin;
+    const extra = AFTER_PREFIX[block.node.type.name];
+    const content = text.slice(begin, end);
+    const prefix = PREFIX.exec(content)?.[0].length ?? 0;
+    return begin + prefix + (extra?.exec(content.slice(prefix))?.[0].length ?? 0);
+  }
+
   /** For each character of the block's text, its index in the block's source lines. */
   private align(block: Block): number[] {
     if (block.aligned !== undefined) return block.aligned;
@@ -196,18 +241,12 @@ export class PositionMap {
     const chars = block.node.textBetween(0, block.size, '', sourceLeaf);
     const starts = lineStartsOf(text);
     const contents = new Map<number, number>();
-    const extra = AFTER_PREFIX[block.node.type.name];
+    block.lineStarts = starts;
+    block.contentStarts = contents;
     const contentStart = (line: number): number => {
       let known = contents.get(line);
       if (known === undefined) {
-        const begin = starts[line]!;
-        const end = starts[line + 1] === undefined ? text.length : starts[line + 1]! - 1;
-        if (block.fenced) known = begin;
-        else {
-          const line = text.slice(begin, end);
-          const prefix = PREFIX.exec(line)?.[0].length ?? 0;
-          known = begin + prefix + (extra?.exec(line.slice(prefix))?.[0].length ?? 0);
-        }
+        known = this.contentStart(block, text, starts, line);
         contents.set(line, known);
       }
       return known;

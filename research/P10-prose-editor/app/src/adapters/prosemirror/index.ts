@@ -1,23 +1,24 @@
 import { selectAll } from 'prosemirror-commands';
-import { EditorState, TextSelection, type Plugin } from 'prosemirror-state';
+import { EditorState, TextSelection, type Plugin, type Transaction } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import type { EditorContext, Mode, ProseAdapter, ScriptedEdit, TextChange } from '../../harness/types.ts';
 import { BeatAttrsView, BeatHeadingView } from './beatview.ts';
+import { stockBody, type BodyModel } from './body.ts';
 import { beatRaw } from './beatraw.ts';
 import { CalloutView } from './calloutview.ts';
 import { calloutRaw } from './calloutraw.ts';
 import { devWords } from './devwords.ts';
 import { applyEdit, type EditTarget } from './edits.ts';
 import { applyChanges, externalTransaction } from './external.ts';
-import { joinFrontMatter, splitFrontMatter } from './frontmatter.ts';
+import { splitFrontMatter } from './frontmatter.ts';
 import { canUndo, history, undo, withoutHistory } from './history.ts';
 import { keymapPlugins } from './keymap.ts';
 import { finishTypedLink } from './linkkeys.ts';
 import { LinkView } from './linkview.ts';
 import { livePreview } from './livepreview.ts';
-import { parseBody, serializeBody } from './markdown.ts';
+import { parseBody } from './markdown.ts';
 import { popoverPlugin } from './popover.ts';
-import { PositionMap, Tracker } from './positions.ts';
+import { PositionMap } from './positions.ts';
 import { schema } from './schema.ts';
 import { guard, selectSourceBody, sourceDoc, sourceState } from './source.ts';
 import { installTheme } from './theme.ts';
@@ -26,17 +27,17 @@ import { typingPlugin } from './typing.ts';
 const toLf = (text: string): string => text.replace(/\r\n?/g, '\n');
 
 /**
- * Prototype B, stock column: plain ProseMirror with the stock `prosemirror-markdown` parser and
- * serializer. The body is a tree that kept no source, so `text()` is the front matter plus what
- * the serializer writes. Write mode keeps the front matter outside the document; Source mode is
- * the same view on a one-block document that holds the whole file, front matter protected.
+ * Prototype B: plain ProseMirror with the stock `prosemirror-markdown` parser. What Write mode
+ * saves comes from the body model (`body.ts`): in the stock column the body is a tree that kept no
+ * source, so `text()` is the front matter plus what the serializer writes. Write mode keeps the
+ * front matter outside the document; Source mode is the same view on a one-block document that
+ * holds the whole file, front matter protected.
  */
-class ProseMirrorAdapter implements ProseAdapter, EditTarget {
+export class ProseMirrorAdapter implements ProseAdapter, EditTarget {
   view!: EditorView;
   private ctx: EditorContext | undefined;
   private mode: Mode = 'write';
   private frontMatter = '';
-  private tracker!: Tracker;
   /** Source mode: how many characters at the start of the file are the protected front matter. */
   private protectedEnd = 0;
   private historyPlugin: Plugin = history();
@@ -47,6 +48,9 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
   /** The beat rows on the page, redrawn by a new index or new findings. */
   private readonly beatRows = new Set<BeatAttrsView>();
 
+  /** `body`: what Write mode saves and what the offsets refer to; the stock column by default. */
+  constructor(private readonly body: BodyModel = stockBody()) {}
+
   mount(target: HTMLElement, text: string, ctx: EditorContext): void {
     installTheme();
     this.ctx = ctx;
@@ -54,9 +58,11 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
     const { frontMatter, body } = splitFrontMatter(file);
     this.frontMatter = frontMatter;
     const doc = parseBody(body);
-    this.tracker = new Tracker(file, frontMatter.length, doc);
+    this.body.reset(file, frontMatter.length, doc);
     this.view = new EditorView(target, {
       state: this.stateOf(doc),
+      // Only a body model that maps the changes wants the transactions; the stock view keeps the default dispatch.
+      ...(this.body.observe === undefined ? {} : { dispatchTransaction: (tr: Transaction) => this.dispatch(tr) }),
       nodeViews: {
         wikilink: (node) => new LinkView(node, () => this.ctx!, this.chips),
         callout: (node, view, getPos) => new CalloutView(node, view, getPos, () => this.ctx!, this.callouts),
@@ -71,7 +77,7 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
 
   text(): string {
     if (this.mode === 'source') return this.view.state.doc.textContent;
-    return joinFrontMatter(this.frontMatter, serializeBody(this.view.state.doc));
+    return this.body.save(this.view.state.doc, this.frontMatter);
   }
 
   apply(edit: ScriptedEdit): void {
@@ -95,10 +101,10 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
       const { frontMatter, body } = splitFrontMatter(file);
       this.frontMatter = frontMatter;
       const doc = parseBody(body);
-      this.tracker.reset(file, frontMatter.length, doc);
+      this.body.reset(file, frontMatter.length, doc);
       this.mode = 'write';
       const state = this.stateOf(doc);
-      const pos = this.tracker.toPos(Math.max(offset, frontMatter.length));
+      const pos = this.body.toPos(doc, Math.max(offset, frontMatter.length));
       view.updateState(state.apply(state.tr.setSelection(TextSelection.near(state.doc.resolve(pos)))));
     }
   }
@@ -117,8 +123,7 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
   caret(): number {
     const head = this.view.state.selection.head;
     if (this.mode === 'source') return head - 1;
-    this.tracker.sync(this.view.state.doc);
-    return this.tracker.toOffset(head);
+    return this.body.toOffset(this.view.state.doc, head);
   }
 
   applyExternal(changes: TextChange[]): void {
@@ -129,13 +134,12 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
       if (tr !== undefined) view.dispatch(tr);
       return;
     }
-    this.tracker.sync(view.state.doc);
-    const file = applyChanges(this.tracker.text(), changes);
+    const file = applyChanges(this.body.source(view.state.doc), changes);
     const { frontMatter, body } = splitFrontMatter(file);
     const tr = externalTransaction(view.state, parseBody(body));
     if (tr !== undefined) view.dispatch(tr);
     this.frontMatter = frontMatter;
-    this.tracker.reset(file, frontMatter.length, view.state.doc);
+    this.body.reset(file, frontMatter.length, view.state.doc);
   }
 
   undo(): void {
@@ -172,22 +176,27 @@ class ProseMirrorAdapter implements ProseAdapter, EditTarget {
 
   sourceText(): string {
     if (this.mode === 'source') return this.view.state.doc.textContent;
-    this.tracker.sync(this.view.state.doc);
-    return this.tracker.text();
+    return this.body.source(this.view.state.doc);
   }
 
   toPos(offset: number): number {
     if (this.mode === 'source') return Math.min(Math.max(offset, 0), this.view.state.doc.textContent.length) + 1;
-    this.tracker.sync(this.view.state.doc);
-    return this.tracker.toPos(offset);
+    return this.body.toPos(this.view.state.doc, offset);
   }
 
   bodyStart(): number {
-    return this.mode === 'source' ? this.protectedEnd : this.tracker.start();
+    return this.mode === 'source' ? this.protectedEnd : this.body.start();
   }
 
   writing(): boolean {
     return this.mode === 'write';
+  }
+
+  /** The dispatch of a view whose body model observes: every Write-mode transaction that changed the document goes to it. */
+  private dispatch(tr: Transaction): void {
+    const { state, transactions } = this.view.state.applyTransaction(tr);
+    if (this.mode === 'write') for (const applied of transactions) if (applied.docChanged) this.body.observe?.(applied);
+    this.view.updateState(state);
   }
 
   // ── Plugins ──────────────────────────────────────────────────────────────
