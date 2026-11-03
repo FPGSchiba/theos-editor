@@ -21,6 +21,9 @@ export default defineConfig({
     url: origin,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
+    // Show the dev server's output, so a stalled module request is visible in a run.
+    stdout: 'pipe',
+    stderr: 'pipe',
   },
   // The reports in ../report are only overwritten by a run that asks for it (P10_REPORT=1).
   globalTeardown: process.env.P10_REPORT === '1' ? './tests/e2e/write-reports.ts' : undefined,
