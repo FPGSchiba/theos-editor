@@ -581,7 +581,34 @@ test.describe('@harness prosemirror · beats', () => {
     expect(await text(page)).toContain('## Beat 4 — Rest\nat:: X\nwith:: [[mother-ilse]]\n');
   });
 
-  test('every beat has one row, and the rows have spellcheck off', async ({ page }) => {
+  test('typing [[ in an attribute line opens the popover of that key; Escape keeps the text', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, sample.indexOf('when:: T1') + 'when:: T1'.length);
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('at:: [[fates');
+    await expect(page.locator('.tu-pop[data-link-popover]')).toBeVisible();
+    const kinds = await page.locator('.tu-pop__row').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-kind')));
+    expect(kinds.length).toBeGreaterThan(0);
+    for (const kind of kinds) expect(['location', 'floor']).toContain(kind);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.tu-pop[data-link-popover]')).toHaveCount(0);
+    expect(await text(page)).toContain('when:: T1\nat:: [[fates\n');
+  });
+
+  test('picking in an attribute line inserts the link text in that line', async ({ page }) => {
+    await openText(page, sample);
+    await at(page, sample.indexOf('when:: T1') + 'when:: T1'.length);
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('at:: [[fates');
+    await expect(page.locator('.tu-pop__row').first()).toBeVisible();
+    const id = await page.locator('.tu-pop__row').first().getAttribute('data-link-option');
+    await page.keyboard.press('Enter');
+    expect(await text(page)).toContain(`when:: T1\nat:: [[${id}]]\n`);
+    await page.keyboard.type('X');
+    expect(await text(page)).toContain(`at:: [[${id}]]X\n`);
+  });
+
+  test('every beat has one row,and the rows have spellcheck off', async ({ page }) => {
     await openText(page, sample);
     await expect(page.locator('[data-beat-row]')).toHaveCount(4);
     await expect(page.locator('[data-beat-row] [data-beat-param]')).toHaveCount(4);

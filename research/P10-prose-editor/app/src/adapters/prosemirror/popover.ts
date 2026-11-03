@@ -82,8 +82,10 @@ class PopoverView {
     const { state } = this.view;
     const typing = typingKey.getState(state);
     if (typing === undefined) return;
-    const tr = state.tr.replaceWith(typing.from, typing.to, state.schema.nodes.wikilink!.create({ id }));
-    this.view.dispatch(tr.setSelection(TextSelection.create(tr.doc, typing.from + 1)).scrollIntoView());
+    // The raw text of a beat attribute block takes the link as text (its row draws the chip).
+    const raw = state.doc.resolve(typing.from).parent.type.name === 'beat_attrs';
+    const tr = raw ? state.tr.insertText(`[[${id}]]`, typing.from, typing.to) : state.tr.replaceWith(typing.from, typing.to, state.schema.nodes.wikilink!.create({ id }));
+    this.view.dispatch(tr.setSelection(TextSelection.create(tr.doc, raw ? typing.from + id.length + 4 : typing.from + 1)).scrollIntoView());
   }
 
   private place(at: number): void {
