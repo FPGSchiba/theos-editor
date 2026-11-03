@@ -1,0 +1,264 @@
+{
+  "commit": "6b22b2b32d8c3669f09c8fb170aaa2b4173a4c88",
+  "os": "Windows_NT 10.0.26300 x64",
+  "browsers": {
+    "chromium": "156.0.8078.4",
+    "webkit": "27.2"
+  },
+  "date": "2026-11-03T17:50:21.734Z",
+  "kind": "integration",
+  "rows": [
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "N-external-caret",
+      "ok": true,
+      "detail": "the caret shifts for a change before it and stays for one behind it"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "N-history",
+      "ok": true,
+      "detail": "markSaved() empties the history; a new edit fills it again"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "N-keymap-save",
+      "ok": true,
+      "detail": "one ControlOrMeta+s asks the app to save once"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "N-keymap-undo-redo",
+      "ok": true,
+      "detail": "ControlOrMeta+z undoes and ControlOrMeta+Shift+z redoes"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "N-reactive",
+      "ok": true,
+      "detail": "the chip shows the new title; elements, text, caret and undo history are unchanged"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "N-remount",
+      "ok": true,
+      "detail": "20 loads, 13 chips for 13 links, no console errors"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "N-external-caret",
+      "ok": true,
+      "detail": "the caret shifts for a change before it and stays for one behind it"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "N-history",
+      "ok": true,
+      "detail": "markSaved() empties the history; a new edit fills it again"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "N-keymap-save",
+      "ok": true,
+      "detail": "one ControlOrMeta+s asks the app to save once"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "N-keymap-undo-redo",
+      "ok": true,
+      "detail": "ControlOrMeta+z undoes and ControlOrMeta+Shift+z redoes"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "N-reactive",
+      "ok": true,
+      "detail": "the chip shows the new title; elements, text, caret and undo history are unchanged"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "N-remount",
+      "ok": true,
+      "detail": "20 loads, 13 chips for 13 links, no console errors"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "N-external-caret",
+      "ok": true,
+      "detail": "the caret shifts for a change before it and stays for one behind it"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "N-history",
+      "ok": true,
+      "detail": "markSaved() empties the history; a new edit fills it again"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "N-keymap-save",
+      "ok": true,
+      "detail": "one ControlOrMeta+s asks the app to save once"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "N-keymap-undo-redo",
+      "ok": true,
+      "detail": "ControlOrMeta+z undoes and ControlOrMeta+Shift+z redoes"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "N-reactive",
+      "ok": true,
+      "detail": "the chip shows the new title; elements, text, caret and undo history are unchanged"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "N-remount",
+      "ok": true,
+      "detail": "20 loads, 13 chips for 13 links, no console errors"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "N-external-caret",
+      "ok": true,
+      "detail": "the caret shifts for a change before it and stays for one behind it"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "N-history",
+      "ok": true,
+      "detail": "markSaved() empties the history; a new edit fills it again"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "N-keymap-save",
+      "ok": true,
+      "detail": "one ControlOrMeta+s asks the app to save once"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "N-keymap-undo-redo",
+      "ok": true,
+      "detail": "ControlOrMeta+z undoes and ControlOrMeta+Shift+z redoes"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "N-reactive",
+      "ok": true,
+      "detail": "the chip shows the new title; elements, text, caret and undo history are unchanged"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "N-remount",
+      "ok": true,
+      "detail": "20 loads, 13 chips for 13 links, no console errors"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "N-external-caret",
+      "ok": false,
+      "detail": "the text is not the original with both external inserts"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "N-history",
+      "ok": true,
+      "detail": "markSaved() empties the history; a new edit fills it again"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "N-keymap-save",
+      "ok": true,
+      "detail": "one ControlOrMeta+s asks the app to save once"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "N-keymap-undo-redo",
+      "ok": false,
+      "detail": "ControlOrMeta+z did not take the edit back"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "N-reactive",
+      "ok": true,
+      "detail": "the chip shows the new title; elements, text, caret and undo history are unchanged"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "N-remount",
+      "ok": true,
+      "detail": "20 loads, 13 chips for 13 links, no console errors"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "N-external-caret",
+      "ok": false,
+      "detail": "the text is not the original with both external inserts"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "N-history",
+      "ok": true,
+      "detail": "markSaved() empties the history; a new edit fills it again"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "N-keymap-save",
+      "ok": true,
+      "detail": "one ControlOrMeta+s asks the app to save once"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "N-keymap-undo-redo",
+      "ok": false,
+      "detail": "ControlOrMeta+z did not take the edit back"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "N-reactive",
+      "ok": true,
+      "detail": "the chip shows the new title; elements, text, caret and undo history are unchanged"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "N-remount",
+      "ok": true,
+      "detail": "20 loads, 13 chips for 13 links, no console errors"
+    }
+  ]
+}
