@@ -165,6 +165,45 @@ test.describe('@harness prosemirror:best-effort · Enter at the end of a paragra
   }
 });
 
+/** Load a text of its own (no front matter) into the best-effort variant. */
+async function openText(page: Page, content: string): Promise<void> {
+  if (page.url() === 'about:blank') await page.goto('/');
+  await page.waitForFunction(() => window.__harness !== undefined);
+  await page.evaluate(([variant, body]) => window.__harness!.load(variant, body, 'records/probe.md'), [VARIANT, content] as const);
+}
+
+test.describe('@harness prosemirror:best-effort · the level of joined and split rewritten blocks', () => {
+  test('a block joined to a rewritten one still reports block: the joined text holds serializer bytes', async ({ page }) => {
+    const body = 'Prev line.\n\nWords _under_ tail.\n';
+    await openText(page, body);
+    // A letter in front of an `_` run inside a word: the paragraph is written again (`*under*`).
+    await caretTo(page, body.indexOf('_under_'));
+    await page.keyboard.type('Y');
+    expect(await text(page)).toBe('Prev line.\n\nWords Y*under* tail.\n');
+    expect(await level(page)).toBe('block');
+    await caretTo(page, (await text(page)).indexOf('Words'));
+    await page.keyboard.press('Backspace');
+    expect(await text(page)).toBe('Prev line.Words Y*under* tail.\n');
+    expect(await level(page)).toBe('block');
+  });
+
+  test('the half of a split rewritten block still reports block when the other half is deleted', async ({ page }) => {
+    const body = 'Lead _a_ first. Then _more_ end.\n';
+    await openText(page, body);
+    await caretTo(page, body.indexOf('_a_'));
+    await page.keyboard.type('Y');
+    expect(await text(page)).toBe('Lead Y*a* first. Then *more* end.\n');
+    await caretTo(page, (await text(page)).indexOf('Then'));
+    await page.keyboard.press('Enter');
+    expect(await level(page)).toBe('block');
+    const split = await text(page);
+    // The first half goes, from its start to the start of the second half.
+    await page.evaluate((length) => window.__harness!.apply({ id: 'cut', kind: 'delete', at: { find: 'Lead' }, length }), split.indexOf('Then'));
+    expect(await text(page)).toBe('Then *more* end.\n');
+    expect(await level(page)).toBe('block');
+  });
+});
+
 test.describe('@harness prosemirror:best-effort · paragraph breaks in a callout', () => {
   test('Enter inside a voice line is a blank quote line, and Backspace joins the lines again', async ({ page }) => {
     const source = await open(page, VOICES);

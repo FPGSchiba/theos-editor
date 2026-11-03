@@ -237,6 +237,26 @@ describe('SourceBody: fallback per block', () => {
   });
 });
 
+describe('SourceBody: the level of joined and split rewritten blocks', () => {
+  it('reports block while a joined or split block holds serializer bytes', () => {
+    const joined = editor('Prev line.\n\nWords _under_ tail.\n');
+    joined.dispatch(joined.state.tr.insertText('Y', joined.pos('under')));
+    expect(joined.body()).toBe('Prev line.\n\nWords Y*under* tail.\n');
+    joined.dispatch(joined.state.tr.setSelection(TextSelection.create(joined.state.doc, joined.posNow('Words'))));
+    joinBackward(joined.state, joined.dispatch);
+    expect(joined.body()).toBe('Prev line.Words Y*under* tail.\n');
+    expect(joined.level()).toBe('block');
+
+    const split = editor('Lead _a_ first. Then _more_ end.\n');
+    split.dispatch(split.state.tr.insertText('Y', split.pos('a_')));
+    split.dispatch(split.state.tr.setSelection(TextSelection.create(split.state.doc, split.posNow('Then'))));
+    splitBlock(split.state, split.dispatch);
+    split.dispatch(split.state.tr.delete(1, split.posNow('Then')));
+    expect(split.body()).toBe('Then *more* end.\n');
+    expect(split.level()).toBe('block');
+  });
+});
+
 describe('SourceBody: a document no Markdown stands for', () => {
   it('keeps the other blocks when an attribute line stops being one, and undo brings the bytes back', () => {
     const body = 'Intro.\n\n## Beat 1 — A\nat:: [[place]]\nsays:: [[belief]]\nwhen:: T1\n\nOutro _kept_.\n';

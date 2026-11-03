@@ -1,8 +1,7 @@
 import type { Node } from 'prosemirror-model';
 import { PositionMap } from '../prosemirror/positions.ts';
-import { childrenOf, positionOf, runAround } from './blocks.ts';
+import { childrenOf, isEmptyParagraph, positionOf, runAround } from './blocks.ts';
 import type { Change } from './changes.ts';
-import { isEmptyParagraph } from './blocks.ts';
 import { docOf, type ChangedBlocks, type SourceEdit, type SourceState } from './edit.ts';
 import { continuation, insertsFor, keepFinalNewline, leadSeparator, trailSeparator, type Insert } from './spans.ts';
 import { Verifier } from './verify.ts';

@@ -52,9 +52,12 @@ below; every feature, input and integration check that compares bytes passes (`F
 | `note-state` | span | The title is raw text of the callout; the change is a span of its line. |
 | `beat-param` (row and api) | span | The attribute lines are raw text; the first line of a bare beat gets its own line (`at:: x\n`). |
 | Enter in the middle of a top-level paragraph, Backspace joining it again | span | `\n\n` in, `\n\n` out (probe; mid-paragraph only). |
-| Enter at the end of a top-level paragraph, then typing: mid-file (before a heading) and on the last block, each with and without a save (`text()`) between Enter and typing | span, the same bytes in all four | The new paragraph is `\n\nNew one.` behind the old one and the final newline stays (probes: exact bytes, level, and the saved text parses to the editor's document). Between Enter and typing the empty paragraph owns a blank line between two blank lines. Fix round 1; before it, the save in between made the fallback merge the new paragraph into the next block. |
+| Enter at the end of a top-level paragraph, then typing: mid-file (before a heading) and on the last block of a file that ends with a newline, each with and without a save (`text()`) between Enter and typing | span, the same bytes in all four | The new paragraph is `\n\nNew one.` behind the old one and the final newline stays (probes: exact bytes, level, and the saved text parses to the editor's document). Between Enter and typing the empty paragraph owns a blank line between two blank lines. Fix round 1; before it, the save in between made the fallback merge the new paragraph into the next block. |
+| The same on the last block of a file without a final newline, with a save between | block, a final newline added | Variant M1 of the separator class (finding below): `…graph.\n\nNew one.\n` instead of `…graph.\n\nNew one.`. Without a save between it is span. |
 | Enter in the middle of a callout or quote line | span | A blank quote line with the line's prefix: `\n>\n> ` (probe). |
-| Enter at the end of the last paragraph of a voice block | block | The editor (stock `splitBlock`) makes a `callout_caption` there, so typing goes into a `— ` caption line; the callout is written again (Node check, no probe). |
+| Enter at the end of the last paragraph of a voice, design or note callout | block | The editor (stock `splitBlock`) makes a `callout_caption` there, so typing goes into a `— ` caption line; the callout is written again. For design the saved `> — New one.` does not parse back to the document (the design parser has no caption: it reloads as a paragraph), and the empty caption `> — ` saved between Enter and typing does not parse back for any type. Variant M2 (finding below). |
+| Enter in a plain quote's last line, a save, typing | span, then block | The save is `> A quote.\n>\n> \n` (span); the keystroke after it is written again (a nested empty paragraph has no line of its own). |
+| Enter in a callout title when the callout has nothing else (`leaveTitle` adds a paragraph), a save | block, a blank line leaks behind the callout | Variant O2 (finding below). |
 | Enter at the end of a callout paragraph that has a paragraph after it | no change | Stock `splitBlock` refuses there, so there is nothing to save (Node check). |
 | Enter in an item of a tight list | block | No Markdown holds a tight list whose item has two paragraphs; the list is written again (probe). |
 | A letter that changes what a line is (`Beat` of a beat heading, an upper-case letter in an attribute key) | block | The document still holds the beat nodes, which no source with that line stands for; the block is written again, the bytes are the typed ones (probe). |
@@ -114,7 +117,8 @@ after a fallback, as long as its run still parses with it), with the newline tha
 may have none, and a block added behind it gives it one); a document equal to the loaded one gets the loaded text back whole.
 
 **`lastSaveLevel()`** maps the queue first, then says `block` while any block of the saved text was written by the serializer since the load
-(or the last external change or mode switch), else `span`.
+(or the last external change or mode switch), else `span`. A block a change makes from others (a join, a split) counts as written when any
+of the blocks it came from was. Bytes in the gaps between blocks carry no flag (variant O2 of the finding below).
 
 **Offsets** (`offsets.ts`). `caretTo`, `caret` and `apply` use the stock `PositionMap`, built per run on demand on the source text, which is
 the exact file. A query reads one run instead of tokenizing the whole file, and a run that does not pair only guesses inside itself. The
@@ -144,29 +148,29 @@ the history (the stock code path) and makes the result the new loaded state. Sou
   attribute lines (above).
 - Cost: `reset` tokenizes the body once more than stock (the block ranges); typing costs the same as stock (a queue push).
 
-## Finding: separators and the final newline at block boundaries (fix round 1)
+## Finding: the bytes between blocks have no node in a ProseMirror tree
 
-The review found two defects, and both belong to one class: **the bytes between blocks (blank lines, the newline that ends a block's last line,
-the file's final newline) have no node in the tree**, so every edit at a block boundary has to decide where they go, and a tree editor makes
-blocks there that Markdown cannot hold. Variants found:
+**The class.** Blank lines, the newline that ends a block's last line and the file's final newline are bytes between blocks. A ProseMirror
+document has no node for them, so the save path has to keep them as bookkeeping beside the tree, and every edit at a block boundary has to
+decide where they go. The tree editor also makes blocks there that Markdown cannot hold (an empty paragraph after Enter, an empty caption).
+The review rounds of Task 16 found six variants of this one class. Fix round 1 fixed the first three with one set of rules; controller ruling
+26 then stopped further patching of the class, so the last three are recorded here and not fixed. This is evidence for criterion 1: on a
+tree editor byte stability at block boundaries is not a property of the editor but bookkeeping that every new kind of boundary edit can break.
 
-- Enter at the end of a paragraph makes an empty paragraph, which no Markdown holds. With a save before typing, the fallback put the blank
-  line in front of the next block into the empty block's guessed range; typing then merged the new paragraph into the next block (E1).
-- A paragraph added behind the last block lost the file's final newline: the document diff's overlap correction stretched the change past
-  the last block's closing token to the end of the file, and the reparse cannot see a final newline (E2). The same with a node or a text
-  inserted at the end of the document, behind a paragraph or a heading.
-- The undo restore of a block put back its loaded text with its loaded line end: the last block of a file without a final newline got no
-  newline although a block now followed it (found while fixing E2).
-- Inside callouts: Enter at the end of a voice block's last paragraph makes a caption, and at the end of a callout paragraph with one behind
-  it stock `splitBlock` refuses (above). Not fixed: they are editor behaviour, and nested empty paragraphs have no line of their own here, so
-  a save between Enter and typing there writes the callout again (block level, parsing to the document).
+| Variant | What happened | Cost now |
+|---|---|---|
+| E1. Enter at the end of a paragraph, a save, typing | The empty paragraph's guessed range swallowed the blank line in front of the next block; typing merged the new paragraph into it (`…\n\nNew one.\nNext.`, which parses to another document). | Fixed (round 1): span, exact bytes, mid-file and on the last block (probes). |
+| E2. A block added behind the last block | The diff's overlap correction stretched the change past the last block to the end of the file; the final newline was lost, at `span`. Also for a node or text inserted at the document end. | Fixed (round 1): span, final newline kept (probes and unit tests). |
+| Undo line end | The undo restore put back a block's loaded line end, so the last line of a file without a final newline stayed without one after a block was added behind it (`Words here.\nNew one.`). | Fixed (round 1). |
+| M1. A file without a final newline: Enter at the end of its last paragraph, a save, typing | `blankLine` counts only lines that end in `\n`, so the empty paragraph sits on the separator line, its run joins the paragraph before, and the rewrite adds a newline: `…graph.\n\nNew one.\n` instead of `…graph.\n\nNew one.`; offsets in that run are guesses (`toOffset` of "Last" 15 instead of 14). | block level, one byte beyond the edit (a final newline the file did not have). |
+| M2. Captions in callouts | Enter at the end of the last paragraph of a voice, design or note callout makes a `callout_caption` (stock `splitBlock`). For design the saved `> — New one.` does not parse back to the document (the design parser has no caption; it reloads as a paragraph); the empty caption `> — ` saved between Enter and typing does not parse back for any type. In a plain quote the save is span (`> A quote.\n>\n> \n`) and only the keystroke after it is block. | block level; for design a saved file that reloads as a different document. |
+| O2. Enter in a callout title when the callout holds nothing else, a save | `leaveTitle` adds an empty paragraph to the callout; the rewrite leaves a blank line behind the callout: `> [!design] Title\n\n\nAfter.` at block. An undo that cannot go back to the loaded document (after another edit) leaks a second blank line (`\n\n\n\n`) and reports span: the leaked bytes sit in a gap, which has no block and so no `serialized` flag. The O1 rule of fix round 2 does not change that (the callout block itself is back to its loaded text). An undo straight back to the loaded document restores the loaded bytes, at span. | block level after the save; after such an undo extra blank lines at a level that says span. |
 
-Fixed by one set of rules for the class, not per variant: a block is whole lines and separators stay outside block ranges, guessed ranges
+The rules of fix round 1 (all variants above share them): a block is whole lines and separators stay outside block ranges, guessed ranges
 included; an empty paragraph owns a blank line between blank separators; the change range comes from ProseMirror's step maps, not from the
 diff; every rewrite is parsed again and widened to its run when it does not stand for the document; the final newline is a fixed separator;
-a restored block keeps its current line end. Measured cost for criterion 1: on a tree editor the separators are bookkeeping of their own,
-and each new kind of boundary edit (an empty block, a block at the end, a nested container) is another place where they can be lost; the
-reparse turns a loss into a block-level rewrite, it does not prevent it.
+a restored block keeps its current line end. The reparse turns most losses into a block-level rewrite; it does not see gap bytes (O2) or a
+final newline (M1).
 
 Existing APIs used: markdown-it's token `map` for the block lines, ProseMirror's `StepMap.forEach` and `Mapping.slice` for the change range,
 `Fragment.findDiffStart`/`findDiffEnd` only for mark steps, `Node.eq` and the adapter's own `MarkdownParser` for the reparse, the stock
@@ -174,7 +178,9 @@ Existing APIs used: markdown-it's token `map` for the block lines, ProseMirror's
 
 ## Budget
 
-One implementation attempt and one fix round (the class above). Tried and kept: raw text first, serializer's inline form second; offsets on both sides of markers; the loose
+One implementation attempt and two fix rounds: round 1 the separator class (above), round 2 the level of joined and split rewritten
+blocks (a new changed block is `serialized` when the edit wrote it or any old changed block was; before, a join kept only the first block's
+flag and the new half of a split reported span; probes for both). Tried and kept: raw text first, serializer's inline form second; offsets on both sides of markers; the loose
 whitespace pass; the container prefix for paragraph breaks in callouts; per-run offset maps (after a probe showed that one block that no
 Markdown stands for turned every offset of the file into a guess); trimming the blank line markdown-it gives a list (after a unit test showed
 the fallback lost the blank line behind a list). Not tried: paste as plain text and a soft-break node (editor and parser changes shared with

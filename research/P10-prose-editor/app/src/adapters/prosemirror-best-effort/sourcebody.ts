@@ -194,13 +194,15 @@ export class SourceBody implements BodyModel {
     const nodes = childrenOf(after, edit.first, edit.last + grown);
     const old = this.blocks;
     const fresh = blocksOf(edit.text, edit.runFrom, tokenize(edit.text), nodes) ?? guessed(edit, old, grown, changed, endAfter);
+    // Which changed block's text a new changed block holds is not known (a join holds both, a split shares one), so each new changed
+    // block holds serializer bytes when the edit wrote it, or when any of the old changed blocks held them.
+    const heldWritten = old.slice(changed, endBefore).some((block) => block.serialized);
     fresh.forEach((block, offset) => {
       const index = edit.first + offset;
       // The old block this one continues: an unchanged neighbour, or a changed block at the same place.
       const twin = index < changed ? old[index] : index >= endAfter ? old[index - grown] : index < endBefore ? old[index] : undefined;
       if (twin?.origin !== undefined) block.origin = twin.origin;
-      const rewritten = edit.serialized && index >= changed && index < endAfter;
-      block.serialized = rewritten || (twin?.serialized ?? edit.serialized);
+      block.serialized = index >= changed && index < endAfter ? edit.serialized || heldWritten : twin?.serialized === true;
     });
     const shift = edit.insert.length - (edit.to - edit.from);
     this.file = this.file.slice(0, edit.from) + edit.insert + this.file.slice(edit.to);
