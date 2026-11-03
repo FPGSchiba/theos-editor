@@ -30,7 +30,7 @@ enum Problem {
 
 /// The findings of the cfg rule for the Rust source `text` of the file `file`, in file order.
 ///
-/// Every attribute is read ([`read_attributes`]), so one after other code on a line, one over
+/// Every attribute is read (`attribute_reader.rs`), so one after other code on a line, one over
 /// several lines and one in a macro body are found; words in comments and strings do not count.
 /// For `cfg(…)` and `cfg_attr(…)` the predicate is parsed (also in a `cfg` nested in a
 /// `cfg_attr`); a name outside the allowlist, or a predicate that does not parse, is a finding.

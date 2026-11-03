@@ -18,7 +18,7 @@ const IGNORE_FOUND: &str = "`ignore` without a reason: write `#[ignore = \"…\"
 /// and no `reason = "…"` with something in it, or when it is `ignore` (also inside `cfg_attr`)
 /// and has no `= "…"` with something in it. A `path = …` of an attribute (also inside `cfg_attr`)
 /// is found when it leads into a `tests/fixtures/` folder, out of the `src/` of its crate, or
-/// cannot be followed. The attributes come from the token stream ([`read_attributes`]): inner and
+/// cannot be followed. The attributes come from the token stream (`attribute_reader.rs`): inner and
 /// outer, anywhere in a line, over several lines, in function and macro bodies. Only whole words
 /// count, and words in comments and strings do not.
 #[must_use]
