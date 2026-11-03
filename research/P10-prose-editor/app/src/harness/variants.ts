@@ -33,4 +33,16 @@ export const variants: VariantInfo[] = [
       'prosemirror-state', 'prosemirror-view', 'markdown-it',
     ],
   },
+  {
+    // The same editor as the stock column; Write mode saves the source text with the changes mapped onto it.
+    name: 'prosemirror:best-effort',
+    component: 'ProseMirror',
+    version: '1.42.9',
+    wysiwyg: true,
+    column: 'best-effort',
+    packages: [
+      'prosemirror-commands', 'prosemirror-history', 'prosemirror-keymap', 'prosemirror-markdown', 'prosemirror-model',
+      'prosemirror-state', 'prosemirror-view', 'markdown-it',
+    ],
+  },
 ];
