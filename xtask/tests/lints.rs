@@ -495,3 +495,44 @@ fn manifest_target_inside_src_or_not_measured_passes() -> TestResult {
     }
     Ok(())
 }
+
+// AC: CE-08.5
+#[test]
+fn a_legacy_rust_toolchain_file_fails() -> TestResult {
+    // rustup reads `rust-toolchain` before the protected `rust-toolchain.toml`.
+    for (relative, flagged) in [
+        ("rust-toolchain", "rust-toolchain"),
+        ("crates/a/rust-toolchain", "crates/a/rust-toolchain"),
+        ("Rust-Toolchain", "Rust-Toolchain"),
+    ] {
+        let dir = copy_fixture(None)?;
+        write(dir.path(), relative, "nightly\n")?;
+        let verdict = lint(dir.path())?;
+        let message = only_finding(&verdict, flagged);
+        assert!(message.contains("rust-toolchain.toml"), "{message}");
+    }
+
+    let verdict = lint_case("legacy-rust-toolchain")?;
+    only_finding(&verdict, "rust-toolchain");
+    Ok(())
+}
+
+// AC: CE-08.5
+#[test]
+fn rust_toolchain_toml_and_fixture_copies_pass() -> TestResult {
+    let dir = copy_fixture(None)?;
+    write(
+        dir.path(),
+        "rust-toolchain.toml",
+        "[toolchain]\nchannel = \"1.99.1\"\n",
+    )?;
+    write(
+        dir.path(),
+        "crates/a/tests/fixtures/x/rust-toolchain",
+        "nightly\n",
+    )?;
+    write(dir.path(), "tests/fixtures/rust-toolchain", "nightly\n")?;
+    let verdict = lint(dir.path())?;
+    assert!(verdict.passed(), "{:?}", verdict.findings);
+    Ok(())
+}

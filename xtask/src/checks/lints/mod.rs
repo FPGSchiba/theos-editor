@@ -14,6 +14,8 @@
 //! - a clippy or rustfmt configuration, or a `.cargo` folder, anywhere else (the root `.cargo`
 //!   and `gate/clippy.toml` are the only exceptions), because clippy and cargo find these files
 //!   by walking up from the crate;
+//! - a file called `rust-toolchain` anywhere, which rustup reads instead of the pinned
+//!   `rust-toolchain.toml`;
 //! - in every `.rs` source, an attribute with `allow(…)`, an `expect(…)` without
 //!   `reason = "…"` or an `ignore` without `= "…"` ([`scan_attributes`]);
 //! - a way to compile a fixture, which the scan does not read (below): a `#[path = "…"]`
@@ -293,8 +295,10 @@ fn mirror(
     Ok(())
 }
 
-/// The clippy and rustfmt configuration files and the `.cargo` folders that must not exist: the
-/// ones that are not the root copy of `clippy.toml` and its original, and not the root `.cargo`.
+/// The clippy and rustfmt configuration files, the legacy `rust-toolchain` files and the `.cargo`
+/// folders that must not exist: the ones that are not the root copy of `clippy.toml` and its
+/// original, and not the root `.cargo`. A `rust-toolchain` file anywhere wins over the protected
+/// `rust-toolchain.toml` in rustup, so none may exist.
 ///
 /// File systems that ignore case find `Clippy.toml` as `clippy.toml`, so names are compared
 /// without case. A `.cargo` folder is one finding, however many files it has.
@@ -317,6 +321,11 @@ fn stray_config(files: &[String]) -> Vec<Finding> {
                 path,
                 "a rustfmt configuration: the gate has none, and one outside `gate/` could \
                  change what `fmt` checks",
+            )),
+            "rust-toolchain" => findings.push(at_file(
+                path,
+                "a legacy toolchain file: rustup reads it instead of `rust-toolchain.toml`, \
+                 which holds the pin; remove it",
             )),
             _ => {}
         }
@@ -456,6 +465,8 @@ mod tests {
             "xtask/tests/fixtures/lints/x/crates/a/clippy.toml",
             "tests/fixtures/rustfmt.toml",
             "crates/a/tests/fixtures/x/.cargo/config.toml",
+            "rust-toolchain.toml",
+            "tests/fixtures/rust-toolchain",
         ]);
         assert_eq!(stray_config(&allowed), Vec::<Finding>::new());
 
@@ -478,6 +489,9 @@ mod tests {
             ("RUSTFMT.TOML", "RUSTFMT.TOML"),
             ("crates/a/.Cargo/config.toml", "crates/a/.Cargo"),
             (".Cargo/config.toml", ".Cargo"),
+            ("rust-toolchain", "rust-toolchain"),
+            ("crates/a/rust-toolchain", "crates/a/rust-toolchain"),
+            ("Rust-Toolchain", "Rust-Toolchain"),
         ] {
             let findings = stray_config(&paths(&[stray]));
             assert_eq!(findings.len(), 1, "{stray}: {findings:?}");
