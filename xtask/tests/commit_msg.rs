@@ -479,7 +479,10 @@ fn types_and_scopes_equal_contributing_md_section_2() -> TestResult {
 #[test]
 fn a_type_or_scope_on_one_side_only_is_a_difference() {
     let document: BTreeSet<&str> = ["feat", "fix"].into();
-    assert!(list_differences("type", &document, &["feat", "fix"]).is_empty());
+    assert_eq!(
+        list_differences("type", &document, &["feat", "fix"]),
+        Vec::<String>::new()
+    );
     let extra_in_code = list_differences("type", &document, &["feat", "fix", "style"]);
     assert_eq!(extra_in_code.len(), 1, "{extra_in_code:?}");
     assert!(extra_in_code[0].contains("`style`") && extra_in_code[0].contains("in the code"));
