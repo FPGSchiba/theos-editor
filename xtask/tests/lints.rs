@@ -583,3 +583,88 @@ fn cfgs_that_keep_code_measured_pass() -> TestResult {
     }
     Ok(())
 }
+
+// AC: CE-08.5
+#[test]
+fn an_attribute_anywhere_in_a_source_is_judged() -> TestResult {
+    // Each of these once escaped a scan that read attributes only at the start of a line.
+    for lib_rs in [
+        "#[rustfmt::skip] pub mod m { #![allow(clippy::unwrap_used)] pub fn f() {} }
+",
+        "pub fn a() {} #[allow(dead_code)] pub fn b() {}
+",
+        "pub fn a() { #[allow(unused)] let _x = 1; }
+",
+        "macro_rules! m { () => { #[allow(dead_code)] fn x() {} } }
+",
+        "#[allow(
+    dead_code,
+    unused
+)]
+pub fn f() {}
+",
+        "#[cfg_attr(test, allow(dead_code))]
+pub fn f() {}
+",
+        "#[test] pub fn a() {} #[ignore] #[test] pub fn b() {}
+",
+        "#[test] #[expect(dead_code)] pub fn c() {}
+",
+        "/* /* */ \" */ #[allow(dead_code)] pub fn f() {} // \"
+",
+    ] {
+        let verdict = lint_source(lib_rs)?;
+        assert_eq!(
+            verdict.findings.len(),
+            1,
+            "{lib_rs}: {:?}",
+            verdict.findings
+        );
+        assert_eq!(
+            verdict.findings[0].file.as_deref(),
+            Some("crates/a/src/lib.rs")
+        );
+    }
+    Ok(())
+}
+
+// AC: CE-08.5
+#[test]
+fn attribute_like_text_in_strings_and_comments_passes() -> TestResult {
+    for lib_rs in [
+        "pub const S: &str = \"#[allow(dead_code)]\";
+",
+        "pub const S: &str = r#\"#![allow(dead_code)]\"#;
+",
+        "// #[allow(dead_code)]
+pub fn f() {}
+",
+        "/* #[allow(dead_code)] */ pub fn f() {}
+",
+        "/// #[allow(dead_code)]
+pub fn f() {}
+",
+        "#[rustfmt::skip] pub mod m { pub fn f() {} }
+",
+    ] {
+        let verdict = lint_source(lib_rs)?;
+        assert!(verdict.passed(), "{lib_rs}: {:?}", verdict.findings);
+    }
+    Ok(())
+}
+
+// AC: CE-08.8
+#[test]
+fn a_path_attribute_after_code_is_judged_by_the_src_rule() -> TestResult {
+    let verdict = lint_lib(
+        "pub fn a() {} #[path = \"../outside.rs\"] mod x;
+",
+    )?;
+    only_finding(&verdict, "crates/a/src/lib.rs");
+    let verdict = lint_lib(
+        "pub fn a() {} #[path = \"inner.rs\"] mod x;
+",
+    )?;
+    assert!(verdict.passed(), "{:?}", verdict.findings);
+    Ok(())
+}

@@ -2,10 +2,9 @@
 //! an `ignore` without one, in the attributes of a Rust source, and a `path` of an attribute that
 //! leads into a fixtures folder (which `fixture_routes.rs` judges).
 
+use super::attribute_reader::read_attributes;
 use super::fixture_routes::path_problem;
-use super::tokens::{Token, tokens};
-use crate::checks::ac_trace::line_number;
-use crate::checks::ac_trace::rust_tags::attribute_end;
+use super::tokens::Token;
 use crate::verdict::Finding;
 
 const ALLOW_FOUND: &str = "`allow(…)` in an attribute: a lint is not silenced; fix the cause, or \
@@ -18,63 +17,20 @@ const IGNORE_FOUND: &str = "`ignore` without a reason: write `#[ignore = \"…\"
 /// An attribute is found when it has `allow(` (also inside `cfg_attr`), when it has `expect(`
 /// and no `reason = "…"` with something in it, or when it is `ignore` (also inside `cfg_attr`)
 /// and has no `= "…"` with something in it. A `path = …` of an attribute (also inside `cfg_attr`)
-/// is found when it leads into a `tests/fixtures/` folder or cannot be followed. Only whole words
+/// is found when it leads into a `tests/fixtures/` folder, out of the `src/` of its crate, or
+/// cannot be followed. The attributes come from the token stream ([`read_attributes`]): inner and
+/// outer, anywhere in a line, over several lines, in function and macro bodies. Only whole words
 /// count, and words in comments and strings do not.
 #[must_use]
 pub fn scan_attributes(file: &str, text: &str) -> Vec<Finding> {
-    let lines: Vec<&str> = text.lines().collect();
-    let mut findings = Vec::new();
-    let mut index = 0;
-    while index < lines.len() {
-        if starts_attribute(lines[index].trim()) {
-            index = scan_attribute_line(file, &lines, index, &mut findings);
-        }
-        index += 1;
-    }
-    findings
+    read_attributes(text)
+        .iter()
+        .flat_map(|attribute| judge(file, attribute.line, &attribute.body))
+        .collect()
 }
 
-/// Whether `text`, trimmed, starts an attribute.
-fn starts_attribute(text: &str) -> bool {
-    text.starts_with("#[") || text.starts_with("#![")
-}
-
-/// Scans the attributes that start with line `first` (counting from 0): the one that starts it,
-/// joined over the lines that follow until its brackets balance, and the attributes after it on
-/// the line it ends on. Returns the last line that was read.
-fn scan_attribute_line(
-    file: &str,
-    lines: &[&str],
-    first: usize,
-    findings: &mut Vec<Finding>,
-) -> usize {
-    // What is left of the lines read so far, from the start of the next attribute.
-    let mut text = lines[first].trim().to_owned();
-    let mut start = first;
-    let mut last = first;
-    while starts_attribute(&text) {
-        let end = loop {
-            if let Some(end) = attribute_end(&text) {
-                break end;
-            }
-            // An attribute that is never closed takes the rest of the file.
-            let Some(next) = lines.get(last + 1) else {
-                break text.len();
-            };
-            last += 1;
-            text.push('\n');
-            text.push_str(next);
-        };
-        findings.extend(judge(file, line_number(start), &text[..end]));
-        text = text[end..].trim().to_owned();
-        start = last;
-    }
-    last
-}
-
-/// The findings for the attribute `attribute`, which starts on `line`.
-fn judge(file: &str, line: u32, attribute: &str) -> Vec<Finding> {
-    let tokens = tokens(attribute);
+/// The findings for the attribute with the tokens `tokens`, which starts on `line`.
+fn judge(file: &str, line: u32, tokens: &[Token<'_>]) -> Vec<Finding> {
     // The first word is the name of the attribute: `ignore`, or `cfg_attr` that has `ignore` in it.
     let name = tokens
         .iter()
@@ -386,6 +342,84 @@ mod tests {
         assert_eq!(lines_of(&findings), [Some(1)]);
         let text = "#[expect(\r\n    dead_code,\r\n    reason = \"x\"\r\n)]\r\nfn f() {}\r\n";
         let findings = scan_attributes("a.rs", text);
+        assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    #[test]
+    fn attributes_are_read_wherever_they_stand() {
+        for text in [
+            "#[rustfmt::skip] pub mod m { #![allow(clippy::unwrap_used)] pub fn f() {} }",
+            "fn a() {} #[allow(dead_code)] fn b() {}",
+            "fn f() { #[allow(unused)] let x = 1; }",
+            "fn f() { #![allow(unused)] }",
+            "macro_rules! m { () => { #[allow(dead_code)] fn x() {} } }",
+            "macro_rules! m { () => { fn x() {} }; ($a:ident) => { #[allow(dead_code)] fn $a() {} } }",
+            "#[allow(
+    dead_code,
+    unused
+)]
+fn f() {}",
+            "#[cfg_attr(test, allow(dead_code))]
+fn f() {}",
+            "#[derive(Debug)] #[cfg_attr(unix, allow(dead_code))] struct S;",
+            "mod m {
+    #![allow(dead_code)]
+}",
+        ] {
+            let findings = scan_attributes("a.rs", text);
+            assert_eq!(findings.len(), 1, "{text}: {findings:?}");
+        }
+        let findings = scan(&["fn f() {", "    let a = 1; #[ignore] fn g() {}", "}"]);
+        assert_eq!(lines_of(&findings), [Some(2)]);
+        let findings = scan(&["fn f() { #[expect(dead_code)] let x = 1; }"]);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+    }
+
+    #[test]
+    fn a_path_attribute_is_read_wherever_it_stands() {
+        let findings = scan_attributes(
+            "crates/a/src/lib.rs",
+            "pub fn a() {} #[path = \"../outside.rs\"] mod x;
+",
+        );
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert!(findings[0].message.contains("src/"), "{findings:?}");
+    }
+
+    #[test]
+    fn strings_comments_and_char_literals_never_make_an_attribute() {
+        for text in [
+            "const S: &str = \"#[allow(x)]\";",
+            "const S: &str = r#\"#[allow(x)]\"#;",
+            "const S: &str = r##\"a \"# #[allow(x)]\"##;",
+            "// #[allow(x)]
+fn f() {}",
+            "/* #[allow(x)] */ fn f() {}",
+            "/// #[allow(x)]
+fn f() {}",
+            "//! #![allow(x)]
+fn f() {}",
+            "fn f() -> char { '#' }",
+            "fn f() { let c = b'['; let d = '\''; }",
+        ] {
+            let findings = scan_attributes("a.rs", text);
+            assert!(findings.is_empty(), "{text}: {findings:?}");
+        }
+    }
+
+    #[test]
+    fn nested_block_comments_cannot_hide_an_attribute() {
+        // rustc nests `/* */`: the quote below is inside the comment, so the attribute is code.
+        let text = "/* /* */ \" */ #[allow(x)] fn f() {} // \"
+";
+        let findings = scan_attributes("a.rs", text);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        // And an attribute inside the nested comment is not one.
+        let findings = scan_attributes(
+            "a.rs",
+            "/* a /* b */ #[allow(x)] */ fn f() {}
+",
+        );
         assert!(findings.is_empty(), "{findings:?}");
     }
 }

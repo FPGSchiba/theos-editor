@@ -15,12 +15,28 @@ pub(super) enum Token<'a> {
     Symbol(u8),
 }
 
-/// The tokens of the attribute `text`.
-pub(super) fn tokens(text: &str) -> Vec<Token<'_>> {
-    located_tokens(text)
-        .into_iter()
-        .map(|(_, token)| token)
-        .collect()
+/// The byte after the block comment that starts at `start`. Block comments nest, as in rustc: a
+/// scanner that ended one at its first `*/` could take a quote inside the comment for the start
+/// of a string and read real code as the string's content. A comment that is never closed ends
+/// at the end of the text.
+fn block_comment_end(bytes: &[u8], start: usize) -> usize {
+    let mut depth = 1_usize;
+    let mut i = start + 2;
+    while i < bytes.len() {
+        if bytes[i..].starts_with(b"/*") {
+            depth += 1;
+            i += 2;
+        } else if bytes[i..].starts_with(b"*/") {
+            depth -= 1;
+            i += 2;
+            if depth == 0 {
+                return i;
+            }
+        } else {
+            i += 1;
+        }
+    }
+    bytes.len()
 }
 
 /// The tokens of `text`, each with the byte it starts at.
@@ -35,9 +51,7 @@ pub(super) fn located_tokens(text: &str) -> Vec<(usize, Token<'_>)> {
         } else if bytes[i..].starts_with(b"//") {
             i = text[i..].find('\n').map_or(bytes.len(), |end| i + end);
         } else if bytes[i..].starts_with(b"/*") {
-            i = text[i + 2..]
-                .find("*/")
-                .map_or(bytes.len(), |end| i + 2 + end + 2);
+            i = block_comment_end(bytes, i);
         } else if let Some(end) = literal_end(text, i) {
             let literal = &text[i..end];
             if literal.starts_with(['"', 'r']) {

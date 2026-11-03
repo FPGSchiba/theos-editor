@@ -51,23 +51,22 @@
 //! fixtures may be read that way. Files in folders below, such as `tests/fixtures/case/main.rs`,
 //! are the fixtures themselves, and stay allowed.
 //!
-//! The attribute scan is for attributes at the start of a line, because a text scan cannot know
-//! more: a line whose trimmed text starts with `#[` or `#![` starts an attribute, which goes on
-//! over the next lines until its brackets balance, and any attribute that follows it on its last
-//! line is read too. An attribute after other code on a line, such as one in a macro body that is
-//! written on one line, is not read: `fmt` moves the attributes of items and statements to lines
-//! of their own, and clippy denies `allow_attributes` in the code it compiles. Comments and
-//! strings inside an attribute do not count as text of it.
+//! Every rule that reads attributes reads them from the token stream (`attribute_reader.rs`):
+//! inner and outer, anywhere in a line, over several lines, in function bodies and inside
+//! `macro_rules!` arms. Comments, strings and character literals are not tokens, so what they
+//! hold never counts; block comments nest as in rustc. An attribute-like token sequence in a
+//! macro body that never becomes an attribute is read as one, so the rules over-report there and
+//! never under-report.
 //!
 //! Findings name the file and the line and say what is wrong, never what is written there: the
 //! repository is the pull request's, and what a check prints is read by the runner.
 //!
-//! The code is in six files: this one has the rules for the lint tables, the manifests and the
+//! The code is in seven files: this one has the rules for the lint tables, the manifests and the
 //! mirrored configuration files, `attributes.rs` the attribute scan, `fixture_routes.rs` the ways
 //! to compile a fixture (the name avoids `mod fixtures;`, which this check forbids), and
 //! `src_bounds.rs` the rule that code stays in `src/`, `coverage_cfg.rs` the rule on coverage
-//! cfgs, and
-//! `tokens.rs` the tokens that these read.
+//! cfgs, `attribute_reader.rs` the reader of attributes that the rules share, and `tokens.rs` the
+//! tokens that these read.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -80,6 +79,7 @@ use crate::files::repo_files;
 use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
+mod attribute_reader;
 mod attributes;
 mod coverage_cfg;
 mod fixture_routes;
