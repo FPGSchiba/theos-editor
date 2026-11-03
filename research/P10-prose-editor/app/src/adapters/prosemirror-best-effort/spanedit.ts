@@ -2,8 +2,9 @@ import type { Node } from 'prosemirror-model';
 import { PositionMap } from '../prosemirror/positions.ts';
 import { childrenOf, positionOf, runAround } from './blocks.ts';
 import type { Change } from './changes.ts';
+import { isEmptyParagraph } from './blocks.ts';
 import { docOf, type ChangedBlocks, type SourceEdit, type SourceState } from './edit.ts';
-import { continuation, insertsFor, leadSeparator, trailSeparator, type Insert } from './spans.ts';
+import { continuation, insertsFor, keepFinalNewline, leadSeparator, trailSeparator, type Insert } from './spans.ts';
 import { Verifier } from './verify.ts';
 
 /** Which end of a change a position is: where to look first among its candidate offsets. */
@@ -50,9 +51,9 @@ export function spanEdit(state: SourceState, after: Node, change: Change, blocks
       return unique([all[index]!.from, all[index - 1]!.to]);
     }
     if (!$pos.parent.isTextblock) return undefined;
-    // An empty top-level textblock with no source lines (the empty paragraph of an empty body) is written at its place.
+    // An empty top-level textblock without a token (an empty paragraph, an empty body) is written at the start of its line.
     const own = state.blocks[$pos.index(0)]!;
-    if ($pos.depth === 1 && $pos.parent.content.size === 0 && own.from === own.to) return [own.from];
+    if ($pos.depth === 1 && $pos.parent.content.size === 0 && (own.from === own.to || isEmptyParagraph($pos.parent))) return [own.from];
     map ??= new PositionMap(file.slice(runFrom, runTo), 0, docOf(childrenOf(before, first, last)));
     const local = map.offsets(pos - runPos);
     if (local === undefined) return undefined;
@@ -76,9 +77,10 @@ export function spanEdit(state: SourceState, after: Node, change: Change, blocks
     ? fromOptions.map((offset) => [offset, offset])
     : fromOptions.flatMap((from) => toOptions.filter((to) => to >= from).map((to): [number, number] => [from, to]));
 
-  // Text typed into an empty textblock (a beat without attribute lines) needs a line of its own.
+  // Text typed into an empty top-level textblock that has no line (a beat without attribute lines) needs a line of its own.
   const $start = before.resolve(change.start);
-  const intoEmpty = insertion && $start.parent.isTextblock && $start.parent.content.size === 0;
+  const home = state.blocks[$start.index(0)];
+  const intoEmpty = insertion && $start.depth === 1 && $start.parent.content.size === 0 && home !== undefined && home.from === home.to;
   const expected = childrenOf(after, first, last + m - n);
   const verifier = new Verifier();
   for (const strictness of ['strict', 'loose'] as const) {
@@ -87,8 +89,8 @@ export function spanEdit(state: SourceState, after: Node, change: Change, blocks
       const unitTo = Math.max(runTo, to);
       for (const insert of insertsAt(from) ?? []) {
         const text = (insert.opensBlock ? leadSeparator(file, bodyStart, from) : '') + insert.text + (insert.closesBlock ? trailSeparator(file, to) : '');
-        const variants = intoEmpty && text !== '' ? (file[to] === '\n' ? [`${text}\n`, text] : [text, `${text}\n`]) : [text];
-        for (const variant of variants) {
+        const lines = intoEmpty && text !== '' ? (file[to] === '\n' ? [`${text}\n`, text] : [text, `${text}\n`]) : [text];
+        for (const variant of new Set(lines.map((line) => keepFinalNewline(file, bodyStart, from, to, line)))) {
           const unit = file.slice(unitFrom, from) + variant + file.slice(to, unitTo);
           if (verifier.check(unit, expected, strictness)) {
             return { from, to, insert: variant, first, last, runFrom: unitFrom, text: unit, serialized: false, blocks };

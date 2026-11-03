@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
+import { parseBody } from '../../src/adapters/prosemirror/markdown.ts';
+import { schema } from '../../src/adapters/prosemirror/schema.ts';
 import { resolveAnchor } from '../../src/harness/anchor.ts';
 import { splitFrontMatter } from '../../src/harness/frontmatter.ts';
 import { toLf } from '../../src/harness/oracle.ts';
@@ -123,6 +125,44 @@ test.describe('@harness prosemirror:best-effort · fallback per block', () => {
     expect(await text(page)).toBe(source);
     expect(await level(page)).toBe('span');
   });
+});
+
+/** The editor's document as the view holds it, as JSON (prosemirror-view keeps its view description on the root element). */
+const editorDoc = (page: Page): Promise<unknown> =>
+  page.evaluate(() => (document.querySelector('#editor-host .ProseMirror') as unknown as { pmViewDesc: { node: { toJSON(): unknown } } }).pmViewDesc.node.toJSON());
+
+/** Whether the saved body parses to the editor's document. */
+async function reparses(page: Page, saved: string): Promise<boolean> {
+  return schema.nodeFromJSON(await editorDoc(page)).eq(parseBody(splitFrontMatter(saved).body));
+}
+
+test.describe('@harness prosemirror:best-effort · Enter at the end of a paragraph', () => {
+  // Mid-file (a paragraph followed by a heading) and on the last block (the file ends with a newline);
+  // with and without a save (`text()`) between Enter, which makes an empty paragraph no Markdown holds, and typing.
+  const cases = [
+    { name: 'mid-file', file: BELIEF, end: 'A paragraph under the first heading.' },
+    { name: 'on the last block', file: HALL, end: 'their holiest place.' },
+  ];
+  for (const { name, file, end } of cases) {
+    for (const query of [false, true]) {
+      test(`${name}, ${query ? 'with' : 'without'} a save before typing: a new paragraph, span edits, and the text parses to the document`, async ({ page }) => {
+        const source = await open(page, file);
+        const at = resolveAnchor(source, { find: end, offset: end.length });
+        await caretTo(page, at);
+        await page.keyboard.press('Enter');
+        if (query) {
+          // The empty paragraph owns a blank line between two blank lines.
+          expect(await text(page)).toBe(`${source.slice(0, at)}\n\n${source.slice(at)}`);
+          expect(await level(page)).toBe('span');
+        }
+        await page.keyboard.type('New one.');
+        const saved = await text(page);
+        expect(saved).toBe(`${source.slice(0, at)}\n\nNew one.${source.slice(at)}`);
+        expect(await level(page)).toBe('span');
+        expect(await reparses(page, saved)).toBe(true);
+      });
+    }
+  }
 });
 
 test.describe('@harness prosemirror:best-effort · paragraph breaks in a callout', () => {

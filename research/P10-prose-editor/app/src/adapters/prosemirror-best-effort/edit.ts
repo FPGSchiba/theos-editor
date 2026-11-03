@@ -28,6 +28,8 @@ export interface SourceEdit {
   serialized: boolean;
   /** The top-level children the edit replaced. */
   blocks: ChangedBlocks;
+  /** A fallback: where the written blocks stand in the new file, without the blank lines around them. */
+  wrote?: [number, number];
 }
 
 /**

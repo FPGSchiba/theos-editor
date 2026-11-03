@@ -170,6 +170,43 @@ describe('SourceBody: span edits', () => {
   });
 });
 
+describe('SourceBody: separators and the final newline at block boundaries', () => {
+  for (const save of [false, true]) {
+    it(`gives a paragraph made by Enter at the end of a paragraph its lines (${save ? 'with' : 'without'} a save before typing)`, () => {
+      for (const body of ['Words here.\n\nNext.\n', 'A paragraph.\n\n## Heading two\n', 'Words here.\n', '## Heading\n']) {
+        const ed = editor(body);
+        const end = body.indexOf('\n');
+        ed.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, ed.pos(body.slice(0, end), end))));
+        splitBlock(ed.state, ed.dispatch);
+        // The empty paragraph owns a blank line between two blank lines.
+        if (save) expect(ed.body(), body).toBe(`${body.slice(0, end)}\n\n${body.slice(end)}`);
+        ed.dispatch(ed.state.tr.insertText('New one.'));
+        expect(ed.body(), body).toBe(`${body.slice(0, end)}\n\nNew one.${body.slice(end)}`);
+        expect(ed.level()).toBe('span');
+        expect(parseBody(ed.body()).eq(ed.state.doc)).toBe(true);
+      }
+    });
+  }
+
+  it('keeps the final newline when a block is added at the end, whatever step adds it', () => {
+    for (const body of ['Words here.\n', '## Heading\n']) {
+      const node = editor(body);
+      node.dispatch(node.state.tr.insert(node.state.doc.content.size, schema.node('paragraph', null, [schema.text('New one.')])));
+      expect(node.body()).toBe(`${body}\nNew one.\n`);
+      const typed = editor(body);
+      typed.dispatch(typed.state.tr.insertText('New one.', typed.state.doc.content.size));
+      expect(typed.body()).toBe(`${body}\nNew one.\n`);
+      expect(typed.level()).toBe('span');
+    }
+  });
+
+  it('keeps a file without a final newline without one', () => {
+    const ed = editor('Words here.');
+    ed.dispatch(ed.state.tr.insert(ed.state.doc.content.size, schema.node('paragraph', null, [schema.text('New one.')])));
+    expect(ed.body()).toBe('Words here.\n\nNew one.');
+  });
+});
+
 describe('SourceBody: paragraph breaks inside a callout', () => {
   it('writes Enter inside a callout paragraph as a blank quote line, and Backspace joins it back', () => {
     const body = 'Intro.\n\n> [!design]\n> A remark. Over two\n> lines, _kept_.\n\nOutro.\n';

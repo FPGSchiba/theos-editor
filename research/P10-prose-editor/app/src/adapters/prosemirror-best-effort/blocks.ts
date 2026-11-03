@@ -29,23 +29,52 @@ export function lineStarts(text: string): number[] {
   return starts;
 }
 
+/** A paragraph without content (Enter at the end of a paragraph makes one): no Markdown holds it, and markdown-it gives it no token. */
+export const isEmptyParagraph = (node: Node): boolean => node.type.name === 'paragraph' && node.content.size === 0;
+
 /**
  * The blocks of `text` (which starts at offset `base` of the file) for the document children
- * `nodes`, or undefined when markdown-it and the document do not pair one to one. A text without
- * any block parses to one empty paragraph; that paragraph gets an empty block at the start.
+ * `nodes`, or undefined when markdown-it and the document do not pair. A block is the lines of its
+ * token's `map`, never the blank lines around it. An empty paragraph has no token: it owns a blank
+ * line of the gap it stands in, behind the one blank line that separates it from the block before
+ * (an empty body: an empty range at the start).
  */
 export function blocksOf(text: string, base: number, tokens: MarkdownToken[], nodes: readonly Node[]): Block[] | undefined {
   const top = topTokens(tokens);
-  if (top.length === 0 && nodes.length === 1 && nodes[0]!.isTextblock && nodes[0]!.content.size === 0) {
-    return [{ from: base, to: base, serialized: false }];
-  }
-  if (top.length !== nodes.length) return undefined;
   const starts = lineStarts(text);
   const at = (line: number): number => starts[line] ?? text.length;
-  return top.map((token) => {
+  const ranged = (token: MarkdownToken): Block => {
     const from = at(token.map![0]);
     return { from: base + from, to: base + withoutBlankLines(text, from, at(token.map![1])), serialized: false };
+  };
+  if (top.length === nodes.length) return top.map(ranged);
+  if (top.length !== nodes.filter((node) => !isEmptyParagraph(node)).length) return undefined;
+  const blocks: Block[] = [];
+  let next = 0;
+  nodes.forEach((node, index) => {
+    if (!isEmptyParagraph(node)) {
+      blocks.push(ranged(top[next++]!));
+      return;
+    }
+    const gapFrom = index === 0 ? 0 : blocks[index - 1]!.to - base;
+    const gapTo = next < top.length ? at(top[next]!.map![0]) : text.length;
+    const [from, to] = blankLine(text, gapFrom, gapTo, index > 0);
+    blocks.push({ from: base + from, to: base + to, serialized: false });
   });
+  return blocks;
+}
+
+/** The blank line of `[from, to)` an empty paragraph owns: the second one behind a block (the first separates), else the first. */
+function blankLine(text: string, from: number, to: number, behindBlock: boolean): [number, number] {
+  const lines: number[] = [];
+  for (let start = from; start < to;) {
+    const end = text.indexOf('\n', start);
+    if (end === -1 || end >= to || !/^[ \t]*$/.test(text.slice(start, end))) break;
+    lines.push(start);
+    start = end + 1;
+  }
+  const line = lines[behindBlock && lines.length > 1 ? 1 : 0];
+  return line === undefined ? [from, from] : [line, text.indexOf('\n', line) + 1];
 }
 
 /** The end of `[from, to)` of `text` without the blank lines at its end (markdown-it counts the one behind a list to the list). */

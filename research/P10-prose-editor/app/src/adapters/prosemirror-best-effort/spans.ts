@@ -179,6 +179,18 @@ export function insertsFor(doc: Node, start: number, end: number, prefix: string
   return [...texts].map((text) => ({ text, opensBlock: $start.depth === 0, closesBlock: $end.depth === 0 }));
 }
 
+/**
+ * The file's final newline is a fixed separator: an edit that reaches the end of a file that ends
+ * with a newline leaves one there, unless it replaces the whole body (select-all and typing), whose
+ * text is then all the body there is.
+ */
+export function keepFinalNewline(file: string, bodyStart: number, from: number, to: number, insert: string): string {
+  if (to !== file.length || !file.endsWith('\n')) return insert;
+  if (!/\S/.test(file.slice(bodyStart, from))) return insert;
+  const ends = insert === '' ? file[from - 1] === '\n' : insert.endsWith('\n');
+  return ends ? insert : `${insert}\n`;
+}
+
 /** The separator in front of inserted whole blocks at `at`: whatever makes a blank line after the text before. */
 export function leadSeparator(source: string, bodyStart: number, at: number): string {
   let index = at;

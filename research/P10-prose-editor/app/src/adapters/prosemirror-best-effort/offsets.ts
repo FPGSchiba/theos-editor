@@ -1,10 +1,10 @@
 import type { Node } from 'prosemirror-model';
 import { PositionMap } from '../prosemirror/positions.ts';
-import { childrenOf, positionOf, runAround, type Block } from './blocks.ts';
+import { childrenOf, isEmptyParagraph, positionOf, runAround, type Block } from './blocks.ts';
 import { docOf } from './edit.ts';
 
 interface RunMap {
-  map: PositionMap;
+  map: Pick<PositionMap, 'toOffset' | 'toPos'>;
   /** Document position in front of the run's first block, and source offset of its first line. */
   pos: number;
   from: number;
@@ -49,7 +49,10 @@ export class RunPositions {
     if (run === undefined) {
       const from = this.blocks[first]!.from;
       const text = this.file.slice(from, this.blocks[last - 1]!.to);
-      run = { map: new PositionMap(text, 0, docOf(childrenOf(this.doc, first, last))), pos: positionOf(this.doc, first), from };
+      const nodes = childrenOf(this.doc, first, last);
+      // An empty paragraph alone has no token to map: its one position is the start of its line.
+      const map = nodes.length === 1 && isEmptyParagraph(nodes[0]!) ? { toOffset: () => 0, toPos: () => 1 } : new PositionMap(text, 0, docOf(nodes));
+      run = { map, pos: positionOf(this.doc, first), from };
       this.runs.set(first, run);
     }
     return run;

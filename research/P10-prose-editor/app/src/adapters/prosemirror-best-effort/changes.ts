@@ -30,22 +30,32 @@ export function diffOf(before: Node, after: Node): Change | undefined {
 }
 
 /**
- * What a transaction replaced: the ranges its steps replace (a select-all replace covers the
- * whole document, its edges included), joined with the document diff (which also sees mark
- * steps, whose maps are empty).
+ * What a transaction replaced: the ranges its steps replace (ProseMirror's step maps, mapped
+ * through the steps after them), so a select-all replace covers the whole document and a split
+ * at the end of a paragraph stays at that end. A step whose map is empty (a mark step) has no
+ * range of its own; then the document diff stands in, which a pure diff cannot place exactly
+ * next to equal content (its overlap correction may move the range across a block boundary).
  */
 export function changeOf(tr: Transaction): Change | undefined {
   const diff = diffOf(tr.before, tr.doc);
   if (diff === undefined) return undefined;
-  let start = diff.start;
-  let endAfter = diff.endAfter;
+  let start = Number.POSITIVE_INFINITY;
+  let endAfter = Number.NEGATIVE_INFINITY;
+  let unmapped = false;
   tr.mapping.maps.forEach((map, index) => {
     const rest = tr.mapping.slice(index + 1);
+    let ranges = 0;
     map.forEach((_oldStart, _oldEnd, newStart, newEnd) => {
+      ranges++;
       start = Math.min(start, rest.map(newStart, -1));
       endAfter = Math.max(endAfter, rest.map(newEnd, 1));
     });
+    if (ranges === 0) unmapped = true;
   });
+  if (unmapped || start === Number.POSITIVE_INFINITY) {
+    start = Math.min(start, diff.start);
+    endAfter = Math.max(endAfter, diff.endAfter);
+  }
   const grown = tr.doc.content.size - tr.before.content.size;
   return { start, endBefore: endAfter - grown, endAfter };
 }

@@ -1,5 +1,6 @@
-import type { Node } from 'prosemirror-model';
+import { Fragment, type Node } from 'prosemirror-model';
 import { parseBody } from '../prosemirror/markdown.ts';
+import { isEmptyParagraph } from './blocks.ts';
 
 /**
  * Whether a candidate source text stands for the document: the text alone is parsed with the
@@ -8,6 +9,27 @@ import { parseBody } from '../prosemirror/markdown.ts';
  * at the edges of a textblock, several spaces in a row): the typed bytes are kept as typed.
  */
 export type Strictness = 'strict' | 'loose';
+
+/**
+ * What Markdown can hold of a block: without its empty paragraphs (at any depth), which no source
+ * text stands for. Both sides of a comparison are taken in this form.
+ */
+function held(node: Node): Node {
+  if (node.isTextblock || node.isLeaf) return node;
+  const kept: Node[] = [];
+  let dropped = false;
+  node.forEach((child) => {
+    if (isEmptyParagraph(child)) dropped = true;
+    else {
+      const inner = held(child);
+      if (inner !== child) dropped = true;
+      kept.push(inner);
+    }
+  });
+  return dropped ? node.copy(Fragment.from(kept)) : node;
+}
+
+const heldBlocks = (nodes: readonly Node[]): Node[] => nodes.filter((node) => !isEmptyParagraph(node)).map(held);
 
 /** A text without line breaks for the inline content of a textblock: marks and leaves spelled out. */
 function inlineKey(node: Node, loose: boolean): string {
@@ -35,16 +57,18 @@ function sameNode(a: Node, b: Node, loose: boolean): boolean {
 export class Verifier {
   private readonly parsed = new Map<string, Node>();
 
-  /** Does `text`, parsed alone, give exactly the blocks `nodes`? */
+  /** Does `text`, parsed alone, give the blocks `nodes`, as far as Markdown can hold them? */
   check(text: string, nodes: readonly Node[], strictness: Strictness): boolean {
     let doc = this.parsed.get(text);
     if (doc === undefined) {
       doc = parseBody(text);
       this.parsed.set(text, doc);
     }
-    if (doc.childCount !== nodes.length) return false;
+    const got = heldBlocks(doc.content.content);
+    const want = heldBlocks(nodes);
+    if (got.length !== want.length) return false;
     const loose = strictness === 'loose';
-    for (let index = 0; index < nodes.length; index++) if (!sameNode(doc.child(index), nodes[index]!, loose)) return false;
+    for (let index = 0; index < want.length; index++) if (!sameNode(got[index]!, want[index]!, loose)) return false;
     return true;
   }
 }

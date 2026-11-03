@@ -16,17 +16,18 @@ const copy = (blocks: readonly Block[]): Block[] => blocks.map((block) => ({ ...
 /**
  * Block ranges for a rewritten run that does not parse into one token per block (a document no
  * Markdown stands for, such as an attribute block holding a line that is no attribute line): the
- * neighbours keep theirs, the first rewritten block gets the whole written text and the others an
- * empty range behind it. They are `opaque`, so a later change rewrites them together.
+ * neighbours keep theirs, the first rewritten block gets the written text (never the blank lines
+ * around it) and the others an empty range behind it. They are `opaque`, so a later change
+ * rewrites them together.
  */
 function guessed(edit: SourceEdit, old: readonly Block[], grown: number, changed: number, endAfter: number): Block[] {
   const shift = edit.insert.length - (edit.to - edit.from);
-  const end = edit.from + edit.insert.length;
+  const [start, end] = edit.wrote ?? [edit.from, edit.from + edit.insert.length];
   const blocks: Block[] = [];
   for (let index = edit.first; index < edit.last + grown; index++) {
     if (index < changed) blocks.push({ ...old[index]! });
     else if (index >= endAfter) blocks.push({ ...old[index - grown]!, from: old[index - grown]!.from + shift, to: old[index - grown]!.to + shift });
-    else blocks.push({ from: index === changed ? edit.from : end, to: end, serialized: true, opaque: true });
+    else blocks.push({ from: index === changed ? start : end, to: end, serialized: true, opaque: true });
   }
   return blocks;
 }
@@ -223,13 +224,15 @@ export class SourceBody implements BodyModel {
       const origin = block.origin;
       if (origin === undefined || !doc.child(index).eq(origin.node)) continue;
       const current = this.file.slice(block.from, block.to);
-      if (current === origin.text && block.opaque !== true) {
+      // The newline that ends the block's last line depends on what follows it (the last line of a file may have none): it stays as it is now.
+      const restored = origin.text.replace(/\n$/, '') + (current.endsWith('\n') ? '\n' : '');
+      if (current === restored && block.opaque !== true) {
         block.serialized = false;
         continue;
       }
       const [first, last] = runAround(this.file, this.blocks, index, index + 1);
       const runFrom = this.blocks[first]!.from;
-      const text = this.file.slice(runFrom, block.from) + origin.text + this.file.slice(block.to, this.blocks[last - 1]!.to);
+      const text = this.file.slice(runFrom, block.from) + restored + this.file.slice(block.to, this.blocks[last - 1]!.to);
       const nodes = childrenOf(doc, first, last);
       if (!new Verifier().check(text, nodes, 'strict')) continue;
       const fresh = blocksOf(text, runFrom, tokenize(text), nodes);
@@ -239,8 +242,8 @@ export class SourceBody implements BodyModel {
         if (was.origin !== undefined) one.origin = was.origin;
         one.serialized = first + offset === index ? false : was.serialized;
       });
-      const shift = origin.text.length - current.length;
-      this.file = this.file.slice(0, block.from) + origin.text + this.file.slice(block.to);
+      const shift = restored.length - current.length;
+      this.file = this.file.slice(0, block.from) + restored + this.file.slice(block.to);
       this.blocks.splice(first, last - first, ...fresh);
       for (let next = first + fresh.length; next < this.blocks.length; next++) {
         this.blocks[next]!.from += shift;
