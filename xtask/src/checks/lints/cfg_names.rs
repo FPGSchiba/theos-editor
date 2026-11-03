@@ -6,7 +6,8 @@
 //! a `build.rs` can set any name. Code under `#[cfg(not(clippy))]` is never seen by clippy and
 //! `#[cfg(not(coverage))]` is never counted, while both ship. A list of forbidden names loses to
 //! the next name, so the rule is an allowlist: `test`, `doc`, `unix`, `windows`,
-//! `feature = "…"` and the keys that start with `target_` (`target_os = "…"` and the like),
+//! `feature = "…"` and the keys that rustc sets itself (`TARGET_KEYS`: `target_os = "…"` and the
+//! like),
 //! combined with `all`, `any` and `not`. Anything else, or a predicate that cannot be read, is a
 //! finding. An attribute whose path is `coverage` (`#[coverage(off)]`) is a finding too.
 //!
@@ -17,12 +18,30 @@ use super::attribute_reader::{Attribute, read_attributes};
 use super::tokens::Token;
 use crate::verdict::Finding;
 
+/// The `target_*` keys that rustc sets itself. A `build.rs` can set any other name that starts
+/// with `target_`, so the prefix alone does not make a key safe.
+const TARGET_KEYS: [&str; 13] = [
+    "target_abi",
+    "target_arch",
+    "target_endian",
+    "target_env",
+    "target_family",
+    "target_feature",
+    "target_has_atomic",
+    "target_has_atomic_equal_alignment",
+    "target_has_atomic_load_store",
+    "target_os",
+    "target_pointer_width",
+    "target_thread_local",
+    "target_vendor",
+];
+
 /// The longest name that a finding repeats.
 const NAME_LIMIT: usize = 40;
 
 /// What is wrong with an attribute.
 enum Problem {
-    /// A cfg name that is not allowed; it is a word of letters, digits and `_`.
+    /// A cfg name that is not allowed.
     Name(String),
     /// A predicate or an attribute that cannot be read.
     Syntax,
@@ -45,12 +64,28 @@ pub fn scan_cfg_names(file: &str, text: &str) -> Vec<Finding> {
         .collect()
 }
 
+/// The part of a rejected name that a finding repeats: ASCII letters, digits and `_` as they are,
+/// every other character as `?`, cut at `NAME_LIMIT` characters. No format character, bidi
+/// control or `::` can reach the output.
+fn echo(name: &str) -> String {
+    name.chars()
+        .take(NAME_LIMIT)
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '?'
+            }
+        })
+        .collect()
+}
+
 /// The message for `attribute`, if it breaks the rule.
 fn problem(attribute: &Attribute<'_>) -> Option<String> {
     match check_attribute(&attribute.body) {
         Ok(()) => None,
         Err(Problem::Name(name)) => {
-            let name: String = name.chars().take(NAME_LIMIT).collect();
+            let name = echo(&name);
             Some(format!(
                 "`{name}` in a `cfg(…)` or `cfg_attr(…)` attribute, or a `coverage` attribute: \
                  only `test`, `doc`, `unix`, `windows`, `feature = \"…\"` and `target_*` may be \
@@ -162,11 +197,11 @@ fn predicate<'a, 't>(tokens: &'a [Token<'t>]) -> Result<&'a [Token<'t>], Problem
             Token::Symbol(b'='),
             Token::Text(_),
             rest @ ..,
-        ] if key.starts_with("target_") => Ok(rest),
+        ] if TARGET_KEYS.contains(key) => Ok(rest),
         [Token::Word("test" | "doc" | "unix" | "windows"), rest @ ..] => Ok(rest),
         // Allowed names in the wrong shape.
         [Token::Word("all" | "any" | "not" | "feature"), ..] => Err(Problem::Syntax),
-        [Token::Word(key), ..] if key.starts_with("target_") => Err(Problem::Syntax),
+        [Token::Word(key), ..] if TARGET_KEYS.contains(key) => Err(Problem::Syntax),
         [Token::Word(name), ..] => Err(Problem::Name((*name).to_owned())),
         _ => Err(Problem::Syntax),
     }
@@ -328,6 +363,32 @@ mod tests {
             let text = source(&[attribute, "fn f() {}"]);
             assert_eq!(lines(&text), [Some(1)], "{attribute}");
         }
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn a_non_ascii_name_is_a_name_of_its_own() {
+        for attribute in [
+            "#[cfg(not(test\u{e9}))]",
+            "#[cfg(t\u{435}st)]",
+            "#[cfg(\u{e9})]",
+            "#[cfg(target_os\u{e9} = \"x\")]",
+            "#[cfg(doc\u{e9})]",
+            "#[cfg(target_custom = \"x\")]",
+            "#[cfg(unix\u{e9})]",
+            "#[cfg(\u{e9}windows)]",
+            "#[cfg(any(test, \u{202e}unix))]",
+        ] {
+            let text = source(&[attribute, "fn f() {}"]);
+            assert_eq!(lines(&text), [Some(1)], "{attribute}");
+        }
+        let findings = scan_cfg_names("a.rs", "#[cfg(test\u{e9})] fn f() {}\n");
+        assert!(findings[0].message.contains("`test?`"), "{findings:?}");
+        let findings = scan_cfg_names("a.rs", "#[cfg(a\u{202e}b)] fn f() {}\n");
+        assert!(!findings[0].message.contains('\u{202e}'), "{findings:?}");
+        // Pattern_White_Space is white space to rustc, so it separates words.
+        let text = source(&["#[cfg(test\u{200e})]", "fn f() {}"]);
+        assert_eq!(lines(&text), Vec::<Option<u32>>::new());
     }
 
     // AC: CE-08.8

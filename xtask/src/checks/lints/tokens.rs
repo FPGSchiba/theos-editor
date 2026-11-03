@@ -7,11 +7,11 @@ use crate::checks::ac_trace::rust_tags::literal_end;
 /// white space and character literals are left out.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Token<'a> {
-    /// Letters, digits and `_`.
+    /// A run of ASCII letters, digits and `_` and of non-ASCII characters (see `located_tokens`).
     Word(&'a str),
     /// A string literal as written, with its quotes.
     Text(&'a str),
-    /// An ASCII character that is none of the above.
+    /// An ASCII character that is none of the above; a non-ASCII character is never a symbol.
     Symbol(u8),
 }
 
@@ -39,15 +39,47 @@ fn block_comment_end(bytes: &[u8], start: usize) -> usize {
     bytes.len()
 }
 
+/// The character at byte `i` of `text`, which must be a character boundary.
+fn char_at(text: &str, i: usize) -> Option<char> {
+    text.get(i..)?.chars().next()
+}
+
+/// White space as rustc reads it: ASCII white space, vertical tab, and the other characters of
+/// Unicode's `Pattern_White_Space` (`U+0085`, `U+200E`, `U+200F`, `U+2028`, `U+2029`).
+fn is_space(c: char) -> bool {
+    c.is_ascii_whitespace()
+        || matches!(
+            c,
+            '\u{b}' | '\u{85}' | '\u{200e}' | '\u{200f}' | '\u{2028}' | '\u{2029}'
+        )
+}
+
+/// Whether `c` belongs to a word: an ASCII letter, digit or `_`, or any non-ASCII character that
+/// is not white space. A non-ASCII character is never dropped: `testé` is one word, and so is
+/// `tеst` with a Cyrillic `е`, so neither can pass as `test`. rustc reads them as identifiers
+/// (or rejects the file), and no rule word is spelled with one.
+fn is_word(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_' || (!c.is_ascii() && !is_space(c))
+}
+
 /// The tokens of `text`, each with the byte it starts at.
+///
+/// Per byte class: white space (see `is_space`) separates tokens; `//` and nested `/* */`
+/// comments and character literals are skipped; strings and raw strings are `Text`; ASCII
+/// letters, digits, `_` and every other non-ASCII character join into `Word`s; any other ASCII
+/// byte, control characters included, is a `Symbol`. Nothing is dropped without being white
+/// space, a comment or a character literal.
 pub(super) fn located_tokens(text: &str) -> Vec<(usize, Token<'_>)> {
-    let is_word = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'_';
     let bytes = text.as_bytes();
     let mut tokens = Vec::new();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i].is_ascii_whitespace() {
+        let Some(c) = char_at(text, i) else {
             i += 1;
+            continue;
+        };
+        if is_space(c) {
+            i += c.len_utf8();
         } else if bytes[i..].starts_with(b"//") {
             i = text[i..].find('\n').map_or(bytes.len(), |end| i + end);
         } else if bytes[i..].starts_with(b"/*") {
@@ -58,16 +90,14 @@ pub(super) fn located_tokens(text: &str) -> Vec<(usize, Token<'_>)> {
                 tokens.push((i, Token::Text(literal)));
             }
             i = end;
-        } else if is_word(bytes[i]) {
+        } else if is_word(c) {
             let start = i;
-            while i < bytes.len() && is_word(bytes[i]) {
-                i += 1;
+            while let Some(c) = char_at(text, i).filter(|c| is_word(*c)) {
+                i += c.len_utf8();
             }
             tokens.push((start, Token::Word(&text[start..i])));
         } else {
-            if bytes[i].is_ascii() {
-                tokens.push((i, Token::Symbol(bytes[i])));
-            }
+            tokens.push((i, Token::Symbol(bytes[i])));
             i += 1;
         }
     }

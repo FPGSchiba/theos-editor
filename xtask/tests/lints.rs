@@ -735,6 +735,30 @@ pub fn f() {}
 ",
             "clippy",
         ),
+        (
+            "#[cfg(not(test\u{e9}))]
+pub fn f() {}
+",
+            "test?",
+        ),
+        (
+            "#[cfg(t\u{435}st)]
+pub fn f() {}
+",
+            "t?st",
+        ),
+        (
+            "#[cfg(target_os\u{e9} = \"x\")]
+pub fn f() {}
+",
+            "target_os?",
+        ),
+        (
+            "#[cfg(doc\u{e9})]
+pub fn f() {}
+",
+            "doc?",
+        ),
     ] {
         let verdict = lint_source(lib_rs)?;
         let message = only_finding(&verdict, "crates/a/src/lib.rs");
