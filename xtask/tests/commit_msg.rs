@@ -410,3 +410,82 @@ fn an_unreadable_range_is_exit_code_2() -> TestResult {
     assert_eq!(output.status.code(), Some(2), "{output:?}");
     Ok(())
 }
+
+/// What `CONTRIBUTING.md` §2 lists and `code` lacks, and the other way round, as sentences.
+fn list_differences(what: &str, document: &BTreeSet<&str>, code: &[&str]) -> Vec<String> {
+    let code: BTreeSet<&str> = code.iter().copied().collect();
+    let mut differences = Vec::new();
+    differences.extend(
+        document
+            .difference(&code)
+            .map(|item| format!("{what} `{item}` is in CONTRIBUTING.md but not in the code")),
+    );
+    differences.extend(
+        code.difference(document)
+            .map(|item| format!("{what} `{item}` is in the code but not in CONTRIBUTING.md")),
+    );
+    differences
+}
+
+// AC: CE-08.10
+#[test]
+fn types_and_scopes_equal_contributing_md_section_2() -> TestResult {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or("xtask has no parent folder")?;
+    let text = std::fs::read_to_string(root.join("CONTRIBUTING.md"))?.replace("\r\n", "\n");
+    let section = text
+        .split("\n## 2. Commits")
+        .nth(1)
+        .and_then(|rest| rest.split("\n## ").next())
+        .ok_or("CONTRIBUTING.md has no section 2")?;
+
+    // The first column of the types table, in backticks.
+    let table = section
+        .split("**Types**")
+        .nth(1)
+        .and_then(|rest| rest.split("\n\n**").next())
+        .ok_or("section 2 has no types table")?;
+    let types: BTreeSet<&str> = table
+        .lines()
+        .filter_map(|line| line.strip_prefix("| `"))
+        .filter_map(|line| line.split('`').next())
+        .collect();
+
+    // Everything in backticks in the paragraph that starts with `**Scopes:**`.
+    let scopes_paragraph = section
+        .split("**Scopes:**")
+        .nth(1)
+        .and_then(|rest| rest.split("\n\n").next())
+        .ok_or("section 2 has no scopes line")?;
+    let scopes: BTreeSet<&str> = scopes_paragraph.split('`').skip(1).step_by(2).collect();
+
+    assert!(
+        types.contains("feat") && scopes.contains("content"),
+        "not read: {section}"
+    );
+    assert_eq!(
+        list_differences("type", &types, &xtask::conventional::TYPES),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        list_differences("scope", &scopes, &xtask::conventional::SCOPES),
+        Vec::<String>::new()
+    );
+    Ok(())
+}
+
+// AC: CE-08.10
+#[test]
+fn a_type_or_scope_on_one_side_only_is_a_difference() {
+    let document: BTreeSet<&str> = ["feat", "fix"].into();
+    assert!(list_differences("type", &document, &["feat", "fix"]).is_empty());
+    let extra_in_code = list_differences("type", &document, &["feat", "fix", "style"]);
+    assert_eq!(extra_in_code.len(), 1, "{extra_in_code:?}");
+    assert!(extra_in_code[0].contains("`style`") && extra_in_code[0].contains("in the code"));
+    let extra_in_document = list_differences("scope", &document, &["feat"]);
+    assert_eq!(extra_in_document.len(), 1, "{extra_in_document:?}");
+    assert!(
+        extra_in_document[0].contains("`fix`") && extra_in_document[0].contains("CONTRIBUTING")
+    );
+}
