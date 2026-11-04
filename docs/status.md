@@ -43,14 +43,16 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
   while Windows joins macOS in the `platforms` workflow (D8, umbrella G2). The build PR #7 waits
   for it: the plan is appended to the P00 plan and built on #7 once this is approved.
 - Docs PR #8: the engineering directives in `CLAUDE.md`. Its checks run once P00 is merged.
-- P10 build PR #11: accept or reject decision record
-  `docs/decisions/0001-prose-editor.md`, which recommends CodeMirror 6 (42 of 54 against
-  ProseMirror/Tiptap 32). Before deciding: run the manual checklist in
-  `research/P10-prose-editor/README.md` (spelling marks, Swiss German dead keys, a Japanese IME,
-  Safari if a Mac is at hand), and review the five readings made at scoring time (rulings 29, 30,
-  32, 34, 36), each of which you can overrule. The comparison lists what each would move: applied
-  to both editors alike, none changes the leader; only a mixed standard flips it. `cargo xtask
-  gate` and `ac-trace` did not run because P00 is not merged (ruling 35).
+- P10 build PR #11: merging it accepts decision record `docs/decisions/0001-prose-editor.md`
+  (CodeMirror 6, 42 of 54 against ProseMirror/Tiptap 32). Jann ran the manual checklist on
+  2026-11-04 (all passed but Safari, which was not run) and is happy with CodeMirror 6. The five
+  readings made at scoring time (rulings 29, 30, 32, 34, 36) can still be overruled; applied to
+  both editors alike, none changes the leader. `cargo xtask gate` and `ac-trace` did not run
+  because P00 is not merged (ruling 35).
+- Comments on text sections (Jann, 2026-11-04: "an important feature") are not in the umbrella.
+  They need a CE in `docs/specs/00-umbrella.md` and a data-model decision on where comments live:
+  a sidecar file with offsets and a text quote, or markers inside the Markdown. The P10 probe in
+  `research/P10-prose-editor/app/src/probes/comments/` shows what each editor needs.
 
 ## Needs a private session (Confluence, Jira, plugin)
 
