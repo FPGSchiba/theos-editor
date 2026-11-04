@@ -38,6 +38,11 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
   not name `number: 1` and `floors: [1, 1]` as values to replace, and the sample id `f100-summit`
   implies lore. Manual checks before merging: open the vault in Obsidian 1.14 and see `git status`
   stay clean; make one record with *Insert template* and one with a VS Code snippet.
+- P00 revision 1 (spec PR from `spec/P00-gate-redesign`): the checks read code through the
+  compiler, cargo and real parsers (P00 spec §4.3, §5.10), and per-PR checks run on Linux only
+  while Windows joins macOS in the `platforms` workflow (D8, umbrella G2). The build PR #7 waits
+  for it: the plan is appended to the P00 plan and built on #7 once this is approved.
+- Docs PR #8: the engineering directives in `CLAUDE.md`. Its checks run once P00 is merged.
 
 ## Needs a private session (Confluence, Jira, plugin)
 

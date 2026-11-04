@@ -1,8 +1,22 @@
 # P00 · Foundation and gate — phase spec
 
-Status: waiting for Jann's approval (spec PR) · 31 Oct 2026
+Status: approved 31 Oct 2026 (#5) · revision 1 waiting for Jann's approval (spec PR) · 3 Nov 2026
 Phase: P00 · Repo: theos-editor · Depends on: – · Slice: S2
-Branches: `spec/P00-foundation-and-gate` (this spec), `phase/P00-foundation-and-gate` (build)
+Branches: `spec/P00-foundation-and-gate` (this spec), `spec/P00-gate-redesign` (revision 1),
+`phase/P00-foundation-and-gate` (build)
+
+**Revision 1 (3 Nov 2026).** The checks read code through the compiler, cargo and real parsers
+instead of hand-written scanners (§4.3, §5.10). The build PR (#7) had grown a hand-written Rust
+lexer in `lints`, and seven review rounds each found a new way past it. Per-PR checks now run on
+Linux only, and Windows joins macOS in a weekly and on-demand `platforms` workflow that also runs
+`lints` and `ac-trace` (D8; umbrella G2 changes with it). Revision 1 also takes in what the build
+PR settled on its way: the alias's own target directory (§5.1), the `settings` job's read scope
+(§5.6) and two approval steps (§5.7). The ACs are unchanged.
+
+**Revision 1a (4 Nov 2026).** The three clippy lints that guard the others stay at `deny`, not
+`forbid`: clap's derive allows the lint groups that contain them, and rustc refuses that once one
+of them is forbidden. `lints` rule 3 refuses any `allow` or `expect` of a guard lint instead
+(§5.2, §5.10). `unexpected_cfgs` stays `forbid`.
 Sources: `docs/specs/00-umbrella.md` (P00, G1–G18), `docs/gate.md`, `docs/architecture.md` §3,
 `CONTRIBUTING.md`, `docs/release.md`, `CLAUDE.md`.
 
@@ -17,8 +31,9 @@ rests on the rules in `CLAUDE.md`.
 
 After P00:
 
-- the workspace holds every crate of G4 (empty and documented), and it builds and tests on
-  Linux and Windows in CI, plus macOS weekly;
+- the workspace holds every crate of G4 (empty and documented), and it builds and tests in CI:
+  on Linux for every PR, and on Windows and macOS weekly, on demand and before every release
+  (G2, as changed by revision 1);
 - every check of `docs/gate.md` §1 except `ui` runs on every PR and is required on `main`;
 - `cargo xtask gate` gives the same verdicts on a developer machine (Windows or Linux) as CI;
 - the GitHub ruleset, repo settings and labels are kept as files in `gate/` and can be checked
@@ -51,8 +66,11 @@ After P00:
 - One implementation of every check, in Rust, tested offline, run in the same way by CI and by
   developers.
 - Findings that show up where people look: on the PR's diff lines and in the run summary.
-- A gate that has no quiet way around it: no check that can be skipped by editing an unprotected
-  file, and no required check that silently never reports.
+- A gate with no everyday way around it: switching a check off or hiding code from it takes an
+  edit to a protected file, or a construction that any diff shows plainly and the reviews catch
+  (D6). No required check silently never reports.
+- Gate code that is easy to maintain and extend (D4), built on what rustc, clippy, cargo and
+  maintained crates already know (D5).
 
 **Non-goals**
 
@@ -106,9 +124,10 @@ Claude's calls, and Jann can overturn any of them in this review.
 - Ruling: `cargo xtask github apply` changes live repo settings only after Jann says so —
   changing protection is security-sensitive (`CLAUDE.md`, "When to stop") — cost if wrong: one
   extra question per change.
-- Ruling: required check names are `clippy (linux)`, `clippy (windows)`, `test (linux)`,
-  `test (windows)`; every other check uses its name from `docs/gate.md` §1 — GitHub names matrix
-  jobs this way, and the name stays readable — cost if wrong: renaming means a ruleset update.
+- Ruling (revision 1): every required check uses its name from `docs/gate.md` §1 (`clippy`,
+  `test`, …), because per-PR checks run on Linux only; the jobs of the `platforms` workflow are
+  named `<check> (windows)` and `<check> (macos)` and are not required — the names stay readable
+  and equal the gate's — cost if wrong: renaming means a ruleset update.
 - Ruling: the coverage baseline of `main` is measured at the merge base in the same run and cached
   per commit and toolchain — the local and CI verdicts are then the same by construction, with no
   artifacts that expire — cost if wrong: slower coverage runs when the cache is cold.
@@ -174,11 +193,37 @@ Claude's calls, and Jann can overturn any of them in this review.
   §6 says nobody moves or deletes a tag, and CE-08.3 asks the settings to match §6, but blocking
   creation now would block the release pipeline, which uses the same account — cost if wrong: a
   tag created by hand before P05 goes unnoticed (it still cannot be moved or deleted).
-- Ruling: `macos.yml` also runs on a PR when the label `macos` is added — GitHub can dispatch a
-  workflow only once it is on the default branch, so without this the build PR could not show a
-  macOS run before Jann merges it, and later phases with OS-specific code (P09 process trees, P18
-  bundles) get macOS on demand — cost if wrong: one more label, and macOS minutes when it is
-  used.
+- Ruling (revision 1): the `platforms` workflow (formerly `macos.yml`) also runs on a PR when the
+  label `windows` or `macos` is added, each label for its own OS — GitHub can dispatch a workflow
+  only once it is on the default branch, so without this the build PR could not show those runs
+  before Jann merges it, and later phases with OS-specific code (P09 process trees, P18 bundles)
+  get them on demand — cost if wrong: two labels, and runner minutes when they are used.
+
+### 4.3 Decided with Jann (revision 1, 3 Nov 2026)
+
+- **D4 · Maintainability and extendability first.** Every check is built from small modules with
+  one job each, over shared inputs that are built in one place. A new rule is one new module and
+  one line that registers it, with its own tests.
+- **D5 · Use what exists.** A check takes its answers from rustc, clippy, cargo or a maintained
+  crate wherever one of them already knows the answer, confirmed by a probe on the pinned
+  toolchain (§5.10). Custom code is written only where nothing standard covers the question, and
+  then as a small rule over the shared inputs. No hand-written lexer or parser for Rust,
+  Markdown, XML or Conventional Commits.
+- **D6 · Code quality, not a fortress.** The gate reliably catches the everyday shortcuts that
+  erode code quality (silencing a lint, hiding code from coverage, skipping a test, an `unwrap`
+  outside tests) and never flags ordinary code. Deliberate, exotic constructions that any diff
+  shows are left to the phase reviews.
+- **D7 · Compiler first, small checks for the rest.** Chosen over reading everything with `syn`
+  (more custom code, blind to macro expansion and to which files are compiled) and over the
+  compiler alone (leaves `cfg(clippy)`, release-only code and library code under `tests/` open).
+  §5.10 describes it.
+- **D8 · Linux per PR; Windows and macOS like each other.** Per-PR checks run on Linux only.
+  Windows joins macOS in the `platforms` workflow: weekly, on demand, through the labels
+  `windows` and `macos` on a PR, and before every release. G2 changes to say so. Runner minutes
+  cost twice (Windows) and ten times (macOS) as much as Linux on a private repository. That
+  workflow runs `clippy`, `test`, `lints` and `ac-trace`, because the last two read what the
+  compiler builds for the machine they run on (§5.10). Windows stays the primary platform, and
+  every phase runs `cargo xtask gate` on Windows before it is claimed done (`CLAUDE.md`).
 
 ## 5. Design
 
@@ -188,7 +233,7 @@ Claude's calls, and Jann can overturn any of them in this review.
 Cargo.toml              workspace root (members crates/*, xtask; resolver 3)
 Cargo.lock              committed (G3)
 rust-toolchain.toml     pinned stable; components rustfmt, clippy, llvm-tools-preview
-.cargo/config.toml      [alias] xtask = "run --locked --package xtask --"
+.cargo/config.toml      [alias] xtask = "run --locked --package xtask --target-dir target/xtask-bin --"
 .gitattributes          * text=auto eol=lf  (LF on Windows checkouts too)
 clippy.toml             copy of gate/clippy.toml
 .config/nextest.toml    copy of gate/nextest.toml
@@ -214,6 +259,8 @@ gate/                   the gate's data (§5.2)
   protected path.
 - `.gitattributes` is needed so that rustfmt, the mirror comparisons and the fingerprint never see
   CRLF on Windows.
+- The alias builds xtask in its own target directory, so that `cargo xtask clippy` or `test` never
+  has to relink the `xtask.exe` that is running (Windows refuses that).
 
 ### 5.2 `gate/` — the gate's data
 
@@ -226,6 +273,7 @@ gate/                   the gate's data (§5.2)
 | `tools.toml` | Exact versions of cargo-nextest, cargo-deny and cargo-llvm-cov | setup action, `tools`, `gate` |
 | `protected-paths.toml` | `docs/gate.md` §5 as globs with exceptions, plus the `[workspace.lints]` table rule | `approval` |
 | `engine-crates.toml` | Engine sources and names (§5.4 `engine-free`) | `engine-free` |
+| `cfg-names.toml` | The cfg names that code may test (§5.10) | `lints` |
 | `ruleset-main.json` | The ruleset for the default branch, in the GitHub API format | `github` |
 | `ruleset-tags.json` | The ruleset for `refs/tags/v*` (no update, no deletion) | `github` |
 | `repo-settings.toml` | Merge settings and labels | `github` |
@@ -236,6 +284,7 @@ gate/                   the gate's data (§5.2)
 [rust]
 unsafe_code = "forbid"
 missing_docs = "deny"
+unexpected_cfgs = "forbid"
 rust_2018_idioms = { level = "warn", priority = -1 }
 
 [rustdoc]
@@ -254,9 +303,30 @@ print_stdout = "deny"
 print_stderr = "deny"
 allow_attributes = "deny"
 allow_attributes_without_reason = "deny"
+ignore_without_reason = "deny"
 exit = "deny"
 mem_forget = "deny"
 ```
+
+Four lints guard the others (revision 1):
+
+- `unexpected_cfgs` (rustc's check of cfg names) is `forbid`. It rejects every cfg name rustc and
+  cargo do not know, so a misspelt, invented or non-ASCII name cannot hide code from the checks,
+  and at `forbid` rustc refuses any `allow` or `expect` of it (E0453). A crate's build script can
+  declare more names; `gate/cfg-names.toml` (§5.10) still refuses them.
+- `allow_attributes` makes every outer `#[allow]` an error, `allow_attributes_without_reason`
+  every `allow` or `expect` without a reason, and `ignore_without_reason` every `#[ignore]`
+  without a reason. These three stay at `deny` (revision 1a): derives such as clap's write
+  `#[allow(clippy::pedantic, clippy::restriction)]` into the code they generate, and rustc
+  refuses any allow of a lint group that contains a forbidden lint, so `forbid` would reject
+  every crate that uses such a derive.
+- What `forbid` would add, `lints` does (§5.10, rule 3): it refuses every `allow` attribute in
+  our code, inner ones included (clippy flags outer attributes only), and every `allow` or
+  `expect` that names one of the four guard lints, so `#[expect(clippy::ignore_without_reason,
+  reason = "…")]` cannot switch one off either.
+
+The other denied lints can still be expected with a reason (`#[expect(clippy::unwrap_used,
+reason = "…")]`); the reason is for the reviews to judge.
 
 `gate/clippy.toml` turns on clippy's test exemptions for `unwrap_used`, `expect_used`, `panic`,
 `print_*` and `dbg_macro`, which is what "denied outside tests" in §2 means. A binary that prints
@@ -296,12 +366,12 @@ through `std::io::Write`.
 | `docs` | `cargo doc --workspace --no-deps --locked` with `RUSTDOCFLAGS=-D warnings` set on the child process. |
 | `deny` | `cargo deny --locked check` (licences, advisories, bans, sources) with `deny.toml`. Advisory ignores need a reason. |
 | `engine-free` | Fails when either level finds an engine crate. **Declared:** every dependency of every workspace member (normal, dev, build, target-specific, renamed) that is an engine crate must be optional, and enabled only by the feature `engine` (`dep:x`, `x`, `x/…`, `x?/…`), and `default` must not reach `engine`. **Resolved:** `cargo metadata --locked` with default features contains no engine crate. An engine crate is a package from a source matching `gate/engine-crates.toml` (the theos-engine repo, case-insensitive), a path package outside the workspace root, or a package named in the list that is not a workspace member. |
-| `coverage` | Measures `cargo llvm-cov nextest --workspace --locked` per crate (lines in `crates/<name>/src/**` and `xtask/src/**`; `tests/` and fixtures excluded). Fails when a crate is below the floor of its class, when a workspace member has no class, or when a crate present on the baseline drops by more than the allowed amount. The baseline is the merge base with `main`, measured in a temporary worktree and cached by commit, toolchain and llvm-cov version (`target/xtask/coverage/` locally, `actions/cache` in CI). A crate with no instrumented lines passes and is reported as such. |
-| `lints` | `[workspace.lints]` equals `gate/lints.toml` (compared as parsed TOML). Every crate has `lints.workspace = true`. Root `clippy.toml` and `.config/nextest.toml` equal their `gate/` copies. No `clippy.toml`, `.clippy.toml`, `rustfmt.toml`, `.rustfmt.toml` or `.cargo/` exists anywhere else. Scanning every `.rs` file outside `**/tests/fixtures/**` and `target/`: no `allow(` in any attribute (`#[allow]`, `#![allow]`, inside `cfg_attr`); every `expect(` attribute has `reason = "…"`; every `#[ignore]` has a reason (`#[ignore = "…"]`). |
-| `ac-trace` | Reads the ACs from `docs/specs/00-umbrella.md`: ids matching `CE-\d{2}[A-Z]?\.\d+` in list items under each `### PNN ·` heading. Finds tags: a `// AC: <id>[, <id>]*` comment followed only by attributes or doc comments up to a test (`#[test]`, `#[<path>::test]`, `#[rstest]`, `#[test_case(…)]`) in Rust, or a `test(` or `it(` call (also `.each`, indented inside `describe` blocks) in TypeScript, which covers Vitest and Playwright. Scans every tracked `.rs` and `.ts` file, `research/**` included, except `**/tests/fixtures/**`, `target/` and `node_modules/`. Phases whose repo in umbrella §3 is tower-of-theos (P01, P08) demand nothing here; their tests live there. **Fails** when: an AC of the branch's phase has no counting test; a tag names an id not in the umbrella; a comment starting with `// AC` is malformed or not directly above a test. A test does not count when it is `#[ignore]`d, `.skip`ped or `.fixme`d, or carries a `#[cfg(…)]` that names anything besides the target OS. Without a phase branch (`main`, `spec/`, `gate/`, `docs/`, `fix/`), only the id and placement rules apply. It prints AC → tests, and adds a pass/fail column when nextest JUnit output exists. |
-| `commit-msg` | Commits `base..head` (CI: from the event; locally: merge base with `origin/main` .. `HEAD`), skipping commits with two or more parents. Each message must have: a header `type(scope)!: summary` with a type and scope from `CONTRIBUTING.md` §2 (scope optional); a summary of at most 72 characters that does not start with an upper-case letter and does not end with `.`; a blank line before the body; body lines of at most 100 characters (a line with no spaces, such as a URL, is exempt); `!` if and only if there is a `BREAKING CHANGE:` (or `BREAKING-CHANGE:`) footer; `Phase: PNN` equal to the branch's phase on `phase/` branches; `Refs:` naming only ACs of the umbrella. CRLF in messages is read as LF. |
+| `coverage` | Measures `cargo llvm-cov nextest --workspace --locked` per crate (lines in `crates/<name>/src/**` and `xtask/src/**`; `tests/` and fixtures excluded). Paths are normalised before they are mapped, so `src/../x.rs` is not under `src/`. The path mapping is complete because `lints` keeps the code of every library and binary inside its crate's `src/` (§5.10): llvm-cov leaves out files under `tests/` even when a library compiles them. Fails when a crate is below the floor of its class, when a workspace member has no class, or when a crate present on the baseline drops by more than the allowed amount. The baseline is the merge base with `main`, measured in a temporary worktree and cached by commit, toolchain and llvm-cov version (`target/xtask/coverage/` locally, `actions/cache` in CI). A crate with no instrumented lines passes and is reported as such. |
+| `lints` | **Files:** `[workspace.lints]` equals `gate/lints.toml` (compared as parsed TOML). Every crate has `lints.workspace = true`. Root `clippy.toml` and `.config/nextest.toml` equal their `gate/` copies. No `clippy.toml`, `.clippy.toml`, `rustfmt.toml`, `.rustfmt.toml`, `rust-toolchain` (without extension) or `.cargo/` exists anywhere else outside `**/tests/fixtures/**`. **Compiled code** (§5.10): library, binary and build-script targets compile Rust only from their crate's `src/` (a build script also from its `build.rs`) and use no `include!`; every `cfg` and `cfg_attr` predicate names only what `gate/cfg-names.toml` allows; no `allow` attribute anywhere, outer or inner, alone or inside `cfg_attr`, in the syntax tree or in macro input; no `#[expect]` or `#[ignore]` without a reason in macro input (clippy checks those everywhere else, §5.2); no `allow` or `expect` that names a guard lint (§5.2). |
+| `ac-trace` | Reads the ACs from `docs/specs/00-umbrella.md` with `pulldown-cmark`: ids matching `CE-\d{2}[A-Z]?\.\d+` in list items under each `### PNN ·` heading, and each phase's repo from the §3 table. Finds tags: in Rust, a `// AC: <id>[, <id>]*` comment directly above a test, that is above its first attribute or doc comment; a test is a function with a test attribute (`#[test]`, `#[<path>::test]`, `#[rstest]`, `#[test_case(…)]`) in a file that a test target compiles, read with `syn` (§5.10), so a tag in a file that nothing compiles does not count. In TypeScript, a `test(` or `it(` call (also `.each`, indented inside `describe` blocks), which covers Vitest and Playwright, in every tracked `.ts` file, `research/**` included, except `node_modules/` (P11 decides how TypeScript is read, §7). Phases whose repo in umbrella §3 is tower-of-theos (P01, P08) demand nothing here; their tests live there. **Fails** when: an AC of the branch's phase has no counting test; a tag names an id not in the umbrella; a comment starting with `// AC` is malformed or not directly above a test. A test does not count when it is `#[ignore]`d, `.skip`ped or `.fixme`d, or carries a `#[cfg(…)]` that names anything besides the target OS. Without a phase branch (`main`, `spec/`, `gate/`, `docs/`, `fix/`), only the id and placement rules apply. It prints AC → tests, and adds a pass/fail column when nextest JUnit output exists (read with `quick-xml`). |
+| `commit-msg` | Commits `base..head` (CI: from the event; locally: merge base with `origin/main` .. `HEAD`), skipping commits with two or more parents. Each message is parsed with `git-conventional` (type, scope, `!`, summary, body, footers); the rules on top are ours. Each message must have: a header `type(scope)!: summary` with a type and scope from `CONTRIBUTING.md` §2 (scope optional); a summary of at most 72 characters that does not start with an upper-case letter and does not end with `.`; a blank line before the body; body lines of at most 100 characters (a line with no spaces, such as a URL, is exempt); `!` if and only if there is a `BREAKING CHANGE:` (or `BREAKING-CHANGE:`) footer; `Phase: PNN` equal to the branch's phase on `phase/` branches; `Refs:` naming only ACs of the umbrella. CRLF in messages is read as LF. |
 | `pr-title` | A Conventional Commit header (same parser) whose summary ends with ` (PNN)`, ` (gate)` or ` (docs)`, or a release title `chore(release): vX.Y.Z` / `vX.Y.Z-rc.N`. It must match the branch: `phase/PNN-…` → `(PNN)`; `spec/PNN-…` → `docs(spec): … (PNN)`; `gate/…` → `(gate)`; `docs/…` → `(docs)`; `fix/…` → `(PNN)`, `(gate)` or `(docs)`; `release-plz-…` → release title. Any other branch name fails, naming `CONTRIBUTING.md` §1. |
-| `pr-body` | The sections are the `## ` headings of `.github/pull_request_template.md` at the checked-out commit. Each must appear in the body, in any order, with content once HTML comments and whitespace are removed. A missing body counts as empty. CRLF is read as LF. |
+| `pr-body` | Template and body are read with `pulldown-cmark` (CommonMark), so a heading inside a code block or an HTML comment is not a heading. The sections are the level-two headings of `.github/pull_request_template.md` at the checked-out commit. Each must appear in the body, in any order, with content: text other than HTML comments and whitespace. A missing body counts as empty. CRLF is read as LF. |
 | `approval` | §5.7. |
 
 ### 5.5 `cargo xtask gate`
@@ -317,10 +387,10 @@ where the inputs come from (git instead of the event payload). It leaves out `pr
 
 | File | Triggers | Jobs (= check names) |
 |---|---|---|
-| `ci.yml` | `pull_request` (opened, synchronize, reopened), `push` to `main`, `workflow_dispatch` | `fmt`, `clippy (linux)`, `clippy (windows)`, `test (linux)`, `test (windows)`, `docs`, `deny`, `engine-free`, `coverage`, `lints`, `ac-trace`, `commit-msg` |
+| `ci.yml` | `pull_request` (opened, synchronize, reopened), `push` to `main`, `workflow_dispatch` | `fmt`, `clippy`, `test`, `docs`, `deny`, `engine-free`, `coverage`, `lints`, `ac-trace`, `commit-msg` (all on Linux) |
 | `pr.yml` | `pull_request` (opened, edited, synchronize, reopened) | `pr-title`, `pr-body` |
 | `approval.yml` | `pull_request` (opened, edited, synchronize, reopened, labeled, unlabeled) | `approval` |
-| `macos.yml` | `schedule` (weekly, Monday 04:00 UTC), `workflow_dispatch`, `pull_request` (labeled, only for the label `macos`) | `clippy (macos)`, `test (macos)` (not required) |
+| `platforms.yml` | `schedule` (weekly, Monday 04:00 UTC), `workflow_dispatch`, `pull_request` (labeled, only for the labels `windows` and `macos`) | `clippy`, `test`, `lints` and `ac-trace`, each as `(windows)` and `(macos)` (not required); a labelled PR runs only the label's OS |
 | `settings.yml` | `schedule` (weekly), `workflow_dispatch` | `settings` (`cargo xtask github check`) |
 
 Every job is the same three steps: `actions/checkout` (full history where commits or the merge
@@ -342,7 +412,8 @@ Rules for every workflow, checked by a test:
   required jobs, so every required check reports on every PR;
 - no `pull_request_target`;
 - the top-level `permissions: contents: read`; only `approval` adds `pull-requests: write` and
-  `issues: write`;
+  `issues: write`, and `settings` adds `issues: read` (in a private repository the workflow token
+  needs it to list labels);
 - actions are pinned by full SHA with the version as a comment;
 - `concurrency` cancels outdated runs for `ci.yml` and `pr.yml`; `approval.yml` queues and never
   cancels, so label changes are never cut off halfway.
@@ -363,28 +434,33 @@ runs or reads configuration from the PR's working tree.
    protected too (on Windows it is the same folder).
 2. **Lints table:** the PR is also protected when the parsed `[workspace.lints]` of the root
    `Cargo.toml` differs between the merge base and head.
-3. **Not protected** → pass.
-4. **Protected** → ensure the label `needs-jann` exists and is on the PR (create the label if it
+3. **Not protected** → pass, without reading GitHub.
+4. **Earlier commit:** read the PR's current head from the API. When it differs from the event's
+   head (a re-run of an old run), fail with "this run is for an earlier commit" and do nothing
+   else: no label, no comment, no recorded fingerprint. The run for the current head decides.
+5. **Protected** → ensure the label `needs-jann` exists and is on the PR (create the label if it
    is missing). Read the PR's current labels from the API (not from the event, which may be
    stale on re-runs).
-5. **Fingerprint:** compute it (§4.2). When the event is `labeled` with `approved`, record it as
+6. **Fingerprint:** compute it (§4.2). When the event is `labeled` with `approved`, record it as
    a new comment by the workflow: a marker line `<!-- theos-gate:approval fingerprint=<hex>
    head=<sha> -->` plus one human sentence.
-6. **Recorded fingerprint:** the newest comment with the marker that was written by
+7. **Recorded fingerprint:** the newest comment with the marker that was written by
    `github-actions[bot]` and never edited (`created_at == updated_at`). Comments by anyone else
    are ignored, because they could be written by the shared account.
-7. **Verdict:**
+8. **Verdict:**
    - without `approved`: fail with "waits for Jann: add the label `approved` after review";
    - with `approved` and a recorded fingerprint equal to the current one: pass;
-   - with `approved` but a different fingerprint, or none recorded: remove `approved`, keep
-     `needs-jann`, comment "approval removed: the PR changed after approval (old → new)", and
-     fail.
+   - with `approved` but a different fingerprint: remove `approved`, keep `needs-jann`, comment
+     "approval removed: the PR changed after approval (old → new)", and fail;
+   - with `approved` but none recorded (the `labeled` run was dropped or ran while another run
+     was in flight): the same actions, but the comment says that no approval was recorded and
+     asks Jann to add the label again once the run has finished.
 
 Label and comment changes made with the workflow token start no new workflow runs, so there is no
 loop. `needs-jann` is never removed by CI either: it marks the PR as Jann's for good. The decision
-logic (steps 3–7) is a pure function over (protected?, event, labels, recorded and current
-fingerprint) returning a verdict and a list of actions. The tests drive it through the fake
-GitHub.
+logic (steps 3 and 5–8) is a pure function over (protected?, event, labels, recorded and current
+fingerprint) returning a verdict and a list of actions; the earlier-commit check of step 4 runs
+before it, for protected PRs only. The tests drive it through the fake GitHub.
 
 ### 5.8 GitHub settings as code (CE-08.3)
 
@@ -401,7 +477,7 @@ GitHub.
     PR_TITLE`, `squash_merge_commit_message = COMMIT_MESSAGES` (so `Refs:`, `Phase:` and Claude
     trailers reach `main`), `allow_auto_merge = true`, `delete_branch_on_merge = true`,
     `allow_update_branch = true`;
-  - labels `needs-jann`, `approved` and `macos` with colours and descriptions.
+  - labels `needs-jann`, `approved`, `windows` and `macos` with colours and descriptions.
 - **`gate/ruleset-tags.json`:** target `refs/tags/v*`, enforcement `active`, `bypass_actors: []`,
   rules `update` and `deletion`.
 - **`cargo xtask github check`** compares the live rulesets (by name), the repo settings and the
@@ -418,6 +494,105 @@ time). `cargo xtask tools` checks the installed versions; `--install` runs `carg
 --locked <tool> --version <v>` for each mismatch. CI installs the same versions as prebuilt
 binaries. `cargo xtask gate` fails early, with the install command, when a version differs.
 
+### 5.10 How the checks read code (revision 1)
+
+Before a check reads anything itself, it asks the tool that already knows (D5):
+
+| Question | Answered by |
+|---|---|
+| Is there an `#[allow]`, an `#[expect]` without a reason, an `#[ignore]` without a reason? | clippy at `deny` (§5.2), over the expanded code, for outer `#[allow]` and for every `expect` and `ignore`. Inner `#![allow]`, macro input, and any `allow` or `expect` of a guard lint: `lints` (rule 3 below). |
+| Does code test a cfg name that does not exist? | rustc's `unexpected_cfgs` at `forbid` |
+| Which files does each target compile? | cargo: the dep-info of every artifact of `cargo check --workspace --all-targets --locked` |
+| What does a Rust file contain: items, attributes, tests, macro calls? | `syn` (full syntax tree; positions through `proc-macro2` span locations). Inside macro calls and `macro_rules!` bodies: the `proc-macro2` tokens. |
+| Where are the comments of a Rust file? | the text between `proc-macro2` tokens, so a string is never read as a comment |
+| What does a Markdown file contain: headings, list items, tables, HTML comments? | `pulldown-cmark` with tables |
+| What does a JUnit report say? | `quick-xml` |
+| What is the structure of a commit message? | `git-conventional` |
+| Which packages, targets and dependencies exist? | `cargo metadata` through `cargo_metadata` (unchanged) |
+| Which lines are covered? | the JSON export of `cargo llvm-cov` (unchanged) |
+
+**The workspace view.** One module builds it. Every check that needs compiled code reads the view
+and never opens Rust files by itself.
+
+- It runs `cargo check --workspace --all-targets --locked --message-format=json`. For every
+  artifact of a workspace member it keeps the package, the target's kind and name, and the files
+  in its dep-info, normalised and relative to the repo root.
+- It parses each Rust file among them once with `syn`. A file that does not parse is a finding;
+  rustc would not compile it either.
+- It is built at most once per xtask run, so `cargo xtask gate` shares it between `lints` and
+  `ac-trace`. In CI those two jobs therefore check-build the workspace first.
+- It is the view of the machine it runs on: cargo builds for the host, so a file behind
+  `#[cfg(windows)]` or `#[cfg(target_os = "macos")]` is in the Windows or macOS view only. The
+  per-PR run reads the Linux view; the `platforms` runs and a local `cargo xtask gate` on Windows
+  read theirs (D8).
+
+**Rules over the view.** Each rule is a module with its own tests, and one list registers them.
+
+1. **Sources.** In library, binary and build-script targets, every Rust file in the dep-info lies
+   under the crate's `src/` (for a build script, also its own `build.rs`), and those files use no
+   `include!`. Every other file in their dep-info is then data (`include_str!`,
+   `include_bytes!`), which may live anywhere. Test, bench and example targets are not limited:
+   fixture code they compile is linted by clippy like any other code. This rule replaces the
+   path and fixture rules of the build PR, and it is what keeps library code out of the `tests/`
+   folders that llvm-cov leaves out.
+2. **Cfg names.** Every `cfg` and `cfg_attr` predicate in the syntax tree, and every `#[cfg(…)]`
+   and `#[cfg_attr(…)]` in macro tokens, names only entries of `gate/cfg-names.toml`: `test`,
+   `doc`, `unix`, `windows`, `feature = "…"`, and the target keys that the pinned rustc sets
+   itself on stable for the targets of G2 (taken from `rustc --print cfg`). `unexpected_cfgs`
+   already refuses every name rustc does not know, so this rule decides only among rustc's own
+   names, and it refuses the ones that differ between the builds the checks make: `clippy` (set
+   only in the clippy build), `debug_assertions`, `overflow_checks`, `ub_checks` and `panic` (the
+   release build differs from every checked build), `miri`, `doctest`, and any name a build
+   script declares.
+3. **Attributes.** In the syntax tree and in the tokens of macro calls and `macro_rules!` bodies,
+   every `allow` attribute is a finding: outer or inner, alone or inside `cfg_attr`, with or
+   without a reason. In macro tokens, an `#[expect(…)]` without `reason` or an `#[ignore]`
+   without a reason is a finding too. Anywhere, an `allow` or `expect` that names
+   `unexpected_cfgs`, `clippy::allow_attributes`, `clippy::allow_attributes_without_reason` or
+   `clippy::ignore_without_reason` is a finding, so the lints that guard the others cannot be
+   switched off (§5.2). clippy flags only outer `#[allow]`, and it does not see an attribute that
+   a macro passes through unchanged (`$(#[$m:meta])*`); every other `expect` and `ignore` the
+   compiler sees is clippy's.
+4. **Lint table and config files.** As in §5.4, over TOML and file names only.
+
+Removed with revision 1: the build PR's Rust tokenizer and attribute reader, its attribute,
+fixture-route, src-bounds and cfg-name rules, and its hand-written readers for Markdown
+(`umbrella.rs`, `pr_body.rs`, the `docs/gate.md` tables), JUnit XML and the structure of commit
+messages. Their rules stay, over the parsed values.
+
+**ac-trace over the view.** The Rust tests are the functions with a test attribute in the syntax
+trees of the files that test targets compile. A tag is a `// AC:` comment among the comments
+directly above a test's first attribute or doc comment. A comment starting with `// AC` anywhere
+else in a compiled file is a dangling tag. `#[ignore]` and `#[cfg(…)]` are read from the parsed
+attributes. TypeScript stays as it is until P11 (§7).
+
+**Probe evidence** (pinned 1.99.1, 3 Nov 2026):
+
+- **`forbid` on `allow_attributes`:** rustc refuses (E0453) an inner
+  `#![allow(clippy::allow_attributes)]` in a one-line module, a crate-level one through
+  `cfg_attr`, and `#[expect(clippy::allow_attributes, …)]`. An `#[allow]` in a `macro_rules!`
+  body or in `cfg_attr` is found, and one with a reason still fails. serde's derive passes. An
+  attribute forwarded through `$(#[$m:meta])*` passes, and so does an inner
+  `#![allow(…, reason = "…")]`, alone or inside `#![cfg_attr(…)]` (clippy flags outer
+  attributes only), hence rule 3. The build then found (4 Nov 2026) that clap's derive writes
+  `#[allow(clippy::pedantic, clippy::restriction)]`, which rustc refuses (E0453) once a lint of
+  those groups is `forbid`; hence `deny` for the three clippy guard lints, and rule 3 refusing
+  any `allow` or `expect` of them.
+- **`unexpected_cfgs`:** it refuses `coverage`, `testé`, `target_has_atomic_equal_alignment` and
+  an unknown feature value, and accepts `clippy`, `debug_assertions` and `miri`, hence rule 2.
+- **dep-info of `cargo check`:** it lists `#[path]` and `include!` files, `include_str!` data,
+  and library code under `tests/`. A leading byte-order mark changes nothing.
+- **`clippy::ignore_without_reason`:** it refuses `#[ignore]` and accepts `#[ignore = "…"]`.
+- **llvm-cov:** it measures `#[path]` and `include!` code outside `src/` and never data, and it
+  leaves out library code under `tests/`, hence rule 1.
+
+**Left to the reviews (D6).**
+
+- An `allow(…)` passed to a macro without `#[` that the macro turns into an attribute.
+- What a build script does besides declaring cfg names: build scripts are rare, and every diff
+  shows them.
+- TypeScript tests until P11.
+
 ## 6. How each AC is proven
 
 Every test below carries `// AC: <id>`. The evidence column lists what the build PR shows in
@@ -425,18 +600,18 @@ addition.
 
 | AC | Tagged tests | Evidence in the build PR |
 |---|---|---|
-| CE-08.1 | The workspace members equal the G4 set at `crates/<name>` and `xtask/`, each with a README and crate docs. Smoke tests run `theos`, `theos-mcp` and `theos-editor` and expect exit 0. | `clippy` and `test` green on Linux and Windows |
+| CE-08.1 | The workspace members equal the G4 set at `crates/<name>` and `xtask/`, each with a README and crate docs. Smoke tests run `theos`, `theos-mcp` and `theos-editor` and expect exit 0. | `clippy` and `test` green on Linux per PR, and on Windows and macOS in the `platforms` runs started on the build PR with the labels `windows` and `macos` |
 | CE-08.2 | `engine-free` on fixture workspaces: a non-optional engine dependency, one behind another feature, one reached from `default`, a renamed one, and a dev/build one all fail; a dependency behind `engine` only passes. The `ci.yml` job exists. | — |
 | CE-08.3 | The contexts derived from `docs/gate.md` §1 (minus `ui`, expanded by OS) equal the ruleset's required contexts and the job names of the PR workflows. The rulesets and repo-settings files encode §6 (squash only, linear, strict, no force push or deletion, no bypass, branch deletion, auto-merge, `v*` tags neither moved nor deleted). | `cargo xtask github check` output after `apply` |
 | CE-08.4 | The check list of `gate` equals the CI jobs minus `pr-title`, `pr-body` and `approval`. Every CI job runs `cargo xtask <its name>`. Runs in both test legs (Linux and Windows). | `cargo xtask gate` output on Windows, and CI on Linux, for the same commit |
 | CE-08.5 | Approval decisions through the fake GitHub: protected without the label fails and adds `needs-jann`; with the label and a matching fingerprint passes; a changed fingerprint removes `approved` and fails; not protected passes; a change to the lints table only is protected; a rename out of `docs/` is protected; a comment not by the bot or edited is ignored. The protected-path list and the lints table are read from the base commit and from git objects, so a PR that edits `gate/protected-paths.toml` is still judged by the base's list. `approval.yml` checks out the base commit (D3). | The build PR itself: `approval` red with `needs-jann` until Jann adds `approved` |
-| CE-08.6 | `ac-trace` fixtures: a phase AC without a tag fails; an unknown id fails; an ignored test does not count; a dangling tag fails; a passing set passes; Playwright-style TypeScript tags count, `test.skip` does not; a tower-of-theos phase demands nothing. | `cargo xtask ac-trace --phase P00` lists CE-08.1–CE-08.12 |
-| CE-08.7 | `pr-body`: a missing section fails, a placeholder-only section fails, a full body passes, a CRLF body passes. | — |
+| CE-08.6 | `ac-trace` fixtures: a phase AC without a tag fails; an unknown id fails; an ignored test does not count; a dangling tag fails; a tag in a file that no target compiles does not count; a passing set passes; Playwright-style TypeScript tags count, `test.skip` does not; a tower-of-theos phase demands nothing. | `cargo xtask ac-trace --phase P00` lists CE-08.1–CE-08.12 |
+| CE-08.7 | `pr-body`: a missing section fails, a placeholder-only section fails, a heading inside a code block is no section, a full body passes, a CRLF body passes. | — |
 | CE-08.8 | Coverage verdicts over per-crate numbers: below floor fails; a drop over 1.0 point fails; within passes; an unlisted crate fails; an empty crate passes. Parsing of a llvm-cov JSON fixture. | — |
 | CE-08.9 | `pr-title`: non-conventional, a missing suffix, a suffix not matching the branch, and an unknown branch fail; phase, spec, gate, docs and release titles pass. | — |
 | CE-08.10 | `commit-msg` over temporary git repos made in the test: a bad header, an unknown type or scope, an over-long summary, `!` without a footer, and a missing `Phase:` on a phase branch fail; a merge commit is skipped; a good range passes. | — |
 | CE-08.11 | `cargo metadata`: every member's version equals `[workspace.package]`, and every manifest uses `version.workspace = true`. | — |
-| CE-08.12 | `macos.yml` has a weekly `schedule` and `workflow_dispatch` and runs `cargo xtask clippy` and `cargo xtask test` on `macos-latest`. | A run on the build PR started with the label `macos`, linked in the PR; the first `workflow_dispatch` run after merge, linked in `docs/status.md` |
+| CE-08.12 | `platforms.yml` has a weekly `schedule` and `workflow_dispatch` and runs `cargo xtask clippy` and `cargo xtask test` (and `lints`, `ac-trace`) on `macos-latest` and `windows-latest`. | A run on the build PR started with the label `macos`, linked in the PR; the first `workflow_dispatch` run after merge, linked in `docs/status.md` |
 
 The tests need no network. Tests that make git repos call the `git` command line in a temporary
 directory.
@@ -444,8 +619,10 @@ directory.
 ## 7. Interfaces other phases use
 
 - **Every phase:** branch names decide the phase for `ac-trace` and `pr-title`. Tests carry
-  `// AC: <id>`. `cargo xtask gate` before claiming done; `cargo xtask ac-trace --phase PNN`
-  for the AC table.
+  `// AC: <id>`. `cargo xtask gate` on Windows before claiming done; `cargo xtask ac-trace
+  --phase PNN` for the AC table. A PR with OS-specific code gets the labels `windows` and
+  `macos`, and its description links their runs. OS-specific tests put the `cfg` on the test
+  function where they can, so that every OS's view sees their tags.
 - **New crates (G4 is fixed, but any later crate):** `version.workspace = true`,
   `lints.workspace = true`, dependencies from `[workspace.dependencies]`, and an entry in
   `gate/thresholds.toml`. That entry is a protected change, so a new crate needs Jann.
@@ -464,8 +641,10 @@ directory.
 - **P10:** `ac-trace --phase P10` finds the `// AC:` tags of the Playwright tests and document
   checks in `research/P10-prose-editor/app/tests/`, as the P10 spec (§4.11, §5) needs. No CI job
   runs those tests (P10 spec §4.11), so P10's own verification runs are their evidence.
-- **P11:** adds the `ui` check as jobs `ui (linux)` and `ui (windows)` calling `cargo xtask ui`,
-  in a gate PR that also updates the ruleset. `ac-trace` already reads TypeScript tests. Linux CI
+- **P11:** adds the `ui` check as the job `ui` calling `cargo xtask ui`, and `ui` to the
+  `platforms` runs, in a gate PR that also updates the ruleset. `ac-trace` already reads
+  TypeScript tests, line by line; following D5, P11 decides whether the test runner's own report
+  or a real TypeScript parser replaces that reader. Linux CI
   then needs the WebKitGTK packages for Tauri in the setup action. MPL-2.0 is already allowed.
 - **Engine part (later):** engine crates come in as optional dependencies behind `engine` only.
   The engine has its own crate named `theos-editor`; two packages with that name in one tree work
@@ -496,8 +675,20 @@ directory.
   behaviour on itself. Its tests prove it, and the next PR uses it.
 - **First gated PR.** The build PR is the first to run the workflows. If a required context name
   is wrong, the PR cannot merge until it is fixed. Hence the rollout order in §10.
-- **Runner minutes.** Windows jobs cost double and macOS ten times on a private repo; caching
-  and the weekly macOS schedule keep this bounded.
+- **Runner minutes.** Windows jobs cost double and macOS ten times on a private repo. Since
+  revision 1 only Linux runs per PR, and Windows and macOS run weekly or on demand (D8).
+  `lints` and `ac-trace` also check-build the workspace (§5.10), which the build cache keeps
+  short.
+- **Windows breaks between runs.** With D8, a change that breaks only Windows can reach `main`
+  and show up in the next weekly run. Against that: `cargo xtask gate` runs on Windows before
+  every phase is claimed done, PRs with OS-specific code carry the `windows` label, and
+  `release.yml` tests on Windows before anything ships. A red run goes to "Needs Jann" in
+  `docs/status.md`.
+- **Toolchain bumps.** A new pin can add lints, cfg names or target keys. The lint list and
+  `gate/cfg-names.toml` are reviewed with every pin change, which is a protected change anyway.
+- **Crates of the gate.** `syn`, `proc-macro2`, `pulldown-cmark`, `quick-xml` and
+  `git-conventional` are maintained, MIT or Apache-2.0 licensed and widely used. A breaking
+  release of one of them is an ordinary dependency update in a gate PR.
 
 ## 9. Review Focus — inputs most likely to break it
 
@@ -556,15 +747,24 @@ directory.
   - target-specific, dev and build dependencies;
   - `default` enabling `engine` through another feature;
   - the engine's `theos-editor` vs ours.
-- **lints:**
-  - `#![allow]`;
-  - `cfg_attr(…, allow(…))`;
-  - `allow` inside `macro_rules!`;
-  - `#[expect]` without a reason;
-  - `#[ignore]` without a reason;
-  - a crate-level `clippy.toml`;
-  - `.cargo/config.toml` in a crate folder;
-  - fixture files with deliberate violations being compiled through `#[path]` or `include!`.
+- **lints** (revision 1):
+  - ordinary code that must pass: `#[cfg(test)]`, `#[cfg(not(test))]`, `#[cfg(windows)]`,
+    `#[cfg(target_os = "…")]`, `cfg_attr(test, derive(…))`, `#[expect(…, reason = "…")]`,
+    `#[ignore = "…"]`, serde derives, and the `$(#[$m:meta])*` macro idiom with ordinary
+    attributes;
+  - library code taken from `tests/` or from outside `src/` through `#[path]` or `include!`;
+  - `#[cfg(not(clippy))]`, `#[cfg(debug_assertions)]`, `#[cfg(miri)]`, and a cfg name that a
+    build script declares;
+  - an `#[allow]` forwarded through a macro;
+  - an `allow` or `expect` naming a guard lint, such as
+    `#[expect(clippy::ignore_without_reason, reason = "…")]`, and a clap derive (must pass);
+  - an inner `#![allow(…, reason = "…")]` in a module or at crate level, and
+    `#![cfg_attr(…, allow(…))]`;
+  - a crate-level `clippy.toml`, a `rust-toolchain` file, and `.cargo/config.toml` in a crate
+    folder;
+  - a file that `syn` cannot parse, and the error the view gives when `cargo check` fails.
+- **ac-trace** (revision 1): a tag in a file that no target compiles; a `// AC:` line inside a
+  string; a tag above a test inside an inline module.
 - **Workflows:**
   - a required job that does not run on some event;
   - matrix names that don't match the ruleset contexts;
@@ -583,17 +783,24 @@ directory.
    `gate/**`, `xtask/**`, `.cargo/**`, `deny.toml`, `rust-toolchain.toml` and the lints table.
    Under the umbrella's P00 entry, this is the one implementation PR that changes protected
    paths. It changes no protected document (`docs/**`, `CLAUDE.md`, `CONTRIBUTING.md`,
-   `.claude/**`, `design/**`); a doc change found necessary goes in its own docs PR.
-2. When every other check is green, Claude adds the label `macos` to run the macOS jobs once, and
-   asks Jann for the go-ahead to run `cargo xtask github apply`. It then puts the
-   `cargo xtask github check` output and the macOS run into the PR.
+   `.claude/**`, `design/**`); a doc change found necessary goes in its own docs PR. Revision 1
+   (§5.10) is built on the same build PR, before Jann approves it.
+2. When every other check is green, Claude adds the labels `windows` and `macos` to run the
+   `platforms` jobs once, and asks Jann for the go-ahead to run `cargo xtask github apply`. It
+   then puts the `cargo xtask github check` output and both runs into the PR.
 3. Jann reviews and adds `approved`. `approval` turns green, and Jann merges.
 4. PRs opened before the merge (P10, docs) must rebase onto the new `main` to get their checks.
 
 ## 11. Left to the builder
 
-- Exact crate choices for xtask: argument parsing, TOML, JSON, a maintained YAML parser for the
-  workflow tests (one that passes `deny`), and globbing.
+- The readers named in §5.10 (`syn`, `proc-macro2`, `pulldown-cmark`, `quick-xml`,
+  `git-conventional`, `cargo_metadata`) are decided. Still the builder's: their versions and
+  features (each must pass `deny`), argument parsing, TOML, JSON, the YAML parser for the
+  workflow tests, and globbing.
+- How the workspace view matches cargo's artifact messages to their dep-info files, and how it
+  is kept for the length of one xtask run.
+- The exact target keys in `gate/cfg-names.toml`, taken from `rustc --print cfg` of the pinned
+  toolchain.
 - Exact keys of `deny.toml`, `gate/nextest.toml` and the clippy test-exemption options for the
   pinned versions.
 - Lint names that the pinned toolchain renamed (keep the intent of §5.2).
