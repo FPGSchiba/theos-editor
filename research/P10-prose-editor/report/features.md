@@ -1,10 +1,10 @@
 # features report
 
-- commit: `7e0d7281b5f036b71e72895b6b6d8bbd6a1d2e2e`
+- commit: `0f70ac5adb7e54da59846352592bb4c6a451502e`
 - os: Windows_NT 10.0.26300 x64
 - chromium: 156.0.8078.4
 - webkit: 27.2
-- date: 2026-11-04T12:13:53.671Z
+- date: 2026-11-04T12:26:24.274Z
 
 Checks of a rendered feature of the editor. A check is `ok` or `FAIL`; `error` means it could not run (the error is listed),
 and `gap` is a gap of the tooling that no variant can close. A failed check is a result, not a test failure.
