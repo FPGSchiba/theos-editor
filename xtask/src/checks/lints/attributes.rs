@@ -148,11 +148,7 @@ fn cfg_attr_problems(tokens: &TokenStream) -> Vec<String> {
         tokens.clone(),
     );
     match parsed {
-        Ok(args) => args
-            .iter()
-            .skip(1)
-            .flat_map(|meta| problems(meta))
-            .collect(),
+        Ok(args) => args.iter().skip(1).flat_map(problems).collect(),
         Err(_) => unparsed_problems(tokens),
     }
 }
