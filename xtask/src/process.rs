@@ -22,6 +22,10 @@ pub struct CargoCommand {
     pub args: Vec<String>,
     /// Variables to set for the child, such as `("RUSTDOCFLAGS", "-D warnings")`.
     pub env: Vec<(String, String)>,
+    /// Variables to remove from the child's environment, so that a value xtask itself inherited
+    /// (such as `CARGO_TARGET_DIR`) does not reach it. `command()` removes these first, then
+    /// sets `env`.
+    pub env_remove: Vec<String>,
 }
 
 /// Runs cargo in `root` with the command's arguments and environment, with stdin, stdout and
@@ -124,6 +128,7 @@ pub(crate) fn cargo_metadata(
     let command = CargoCommand {
         args: args.iter().map(|arg| (*arg).to_owned()).collect(),
         env: Vec::new(),
+        env_remove: Vec::new(),
     };
     let stdout = capture_cargo(root, &command)?.ok_or_else(|| Error::Missing {
         what: format!(
@@ -166,6 +171,7 @@ pub fn capture_rustc_version(root: &Path) -> Result<Option<String>> {
     let cmd = CargoCommand {
         args: vec!["-vV".to_owned()],
         env: Vec::new(),
+        env_remove: Vec::new(),
     };
     capture_program(&program, root, &cmd)
 }
@@ -227,6 +233,9 @@ fn run_program(program: &OsStr, root: &Path, cmd: &CargoCommand) -> Result<bool>
 
 fn command(program: &OsStr, root: &Path, cmd: &CargoCommand) -> Command {
     let mut command = Command::new(program);
+    for key in &cmd.env_remove {
+        command.env_remove(key);
+    }
     command
         .current_dir(root)
         .args(&cmd.args)
@@ -246,6 +255,7 @@ mod tests {
                 .iter()
                 .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
                 .collect(),
+            env_remove: Vec::new(),
         }
     }
 
@@ -270,7 +280,18 @@ mod tests {
     }
 
     #[test]
-    fn the_exit_status_decides_the_answer() -> crate::Result<()> {
+    fn variables_to_remove_are_removed_from_the_child() {
+        let mut cargo = cmd(&["check"], &[]);
+        cargo.env_remove = vec!["CARGO_TARGET_DIR".to_owned()];
+        let command = command(OsStr::new("cargo"), Path::new("."), &cargo);
+        assert_eq!(
+            command.get_envs().collect::<Vec<_>>(),
+            [(OsStr::new("CARGO_TARGET_DIR"), None)]
+        );
+    }
+
+    #[test]
+    fn the_exit_status_decides_the_answer()-> crate::Result<()> {
         let root = std::env::current_dir().map_err(|source| crate::Error::Io {
             path: PathBuf::from("."),
             source,

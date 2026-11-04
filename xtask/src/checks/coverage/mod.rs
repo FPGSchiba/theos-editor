@@ -160,6 +160,7 @@ impl Llvm for CargoLlvm {
         let command = CargoCommand {
             args: vec!["llvm-cov".to_owned(), "--version".to_owned()],
             env: Vec::new(),
+            env_remove: Vec::new(),
         };
         let output = capture_cargo(root, &command)?.unwrap_or_default();
         parse_version("cargo-llvm-cov", &output).ok_or_else(|| Error::Missing {
@@ -200,8 +201,14 @@ fn rustc_identity(output: &str) -> Option<String> {
     })
 }
 
-/// `cargo llvm-cov nextest --workspace --locked --json --output-path <output>`, with
-/// `CARGO_TARGET_DIR` set to `target_dir` when there is one.
+/// `cargo llvm-cov nextest --workspace --locked --json --output-path <output>`, building into
+/// `target_dir` when there is one.
+///
+/// The folder goes in `CARGO_LLVM_COV_TARGET_DIR`, not `CARGO_TARGET_DIR`: cargo-llvm-cov builds
+/// into the former, but the latter would also reach the tests it runs, and every `cargo` those
+/// tests start would build into it. With a folder of its own, the command also drops
+/// `CARGO_TARGET_DIR` and `CARGO_BUILD_TARGET_DIR` that xtask inherited, so they do not reach the
+/// tests either. Without one, cargo's usual behaviour stays.
 pub(crate) fn llvm_cov_command(output: &Path, target_dir: Option<&Path>) -> CargoCommand {
     let mut args: Vec<String> = [
         "llvm-cov",
@@ -217,13 +224,24 @@ pub(crate) fn llvm_cov_command(output: &Path, target_dir: Option<&Path>) -> Carg
     let env = target_dir
         .map(|dir| {
             (
-                "CARGO_TARGET_DIR".to_owned(),
+                "CARGO_LLVM_COV_TARGET_DIR".to_owned(),
                 dir.to_string_lossy().into_owned(),
             )
         })
         .into_iter()
         .collect();
-    CargoCommand { args, env }
+    let env_remove = if target_dir.is_some() {
+        ["CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"]
+            .map(str::to_owned)
+            .into()
+    } else {
+        Vec::new()
+    };
+    CargoCommand {
+        args,
+        env,
+        env_remove,
+    }
 }
 
 /// The folder of the check below `root`.
@@ -662,14 +680,20 @@ mod tests {
             ]
         );
         assert_eq!(command.env, Vec::<(String, String)>::new());
+        assert_eq!(command.env_remove, Vec::<String>::new());
         let target = Path::new("some").join("target");
         let command = llvm_cov_command(&output, Some(&target));
+        // cargo-llvm-cov builds into this one; the tests it runs never see `CARGO_TARGET_DIR`.
         assert_eq!(
             command.env,
             [(
-                "CARGO_TARGET_DIR".to_owned(),
+                "CARGO_LLVM_COV_TARGET_DIR".to_owned(),
                 target.to_string_lossy().into_owned()
             )]
+        );
+        assert_eq!(
+            command.env_remove,
+            ["CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"]
         );
     }
 

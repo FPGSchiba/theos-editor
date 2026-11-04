@@ -249,3 +249,64 @@ fn a_relative_root_gives_repo_relative_paths() -> TestResult {
     );
     Ok(())
 }
+
+/// Options for a fixture whose cargo child sees `CARGO_TARGET_DIR=<shared>`, as it does when the
+/// coverage baseline runs these tests with one target directory.
+fn with_shared_target_dir(shared: &Path) -> TestResult<ViewOptions> {
+    let shared: &'static str =
+        Box::leak(shared.to_str().ok_or("path")?.to_owned().into_boxed_str());
+    let env: &'static [(&str, &str)] = Box::leak(Box::new([("CARGO_TARGET_DIR", shared)]));
+    Ok(ViewOptions {
+        extra_env: env,
+        ..ViewOptions::FIXTURE
+    })
+}
+
+// AC: CE-08.8
+#[test]
+fn fixtures_do_not_share_builds_through_an_inherited_target_dir() -> TestResult {
+    let shared = tempfile::tempdir()?;
+    let options = with_shared_target_dir(&shared.path().join("shared-target"))?;
+
+    let plain = copy_case("plain")?;
+    let view = View::build(plain.path(), options)?;
+    let lib = find(&view, "a", TargetKind::Lib, false)?;
+    assert_eq!(
+        files(lib),
+        BTreeSet::from(["crates/a/src/lib.rs", "crates/a/src/sub.rs"])
+    );
+
+    let linked = copy_case("path-and-include")?;
+    let other = View::build(linked.path(), options)?;
+    let other_lib = find(&other, "a", TargetKind::Lib, false)?;
+    assert_ne!(files(other_lib), files(lib));
+    assert!(
+        other_lib.files.iter().all(|file| !file.ends_with("sub.rs")),
+        "{:?}",
+        other_lib.files
+    );
+
+    // Each fixture built into its own `target` folder; the shared directory was never used.
+    assert!(plain.path().join("target").is_dir());
+    assert!(linked.path().join("target").is_dir());
+    assert!(!shared.path().join("shared-target").exists());
+    Ok(())
+}
+
+// AC: CE-08.8
+#[test]
+fn a_failing_fixture_still_fails_with_an_inherited_target_dir() -> TestResult {
+    let shared = tempfile::tempdir()?;
+    let options = with_shared_target_dir(&shared.path().join("shared-target"))?;
+
+    let good = copy_case("plain")?;
+    View::build(good.path(), options)?;
+    let bad = copy_case("does-not-check")?;
+    let result = View::build(bad.path(), options);
+    assert!(
+        matches!(result, Err(xtask::Error::Command { .. })),
+        "{:?}",
+        result.map(|_| ())
+    );
+    Ok(())
+}

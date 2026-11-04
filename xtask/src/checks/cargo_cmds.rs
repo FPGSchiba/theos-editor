@@ -17,6 +17,7 @@ fn cargo(args: &[&str]) -> CargoCommand {
     CargoCommand {
         args: args.iter().map(|arg| (*arg).to_owned()).collect(),
         env: Vec::new(),
+        env_remove: Vec::new(),
     }
 }
 
@@ -159,6 +160,7 @@ mod tests {
                 .iter()
                 .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
                 .collect(),
+            env_remove: Vec::new(),
         }
     }
 
