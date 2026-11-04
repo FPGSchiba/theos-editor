@@ -16,7 +16,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map toolset as a generator | tower-of-theos | todo | | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
-| P10 | Prose editor research | theos-editor | in-progress | #3 | |
+| P10 | Prose editor research | theos-editor | pr-open | #3 | |
 | P11 | Editor shell and Codex | theos-editor | todo | | |
 | P12 | Manuscript editor | theos-editor | todo | | |
 | P13 | Changes and Review screens | theos-editor | todo | | |
@@ -43,6 +43,14 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
   while Windows joins macOS in the `platforms` workflow (D8, umbrella G2). The build PR #7 waits
   for it: the plan is appended to the P00 plan and built on #7 once this is approved.
 - Docs PR #8: the engineering directives in `CLAUDE.md`. Its checks run once P00 is merged.
+- P10 build PR (`docs(ui): prose editor research (P10)`): accept or reject decision record
+  `docs/decisions/0001-prose-editor.md`, which recommends CodeMirror 6 (42 of 54 against
+  ProseMirror/Tiptap 32). Before deciding: run the manual checklist in
+  `research/P10-prose-editor/README.md` (spelling marks, Swiss German dead keys, a Japanese IME,
+  Safari if a Mac is at hand), and review the five readings made at scoring time (rulings 29, 30,
+  32, 34, 36), each of which you can overrule. The comparison lists what each would move: applied
+  to both editors alike, none changes the leader; only a mixed standard flips it. `cargo xtask
+  gate` and `ac-trace` did not run because P00 is not merged (ruling 35).
 
 ## Needs a private session (Confluence, Jira, plugin)
 
