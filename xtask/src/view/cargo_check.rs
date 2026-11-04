@@ -53,7 +53,7 @@ const CHECK_FAILED: &str = "the check failed; run `cargo check --workspace --all
 /// workspace (the error names the command to run and does not echo cargo's diagnostics), when
 /// its messages are not what was expected, or when an artifact has no readable dep-info.
 ///
-/// Gives the workspace root as cargo names it ([`crate::process::workspace_root`]) with the
+/// Gives the workspace root as cargo names it (`process::workspace_root`) with the
 /// artifacts: the paths of cargo's messages are made relative to that root, and it is the root
 /// to read the files from. The artifacts are sorted by package, kind, name and test, whatever
 /// order cargo built them in.
