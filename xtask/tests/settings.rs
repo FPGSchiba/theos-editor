@@ -213,26 +213,27 @@ fn repo_settings_encode_section_6() -> TestResult {
 }
 
 #[test]
-fn required_contexts_skip_ui_and_split_the_os_matrix() {
-    let text = "\
-# The gate
+fn required_contexts_are_the_first_column_of_section_1_without_ui() {
+    let text = "# The gate
 
 ## 1. Required checks
 
 | Check | What it runs | OS |
 |---|---|---|
 | `fmt` | `cargo fmt --all --check` | Linux |
-| `clippy` | `cargo clippy` | Linux, Windows |
-| `ui` | from P11: `pnpm install` | Linux, Windows |
+| `clippy` | `cargo clippy` | Linux |
+| `ui` | from P11: `pnpm install` | Linux |
 | `docs` | `cargo doc` with warnings | Linux |
 
 Text after the table, and `not-a-check` in it.
 
 ## 2. Lints
 
-| `other` | not in section 1 | Linux, Windows |
+| Check | What it runs | OS |
+|---|---|---|
+| `other` | not in section 1 | Linux |
 ";
-    let expected: BTreeSet<String> = ["fmt", "clippy (linux)", "clippy (windows)", "docs"]
+    let expected: BTreeSet<String> = ["fmt", "clippy", "docs"]
         .into_iter()
         .map(String::from)
         .collect();

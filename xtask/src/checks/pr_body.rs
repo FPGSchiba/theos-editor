@@ -1,17 +1,16 @@
 //! The `pr-body` check: the description of a pull request has every section of the pull request
 //! template, and each one has content (`docs/gate.md` §1).
 //!
-//! The sections are the `## ` headings of `.github/pull_request_template.md`. A section is the
-//! text from its heading to the next `## ` line, and it has content when something is left of it
-//! once HTML comments and whitespace are removed, so a description that keeps only the comments of
-//! the template fails. The order of the sections and extra sections do not matter, and a heading
-//! matches after trimming. A missing description is an empty one. The core is [`check_body`]: a
+//! Template and description are read with `pulldown-cmark` (`CommonMark`, [`crate::markdown`]), so a
+//! heading inside a code block or an HTML comment is no heading. The sections are the level-two
+//! headings of `.github/pull_request_template.md`. Each must appear in the description, in any
+//! order and with extra sections allowed, and it has content when it holds text or code other than
+//! HTML comments and whitespace, so a description that keeps only the comments of the template
+//! fails. Headings match by their text after inline parsing, so trailing spaces and a closing
+//! sequence do not matter. A missing description is an empty one. The core is [`check_body`]: a
 //! template and a description in, a verdict out. [`run`] takes the description from the pull
-//! request event.
-//!
-//! The comments are removed before the text is cut into sections, so a heading inside a comment is
-//! no heading, as on GitHub. A byte order mark at the start and CRLF line ends are not read as
-//! text: Windows tools write the first and the web editor the second.
+//! request event. A byte order mark and CRLF line ends are not read as text: Windows tools write
+//! the first and the web editor the second.
 //!
 //! Findings name headings only. The description is written by whoever opened the pull request, and
 //! the runner reads workflow commands in what a check prints.
@@ -20,21 +19,22 @@ use std::io::Write;
 use std::path::Path;
 
 use crate::ci::CiEvent;
+use crate::markdown::{self, Section};
 use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
 /// The pull request template, relative to the repository root.
 const TEMPLATE_PATH: &str = ".github/pull_request_template.md";
 
-/// The `## ` headings of `template`, trimmed, in order.
+/// The level-two headings of `template` as text, in order.
 ///
-/// Text before the first heading belongs to no section, and a heading in an HTML comment is not
-/// one.
+/// Text before the first heading belongs to no section, and a heading in a code block or an HTML
+/// comment is not one.
 #[must_use]
 pub fn template_sections(template: &str) -> Vec<String> {
-    sections(&normalise(template))
+    markdown::sections(template, 2)
         .into_iter()
-        .map(|section| section.heading)
+        .map(|section| section.heading.text)
         .collect()
 }
 
@@ -45,7 +45,8 @@ pub fn template_sections(template: &str) -> Vec<String> {
 /// sections asks for nothing; [`read_template`] refuses one.
 #[must_use]
 pub fn check_body(template: &str, body: Option<&str>) -> Verdict {
-    let found = sections(&normalise(body.unwrap_or_default()));
+    let body = body.unwrap_or_default();
+    let found = markdown::sections(body, 2);
     let findings = template_sections(template)
         .iter()
         .filter_map(|heading| problem(heading, &found))
@@ -92,37 +93,12 @@ pub fn run(root: &Path, ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<Ve
     Ok(check_body(&template, pull_request.body.as_deref()))
 }
 
-/// A `## ` section of a text.
-struct Section {
-    /// The heading after `## `, trimmed.
-    heading: String,
-    /// The lines under it, up to the next `## ` line.
-    content: String,
-}
-
-/// The sections of `text`, which [`normalise`] has read.
-fn sections(text: &str) -> Vec<Section> {
-    let mut found: Vec<Section> = Vec::new();
-    for line in text.lines() {
-        if let Some(heading) = line.strip_prefix("## ") {
-            found.push(Section {
-                heading: heading.trim().to_owned(),
-                content: String::new(),
-            });
-        } else if let Some(section) = found.last_mut() {
-            section.content.push_str(line);
-            section.content.push('\n');
-        }
-    }
-    found
-}
-
 /// What is wrong with the section `heading` among the sections `found`, if anything. A heading
 /// that occurs more than once is filled when one of its sections is.
-fn problem(heading: &str, found: &[Section]) -> Option<String> {
-    let named: Vec<&Section> = found
+fn problem(heading: &str, found: &[Section<'_>]) -> Option<String> {
+    let named: Vec<&Section<'_>> = found
         .iter()
-        .filter(|section| section.heading == heading)
+        .filter(|section| section.heading.text == heading)
         .collect();
     if named.is_empty() {
         Some(format!(
@@ -131,7 +107,7 @@ fn problem(heading: &str, found: &[Section]) -> Option<String> {
         ))
     } else if named
         .iter()
-        .all(|section| section.content.trim().is_empty())
+        .all(|section| !markdown::has_content(section.body))
     {
         Some(format!(
             "the `## {heading}` section is empty: HTML comments and blank lines do not count, so \
@@ -140,30 +116,6 @@ fn problem(heading: &str, found: &[Section]) -> Option<String> {
     } else {
         None
     }
-}
-
-/// `text` as the rules read it: without a byte order mark, with LF line ends and without HTML
-/// comments.
-fn normalise(text: &str) -> String {
-    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
-    strip_comments(&text.replace("\r\n", "\n"))
-}
-
-/// `text` without its `<!-- … -->` comments, which may span lines. A comment that is not closed
-/// runs to the end.
-fn strip_comments(text: &str) -> String {
-    let mut kept = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(start) = rest.find("<!--") {
-        kept.push_str(&rest[..start]);
-        let comment = &rest[start + "<!--".len()..];
-        let Some(end) = comment.find("-->") else {
-            return kept;
-        };
-        rest = &comment[end + "-->".len()..];
-    }
-    kept.push_str(rest);
-    kept
 }
 
 #[cfg(test)]
@@ -518,5 +470,81 @@ mod tests {
         let root = root_with(REAL_TEMPLATE)?;
         assert_eq!(read_template(root.path())?, REAL_TEMPLATE);
         Ok(())
+    }
+
+    // AC: CE-08.7
+    #[test]
+    fn a_heading_inside_a_code_block_is_no_section() {
+        let hidden = format!(
+            "{}```
+## Gate
+
+Done.
+```
+",
+            filled(&all_but("Gate"))
+        );
+        let verdict = check_body(REAL_TEMPLATE, Some(&hidden));
+        let found = messages(&verdict);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].contains("no `## Gate` section"), "{found:?}");
+        // The same in the template: a fenced heading asks for nothing.
+        let template = "## A
+
+```
+## Fenced
+```
+";
+        assert_eq!(template_sections(template), ["A"]);
+    }
+
+    // AC: CE-08.7
+    #[test]
+    fn a_heading_inside_an_html_comment_is_no_section() {
+        let hidden = format!(
+            "{}<!--
+## Gate
+
+Done.
+-->
+",
+            filled(&all_but("Gate"))
+        );
+        let verdict = check_body(REAL_TEMPLATE, Some(&hidden));
+        let found = messages(&verdict);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].contains("no `## Gate` section"), "{found:?}");
+    }
+
+    // AC: CE-08.7
+    #[test]
+    fn a_heading_with_a_closing_sequence_or_trailing_spaces_matches() {
+        let closed = full_body().replace("## Gate", "## Gate ##");
+        assert!(check_body(REAL_TEMPLATE, Some(&closed)).passed());
+        let spaced = full_body().replace("## Gate", "##   Gate   ");
+        assert!(check_body(REAL_TEMPLATE, Some(&spaced)).passed());
+        let template = "## A ##
+
+## B   
+";
+        assert_eq!(template_sections(template), ["A", "B"]);
+    }
+
+    // AC: CE-08.7
+    #[test]
+    fn a_section_whose_only_content_is_a_code_block_is_filled() {
+        let sections: Vec<(&str, &str)> = HEADINGS
+            .iter()
+            .map(|heading| {
+                (
+                    *heading,
+                    "```
+cargo xtask gate
+```",
+                )
+            })
+            .collect();
+        let verdict = check_body(REAL_TEMPLATE, Some(&body_of(&sections)));
+        assert!(verdict.passed(), "{:?}", verdict.findings);
     }
 }

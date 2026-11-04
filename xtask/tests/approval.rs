@@ -11,6 +11,7 @@ use std::process::Command;
 use xtask::checks::approval::fingerprint::{self, Fingerprint};
 use xtask::checks::approval::protected::{self, ProtectedPaths};
 use xtask::git::Git;
+use xtask::markdown;
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
@@ -549,17 +550,17 @@ fn fingerprint_changes_when_main_changes_a_file_the_pr_changes() -> TestResult {
     Ok(())
 }
 
-/// The text between the line that starts with `from` and the next line that starts with `## `.
-fn section<'a>(text: &'a str, from: &str) -> Option<&'a str> {
-    let start = text.find(from)?;
-    let rest = &text[start..];
-    let body = rest.find('\n').map_or("", |end| &rest[end..]);
-    Some(body.split("\n## ").next().unwrap_or(body))
+/// The text of the level-two section of `text` whose heading starts with `prefix`.
+fn section<'a>(text: &'a str, prefix: &str) -> Option<&'a str> {
+    markdown::sections(text, 2)
+        .into_iter()
+        .find(|section| section.heading.text.starts_with(prefix))
+        .map(|section| section.body)
 }
 
-/// Everything between a pair of backticks in `text`.
-fn backticked(text: &str) -> BTreeSet<&str> {
-    text.split('`').skip(1).step_by(2).collect()
+/// Every inline code span in `text`.
+fn backticked(text: &str) -> BTreeSet<String> {
+    markdown::code_spans(text).into_iter().collect()
 }
 
 fn strings(table: &toml::Table, key: &str) -> TestResult<Vec<String>> {
@@ -576,7 +577,7 @@ fn strings(table: &toml::Table, key: &str) -> TestResult<Vec<String>> {
 fn protected_paths_toml_matches_gate_md_section_5() -> TestResult {
     let root = repo_root()?;
     let gate_md = fs::read_to_string(root.join("docs").join("gate.md"))?;
-    let section_5 = section(&gate_md, "## 5. Protected paths").ok_or("docs/gate.md has no §5")?;
+    let section_5 = section(&gate_md, "5.").ok_or("docs/gate.md has no §5")?;
     let in_gate_md = backticked(section_5);
     assert!(
         in_gate_md.contains("CLAUDE.md"),
@@ -593,7 +594,7 @@ fn protected_paths_toml_matches_gate_md_section_5() -> TestResult {
     );
     for pattern in protected.iter().chain(&except) {
         assert!(
-            in_gate_md.contains(pattern.as_str()),
+            in_gate_md.contains(pattern),
             "`{pattern}` is in gate/protected-paths.toml but not backticked in docs/gate.md §5"
         );
     }

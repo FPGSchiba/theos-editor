@@ -37,6 +37,7 @@ use super::gh_cli::GhCli;
 use super::{LabelSpec, RepoAdmin};
 use crate::checks::approval::decide::{APPROVED, NEEDS_JANN};
 use crate::checks::lints;
+use crate::markdown;
 use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
@@ -575,46 +576,35 @@ pub fn run_apply(root: &Path, repo: Option<&str>) -> Result<Verdict> {
     Ok(applied(actions))
 }
 
-/// The checks of `docs/gate.md` §1 as GitHub names them: the first column of the table in that
-/// section, `ui` left out (it starts in P11). A check that runs on Linux and Windows is two
-/// contexts, `<check> (linux)` and `<check> (windows)`, which is how GitHub names the jobs of a
-/// matrix; a check that runs on Linux only keeps its name.
+/// The checks of `docs/gate.md` §1 as GitHub names them: the first cell of every row of the first
+/// table under the level-two section whose heading starts with `1.`, `ui` left out (it starts in
+/// P11). A cell that is not a bare job name (`[a-z0-9-]`) is skipped.
 #[must_use]
 pub fn required_contexts_from_gate_md(text: &str) -> BTreeSet<String> {
-    let mut contexts = BTreeSet::new();
-    let mut in_section = false;
-    for line in text.lines() {
-        if let Some(heading) = line.strip_prefix("## ") {
-            in_section = heading.starts_with("1.");
-            continue;
-        }
-        if !in_section {
-            continue;
-        }
-        let row = line
-            .trim()
-            .strip_prefix('|')
-            .and_then(|row| row.strip_suffix('|'));
-        let Some(row) = row else { continue };
-        let cells: Vec<&str> = row.split('|').map(str::trim).collect();
-        let (Some(first), Some(os)) = (cells.first(), cells.last()) else {
-            continue;
-        };
-        let name = first
-            .strip_prefix('`')
-            .and_then(|first| first.strip_suffix('`'))
-            .filter(|name| name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'));
-        let Some(name) = name.filter(|name| *name != "ui") else {
-            continue;
-        };
-        if os.contains("Linux") && os.contains("Windows") {
-            contexts.insert(format!("{name} (linux)"));
-            contexts.insert(format!("{name} (windows)"));
-        } else {
-            contexts.insert(name.to_owned());
-        }
-    }
-    contexts
+    let sections = markdown::sections(text, 2);
+    let Some(section) = sections
+        .iter()
+        .find(|section| section.heading.text.starts_with("1."))
+    else {
+        return BTreeSet::new();
+    };
+    let tables = markdown::tables(section.body);
+    let Some(table) = tables.first() else {
+        return BTreeSet::new();
+    };
+    table
+        .rows
+        .iter()
+        .filter_map(|row| row.first())
+        .filter(|name| {
+            !name.is_empty()
+                && name.as_str() != "ui"
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        })
+        .cloned()
+        .collect()
 }
 
 #[cfg(test)]
