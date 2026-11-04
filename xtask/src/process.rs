@@ -291,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn the_exit_status_decides_the_answer()-> crate::Result<()> {
+    fn the_exit_status_decides_the_answer() -> crate::Result<()> {
         let root = std::env::current_dir().map_err(|source| crate::Error::Io {
             path: PathBuf::from("."),
             source,
