@@ -1,22 +1,16 @@
 //! The nextest `JUnit` report (`target/nextest/<profile>/junit.xml`): which tests passed.
 //!
-//! `ac-trace` shows the result of every tagged test next to it. The report is small and regular,
-//! so this reads just what is needed with a tolerant scanner instead of an XML library: the
-//! elements `testcase`, `failure`, `error` and `skipped`, with comments and `CDATA` sections
-//! (where the output of tests is) skipped whole. Nothing from the report goes into an error.
+//! `ac-trace` shows the result of every tagged test next to it. The report is read with
+//! `quick-xml`; only the elements `testcase`, `failure`, `error` and `skipped` matter. Nothing
+//! from the report goes into an error, only the byte position where reading stopped.
 
 use std::collections::BTreeMap;
 
-use crate::{Error, Result};
+use quick_xml::Reader;
+use quick_xml::XmlVersion;
+use quick_xml::events::{BytesStart, Event};
 
-/// What the scanner skips whole: where it starts and where it ends. `<!` comes last, for the
-/// declarations that are not comments or `CDATA` sections.
-const SKIPPED: [(&str, &str); 4] = [
-    ("<!--", "-->"),
-    ("<![CDATA[", "]]>"),
-    ("<?", "?>"),
-    ("<!", ">"),
-];
+use crate::{Error, Result};
 
 /// A `testcase` element that is being read.
 struct Case {
@@ -28,96 +22,128 @@ struct Case {
 /// Reads the report `xml` into a map from test name to whether the test passed.
 ///
 /// A test with a `failure` or `error` element failed. One with a `skipped` element did not run
-/// and is left out. A test that failed and then passed on a retry (`flakyFailure`) passed. When a
-/// name is in the report more than once, such as the same test in two binaries, it passed only if
-/// it passed every time.
+/// and is left out. A test that failed and then passed on a retry (`flakyFailure`,
+/// `rerunFailure`) passed. When a name is in the report more than once, such as the same test in
+/// two binaries, it passed only if it passed every time.
 ///
 /// # Errors
 ///
 /// Fails when the text is not an XML document whose root is `testsuites` or `testsuite`, a
 /// `testcase` has no name or is inside another one, or an element is cut off.
 pub fn parse(xml: &str) -> Result<BTreeMap<String, bool>> {
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
     let mut results = BTreeMap::new();
     let mut open: Option<Case> = None;
     let mut root_seen = false;
-    let mut rest = xml;
-    while let Some(start) = rest.find('<') {
-        rest = &rest[start..];
-        if let Some((opening, closing)) = SKIPPED
-            .iter()
-            .find(|(opening, _)| rest.starts_with(opening))
-        {
-            let body = &rest[opening.len()..];
-            let end = body.find(closing).ok_or_else(|| {
-                error("a comment, a CDATA section or a declaration is not closed")
-            })?;
-            rest = &body[end + closing.len()..];
-            continue;
-        }
-        let (tag, after) = split_tag(rest)?;
-        rest = after;
-        if let Some(name) = tag.strip_prefix('/') {
-            if name.trim() == "testcase"
-                && let Some(case) = open.take()
-            {
-                record(&mut results, case);
-            }
-            continue;
-        }
-        let (tag, self_closing) = tag
-            .strip_suffix('/')
-            .map_or((tag, false), |tag| (tag, true));
-        let (name, attributes) = tag.split_once(char::is_whitespace).unwrap_or((tag, ""));
-        if !root_seen {
-            if !matches!(name, "testsuites" | "testsuite") {
-                return Err(error("the root element is not `testsuites` or `testsuite`"));
-            }
-            root_seen = true;
-        }
-        match name {
-            "testcase" => {
-                if open.is_some() {
-                    return Err(error("a `testcase` is inside another one"));
-                }
-                let name = attribute(attributes, "name")
-                    .ok_or_else(|| error("a `testcase` has no `name`"))?;
-                let case = Case {
-                    name,
-                    failed: false,
-                    skipped: false,
-                };
-                if self_closing {
-                    record(&mut results, case);
+    let mut depth = 0_usize;
+    loop {
+        let event = reader.read_event().map_err(|e| {
+            error(
+                &reader,
+                &format!("the XML is not well formed ({})", kind(&e)),
+            )
+        })?;
+        match event {
+            Event::Start(tag) => {
+                check_root(&reader, &mut root_seen, &tag)?;
+                depth += 1;
+                if tag.local_name().as_ref() == b"testcase" {
+                    open = Some(begin_case(&reader, open.is_some(), &tag)?);
                 } else {
-                    open = Some(case);
+                    note(&mut open, &tag);
                 }
             }
-            "failure" | "error" => {
-                if let Some(case) = open.as_mut() {
-                    case.failed = true;
+            Event::Empty(tag) => {
+                check_root(&reader, &mut root_seen, &tag)?;
+                if tag.local_name().as_ref() == b"testcase" {
+                    record(&mut results, begin_case(&reader, open.is_some(), &tag)?);
+                } else {
+                    note(&mut open, &tag);
                 }
             }
-            "skipped" => {
-                if let Some(case) = open.as_mut() {
-                    case.skipped = true;
+            Event::End(tag) => {
+                depth = depth.saturating_sub(1);
+                if tag.local_name().as_ref() == b"testcase"
+                    && let Some(case) = open.take()
+                {
+                    record(&mut results, case);
                 }
             }
+            Event::Eof => break,
             _ => {}
         }
     }
-    if open.is_some() {
-        return Err(error("a `testcase` is not closed"));
-    }
     if !root_seen {
-        return Err(error("there is no XML element"));
+        return Err(error(&reader, "there is no XML element"));
+    }
+    if depth > 0 || open.is_some() {
+        return Err(error(&reader, "an element is not closed"));
     }
     Ok(results)
 }
 
-fn error(message: &str) -> Error {
+/// An error that names where `reader` stopped, never the report's text.
+fn error(reader: &Reader<&[u8]>, message: &str) -> Error {
     Error::Parse {
-        what: "the nextest JUnit report".to_owned(),
-        message: message.to_owned(),
+        what: "the JUnit report".to_owned(),
+        message: format!("{message} at byte {}", reader.buffer_position()),
+    }
+}
+
+/// A fixed description of a `quick-xml` error, which can quote the report.
+fn kind(error: &quick_xml::Error) -> &'static str {
+    match error {
+        quick_xml::Error::Syntax(_) => "syntax",
+        quick_xml::Error::IllFormed(_) => "ill-formed",
+        quick_xml::Error::Encoding(_) => "encoding",
+        _ => "other",
+    }
+}
+
+/// Fails when the first element is not `testsuites` or `testsuite`.
+fn check_root(reader: &Reader<&[u8]>, root_seen: &mut bool, tag: &BytesStart<'_>) -> Result<()> {
+    if *root_seen {
+        return Ok(());
+    }
+    if !matches!(tag.local_name().as_ref(), b"testsuites" | b"testsuite") {
+        return Err(error(
+            reader,
+            "the root element is not `testsuites` or `testsuite`",
+        ));
+    }
+    *root_seen = true;
+    Ok(())
+}
+
+/// Starts the case of a `testcase` element.
+fn begin_case(reader: &Reader<&[u8]>, inside_case: bool, tag: &BytesStart<'_>) -> Result<Case> {
+    if inside_case {
+        return Err(error(reader, "a `testcase` is inside another one"));
+    }
+    let name = tag
+        .try_get_attribute("name")
+        .map_err(|_| error(reader, "a `testcase` has an unreadable attribute"))?
+        .ok_or_else(|| error(reader, "a `testcase` has no `name`"))?
+        .normalized_value(XmlVersion::Implicit1_0)
+        .map_err(|_| error(reader, "the `name` of a `testcase` has a bad entity"))?
+        .into_owned();
+    Ok(Case {
+        name,
+        failed: false,
+        skipped: false,
+    })
+}
+
+/// Marks the open case by a `failure`, `error` or `skipped` element.
+fn note(open: &mut Option<Case>, tag: &BytesStart<'_>) {
+    let Some(case) = open.as_mut() else {
+        return;
+    };
+    match tag.local_name().as_ref() {
+        b"failure" | b"error" => case.failed = true,
+        b"skipped" => case.skipped = true,
+        _ => {}
     }
 }
 
@@ -131,79 +157,6 @@ fn record(results: &mut BTreeMap<String, bool>, case: Case) {
         .entry(case.name)
         .and_modify(|before| *before = *before && passed)
         .or_insert(passed);
-}
-
-/// Splits `text`, which starts with `<`, into what is inside the angle brackets and what comes
-/// after them. A `>` inside the quotes of an attribute does not end the element.
-fn split_tag(text: &str) -> Result<(&str, &str)> {
-    let mut quote: Option<char> = None;
-    for (offset, c) in text.char_indices().skip(1) {
-        match (quote, c) {
-            (None, '>') => return Ok((&text[1..offset], &text[offset + 1..])),
-            (None, '"' | '\'') => quote = Some(c),
-            (Some(open), _) if open == c => quote = None,
-            _ => {}
-        }
-    }
-    Err(error("an element is cut off"))
-}
-
-/// The value of the attribute `wanted` in `text`, which holds the attributes of an element.
-fn attribute(text: &str, wanted: &str) -> Option<String> {
-    let mut rest = text.trim_start();
-    while let Some((key, after)) = rest.split_once('=') {
-        let after = after.trim_start();
-        let quote = after.chars().next().filter(|c| matches!(c, '"' | '\''))?;
-        let value_and_rest = &after[1..];
-        let end = value_and_rest.find(quote)?;
-        if key.trim() == wanted {
-            return Some(unescape(&value_and_rest[..end]));
-        }
-        rest = value_and_rest[end + 1..].trim_start();
-    }
-    None
-}
-
-/// `text` with the entities `&lt;`, `&gt;`, `&amp;`, `&quot;`, `&apos;` and `&#N;`/`&#xN;`
-/// replaced; anything else that starts with `&` stays as it is.
-fn unescape(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(amp) = rest.find('&') {
-        out.push_str(&rest[..amp]);
-        rest = &rest[amp..];
-        let replacement = rest.find(';').and_then(|semicolon| {
-            let entity = &rest[1..semicolon];
-            let c = match entity {
-                "lt" => Some('<'),
-                "gt" => Some('>'),
-                "amp" => Some('&'),
-                "quot" => Some('"'),
-                "apos" => Some('\''),
-                _ => numeric_entity(entity),
-            };
-            c.map(|c| (c, semicolon + 1))
-        });
-        if let Some((c, length)) = replacement {
-            out.push(c);
-            rest = &rest[length..];
-        } else {
-            out.push('&');
-            rest = &rest[1..];
-        }
-    }
-    out.push_str(rest);
-    out
-}
-
-/// The character of `#65` or `#x41`.
-fn numeric_entity(entity: &str) -> Option<char> {
-    let digits = entity.strip_prefix('#')?;
-    let code = match digits.strip_prefix(['x', 'X']) {
-        Some(hex) => u32::from_str_radix(hex, 16),
-        None => digits.parse(),
-    };
-    char::from_u32(code.ok()?)
 }
 
 #[cfg(test)]
@@ -263,6 +216,34 @@ mod tests {
                 matches!(result, Err(Error::Parse { .. })),
                 "{xml}: {result:?}"
             );
+        }
+    }
+
+    #[test]
+    fn cdata_comments_and_a_declaration_inside_a_case_do_not_change_its_result() -> TestResult {
+        let xml = "<testsuites><testsuite name=\"s\">            <testcase name=\"a\"><!-- <failure/> --><?note <failure/> ?>            <system-out><![CDATA[<failure/></testcase>]]></system-out></testcase>            <testcase name=\"b\"><!-- c --><failure/><![CDATA[<skipped/>]]></testcase>            </testsuite></testsuites>";
+        let results = parse(xml)?;
+        assert_eq!(results.get("a"), Some(&true));
+        assert_eq!(results.get("b"), Some(&false));
+        Ok(())
+    }
+
+    #[test]
+    fn an_error_names_the_position_and_not_the_text() {
+        for xml in [
+            "<testsuites><testcase name=\"SECRETTEXT\"></wrong></testsuites>",
+            "<testsuites><testcase name=\"SECRETTEXT\"><testcase name=\"b\"/></testcase></testsuites>",
+            "<testsuites><testcase classname=\"SECRETTEXT\"/></testsuites>",
+            "<SECRETTEXT/>",
+        ] {
+            let result = parse(xml);
+            let Err(Error::Parse { what, message }) = result else {
+                panic!("{xml}: {result:?}");
+            };
+            assert_eq!(what, "the JUnit report", "{xml}");
+            assert!(message.contains("byte "), "{xml}: {message}");
+            assert!(!message.contains("SECRETTEXT"), "{xml}: {message}");
+            assert!(!message.contains("wrong"), "{xml}: {message}");
         }
     }
 }
