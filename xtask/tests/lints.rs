@@ -431,7 +431,18 @@ fn code_reached_from_src_inside_it_passes() -> TestResult {
 // AC: CE-08.8
 #[test]
 fn xtask_source_leaving_src_fails() -> TestResult {
+    // `xtask` is a member of the copy, so the view reaches it: rule 1 reports the file that
+    // `include!` compiles from outside `xtask/src/` and the `include!` itself.
     let dir = copy_fixture(None)?;
+    let root_manifest = dir.path().join("Cargo.toml");
+    let text = fs::read_to_string(&root_manifest)?;
+    fs::write(
+        &root_manifest,
+        text.replace(
+            "members = [\"crates/*\"]",
+            "members = [\"crates/*\", \"xtask\"]",
+        ),
+    )?;
     write(
         dir.path(),
         "xtask/Cargo.toml",
@@ -444,7 +455,14 @@ fn xtask_source_leaving_src_fails() -> TestResult {
     )?;
     write(dir.path(), "xtask/real.rs", "fn main() {}\n")?;
     let verdict = lint(dir.path())?;
-    assert_eq!(places(&verdict), [(Some("xtask/src/main.rs"), Some(1))]);
+    assert_eq!(
+        found_with(&verdict, OUTSIDE_SRC),
+        [(Some("xtask/real.rs"), None)]
+    );
+    assert_eq!(
+        found_with(&verdict, "`include!` in"),
+        [(Some("xtask/src/main.rs"), Some(1))]
+    );
     Ok(())
 }
 
@@ -593,11 +611,27 @@ fn a_cfg_that_hides_code_from_coverage_fails() -> TestResult {
 
 // AC: CE-08.8
 #[test]
-fn the_coverage_attribute_fails_the_check() {
+fn the_coverage_attribute_fails_the_check() -> TestResult {
     // `#![coverage(off)]` is unstable, so rustc refuses it on stable and the view cannot be
-    // built: the check must not pass, whether it errors or reports.
-    let passed = lint_source("#![coverage(off)]\npub fn f() {}\n").is_ok_and(|v| v.passed());
-    assert!(!passed);
+    // built: the check must not pass.
+    assert_view_refused("#![coverage(off)]\npub fn f() {}\n")
+}
+
+/// Asserts that `lib_rs` as the library of `clean` stops the view: the error is the failed
+/// `cargo check`, and no verdict says the code passes.
+fn assert_view_refused(lib_rs: &str) -> TestResult {
+    let error = lint_source(lib_rs)
+        .err()
+        .ok_or_else(|| format!("passed: {lib_rs}"))?;
+    let error = error
+        .downcast_ref::<xtask::Error>()
+        .ok_or_else(|| format!("not an xtask error: {error}"))?;
+    let xtask::Error::Command { program, args, .. } = error else {
+        return Err(format!("not a failed command: {error}").into());
+    };
+    assert_eq!(program, "cargo", "{lib_rs}");
+    assert_eq!(args.first().map(String::as_str), Some("check"), "{lib_rs}");
+    Ok(())
 }
 
 // AC: CE-08.8
@@ -909,7 +943,7 @@ fn include_in_library_code_fails() -> TestResult {
     let verdict = lint_case("include-in-src")?;
     // The `include!` is on line 3; the `include_str!` on line 6 reads data.
     assert_eq!(
-        found_with(&verdict, "library or binary code"),
+        found_with(&verdict, "`include!` in"),
         [(Some("crates/a/src/lib.rs"), Some(3))]
     );
     assert_eq!(found_with(&verdict, OUTSIDE_SRC), []);
@@ -930,7 +964,7 @@ fn a_build_script_compiles_from_build_rs() -> TestResult {
     )?;
     let verdict = lint(dir.path())?;
     assert_eq!(found_with(&verdict, OUTSIDE_SRC), []);
-    assert_eq!(found_with(&verdict, "library or binary code"), []);
+    assert_eq!(found_with(&verdict, "`include!` in"), []);
     Ok(())
 }
 
@@ -1019,14 +1053,75 @@ fn cfg_messages(verdict: &Verdict) -> Vec<&str> {
 
 // AC: CE-08.8
 #[test]
-fn cfg_names_that_stable_rustc_refuses_fail_the_check() {
+fn cfg_names_that_stable_rustc_refuses_fail_the_check() -> TestResult {
     // `overflow_checks` and `ub_checks` are unstable cfgs: rustc refuses them on stable, so the
-    // view cannot be built and the check must not pass (it errors; it never reports a pass).
+    // view cannot be built and the check must not pass.
     for lib_rs in [
         "#[cfg_attr(overflow_checks, inline)]\npub fn f() {}\n",
         "#[cfg(ub_checks)]\npub fn f() {}\n",
     ] {
-        let passed = lint_source(lib_rs).is_ok_and(|verdict| verdict.passed());
-        assert!(!passed, "{lib_rs}");
+        assert_view_refused(lib_rs)?;
     }
+    Ok(())
+}
+
+// AC: CE-08.8
+#[test]
+fn a_target_outside_the_repository_is_reported_at_its_absolute_path() -> TestResult {
+    // Ruling 4: a file outside the root keeps its absolute normal form, with `/` separators.
+    let outside = tempfile::tempdir()?;
+    write(outside.path(), "lib.rs", "pub fn f() {}\n")?;
+    let absolute = outside.path().join("lib.rs");
+    let manifest_path = absolute.to_string_lossy().into_owned();
+    let verdict = lint_manifest(&format!("[lib]\npath = '{manifest_path}'\n"), &[])?;
+    let found = found_with(&verdict, OUTSIDE_SRC);
+    let [(Some(file), None)] = found.as_slice() else {
+        return Err(format!("expected one finding at the file: {found:?}").into());
+    };
+    let expected = manifest_path.replace('\\', "/");
+    let expected = expected.trim_start_matches("//?/");
+    assert!(
+        file.eq_ignore_ascii_case(expected),
+        "{file} against {expected}"
+    );
+    Ok(())
+}
+
+// AC: CE-08.8
+#[test]
+fn a_backslash_path_never_passes() -> TestResult {
+    // A `\` separates folders in a module path on Windows only. There rule 1 reports the file
+    // outside `src/`; elsewhere the file does not exist, and the view stops.
+    let lib_rs = "#[path = \"..\\\\lib\\\\real.rs\"]\nmod real;\n";
+    if cfg!(windows) {
+        let verdict = lint_lib(lib_rs)?;
+        assert_eq!(
+            found_with(&verdict, OUTSIDE_SRC),
+            [(Some("crates/a/lib/real.rs"), None)]
+        );
+        Ok(())
+    } else {
+        let dir = copy_fixture(None)?;
+        write(dir.path(), "crates/a/src/lib.rs", lib_rs)?;
+        write(dir.path(), "crates/a/lib/real.rs", "pub fn real() {}\n")?;
+        assert!(lint(dir.path()).is_err());
+        Ok(())
+    }
+}
+
+#[test]
+fn the_fixture_copy_of_cfg_names_is_the_real_file() -> TestResult {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let real = fs::read_to_string(manifest.join("..").join("gate").join("cfg-names.toml"))?;
+    let copy = fs::read_to_string(
+        manifest
+            .join("tests")
+            .join("fixtures")
+            .join("lints")
+            .join("clean")
+            .join("gate")
+            .join("cfg-names.toml"),
+    )?;
+    assert_eq!(real.replace("\r\n", "\n"), copy.replace("\r\n", "\n"));
+    Ok(())
 }

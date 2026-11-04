@@ -124,17 +124,21 @@ fn read(root: &Path, path: &str) -> Result<String> {
     fs::read_to_string(&full).map_err(|source| Error::Io { path: full, source })
 }
 
+/// The line of a TOML error in `text`, from 1, when the error knows where it is. Shared so that
+/// no message quotes the text.
+pub(super) fn error_line(error: &toml::de::Error, text: &str) -> Option<usize> {
+    let span = error.span()?;
+    let before = text.get(..span.start).unwrap_or(text);
+    Some(before.matches('\n').count() + 1)
+}
+
 /// `text` as a TOML table. The error does not quote it; `what` names the file.
 pub(crate) fn parse(what: &str, text: &str) -> Result<toml::Table> {
     text.parse().map_err(|error: toml::de::Error| {
-        let message = match error.span() {
-            Some(span) => {
-                let before = text.get(..span.start).unwrap_or(text);
-                let line = before.matches('\n').count() + 1;
-                format!("not valid TOML, near line {line}")
-            }
-            None => "not valid TOML".to_owned(),
-        };
+        let message = error_line(&error, text).map_or_else(
+            || "not valid TOML".to_owned(),
+            |line| format!("not valid TOML, near line {line}"),
+        );
         Error::Parse {
             what: what.to_owned(),
             message,

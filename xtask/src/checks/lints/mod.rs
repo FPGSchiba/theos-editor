@@ -84,8 +84,10 @@ pub fn run(
     shared: &Shared,
     _out: &mut dyn Write,
 ) -> Result<Verdict> {
+    // A bad `gate/cfg-names.toml` fails before cargo runs.
+    let cfg_names = CfgNames::load(root)?;
     let files = repo_files(root)?;
-    check(root, &files, shared.view(root)?)
+    check_with(root, &files, shared.view(root)?, &cfg_names)
 }
 
 /// Checks the repository at `root`, whose files are `files` (repo-relative, joined with `/`),
@@ -96,12 +98,15 @@ pub fn run(
 ///
 /// Fails when `gate/cfg-names.toml` or a file that a rule reads cannot be read.
 pub fn check(root: &Path, files: &[String], view: &View) -> Result<Verdict> {
-    let cfg_names = CfgNames::load(root)?;
+    check_with(root, files, view, &CfgNames::load(root)?)
+}
+
+fn check_with(root: &Path, files: &[String], view: &View, cfg_names: &CfgNames) -> Result<Verdict> {
     let inputs = Inputs {
         root,
         files,
         view,
-        cfg_names: &cfg_names,
+        cfg_names,
     };
     let mut findings = view.findings.clone();
     for rule in RULES {

@@ -112,7 +112,7 @@ fn include_findings(source: &Source) -> Vec<Finding> {
             Finding::at(
                 &source.path,
                 line,
-                "`include!` in library or binary code: the file it compiles is not named by a \
+                "`include!` in library, binary or build-script code: the file it compiles is not named by a \
                  path that the check can follow, and `coverage` measures only `src/`; declare \
                  a module instead (`include_str!` and `include_bytes!` are fine)",
             )
@@ -128,7 +128,12 @@ struct IncludeFinder {
 
 impl<'ast> Visit<'ast> for IncludeFinder {
     fn visit_macro(&mut self, mac: &'ast syn::Macro) {
-        if mac.path.is_ident("include") {
+        if mac
+            .path
+            .segments
+            .last()
+            .is_some_and(|segment| segment.ident == "include")
+        {
             self.lines
                 .insert(line_of(syn::spanned::Spanned::span(&mac.path)));
         }
@@ -174,8 +179,9 @@ mod tests {
     fn include_is_found_in_the_tree_and_in_macro_tokens() {
         let text = "include!(\"a.rs\");\nfn f() { include!(\"b.rs\"); }\n\
                     macro_rules! m { () => { include!(\"c.rs\"); } }\n\
-                    m! { nested { include!(\"d.rs\") } }\n";
-        assert_eq!(lines(text), [Some(1), Some(2), Some(3), Some(4)]);
+                    m! { nested { include!(\"d.rs\") } }\n\
+                    std::include!(\"e.rs\");\n";
+        assert_eq!(lines(text), [Some(1), Some(2), Some(3), Some(4), Some(5)]);
     }
 
     #[test]

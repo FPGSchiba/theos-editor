@@ -27,13 +27,11 @@ use std::path::Path;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 use serde::Deserialize;
-use syn::ext::IdentExt;
-use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
-use syn::{Expr, ExprLit, Ident, Lit, Meta, MetaList, Token};
+use syn::{Expr, ExprLit, Lit, Meta};
 
+use super::config_files::error_line;
 use super::{Inputs, Rule};
 use crate::verdict::Finding;
 use crate::view::line_of;
@@ -76,15 +74,8 @@ impl CfgNames {
             .map_err(|error| config(format!("cannot be read: {error}")))?;
         toml::from_str(&text).map_err(|error| {
             // The error quotes the text; the line is all that is shown.
-            let place = error.span().map_or_else(String::new, |span| {
-                let line = text
-                    .get(..span.start)
-                    .unwrap_or(&text)
-                    .matches('\n')
-                    .count()
-                    + 1;
-                format!(" near line {line}")
-            });
+            let place = error_line(&error, &text)
+                .map_or_else(String::new, |line| format!(" near line {line}"));
             config(format!(
                 "is not a table of `names` and `keys`, two arrays of strings{place}"
             ))
@@ -109,7 +100,8 @@ fn findings(inputs: &Inputs<'_>) -> Vec<Finding> {
 }
 
 /// Judges the predicate of a `cfg(…)`: a bare name that is listed, a listed key with a string,
-/// or `all`/`any`/`not` over those.
+/// or `all`/`any`/`not` over those. An empty `any()` is refused, as `cfg(false)` is: it hides
+/// code from every check.
 ///
 /// # Errors
 ///
@@ -140,11 +132,19 @@ pub fn judge(predicate: &Meta, names: &CfgNames) -> std::result::Result<(), Stri
             let head = list.path.get_ident().map(ToString::to_string);
             match head.as_deref() {
                 Some(combinator @ ("all" | "any" | "not")) => {
-                    let inner = parse_args(list).map_err(|_| unreadable())?;
-                    if combinator == "not" && inner.len() != 1 {
+                    let inner = split_args(&list.tokens);
+                    let wrong_count = match combinator {
+                        "not" => inner.len() != 1,
+                        "any" => inner.is_empty(),
+                        _ => false,
+                    };
+                    if wrong_count {
                         return Err(unreadable());
                     }
-                    inner.iter().try_for_each(|arg| judge_arg(arg, names))
+                    inner.into_iter().try_for_each(|tokens| {
+                        let meta = parse_predicate(tokens)?;
+                        judge(&meta, names)
+                    })
                 }
                 Some(other) => Err(refused_word(other)),
                 None => Err(unreadable()),
@@ -153,38 +153,42 @@ pub fn judge(predicate: &Meta, names: &CfgNames) -> std::result::Result<(), Stri
     }
 }
 
-/// One argument of a list: a meta item, or a keyword (`false`, `true`) that `Meta` cannot hold
-/// but that `cfg(false)` writes.
-enum Arg {
-    Meta(Box<Meta>),
-    Keyword(String),
-}
-
-impl Parse for Arg {
-    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-        if input.peek(Ident::peek_any) && !input.peek(Ident) {
-            Ok(Self::Keyword(Ident::parse_any(input)?.to_string()))
-        } else {
-            input.parse().map(|meta| Self::Meta(Box::new(meta)))
+/// The comma-separated arguments of a list, each as its own tokens; a trailing comma adds none.
+/// Commas inside a group belong to the group, so nesting needs no parser of ours.
+fn split_args(tokens: &TokenStream) -> Vec<TokenStream> {
+    let mut args = Vec::new();
+    let mut current = TokenStream::new();
+    for tree in tokens.clone() {
+        match &tree {
+            TokenTree::Punct(punct) if punct.as_char() == ',' => {
+                args.push(std::mem::take(&mut current));
+            }
+            _ => current.extend([tree]),
         }
     }
-}
-
-/// The comma-separated arguments of `list`.
-fn parse_args(list: &MetaList) -> syn::Result<Vec<Arg>> {
-    list.parse_args_with(Punctuated::<Arg, Token![,]>::parse_terminated)
-        .map(|args| args.into_iter().collect())
-}
-
-fn judge_arg(arg: &Arg, names: &CfgNames) -> std::result::Result<(), String> {
-    match arg {
-        Arg::Meta(meta) => judge(meta, names),
-        Arg::Keyword(word) => Err(refused_word(word)),
+    if !current.is_empty() {
+        args.push(current);
     }
+    args
+}
+
+/// `tokens` as a predicate. `Meta` does not read a keyword on its own (`false`, `true`), so a
+/// lone ident is refused by name; anything else that does not parse cannot be read.
+fn parse_predicate(tokens: TokenStream) -> std::result::Result<Meta, String> {
+    syn::parse2::<Meta>(tokens.clone()).map_err(|_| {
+        let mut trees = tokens.into_iter();
+        match (trees.next(), trees.next()) {
+            (Some(TokenTree::Ident(word)), None) => refused_word(&word.to_string()),
+            _ => unreadable(),
+        }
+    })
 }
 
 /// What is wrong with the attribute `meta`, when it is a `cfg` or `cfg_attr` that breaks the
 /// rule; `None` for every other attribute.
+///
+/// A predicate with a macro metavariable (`$p`) is not judged (Ruling 6), and neither is a
+/// nested attribute of a `cfg_attr` that holds one: the rest of the attribute still is.
 fn attribute_problem(meta: &Meta, names: &CfgNames) -> Option<String> {
     let path = meta.path();
     let is_cfg = path.is_ident("cfg");
@@ -194,24 +198,23 @@ fn attribute_problem(meta: &Meta, names: &CfgNames) -> Option<String> {
     let Meta::List(list) = meta else {
         return Some(unreadable());
     };
-    let Ok(args) = parse_args(list) else {
-        return Some(unreadable());
-    };
-    let mut args = args.into_iter();
+    let mut args = split_args(&list.tokens).into_iter();
     let Some(predicate) = args.next() else {
         return Some(unreadable());
     };
     if is_cfg && args.next().is_some() {
         return Some(unreadable());
     }
-    if let Err(message) = judge_arg(&predicate, names) {
-        return Some(message);
+    if !has_dollar(&predicate) {
+        let judged = parse_predicate(predicate).and_then(|predicate| judge(&predicate, names));
+        if let Err(message) = judged {
+            return Some(message);
+        }
     }
     // `cfg_attr(predicate, attribute…)`: the attributes it applies are judged the same way.
-    args.find_map(|nested| match nested {
-        Arg::Meta(nested) => attribute_problem(&nested, names),
-        Arg::Keyword(_) => None,
-    })
+    args.filter(|nested| !has_dollar(nested))
+        .filter_map(|nested| syn::parse2::<Meta>(nested).ok())
+        .find_map(|nested| attribute_problem(&nested, names))
 }
 
 /// The message for a refused name or key.
@@ -283,12 +286,9 @@ impl Walker<'_> {
         }
     }
 
-    /// Judges the content of a bracket group when it is a `cfg` or `cfg_attr` attribute without
-    /// a macro metavariable.
+    /// Judges the content of a bracket group when it is a `cfg` or `cfg_attr` attribute; a macro
+    /// metavariable is handled by [`attribute_problem`].
     fn judge_group(&mut self, line: u32, content: &TokenStream) {
-        if has_dollar(content) {
-            return;
-        }
         let Ok(meta) = syn::parse2::<Meta>(content.clone()) else {
             return;
         };
@@ -363,8 +363,12 @@ mod tests {
         let text = "#![cfg(doc)]\n#[cfg(test)]\nmod t {}\n#[cfg(not(test))]\nfn a() {}\n\
                     #[cfg(windows)]\nfn b() {}\n#[cfg(target_os = \"macos\")]\nfn c() {}\n\
                     #[cfg(all(unix, not(target_env = \"musl\")))]\nfn d() {}\n\
-                    #[cfg(feature = \"extra\")]\nfn e() {}\n#[cfg(any())]\nfn f() {}\n\
-                    #[cfg_attr(test, derive(Debug))]\nstruct S;\n";
+                    #[cfg(feature = \"extra\")]\nfn e() {}\n#[cfg(all())]\nfn f() {}\n\
+                    #[cfg(all(test, ))]\nfn g() {}\n#[cfg(feature = r#\"x\"#)]\nfn h() {}\n\
+                    #[cfg_attr(test, derive(Debug))]\nstruct S;\n\
+                    #[cfg_attr(feature = \"x\", derive(Debug), derive(Clone),)]\nstruct T;\n\
+                    #[cfg_attr(test)]\nstruct U;\n\
+                    #[cfg_attr(test, unsafe(no_mangle))]\nfn i() {}\n";
         assert_eq!(judged(text), []);
     }
 
@@ -379,14 +383,47 @@ mod tests {
             "target_os",
             "not(test, doc)",
             "not()",
+            "any()",
+            "any(test, any())",
             "foo(test)",
             "all(test, miri)",
+            "test, doc",
+            "",
         ] {
             let text = format!("#[cfg({predicate})]\nfn a() {{}}\n");
             assert_eq!(lines(&text), [1], "{predicate}");
         }
         assert_eq!(lines("#[cfg = \"x\"]\nfn a() {}\n"), [1]);
         assert_eq!(lines("#[cfg(\"x\")]\nfn a() {}\n"), [1]);
+        assert_eq!(lines("#[cfg_attr()]\nfn a() {}\n"), [1]);
+        assert_eq!(lines("#[cfg_attr(false, inline)]\nfn a() {}\n"), [1]);
+    }
+
+    #[test]
+    fn a_keyword_predicate_is_refused_by_name() {
+        for (text, word) in [
+            ("false", "false"),
+            ("not(true)", "true"),
+            ("all(self)", "self"),
+        ] {
+            let found = judged(&format!("#[cfg({text})]\nfn a() {{}}\n"));
+            assert_eq!(found.len(), 1, "{text}");
+            assert!(
+                found[0].1.contains(&format!("`{word}`")),
+                "{text}: {}",
+                found[0].1
+            );
+        }
+    }
+    #[test]
+    fn a_path_is_never_echoed_with_its_colons() -> TestResult {
+        for text in ["clippy_::x", "a::b(test)", "std::cfg(test)", "r#try"] {
+            let predicate: Meta = syn::parse_str(text)?;
+            let message = judge(&predicate, &names()).err().ok_or("no refusal")?;
+            assert!(!message.contains("::"), "{text}: {message}");
+            assert!(!message.contains("clippy_"), "{text}: {message}");
+        }
+        Ok(())
     }
 
     #[test]
@@ -425,6 +462,16 @@ mod tests {
                     macro_rules! s { ($m:meta) => { #[$m] fn k() {} } }\n\
                     p!(not(clippy));\nr! { #[inline] fn h() }\n";
         assert_eq!(judged(text), []);
+    }
+
+    #[test]
+    fn only_the_part_with_a_metavariable_is_not_judged() {
+        // The predicate is judged when a nested attribute holds the metavariable, and the other
+        // nested attributes are judged when the predicate does.
+        let text = "macro_rules! q { ($a:meta) => { #[cfg_attr(not(clippy), $a)] fn q() {} } }\n\
+                    macro_rules! r { ($p:meta) => { #[cfg_attr($p, cfg(miri))] fn r() {} } }\n\
+                    macro_rules! s { ($p:meta) => { #[cfg_attr($p, inline)] fn s() {} } }\n";
+        assert_eq!(lines(text), [1, 2]);
     }
 
     #[test]
