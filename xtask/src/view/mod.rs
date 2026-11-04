@@ -35,6 +35,12 @@ pub struct ViewOptions {
     pub locked: bool,
     /// Pass `--offline`: cargo does not use the network.
     pub offline: bool,
+    /// Build into `<root>/target` (`--target-dir`), whatever `CARGO_TARGET_DIR` or
+    /// `CARGO_BUILD_TARGET_DIR` say, so workspaces in different folders never share builds.
+    pub own_target_dir: bool,
+    /// Variables to set on the `cargo check` child. Production code leaves this empty; tests use
+    /// it to force an environment, such as a shared `CARGO_TARGET_DIR`, on one view only.
+    pub extra_env: &'static [(&'static str, &'static str)],
 }
 
 impl ViewOptions {
@@ -42,11 +48,16 @@ impl ViewOptions {
     pub const REPOSITORY: Self = Self {
         locked: true,
         offline: false,
+        own_target_dir: false,
+        extra_env: &[],
     };
     /// What tests run over fixture workspaces, which have no network and may gain a lock file.
+    /// Every fixture builds into its own `target` folder.
     pub const FIXTURE: Self = Self {
         locked: false,
         offline: true,
+        own_target_dir: true,
+        extra_env: &[],
     };
 }
 

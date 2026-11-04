@@ -251,6 +251,8 @@ fn xtask_ac_trace(root: &Path, extra: &[&str]) -> TestResult<Output> {
         .args(extra)
         // A real CI run must not make this one write annotations or a step summary.
         .env_remove("GITHUB_ACTIONS")
+        .env_remove("CARGO_TARGET_DIR")
+        .env_remove("CARGO_BUILD_TARGET_DIR")
         .env_remove("GITHUB_STEP_SUMMARY");
     Ok(command.output()?)
 }
