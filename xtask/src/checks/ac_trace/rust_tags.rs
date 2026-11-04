@@ -92,7 +92,8 @@ struct Test {
 #[derive(Default)]
 struct TestFinder {
     tests: BTreeMap<u32, Test>,
-    /// How many enclosing files, modules and functions carry a `cfg` that some build does not satisfy.
+    /// How many enclosing files, modules and functions carry a `cfg` that some build does not
+    /// satisfy.
     switched_off: usize,
 }
 
