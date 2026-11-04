@@ -386,6 +386,18 @@ mod tests {
     }
 
     #[test]
+    fn inner_attributes_of_the_file_are_judged() {
+        assert_eq!(lines("#![cfg(miri)]
+fn f() {}
+"), [1]);
+        assert_eq!(lines("//! Docs.
+#![cfg_attr(coverage, inline)]
+"), [2]);
+        assert_eq!(lines("#![cfg(feature = \"x\")]
+"), Vec::<u32>::new());
+    }
+
+    #[test]
     fn macro_bodies_are_judged_where_they_write_the_attribute() {
         let text = "macro_rules! m { () => { #[cfg(not(clippy))] fn g() {} } }\n\
                     macro_rules! n { () => { #![cfg(miri)] } }\n\

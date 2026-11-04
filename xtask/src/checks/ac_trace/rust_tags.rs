@@ -11,8 +11,9 @@
 //! - `#[ignore…]`, or a `#[cfg_attr(…, …ignore…)]` which may ignore it on some targets;
 //! - a `#[cfg(…)]` whose predicate names anything but the target (`CfgNames::for_target`), or that
 //!   is `any()`, which is always false;
-//! - the same `#[cfg(…)]` rule on an enclosing module or function, except that `test` is allowed
-//!   there (`#[cfg(test)] mod tests` is the ordinary pattern).
+//! - the same `#[cfg(…)]` rule on an enclosing module or function, or the file's own inner
+//!   `#![cfg(…)]`, except that `test` is allowed there (`#[cfg(test)] mod tests` is the ordinary
+//!   pattern).
 //!
 //! A file that no test target compiles proves nothing: its tags are dangling (Ruling 11).
 
@@ -41,7 +42,11 @@ pub fn scan(source: &Source, in_test_target: bool) -> (Vec<Tag>, Vec<Finding>) {
     let (Some(file), Some(tokens)) = (&source.file, &source.tokens) else {
         return (Vec::new(), Vec::new());
     };
-    let mut finder = TestFinder::default();
+    // The file is the outermost module: its inner `#![cfg(…)]` decides like a module's.
+    let mut finder = TestFinder {
+        switched_off: usize::from(!encloses_running_tests(&file.attrs)),
+        ..TestFinder::default()
+    };
     finder.visit_file(file);
     let comments = line_comments(&source.text, tokens);
     let owners = finder.owners(&comments);
@@ -87,7 +92,7 @@ struct Test {
 #[derive(Default)]
 struct TestFinder {
     tests: BTreeMap<u32, Test>,
-    /// How many enclosing modules and functions carry a `cfg` that some build does not satisfy.
+    /// How many enclosing files, modules and functions carry a `cfg` that some build does not satisfy.
     switched_off: usize,
 }
 
@@ -392,6 +397,29 @@ mod tests {
                 "}",
             ];
             assert_eq!(tag_counts(&lines), expected, "{outer} {inner}");
+        }
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn a_test_in_a_file_counts_only_when_the_file_cfg_names_test_or_the_target() {
+        let cases = [
+            ("#![cfg(test)]", true),
+            ("#![cfg(windows)]", true),
+            ("#![cfg(feature = \"x\")]", false),
+            ("#![cfg(any())]", false),
+            ("#![cfg(all(test, feature = \"x\"))]", false),
+        ];
+        for (cfg, expected) in cases {
+            let lines = [
+                "//! A file with a doc comment before its cfg.",
+                cfg,
+                "",
+                "// AC: CE-08.1",
+                "#[test]",
+                "fn inner() {}",
+            ];
+            assert_eq!(tag_counts(&lines), expected, "{cfg}");
         }
     }
 

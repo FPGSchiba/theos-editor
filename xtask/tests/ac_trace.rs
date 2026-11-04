@@ -195,6 +195,25 @@ fn a_test_in_a_module_that_no_build_compiles_does_not_prove_an_ac() -> TestResul
 
 // AC: CE-08.6
 #[test]
+fn a_test_in_a_file_that_no_build_runs_does_not_prove_an_ac() -> TestResult {
+    let (verdict, table) = trace("disabled-test-file", Some("P90"))?;
+    assert_eq!(verdict.findings.len(), 1, "{:?}", verdict.findings);
+    assert!(verdict.findings[0].message.contains("CE-90.2"));
+    assert!(
+        table.contains("CE-90.2   tests/never.rs:4 would_prove_the_second (does not count)
+"),
+        "{table}"
+    );
+    assert!(
+        table.contains("CE-90.1   src/lib.rs:5 proves_the_first
+"),
+        "{table}"
+    );
+    Ok(())
+}
+
+// AC: CE-08.6
+#[test]
 fn a_tag_inside_a_string_is_not_a_tag() -> TestResult {
     let (verdict, table) = trace("string-looks-like-a-tag", Some("P90"))?;
     assert!(verdict.passed(), "{:?}", verdict.findings);
