@@ -72,6 +72,54 @@ export function settle(page: Page): Promise<void> {
   );
 }
 
+/** Consecutive animation frames without a DOM change that mean a viewport editor has drawn. */
+const QUIET_FRAMES = 3;
+/** The longest `settleDrawing` waits for one scroll step. */
+const SETTLE_TIMEOUT_MS = 5_000;
+
+/**
+ * Wait until the editor host has finished drawing after a scroll step: its DOM has been quiet
+ * for `QUIET_FRAMES` consecutive animation frames. A fixed frame count is not enough, as a
+ * viewport editor (CodeMirror in WebKit) may draw the newly visible range several frames after the
+ * scroll. Throws when the editor is still changing after `SETTLE_TIMEOUT_MS`; it never goes on
+ * silently. `label` names the step in the error.
+ */
+export async function settleDrawing(page: Page, label = 'scroll step'): Promise<void> {
+  const settled = await page.evaluate(
+    ({ quiet, timeoutMs }) =>
+      new Promise<boolean>((resolve) => {
+        const host = document.getElementById('editor-host') ?? document.body;
+        let changed = false;
+        const observer = new MutationObserver(() => {
+          changed = true;
+        });
+        observer.observe(host, { subtree: true, childList: true, attributes: true, characterData: true });
+        const started = performance.now();
+        let calm = 0;
+        const frame = (): void => {
+          if (changed) {
+            changed = false;
+            calm = 0;
+          } else {
+            calm += 1;
+          }
+          if (calm >= quiet) {
+            observer.disconnect();
+            resolve(true);
+          } else if (performance.now() - started > timeoutMs) {
+            observer.disconnect();
+            resolve(false);
+          } else {
+            requestAnimationFrame(frame);
+          }
+        };
+        requestAnimationFrame(frame);
+      }),
+    { quiet: QUIET_FRAMES, timeoutMs: SETTLE_TIMEOUT_MS },
+  );
+  if (!settled) throw new Error(`editor did not settle after ${label}`);
+}
+
 /** Poll `condition` until it holds or `timeoutMs` has passed; returns whether it held. */
 export async function eventually(condition: () => Promise<boolean>, timeoutMs = 1_000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
@@ -176,8 +224,8 @@ function scrollEditorTo(page: Page, step: number): Promise<boolean> {
 }
 
 /**
- * Run `read` with the editor scrolled to the top and then down in half-window steps (two frames
- * at each), and return the union of what it found; the editor is scrolled back to the top at the
+ * Run `read` with the editor scrolled to the top and then down in half-window steps (waiting
+ * at each for the editor to finish drawing), and return the union of what it found; the editor is scrolled back to the top at the
  * end. A viewport editor draws only what is near the window, so a check that reads constructs
  * that are not under the caret must read them where they are drawn. Items are told apart by
  * `key` (default: the item as JSON): the DOM elements of a viewport editor are recycled, so an
@@ -196,19 +244,19 @@ export async function collectWhileScrolling<T>(
   const scrollTo = (step: number): Promise<boolean> => scrollEditorTo(page, step);
   try {
     await scrollTo(0);
-    await settle(page);
+    await settleDrawing(page, 'scroll step 0');
     await take();
     let reachedEnd = false;
     for (let step = 1; step <= MAX_STEPS && !reachedEnd; step++) {
       reachedEnd = await scrollTo(step);
-      await settle(page);
+      await settleDrawing(page, `scroll step ${step}`);
       await take();
     }
     // A truncated read would be a wrong verdict; an error row says the check could not run.
     if (!reachedEnd) throw new Error(`collectWhileScrolling: the end was not reached in ${MAX_STEPS} half-window steps`);
   } finally {
     await scrollTo(0);
-    await settle(page);
+    await settleDrawing(page, 'the scroll back to the top');
   }
   return [...found.values()];
 }
@@ -217,7 +265,7 @@ export async function collectWhileScrolling<T>(
  * Scroll the editor until an element matching `selector` is attached, then scroll it into view
  * (centred). For a driver or a check that has to click or fill a rendered element that is not
  * under the caret: a viewport editor draws only what is near the window, so a person would scroll
- * to it first. It starts at the top and goes down in half-window steps (two frames at each), over
+ * to it first. It starts at the top and goes down in half-window steps (waiting at each for the editor to finish drawing), over
  * the whole range; when `waitMs` is given it repeats the pass until that time is up, for an
  * element that is mounted late. It throws when the end is reached without the element. The caret
  * is never moved (moving it would turn the construct raw) and the viewport is never enlarged.
@@ -230,7 +278,7 @@ export async function revealElement(page: Page, selector: string, waitMs = 0): P
       (sel) => document.getElementById('editor-host')?.querySelector(sel)?.scrollIntoView({ block: 'center' }),
       selector,
     );
-    await settle(page);
+    await settleDrawing(page, 'scrolling the element into view');
     return present();
   };
   const deadline = Date.now() + waitMs;
@@ -239,13 +287,13 @@ export async function revealElement(page: Page, selector: string, waitMs = 0): P
     // push it out of a viewport editor's window and drop the UI state it holds.
     if ((await present()) && (await show())) return;
     await scrollEditorTo(page, 0);
-    await settle(page);
+    await settleDrawing(page, 'scroll step 0');
     let reachedEnd = false;
     for (let step = 1; step <= MAX_STEPS; step++) {
       if ((await present()) && (await show())) return;
       if (reachedEnd) break;
       reachedEnd = await scrollEditorTo(page, step);
-      await settle(page);
+      await settleDrawing(page, `scroll step ${step}`);
     }
     if (!reachedEnd) throw new Error(`revealElement: the end was not reached in ${MAX_STEPS} half-window steps`);
     if (Date.now() >= deadline) throw new Error(`revealElement: nothing matches ${selector}`);
