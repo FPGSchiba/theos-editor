@@ -50,7 +50,8 @@ for (const variant of variantsUnderTest()) {
     expect(voices.length, 'a scrolling read finds at least what one pass finds').toBeGreaterThanOrEqual(unscrolled);
     expect(await page.evaluate(() => window.__harness!.caret()), 'reading does not move the caret').toBe(caretBefore);
 
-    if (variant.wysiwyg) {
+    // Every variant but the baseline textarea draws callouts, the viewport editor included.
+    if (variant.baseline !== true) {
       expect(heads.some((head) => head.includes('Mother Ilse')), 'the head of the last voice is found').toBe(true);
       expect(heads.some((head) => head.includes('Hearth folk')), 'the head of the first voice is found').toBe(true);
       const words = await collectRows(page, '[data-dev-word]', (node) => ({ text: (node.textContent ?? '').trim() }));

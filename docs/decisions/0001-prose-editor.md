@@ -36,11 +36,12 @@ and the reports of the run of 2026-11-03 (commit 6b22b2b, Windows, Chromium 156,
   edits identical to the oracle, through commands and real input, in both engines; its adapter
   writes nothing of its own. ProseMirror stock kept 5 of 17 and 8 of 60. ProseMirror best effort
   (untouched blocks keep their source text, change steps are mapped onto it) kept 17 of 17 and
-  57 of 60; the misses are the pastes. It scores 1 for the class "the bytes between blocks have no
-  node in a ProseMirror tree": six variants, three left unpatched by controller ruling 26. In one,
-  Enter at the end of a voice or design callout's last paragraph, then typing, writes the whole
-  callout again and turns a line break inside its paragraph into a space
-  ([best-effort notes][pm-be-notes]).
+  57 of 60; the 17 hold by construction, because it saves the loaded text while no change is
+  pending, so they do not measure its parsing; the misses are the pastes. It scores 1 for the
+  class "the bytes between blocks have no node in a ProseMirror tree": six variants, three left
+  unpatched by controller ruling 26. In one, Enter at the end of a voice or design callout's last
+  paragraph, then typing, writes the whole callout again and turns a line break inside its
+  paragraph into a space ([best-effort notes][pm-be-notes]).
 - **Cost:** 1332 adapter lines for CodeMirror 6; 3325 for ProseMirror best effort, 988 of them
   the save mapping ([`adapter-size.md`][adapter-size]).
 - **Chips and callouts:** every feature and integration check passes for CodeMirror 6 and for
@@ -60,22 +61,28 @@ and the reports of the run of 2026-11-03 (commit 6b22b2b, Windows, Chromium 156,
   cannot show line breaks as written (spec §3).
 - **Readings and rulings the scores rest on** (comparison, Top two and Measured scores; the
   rulings are listed in the P10 PR). ProseMirror was prototyped by Jann's decision of 2026-10-31
-  on a paper tie with Milkdown. Two rulings were made at scoring time, after the results: ruling
-  29 (a recorded defect is a known bug only on a construct the corpus holds, or an everyday edit
-  of one) set ProseMirror's criteria 3 and 4 to 1; ruling 30 (the stress file is usable if it
-  opens, typing lands and the editor does not hang) raised its criterion 7 to 3. Ruling 32 rests
-  on code reading: both prototypes leave spell check on in raw attribute lines and raw callout
-  titles (where ProseMirror's link ids are plain text), which `I-spellcheck-off` did not see,
-  because it reads only chips and rendered rows. Under ruling 29 that set criterion 6 of both to
-  1; the first measured totals were 44 and 34. The comparison lists what other readings would
-  move, in weighted points: ProseMirror's criterion 1 at 2 if only the pastes decide, +3; its
-  criteria 3 and 4 at 2 if those defects count as limits, +2 each; criterion 6 at 2 for both if
-  the raw-line spell check counts as a limit, +2 each, or at 3 if the unmeasured parts are also
-  left to P11, +4 each; ProseMirror's criterion 2 at 2 if the undo history lost at a mode switch
-  counts, −2; its criterion 7 at 2 if usable means a latency bound, −1. With the four that favour
-  ProseMirror (criteria 1, 3 and 4 at 2, criterion 6 at 3 for both) it has 43 against 46; with
-  known bugs read broadly for both, 30 against 36. Each reading applied to both alike keeps the
-  order.
+  on a paper tie with Milkdown. Four rulings were made at scoring time, after the results
+  (rulings 29, 30, 32 and 34, all of 2026-11-04). Ruling 29 (a recorded defect is a known bug
+  only on a construct the corpus holds, or an everyday edit of one) set ProseMirror's criteria 3
+  and 4 to 1. Ruling 30 (the stress file is usable if it opens, typing lands and the editor does
+  not hang) raised its criterion 7 to 3. Ruling 32 decides a part the harness could have checked
+  but did not on a reading of the code: both prototypes leave spell check on in raw attribute
+  lines and raw callout titles (where ProseMirror's link ids are plain text), which
+  `I-spellcheck-off` did not see, because it reads only chips and rendered rows. Under ruling 29
+  that set criterion 6 of both to 1; the first measured totals were 44 and 34. Ruling 34 keeps
+  criterion 5 at 2 for both: "editing a parameter changes only its line" covers the five keys of
+  data model §9.4, so the unknown key `synthetic::` of S-901, which the shared `BeatRow` does not
+  open, is not a parameter, and its raw line stays editable; the focus lost after a row commit is
+  a missing convenience; no everyday edit triggers the redraw that loses an open input. The
+  comparison lists what other readings would move, in weighted points: ProseMirror's criterion 1
+  at 2 if only the pastes decide, +3; its criteria 3 and 4 at 2 if those defects count as limits,
+  +2 each; criterion 6 at 2 for both if the raw-line spell check counts as a limit, +2 each, or
+  at 3 if the unmeasured parts are also left to P11, +4 each; criterion 5 at 1 for both if the
+  beat-row limits count as known bugs, −2 each (CodeMirror 6 40, ProseMirror 30); ProseMirror's
+  criterion 2 at 2 if the undo history lost at a mode switch counts, −2; its criterion 7 at 2 if
+  usable means a latency bound, −1. With the four that favour ProseMirror (criteria 1, 3 and 4 at
+  2, criterion 6 at 3 for both) it has 43 against 46; with known bugs read broadly for both, 30
+  against 36. Each reading applied to both alike keeps the order.
 - **Unequal probing:** three review rounds probed Enter at block boundaries in ProseMirror; none
   probed Enter in CodeMirror 6's callouts and lists. CodeMirror 6's record there is clean partly
   because nobody looked, though its Enter only inserts a newline into the text, which is the file.
@@ -87,9 +94,10 @@ P12 ports the prototype's patterns ([CodeMirror notes][cm-notes]); it imports no
 **What P12 builds on top**
 
 - Front matter: a `transactionFilter` that drops a change inside it and moves a crossing change to
-  the body start. The stock `changeFilter` is not enough: it lets an insertion at offset 0 through
-  and loses the typed text of select-all-and-type. Source mode is a compartment swap in the same
-  view, so text, history and selection carry over.
+  the body start. The dossier's probe showed that the stock `changeFilter` is not enough: it lets
+  an insertion at offset 0 through and loses the typed text of select-all-and-type; the prototype
+  did not test it again. Source mode is a compartment swap in the same view, so text, history and
+  selection carry over.
 - Rendering: no parser extension was needed. Chips come from a scan of the visible lines,
   callouts from Lezer's `Blockquote`, beats from a scan of the body. A view plugin hides markers on
   lines no selection touches; chips are `Decoration.replace` widgets mounting `LinkChip`, also
@@ -139,8 +147,9 @@ P12 ports the prototype's patterns ([CodeMirror notes][cm-notes]); it imports no
 - Undo and redo pass no filter: harmless while the front matter is protected in both modes, a risk
   if P12 lets Source mode edit it.
 - The editor parses for display only; links and findings come from `theos-content` (spec §7).
-- Upstream: one maintainer wrote 120 of the 124 `@codemirror/view` commits in the 12 months
-  researched (ProseMirror's core has the same maintainer).
+- Upstream: one maintainer wrote 120 of the 124 `@codemirror/view` commits in the 5½ months to
+  the GitHub archive (2026-04-15); later commits are on Forgejo and could not be read.
+  ProseMirror's core has the same maintainer.
 
 **What P11 must check in the real webviews** (Playwright's engines are not the Tauri webviews;
 facts in the [webviews dossier][webviews]):
@@ -162,10 +171,10 @@ facts in the [webviews dossier][webviews]):
   without `compositionstart`. Playwright could not drive WebKit composition (a gap row of
   [`input.md`][input]).
 - Dead keys: a German-layout dead key can panic tao, Tauri's windowing layer, on Windows (tao
-  #1408). Whether WebView2 sends composition events for dead keys is unsettled: a 2016 statement
-  says Windows browsers fire none, UI Events says they must, and no current source settles it. The
-  `I-deadkey-*` checks sent a CDP composition in Chromium, the shape WebKit uses on macOS (WebKit
-  167880). Neither the Windows nor the WebKitGTK path was driven.
+  #1408, open, one report). Whether WebView2 sends composition events for dead keys is unsettled:
+  a 2016 statement says Windows browsers fire none, UI Events says they must, and no current
+  source settles it. The `I-deadkey-*` checks sent a CDP composition in Chromium, the shape WebKit
+  uses on macOS (WebKit 167880). Neither the Windows nor the WebKitGTK path was driven.
 
 ## Alternative
 
@@ -190,8 +199,9 @@ constructs P12 renders. It would cost instead ([best-effort notes][pm-be-notes],
 - Already paid in the prototype, and needed only because the document is a tree: a 322-line map
   from file offsets to tree positions.
 - Slower on very long files: the stress-file numbers above.
-- More open composition (13) and WebKit (18) issues, and `prosemirror-markdown` patch releases
-  that changed the serializer's output.
+- More open composition (13) and WebKit (18) issues, counted on 2026-10-31, than CodeMirror 6
+  had in its GitHub snapshot of 2026-04-15, its last readable count (12 open in all, one on IME);
+  and `prosemirror-markdown` patch releases that changed the serializer's output.
 
 ## If rejected
 

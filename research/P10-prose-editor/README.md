@@ -54,6 +54,12 @@ corepack pnpm test
   one part each. A byte mismatch or a failed feature check is recorded as a result, not as a
   test failure; `P10_STRICT=1` makes it fail. `P10_VARIANTS=a,b` limits the browser suites to the
   named variants (`codemirror`, `prosemirror:stock`, `prosemirror:best-effort`, `baseline`).
+- The round trip's `input` driver makes each edit as a person would (keys, clicks, a paste
+  event), with one exception: the local edit of the `external` rows comes in as one
+  `insertText`, one input event. Those rows therefore do not test how an editor groups fast
+  keystrokes into undo steps. Both prototypes group them anyway: `@codemirror/commands` and
+  `prosemirror-history` join adjacent changes less than 500 ms apart into one step by default
+  (`newGroupDelay`).
 - The reports in `report/` are rewritten only when `P10_REPORT=1` is set (in PowerShell:
   `$env:P10_REPORT = '1'`). The committed ones come from two runs, because the timings need the
   machine to themselves:

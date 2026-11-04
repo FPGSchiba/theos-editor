@@ -28,8 +28,8 @@ Umbrella global constraints, verbatim (`docs/specs/00-umbrella.md` §2):
   content project and the map toolset. `Theos-Engine` is never a dependency, except behind the
   cargo feature `engine`, which no phase here builds.
 - **G2** Platforms: Windows 11 x64 (primary), Linux x64, and macOS 13 or later on Apple silicon
-  and Intel (universal builds). Every PR is checked on Windows and Linux; macOS is tested weekly
-  and before every release (`docs/gate.md` §1).
+  and Intel (universal builds). Every PR is checked on Linux; Windows and macOS are tested
+  weekly, on demand (a label on the PR) and before every release (`docs/gate.md` §1).
 - **G3** Rust: stable toolchain pinned in `rust-toolchain.toml`, edition 2024, `unsafe_code`
   forbidden, `Cargo.lock` committed, all builds `--locked`.
 - **G4** Crates: `theos-content`, `theos-vcs`, `theos-studio` (libs); `theos`, `theos-mcp`,
@@ -585,8 +585,12 @@ sources are copied into the S list). A `## Top two` section applies spec §4.4.
     2_500_000)` imported from `corpus/generate-long.ts` (no generated files needed); per size,
     load to first paint (double
     `requestAnimationFrame`), 200 keystrokes at start, middle and end (latency from the
-    keydown's `timeStamp` to the next animation frame after the editor's DOM changed), scroll
-    to the end, heap via `performance.memory` in Chromium.
+    keydown's `timeStamp` until the main thread has styled, laid out and painted the frame after
+    the editor's DOM changed: that frame's animation-frame callback posts a `MessageChannel`
+    message, which runs after the frame's main-thread work, and the sample is taken there;
+    controller ruling 15 superseded "to the next animation frame" and keeps that earlier time
+    as a second field, `typingFrame`), scroll to the end, heap via `performance.memory` in
+    Chromium.
 - [ ] **Step 2: Run** `P10_VARIANTS=baseline pnpm exec playwright test features input integration long-docs`
   — expected: the suites run; `baseline` records `ok: false` for every rendered feature (it
   has none) and real numbers for the long documents. That proves the checks can fail.

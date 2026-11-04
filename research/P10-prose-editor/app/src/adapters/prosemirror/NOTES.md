@@ -52,6 +52,10 @@ Nothing else fails: no harness error, no timeout, no console error in `N-remount
 - **Front matter** (`frontmatter.ts`, `source.ts`). Write mode keeps it outside the ProseMirror document: split off on load, put back in front of the serializer's output. Source mode shows the whole file raw in the same view, as one block, and protects
   the front matter with a `filterTransaction` (any step that starts inside it is rejected) and a decoration for its look. Chosen over a second component so that the comparison counts one component; the cost is that the document, the history and the
   position source are replaced at every mode switch, so undo history does not survive a switch and Write to Source writes the serialized text, not the loaded bytes.
+  Limits of the guard: it rejects a whole step, so text typed over a selection that starts inside the front matter is lost (`Mod-a` selects the body only, so
+  select-all-and-type does not meet this). Its length (`protectedEnd`) and the guard plugin are fixed when Source mode starts (`setMode`); an external
+  change in Source mode (`applyExternal`) that makes the front matter longer or shorter leaves them at the old length, so the last characters of the
+  front matter become editable, or the first characters of the body are locked, until the next switch to Write mode and back. No check makes such a change.
 - **Live preview** (`livepreview.ts`). A plugin whose `decorations` add widgets for the blocks and runs the selection touches: `## ` before a heading, `*`, `**` or `` ` `` around emphasis, strong and code runs. The tree renders everything else.
   The markers are those of the stock serializer, so source written with `_` shows `*`.
 - **History** (`history.ts`). `prosemirror-history`; `markSaved()` creates the state again with the same document and selection and a new history plugin (the library has no reset, issue 1042).
