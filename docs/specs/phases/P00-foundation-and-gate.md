@@ -12,6 +12,11 @@ Linux only, and Windows joins macOS in a weekly and on-demand `platforms` workfl
 `lints` and `ac-trace` (D8; umbrella G2 changes with it). Revision 1 also takes in what the build
 PR settled on its way: the alias's own target directory (§5.1), the `settings` job's read scope
 (§5.6) and two approval steps (§5.7). The ACs are unchanged.
+
+**Revision 1a (4 Nov 2026).** The three clippy lints that guard the others stay at `deny`, not
+`forbid`: clap's derive allows the lint groups that contain them, and rustc refuses that once one
+of them is forbidden. `lints` rule 3 refuses any `allow` or `expect` of a guard lint instead
+(§5.2, §5.10). `unexpected_cfgs` stays `forbid`.
 Sources: `docs/specs/00-umbrella.md` (P00, G1–G18), `docs/gate.md`, `docs/architecture.md` §3,
 `CONTRIBUTING.md`, `docs/release.md`, `CLAUDE.md`.
 
@@ -296,24 +301,29 @@ unimplemented = "deny"
 dbg_macro = "deny"
 print_stdout = "deny"
 print_stderr = "deny"
-allow_attributes = "forbid"
-allow_attributes_without_reason = "forbid"
-ignore_without_reason = "forbid"
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+ignore_without_reason = "deny"
 exit = "deny"
 mem_forget = "deny"
 ```
 
-The four lints that guard the others are `forbid`, not `deny` (revision 1). rustc then refuses
-any `allow` or `expect` of them (E0453), at crate level, inside a module, in `cfg_attr` and in
-code a macro writes, so they cannot be switched off anywhere in the code:
+Four lints guard the others (revision 1):
 
-- `allow_attributes` makes every outer `#[allow]` an error, and `allow_attributes_without_reason`
-  every `allow` or `expect` without a reason. clippy leaves inner attributes alone, so an inner
-  `#![allow(…, reason = "…")]` passes it; `lints` catches that one (§5.10, rule 3);
-- `ignore_without_reason` makes every `#[ignore]` without a reason an error;
-- `unexpected_cfgs` (rustc's check of cfg names) rejects every cfg name rustc and cargo do not
-  know, so a misspelt, invented or non-ASCII name cannot hide code from the checks. A crate's
-  build script can declare more names; `gate/cfg-names.toml` (§5.10) still refuses them.
+- `unexpected_cfgs` (rustc's check of cfg names) is `forbid`. It rejects every cfg name rustc and
+  cargo do not know, so a misspelt, invented or non-ASCII name cannot hide code from the checks,
+  and at `forbid` rustc refuses any `allow` or `expect` of it (E0453). A crate's build script can
+  declare more names; `gate/cfg-names.toml` (§5.10) still refuses them.
+- `allow_attributes` makes every outer `#[allow]` an error, `allow_attributes_without_reason`
+  every `allow` or `expect` without a reason, and `ignore_without_reason` every `#[ignore]`
+  without a reason. These three stay at `deny` (revision 1a): derives such as clap's write
+  `#[allow(clippy::pedantic, clippy::restriction)]` into the code they generate, and rustc
+  refuses any allow of a lint group that contains a forbidden lint, so `forbid` would reject
+  every crate that uses such a derive.
+- What `forbid` would add, `lints` does (§5.10, rule 3): it refuses every `allow` attribute in
+  our code, inner ones included (clippy flags outer attributes only), and every `allow` or
+  `expect` that names one of the four guard lints, so `#[expect(clippy::ignore_without_reason,
+  reason = "…")]` cannot switch one off either.
 
 The other denied lints can still be expected with a reason (`#[expect(clippy::unwrap_used,
 reason = "…")]`); the reason is for the reviews to judge.
@@ -357,7 +367,7 @@ through `std::io::Write`.
 | `deny` | `cargo deny --locked check` (licences, advisories, bans, sources) with `deny.toml`. Advisory ignores need a reason. |
 | `engine-free` | Fails when either level finds an engine crate. **Declared:** every dependency of every workspace member (normal, dev, build, target-specific, renamed) that is an engine crate must be optional, and enabled only by the feature `engine` (`dep:x`, `x`, `x/…`, `x?/…`), and `default` must not reach `engine`. **Resolved:** `cargo metadata --locked` with default features contains no engine crate. An engine crate is a package from a source matching `gate/engine-crates.toml` (the theos-engine repo, case-insensitive), a path package outside the workspace root, or a package named in the list that is not a workspace member. |
 | `coverage` | Measures `cargo llvm-cov nextest --workspace --locked` per crate (lines in `crates/<name>/src/**` and `xtask/src/**`; `tests/` and fixtures excluded). Paths are normalised before they are mapped, so `src/../x.rs` is not under `src/`. The path mapping is complete because `lints` keeps the code of every library and binary inside its crate's `src/` (§5.10): llvm-cov leaves out files under `tests/` even when a library compiles them. Fails when a crate is below the floor of its class, when a workspace member has no class, or when a crate present on the baseline drops by more than the allowed amount. The baseline is the merge base with `main`, measured in a temporary worktree and cached by commit, toolchain and llvm-cov version (`target/xtask/coverage/` locally, `actions/cache` in CI). A crate with no instrumented lines passes and is reported as such. |
-| `lints` | **Files:** `[workspace.lints]` equals `gate/lints.toml` (compared as parsed TOML). Every crate has `lints.workspace = true`. Root `clippy.toml` and `.config/nextest.toml` equal their `gate/` copies. No `clippy.toml`, `.clippy.toml`, `rustfmt.toml`, `.rustfmt.toml`, `rust-toolchain` (without extension) or `.cargo/` exists anywhere else outside `**/tests/fixtures/**`. **Compiled code** (§5.10): library, binary and build-script targets compile Rust only from their crate's `src/` (a build script also from its `build.rs`) and use no `include!`; every `cfg` and `cfg_attr` predicate names only what `gate/cfg-names.toml` allows; no `allow` attribute anywhere, outer or inner, alone or inside `cfg_attr`, in the syntax tree or in macro input; no `#[expect]` or `#[ignore]` without a reason in macro input (clippy checks those everywhere else, §5.2). |
+| `lints` | **Files:** `[workspace.lints]` equals `gate/lints.toml` (compared as parsed TOML). Every crate has `lints.workspace = true`. Root `clippy.toml` and `.config/nextest.toml` equal their `gate/` copies. No `clippy.toml`, `.clippy.toml`, `rustfmt.toml`, `.rustfmt.toml`, `rust-toolchain` (without extension) or `.cargo/` exists anywhere else outside `**/tests/fixtures/**`. **Compiled code** (§5.10): library, binary and build-script targets compile Rust only from their crate's `src/` (a build script also from its `build.rs`) and use no `include!`; every `cfg` and `cfg_attr` predicate names only what `gate/cfg-names.toml` allows; no `allow` attribute anywhere, outer or inner, alone or inside `cfg_attr`, in the syntax tree or in macro input; no `#[expect]` or `#[ignore]` without a reason in macro input (clippy checks those everywhere else, §5.2); no `allow` or `expect` that names a guard lint (§5.2). |
 | `ac-trace` | Reads the ACs from `docs/specs/00-umbrella.md` with `pulldown-cmark`: ids matching `CE-\d{2}[A-Z]?\.\d+` in list items under each `### PNN ·` heading, and each phase's repo from the §3 table. Finds tags: in Rust, a `// AC: <id>[, <id>]*` comment directly above a test, that is above its first attribute or doc comment; a test is a function with a test attribute (`#[test]`, `#[<path>::test]`, `#[rstest]`, `#[test_case(…)]`) in a file that a test target compiles, read with `syn` (§5.10), so a tag in a file that nothing compiles does not count. In TypeScript, a `test(` or `it(` call (also `.each`, indented inside `describe` blocks), which covers Vitest and Playwright, in every tracked `.ts` file, `research/**` included, except `node_modules/` (P11 decides how TypeScript is read, §7). Phases whose repo in umbrella §3 is tower-of-theos (P01, P08) demand nothing here; their tests live there. **Fails** when: an AC of the branch's phase has no counting test; a tag names an id not in the umbrella; a comment starting with `// AC` is malformed or not directly above a test. A test does not count when it is `#[ignore]`d, `.skip`ped or `.fixme`d, or carries a `#[cfg(…)]` that names anything besides the target OS. Without a phase branch (`main`, `spec/`, `gate/`, `docs/`, `fix/`), only the id and placement rules apply. It prints AC → tests, and adds a pass/fail column when nextest JUnit output exists (read with `quick-xml`). |
 | `commit-msg` | Commits `base..head` (CI: from the event; locally: merge base with `origin/main` .. `HEAD`), skipping commits with two or more parents. Each message is parsed with `git-conventional` (type, scope, `!`, summary, body, footers); the rules on top are ours. Each message must have: a header `type(scope)!: summary` with a type and scope from `CONTRIBUTING.md` §2 (scope optional); a summary of at most 72 characters that does not start with an upper-case letter and does not end with `.`; a blank line before the body; body lines of at most 100 characters (a line with no spaces, such as a URL, is exempt); `!` if and only if there is a `BREAKING CHANGE:` (or `BREAKING-CHANGE:`) footer; `Phase: PNN` equal to the branch's phase on `phase/` branches; `Refs:` naming only ACs of the umbrella. CRLF in messages is read as LF. |
 | `pr-title` | A Conventional Commit header (same parser) whose summary ends with ` (PNN)`, ` (gate)` or ` (docs)`, or a release title `chore(release): vX.Y.Z` / `vX.Y.Z-rc.N`. It must match the branch: `phase/PNN-…` → `(PNN)`; `spec/PNN-…` → `docs(spec): … (PNN)`; `gate/…` → `(gate)`; `docs/…` → `(docs)`; `fix/…` → `(PNN)`, `(gate)` or `(docs)`; `release-plz-…` → release title. Any other branch name fails, naming `CONTRIBUTING.md` §1. |
@@ -490,7 +500,7 @@ Before a check reads anything itself, it asks the tool that already knows (D5):
 
 | Question | Answered by |
 |---|---|
-| Is there an `#[allow]`, an `#[expect]` without a reason, an `#[ignore]` without a reason? | clippy at `forbid` (§5.2), over the expanded code, for outer `#[allow]` and for every `expect` and `ignore`. Inner `#![allow]` and macro input: `lints` (rule 3 below). |
+| Is there an `#[allow]`, an `#[expect]` without a reason, an `#[ignore]` without a reason? | clippy at `deny` (§5.2), over the expanded code, for outer `#[allow]` and for every `expect` and `ignore`. Inner `#![allow]`, macro input, and any `allow` or `expect` of a guard lint: `lints` (rule 3 below). |
 | Does code test a cfg name that does not exist? | rustc's `unexpected_cfgs` at `forbid` |
 | Which files does each target compile? | cargo: the dep-info of every artifact of `cargo check --workspace --all-targets --locked` |
 | What does a Rust file contain: items, attributes, tests, macro calls? | `syn` (full syntax tree; positions through `proc-macro2` span locations). Inside macro calls and `macro_rules!` bodies: the `proc-macro2` tokens. |
@@ -537,9 +547,12 @@ and never opens Rust files by itself.
 3. **Attributes.** In the syntax tree and in the tokens of macro calls and `macro_rules!` bodies,
    every `allow` attribute is a finding: outer or inner, alone or inside `cfg_attr`, with or
    without a reason. In macro tokens, an `#[expect(…)]` without `reason` or an `#[ignore]`
-   without a reason is a finding too. clippy flags only outer `#[allow]`, and it does not see an
-   attribute that a macro passes through unchanged (`$(#[$m:meta])*`); every `expect` and
-   `ignore` the compiler sees is clippy's.
+   without a reason is a finding too. Anywhere, an `allow` or `expect` that names
+   `unexpected_cfgs`, `clippy::allow_attributes`, `clippy::allow_attributes_without_reason` or
+   `clippy::ignore_without_reason` is a finding, so the lints that guard the others cannot be
+   switched off (§5.2). clippy flags only outer `#[allow]`, and it does not see an attribute that
+   a macro passes through unchanged (`$(#[$m:meta])*`); every other `expect` and `ignore` the
+   compiler sees is clippy's.
 4. **Lint table and config files.** As in §5.4, over TOML and file names only.
 
 Removed with revision 1: the build PR's Rust tokenizer and attribute reader, its attribute,
@@ -561,7 +574,10 @@ attributes. TypeScript stays as it is until P11 (§7).
   body or in `cfg_attr` is found, and one with a reason still fails. serde's derive passes. An
   attribute forwarded through `$(#[$m:meta])*` passes, and so does an inner
   `#![allow(…, reason = "…")]`, alone or inside `#![cfg_attr(…)]` (clippy flags outer
-  attributes only), hence rule 3.
+  attributes only), hence rule 3. The build then found (4 Nov 2026) that clap's derive writes
+  `#[allow(clippy::pedantic, clippy::restriction)]`, which rustc refuses (E0453) once a lint of
+  those groups is `forbid`; hence `deny` for the three clippy guard lints, and rule 3 refusing
+  any `allow` or `expect` of them.
 - **`unexpected_cfgs`:** it refuses `coverage`, `testé`, `target_has_atomic_equal_alignment` and
   an unknown feature value, and accepts `clippy`, `debug_assertions` and `miri`, hence rule 2.
 - **dep-info of `cargo check`:** it lists `#[path]` and `include!` files, `include_str!` data,
@@ -740,6 +756,8 @@ directory.
   - `#[cfg(not(clippy))]`, `#[cfg(debug_assertions)]`, `#[cfg(miri)]`, and a cfg name that a
     build script declares;
   - an `#[allow]` forwarded through a macro;
+  - an `allow` or `expect` naming a guard lint, such as
+    `#[expect(clippy::ignore_without_reason, reason = "…")]`, and a clap derive (must pass);
   - an inner `#![allow(…, reason = "…")]` in a module or at crate level, and
     `#![cfg_attr(…, allow(…))]`;
   - a crate-level `clippy.toml`, a `rust-toolchain` file, and `.cargo/config.toml` in a crate
