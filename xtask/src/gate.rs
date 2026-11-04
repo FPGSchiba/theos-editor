@@ -54,7 +54,7 @@ fn run_check(
         }
         Check::Lints => lints::run(root, ci, shared, out),
         Check::EngineFree => engine_free::run(root, ci, out),
-        Check::AcTrace => ac_trace::run(root, ci, out),
+        Check::AcTrace => ac_trace::run(root, ci, shared, out),
         Check::CommitMsg => commit_msg::run(root, ci, out),
         Check::Coverage => coverage::run(root, ci, out),
         Check::PrTitle | Check::PrBody | Check::Approval | Check::Github => Err(Error::Missing {

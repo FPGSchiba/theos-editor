@@ -34,6 +34,21 @@ pub fn repo_files(root: &Path) -> Result<Vec<String>> {
     Ok(files)
 }
 
+/// Whether `path` (repo-relative, with `/`) is under a `tests/fixtures/` folder: test data that
+/// holds deliberate violations, which no check reads as part of the repository.
+#[must_use]
+pub fn is_fixture(path: &str) -> bool {
+    path.starts_with("tests/fixtures/") || path.contains("/tests/fixtures/")
+}
+
+/// The extension of `path`, such as `rs`.
+#[must_use]
+pub fn extension(path: &str) -> Option<&str> {
+    Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+}
+
 fn walk(root: &Path) -> Result<Vec<String>> {
     let mut files = Vec::new();
     // Directories still to read, each with its path relative to the root as a prefix.

@@ -22,10 +22,11 @@ use std::path::Path;
 
 use crate::branch::{Phase, parse_branch, phase_of};
 use crate::ci::CiEvent;
-use crate::files::repo_files;
+use crate::files::{extension, is_fixture, repo_files};
 use crate::git::Git;
 use crate::umbrella::{self, Umbrella};
 use crate::verdict::{Check, Finding, Verdict};
+use crate::view::{Shared, View};
 use crate::{Error, Result};
 
 /// The repository whose tests this check can see. A phase built in another one demands nothing.
@@ -241,13 +242,20 @@ fn printable(text: &str) -> String {
 ///
 /// The branch is the head branch of a pull request event, or else the one that is checked out;
 /// only `phase/PNN-…` has a phase. The results are read from the report of the profile `ci`
-/// under GitHub Actions and `default` elsewhere.
+/// under GitHub Actions and `default` elsewhere. The Rust tests come from the workspace view of
+/// `shared`.
 ///
 /// # Errors
 ///
 /// Fails when the umbrella spec or a source file cannot be read, the umbrella lists no criteria,
-/// the report exists and does not parse, or `HEAD` is detached outside a pull request.
-pub fn run(root: &Path, ci: Option<&CiEvent>, out: &mut dyn Write) -> Result<Verdict> {
+/// the workspace view cannot be built, the report exists and does not parse, or `HEAD` is
+/// detached outside a pull request.
+pub fn run(
+    root: &Path,
+    ci: Option<&CiEvent>,
+    shared: &Shared,
+    out: &mut dyn Write,
+) -> Result<Verdict> {
     let branch = match ci {
         Some(CiEvent::PullRequest(pull_request)) => parse_branch(&pull_request.head_ref),
         Some(CiEvent::Push(_) | CiEvent::Other) | None => match Git::new(root).current_branch()? {
@@ -259,24 +267,25 @@ pub fn run(root: &Path, ci: Option<&CiEvent>, out: &mut dyn Write) -> Result<Ver
             }
         },
     };
-    run_phase(root, phase_of(&branch), ci.is_some(), out)
+    run_phase(root, phase_of(&branch), ci.is_some(), shared, out)
 }
 
 /// Runs the check on the repository at `root` for `phase`; `ci` chooses the profile of the test
-/// report, as in [`run`].
+/// report, and `shared` holds the workspace view, as in [`run`].
 ///
 /// # Errors
 ///
 /// Fails when the umbrella spec or a source file cannot be read, the umbrella lists no criteria,
-/// or the report exists and does not parse.
+/// the workspace view cannot be built, or the report exists and does not parse.
 pub fn run_phase(
     root: &Path,
     phase: Option<Phase>,
     ci: bool,
+    shared: &Shared,
     out: &mut dyn Write,
 ) -> Result<Verdict> {
     let umbrella = umbrella::load(root)?;
-    let (tags, mut findings) = scan_files(root)?;
+    let (tags, mut findings) = scan_files(root, shared.view(root)?)?;
     let junit = read_junit(root, ci)?;
     let mut verdict = check(&umbrella, phase, &tags, junit.as_ref(), out);
     // The problems with tags come first, in file order, then the ones about ids and criteria.
@@ -285,47 +294,38 @@ pub fn run_phase(
     Ok(verdict)
 }
 
-/// The tags and the malformed or dangling tags of every scanned file.
-fn scan_files(root: &Path) -> Result<(Vec<Tag>, Vec<Finding>)> {
+/// The tags and the malformed or dangling tags of every file that is read.
+///
+/// The Rust files are those of the workspace `view`, which compile in some target; the findings
+/// of the view (files that do not parse) come first. A tag in a file that no test target compiles
+/// is dangling. TypeScript files come from the repository ([`is_typescript`]).
+fn scan_files(root: &Path, view: &View) -> Result<(Vec<Tag>, Vec<Finding>)> {
     let mut tags = Vec::new();
-    let mut findings = Vec::new();
-    for path in repo_files(root)?.iter().filter(|path| is_scanned(path)) {
+    let mut findings = view.findings.clone();
+    let test_files = view.test_files();
+    for source in view.sources() {
+        let (found, problems) = rust_tags::scan(source, test_files.contains(source.path.as_str()));
+        tags.extend(found);
+        findings.extend(problems);
+    }
+    for path in repo_files(root)?.iter().filter(|path| is_typescript(path)) {
         let full = root.join(path);
         let bytes = fs::read(&full).map_err(|source| Error::Io { path: full, source })?;
-        let text = String::from_utf8_lossy(&bytes);
-        let (found, problems) = if extension(path) == Some("rs") {
-            rust_tags::scan(path, &text)
-        } else {
-            ts_tags::scan(path, &text)
-        };
+        let (found, problems) = ts_tags::scan(path, &String::from_utf8_lossy(&bytes));
         tags.extend(found);
         findings.extend(problems);
     }
     Ok((tags, findings))
 }
 
-/// Whether the scanners read the file `path` (repo-relative, with `/`): Rust and TypeScript
-/// sources, except fixtures (`tests/fixtures/`) and anything under `target/` or `node_modules/`.
-/// Research folders are read like any other.
-fn is_scanned(path: &str) -> bool {
-    let source = matches!(extension(path), Some("rs" | "ts"));
+/// Whether `path` (repo-relative, with `/`) is a TypeScript file that is read: `.ts`, except
+/// fixtures (`tests/fixtures/`) and anything under `target/` or `node_modules/`. Research
+/// folders are read like any other.
+fn is_typescript(path: &str) -> bool {
     let built = path
         .split('/')
         .any(|part| part == "target" || part == "node_modules");
-    source && !is_fixture(path) && !built
-}
-
-/// Whether `path` (repo-relative, with `/`) is under a `tests/fixtures/` folder: test data that
-/// holds deliberate violations, which no check reads as part of the repository.
-pub(crate) fn is_fixture(path: &str) -> bool {
-    path.starts_with("tests/fixtures/") || path.contains("/tests/fixtures/")
-}
-
-/// The extension of `path`, such as `rs`.
-pub(crate) fn extension(path: &str) -> Option<&str> {
-    Path::new(path)
-        .extension()
-        .and_then(|extension| extension.to_str())
+    extension(path) == Some("ts") && !is_fixture(path) && !built
 }
 
 /// The results of the last test run of the profile, if nextest wrote a report.
@@ -417,10 +417,16 @@ mod tests {
 
     use super::*;
     use crate::git::testing::{TestResult, commit, git, init_repo};
+    use crate::view::ViewOptions;
     use crate::{Error, umbrella};
 
     const UMBRELLA: &str =
         include_str!("../../../tests/fixtures/ac-trace/complete-phase/docs/specs/00-umbrella.md");
+
+    /// A holder of a view that builds on a fixture workspace: offline, no `--locked`.
+    fn shared() -> Shared {
+        Shared::with(ViewOptions::FIXTURE)
+    }
 
     fn phase(text: &str) -> TestResult<Phase> {
         Ok(text.parse()?)
@@ -727,32 +733,30 @@ mod tests {
     }
 
     #[test]
-    fn scanned_files_are_rust_and_typescript_outside_fixtures_and_builds() {
+    fn typescript_files_are_tracked_outside_fixtures_node_modules_and_target() {
         for path in [
-            "src/lib.rs",
-            "xtask/src/main.rs",
             "editor-ui/e2e/editor.spec.ts",
             "editor-ui/src/lib/store.test.ts",
             "research/prose/prototype.spec.ts",
-            "crates/theos-content/tests/fixtures.rs",
-            "crates/theos-content/tests/fixturesX/a.rs",
+            "crates/theos-content/tests/fixturesX/a.ts",
         ] {
-            assert!(is_scanned(path), "{path}");
+            assert!(is_typescript(path), "{path}");
         }
         for path in [
             "README.md",
+            "src/lib.rs",
             "editor-ui/src/App.svelte",
             "editor-ui/src/main.js",
             "editor-ui/src/main.tsx",
-            "tests/fixtures/a.rs",
-            "xtask/tests/fixtures/ac-trace/case/src/lib.rs",
+            "tests/fixtures/a.ts",
+            "xtask/tests/fixtures/ac-trace/case/e2e/a.ts",
             "crates/theos-content/tests/fixtures/records/a.ts",
-            "target/debug/build/x.rs",
-            "crates/a/target/x.rs",
+            "target/debug/build/x.ts",
+            "crates/a/target/x.ts",
             "editor-ui/node_modules/pkg/index.ts",
             "node_modules/pkg/index.ts",
         ] {
-            assert!(!is_scanned(path), "{path}");
+            assert!(!is_typescript(path), "{path}");
         }
     }
 
@@ -774,6 +778,28 @@ mod tests {
         std::fs::create_dir_all(path.join("docs").join("specs"))?;
         std::fs::write(path.join(umbrella::PATH), UMBRELLA)?;
         std::fs::create_dir_all(path.join("src"))?;
+        std::fs::write(
+            path.join("Cargo.toml"),
+            "[package]
+name = \"fixture\"
+version = \"0.0.0\"
+edition = \"2024\"
+
+[lib]
+path = \"src/lib.rs\"
+
+[workspace]
+",
+        )?;
+        std::fs::write(
+            path.join("Cargo.lock"),
+            "version = 4
+
+[[package]]
+name = \"fixture\"
+version = \"0.0.0\"
+",
+        )?;
         std::fs::write(
             path.join("src").join("lib.rs"),
             "// AC: CE-90.1\n#[test]\nfn proves_the_first() {}\n",
@@ -801,15 +827,20 @@ mod tests {
     fn the_phase_comes_from_the_branch_or_from_the_pull_request() -> TestResult {
         let dir = repository("phase/P90-fixture")?;
         let path = dir.path();
-        let verdict = run(path, None, &mut Vec::new())?;
+        let verdict = run(path, None, &shared(), &mut Vec::new())?;
         assert_eq!(verdict.findings.len(), 1, "{:?}", verdict.findings);
         assert!(verdict.findings[0].message.contains("CE-90.2"));
 
         // The head branch of the pull request wins over the one checked out.
-        let verdict = run(path, Some(&pull_request("fix/x")), &mut Vec::new())?;
+        let verdict = run(
+            path,
+            Some(&pull_request("fix/x")),
+            &shared(),
+            &mut Vec::new(),
+        )?;
         assert!(verdict.passed(), "{:?}", verdict.findings);
         let on_phase = pull_request("phase/P90-fixture");
-        assert!(!run(path, Some(&on_phase), &mut Vec::new())?.passed());
+        assert!(!run(path, Some(&on_phase), &shared(), &mut Vec::new())?.passed());
         Ok(())
     }
 
@@ -817,15 +848,19 @@ mod tests {
     fn a_branch_without_a_phase_checks_only_the_tags() -> TestResult {
         for branch in ["fix/x", "spec/P90-x", "docs/x", "gate/x"] {
             let dir = repository(branch)?;
-            let verdict = run(dir.path(), None, &mut Vec::new())?;
+            let verdict = run(dir.path(), None, &shared(), &mut Vec::new())?;
             assert!(verdict.passed(), "{branch}: {:?}", verdict.findings);
         }
         let dir = repository("fix/x")?;
         std::fs::write(
+            dir.path().join("src").join("lib.rs"),
+            "mod more;\n// AC: CE-90.1\n#[test]\nfn proves_the_first() {}\n",
+        )?;
+        std::fs::write(
             dir.path().join("src").join("more.rs"),
             "// AC: CE-99.9\n#[test]\nfn unknown() {}\n",
         )?;
-        let verdict = run(dir.path(), None, &mut Vec::new())?;
+        let verdict = run(dir.path(), None, &shared(), &mut Vec::new())?;
         assert_eq!(verdict.findings.len(), 1, "{:?}", verdict.findings);
         Ok(())
     }
@@ -834,13 +869,21 @@ mod tests {
     fn a_detached_head_outside_a_pull_request_is_an_error() -> TestResult {
         let dir = repository("fix/x")?;
         git(dir.path(), &["switch", "-q", "--detach", "HEAD"])?;
-        let result = run(dir.path(), None, &mut Vec::new());
+        let result = run(dir.path(), None, &shared(), &mut Vec::new());
         assert!(
             matches!(&result, Err(Error::Missing { what }) if what.contains("--phase")),
             "{result:?}"
         );
         // The pull request says which branch it is from.
-        assert!(run(dir.path(), Some(&pull_request("fix/x")), &mut Vec::new())?.passed());
+        assert!(
+            run(
+                dir.path(),
+                Some(&pull_request("fix/x")),
+                &shared(),
+                &mut Vec::new()
+            )?
+            .passed()
+        );
         Ok(())
     }
 
@@ -854,7 +897,7 @@ mod tests {
         };
 
         let mut out = Vec::new();
-        run(path, None, &mut out)?;
+        run(path, None, &shared(), &mut out)?;
         assert_eq!(first_row(out)?, "CE-90.1   src/lib.rs:1 proves_the_first");
 
         for (profile, ci) in [("default", false), ("ci", true)] {
@@ -865,7 +908,7 @@ mod tests {
                 "<testsuites><testsuite name=\"x\"><testcase name=\"lib::proves_the_first\"/></testsuite></testsuites>",
             )?;
             let mut out = Vec::new();
-            run_phase(path, Some(phase("P90")?), ci, &mut out)?;
+            run_phase(path, Some(phase("P90")?), ci, &shared(), &mut out)?;
             assert_eq!(
                 first_row(out)?,
                 "CE-90.1   pass  src/lib.rs:1 proves_the_first",
@@ -881,7 +924,7 @@ mod tests {
                 .join("junit.xml"),
             "nope",
         )?;
-        let result = run(path, None, &mut Vec::new());
+        let result = run(path, None, &shared(), &mut Vec::new());
         assert!(matches!(result, Err(Error::Parse { .. })), "{result:?}");
         Ok(())
     }

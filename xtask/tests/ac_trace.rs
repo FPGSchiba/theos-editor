@@ -2,8 +2,8 @@
 //! the umbrella spec in the format of the real one: P90 is built in `theos-editor` and has the
 //! criteria CE-90.1 and CE-90.2, P91 is built in `tower-of-theos`.
 //!
-//! The fixtures are copied to a temporary directory first, where their files are scanned; in this
-//! repository `ac-trace` leaves everything under `tests/fixtures/` alone.
+//! Each fixture is a one-crate workspace, copied to a temporary directory first, where `cargo check`
+//! builds the view; in this repository `ac-trace` leaves everything under `tests/fixtures/` alone.
 
 use std::error::Error;
 use std::fs;
@@ -13,6 +13,7 @@ use std::process::{Command, Output};
 use xtask::branch::Phase;
 use xtask::checks::ac_trace;
 use xtask::verdict::{Check, Verdict};
+use xtask::view::{Shared, ViewOptions};
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
@@ -48,7 +49,8 @@ fn trace(name: &str, phase: Option<&str>) -> TestResult<(Verdict, String)> {
     let dir = copy_fixture(name)?;
     let phase = phase.map(str::parse::<Phase>).transpose()?;
     let mut out = Vec::new();
-    let verdict = ac_trace::run_phase(dir.path(), phase, false, &mut out)?;
+    let shared = Shared::with(ViewOptions::FIXTURE);
+    let verdict = ac_trace::run_phase(dir.path(), phase, false, &shared, &mut out)?;
     Ok((verdict, String::from_utf8(out)?))
 }
 
@@ -137,6 +139,48 @@ fn other_repo_phase_demands_nothing() -> TestResult {
     assert!(verdict.passed(), "{:?}", verdict.findings);
     assert_eq!(verdict.notes.len(), 1, "{:?}", verdict.notes);
     assert!(verdict.notes[0].contains("tower-of-theos"));
+    Ok(())
+}
+
+// AC: CE-08.6
+#[test]
+fn a_tag_in_a_file_no_target_compiles_does_not_count() -> TestResult {
+    let (verdict, table) = trace("uncompiled-file", Some("P90"))?;
+    assert_eq!(verdict.findings.len(), 1, "{:?}", verdict.findings);
+    assert!(verdict.findings[0].message.contains("CE-90.1"));
+    assert!(verdict.findings[0].message.contains("no test that counts"));
+    assert!(
+        table.contains(
+            "CE-90.1   no counting test
+"
+        ),
+        "{table}"
+    );
+    assert!(!table.contains("orphan.rs"), "{table}");
+    Ok(())
+}
+
+// AC: CE-08.6
+#[test]
+fn a_tag_above_a_test_in_an_inline_module_counts() -> TestResult {
+    let (verdict, table) = trace("tag-in-inline-module", Some("P90"))?;
+    assert!(verdict.passed(), "{:?}", verdict.findings);
+    assert!(
+        table.contains(
+            "CE-90.1   src/lib.rs:5 proves_the_first
+"
+        ),
+        "{table}"
+    );
+    Ok(())
+}
+
+// AC: CE-08.6
+#[test]
+fn a_tag_inside_a_string_is_not_a_tag() -> TestResult {
+    let (verdict, table) = trace("string-looks-like-a-tag", Some("P90"))?;
+    assert!(verdict.passed(), "{:?}", verdict.findings);
+    assert!(!table.contains("CE-99.9"), "{table}");
     Ok(())
 }
 

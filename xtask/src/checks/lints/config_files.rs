@@ -22,7 +22,7 @@ use std::fs;
 use std::path::Path;
 
 use super::{Inputs, Rule, at_file};
-use crate::checks::ac_trace::is_fixture;
+use crate::files::is_fixture;
 use crate::verdict::Finding;
 use crate::{Error, Result};
 
