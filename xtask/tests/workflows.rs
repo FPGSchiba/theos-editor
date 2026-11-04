@@ -187,7 +187,7 @@ fn map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
 }
 
 /// The suffixes GitHub adds to the name of a job that runs on one OS of a matrix.
-const OS_SUFFIXES: [&str; 3] = [" (linux)", " (windows)", " (macos)"];
+const OS_SUFFIXES: [&str; 2] = [" (windows)", " (macos)"];
 
 /// The check a job runs: its name without the OS suffix.
 fn check_of(name: &str) -> &str {
