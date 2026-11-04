@@ -811,3 +811,25 @@ pub struct S;
     }
     Ok(())
 }
+
+#[test]
+fn the_gate_guards_the_lints_that_guard_the_others() -> TestResult {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("gate")
+        .join("lints.toml");
+    let table: toml::Table = fs::read_to_string(path)?.parse()?;
+    for (section, lint, expected) in [
+        ("rust", "unexpected_cfgs", "forbid"),
+        ("clippy", "allow_attributes", "deny"),
+        ("clippy", "allow_attributes_without_reason", "deny"),
+        ("clippy", "ignore_without_reason", "deny"),
+    ] {
+        let level = table
+            .get(section)
+            .and_then(|s| s.get(lint))
+            .and_then(toml::Value::as_str);
+        assert_eq!(level, Some(expected), "{section}.{lint}");
+    }
+    Ok(())
+}

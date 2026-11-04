@@ -1,6 +1,7 @@
 [rust]
 unsafe_code = "forbid"
 missing_docs = "deny"
+unexpected_cfgs = "forbid"
 rust_2018_idioms = { level = "warn", priority = -1 }
 
 [rustdoc]
@@ -19,5 +20,6 @@ print_stdout = "deny"
 print_stderr = "deny"
 allow_attributes = "deny"
 allow_attributes_without_reason = "deny"
+ignore_without_reason = "deny"
 exit = "deny"
 mem_forget = "deny"
