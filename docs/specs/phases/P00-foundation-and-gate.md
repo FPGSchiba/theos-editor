@@ -1,8 +1,10 @@
 # P00 · Foundation and gate — phase spec
 
-Status: approved 31 Oct 2026 (#5) · revision 1 waiting for Jann's approval (spec PR) · 3 Nov 2026
+Status: approved 31 Oct 2026 (#5) · revision 1 (#9) and 1a (#10) approved · revision 1b waiting
+for Jann's approval (spec PR) · 4 Nov 2026
 Phase: P00 · Repo: theos-editor · Depends on: – · Slice: S2
 Branches: `spec/P00-foundation-and-gate` (this spec), `spec/P00-gate-redesign` (revision 1),
+`spec/P00-gate-lints` (revision 1a), `spec/P00-gate-rules` (revision 1b),
 `phase/P00-foundation-and-gate` (build)
 
 **Revision 1 (3 Nov 2026).** The checks read code through the compiler, cargo and real parsers
@@ -17,6 +19,25 @@ PR settled on its way: the alias's own target directory (§5.1), the `settings` 
 `forbid`: clap's derive allows the lint groups that contain them, and rustc refuses that once one
 of them is forbidden. `lints` rule 3 refuses any `allow` or `expect` of a guard lint instead
 (§5.2, §5.10). `unexpected_cfgs` stays `forbid`.
+
+**Revision 1b (4 Nov 2026).** The spec takes in what the final review of the build PR (#7)
+settled. The ACs are unchanged.
+
+- **`lints` rule 3** also refuses every `warn` attribute: `#![warn(warnings)]` lets clippy pass a
+  denied lint as a warning. It asks for a reason on every `expect` and `ignore`, because clippy
+  does not see an item that a `cfg` strips on the checking machine. It also refuses an `allow` or
+  `expect` of `clippy::pedantic` or `clippy::restriction`, which contain guard lints (§5.2, §5.4,
+  §5.10).
+- **Rule 2** refuses an empty `any()`, which is always false.
+- **`ac-trace`** reads the `cfg` of a test's enclosing modules and functions and of its file (§5.4,
+  §5.10).
+- **The view and `coverage`** compare paths against the workspace root as cargo names it (§5.10).
+- **`pr-title`** counts the ` (#N)` that the squash commit adds (§5.4).
+- **Workflows:** the token goes only to the steps that call GitHub, and only `approval` keeps the
+  checkout's git credentials (§5.6).
+- **`approval`:** with `approved` but no recorded approval, a run fails without removing the label
+  (§5.7, step 8).
+
 Sources: `docs/specs/00-umbrella.md` (P00, G1–G18), `docs/gate.md`, `docs/architecture.md` §3,
 `CONTRIBUTING.md`, `docs/release.md`, `CLAUDE.md`.
 
@@ -320,10 +341,14 @@ Four lints guard the others (revision 1):
   `#[allow(clippy::pedantic, clippy::restriction)]` into the code they generate, and rustc
   refuses any allow of a lint group that contains a forbidden lint, so `forbid` would reject
   every crate that uses such a derive.
-- What `forbid` would add, `lints` does (§5.10, rule 3): it refuses every `allow` attribute in
-  our code, inner ones included (clippy flags outer attributes only), and every `allow` or
-  `expect` that names one of the four guard lints, so `#[expect(clippy::ignore_without_reason,
-  reason = "…")]` cannot switch one off either.
+- What `forbid` would add, `lints` does (§5.10, rule 3):
+  - It refuses every `allow` and every `warn` attribute in our code, inner ones included (clippy
+    flags outer `allow` only). A `warn` lowers a denied lint, and `#![warn(warnings)]` undoes the
+    `-D warnings` of the clippy run.
+  - It refuses every `allow` or `expect` that names one of the four guard lints, or the groups
+    `clippy::pedantic` and `clippy::restriction` that contain them. So
+    `#[expect(clippy::ignore_without_reason, reason = "…")]` cannot switch one off either.
+  - It asks for a reason on every `expect` and `ignore`, also where clippy does not look.
 
 The other denied lints can still be expected with a reason (`#[expect(clippy::unwrap_used,
 reason = "…")]`); the reason is for the reviews to judge.
@@ -367,10 +392,10 @@ through `std::io::Write`.
 | `deny` | `cargo deny --locked check` (licences, advisories, bans, sources) with `deny.toml`. Advisory ignores need a reason. |
 | `engine-free` | Fails when either level finds an engine crate. **Declared:** every dependency of every workspace member (normal, dev, build, target-specific, renamed) that is an engine crate must be optional, and enabled only by the feature `engine` (`dep:x`, `x`, `x/…`, `x?/…`), and `default` must not reach `engine`. **Resolved:** `cargo metadata --locked` with default features contains no engine crate. An engine crate is a package from a source matching `gate/engine-crates.toml` (the theos-engine repo, case-insensitive), a path package outside the workspace root, or a package named in the list that is not a workspace member. |
 | `coverage` | Measures `cargo llvm-cov nextest --workspace --locked` per crate (lines in `crates/<name>/src/**` and `xtask/src/**`; `tests/` and fixtures excluded). Paths are normalised before they are mapped, so `src/../x.rs` is not under `src/`. The path mapping is complete because `lints` keeps the code of every library and binary inside its crate's `src/` (§5.10): llvm-cov leaves out files under `tests/` even when a library compiles them. Fails when a crate is below the floor of its class, when a workspace member has no class, or when a crate present on the baseline drops by more than the allowed amount. The baseline is the merge base with `main`, measured in a temporary worktree and cached by commit, toolchain and llvm-cov version (`target/xtask/coverage/` locally, `actions/cache` in CI). A crate with no instrumented lines passes and is reported as such. |
-| `lints` | **Files:** `[workspace.lints]` equals `gate/lints.toml` (compared as parsed TOML). Every crate has `lints.workspace = true`. Root `clippy.toml` and `.config/nextest.toml` equal their `gate/` copies. No `clippy.toml`, `.clippy.toml`, `rustfmt.toml`, `.rustfmt.toml`, `rust-toolchain` (without extension) or `.cargo/` exists anywhere else outside `**/tests/fixtures/**`. **Compiled code** (§5.10): library, binary and build-script targets compile Rust only from their crate's `src/` (a build script also from its `build.rs`) and use no `include!`; every `cfg` and `cfg_attr` predicate names only what `gate/cfg-names.toml` allows; no `allow` attribute anywhere, outer or inner, alone or inside `cfg_attr`, in the syntax tree or in macro input; no `#[expect]` or `#[ignore]` without a reason in macro input (clippy checks those everywhere else, §5.2); no `allow` or `expect` that names a guard lint (§5.2). |
-| `ac-trace` | Reads the ACs from `docs/specs/00-umbrella.md` with `pulldown-cmark`: ids matching `CE-\d{2}[A-Z]?\.\d+` in list items under each `### PNN ·` heading, and each phase's repo from the §3 table. Finds tags: in Rust, a `// AC: <id>[, <id>]*` comment directly above a test, that is above its first attribute or doc comment; a test is a function with a test attribute (`#[test]`, `#[<path>::test]`, `#[rstest]`, `#[test_case(…)]`) in a file that a test target compiles, read with `syn` (§5.10), so a tag in a file that nothing compiles does not count. In TypeScript, a `test(` or `it(` call (also `.each`, indented inside `describe` blocks), which covers Vitest and Playwright, in every tracked `.ts` file, `research/**` included, except `node_modules/` (P11 decides how TypeScript is read, §7). Phases whose repo in umbrella §3 is tower-of-theos (P01, P08) demand nothing here; their tests live there. **Fails** when: an AC of the branch's phase has no counting test; a tag names an id not in the umbrella; a comment starting with `// AC` is malformed or not directly above a test. A test does not count when it is `#[ignore]`d, `.skip`ped or `.fixme`d, or carries a `#[cfg(…)]` that names anything besides the target OS. Without a phase branch (`main`, `spec/`, `gate/`, `docs/`, `fix/`), only the id and placement rules apply. It prints AC → tests, and adds a pass/fail column when nextest JUnit output exists (read with `quick-xml`). |
+| `lints` | **Files:** `[workspace.lints]` equals `gate/lints.toml` (compared as parsed TOML). Every crate has `lints.workspace = true`. Root `clippy.toml` and `.config/nextest.toml` equal their `gate/` copies. No `clippy.toml`, `.clippy.toml`, `rustfmt.toml`, `.rustfmt.toml`, `rust-toolchain` (without extension) or `.cargo/` exists anywhere else outside `**/tests/fixtures/**`. **Compiled code** (§5.10): library, binary and build-script targets compile Rust only from their crate's `src/` (a build script also from its `build.rs`) and use no `include!`; every `cfg` and `cfg_attr` predicate names only what `gate/cfg-names.toml` allows, and none is an empty `any()`; no `allow` or `warn` attribute anywhere, outer or inner, alone or inside `cfg_attr`, in the syntax tree or in macro input; no `#[expect]` or `#[ignore]` without a reason anywhere (clippy sees neither macro input nor code that a `cfg` strips on the checking machine); no `allow` or `expect` that names a guard lint, `clippy::pedantic` or `clippy::restriction` (§5.2). |
+| `ac-trace` | Reads the ACs from `docs/specs/00-umbrella.md` with `pulldown-cmark`: ids matching `CE-\d{2}[A-Z]?\.\d+` in list items under each `### PNN ·` heading, and each phase's repo from the §3 table. Finds tags: in Rust, a `// AC: <id>[, <id>]*` comment directly above a test, that is above its first attribute or doc comment; a test is a function with a test attribute (`#[test]`, `#[<path>::test]`, `#[rstest]`, `#[test_case(…)]`) in a file that a test target compiles, read with `syn` (§5.10), so a tag in a file that nothing compiles does not count. In TypeScript, a `test(` or `it(` call (also `.each`, indented inside `describe` blocks), which covers Vitest and Playwright, in every tracked `.ts` file, `research/**` included, except `node_modules/` (P11 decides how TypeScript is read, §7). Phases whose repo in umbrella §3 is tower-of-theos (P01, P08) demand nothing here; their tests live there. **Fails** when: an AC of the branch's phase has no counting test; a tag names an id not in the umbrella; a comment starting with `// AC` is malformed or not directly above a test. A test does not count when it is `#[ignore]`d, `.skip`ped or `.fixme`d, or when a `#[cfg(…)]` names anything besides the target OS. That `cfg` may sit on the test, on an enclosing module or function, or on its file (`#![cfg(…)]`); on an enclosing item or the file, `test` is allowed too. Without a phase branch (`main`, `spec/`, `gate/`, `docs/`, `fix/`), only the id and placement rules apply. It prints AC → tests, and adds a pass/fail column when nextest JUnit output exists (read with `quick-xml`). |
 | `commit-msg` | Commits `base..head` (CI: from the event; locally: merge base with `origin/main` .. `HEAD`), skipping commits with two or more parents. Each message is parsed with `git-conventional` (type, scope, `!`, summary, body, footers); the rules on top are ours. Each message must have: a header `type(scope)!: summary` with a type and scope from `CONTRIBUTING.md` §2 (scope optional); a summary of at most 72 characters that does not start with an upper-case letter and does not end with `.`; a blank line before the body; body lines of at most 100 characters (a line with no spaces, such as a URL, is exempt); `!` if and only if there is a `BREAKING CHANGE:` (or `BREAKING-CHANGE:`) footer; `Phase: PNN` equal to the branch's phase on `phase/` branches; `Refs:` naming only ACs of the umbrella. CRLF in messages is read as LF. |
-| `pr-title` | A Conventional Commit header (same parser) whose summary ends with ` (PNN)`, ` (gate)` or ` (docs)`, or a release title `chore(release): vX.Y.Z` / `vX.Y.Z-rc.N`. It must match the branch: `phase/PNN-…` → `(PNN)`; `spec/PNN-…` → `docs(spec): … (PNN)`; `gate/…` → `(gate)`; `docs/…` → `(docs)`; `fix/…` → `(PNN)`, `(gate)` or `(docs)`; `release-plz-…` → release title. Any other branch name fails, naming `CONTRIBUTING.md` §1. |
+| `pr-title` | A Conventional Commit header (same parser) whose summary ends with ` (PNN)`, ` (gate)` or ` (docs)`, or a release title `chore(release): vX.Y.Z` / `vX.Y.Z-rc.N`. It must match the branch: `phase/PNN-…` → `(PNN)`; `spec/PNN-…` → `docs(spec): … (PNN)`; `gate/…` → `(gate)`; `docs/…` → `(docs)`; `fix/…` → `(PNN)`, `(gate)` or `(docs)`; `release-plz-…` → release title. Any other branch name fails, naming `CONTRIBUTING.md` §1. When the PR number is known (CI), the summary plus ` (#N)` must fit the 72 characters, because the squash commit on `main` is the title plus ` (#N)` and `commit-msg` judges it there. |
 | `pr-body` | Template and body are read with `pulldown-cmark` (CommonMark), so a heading inside a code block or an HTML comment is not a heading. The sections are the level-two headings of `.github/pull_request_template.md` at the checked-out commit. Each must appear in the body, in any order, with content: text other than HTML comments and whitespace. A missing body counts as empty. CRLF is read as LF. |
 | `approval` | §5.7. |
 
@@ -414,6 +439,10 @@ Rules for every workflow, checked by a test:
 - the top-level `permissions: contents: read`; only `approval` adds `pull-requests: write` and
   `issues: write`, and `settings` adds `issues: read` (in a private repository the workflow token
   needs it to list labels);
+- `GH_TOKEN` is set only on the steps that call GitHub (`cargo xtask approval`,
+  `cargo xtask github check`), never on a job, so the setup steps never receive it;
+- every `actions/checkout` sets `persist-credentials: false`, except the two of `approval`, which
+  keep the credentials because `cargo xtask approval` fetches the PR's refs;
 - actions are pinned by full SHA with the version as a comment;
 - `concurrency` cancels outdated runs for `ci.yml` and `pr.yml`; `approval.yml` queues and never
   cancels, so label changes are never cut off halfway.
@@ -452,12 +481,17 @@ runs or reads configuration from the PR's working tree.
    - with `approved` and a recorded fingerprint equal to the current one: pass;
    - with `approved` but a different fingerprint: remove `approved`, keep `needs-jann`, comment
      "approval removed: the PR changed after approval (old → new)", and fail;
-   - with `approved` but none recorded (the `labeled` run was dropped or ran while another run
-     was in flight): the same actions, but the comment says that no approval was recorded and
-     asks Jann to add the label again once the run has finished.
+   - with `approved` but none recorded: fail, saying that no approval is recorded for this
+     content yet. Do not remove `approved`, and write no comment. Only the run of the
+     `labeled` `approved` event records (step 6), and the run of another event can go before it.
+     For example, when Jann removes a label and adds `approved` in the same second, the first run
+     reads the fresh labels, which already hold `approved`, and must not undo the approval that
+     the next run records. If the `labeled` run was dropped or ran for an earlier commit, the
+     check stays red, and Jann removes `approved` and adds it again.
 
 Label and comment changes made with the workflow token start no new workflow runs, so there is no
-loop. `needs-jann` is never removed by CI either: it marks the PR as Jann's for good. The decision
+loop. `needs-jann` is never removed by CI either: it marks the PR as Jann's for good. Removing it
+by hand only starts a run that adds it back. The decision
 logic (steps 3 and 5–8) is a pure function over (protected?, event, labels, recorded and current
 fingerprint) returning a verdict and a list of actions; the earlier-commit check of step 4 runs
 before it, for protected PRs only. The tests drive it through the fake GitHub.
@@ -500,7 +534,7 @@ Before a check reads anything itself, it asks the tool that already knows (D5):
 
 | Question | Answered by |
 |---|---|
-| Is there an `#[allow]`, an `#[expect]` without a reason, an `#[ignore]` without a reason? | clippy at `deny` (§5.2), over the expanded code, for outer `#[allow]` and for every `expect` and `ignore`. Inner `#![allow]`, macro input, and any `allow` or `expect` of a guard lint: `lints` (rule 3 below). |
+| Is there an `#[allow]`, an `#[expect]` without a reason, an `#[ignore]` without a reason? | clippy at `deny` (§5.2), over the expanded code that the checking machine builds, for outer `#[allow]` and for every `expect` and `ignore` there. `lints` (rule 3 below) covers the rest: inner `#![allow]`, every `warn`, macro input, a reasonless `expect` or `ignore` anywhere (so code behind another OS's `cfg` is judged on Linux too), and any `allow` or `expect` of a guard lint or of its groups. |
 | Does code test a cfg name that does not exist? | rustc's `unexpected_cfgs` at `forbid` |
 | Which files does each target compile? | cargo: the dep-info of every artifact of `cargo check --workspace --all-targets --locked` |
 | What does a Rust file contain: items, attributes, tests, macro calls? | `syn` (full syntax tree; positions through `proc-macro2` span locations). Inside macro calls and `macro_rules!` bodies: the `proc-macro2` tokens. |
@@ -516,7 +550,11 @@ and never opens Rust files by itself.
 
 - It runs `cargo check --workspace --all-targets --locked --message-format=json`. For every
   artifact of a workspace member it keeps the package, the target's kind and name, and the files
-  in its dep-info, normalised and relative to the repo root.
+  in its dep-info, normalised and relative to the workspace root as cargo names it (the
+  `workspace_root` of `cargo metadata`). Cargo builds its paths from the kernel's spelling of its
+  working directory, so the root as given would not match on a symlinked clone or on macOS
+  (`/var` is `/private/var`). `coverage` compares the llvm-cov paths against the same root, and one
+  lexical path normaliser serves both.
 - It parses each Rust file among them once with `syn`. A file that does not parse is a finding;
   rustc would not compile it either.
 - It is built at most once per xtask run, so `cargo xtask gate` shares it between `lints` and
@@ -543,16 +581,24 @@ and never opens Rust files by itself.
    names, and it refuses the ones that differ between the builds the checks make: `clippy` (set
    only in the clippy build), `debug_assertions`, `overflow_checks`, `ub_checks` and `panic` (the
    release build differs from every checked build), `miri`, `doctest`, and any name a build
-   script declares.
-3. **Attributes.** In the syntax tree and in the tokens of macro calls and `macro_rules!` bodies,
-   every `allow` attribute is a finding: outer or inner, alone or inside `cfg_attr`, with or
-   without a reason. In macro tokens, an `#[expect(…)]` without `reason` or an `#[ignore]`
-   without a reason is a finding too. Anywhere, an `allow` or `expect` that names
-   `unexpected_cfgs`, `clippy::allow_attributes`, `clippy::allow_attributes_without_reason` or
-   `clippy::ignore_without_reason` is a finding, so the lints that guard the others cannot be
-   switched off (§5.2). clippy flags only outer `#[allow]`, and it does not see an attribute that
-   a macro passes through unchanged (`$(#[$m:meta])*`); every other `expect` and `ignore` the
-   compiler sees is clippy's.
+   script declares. An empty `any()` is refused like `cfg(false)`: it is always false and hides
+   code from every check.
+3. **Attributes.** The rule reads the syntax tree and the tokens of macro calls and
+   `macro_rules!` bodies, and these are findings there:
+   - Every `allow` and every `warn` attribute: outer or inner, alone or inside `cfg_attr`, with or
+     without a reason. The levels come from `gate/lints.toml`, and a `warn` of a denied lint under
+     `#![warn(warnings)]` lets `cargo clippy -- -D warnings` pass with the lint printed as a
+     warning. `deny` and `forbid` raise a level and pass.
+   - An `#[expect(…)]` without `reason`, or an `#[ignore]` without a reason, wherever it stands.
+     Clippy does not see macro input, a `cfg_attr` that the compiler does not apply, or an item
+     that a `cfg` strips on the checking machine.
+   - Anywhere, an `allow` or `expect` that names `unexpected_cfgs`, `clippy::allow_attributes`,
+     `clippy::allow_attributes_without_reason`, `clippy::ignore_without_reason`, or the groups
+     `clippy::pedantic` and `clippy::restriction` that contain them. So the lints that guard the
+     others cannot be switched off (§5.2).
+
+   Clippy also flags only outer `#[allow]`, and it does not see an attribute that a macro passes
+   through unchanged (`$(#[$m:meta])*`).
 4. **Lint table and config files.** As in §5.4, over TOML and file names only.
 
 Removed with revision 1: the build PR's Rust tokenizer and attribute reader, its attribute,
@@ -564,7 +610,9 @@ messages. Their rules stay, over the parsed values.
 trees of the files that test targets compile. A tag is a `// AC:` comment among the comments
 directly above a test's first attribute or doc comment. A comment starting with `// AC` anywhere
 else in a compiled file is a dangling tag. `#[ignore]` and `#[cfg(…)]` are read from the parsed
-attributes. TypeScript stays as it is until P11 (§7).
+attributes: those of the test, of every enclosing module and function, and the file's inner
+attributes. A file stays in the dep-info even when its `#![cfg(…)]` switches all of it off.
+TypeScript stays as it is until P11 (§7).
 
 **Probe evidence** (pinned 1.99.1, 3 Nov 2026):
 
@@ -583,6 +631,10 @@ attributes. TypeScript stays as it is until P11 (§7).
 - **dep-info of `cargo check`:** it lists `#[path]` and `include!` files, `include_str!` data,
   and library code under `tests/`. A leading byte-order mark changes nothing.
 - **`clippy::ignore_without_reason`:** it refuses `#[ignore]` and accepts `#[ignore = "…"]`.
+- **`warn`** (4 Nov 2026): `#![warn(warnings)]` with `#![warn(clippy::unwrap_used)]`, where the
+  table denies `unwrap_used`, lets `cargo clippy --all-targets -- -D warnings` exit 0, with the
+  unwrap printed as a warning. Hence `warn` in rule 3. A reasonless `#[ignore]` behind
+  `#[cfg(windows)]` passes clippy on Linux, hence reasons everywhere.
 - **llvm-cov:** it measures `#[path]` and `include!` code outside `src/` and never data, and it
   leaves out library code under `tests/`, hence rule 1.
 
