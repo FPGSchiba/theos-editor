@@ -21,7 +21,9 @@ Versions, as researched and measured (variant `codemirror` in [`variants.ts`][va
 ## Why
 
 Quoted from [`comparison.md`][comparison] (`Stage: final`, sections Matrix and Measured scores)
-and the reports of the run of 2026-11-03 (commit 6b22b2b, Windows, Chromium 156, WebKit 27.2).
+and the reports (Windows, Chromium 156, WebKit 27.2): round trip, input and long documents from
+Task 17's run of 2026-11-03 on commit 6b22b2b; features and integration from the rerun of
+2026-11-04 on commit 0f70ac5 (ruling 37), with verdicts identical to Task 17's.
 
 - **Totals: CodeMirror 6 42, ProseMirror/Tiptap 32** of 54 (42 and 33 on paper), no knockout.
   The 10 points come from byte stability (6), link chips (2) and callouts (2); every other
@@ -61,8 +63,8 @@ and the reports of the run of 2026-11-03 (commit 6b22b2b, Windows, Chromium 156,
   cannot show line breaks as written (spec §3).
 - **Readings and rulings the scores rest on** (comparison, Top two and Measured scores; the
   rulings are listed in the P10 PR). ProseMirror was prototyped by Jann's decision of 2026-10-31
-  on a paper tie with Milkdown. Four rulings were made at scoring time, after the results
-  (rulings 29, 30, 32 and 34, all of 2026-11-04). Ruling 29 (a recorded defect is a known bug
+  on a paper tie with Milkdown. Five rulings were made at scoring time, after the results
+  (rulings 29, 30, 32, 34 and 36, all of 2026-11-04). Ruling 29 (a recorded defect is a known bug
   only on a construct the corpus holds, or an everyday edit of one) set ProseMirror's criteria 3
   and 4 to 1. Ruling 30 (the stress file is usable if it opens, typing lands and the editor does
   not hang) raised its criterion 7 to 3. Ruling 32 decides a part the harness could have checked
@@ -73,16 +75,23 @@ and the reports of the run of 2026-11-03 (commit 6b22b2b, Windows, Chromium 156,
   criterion 5 at 2 for both: "editing a parameter changes only its line" covers the five keys of
   data model §9.4, so the unknown key `synthetic::` of S-901, which the shared `BeatRow` does not
   open, is not a parameter, and its raw line stays editable; the focus lost after a row commit is
-  a missing convenience; no everyday edit triggers the redraw that loses an open input. The
-  comparison lists what other readings would move, in weighted points: ProseMirror's criterion 1
-  at 2 if only the pastes decide, +3; its criteria 3 and 4 at 2 if those defects count as limits,
-  +2 each; criterion 6 at 2 for both if the raw-line spell check counts as a limit, +2 each, or
-  at 3 if the unmeasured parts are also left to P11, +4 each; criterion 5 at 1 for both if the
-  beat-row limits count as known bugs, −2 each (CodeMirror 6 40, ProseMirror 30); ProseMirror's
-  criterion 2 at 2 if the undo history lost at a mode switch counts, −2; its criterion 7 at 2 if
-  usable means a latency bound, −1. With the four that favour ProseMirror (criteria 1, 3 and 4 at
-  2, criterion 6 at 3 for both) it has 43 against 46; with known bugs read broadly for both, 30
-  against 36. Each reading applied to both alike keeps the order.
+  a missing convenience; no everyday edit triggers the redraw that loses an open input. Ruling 36
+  keeps ProseMirror's criterion 2 at 3: criterion 2 judges the front matter bytes through the
+  edits it names (typing, delete at the body start, select-all and type, paste, undo) and Source
+  mode in one component. Two defects of the Source-mode guard need steps the criterion does not
+  name, so they are recorded costs, by the standard that makes CodeMirror 6's filter-free undo a recorded risk:
+  after an external change in Source mode the guard keeps its old length, and text typed over a
+  selection that starts in the front matter is lost. The comparison lists what other readings
+  would move, in weighted points: ProseMirror's criterion 1 at 2 if only the pastes decide, +3;
+  its criteria 3 and 4 at 2 if those defects count as limits, +2 each; criterion 6 at 2 for both
+  if the raw-line spell check counts as a limit, +2 each, or at 3 if the unmeasured parts are also
+  left to P11, +4 each; criterion 5 at 1 for both if the beat-row limits count as known bugs, −2
+  each (CodeMirror 6 40, ProseMirror 30); ProseMirror's criterion 2 at 2 if the undo history lost
+  at a mode switch counts, −2, or at 1 if the two guard defects count as known bugs, −4
+  (CodeMirror 6 42, ProseMirror 28); its criterion 7 at 2 if usable means a latency bound, −1.
+  With the four that favour ProseMirror (criteria 1, 3 and 4 at 2, criterion 6 at 3 for both) it
+  has 43 against 46; with known bugs read broadly for both, 26 against 36. Each reading applied
+  to both alike keeps the order.
 - **Unequal probing:** three review rounds probed Enter at block boundaries in ProseMirror; none
   probed Enter in CodeMirror 6's callouts and lists. CodeMirror 6's record there is clean partly
   because nobody looked, though its Enter only inserts a newline into the text, which is the file.
@@ -194,8 +203,9 @@ constructs P12 renders. It would cost instead ([best-effort notes][pm-be-notes],
 - Plain-text paste and a soft-break node in schema and parser, named but not built; the node is
   also what spec §3's line breaks as written need.
 - Still to build: chips in raw lines and Enter in callouts (above), spell check off on raw
-  attribute lines and raw titles (CodeMirror 6 needs that too), and an undo history that survives
-  a Write/Source switch.
+  attribute lines and raw titles (CodeMirror 6 needs that too), an undo history that survives
+  a Write/Source switch, and a Source-mode guard that follows the front matter's length after an
+  external change and keeps text typed over a selection that starts in it (above, ruling 36).
 - Already paid in the prototype, and needed only because the document is a tree: a 322-line map
   from file offsets to tree positions.
 - Slower on very long files: the stress-file numbers above.

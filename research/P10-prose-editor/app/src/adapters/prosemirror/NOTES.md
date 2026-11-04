@@ -50,9 +50,9 @@ Nothing else fails: no harness error, no timeout, no console error in `N-remount
   between; blocks that markdown-it and the schema do not pair one to one (an empty list item) fall back to proportional guesses; a paragraph line that starts like a list item (`2. x` inside a paragraph) is read as a marker.
   Probes show offsets round-trip (`caretTo`, `caret`) in headings, soft-wrapped paragraphs, quote lines, setext and fenced blocks, and typing lands next to the same characters.
 - **Front matter** (`frontmatter.ts`, `source.ts`). Write mode keeps it outside the ProseMirror document: split off on load, put back in front of the serializer's output. Source mode shows the whole file raw in the same view, as one block, and protects
-  the front matter with a `filterTransaction` (any step that starts inside it is rejected) and a decoration for its look. Chosen over a second component so that the comparison counts one component; the cost is that the document, the history and the
+  the front matter with a `filterTransaction` (a transaction is rejected whole when any of its steps changes a range that starts inside it) and a decoration for its look. Chosen over a second component so that the comparison counts one component; the cost is that the document, the history and the
   position source are replaced at every mode switch, so undo history does not survive a switch and Write to Source writes the serialized text, not the loaded bytes.
-  Limits of the guard: it rejects a whole step, so text typed over a selection that starts inside the front matter is lost (`Mod-a` selects the body only, so
+  Limits of the guard: it rejects the whole transaction, so text typed over a selection that starts inside the front matter is lost (`Mod-a` selects the body only, so
   select-all-and-type does not meet this). Its length (`protectedEnd`) and the guard plugin are fixed when Source mode starts (`setMode`); an external
   change in Source mode (`applyExternal`) that makes the front matter longer or shorter leaves them at the old length, so the last characters of the
   front matter become editable, or the first characters of the body are locked, until the next switch to Write mode and back. No check makes such a change.

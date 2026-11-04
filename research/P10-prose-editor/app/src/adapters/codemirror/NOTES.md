@@ -21,7 +21,7 @@ After Task 11 Chromium and WebKit failed the two checks below; they were the har
   Write mode hides it with a `Decoration.replace` from a direct decoration set, makes `[0, bodyStart]` an
   atomic range, and a transaction filter keeps every selection in the body. Both modes share one
   `transactionFilter`: a change inside the front matter is dropped, a change that starts inside and ends in the body starts
-  at the body instead. The dossier suggested `changeFilter`; it was not used because its measured behaviour
+  at the body instead. The dossier suggested `changeFilter`; it was not used because the dossier's probe showed that it
   lets an insertion at offset 0 through and loses the typed text of a select-all-and-type. Undo and redo
   run with `filter: false`, so no filter sees them; none is needed, because they only invert changes that
   already passed. The filter lets a change through that carries the `fromOutside` annotation (`applyExternal`).

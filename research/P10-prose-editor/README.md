@@ -61,10 +61,15 @@ corepack pnpm test
   `prosemirror-history` join adjacent changes less than 500 ms apart into one step by default
   (`newGroupDelay`).
 - The reports in `report/` are rewritten only when `P10_REPORT=1` is set (in PowerShell:
-  `$env:P10_REPORT = '1'`). The committed ones come from two runs, because the timings need the
-  machine to themselves:
+  `$env:P10_REPORT = '1'`). A suite without rows in a run leaves its report as it is. The
+  round-trip, input and long-document reports come from Task 17's two runs on commit 6b22b2b,
+  two because the timings need the machine to themselves:
   `P10_REPORT=1 corepack pnpm exec playwright test --grep-invert @long`, then
   `P10_REPORT=1 corepack pnpm exec playwright test long-docs --workers=1` (about 15 minutes).
+  The feature and integration reports come from a rerun on commit 0f70ac5 (controller ruling
+  37), after the scroll-aware reads were made to wait until the editor has finished drawing:
+  `P10_REPORT=1 corepack pnpm exec playwright test features integration`, with
+  `test-results/raw` emptied first. Every row is identical to Task 17's run.
   `node scripts/licences.ts` writes `licences.md` and `adapter-size.md`.
 - By hand: `corepack pnpm dev` and open <http://localhost:5179>. Pick a corpus file and a variant;
   the toolbar switches between Write and Source. In the browser console, `__harness.text()`

@@ -78,11 +78,19 @@ const QUIET_FRAMES = 3;
 const SETTLE_TIMEOUT_MS = 5_000;
 
 /**
+ * The editor was still drawing when `settleDrawing` gave up: a harness error, not a verdict on a
+ * feature. Its own class lets callers that turn errors into "feature missing" pass it through.
+ */
+export class SettleTimeout extends Error {
+  override name = 'SettleTimeout';
+}
+
+/**
  * Wait until the editor host has finished drawing after a scroll step: its DOM has been quiet
  * for `QUIET_FRAMES` consecutive animation frames. A fixed frame count is not enough, as a
  * viewport editor (CodeMirror in WebKit) may draw the newly visible range several frames after the
- * scroll. Throws when the editor is still changing after `SETTLE_TIMEOUT_MS`; it never goes on
- * silently. `label` names the step in the error.
+ * scroll. Throws a `SettleTimeout` when the editor is still changing after `SETTLE_TIMEOUT_MS`;
+ * it never goes on silently. `label` names the step in the error.
  */
 export async function settleDrawing(page: Page, label = 'scroll step'): Promise<void> {
   const settled = await page.evaluate(
@@ -117,7 +125,7 @@ export async function settleDrawing(page: Page, label = 'scroll step'): Promise<
       }),
     { quiet: QUIET_FRAMES, timeoutMs: SETTLE_TIMEOUT_MS },
   );
-  if (!settled) throw new Error(`editor did not settle after ${label}`);
+  if (!settled) throw new SettleTimeout(`editor did not settle after ${label}`);
 }
 
 /** Poll `condition` until it holds or `timeoutMs` has passed; returns whether it held. */
@@ -242,6 +250,8 @@ export async function collectWhileScrolling<T>(
     for (const item of await read()) if (!found.has(key(item))) found.set(key(item), item);
   };
   const scrollTo = (step: number): Promise<boolean> => scrollEditorTo(page, step);
+  // The first error is the one that says what went wrong; the scroll back must not replace it.
+  let failure: { error: unknown } | undefined;
   try {
     await scrollTo(0);
     await settleDrawing(page, 'scroll step 0');
@@ -254,10 +264,16 @@ export async function collectWhileScrolling<T>(
     }
     // A truncated read would be a wrong verdict; an error row says the check could not run.
     if (!reachedEnd) throw new Error(`collectWhileScrolling: the end was not reached in ${MAX_STEPS} half-window steps`);
-  } finally {
+  } catch (error) {
+    failure = { error };
+  }
+  try {
     await scrollTo(0);
     await settleDrawing(page, 'the scroll back to the top');
+  } catch (error) {
+    failure ??= { error };
   }
+  if (failure !== undefined) throw failure.error;
   return [...found.values()];
 }
 

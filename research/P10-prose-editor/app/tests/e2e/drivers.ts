@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { resolveAnchor } from '../../src/harness/anchor.ts';
 import { editOffset, expectedAfter, NOTE_STATE, toLf } from '../../src/harness/oracle.ts';
 import type { ScriptedEdit } from '../../src/harness/types.ts';
-import { revealElement } from './checks.ts';
+import { revealElement, SettleTimeout } from './checks.ts';
 import { registerDriver, type EditDriver } from './helpers.ts';
 
 // The `input` driver: a scripted edit as a person would make it, with the keyboard and the mouse
@@ -51,7 +51,9 @@ async function beatParam(page: Page, edit: ScriptedEdit & { kind: 'beat-param' }
   const reveal = async (selector: string, what: string): Promise<void> => {
     try {
       await revealElement(page, selector, FEATURE_WAIT_MS);
-    } catch {
+    } catch (error) {
+      // An editor that never stopped drawing is a harness error, not a missing feature.
+      if (error instanceof SettleTimeout) throw error;
       throw new Error(`feature missing: ${what} is not rendered`);
     }
   };
