@@ -46,10 +46,11 @@ pub struct Header {
     pub summary: String,
 }
 
-/// Reads `type(scope)!: summary`. The scope and the `!` are optional, exactly one space follows
-/// the colon, and the type is a word of ASCII letters, digits and hyphens.
+/// Reads `type(scope)!: summary` with `git-conventional`. The scope and the `!` are optional.
+/// Our rule on top of the crate: exactly one space follows the colon, as `CONTRIBUTING.md` §2
+/// writes the header; the crate accepts any number of spaces, or none.
 ///
-/// Any such type and scope are accepted here; whether they are allowed is for
+/// Any type and scope the crate accepts are accepted here; whether they are allowed is for
 /// [`header_problems`].
 ///
 /// # Errors
@@ -60,54 +61,29 @@ pub fn parse_header(line: &str) -> std::result::Result<Header, String> {
         let hint = hint_for(line);
         format!("the header is not `type(scope)!: summary`: {why}{hint}")
     };
-    let Some(kind_end) = line.find(['(', '!', ':']) else {
-        return Err(not_a_header("there is no `:`"));
-    };
-    let kind = &line[..kind_end];
-    if kind.is_empty() {
-        return Err(not_a_header("the type is missing"));
+    if line.contains(['\n', '\r']) {
+        return Err(not_a_header("the header is one line"));
     }
-    if !kind.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
-        return Err(not_a_header(
-            "the type is one word of letters, digits and hyphens",
-        ));
-    }
-    let mut rest = &line[kind_end..];
-    let mut scope = None;
-    if let Some(after) = rest.strip_prefix('(') {
-        let Some((word, tail)) = after.split_once(')') else {
-            return Err(not_a_header("the scope is not closed with `)`"));
-        };
-        if word.is_empty() {
-            return Err(not_a_header("the scope in parentheses is empty"));
-        }
-        scope = Some(word.to_owned());
-        rest = tail;
-    }
-    let breaking = rest.starts_with('!');
-    if breaking {
-        rest = &rest[1..];
-    }
-    let Some(after_colon) = rest.strip_prefix(':') else {
-        return Err(not_a_header(
-            "`:` must follow the type, the scope and the `!`",
-        ));
-    };
-    let Some(summary) = after_colon.strip_prefix(' ') else {
-        return Err(not_a_header("exactly one space must follow the colon"));
-    };
-    if summary.starts_with(char::is_whitespace) {
+    let commit =
+        git_conventional::Commit::parse(line).map_err(|error| not_a_header(&error.to_string()))?;
+    let summary = commit.description();
+    let before_summary = &line[..line.len() - summary.len()];
+    if !before_summary.ends_with(": ") || before_summary.ends_with("  ") {
         return Err(not_a_header("exactly one space must follow the colon"));
     }
-    if summary.is_empty() {
-        return Err(not_a_header("the summary is empty"));
+    Ok(header_of(&commit, line))
+}
+
+/// The header fields of a parsed commit; `!` is read from the text before the first `: ` of
+/// `first_line`, because the crate's own flag also counts the `BREAKING CHANGE` footer.
+fn header_of(commit: &git_conventional::Commit<'_>, first_line: &str) -> Header {
+    let before_colon = first_line.split_once(": ").map_or("", |(before, _)| before);
+    Header {
+        kind: commit.type_().to_string(),
+        scope: commit.scope().map(|scope| scope.to_string()),
+        breaking: before_colon.ends_with('!'),
+        summary: commit.description().to_owned(),
     }
-    Ok(Header {
-        kind: kind.to_owned(),
-        scope,
-        breaking,
-        summary: summary.to_owned(),
-    })
 }
 
 /// What to add, beyond the shape, for the headers git and its tools write by themselves.
@@ -188,14 +164,16 @@ pub struct Message {
     /// The footers as `(key, value)`; a value that continues on further lines has them joined
     /// with `\n`.
     pub footers: Vec<(String, String)>,
+    /// Every line after the header, as written (the crate drops the separator spacing of a
+    /// footer, so the length rule reads the lines from here).
+    pub lines: Vec<String>,
 }
 
-/// Reads a whole commit message.
+/// Reads a whole commit message with `git-conventional`.
 ///
-/// CRLF is read as LF. A blank line must follow the header when anything follows it. The footers
-/// are the last paragraph, when its first line is `Key: value` with a key of letters and hyphens
-/// or `BREAKING CHANGE`; a line of that paragraph that is not itself a footer continues the
-/// footer before it. Everything between the header and the footers is the body.
+/// CRLF is read as LF. The crate decides what is the body and what are the footers, and that a
+/// blank line follows the header when anything follows it. The header gets the rule of
+/// [`parse_header`].
 ///
 /// # Errors
 ///
@@ -203,76 +181,23 @@ pub struct Message {
 /// after it is missing.
 pub fn parse_message(text: &str) -> std::result::Result<Message, String> {
     let text = text.replace("\r\n", "\n");
-    let mut lines = text.trim_end_matches('\n').split('\n');
-    // `split` yields at least one item; an empty message fails in the header parser.
-    let header = parse_header(lines.next().unwrap_or_default())?;
-    let rest: Vec<&str> = lines.collect();
-    let Some((&separator, content)) = rest.split_first() else {
-        return Ok(Message {
-            header,
-            body: Vec::new(),
-            footers: Vec::new(),
-        });
-    };
-    if !is_blank(separator) {
-        return Err("a blank line must separate the header from the body".to_owned());
-    }
-    let content = trim_blank_lines(content);
-    let last_paragraph = content
-        .iter()
-        .rposition(|line| is_blank(line))
-        .map_or(0, |blank| blank + 1);
-    let has_footers = content
-        .get(last_paragraph)
-        .is_some_and(|line| split_footer(line).is_some());
-    let (body, footer_lines) = if has_footers {
-        content.split_at(last_paragraph)
-    } else {
-        (content, &[][..])
-    };
+    let first_line = text.split('\n').next().unwrap_or_default();
+    let header = parse_header(first_line)?;
+    let commit = git_conventional::Commit::parse(&text)
+        .map_err(|_| "a blank line must separate the header from the body".to_owned())?;
     Ok(Message {
         header,
-        body: trim_blank_lines(body)
+        lines: text.split('\n').skip(1).map(str::to_owned).collect(),
+        body: commit
+            .body()
+            .map(|body| body.split('\n').map(str::to_owned).collect())
+            .unwrap_or_default(),
+        footers: commit
+            .footers()
             .iter()
-            .map(|line| (*line).to_owned())
+            .map(|footer| (footer.token().to_string(), footer.value().to_owned()))
             .collect(),
-        footers: footers_of(footer_lines),
     })
-}
-
-fn is_blank(line: &str) -> bool {
-    line.trim().is_empty()
-}
-
-/// `lines` without the blank lines at its start and its end.
-fn trim_blank_lines<'a, 'b>(lines: &'b [&'a str]) -> &'b [&'a str] {
-    let start = lines.iter().position(|line| !is_blank(line));
-    let end = lines.iter().rposition(|line| !is_blank(line));
-    match (start, end) {
-        (Some(start), Some(end)) => &lines[start..=end],
-        _ => &[],
-    }
-}
-
-/// `Key: value`, with a key of letters and hyphens or `BREAKING CHANGE`.
-fn split_footer(line: &str) -> Option<(&str, &str)> {
-    let (key, value) = line.split_once(": ")?;
-    let word = !key.is_empty() && key.chars().all(|c| c.is_ascii_alphabetic() || c == '-');
-    (word || key == "BREAKING CHANGE").then_some((key, value))
-}
-
-/// The footers in `lines`, the first of which is a footer line.
-fn footers_of(lines: &[&str]) -> Vec<(String, String)> {
-    let mut footers: Vec<(String, String)> = Vec::new();
-    for line in lines {
-        if let Some((key, value)) = split_footer(line) {
-            footers.push((key.to_owned(), value.to_owned()));
-        } else if let Some((_, value)) = footers.last_mut() {
-            value.push('\n');
-            value.push_str(line);
-        }
-    }
-    footers
 }
 
 /// Everything wrong with a parsed message beyond its header ([`header_problems`]):
@@ -298,13 +223,7 @@ pub fn message_problems(
 }
 
 fn line_length_problems(message: &Message, problems: &mut Vec<String>) {
-    // The lines as they were written: a footer's first line has its key in front.
-    let footer_lines = message.footers.iter().flat_map(|(key, value)| {
-        let mut lines = value.split('\n').map(str::to_owned);
-        let first = lines.next().unwrap_or_default();
-        std::iter::once(format!("{key}: {first}")).chain(lines)
-    });
-    for line in message.body.iter().cloned().chain(footer_lines) {
+    for line in &message.lines {
         let length = line.chars().count();
         if length > MAX_LINE && line.contains(' ') {
             let start: String = line.chars().take(30).collect();
@@ -638,7 +557,7 @@ mod tests {
     }
 
     #[test]
-    fn body_and_footers_are_told_apart() -> TestResult {
+    fn a_paragraph_shaped_like_a_footer_starts_the_footers() -> TestResult {
         let both =
             parse_message("feat: x\n\nFirst paragraph\nstill first.\n\nSecond.\n\nRefs: CE-08.1")?;
         assert_eq!(
@@ -647,10 +566,17 @@ mod tests {
         );
         assert_eq!(both.footers, [("Refs".to_owned(), "CE-08.1".to_owned())]);
 
-        let only_body =
-            parse_message("feat: x\n\nWhy: no footers here, a single sentence.\n\nMore.")?;
-        assert_eq!(only_body.footers, Vec::<(String, String)>::new());
-        assert_eq!(only_body.body.len(), 3);
+        // git-conventional's grammar: a paragraph that starts like a footer starts the footers,
+        // and the lines after it continue its value.
+        let shaped = parse_message("feat: x\n\nWhy: no footers here, a single sentence.\n\nMore.")?;
+        assert_eq!(shaped.body, Vec::<String>::new());
+        assert_eq!(
+            shaped.footers,
+            [(
+                "Why".to_owned(),
+                "no footers here, a single sentence.\n\nMore.".to_owned()
+            )]
+        );
 
         // The last paragraph is the footers, even when it is the only one.
         let only_footers = parse_message("feat: x\n\nPhase: P00\nRefs: CE-08.1, CE-08.2")?;
@@ -667,6 +593,22 @@ mod tests {
         let padded = parse_message("feat: x\n\nbody\n\nPhase: P00\n\n\n")?;
         assert_eq!(padded.body, ["body"]);
         assert_eq!(padded.footers.len(), 1);
+        Ok(())
+    }
+
+    // AC: CE-08.10
+    #[test]
+    fn the_rules_still_judge_a_message_whose_first_paragraph_looks_like_a_footer() -> TestResult {
+        let text = "feat: x
+
+Why: a sentence.
+
+More.
+Phase: P01
+Refs: CE-99.1";
+        let found = problems(text, "phase/P00-x", &["CE-08.1"])?;
+        assert!(has_problem(&found, "Phase: P01"), "{found:?}");
+        assert!(has_problem(&found, "CE-99.1"), "{found:?}");
         Ok(())
     }
 
@@ -852,6 +794,19 @@ mod tests {
         ] {
             assert_eq!(refs(bad)?.len(), 1, "{bad}");
         }
+        Ok(())
+    }
+
+    // AC: CE-08.10
+    #[test]
+    fn the_bang_comes_from_the_header_not_from_the_footer() -> TestResult {
+        let text = "feat(cli): rename the flag
+
+BREAKING CHANGE: it is renamed";
+        let message = parse_message(text)?;
+        assert!(!message.header.breaking);
+        let found = problems(text, "main", &[])?;
+        assert!(has_problem(&found, "no `!`"), "{found:?}");
         Ok(())
     }
 

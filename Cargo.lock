@@ -267,6 +267,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "git-conventional"
+version = "0.12.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6a949b7fcc81df22526032dcddb006e78c8575e47b0e7ba57d9960570a57bc4"
+dependencies = [
+ "unicase",
+ "winnow 0.7.15",
+]
+
+[[package]]
 name = "globset"
 version = "0.4.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -668,7 +678,7 @@ dependencies = [
  "toml_datetime",
  "toml_parser",
  "toml_writer",
- "winnow",
+ "winnow 1.0.4",
 ]
 
 [[package]]
@@ -686,7 +696,7 @@ version = "1.1.5+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c"
 dependencies = [
- "winnow",
+ "winnow 1.0.4",
 ]
 
 [[package]]
@@ -803,6 +813,15 @@ dependencies = [
 
 [[package]]
 name = "winnow"
+version = "0.7.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "winnow"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
@@ -814,6 +833,7 @@ dependencies = [
  "anyhow",
  "cargo_metadata",
  "clap",
+ "git-conventional",
  "globset",
  "pulldown-cmark",
  "quick-xml",
