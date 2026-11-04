@@ -21,7 +21,7 @@ All checks are required status checks on `main` (branch protection, administrato
 | `deny` | `cargo deny --locked check` (licences, advisories, bans, sources) | Linux |
 | `engine-free` | `cargo xtask engine-free`: no engine crate in the tree without feature `engine` | Linux |
 | `coverage` | `cargo xtask coverage`: per-crate line coverage ≥ floor in `gate/thresholds.toml`, and no crate drops more than the allowed amount below `main` | Linux |
-| `lints` | `cargo xtask lints`: `[workspace.lints]` in the root `Cargo.toml` equals `gate/lints.toml`; the config files equal their `gate/` copies and exist nowhere else; library and binary code comes only from its crate's `src/`; `cfg` names only what `gate/cfg-names.toml` allows; no `allow` attribute anywhere, outer or inner; no reasonless `#[expect]` or `#[ignore]` in macro input (P00 spec §5.10). The rest of the attribute rules is clippy's (§2). | Linux |
+| `lints` | `cargo xtask lints`: `[workspace.lints]` in the root `Cargo.toml` equals `gate/lints.toml`; the config files equal their `gate/` copies and exist nowhere else; library and binary code comes only from its crate's `src/`; `cfg` names only what `gate/cfg-names.toml` allows; no `allow` attribute anywhere, outer or inner; no `allow` or `expect` of a guard lint (§2); no reasonless `#[expect]` or `#[ignore]` in macro input (P00 spec §5.10). The rest of the attribute rules is clippy's (§2). | Linux |
 | `ac-trace` | `cargo xtask ac-trace`: every acceptance criterion of the PR's phase has at least one test tagged `AC: <id>`; no tag names an unknown criterion | Linux |
 | `pr-body` | `cargo xtask pr-body`: the PR description has every section of the template, filled | Linux |
 | `pr-title` | `cargo xtask pr-title`: the title is a Conventional Commit ending with `(PNN)`, `(gate)`, `(docs)` or a release title (`CONTRIBUTING.md` §3) | Linux |
@@ -49,11 +49,13 @@ At least: `unsafe_code = "forbid"`, `missing_docs = "deny"`, `clippy::all` and
 `clippy::pedantic` as warnings (errors under `-D warnings`), `clippy::unwrap_used`,
 `clippy::expect_used`, `clippy::panic`, `clippy::todo`, `clippy::unimplemented`,
 `clippy::dbg_macro`, `clippy::print_stdout`, `clippy::print_stderr` denied outside tests and
-binaries' `main` (use `#[expect(…, reason = "…")]` where one is justified). `unexpected_cfgs`,
-`clippy::allow_attributes`, `clippy::allow_attributes_without_reason` and
-`clippy::ignore_without_reason` are forbidden, so no `allow` or `expect` can switch them off: no
-`#[allow]` anywhere, a reason on every `#[expect]` and `#[ignore]`, and no unknown cfg name. P00
-writes the final list; later changes need approval.
+binaries' `main` (use `#[expect(…, reason = "…")]` where one is justified). Four lints guard the
+others: `unexpected_cfgs` is forbidden, and `clippy::allow_attributes`,
+`clippy::allow_attributes_without_reason` and `clippy::ignore_without_reason` are denied (derives
+such as clap's allow the lint groups that contain them, so they cannot be forbidden). `lints`
+refuses every `allow` attribute in our code and every `allow` or `expect` that names one of the
+four, so none of them can be switched off: no `#[allow]` anywhere, a reason on every `#[expect]`
+and `#[ignore]`, and no unknown cfg name. P00 writes the final list; later changes need approval.
 
 ## 3. Thresholds (`gate/thresholds.toml`)
 
