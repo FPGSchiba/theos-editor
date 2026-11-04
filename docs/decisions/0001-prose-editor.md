@@ -61,40 +61,57 @@ Task 17's run of 2026-11-03 on commit 6b22b2b; features and integration from the
   (Python-2.0, permissive), is ProseMirror's.
 - **Not scored:** ProseMirror's stock schema holds a soft line break as a space, so its Write mode
   cannot show line breaks as written (spec §3).
-- **Readings and rulings the scores rest on** (comparison, Top two and Measured scores; the
-  rulings are listed in the P10 PR). ProseMirror was prototyped by Jann's decision of 2026-10-31
-  on a paper tie with Milkdown. Five rulings were made at scoring time, after the results
-  (rulings 29, 30, 32, 34 and 36, all of 2026-11-04). Ruling 29 (a recorded defect is a known bug
-  only on a construct the corpus holds, or an everyday edit of one) set ProseMirror's criteria 3
-  and 4 to 1. Ruling 30 (the stress file is usable if it opens, typing lands and the editor does
-  not hang) raised its criterion 7 to 3. Ruling 32 decides a part the harness could have checked
-  but did not on a reading of the code: both prototypes leave spell check on in raw attribute
-  lines and raw callout titles (where ProseMirror's link ids are plain text), which
-  `I-spellcheck-off` did not see, because it reads only chips and rendered rows. Under ruling 29
-  that set criterion 6 of both to 1; the first measured totals were 44 and 34. Ruling 34 keeps
-  criterion 5 at 2 for both: "editing a parameter changes only its line" covers the five keys of
-  data model §9.4, so the unknown key `synthetic::` of S-901, which the shared `BeatRow` does not
-  open, is not a parameter, and its raw line stays editable; the focus lost after a row commit is
-  a missing convenience; no everyday edit triggers the redraw that loses an open input. Ruling 36
-  keeps ProseMirror's criterion 2 at 3: criterion 2 judges the front matter bytes through the
-  edits it names (typing, delete at the body start, select-all and type, paste, undo) and Source
-  mode in one component. Two defects of the Source-mode guard need steps the criterion does not
-  name, so they are recorded costs, by the standard that makes CodeMirror 6's filter-free undo a
-  recorded risk: after an external change in Source mode the guard keeps its old length, and text
-  typed over a selection that starts in the front matter is lost. The comparison lists what other readings
-  would move, in weighted points: ProseMirror's criterion 1 at 2 if only the pastes decide, +3;
-  its criteria 3 and 4 at 2 if those defects count as limits, +2 each; criterion 6 at 2 for both
-  if the raw-line spell check counts as a limit, +2 each, or at 3 if the unmeasured parts are also
-  left to P11, +4 each; criterion 5 at 1 for both if the beat-row limits count as known bugs, −2
-  each (CodeMirror 6 40, ProseMirror 30); ProseMirror's criterion 2 at 2 if the undo history lost
-  at a mode switch counts, −2, or at 1 if the two guard defects count as known bugs, −4
-  (CodeMirror 6 42, ProseMirror 28); its criterion 7 at 2 if usable means a latency bound, −1.
-  With the four that favour ProseMirror (criteria 1, 3 and 4 at 2, criterion 6 at 3 for both) it
-  has 43 against 46; with known bugs read broadly for both, 26 against 36. Each reading applied
-  to both alike keeps the order.
+- **Readings and rulings the scores rest on** (comparison, Top two and Measured scores; the rulings
+  are listed in the P10 PR). ProseMirror was prototyped by Jann's decision of 2026-10-31 on a paper
+  tie with Milkdown. Five rulings were made at scoring time, after the results (rulings 29, 30, 32,
+  34 and 36, all of 2026-11-04). Ruling 29 (a recorded defect is a known bug only on a construct the
+  corpus holds, or an everyday edit of one) set ProseMirror's criteria 3 and 4 to 1. Ruling 30 (the
+  stress file is usable if it opens, typing lands and the editor does not hang) raised its criterion
+  7 to 3. Ruling 32 decides a part the harness could have checked but did not on a reading of the
+  code: both prototypes leave spell check on in raw attribute lines and raw callout titles (where
+  ProseMirror's link ids are plain text), which `I-spellcheck-off` did not see, because it reads
+  only chips and rendered rows. Under ruling 29 that set criterion 6 of both to 1; the first
+  measured totals were 44 and 34. Ruling 34 keeps criterion 5 at 2 for both: "editing a parameter
+  changes only its line" covers the five keys of data model §9.4, so the unknown key `synthetic::`
+  of S-901, which the shared `BeatRow` does not open, is not a parameter, and its raw line stays
+  editable; the focus lost after a row commit is a missing convenience; no everyday edit triggers
+  the redraw that loses an open input. Ruling 36 keeps ProseMirror's criterion 2 at 3: criterion 2
+  judges the front matter bytes through the edits it names (typing, delete at the body start,
+  select-all and type, paste, undo) and Source mode in one component. Two defects of the Source-mode
+  guard need steps the criterion does not name, so they are recorded costs, by the standard that
+  makes CodeMirror 6's filter-free undo a recorded risk: after an external change in Source mode the
+  guard keeps its old length, and text typed over a selection that starts in the front matter is
+  lost. The comparison lists what other readings would move, in weighted points: ProseMirror's
+  criterion 1 at 2 if only the pastes decide, +3; its criteria 3 and 4 at 2 if those defects count
+  as limits, +2 each; criterion 6 at 2 for both if the raw-line spell check counts as a limit, +2
+  each, or at 3 if the unmeasured parts are also left to P11, +4 each; criterion 5 at 1 for both if
+  the beat-row limits count as known bugs, −2 each (CodeMirror 6 40, ProseMirror 30); ProseMirror's
+  criterion 2 at 2 if the undo history lost at a mode switch counts, −2, or at 1 if the two guard
+  defects count as known bugs, −4 (CodeMirror 6 42, ProseMirror 28); its criterion 7 at 2 if usable
+  means a latency bound, −1. With the four that favour ProseMirror (criteria 1, 3 and 4 at 2,
+  criterion 6 at 3 for both) it has 43 against 46; with known bugs read broadly for both, 26
+  against 36. Each reading applied to both alike keeps the order.
 - **Unequal probing:** three review rounds probed Enter at block boundaries in ProseMirror; none
   probed Enter in CodeMirror 6's callouts and lists. CodeMirror 6's record there is clean partly
   because nobody looked, though its Enter only inserts a newline into the text, which is the file.
+- **Comments on text ranges** (Jann, 2026-11-04: an important feature, not yet in the umbrella).
+  A probe made after the scoring, so not scored ([comments probe][comments]), built the same
+  minimal feature in both editors. A comment covers a text range, is stored outside the file in
+  file offsets, and must survive edits, undo and redo, outside changes and a reload. All seven
+  behaviours pass in both editors.
+  - CodeMirror 6 needs 71 lines, almost all library mechanism: a `StateField` of `Decoration.mark`
+    ranges that the library maps through every change, and `invertedEffects` for undo. Its
+    positions are file offsets.
+  - Plain ProseMirror needs 140 lines. Every add, list and edit converts offsets through the
+    stock adapter's `PositionMap` and `Tracker`. `prosemirror-history` does not track plugin
+    state, so undo takes two heuristics of our own: one brings a deleted comment back when an undo
+    puts the same length of text back at its spot, and the other is a separate stack of comment
+    actions.
+  - In ProseMirror, a range that starts inside a link snaps to the chip, and a range inside one
+    link is lost.
+  - Tiptap's ready-made Comments extension needs a paid plan, from a private registry
+    ([Tiptap Comments install][tiptap-comments], read 2026-11-04).
+  - Where comments are stored is open (`docs/status.md`, Needs Jann).
 
 ## Consequences for P12
 
@@ -149,7 +166,24 @@ P12 ports the prototype's patterns ([CodeMirror notes][cm-notes]); it imports no
   cost the long-document numbers already include (459 beats in the large file). The shared
   `BeatRow` lets no unknown key be edited from the row (`isBeatKey`); the fix belongs in that
   component, not in the editor.
-- Links in voice titles are chips only while the title is raw: `VoiceHead` has none.
+- Editing an existing link: Write mode has no way to do it (Jann's manual check, 2026-11-04, in
+  Chrome and WebView2; reproduced with Playwright in both prototypes). Arrow keys step over a
+  chip and a click puts the caret beside it, as criterion 3 asks ("the caret steps over a chip as
+  one unit"), so the raw `[[id|text]]` never shows. Only Source mode, or deleting the link and
+  typing it again, changes a link. A voice title behaves the same: its links stay chips while the
+  title is raw, and `VoiceHead` draws none. The rule comes from the P10 spec, not from the
+  umbrella (CE-35 does not ask for it), so P12's spec can replace it. A chip would then show raw
+  while the caret is inside it, the way Obsidian's live preview, also built on CodeMirror 6, shows
+  links, and a modifier-click would open the target. In the prototype this means leaving out the
+  chip's `Decoration.replace` and its atomic range on the lines a selection touches
+  (`rawlines.ts`), as the headings already do; P12 then decides what Backspace after a chip does.
+  ProseMirror's chips are atom nodes and step the same way.
+- Live preview covers few constructs (found the same way). The view plugin styles headings and
+  emphasis only (`livepreview.ts`). Plain block quotes, Markdown links and autolinks, inline code,
+  lists, code blocks, tables and thematic breaks show as raw Markdown on every line. No criterion
+  scores this. P12 draws them with the same mechanism: Lezer's `QuoteMark`, `LinkMark`, `URL`,
+  `CodeMark` and similar marks hidden off the caret, plus line or mark classes. ProseMirror draws
+  them as nodes.
 - A `Design note:` line inside a callout gets no `tu-note`, although the data model allows it.
 - Not tried: a composition inside a typed `[[query` or in a callout title. Undoing a pick does
   not reopen the popover.
@@ -163,11 +197,16 @@ P12 ports the prototype's patterns ([CodeMirror notes][cm-notes]); it imports no
 **What P11 must check in the real webviews** (Playwright's engines are not the Tauri webviews;
 facts in the [webviews dossier][webviews]):
 
+- The manual checklist of the [research README][research], run by Jann on 2026-11-04 in the
+  variant `codemirror`, in Chrome and in WebView2, passed the steps it ran. Misspelled words got
+  marks and suggestions, and Swiss German dead keys and the Japanese Windows IME gave the expected
+  text, also right after a chip, which stayed whole. The Safari step was not run. P11 repeats all
+  of them in the Tauri shell.
 - Spelling marks in a CodeMirror editor on Chromium. A forum report saw none in a CodeMirror 6
   editor under Electron (Chromium 152) while a plain `contenteditable` had them; the maintainer saw
   them in Chrome 152 on Linux; a second user's report of none in Chrome 152 is unanswered
-  (comparison, section CodeMirror 6). WebView2 is Chromium and Windows is primary; step 2 of the
-  manual checklist in the [research README][research] tests this in Edge.
+  (comparison, section CodeMirror 6). Jann's check saw marks in Chrome and WebView2, so the report
+  did not reproduce there; P11 still checks the Tauri shell.
 - WebView2: no marks in a script-focused `contenteditable` until a click (WebView2Feedback
   #5728); the spelling language follows the Windows UI language and ignores `lang` (#5294), which
   matters for English prose on a Windows with a German UI.
@@ -183,7 +222,8 @@ facts in the [webviews dossier][webviews]):
   #1408, open, one report). Whether WebView2 sends composition events for dead keys is unsettled:
   a 2016 statement says Windows browsers fire none, UI Events says they must, and no current
   source settles it. The `I-deadkey-*` checks sent a CDP composition in Chromium, the shape WebKit
-  uses on macOS (WebKit 167880). Neither the Windows nor the WebKitGTK path was driven.
+  uses on macOS (WebKit 167880). The Windows path was tried only by hand (Jann's check above),
+  the WebKitGTK path not at all.
 
 ## Alternative
 
@@ -237,3 +277,5 @@ Milkdown is the named next candidate (comparison, Measured scores).
 [pm-be-notes]: ../../research/P10-prose-editor/app/src/adapters/prosemirror-best-effort/NOTES.md
 [webviews]: ../../research/P10-prose-editor/dossiers/webviews.md
 [checks]: ../../research/P10-prose-editor/app/tests/e2e/checks.ts
+[comments]: ../../research/P10-prose-editor/app/src/probes/comments/NOTES.md
+[tiptap-comments]: https://tiptap.dev/docs/comments/getting-started/install

@@ -18,7 +18,7 @@ ancestors` (a block start), (a2) `call them ancestors` (inside its paragraph), (
 ## Result
 
 Every behaviour was run per range; all passed on both sides, on the first reasonable attempt
-(no behaviour needed its second attempt, so none is recorded as failing). Run: 78 probe tests, 277
+(no behaviour needed its second attempt, so none is recorded as failing). Run: 77 probe tests, 276
 tests in all with the 199 existing ones, `tsc --noEmit` exit 0.
 
 | Behaviour | CodeMirror 6 | ProseMirror |
@@ -96,7 +96,8 @@ changed outside the editor), or (2) markers inside the Markdown file. With a sid
 Markdown stays byte-identical (G5) and a diff of the record shows no comment noise, but the sidecar
 is a second file that can go out of step (the quote is what repairs it), and a copy of the record
 without the sidecar loses the comments. With markers inside the file, comments travel with the
-record and need no re-anchoring, but every comment changes the file bytes, G5 (byte stability) is
-broken for any file that has one unless the marker syntax is also kept verbatim by the writer, and every
-comment edit appears in the record's diff and in generators that read the file. This probe is
+record and need no re-anchoring. But adding, editing or resolving a comment is an edit of the
+file. G5 still holds, because the bytes the edit does not touch stay identical. Every comment edit
+appears in the record's diff, and generators and other tools that read the file see the markers
+unless they strip them. This probe is
 valid for either storage: it measures the in-editor part (mapping through edits, undo, restore).
