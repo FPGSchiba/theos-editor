@@ -30,8 +30,6 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
       # The credentials stay in the checkout: `cargo xtask approval` fetches the refs of the pull
       # request with `git fetch origin`.
@@ -46,3 +44,5 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup
       - run: cargo xtask approval
+        env:
+          GH_TOKEN: ${{ github.token }}

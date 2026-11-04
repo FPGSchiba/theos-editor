@@ -394,19 +394,19 @@ const WORKFLOW_KEYS: [&str; 5] = ["name", "on", "permissions", "concurrency", "j
 /// What a job may spell. Left out on purpose: `continue-on-error` (a failed check passes),
 /// `defaults` (another shell or folder), `strategy` and `needs` (a job that is skipped or
 /// tolerated), `container` and `services`.
-const JOB_KEYS: [&str; 7] = [
+const JOB_KEYS: [&str; 6] = [
     "name",
     "runs-on",
     "timeout-minutes",
     "permissions",
-    "env",
     "if",
     "steps",
 ];
 
-/// What a step of a job may spell. Left out on purpose: `continue-on-error`, `working-directory`,
-/// `env`, `shell`, `timeout-minutes` and `id`.
-const STEP_KEYS: [&str; 4] = ["uses", "with", "run", "if"];
+/// What a step of a job may spell. `env` is the token of the two steps that call GitHub, which
+/// `token_reaches_only_the_steps_that_call_github` pins. Left out on purpose:
+/// `continue-on-error`, `working-directory`, `shell`, `timeout-minutes` and `id`.
+const STEP_KEYS: [&str; 5] = ["uses", "with", "run", "if", "env"];
 
 /// What a step of the setup action may spell on top of the keys of a job's step.
 const SETUP_STEP_KEYS: [&str; 6] = ["name", "id", "uses", "with", "run", "shell"];
@@ -448,12 +448,7 @@ fn no_key_lets_a_job_pass_while_xtask_fails() -> TestResult {
                 file != "platforms.yml",
                 "{file}: job {name}: only the platforms jobs have an `if:`"
             );
-            // The token goes to the two jobs that call GitHub, and to nothing else.
-            assert_eq!(
-                job.node["env"].is_badvalue(),
-                name != "approval" && name != "settings",
-                "{file}: job {name}: only approval and settings have an `env:`"
-            );
+            // The token goes to two steps, never to a job: see the token test.
             for (position, step) in job.steps()?.iter().enumerate() {
                 assert_eq!(
                     unexpected_keys(step, &STEP_KEYS)?,
@@ -695,24 +690,41 @@ fn no_pull_request_target_and_least_privilege() -> TestResult {
     Ok(())
 }
 
+/// The step of each job that calls GitHub, the only one that gets the token.
+const TOKEN_STEPS: [(&str, &str); 2] = [
+    ("approval", "cargo xtask approval"),
+    ("settings", "cargo xtask github check"),
+];
+
 #[test]
-fn token_reaches_only_the_jobs_that_call_github() -> TestResult {
+fn token_reaches_only_the_steps_that_call_github() -> TestResult {
     for (file, job) in all_jobs()? {
-        let env = &job.node["env"];
-        if job.name == "approval" || job.name == "settings" {
-            assert_eq!(
-                string_map(env)?,
-                map(&[("GH_TOKEN", TOKEN)]),
-                "{file}: the env of job {}",
-                job.name
-            );
-        } else {
-            assert_eq!(
-                *env,
-                Yaml::BadValue,
-                "{file}: job {} has an env, and only approval and settings need the token",
-                job.name
-            );
+        assert_eq!(
+            job.node["env"],
+            Yaml::BadValue,
+            "{file}: job {} has an env, and the token is given to the steps that need it",
+            job.name
+        );
+        for (position, step) in job.steps()?.iter().enumerate() {
+            let calls_github = TOKEN_STEPS
+                .iter()
+                .any(|(name, run)| job.name == *name && step["run"].as_str() == Some(run));
+            if calls_github {
+                assert_eq!(
+                    string_map(&step["env"])?,
+                    map(&[("GH_TOKEN", TOKEN)]),
+                    "{file}: job {}, step {position}: the env of a step that calls GitHub",
+                    job.name
+                );
+            } else {
+                assert_eq!(
+                    step["env"],
+                    Yaml::BadValue,
+                    "{file}: job {}, step {position} has an env, and only the steps that call \
+                     GitHub need the token",
+                    job.name
+                );
+            }
         }
     }
     Ok(())
