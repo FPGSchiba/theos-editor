@@ -730,6 +730,37 @@ fn token_reaches_only_the_steps_that_call_github() -> TestResult {
     Ok(())
 }
 
+// AC: CE-08.5
+#[test]
+fn only_the_approval_checkouts_keep_the_git_credentials() -> TestResult {
+    // Only `cargo xtask approval` talks to git with credentials (it fetches the pull request
+    // refs); every other job leaves them out of `.git/config`, away from the later actions.
+    for (file, job) in all_jobs()? {
+        for (position, step) in job.steps()?.iter().enumerate() {
+            if step_kind(step)? != "checkout" {
+                continue;
+            }
+            let persisted = &step["with"]["persist-credentials"];
+            if job.name == "approval" {
+                assert_eq!(
+                    *persisted,
+                    Yaml::BadValue,
+                    "{file}: job {}, step {position}: approval needs the default",
+                    job.name
+                );
+            } else {
+                assert_eq!(
+                    persisted.as_bool(),
+                    Some(false),
+                    "{file}: job {}, step {position}: the checkout must not persist credentials",
+                    job.name
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Every `uses:` of the workflows and of the setup action, as the files spell it.
 fn uses_lines() -> TestResult<Vec<(String, String)>> {
     let mut files: Vec<String> = ALL_WORKFLOWS
