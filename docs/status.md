@@ -16,7 +16,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map toolset as a generator | tower-of-theos | todo | | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
-| P10 | Prose editor research | theos-editor | spec-pr | #3 | |
+| P10 | Prose editor research | theos-editor | pr-open | #3 | #11 |
 | P11 | Editor shell and Codex | theos-editor | todo | | |
 | P12 | Manuscript editor | theos-editor | todo | | |
 | P13 | Changes and Review screens | theos-editor | todo | | |
@@ -43,6 +43,16 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
   while Windows joins macOS in the `platforms` workflow (D8, umbrella G2). The build PR #7 waits
   for it: the plan is appended to the P00 plan and built on #7 once this is approved.
 - Docs PR #8: the engineering directives in `CLAUDE.md`. Its checks run once P00 is merged.
+- P10 build PR #11: merging it accepts decision record `docs/decisions/0001-prose-editor.md`
+  (CodeMirror 6, 42 of 54 against ProseMirror/Tiptap 32). Jann ran the manual checklist on
+  2026-11-04 (all passed but Safari, which was not run) and is happy with CodeMirror 6. The five
+  readings made at scoring time (rulings 29, 30, 32, 34, 36) can still be overruled; applied to
+  both editors alike, none changes the leader. `cargo xtask gate` and `ac-trace` did not run
+  because P00 is not merged (ruling 35).
+- Comments on text sections (Jann, 2026-11-04: "an important feature") are not in the umbrella.
+  They need a CE in `docs/specs/00-umbrella.md` and a data-model decision on where comments live:
+  a sidecar file with offsets and a text quote, or markers inside the Markdown. The P10 probe in
+  `research/P10-prose-editor/app/src/probes/comments/` shows what each editor needs.
 
 ## Needs a private session (Confluence, Jira, plugin)
 

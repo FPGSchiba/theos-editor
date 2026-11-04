@@ -1,0 +1,221 @@
+{
+  "files": [
+    {
+      "path": "records/world/hearth/f04-choir-hall.md",
+      "origin": "data-model §14",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain"
+      ],
+      "edits": [
+        {"id":"word-insert","kind":"insert","at":{"find":"holiest"},"text":"very "},
+        {"id":"word-delete","kind":"delete","at":{"find":"half-buried "},"length":12},
+        {"id":"select-all-type-short","kind":"select-all-type","text":"A synthetic replacement body."}
+      ]
+    },
+    {
+      "path": "records/people/hearth-folk/fates-cult/mother-ilse.md",
+      "origin": "data-model §14",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "fm-map", "empty-body"
+      ],
+      "edits": [
+        {"id":"empty-body-insert","kind":"insert","at":{"find":"---\n","occurrence":2,"offset":4},"text":"A synthetic first line."}
+      ]
+    },
+    {
+      "path": "records/lore/clues/C-031.md",
+      "origin": "data-model §14",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "fm-list-inline", "empty-body"
+      ],
+      "edits": []
+    },
+    {
+      "path": "records/story/scripts/S-004.md",
+      "origin": "data-model §14",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "fm-list-inline", "link-id", "link-in-callout-title",
+        "link-in-beat-attribute", "voice-beliefs-tier", "voice-no-caption", "beat-voice-adjacent",
+        "beat-at-line"
+      ],
+      "edits": [
+        {"id":"body-start-backspace","kind":"delete","at":{"find":"The player's first night"},"length":1,"backward":true},
+        {"id":"paste-body-start","kind":"paste","at":{"find":"The player's first night"},"plain":"A pasted opening. "},
+        {"id":"voice-end-sentence","kind":"insert","at":{"find":"and they will hear you.","offset":23},"text":" A synthetic closing sentence."},
+        {"id":"beat-param-add","kind":"beat-param","beat":2,"key":"with","value":"[[mother-ilse]]"},
+        {"id":"beat-param-change","kind":"beat-param","beat":1,"key":"when","value":"T2"},
+        {"id":"select-all-type","kind":"select-all-type","text":"A synthetic replacement body for a script."}
+      ]
+    },
+    {
+      "path": "records/maps/f04-terrain.md",
+      "origin": "data-model §14",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "fm-list-inline", "atx-heading-2", "note-open",
+        "link-in-callout-title"
+      ],
+      "edits": [
+        {"id":"note-state-change","kind":"note-state","note":"n1","state":"resolved by [[f04-terrain-v1]]"}
+      ]
+    },
+    {
+      "path": "records/maps/f04-terrain/f04-terrain-v1.md",
+      "origin": "data-model §14",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "fm-map", "empty-body"
+      ],
+      "edits": []
+    },
+    {
+      "path": "records/concepts/fates-shrine/fates-shrine-v5.md",
+      "origin": "data-model §14",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "fm-list-inline", "fm-map", "empty-body"
+      ],
+      "edits": []
+    },
+    {
+      "path": "records/lore/beliefs/B-901.md",
+      "origin": "synthetic",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "fm-comment-trailing", "fm-scalar-single-quoted",
+        "fm-scalar-double-quoted", "fm-list-block", "fm-blank-line", "hard-wrapped-paragraph",
+        "atx-heading-1", "atx-heading-2", "atx-heading-3", "setext-heading", "emphasis-star",
+        "emphasis-underscore", "strong-star", "strong-underscore", "inline-code", "code-fence",
+        "backslash-escape", "html-comment", "autolink", "md-link", "hard-break-spaces",
+        "hard-break-backslash", "link-alias", "link-line-start"
+      ],
+      "edits": [
+        {"id":"external-while-dirty","kind":"external","local":{"at":{"find":"A paragraph under the setext heading.","offset":2},"text":"local "},"external":{"at":{"find":"grandmother recognising"},"text":"external "}},
+        {"id":"undo-all","kind":"undo-all","edits":[{"id":"undo-all-insert","kind":"insert","at":{"find":"Emphasis with "},"text":"Synthetic "},{"id":"undo-all-delete","kind":"delete","at":{"find":"inline code like "},"length":7},{"id":"undo-all-append","kind":"insert","at":{"find":"A paragraph under the first heading.","offset":36},"text":" Appended text."}]},
+        {"id":"paste-crlf","kind":"paste","at":{"find":"A paragraph under the first heading.","offset":36},"plain":" First pasted line.\r\nSecond pasted line."}
+      ]
+    },
+    {
+      "path": "records/lore/truths/T-901.md",
+      "origin": "synthetic",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "fm-scalar-single-quoted", "fm-list-inline",
+        "list-dash", "list-star", "list-plus", "list-ordered-dot", "list-ordered-paren",
+        "list-nested", "list-ones", "block-quote", "gfm-table", "hr-dashes", "hr-stars"
+      ],
+      "edits": [
+        {"id":"after-thematic-break","kind":"insert","at":{"find":"paragraph after the dash"},"text":"synthetic "},
+        {"id":"paste-html","kind":"paste","at":{"find":"A synthetic paragraph before the lists.","offset":39},"plain":" Pasted rich text.","html":"<p> Pasted <b>rich</b> text.</p>"}
+      ]
+    },
+    {
+      "path": "records/lore/topics/synthetic-links-explaining.md",
+      "origin": "synthetic",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "link-id", "link-alias", "link-dangling",
+        "link-punctuation", "link-line-start", "link-line-end", "link-in-emphasis",
+        "link-prose-mother-ilse", "emphasis-star", "emphasis-underscore", "strong-star"
+      ],
+      "edits": [
+        {"id":"link-insert-popover","kind":"link-insert","at":{"find":"names a Listener","offset":6},"query":"Listen","pick":"T-012"},
+        {"id":"link-chip-delete","kind":"link-delete","link":{"find":"[[mother-ilse]]!"}}
+      ]
+    },
+    {
+      "path": "records/lore/topics/synthetic-voices-in-world.md",
+      "origin": "synthetic",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "link-alias", "link-in-callout-title",
+        "voice-speaker-only", "voice-beliefs-tier", "voice-caption", "voice-no-caption",
+        "voice-caption-double-hyphen", "voice-ledger-word", "callout-empty-line",
+        "callout-lazy-line", "callout-design", "design-note-line"
+      ],
+      "edits": []
+    },
+    {
+      "path": "records/maps/synthetic-notes.md",
+      "origin": "synthetic",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "fm-list-inline", "atx-heading-2",
+        "link-in-callout-title", "note-open", "note-resolved", "note-dropped"
+      ],
+      "edits": [
+        {"id":"note-state-to-dropped","kind":"note-state","note":"n2","state":"dropped"},
+        {"id":"note-state-from-resolved","kind":"note-state","note":"n3","state":"open"}
+      ]
+    },
+    {
+      "path": "records/story/scripts/S-901.md",
+      "origin": "synthetic",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "fm-list-inline", "link-in-beat-attribute",
+        "link-in-callout-title", "link-dangling", "voice-beliefs-tier", "voice-no-caption",
+        "beat-all-attributes", "beat-no-attributes", "beat-voice-adjacent", "beat-extra-spaces",
+        "beat-unknown-attribute", "beat-heading-no-dash", "beat-at-line"
+      ],
+      "edits": [
+        {"id":"beat-param-add-bare","kind":"beat-param","beat":3,"key":"at","value":"[[fates-shrine]]"},
+        {"id":"beat-param-change-gap","kind":"beat-param","beat":2,"key":"at","value":"[[choir-hall-nave]]"},
+        {"id":"beat-param-add-order","kind":"beat-param","beat":4,"key":"reveals","value":"[[C-031]]"},
+        {"id":"beat-param-add-no-dash","kind":"beat-param","beat":5,"key":"when","value":"T3"}
+      ]
+    },
+    {
+      "path": "records/things/synthetic-whitespace.md",
+      "origin": "synthetic",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "fm-list-inline", "trailing-spaces", "tab-in-prose",
+        "blank-lines-two", "blank-lines-three", "hard-break-spaces"
+      ],
+      "edits": [
+        {"id":"space-at-paragraph-end","kind":"insert","at":{"find":"Three blank lines sit above this paragraph.","offset":43},"text":" "}
+      ]
+    },
+    {
+      "path": "records/things/synthetic-characters.md",
+      "origin": "synthetic",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "char-em-dash", "char-middle-dot",
+        "char-curly-quotes", "e-precomposed", "e-combining", "nbsp", "emoji"
+      ],
+      "edits": [
+        {"id":"combining-insert","kind":"insert","at":{"find":"cafe\u0301","offset":5},"text":"x"},
+        {"id":"nbsp-delete","kind":"delete","at":{"find":"\u00a0"},"length":1},
+        {"id":"emoji-insert-after","kind":"insert","at":{"find":"\ud83d\ude42","offset":2},"text":" done"}
+      ]
+    },
+    {
+      "path": "records/things/synthetic-no-final-newline.md",
+      "origin": "synthetic",
+      "lineEnds": "lf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "no-final-newline"
+      ],
+      "edits": [
+        {"id":"eof-insert","kind":"insert","at":{"find":"the file.","offset":9},"text":" A synthetic closing sentence."}
+      ]
+    },
+    {
+      "path": "records/things/synthetic-crlf.md",
+      "origin": "synthetic",
+      "lineEnds": "crlf",
+      "covers": [
+        "fm-comment-line", "fm-scalar-plain", "crlf", "voice-speaker-only", "link-in-callout-title"
+      ],
+      "edits": [
+        {"id":"crlf-word-insert","kind":"insert","at":{"find":"to test line ends"},"text":"synthetic "}
+      ]
+    }
+  ]
+}

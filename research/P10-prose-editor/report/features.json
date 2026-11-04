@@ -1,0 +1,726 @@
+{
+  "commit": "0f70ac5adb7e54da59846352592bb4c6a451502e",
+  "os": "Windows_NT 10.0.26300 x64",
+  "browsers": {
+    "chromium": "156.0.8078.4",
+    "webkit": "27.2"
+  },
+  "date": "2026-11-04T12:26:24.274Z",
+  "kind": "features",
+  "rows": [
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-beat-finding",
+      "ok": true,
+      "detail": "never-confirm on beat 2 only"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-beat-heading",
+      "ok": true,
+      "detail": "\"1 · Arrival\" and \"2 · The murmur\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-beat-row",
+      "ok": true,
+      "detail": "the at param holds the fates-shrine chip"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-design",
+      "ok": true,
+      "detail": "design callout and \"Design note:\" line"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-dev-word",
+      "ok": true,
+      "detail": "flagged: ledger"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-frontmatter-hidden",
+      "ok": true,
+      "detail": "Write mode shows the body and no front matter"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-link-alias",
+      "ok": true,
+      "detail": "the alias is the shown text"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-link-atomic",
+      "ok": true,
+      "detail": "one ArrowRight moves the caret behind ]]"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-link-broken",
+      "ok": true,
+      "detail": "only the dangling link is broken"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-link-chip",
+      "ok": true,
+      "detail": "npc chip titled \"Mother Ilse\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-link-popover-escape",
+      "ok": true,
+      "detail": "no popover, and the text is the typed \"[[son\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-link-popover-kind-filter",
+      "ok": true,
+      "detail": "only location and floor options: fates-shrine"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-link-popover-prose",
+      "ok": true,
+      "detail": "3 options of 3 kinds: belief, clue, truth"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-live-preview",
+      "ok": true,
+      "detail": "raw under the caret, rendered elsewhere"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-note",
+      "ok": true,
+      "detail": "n1=open n2=open n3=resolved n4=dropped n5=dropped"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-source-mode",
+      "ok": true,
+      "detail": "front matter shown raw, no chips, typing into it changes nothing"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "F-voice",
+      "ok": true,
+      "detail": "6 heads, 3 captions"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-beat-finding",
+      "ok": true,
+      "detail": "never-confirm on beat 2 only"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-beat-heading",
+      "ok": true,
+      "detail": "\"1 · Arrival\" and \"2 · The murmur\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-beat-row",
+      "ok": true,
+      "detail": "the at param holds the fates-shrine chip"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-design",
+      "ok": true,
+      "detail": "design callout and \"Design note:\" line"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-dev-word",
+      "ok": true,
+      "detail": "flagged: ledger"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-frontmatter-hidden",
+      "ok": true,
+      "detail": "Write mode shows the body and no front matter"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-link-alias",
+      "ok": true,
+      "detail": "the alias is the shown text"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-link-atomic",
+      "ok": true,
+      "detail": "one ArrowRight moves the caret behind ]]"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-link-broken",
+      "ok": true,
+      "detail": "only the dangling link is broken"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-link-chip",
+      "ok": true,
+      "detail": "npc chip titled \"Mother Ilse\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-link-popover-escape",
+      "ok": true,
+      "detail": "no popover, and the text is the typed \"[[son\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-link-popover-kind-filter",
+      "ok": true,
+      "detail": "only location and floor options: fates-shrine"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-link-popover-prose",
+      "ok": true,
+      "detail": "3 options of 3 kinds: belief, clue, truth"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-live-preview",
+      "ok": true,
+      "detail": "raw under the caret, rendered elsewhere"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-note",
+      "ok": true,
+      "detail": "n1=open n2=open n3=resolved n4=dropped n5=dropped"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-source-mode",
+      "ok": true,
+      "detail": "front matter shown raw, no chips, typing into it changes nothing"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "F-voice",
+      "ok": true,
+      "detail": "6 heads, 3 captions"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-beat-finding",
+      "ok": true,
+      "detail": "never-confirm on beat 2 only"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-beat-heading",
+      "ok": true,
+      "detail": "\"1 · Arrival\" and \"2 · The murmur\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-beat-row",
+      "ok": true,
+      "detail": "the at param holds the fates-shrine chip"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-design",
+      "ok": true,
+      "detail": "design callout and \"Design note:\" line"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-dev-word",
+      "ok": true,
+      "detail": "flagged: ledger"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-frontmatter-hidden",
+      "ok": true,
+      "detail": "Write mode shows the body and no front matter"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-link-alias",
+      "ok": true,
+      "detail": "the alias is the shown text"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-link-atomic",
+      "ok": true,
+      "detail": "one ArrowRight moves the caret behind ]]"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-link-broken",
+      "ok": true,
+      "detail": "only the dangling link is broken"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-link-chip",
+      "ok": true,
+      "detail": "npc chip titled \"Mother Ilse\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-link-popover-escape",
+      "ok": true,
+      "detail": "no popover, and the text is the typed \"[[son\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-link-popover-kind-filter",
+      "ok": true,
+      "detail": "only location and floor options: fates-shrine"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-link-popover-prose",
+      "ok": true,
+      "detail": "3 options of 3 kinds: belief, clue, truth"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-live-preview",
+      "ok": true,
+      "detail": "raw under the caret, rendered elsewhere"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-note",
+      "ok": true,
+      "detail": "n1=open n2=open n3=resolved n4=dropped n5=dropped"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-source-mode",
+      "ok": true,
+      "detail": "front matter shown raw, no chips, typing into it changes nothing"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "F-voice",
+      "ok": true,
+      "detail": "6 heads, 3 captions"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-beat-finding",
+      "ok": true,
+      "detail": "never-confirm on beat 2 only"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-beat-heading",
+      "ok": true,
+      "detail": "\"1 · Arrival\" and \"2 · The murmur\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-beat-row",
+      "ok": true,
+      "detail": "the at param holds the fates-shrine chip"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-design",
+      "ok": true,
+      "detail": "design callout and \"Design note:\" line"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-dev-word",
+      "ok": true,
+      "detail": "flagged: ledger"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-frontmatter-hidden",
+      "ok": true,
+      "detail": "Write mode shows the body and no front matter"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-link-alias",
+      "ok": true,
+      "detail": "the alias is the shown text"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-link-atomic",
+      "ok": true,
+      "detail": "one ArrowRight moves the caret behind ]]"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-link-broken",
+      "ok": true,
+      "detail": "only the dangling link is broken"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-link-chip",
+      "ok": true,
+      "detail": "npc chip titled \"Mother Ilse\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-link-popover-escape",
+      "ok": true,
+      "detail": "no popover, and the text is the typed \"[[son\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-link-popover-kind-filter",
+      "ok": true,
+      "detail": "only location and floor options: fates-shrine"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-link-popover-prose",
+      "ok": true,
+      "detail": "3 options of 3 kinds: belief, clue, truth"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-live-preview",
+      "ok": true,
+      "detail": "raw under the caret, rendered elsewhere"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-note",
+      "ok": true,
+      "detail": "n1=open n2=open n3=resolved n4=dropped n5=dropped"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-source-mode",
+      "ok": true,
+      "detail": "front matter shown raw, no chips, typing into it changes nothing"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "F-voice",
+      "ok": true,
+      "detail": "6 heads, 3 captions"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-beat-finding",
+      "ok": true,
+      "detail": "never-confirm on beat 2 only"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-beat-heading",
+      "ok": true,
+      "detail": "\"1 · Arrival\" and \"2 · The murmur\""
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-beat-row",
+      "ok": true,
+      "detail": "the at param holds the fates-shrine chip"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-design",
+      "ok": true,
+      "detail": "design callout and \"Design note:\" line"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-dev-word",
+      "ok": true,
+      "detail": "flagged: ledger"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-frontmatter-hidden",
+      "ok": true,
+      "detail": "Write mode shows the body and no front matter"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-link-alias",
+      "ok": true,
+      "detail": "the alias is the shown text"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-link-atomic",
+      "ok": true,
+      "detail": "one ArrowRight moves the caret behind ]]"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-link-broken",
+      "ok": true,
+      "detail": "only the dangling link is broken"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-link-chip",
+      "ok": true,
+      "detail": "npc chip titled \"Mother Ilse\""
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-link-popover-escape",
+      "ok": false,
+      "detail": "the text differs from the oracle insert of \"[[son\" at 12:69"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-link-popover-kind-filter",
+      "ok": true,
+      "detail": "only location and floor options: fates-shrine"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-link-popover-prose",
+      "ok": true,
+      "detail": "3 options of 3 kinds: belief, clue, truth"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-live-preview",
+      "ok": true,
+      "detail": "raw under the caret, rendered elsewhere"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-note",
+      "ok": true,
+      "detail": "n1=open n2=open n3=resolved n4=dropped n5=dropped"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-source-mode",
+      "ok": false,
+      "detail": "typing into the front matter changed the text at 23:10"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "F-voice",
+      "ok": true,
+      "detail": "6 heads, 3 captions"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-beat-finding",
+      "ok": true,
+      "detail": "never-confirm on beat 2 only"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-beat-heading",
+      "ok": true,
+      "detail": "\"1 · Arrival\" and \"2 · The murmur\""
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-beat-row",
+      "ok": true,
+      "detail": "the at param holds the fates-shrine chip"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-design",
+      "ok": true,
+      "detail": "design callout and \"Design note:\" line"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-dev-word",
+      "ok": true,
+      "detail": "flagged: ledger"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-frontmatter-hidden",
+      "ok": true,
+      "detail": "Write mode shows the body and no front matter"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-link-alias",
+      "ok": true,
+      "detail": "the alias is the shown text"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-link-atomic",
+      "ok": true,
+      "detail": "one ArrowRight moves the caret behind ]]"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-link-broken",
+      "ok": true,
+      "detail": "only the dangling link is broken"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-link-chip",
+      "ok": true,
+      "detail": "npc chip titled \"Mother Ilse\""
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-link-popover-escape",
+      "ok": false,
+      "detail": "the text differs from the oracle insert of \"[[son\" at 12:69"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-link-popover-kind-filter",
+      "ok": true,
+      "detail": "only location and floor options: fates-shrine"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-link-popover-prose",
+      "ok": true,
+      "detail": "3 options of 3 kinds: belief, clue, truth"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-live-preview",
+      "ok": true,
+      "detail": "raw under the caret, rendered elsewhere"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-note",
+      "ok": true,
+      "detail": "n1=open n2=open n3=resolved n4=dropped n5=dropped"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-source-mode",
+      "ok": false,
+      "detail": "typing into the front matter changed the text at 23:10"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "F-voice",
+      "ok": true,
+      "detail": "6 heads, 3 captions"
+    }
+  ]
+}
