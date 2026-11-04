@@ -39,6 +39,7 @@ pub mod files;
 pub mod gate;
 pub mod git;
 pub mod github;
+pub mod markdown;
 pub mod process;
 pub mod report;
 pub mod tools;
