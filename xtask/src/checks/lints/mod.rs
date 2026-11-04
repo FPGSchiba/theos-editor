@@ -13,10 +13,9 @@
 //! - `attributes` (rule 3): no `allow` or `warn` attribute anywhere, no `expect` or `ignore`
 //!   without a reason anywhere (clippy does not see macro tokens, nor an item that a `cfg` strips
 //!   on the checking machine), and no `allow` or `expect` of a lint that guards the others
-//!   (`unexpected_cfgs`, the
-//!   two allow lints, `ignore_without_reason`) or of the groups `clippy::pedantic` and
-//!   `clippy::restriction` that contain them. It reads the syntax tree and the tokens of macro
-//!   calls and `macro_rules!` bodies.
+//!   (`unexpected_cfgs`, the two allow lints, `ignore_without_reason`) or of the groups
+//!   `clippy::pedantic` and `clippy::restriction` that contain them. It reads the syntax tree and
+//!   the tokens of macro calls and `macro_rules!` bodies.
 //! - `config_files` (rule 4): the lint tables, the manifests and the mirrored configuration
 //!   files, which are read as text and TOML and need no view.
 //!

@@ -14,9 +14,9 @@
 //!   `expect(…)` without `reason = …` and every bare `ignore` is a finding too, alone or inside a
 //!   `cfg_attr` (`ignore = "…"` passes);
 //! - in the tokens of macro calls and macro definitions, at every depth: each `#` [`!`] bracket
-//!   group is read as an attribute and judged the same way. A group that does
-//!   not parse as an attribute (`#[$m]`, as in `$(#[$m:meta])*`) is judged by its identifiers:
-//!   an `allow` or `warn` in it is a finding, anything else is left to the reviews (Ruling 9);
+//!   group is read as an attribute and judged the same way. A group that does not parse as an
+//!   attribute (`#[$m]`, as in `$(#[$m:meta])*`) is judged by its identifiers: an `allow` or
+//!   `warn` in it is a finding, anything else is left to the reviews (Ruling 9);
 //! - everywhere, in the tree and in macro tokens, with or without a reason, an `allow` or `expect`
 //!   that names one of the lints that guard the others (`unexpected_cfgs`,
 //!   `clippy::allow_attributes`, `clippy::allow_attributes_without_reason`,
