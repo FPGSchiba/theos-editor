@@ -7,7 +7,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | Phase | Name | Repo | State | Spec PR | Build PR |
 |---|---|---|---|---|---|
 | P00 | Foundation and gate | theos-editor | spec-pr | #5 | |
-| P01 | Content layout and templates | tower-of-theos | pr-open | #4 | tower-of-theos#2 |
+| P01 | Content layout and templates | tower-of-theos | done | #4 | tower-of-theos#2 |
 | P02 | Records and grammars | theos-editor | todo | | |
 | P03 | Kinds, index, search, lenses | theos-editor | todo | | |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | todo | | |
@@ -33,11 +33,6 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
   always be read as text? Needed by P02/P03 (found in the P01 spec, §5). The same holds for
   `accuracy: false` on beliefs, which the restricted YAML reads as a boolean; the P01 checks
   accept it as the enum value for now.
-- P01 build PR tower-of-theos#2 is a draft labelled `needs-jann`: the final review loop reached its
-  cap of 5 rounds. Two Minor findings are open (listed in the PR): the README's Obsidian steps do
-  not name `number: 1` and `floors: [1, 1]` as values to replace, and the sample id `f100-summit`
-  implies lore. Manual checks before merging: open the vault in Obsidian 1.14 and see `git status`
-  stay clean; make one record with *Insert template* and one with a VS Code snippet.
 - P00 revision 1 (spec PR from `spec/P00-gate-redesign`): the checks read code through the
   compiler, cargo and real parsers (P00 spec §4.3, §5.10), and per-PR checks run on Linux only
   while Windows joins macOS in the `platforms` workflow (D8, umbrella G2). The build PR #7 waits
