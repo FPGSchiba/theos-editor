@@ -79,9 +79,9 @@ Task 17's run of 2026-11-03 on commit 6b22b2b; features and integration from the
   keeps ProseMirror's criterion 2 at 3: criterion 2 judges the front matter bytes through the
   edits it names (typing, delete at the body start, select-all and type, paste, undo) and Source
   mode in one component. Two defects of the Source-mode guard need steps the criterion does not
-  name, so they are recorded costs, by the standard that makes CodeMirror 6's filter-free undo a recorded risk:
-  after an external change in Source mode the guard keeps its old length, and text typed over a
-  selection that starts in the front matter is lost. The comparison lists what other readings
+  name, so they are recorded costs, by the standard that makes CodeMirror 6's filter-free undo a
+  recorded risk: after an external change in Source mode the guard keeps its old length, and text
+  typed over a selection that starts in the front matter is lost. The comparison lists what other readings
   would move, in weighted points: ProseMirror's criterion 1 at 2 if only the pastes decide, +3;
   its criteria 3 and 4 at 2 if those defects count as limits, +2 each; criterion 6 at 2 for both
   if the raw-line spell check counts as a limit, +2 each, or at 3 if the unmeasured parts are also
