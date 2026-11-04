@@ -18,8 +18,8 @@
 //!   files, which are read as text and TOML and need no view.
 //!
 //! What is left to the reviews: an attribute that a macro forwards through a metavariable
-//! (`#[$m]`) is judged where the invocation writes it, a cfg predicate with a metavariable is not
-//! judged, `cfg!(…)` in an expression is not an attribute, and a file that no target compiles is
+//! (`#[$m]` in a macro body) is not judged, while the tokens of the invocation, where the
+//! attribute is written, are; a cfg predicate with a metavariable is not judged, `cfg!(…)` in an expression is not an attribute, and a file that no target compiles is
 //! not read at all.
 //!
 //! The view's own findings (a file that does not parse) come first. Findings name the file and the
@@ -39,6 +39,7 @@ use crate::verdict::{Check, Finding, Verdict};
 use crate::view::{Shared, View};
 
 mod attributes;
+mod attrs;
 pub mod cfg_names;
 pub mod config_files;
 mod sources;

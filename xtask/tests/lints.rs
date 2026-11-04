@@ -237,26 +237,19 @@ fn bad_attributes_in_sources_fail() -> TestResult {
             (Some("crates/a/src/lib.rs"), Some(22)),
         ]
     );
+    let allow = "an `allow` attribute: use `#[expect(…, reason = \"…\")]`, or fix the code";
+    let expect = "an `#[expect]` without a reason, inside a macro where clippy does not see it";
+    let ignore = "an `#[ignore]` without a reason, inside a macro where clippy does not see it";
+    let guard = "an `allow` or `expect` of `clippy::ignore_without_reason`, one of the lints \
+                 that guard the others (spec §5.2)";
     let messages: Vec<&str> = verdict
         .findings
         .iter()
         .map(|finding| finding.message.as_str())
         .collect();
-    assert!(
-        messages[0].starts_with("an `allow` attribute"),
-        "{messages:?}"
-    );
-    assert!(
-        messages[4].starts_with("an `#[expect]` without a reason"),
-        "{messages:?}"
-    );
-    assert!(
-        messages[5].starts_with("an `#[ignore]` without a reason"),
-        "{messages:?}"
-    );
-    assert!(
-        messages[7].contains("`clippy::ignore_without_reason`"),
-        "{messages:?}"
+    assert_eq!(
+        messages,
+        [allow, allow, allow, allow, expect, ignore, allow, guard]
     );
 
     // The same file under `tests/fixtures/` is test data and is not read.
@@ -645,43 +638,91 @@ fn cfgs_that_keep_code_measured_pass() -> TestResult {
 // AC: CE-08.8
 #[test]
 fn an_attribute_anywhere_in_a_source_is_judged() -> TestResult {
-    // Each of these once escaped a scan that read attributes only at the start of a line.
-    for lib_rs in [
-        "#[rustfmt::skip] pub mod m { #![allow(clippy::unwrap_used)] pub fn f() {} }
-",
-        "pub fn a() {} #[allow(dead_code)] pub fn b() {}
-",
-        "pub fn a() { #[allow(unused)] let _x = 1; }
-",
-        "macro_rules! m { () => { #[allow(dead_code)] fn x() {} } }
-",
-        "#[allow(
-    dead_code,
-    unused
-)]
-pub fn f() {}
-",
-        "#[cfg_attr(test, allow(dead_code))]
-pub fn f() {}
-",
-        "macro_rules! m { ($($t:tt)*) => { $($t)* }; }
-m! { #[allow(dead_code)] pub fn b() {} }
-",
-        "/* /* */ \" */ #[allow(dead_code)] pub fn f() {} // \"
-",
+    // Each of these is an `allow` where a scan of the start of a line would not look: after code,
+    // inside a body, over several lines, in `cfg_attr`, in macro tokens. The line is the first
+    // of the pair.
+    for (line, lib_rs) in [
+        (
+            1,
+            "#[rustfmt::skip] pub mod m { #![allow(clippy::unwrap_used)] pub fn f() {} }\n",
+        ),
+        (1, "pub fn a() {} #[allow(dead_code)] pub fn b() {}\n"),
+        (1, "pub fn a() { #[allow(unused)] let _x = 1; }\n"),
+        (2, "pub fn a() {\n    #![allow(unused)]\n}\n"),
+        (
+            1,
+            "macro_rules! m { () => { #[allow(dead_code)] fn x() {} } }\n",
+        ),
+        (
+            1,
+            "#[allow(\n    dead_code,\n    unused\n)]\npub fn f() {}\n",
+        ),
+        (1, "#[cfg_attr(test, allow(dead_code))]\npub fn f() {}\n"),
+        (
+            2,
+            "macro_rules! m { ($($t:tt)*) => { $($t)* }; }\nm! { #[allow(dead_code)] pub fn b() {} }\n",
+        ),
+        (
+            1,
+            "/* /* */ \" */ #[allow(dead_code)] pub fn f() {} // \"\n",
+        ),
     ] {
         let verdict = lint_source(lib_rs)?;
-        let line = if lib_rs.starts_with("macro_rules! m { ($") {
-            2
-        } else {
-            1
-        };
         assert_eq!(
             places(&verdict),
             [(Some("crates/a/src/lib.rs"), Some(line))],
             "{lib_rs}"
         );
     }
+    Ok(())
+}
+
+// AC: CE-08.8
+#[test]
+fn a_cfg_attr_in_the_tree_needs_a_reason_for_ignore_and_expect() -> TestResult {
+    // The compiler may not see the attribute on the machine that checks, so clippy cannot be
+    // relied on to ask for the reason.
+    for (line, lib_rs) in [
+        (2, "#[test]\n#[cfg_attr(windows, ignore)]\nfn a() {}\n"),
+        (1, "#[cfg_attr(windows, expect(dead_code))]\nfn a() {}\n"),
+    ] {
+        let verdict = lint_source(lib_rs)?;
+        assert_eq!(
+            places(&verdict),
+            [(Some("crates/a/src/lib.rs"), Some(line))],
+            "{lib_rs}"
+        );
+    }
+    let verdict = lint_source(
+        "#[test]\n#[cfg_attr(windows, ignore = \"slow\")]\n\
+         #[cfg_attr(windows, expect(dead_code, reason = \"kept\"))]\nfn a() {}\n",
+    )?;
+    assert!(verdict.passed(), "{:?}", verdict.findings);
+    Ok(())
+}
+
+// AC: CE-08.8
+#[test]
+fn attributes_of_test_targets_and_build_scripts_are_judged() -> TestResult {
+    let dir = copy_fixture(None)?;
+    write(
+        dir.path(),
+        "crates/a/tests/it.rs",
+        "#![allow(clippy::unwrap_used)]\n",
+    )?;
+    write(
+        dir.path(),
+        "crates/a/build.rs",
+        "#![allow(unused)]\nfn main() {}\n",
+    )?;
+    let verdict = lint(dir.path())?;
+    assert_eq!(
+        places(&verdict),
+        [
+            (Some("crates/a/build.rs"), Some(1)),
+            (Some("crates/a/tests/it.rs"), Some(1)),
+        ]
+    );
     Ok(())
 }
 

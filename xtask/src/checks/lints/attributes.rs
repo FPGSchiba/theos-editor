@@ -23,17 +23,15 @@
 //! A string or a comment is one token that is never an attribute. An attribute that a macro
 //! forwards through a metavariable is judged where the invocation writes it.
 
-use proc_macro2::{Delimiter, TokenStream, TokenTree};
+use proc_macro2::{TokenStream, TokenTree};
 use syn::Meta;
 use syn::Token;
 use syn::punctuated::Punctuated;
-use syn::spanned::Spanned;
-use syn::visit::Visit;
 
-use super::cfg_names::split_args;
+use super::attrs::{Attribute, Body, Place, attributes, split_args};
 use super::{Inputs, Rule};
 use crate::verdict::Finding;
-use crate::view::{Source, line_of};
+use crate::view::Source;
 
 /// The rule, as `RULES` lists it.
 pub const RULE: Rule = Rule {
@@ -58,14 +56,9 @@ const GUARDS: [&str; 4] = [
     "clippy::ignore_without_reason",
 ];
 
-/// Where an attribute was found.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Place {
-    /// In the syntax tree, where clippy judges `expect` and `ignore`.
-    Tree,
-    /// In the tokens of a macro, where clippy sees nothing.
-    Macro,
-}
+/// The lint groups that contain guard lints: `clippy::pedantic` and `clippy::restriction` hold
+/// `ignore_without_reason` and the two allow lints, so naming them silences the guards as well.
+const GROUPS: [&str; 2] = ["clippy::pedantic", "clippy::restriction"];
 
 /// The findings of one file, in line order.
 #[must_use]
@@ -73,22 +66,35 @@ pub fn findings(source: &Source) -> Vec<Finding> {
     let Some(file) = &source.file else {
         return Vec::new();
     };
-    let mut walker = Walker {
-        path: &source.path,
-        findings: Vec::new(),
-    };
-    walker.visit_file(file);
-    walker.findings.sort_by_key(|finding| finding.line);
-    walker.findings
+    let mut found: Vec<Finding> = attributes(file)
+        .iter()
+        .flat_map(|attribute| {
+            judge(attribute)
+                .into_iter()
+                .map(|message| Finding::at(&source.path, attribute.line, message))
+        })
+        .collect();
+    found.sort_by_key(|finding| finding.line);
+    found
 }
 
-/// What is wrong with the attribute `meta`: one message per problem.
-fn problems(meta: &Meta, place: Place) -> Vec<String> {
+/// What is wrong with `attribute`: one message per problem.
+fn judge(attribute: &Attribute) -> Vec<String> {
+    match &attribute.body {
+        Body::Meta(meta) => problems(meta, attribute.place == Place::Macro),
+        Body::Unparsed(tokens) => unparsed_problems(tokens),
+    }
+}
+
+/// What is wrong with the attribute `meta`: one message per problem. `needs_reason` is whether
+/// clippy cannot be relied on to ask `expect` and `ignore` for a reason: in macro tokens, and
+/// inside a `cfg_attr` anywhere, whose attribute the compiler may not see on this machine.
+fn problems(meta: &Meta, needs_reason: bool) -> Vec<String> {
     let Some(name) = meta.path().get_ident().map(ToString::to_string) else {
         return Vec::new();
     };
     match (name.as_str(), meta) {
-        ("cfg_attr", Meta::List(list)) => cfg_attr_problems(&list.tokens, place),
+        ("cfg_attr", Meta::List(list)) => cfg_attr_problems(&list.tokens),
         ("allow", Meta::List(list)) => {
             let guards = guard_messages(&list.tokens);
             if guards.is_empty() {
@@ -100,19 +106,19 @@ fn problems(meta: &Meta, place: Place) -> Vec<String> {
         ("allow", _) => vec![ALLOW.to_owned()],
         ("expect", Meta::List(list)) => {
             let mut found = guard_messages(&list.tokens);
-            if place == Place::Macro && !has_reason(&list.tokens) {
+            if needs_reason && !has_reason(&list.tokens) {
                 found.push(EXPECT.to_owned());
             }
             found
         }
-        ("ignore", Meta::Path(_)) if place == Place::Macro => vec![IGNORE.to_owned()],
+        ("ignore", Meta::Path(_)) if needs_reason => vec![IGNORE.to_owned()],
         _ => Vec::new(),
     }
 }
 
 /// The problems of the attributes that `cfg_attr(predicate, attribute…)` applies, whose tokens are
-/// `tokens`. Arguments that do not parse (a metavariable) are judged by their identifiers.
-fn cfg_attr_problems(tokens: &TokenStream, place: Place) -> Vec<String> {
+/// `tokens`; they are judged for a reason wherever the `cfg_attr` stands. Arguments that do not parse (a metavariable) are judged by their identifiers.
+fn cfg_attr_problems(tokens: &TokenStream) -> Vec<String> {
     let parsed = syn::parse::Parser::parse2(
         Punctuated::<Meta, Token![,]>::parse_terminated,
         tokens.clone(),
@@ -121,7 +127,7 @@ fn cfg_attr_problems(tokens: &TokenStream, place: Place) -> Vec<String> {
         Ok(args) => args
             .iter()
             .skip(1)
-            .flat_map(|meta| problems(meta, place))
+            .flat_map(|meta| problems(meta, true))
             .collect(),
         Err(_) => unparsed_problems(tokens),
     }
@@ -160,12 +166,20 @@ fn guard_messages(tokens: &TokenStream) -> Vec<String> {
     split_args(tokens)
         .iter()
         .filter_map(lint_path)
-        .filter(|lint| GUARDS.contains(&lint.as_str()))
-        .map(|lint| {
-            format!(
-                "an `allow` or `expect` of `{lint}`, one of the lints that guard the others \
-                 (spec §5.2)"
-            )
+        .filter_map(|lint| {
+            if GUARDS.contains(&lint.as_str()) {
+                Some(format!(
+                    "an `allow` or `expect` of `{lint}`, one of the lints that guard the others \
+                     (spec §5.2)"
+                ))
+            } else if GROUPS.contains(&lint.as_str()) {
+                Some(format!(
+                    "an `allow` or `expect` of `{lint}`, a lint group that holds lints that guard \
+                     the others (spec §5.2)"
+                ))
+            } else {
+                None
+            }
         })
         .collect()
 }
@@ -181,61 +195,6 @@ fn lint_path(tokens: &TokenStream) -> Option<String> {
         }
     }
     (!path.is_empty()).then_some(path)
-}
-
-/// Walks one file and collects the findings of its attributes.
-struct Walker<'a> {
-    path: &'a str,
-    findings: Vec<Finding>,
-}
-
-impl Walker<'_> {
-    /// The `#` `[`…`]` and `#` `!` `[`…`]` groups of the tokens of a macro, at any depth.
-    fn scan_tokens(&mut self, tokens: &TokenStream) {
-        let trees: Vec<TokenTree> = tokens.clone().into_iter().collect();
-        for (index, tree) in trees.iter().enumerate() {
-            match tree {
-                TokenTree::Punct(pound) if pound.as_char() == '#' => {
-                    let mut rest = trees[index + 1..].iter();
-                    let mut next = rest.next();
-                    if matches!(next, Some(TokenTree::Punct(bang)) if bang.as_char() == '!') {
-                        next = rest.next();
-                    }
-                    if let Some(TokenTree::Group(group)) = next
-                        && group.delimiter() == Delimiter::Bracket
-                    {
-                        self.judge_group(line_of(pound.span()), &group.stream());
-                    }
-                }
-                TokenTree::Group(group) => self.scan_tokens(&group.stream()),
-                _ => {}
-            }
-        }
-    }
-
-    /// Judges the content of a bracket group that follows a `#` in macro tokens.
-    fn judge_group(&mut self, line: u32, content: &TokenStream) {
-        let found = match syn::parse2::<Meta>(content.clone()) {
-            Ok(meta) => problems(&meta, Place::Macro),
-            Err(_) => unparsed_problems(content),
-        };
-        for message in found {
-            self.findings.push(Finding::at(self.path, line, message));
-        }
-    }
-}
-
-impl<'ast> Visit<'ast> for Walker<'_> {
-    fn visit_attribute(&mut self, attribute: &'ast syn::Attribute) {
-        let line = line_of(attribute.pound_token.span());
-        for message in problems(&attribute.meta, Place::Tree) {
-            self.findings.push(Finding::at(self.path, line, message));
-        }
-    }
-
-    fn visit_macro(&mut self, mac: &'ast syn::Macro) {
-        self.scan_tokens(&mac.tokens);
-    }
 }
 
 #[cfg(test)]
@@ -324,12 +283,51 @@ mod tests {
                        #[test] #[ignore = \"slow\"] fn b() {} } }\n\
                        m! { #[cfg_attr(test, expect(unused, reason = \"x\"))] fn c() }\n";
         assert_eq!(judged(passing), []);
-        // Inside `cfg_attr` the same judgement applies, and a blank-looking list is not a reason.
+        // Inside `cfg_attr` the same judgement applies.
         let nested = "m! { #[cfg_attr(test, expect(unused))] #[cfg_attr(test, ignore)] fn c() }\n";
         assert_eq!(
             judged(nested),
             [(1, EXPECT.to_owned()), (1, IGNORE.to_owned())]
         );
+    }
+
+    #[test]
+    fn an_inner_attribute_in_a_function_body_is_judged() {
+        assert_eq!(lines("fn f() {\n    #![allow(unused)]\n}\n"), [2]);
+    }
+
+    #[test]
+    fn expect_and_ignore_in_a_tree_cfg_attr_need_a_reason() {
+        let ignore = "#[test]\n#[cfg_attr(windows, ignore)]\nfn a() {}\n";
+        assert_eq!(judged(ignore), [(2, IGNORE.to_owned())]);
+        let expect = "#[cfg_attr(windows, expect(dead_code))]\nfn a() {}\n";
+        assert_eq!(judged(expect), [(1, EXPECT.to_owned())]);
+        let inner = "#![cfg_attr(windows, expect(dead_code))]\n";
+        assert_eq!(judged(inner), [(1, EXPECT.to_owned())]);
+        let passing = "#[test]\n#[cfg_attr(windows, ignore = \"slow\")]\n\
+                       #[cfg_attr(windows, expect(dead_code, reason = \"kept\"))]\nfn a() {}\n";
+        assert_eq!(judged(passing), []);
+    }
+
+    #[test]
+    fn the_groups_that_hold_guard_lints_are_judged_like_guard_lints() {
+        for lint in ["clippy::pedantic", "clippy::restriction"] {
+            let message = format!(
+                "an `allow` or `expect` of `{lint}`, a lint group that holds lints that guard \
+                 the others (spec §5.2)"
+            );
+            for text in [
+                format!("#[expect({lint}, reason = \"r\")]\nfn a() {{}}\n"),
+                format!("#![expect({lint}, reason = \"r\")]\n"),
+                format!("#[cfg_attr(test, expect({lint}, reason = \"r\"))]\nfn a() {{}}\n"),
+                format!(
+                    "macro_rules! m {{ () => {{ #[expect({lint}, reason = \"r\")] fn a() {{}} }} }}\n"
+                ),
+                format!("m! {{ #[expect({lint}, reason = \"r\")] fn a() }}\n"),
+            ] {
+                assert_eq!(judged(&text), [(1, message.clone())], "{text}");
+            }
+        }
     }
 
     #[test]

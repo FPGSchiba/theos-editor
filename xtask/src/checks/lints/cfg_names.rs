@@ -25,16 +25,14 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
-use proc_macro2::{Delimiter, TokenStream, TokenTree};
+use proc_macro2::{TokenStream, TokenTree};
 use serde::Deserialize;
-use syn::spanned::Spanned;
-use syn::visit::Visit;
 use syn::{Expr, ExprLit, Lit, Meta};
 
+use super::attrs::{Body, attributes, split_args};
 use super::config_files::error_line;
 use super::{Inputs, Rule};
 use crate::verdict::Finding;
-use crate::view::line_of;
 use crate::{Error, Result};
 
 /// The file that lists the names.
@@ -87,13 +85,14 @@ fn findings(inputs: &Inputs<'_>) -> Vec<Finding> {
     let mut findings = Vec::new();
     for source in inputs.view.sources() {
         let Some(file) = &source.file else { continue };
-        let mut walker = Walker {
-            names: inputs.cfg_names,
-            file: &source.path,
-            findings: Vec::new(),
-        };
-        walker.visit_file(file);
-        findings.extend(walker.findings);
+        for attribute in attributes(file) {
+            // A macro-token attribute that `syn` cannot read (`#[$m]`) is not judged (Ruling 6).
+            if let Body::Meta(meta) = &attribute.body
+                && let Some(message) = attribute_problem(meta, inputs.cfg_names)
+            {
+                findings.push(Finding::at(&source.path, attribute.line, message));
+            }
+        }
     }
     findings.sort_by(|a, b| (&a.file, a.line).cmp(&(&b.file, b.line)));
     findings
@@ -151,25 +150,6 @@ pub fn judge(predicate: &Meta, names: &CfgNames) -> std::result::Result<(), Stri
             }
         }
     }
-}
-
-/// The comma-separated arguments of a list, each as its own tokens; a trailing comma adds none.
-/// Commas inside a group belong to the group, so nesting needs no parser of ours.
-pub(super) fn split_args(tokens: &TokenStream) -> Vec<TokenStream> {
-    let mut args = Vec::new();
-    let mut current = TokenStream::new();
-    for tree in tokens.clone() {
-        match &tree {
-            TokenTree::Punct(punct) if punct.as_char() == ',' => {
-                args.push(std::mem::take(&mut current));
-            }
-            _ => current.extend([tree]),
-        }
-    }
-    if !current.is_empty() {
-        args.push(current);
-    }
-    args
 }
 
 /// `tokens` as a predicate. `Meta` does not read a keyword on its own (`false`, `true`), so a
@@ -251,53 +231,6 @@ fn echo(word: &str) -> String {
         .collect()
 }
 
-/// Walks one file and collects the findings of its attributes.
-struct Walker<'a> {
-    names: &'a CfgNames,
-    file: &'a str,
-    findings: Vec<Finding>,
-}
-
-impl Walker<'_> {
-    fn report(&mut self, line: u32, message: String) {
-        self.findings.push(Finding::at(self.file, line, message));
-    }
-
-    /// The `#` `[`…`]` and `#` `!` `[`…`]` groups of the tokens of a macro, at any depth.
-    fn scan_tokens(&mut self, tokens: &TokenStream) {
-        let trees: Vec<TokenTree> = tokens.clone().into_iter().collect();
-        for (index, tree) in trees.iter().enumerate() {
-            match tree {
-                TokenTree::Punct(pound) if pound.as_char() == '#' => {
-                    let mut rest = trees[index + 1..].iter();
-                    let mut next = rest.next();
-                    if matches!(next, Some(TokenTree::Punct(bang)) if bang.as_char() == '!') {
-                        next = rest.next();
-                    }
-                    if let Some(TokenTree::Group(group)) = next
-                        && group.delimiter() == Delimiter::Bracket
-                    {
-                        self.judge_group(line_of(pound.span()), &group.stream());
-                    }
-                }
-                TokenTree::Group(group) => self.scan_tokens(&group.stream()),
-                _ => {}
-            }
-        }
-    }
-
-    /// Judges the content of a bracket group when it is a `cfg` or `cfg_attr` attribute; a macro
-    /// metavariable is handled by [`attribute_problem`].
-    fn judge_group(&mut self, line: u32, content: &TokenStream) {
-        let Ok(meta) = syn::parse2::<Meta>(content.clone()) else {
-            return;
-        };
-        if let Some(message) = attribute_problem(&meta, self.names) {
-            self.report(line, message);
-        }
-    }
-}
-
 /// Whether a `$` is anywhere in `tokens`.
 fn has_dollar(tokens: &TokenStream) -> bool {
     tokens.clone().into_iter().any(|tree| match tree {
@@ -305,18 +238,6 @@ fn has_dollar(tokens: &TokenStream) -> bool {
         TokenTree::Group(group) => has_dollar(&group.stream()),
         _ => false,
     })
-}
-
-impl<'ast> Visit<'ast> for Walker<'_> {
-    fn visit_attribute(&mut self, attribute: &'ast syn::Attribute) {
-        if let Some(message) = attribute_problem(&attribute.meta, self.names) {
-            self.report(line_of(attribute.pound_token.span()), message);
-        }
-    }
-
-    fn visit_macro(&mut self, mac: &'ast syn::Macro) {
-        self.scan_tokens(&mac.tokens);
-    }
 }
 
 #[cfg(test)]
@@ -339,16 +260,17 @@ mod tests {
         let (source, finding) = parse_source("a.rs", text.as_bytes());
         assert!(finding.is_none(), "{finding:?}");
         let names = names();
-        let mut walker = Walker {
-            names: &names,
-            file: "a.rs",
-            findings: Vec::new(),
-        };
+        let mut findings = Vec::new();
         if let Some(file) = &source.file {
-            walker.visit_file(file);
+            for attribute in attributes(file) {
+                if let Body::Meta(meta) = &attribute.body
+                    && let Some(message) = attribute_problem(meta, &names)
+                {
+                    findings.push(Finding::at("a.rs", attribute.line, message));
+                }
+            }
         }
-        walker
-            .findings
+        findings
             .into_iter()
             .map(|finding| (finding.line.unwrap_or(0), finding.message))
             .collect()
