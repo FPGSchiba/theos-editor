@@ -10,10 +10,18 @@
 //! 2. the PR lacks `approved`: fail, "waits for Jann";
 //! 3. `approved` was just added: record the fingerprint in a comment, pass;
 //! 4. the recorded fingerprint is the current one: pass;
-//! 5. anything else: take `approved` off, say so in a comment, fail.
+//! 5. a fingerprint is recorded and differs from the current one (5a): take `approved` off, say so
+//!    in a comment, fail. None is recorded (5b): fail, and change nothing but the `needs-jann`
+//!    label.
 //!
 //! Every row but the first also makes sure `needs-jann` exists and is on the PR. CI never adds
 //! `approved` and never removes `needs-jann`.
+//!
+//! Only the run of the event `labeled approved` records (row 3). Row 5b takes no action because
+//! GitHub starts a run for every event, in any order: when Jann changes two labels at once, the
+//! run of another event may read `approved` before the run of `labeled approved` has recorded
+//! it, and removing the label then would undo the approval that run is about to record. The check
+//! still never passes without a recorded fingerprint equal to the current one.
 //!
 //! A recorded fingerprint is read back with [`recorded`] from comments of the bot that were never
 //! edited, because everyone else, Claude included, writes comments under Jann's account. Nothing
@@ -37,9 +45,9 @@ const RECORDED_SENTENCE: &str = "Approval recorded for this content of the PR.";
 /// The failure of a protected pull request without the label `approved`.
 const WAITS: &str = "waits for Jann: add the label `approved` after review";
 
-/// The failure of a pull request that has `approved` but no recorded approval: nothing changed
-/// after an approval, because none was recorded. Spec §5.7 step 7 words only the changed case.
-const NOT_RECORDED: &str = "approval removed: no approval was recorded for this content (the label was added while a check was running, or without a run); add `approved` again once this run has finished";
+/// The failure of a pull request that has `approved` but no recorded approval. Spec §5.7 step 7
+/// words only the changed case.
+const NOT_RECORDED: &str = "no approval is recorded for this content yet: the run of the label `approved` records it; if that run has finished and this check is still red, remove `approved` and add it again";
 
 /// Added by CI to a pull request that touches a protected path; never removed by CI. The colour
 /// and the description of the label are in `gate/repo-settings.toml`.
@@ -165,15 +173,15 @@ pub fn decide(
     if recorded == Some(current) {
         return (Verdict::pass(Check::Approval), actions);
     }
-    // Row 5.
-    let reason = recorded.map_or_else(
-        || NOT_RECORDED.to_owned(),
-        |old| {
-            format!(
-                "approval removed: the PR changed after approval ({} → {})",
-                old.0, current.0
-            )
-        },
+    // Row 5b: nothing recorded. Not a pass, but `approved` stays and nothing is written: the run
+    // of the `labeled approved` event may still be to come and records it.
+    let Some(old) = recorded else {
+        return (fail(NOT_RECORDED), actions);
+    };
+    // Row 5a.
+    let reason = format!(
+        "approval removed: the PR changed after approval ({} → {})",
+        old.0, current.0
     );
     actions.push(Action::RemoveLabel(APPROVED.to_owned()));
     actions.push(Action::Comment(reason.clone()));
@@ -366,17 +374,39 @@ mod tests {
             &fp('a'),
             HEAD,
         );
-        // Nothing changed after an approval, because none was recorded: the text says so.
-        let reason = concat!(
-            "approval removed: no approval was recorded for this content (the label was added ",
-            "while a check was running, or without a run); add `approved` again once this run ",
-            "has finished"
+        // Still a failure, but `approved` stays and nothing is written: the run of the label
+        // `approved` may be about to record the approval.
+        assert_eq!(messages(&verdict), [NOT_RECORDED]);
+        assert_eq!(actions, needs_jann_actions());
+    }
+
+    // AC: CE-08.5
+    #[test]
+    fn a_run_of_another_event_does_not_undo_the_approval_the_labeled_run_records() {
+        // Jann removes `needs-jann` and adds `approved` in the same second. The run of the
+        // `unlabeled` event goes first and already sees `approved`; nothing is recorded yet.
+        let (verdict, actions) = decide(
+            &touched(),
+            &Event::Other,
+            &labels(&["approved"]),
+            None,
+            &fp('a'),
+            HEAD,
         );
-        assert_eq!(messages(&verdict), [reason]);
-        let mut expected = needs_jann_actions();
-        expected.push(Action::RemoveLabel("approved".to_owned()));
-        expected.push(Action::Comment(reason.to_owned()));
-        assert_eq!(actions, expected);
+        assert!(!verdict.passed());
+        assert_eq!(actions, needs_jann_actions());
+
+        // Then the run of the `labeled approved` event records and passes.
+        let (verdict, actions) = decide(
+            &touched(),
+            &labeled("approved"),
+            &labels(&["approved", "needs-jann"]),
+            None,
+            &fp('a'),
+            HEAD,
+        );
+        assert_eq!(verdict, Verdict::pass(Check::Approval));
+        assert_eq!(actions, [Action::Comment(marker(&fp('a'), HEAD))]);
     }
 
     // AC: CE-08.5

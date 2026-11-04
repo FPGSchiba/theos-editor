@@ -472,9 +472,49 @@ mod tests {
                 &event("synchronize", None, &base, &head),
                 &gh,
             )?;
+            // The forged record counts as none: the check fails, and since the label may be
+            // waiting for the run that records it, nothing is removed or written.
             assert!(!verdict.passed());
-            assert_eq!(gh.writes()[0], Call::RemoveLabel(7, "approved".to_owned()));
+            assert_eq!(gh.writes(), []);
+            assert_eq!(gh.current_labels(), ["needs-jann", "approved"]);
         }
+        Ok(())
+    }
+
+    // AC: CE-08.5
+    #[test]
+    fn approved_with_nothing_recorded_fails_without_removing_or_commenting() -> TestResult {
+        let (dir, base) = main_repo()?;
+        git(dir.path(), &["switch", "-q", "-c", "topic"])?;
+        let head = change(dir.path(), "docs/a.md", "two\n")?;
+        let git_repo = Git::new(dir.path());
+        // The run of an `unlabeled needs-jann` event sees `approved` before the run of the
+        // `labeled approved` event has recorded it.
+        let gh = FakeGitHub::new()
+            .with_labels(&["approved"])
+            .with_head(&head);
+        let verdict = check(
+            &git_repo,
+            &rules()?,
+            &labels()?,
+            &event("unlabeled", Some("needs-jann"), &base, &head),
+            &gh,
+        )?;
+        assert!(!verdict.passed());
+        assert_eq!(gh.writes(), needs_jann_calls()?);
+        assert_eq!(gh.current_labels(), ["approved", "needs-jann"]);
+        assert_eq!(gh.current_comments(), []);
+
+        // Then the run of the `labeled approved` event records, and passes.
+        let verdict = check(
+            &git_repo,
+            &rules()?,
+            &labels()?,
+            &event("labeled", Some("approved"), &base, &head),
+            &gh,
+        )?;
+        assert!(verdict.passed(), "{verdict:?}");
+        assert_eq!(gh.current_comments().len(), 1);
         Ok(())
     }
 
