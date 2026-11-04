@@ -38,7 +38,7 @@ pub use thresholds::{CrateClass, Thresholds};
 use crate::ci::CiEvent;
 use crate::git::Git;
 use crate::process::{
-    CargoCommand, capture_cargo, capture_rustc_version, cargo_metadata, run_cargo,
+    CargoCommand, capture_cargo, capture_rustc_version, cargo_metadata, run_cargo, workspace_root,
 };
 use crate::tools::parse_version;
 use crate::verdict::{Check, Finding, Verdict};
@@ -143,6 +143,13 @@ pub(crate) trait Llvm {
     /// `output`. The build directory is `target_dir` when there is one. Says whether the tests
     /// passed, which they must for there to be an export.
     fn run(&self, dir: &Path, output: &Path, target_dir: Option<&Path>) -> Result<bool>;
+
+    /// The root of the workspace in `dir` as cargo names it, the spelling the paths of the
+    /// export are compared against ([`crate::process::workspace_root`]). The default is `dir`
+    /// made absolute, for a fake that never runs cargo.
+    fn cargo_root(&self, dir: &Path) -> Result<PathBuf> {
+        std::path::absolute(dir).map_err(io_error(dir))
+    }
 }
 
 /// `cargo llvm-cov` as it is installed.
@@ -169,6 +176,10 @@ impl Llvm for CargoLlvm {
 
     fn run(&self, dir: &Path, output: &Path, target_dir: Option<&Path>) -> Result<bool> {
         run_cargo(dir, &llvm_cov_command(output, target_dir))
+    }
+
+    fn cargo_root(&self, dir: &Path) -> Result<PathBuf> {
+        Ok(workspace_root(&cargo_metadata(dir, true, true, false)?))
     }
 }
 
@@ -249,7 +260,8 @@ pub(crate) fn evaluate(
     store_head: bool,
     members: &[String],
 ) -> Result<Verdict> {
-    // The paths in the export are absolute.
+    // Git and the work directory are found from an absolute root; the paths in the export are
+    // absolute too, in cargo's spelling of the root.
     let root = std::path::absolute(root).map_err(io_error(root))?;
     let thresholds = Thresholds::load(&root)?;
     let git = Git::new(&root);
@@ -273,7 +285,7 @@ pub(crate) fn evaluate(
         ));
     }
     let json = std::fs::read_to_string(&export).map_err(io_error(&export))?;
-    let head = parse_llvm_cov(&json, &root)?;
+    let head = parse_llvm_cov(&json, &llvm.cargo_root(&root)?)?;
 
     let cache_dir = work.join("cache");
     if store_head {
@@ -713,6 +725,9 @@ mod tests {
         baseline_fails: bool,
         /// Writes the paths of a repository somewhere else than where it ran.
         elsewhere: bool,
+        /// Spells every root as cargo does, which is not how it was given (a symlinked clone, or
+        /// macOS's `/private/var` for `/var`): the export has its paths, `cargo_root` names it.
+        cargo_spelling: Option<&'static str>,
     }
 
     fn is_worktree(dir: &Path) -> bool {
@@ -744,6 +759,8 @@ mod tests {
             };
             let place = if self.elsewhere {
                 "/elsewhere".to_owned()
+            } else if let Some(spelling) = self.cargo_spelling {
+                spelling.to_owned()
             } else {
                 dir.display().to_string()
             };
@@ -756,6 +773,13 @@ mod tests {
             });
             fs::write(output, export.to_string()).map_err(io_error(output))?;
             Ok(true)
+        }
+
+        fn cargo_root(&self, dir: &Path) -> Result<PathBuf> {
+            match self.cargo_spelling {
+                Some(spelling) => Ok(PathBuf::from(spelling)),
+                None => std::path::absolute(dir).map_err(io_error(dir)),
+            }
         }
     }
 
@@ -836,6 +860,24 @@ mod tests {
             messages[0]
         );
         assert!(has_note(&result, &["no baseline"]), "{result:?}");
+        Ok(())
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn the_export_is_read_against_the_root_as_cargo_names_it() -> TestResult {
+        let dir = repo("90 100", true)?;
+        git(dir.path(), &["switch", "-q", "-c", "phase/P00-x"])?;
+        set_cov(dir.path(), "80 100")?;
+        let llvm = FakeLlvm {
+            cargo_spelling: Some("/cargo-spelling"),
+            ..FakeLlvm::default()
+        };
+        let result = evaluate(&llvm, dir.path(), "main", false, &the_member())?;
+        assert_eq!(llvm.ran_in(), ["head", "baseline"]);
+        let messages = messages(&result);
+        assert_eq!(messages.len(), 1, "{messages:?}");
+        assert!(messages[0].contains("10.0"), "{}", messages[0]);
         Ok(())
     }
 

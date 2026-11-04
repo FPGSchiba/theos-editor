@@ -89,6 +89,17 @@ pub(crate) fn cargo_output_showing_stderr(root: &Path, cmd: &CargoCommand) -> Re
         })
 }
 
+/// The workspace root as cargo names it, which is the one spelling to compare cargo's and
+/// llvm-cov's paths against.
+///
+/// Cargo runs in `root` and builds every path from the kernel's spelling of its working
+/// directory: macOS turns `/var/...` into `/private/var/...`, and a clone reached through a
+/// symlink gets its target. The root as given can differ from that, and `fs::canonicalize` would
+/// resolve more than cargo does on Windows (subst drives, junctions), so neither is used.
+pub(crate) fn workspace_root(metadata: &Metadata) -> PathBuf {
+    metadata.workspace_root.as_std_path().to_path_buf()
+}
+
 /// The metadata of the workspace at `root`, without the dependencies when `no_deps`.
 ///
 /// # Errors

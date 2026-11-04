@@ -86,6 +86,28 @@ fn the_view_lists_the_artifacts_of_the_members() -> TestResult {
 }
 
 // AC: CE-08.8
+#[cfg(unix)]
+#[test]
+fn a_root_reached_through_a_symlink_is_repo_relative() -> TestResult {
+    // Cargo names its paths from the kernel's spelling of the working directory, which is the
+    // link's target, so the view must take that spelling and not the one it was given.
+    let dir = copy_case("plain")?;
+    let link = tempfile::tempdir()?;
+    let linked = link.path().join("clone");
+    std::os::unix::fs::symlink(dir.path(), &linked)?;
+    let view = View::build(&linked, ViewOptions::FIXTURE)?;
+    let lib = find(&view, "a", TargetKind::Lib, false)?;
+    assert_eq!(lib.manifest_dir, "crates/a");
+    assert_eq!(lib.src_path, "crates/a/src/lib.rs");
+    assert_eq!(
+        files(lib),
+        BTreeSet::from(["crates/a/src/lib.rs", "crates/a/src/sub.rs"])
+    );
+    assert_eq!(view.root, fs::canonicalize(dir.path())?);
+    Ok(())
+}
+
+// AC: CE-08.8
 #[test]
 fn dep_info_lists_path_modules_includes_and_data() -> TestResult {
     let dir = copy_case("path-and-include")?;

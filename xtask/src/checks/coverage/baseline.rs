@@ -86,7 +86,7 @@ pub(crate) fn measure_with(
             });
         }
         let json = fs::read_to_string(&export).map_err(io_error(&export))?;
-        parse_llvm_cov(&json, tree)
+        parse_llvm_cov(&json, &llvm.cargo_root(tree)?)
     })?;
     write_cache(&cache, &measured)?;
     Ok(Some(measured))

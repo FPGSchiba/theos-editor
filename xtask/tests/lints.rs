@@ -1098,12 +1098,34 @@ fn a_target_outside_the_repository_is_reported_at_its_absolute_path() -> TestRes
     let [(Some(file), None)] = found.as_slice() else {
         return Err(format!("expected one finding at the file: {found:?}").into());
     };
-    let expected = manifest_path.replace('\\', "/");
-    let expected = expected.trim_start_matches("//?/");
+    // The file is outside the root whatever the spelling of the temporary directory: as written
+    // in the manifest, or as the kernel names it (`/var` is `/private/var` on macOS).
+    let spellings: Vec<String> = [absolute.clone(), fs::canonicalize(&absolute)?]
+        .iter()
+        .map(|path| {
+            let text = path.to_string_lossy().replace('\\', "/");
+            text.trim_start_matches("//?/").to_owned()
+        })
+        .collect();
     assert!(
-        file.eq_ignore_ascii_case(expected),
-        "{file} against {expected}"
+        spellings.iter().any(|text| file.eq_ignore_ascii_case(text)),
+        "{file} against {spellings:?}"
     );
+    Ok(())
+}
+
+// AC: CE-08.8
+#[cfg(unix)]
+#[test]
+fn a_root_reached_through_a_symlink_has_no_findings() -> TestResult {
+    // Cargo names the root as the kernel spells its working directory, which is the link's
+    // target; rule 1 must still see every file of the crate inside its `src/`.
+    let dir = copy_fixture(None)?;
+    let link = tempfile::tempdir()?;
+    let linked = link.path().join("clone");
+    std::os::unix::fs::symlink(dir.path(), &linked)?;
+    let verdict = lint(&linked)?;
+    assert_eq!(places(&verdict), []);
     Ok(())
 }
 

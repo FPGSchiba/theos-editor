@@ -106,14 +106,10 @@ impl View {
     /// Fails when cargo fails ([`cargo_check::artifacts`]) or a file of an artifact cannot be
     /// read. A file that does not parse is a finding of the view, not an error.
     pub fn build(root: &Path, options: ViewOptions) -> Result<Self> {
-        // Cargo's messages carry absolute paths, so every path is made repo-relative against an
-        // absolute root.
-        let root = std::path::absolute(root).map_err(|source| Error::Io {
-            path: root.to_path_buf(),
-            source,
-        })?;
+        // Cargo's messages carry absolute paths in cargo's own spelling of the root, so every path
+        // is made repo-relative against that spelling and the files are read from it.
+        let (root, artifacts) = cargo_check::artifacts(root, options)?;
         let root = root.as_path();
-        let artifacts = cargo_check::artifacts(root, options)?;
         let rust_files: BTreeSet<&str> = artifacts
             .iter()
             .flat_map(|artifact| &artifact.files)

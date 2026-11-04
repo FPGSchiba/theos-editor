@@ -12,7 +12,7 @@ use cargo_metadata::{Message, PackageId, TargetKind as CargoKind};
 
 use super::dep_info::{build_script_dep_info, dep_info_of, parse_dep_info, repo_relative};
 use super::{Artifact, TargetKind, ViewOptions};
-use crate::process::{CargoCommand, cargo_metadata, cargo_output_showing_stderr};
+use crate::process::{CargoCommand, cargo_metadata, cargo_output_showing_stderr, workspace_root};
 use crate::{Error, Result};
 
 /// The command whose artifacts make the view.
@@ -53,10 +53,14 @@ const CHECK_FAILED: &str = "the check failed; run `cargo check --workspace --all
 /// workspace (the error names the command to run and does not echo cargo's diagnostics), when
 /// its messages are not what was expected, or when an artifact has no readable dep-info.
 ///
-/// `root` should be absolute: paths of cargo's messages are, and are made relative to it. The
-/// artifacts are sorted by package, kind, name and test, whatever order cargo built them in.
-pub fn artifacts(root: &Path, options: ViewOptions) -> Result<Vec<Artifact>> {
+/// Gives the workspace root as cargo names it ([`crate::process::workspace_root`]) with the
+/// artifacts: the paths of cargo's messages are made relative to that root, and it is the root
+/// to read the files from. The artifacts are sorted by package, kind, name and test, whatever
+/// order cargo built them in.
+pub fn artifacts(root: &Path, options: ViewOptions) -> Result<(PathBuf, Vec<Artifact>)> {
     let metadata = cargo_metadata(root, true, options.locked, options.offline)?;
+    let cargo_root = workspace_root(&metadata);
+    let root = cargo_root.as_path();
     let members: BTreeMap<&PackageId, (&str, String)> = metadata
         .packages
         .iter()
@@ -125,7 +129,7 @@ pub fn artifacts(root: &Path, options: ViewOptions) -> Result<Vec<Artifact>> {
     artifacts.sort_by(|a, b| {
         (&a.package, a.kind, &a.name, a.test).cmp(&(&b.package, b.kind, &b.name, b.test))
     });
-    Ok(artifacts)
+    Ok((cargo_root, artifacts))
 }
 
 fn target_kind(kind: Option<&CargoKind>) -> Result<TargetKind> {
