@@ -146,6 +146,7 @@ fn install_command(pin: &ToolPin) -> CargoCommand {
             .map(str::to_owned)
             .to_vec(),
         env: Vec::new(),
+        env_remove: Vec::new(),
     }
 }
 
@@ -170,6 +171,7 @@ fn probe(root: &Path, pin: &ToolPin) -> Result<Installed> {
     let cmd = CargoCommand {
         args: vec![subcommand.to_owned(), "--version".to_owned()],
         env: Vec::new(),
+        env_remove: Vec::new(),
     };
     Ok(match capture_cargo(root, &cmd)? {
         None => Installed::Missing,
@@ -403,6 +405,7 @@ mod tests {
                 .map(str::to_owned)
                 .to_vec(),
             env: Vec::new(),
+            env_remove: Vec::new(),
         };
         assert_eq!(command, expected);
         assert_eq!(

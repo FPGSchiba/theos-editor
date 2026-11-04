@@ -16,9 +16,12 @@ use crate::process::{CargoCommand, cargo_metadata, cargo_output_showing_stderr, 
 use crate::repo_path::repo_relative;
 use crate::{Error, Result};
 
-/// The command whose artifacts make the view.
+/// The command whose artifacts make the view of the workspace at `root`.
+///
+/// With [`ViewOptions::own_target_dir`] it builds into `<root>/target`, which beats
+/// `CARGO_TARGET_DIR` and `CARGO_BUILD_TARGET_DIR` in the environment.
 #[must_use]
-pub fn check_command(options: ViewOptions) -> CargoCommand {
+pub fn check_command(options: ViewOptions, root: &Path) -> CargoCommand {
     let mut args: Vec<String> = [
         "check",
         "--workspace",
@@ -34,9 +37,18 @@ pub fn check_command(options: ViewOptions) -> CargoCommand {
     if options.offline {
         args.push("--offline".to_owned());
     }
+    if options.own_target_dir {
+        args.push("--target-dir".to_owned());
+        args.push(root.join("target").to_string_lossy().into_owned());
+    }
     CargoCommand {
         args,
-        env: Vec::new(),
+        env: options
+            .extra_env
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+            .collect(),
+        env_remove: Vec::new(),
     }
 }
 
@@ -73,7 +85,7 @@ pub fn artifacts(root: &Path, options: ViewOptions) -> Result<(PathBuf, Vec<Arti
         })
         .collect();
 
-    let command = check_command(options);
+    let command = check_command(options, root);
     let output = cargo_output_showing_stderr(root, &command)?;
     let failed = || Error::Command {
         program: "cargo".to_owned(),
@@ -180,7 +192,8 @@ mod tests {
 
     #[test]
     fn the_check_covers_the_workspace_and_every_target() {
-        let args = |options| check_command(options).args;
+        let root = Path::new("some").join("root");
+        let args = |options| check_command(options, &root).args;
         assert_eq!(
             args(ViewOptions::REPOSITORY),
             [
@@ -198,7 +211,9 @@ mod tests {
                 "--workspace",
                 "--all-targets",
                 "--message-format=json",
-                "--offline"
+                "--offline",
+                "--target-dir",
+                &root.join("target").to_string_lossy()
             ]
         );
     }
