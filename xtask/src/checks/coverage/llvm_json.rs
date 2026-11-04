@@ -16,10 +16,11 @@
 //! check would pass without having looked at anything.
 
 use std::collections::BTreeMap;
-use std::path::{Component, Path};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use crate::repo_path::{Case, Climb, RepoPath};
 use crate::{Error, Result};
 
 /// The lines of one crate: how many have code, and how many of those ran.
@@ -161,36 +162,18 @@ fn parse_error(message: &str) -> Error {
 fn normal(path: &str) -> String {
     let path = path.replace('\\', "/");
     let path = path.strip_prefix("//?/").unwrap_or(&path);
-    let mut head = String::new();
-    let mut parts: Vec<String> = Vec::new();
-    for component in Path::new(path).components() {
-        match component {
-            Component::Prefix(prefix) => head.push_str(&prefix.as_os_str().to_string_lossy()),
-            Component::RootDir => head.push('/'),
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if parts.last().is_some_and(|last| last != "..") {
-                    parts.pop();
-                } else {
-                    parts.push("..".to_owned());
-                }
-            }
-            Component::Normal(name) => parts.push(name.to_string_lossy().into_owned()),
-        }
-    }
-    format!("{head}{}", parts.join("/")).replace('\\', "/")
+    RepoPath::of(path, Climb::Keep).text().replace('\\', "/")
 }
 
 /// The crate a source file belongs to: `<name>` for `<root>/crates/<name>/src/<file>` and
 /// `xtask` for `<root>/xtask/src/<file>`. Both paths are normal, see [`normal`].
 fn crate_of<'a>(file: &'a str, root: &str, ignore_case: bool) -> Option<&'a str> {
-    let same = |a: &str, b: &str| {
-        if ignore_case {
-            a.eq_ignore_ascii_case(b)
-        } else {
-            a == b
-        }
+    let case = if ignore_case {
+        Case::Ascii
+    } else {
+        Case::Exact
     };
+    let same = |a: &str, b: &str| case.same(a, b);
     file.get(..root.len()).filter(|start| same(start, root))?;
     let rest = file.get(root.len()..)?.strip_prefix('/')?;
     let mut parts = rest.split('/');

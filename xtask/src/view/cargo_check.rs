@@ -10,9 +10,10 @@ use std::path::{Path, PathBuf};
 
 use cargo_metadata::{Message, PackageId, TargetKind as CargoKind};
 
-use super::dep_info::{build_script_dep_info, dep_info_of, parse_dep_info, repo_relative};
+use super::dep_info::{build_script_dep_info, dep_info_of, parse_dep_info};
 use super::{Artifact, TargetKind, ViewOptions};
 use crate::process::{CargoCommand, cargo_metadata, cargo_output_showing_stderr, workspace_root};
+use crate::repo_path::repo_relative;
 use crate::{Error, Result};
 
 /// The command whose artifacts make the view.

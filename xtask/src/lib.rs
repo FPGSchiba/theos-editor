@@ -43,6 +43,7 @@ pub mod git;
 pub mod github;
 pub mod markdown;
 pub mod process;
+pub mod repo_path;
 pub mod report;
 pub mod tools;
 pub mod umbrella;

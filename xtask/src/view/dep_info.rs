@@ -1,11 +1,11 @@
 //! Dep-info files: the list of input files rustc writes next to every artifact.
 //!
 //! Cargo runs rustc from the workspace root, so the paths in a dep-info file are relative to it
-//! (or absolute, for files outside it). [`parse_dep_info`] reads the file's list, [`repo_relative`]
-//! turns each path into the form the rest of the gate uses, and [`dep_info_of`] says where the
-//! dep-info of an artifact is.
+//! (or absolute, for files outside it). [`parse_dep_info`] reads the file's list,
+//! [`repo_relative`](crate::repo_path::repo_relative) turns each path into the form the rest of the
+//! gate uses, and [`dep_info_of`] says where the dep-info of an artifact is.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 /// The files a dep-info text lists: the lines that end with `:` (rustc writes one such target
 /// per input file, with no dependencies after it; the output lines have dependencies after the
@@ -44,91 +44,6 @@ fn unescape(path: &str) -> String {
     out
 }
 
-/// Where a path lexically is: its prefix (a drive, empty when there is none), whether it starts
-/// at a root, and its segments with `.` and `..` resolved.
-#[derive(Debug)]
-struct Normal {
-    prefix: String,
-    rooted: bool,
-    segments: Vec<String>,
-}
-
-impl Normal {
-    fn of(path: &str) -> Self {
-        let mut normal = Self {
-            prefix: String::new(),
-            rooted: false,
-            segments: Vec::new(),
-        };
-        for component in Path::new(path).components() {
-            match component {
-                Component::Prefix(prefix) => {
-                    prefix
-                        .as_os_str()
-                        .to_string_lossy()
-                        .trim_start_matches(r"\\?\")
-                        .clone_into(&mut normal.prefix);
-                }
-                Component::RootDir => normal.rooted = true,
-                Component::CurDir => {}
-                Component::ParentDir => {
-                    normal.segments.pop();
-                }
-                Component::Normal(segment) => {
-                    normal.segments.push(segment.to_string_lossy().into_owned());
-                }
-            }
-        }
-        normal
-    }
-
-    fn absolute(&self) -> bool {
-        self.rooted || !self.prefix.is_empty()
-    }
-
-    /// The path as text, with `/`.
-    fn text(&self) -> String {
-        let root = if self.rooted { "/" } else { "" };
-        format!("{}{root}{}", self.prefix, self.segments.join("/"))
-    }
-}
-
-/// Whether two names are the same; Windows file names differ only in case are one file.
-fn same(a: &str, b: &str) -> bool {
-    if cfg!(windows) {
-        a.to_lowercase() == b.to_lowercase()
-    } else {
-        a == b
-    }
-}
-
-/// `file` as a path relative to `root`, with `/` as separator, resolved lexically: a relative
-/// path is taken from `root`, a `\\?\` prefix is dropped, `.` and `..` are resolved by
-/// components, case is ignored on Windows, and nothing is canonicalised. A file outside `root`
-/// keeps its absolute normal form.
-#[must_use]
-pub fn repo_relative(root: &Path, file: &str) -> String {
-    let root = Normal::of(&root.to_string_lossy());
-    let mut normal = Normal::of(file);
-    if !normal.absolute() && !root.text().is_empty() {
-        normal = Normal::of(&format!("{}/{file}", root.text()));
-    }
-    let file = normal;
-    let inside = same(&file.prefix, &root.prefix)
-        && file.rooted == root.rooted
-        && file.segments.len() >= root.segments.len()
-        && root
-            .segments
-            .iter()
-            .zip(&file.segments)
-            .all(|(a, b)| same(a, b));
-    if inside {
-        file.segments[root.segments.len()..].join("/")
-    } else {
-        file.text()
-    }
-}
-
 /// The dep-info file of the artifact whose first file is `artifact_file`: the file beside it
 /// named like it, without a leading `lib` and with the extension `.d` (`libxtask-<hash>.rmeta`
 /// gives `xtask-<hash>.d`, `build_script_build-<hash>.exe` gives `build_script_build-<hash>.d`).
@@ -156,6 +71,7 @@ pub fn build_script_dep_info(folder: &Path) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::repo_path::repo_relative;
 
     #[test]
     fn files_are_the_targets_without_dependencies() {
