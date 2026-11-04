@@ -6,7 +6,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 
 | Phase | Name | Repo | State | Spec PR | Build PR |
 |---|---|---|---|---|---|
-| P00 | Foundation and gate | theos-editor | spec-pr | #5 | |
+| P00 | Foundation and gate | theos-editor | pr-open | #5, #9, #10 | #7 |
 | P01 | Content layout and templates | tower-of-theos | done | #4 | tower-of-theos#2 |
 | P02 | Records and grammars | theos-editor | todo | | |
 | P03 | Kinds, index, search, lenses | theos-editor | todo | | |
@@ -33,11 +33,13 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
   always be read as text? Needed by P02/P03 (found in the P01 spec, §5). The same holds for
   `accuracy: false` on beliefs, which the restricted YAML reads as a boolean; the P01 checks
   accept it as the enum value for now.
-- P00 revision 1 (spec PR from `spec/P00-gate-redesign`): the checks read code through the
-  compiler, cargo and real parsers (P00 spec §4.3, §5.10), and per-PR checks run on Linux only
-  while Windows joins macOS in the `platforms` workflow (D8, umbrella G2). The build PR #7 waits
-  for it: the plan is appended to the P00 plan and built on #7 once this is approved.
-- Docs PR #8: the engineering directives in `CLAUDE.md`. Its checks run once P00 is merged.
+- P00 build PR #7 (a draft labelled `needs-jann`) is final and waits for Jann's review and the
+  label `approved`. Spec revisions 1 (#9) and 1a (#10) are built on it. The final review loop
+  ended after round 6, which Jann authorised past the cap; its two Minor findings were fixed
+  without another review, by his decision. `cargo xtask github apply` ran with his go-ahead, and
+  `github check` passes. The Windows `platforms` run passed. The macOS run got no GitHub runner
+  (macOS capacity), so the weekly run or a re-run gives that evidence. A docs PR still has to
+  update the spec and `docs/gate.md` for the rule extensions listed in #7.
 - Comments on text sections (Jann, 2026-11-04: "an important feature") are not in the umbrella.
   They need a CE in `docs/specs/00-umbrella.md` and a data-model decision on where comments live:
   a sidecar file with offsets and a text quote, or markers inside the Markdown. The P10 probe in
