@@ -16,7 +16,7 @@
 //! check would pass without having looked at anything.
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Component, Path};
 
 use serde::{Deserialize, Serialize};
 
@@ -155,11 +155,30 @@ fn parse_error(message: &str) -> Error {
 }
 
 /// `path` with `/` for every separator, without the `\\?\` prefix of verbatim paths and without
-/// a trailing separator.
+/// a trailing separator, and with `.` and `..` resolved lexically: llvm-cov lists files reached
+/// through `#[path]` or `include!` as `crates/a/src/../outside/x.rs`. A `..` with nothing before
+/// it to remove is kept.
 fn normal(path: &str) -> String {
     let path = path.replace('\\', "/");
     let path = path.strip_prefix("//?/").unwrap_or(&path);
-    path.trim_end_matches('/').to_owned()
+    let mut head = String::new();
+    let mut parts: Vec<String> = Vec::new();
+    for component in Path::new(path).components() {
+        match component {
+            Component::Prefix(prefix) => head.push_str(&prefix.as_os_str().to_string_lossy()),
+            Component::RootDir => head.push('/'),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if parts.last().is_some_and(|last| last != "..") {
+                    parts.pop();
+                } else {
+                    parts.push("..".to_owned());
+                }
+            }
+            Component::Normal(name) => parts.push(name.to_string_lossy().into_owned()),
+        }
+    }
+    format!("{head}{}", parts.join("/")).replace('\\', "/")
 }
 
 /// The crate a source file belongs to: `<name>` for `<root>/crates/<name>/src/<file>` and
@@ -282,6 +301,17 @@ mod tests {
             BTreeMap::from([("ok".to_owned(), cov(1, 2))])
         );
         Ok(())
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn a_file_that_climbs_out_of_src_is_not_in_the_crate() {
+        let of = |file: &str| crate_of(&normal(file), "/r", false).map(str::to_owned);
+        let content = Some("theos-content".to_owned());
+        assert_eq!(of("/r/crates/theos-content/src/../x.rs"), None);
+        assert_eq!(of("/r/xtask/src/../tests/x.rs"), None);
+        assert_eq!(of("/r/crates/theos-content/src/./a/../b.rs"), content);
+        assert_eq!(of("/r/crates/theos-content/src/x.rs"), content);
     }
 
     #[test]
