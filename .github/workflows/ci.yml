@@ -1,6 +1,7 @@
 # One job per check of docs/gate.md section 1. A job checks out, sets up and runs
 # `cargo xtask <check>`; xtask decides every verdict. The job name is the required status check
 # of `main` (gate/ruleset-main.json), and `cargo xtask gate` runs the same checks locally.
+# Per-pull-request checks run on Linux only (D8); Windows and macOS are in platforms.yml.
 name: ci
 
 on:
@@ -29,8 +30,8 @@ jobs:
       - uses: ./.github/actions/setup
       - run: cargo xtask fmt
 
-  clippy-linux:
-    name: clippy (linux)
+  clippy:
+    name: clippy
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -38,27 +39,9 @@ jobs:
       - uses: ./.github/actions/setup
       - run: cargo xtask clippy
 
-  clippy-windows:
-    name: clippy (windows)
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/setup
-      - run: cargo xtask clippy
-
-  test-linux:
-    name: test (linux)
+  test:
+    name: test
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/setup
-      - run: cargo xtask test
-
-  test-windows:
-    name: test (windows)
-    runs-on: windows-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

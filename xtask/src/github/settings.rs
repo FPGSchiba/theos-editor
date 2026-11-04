@@ -46,8 +46,11 @@ pub const FILE: &str = "gate/repo-settings.toml";
 /// The files with the rulesets, relative to the repository root.
 const RULESET_FILES: [&str; 2] = ["gate/ruleset-main.json", "gate/ruleset-tags.json"];
 
-/// The label that makes the weekly macOS workflow run on a pull request. Only the workflow reads
-/// it, but the settings must have it.
+/// The label that makes the Windows jobs of the `platforms` workflow run on a pull request. Only
+/// the workflow reads it, but the settings must have it.
+pub const WINDOWS: &str = "windows";
+
+/// The label that does the same for the macOS jobs.
 const MACOS: &str = "macos";
 
 /// The most characters of a value from either side that a difference shows.
@@ -198,7 +201,7 @@ fn check_labels(labels: &[LabelSpec]) -> Result<()> {
             ));
         }
     }
-    for name in [NEEDS_JANN, APPROVED, MACOS] {
+    for name in [NEEDS_JANN, APPROVED, WINDOWS, MACOS] {
         if !labels.iter().any(|label| label.name == name) {
             return Err(config_error(
                 FILE,
@@ -668,6 +671,7 @@ mod tests {
                 "patched 8 repo settings",
                 "set label needs-jann",
                 "set label approved",
+                "set label windows",
                 "set label macos",
             ]
         );
@@ -684,7 +688,9 @@ mod tests {
             .collect();
         assert_eq!(
             kinds,
-            ["create", "create", "patch", "label", "label", "label"]
+            [
+                "create", "create", "patch", "label", "label", "label", "label"
+            ]
         );
         assert_eq!(gh.current_rulesets().len(), 2);
 
@@ -697,6 +703,7 @@ mod tests {
                 "patched 8 repo settings",
                 "set label needs-jann",
                 "set label approved",
+                "set label windows",
                 "set label macos",
             ]
         );
@@ -752,8 +759,8 @@ mod tests {
         wrong.color = "ffffff".to_owned();
         let gh = FakeGitHub::new().with_repo_labels(&[wrong]);
         let live = Live::read(&gh, &desired)?;
-        // Both rulesets, the spelling and the colour of the one label, and the two it lacks.
-        assert_eq!(differences(&desired, &live).len(), 6, "{live:?}");
+        // Both rulesets, the spelling and the colour of the one label, and the three it lacks.
+        assert_eq!(differences(&desired, &live).len(), 7, "{live:?}");
         apply(&gh, root()?)?;
         let live = Live::read(&gh, &desired)?;
         assert_eq!(differences(&desired, &live), Vec::<String>::new());
@@ -779,6 +786,7 @@ mod tests {
                 "ruleset tags: not on GitHub",
                 "label needs-jann: missing",
                 "label approved: missing",
+                "label windows: missing",
                 "label macos: missing",
             ]
         );
@@ -860,7 +868,7 @@ mod tests {
             .into_iter()
             .map(|label| label.name)
             .collect();
-        assert_eq!(names, ["needs-jann", "approved", "macos"]);
+        assert_eq!(names, ["needs-jann", "approved", "windows", "macos"]);
         assert!(Desired::load(dir.path()).is_err(), "the ruleset is gone");
         Ok(())
     }
@@ -931,12 +939,16 @@ mod tests {
             "label 2 has the name of an earlier label, whatever the case",
         )?;
         refused(
-            |text| text.replace("name = \"macos\"", "name = \" \""),
+            |text| text.replace("name = \"windows\"", "name = \" \""),
             "label 3 has no name, or one with control characters",
         )?;
         refused(
             |text| text.replace("name = \"macos\"", "name = \"mac\""),
             "has no label `macos`, which the gate works with",
+        )?;
+        refused(
+            |text| text.replace("name = \"windows\"", "name = \"win\""),
+            "has no label `windows`, which the gate works with",
         )
     }
 

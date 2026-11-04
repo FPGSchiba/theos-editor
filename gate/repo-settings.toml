@@ -32,8 +32,14 @@ name = "approved"
 color = "0e8a16"
 description = "Reviewed by Jann; only Jann adds this label"
 
-# Makes the macOS workflow run on a pull request.
+# Makes the Windows jobs of `platforms.yml` run on a pull request.
+[[labels]]
+name = "windows"
+color = "1d76db"
+description = "Run the Windows jobs of the platforms workflow on this pull request"
+
+# Makes the macOS jobs of `platforms.yml` run on a pull request.
 [[labels]]
 name = "macos"
 color = "5319e7"
-description = "Run the macOS jobs on this pull request"
+description = "Run the macOS jobs of the platforms workflow on this pull request"

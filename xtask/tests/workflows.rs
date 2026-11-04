@@ -24,7 +24,7 @@ const ALL_WORKFLOWS: [&str; 5] = [
     "ci.yml",
     "pr.yml",
     "approval.yml",
-    "macos.yml",
+    "platforms.yml",
     "settings.yml",
 ];
 
@@ -239,14 +239,30 @@ fn step_kind(step: &Yaml) -> TestResult<&'static str> {
 
 // AC: CE-08.1
 #[test]
-fn ci_builds_and_tests_on_linux_and_windows() -> TestResult {
+fn ci_builds_and_tests_on_linux() -> TestResult {
     let jobs = jobs(&workflow("ci.yml")?)?;
     for check in ["clippy", "test"] {
-        for (os, runner) in [("linux", "ubuntu-latest"), ("windows", "windows-latest")] {
+        let job = &jobs[index_of(&jobs, check)?];
+        assert_eq!(job.runs_on()?, "ubuntu-latest", "{check}");
+        assert_eq!(job.commands()?, [format!("cargo xtask {check}")], "{check}");
+    }
+    Ok(())
+}
+
+// AC: CE-08.1
+#[test]
+fn platforms_builds_and_tests_on_windows_and_macos() -> TestResult {
+    let jobs = jobs(&workflow("platforms.yml")?)?;
+    for (os, runner) in [("windows", "windows-latest"), ("macos", "macos-latest")] {
+        for check in ["clippy", "test"] {
             let name = format!("{check} ({os})");
             let job = &jobs[index_of(&jobs, &name)?];
             assert_eq!(job.runs_on()?, runner, "{name}");
-            assert_eq!(job.commands()?, [format!("cargo xtask {check}")], "{name}");
+            assert_eq!(
+                job.commands()?,
+                [format!("cargo xtask {}", check_of(&name))],
+                "{name}"
+            );
         }
     }
     Ok(())
@@ -425,12 +441,12 @@ fn no_key_lets_a_job_pass_while_xtask_fails() -> TestResult {
                 "{file}: job {name} has keys that can make it pass while xtask fails, or run \
                  somewhere else than the root of the repository"
             );
-            // The only job-level conditions are the label and event conditions of the macOS jobs,
-            // which are not required checks.
+            // The only job-level conditions are the label and event conditions of the
+            // `platforms` jobs, which are not required checks.
             assert_eq!(
                 job.node["if"].is_badvalue(),
-                file != "macos.yml",
-                "{file}: job {name}: only the macOS jobs have an `if:`"
+                file != "platforms.yml",
+                "{file}: job {name}: only the platforms jobs have an `if:`"
             );
             // The token goes to the two jobs that call GitHub, and to nothing else.
             assert_eq!(
@@ -492,7 +508,8 @@ fn no_key_lets_a_step_of_the_setup_action_fail_silently() -> TestResult {
 /// the tests of one platform and the coverage run take the longest.
 fn timeout_of(name: &str) -> i64 {
     match name {
-        "test (linux)" | "test (windows)" | "coverage" | "clippy (macos)" | "test (macos)" => 60,
+        "test" | "coverage" => 60,
+        _ if name.ends_with(" (windows)") || name.ends_with(" (macos)") => 60,
         _ => 30,
     }
 }
@@ -543,9 +560,9 @@ fn gate_list_equals_ci_jobs_minus_pr_only() -> TestResult {
 
 // AC: CE-08.12
 #[test]
-fn macos_runs_weekly_and_on_demand() -> TestResult {
-    let macos = workflow("macos.yml")?;
-    let on = &macos["on"];
+fn platforms_runs_weekly_on_demand_and_by_label() -> TestResult {
+    let platforms = workflow("platforms.yml")?;
+    let on = &platforms["on"];
     assert_eq!(
         keys(on)?,
         set(&["schedule", "workflow_dispatch", "pull_request"])
@@ -556,22 +573,35 @@ fn macos_runs_weekly_and_on_demand() -> TestResult {
     assert_eq!(schedule[0]["cron"].as_str(), Some("0 4 * * 1"));
     assert_eq!(strings(&on["pull_request"]["types"])?, ["labeled"]);
 
-    let jobs = jobs(&macos)?;
+    let jobs = jobs(&platforms)?;
     let names: BTreeSet<String> = jobs.iter().map(|job| job.name.clone()).collect();
-    assert_eq!(names, set(&["clippy (macos)", "test (macos)"]));
+    assert_eq!(
+        names,
+        set(&[
+            "clippy (windows)",
+            "test (windows)",
+            "lints (windows)",
+            "ac-trace (windows)",
+            "clippy (macos)",
+            "test (macos)",
+            "lints (macos)",
+            "ac-trace (macos)",
+        ])
+    );
     for job in &jobs {
-        assert_eq!(job.runs_on()?, "macos-latest", "{}", job.name);
-        assert_eq!(
-            job.commands()?,
-            [format!("cargo xtask {}", check_of(&job.name))],
-            "{}",
-            job.name
-        );
-        // On a pull request only the label `macos` starts the jobs; the schedule and a manual
-        // run always do.
+        let os = if job.name.ends_with(" (windows)") {
+            "windows"
+        } else {
+            "macos"
+        };
+        assert_eq!(job.runs_on()?, runner_of(&job.name), "{}", job.name);
+        // On a pull request only the label of the job's own OS starts it; the schedule and a
+        // manual run always do.
+        let expected =
+            format!("github.event_name != 'pull_request' || github.event.label.name == '{os}'");
         assert_eq!(
             job.node["if"].as_str(),
-            Some("github.event_name != 'pull_request' || github.event.label.name == 'macos'"),
+            Some(expected.as_str()),
             "{}",
             job.name
         );

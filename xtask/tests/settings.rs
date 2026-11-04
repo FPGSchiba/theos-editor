@@ -80,10 +80,8 @@ fn ruleset_contexts_equal_gate_md_checks() -> TestResult {
     assert_eq!(contexts, required);
     let expected: BTreeSet<String> = [
         "fmt",
-        "clippy (linux)",
-        "clippy (windows)",
-        "test (linux)",
-        "test (windows)",
+        "clippy",
+        "test",
         "docs",
         "deny",
         "engine-free",
@@ -199,7 +197,16 @@ fn repo_settings_encode_section_6() -> TestResult {
                 "0e8a16",
                 "Reviewed by Jann; only Jann adds this label"
             ),
-            label("macos", "5319e7", "Run the macOS jobs on this pull request"),
+            label(
+                "windows",
+                "1d76db",
+                "Run the Windows jobs of the platforms workflow on this pull request"
+            ),
+            label(
+                "macos",
+                "5319e7",
+                "Run the macOS jobs of the platforms workflow on this pull request"
+            ),
         ]
     );
     Ok(())
