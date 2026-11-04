@@ -29,9 +29,19 @@ export function section(md: string, heading: string): string | undefined {
 export function parseTable(md: string, heading: string): string[][] {
   const body = section(md, heading);
   if (body === undefined) throw new Error(`the document has no "## ${heading}" section`);
-  const lines = body.split('\n');
+  const rows = tableRows(body);
+  if (rows.length === 0) throw new Error(`the "## ${heading}" section has no table`);
+  return rows;
+}
+
+/**
+ * The first table of a text as rows of trimmed cells, in the form `parseTable` reads; an empty
+ * list when the text has no table.
+ */
+export function tableRows(text: string): string[][] {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
   const first = lines.findIndex((line) => line.startsWith('|'));
-  if (first === -1) throw new Error(`the "## ${heading}" section has no table`);
+  if (first === -1) return [];
   const rows: string[][] = [];
   for (const line of lines.slice(first)) {
     if (!line.startsWith('|')) break;
