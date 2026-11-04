@@ -1,20 +1,20 @@
 //! Rule 3 of `lints`: no `allow` or `warn` attribute, no guard lint silenced, and no `expect` or
-//! `ignore` without a reason where clippy does not look.
+//! `ignore` without a reason.
 //!
 //! The lint levels forbid `#[allow]` and require a reason on `#[expect]` and `#[ignore]`, but
-//! clippy reads only the syntax tree: it does not see an attribute that is written in the tokens
-//! of a macro call or of a `macro_rules!` body. The rule reads both, through `syn` and
-//! `proc-macro2`:
+//! clippy sees only what the compiler builds on the machine that checks: not an attribute in the
+//! tokens of a macro call or of a `macro_rules!` body, and not an item that a `cfg` strips (a
+//! `#[cfg(windows)]` test on Linux). The rule reads the syntax tree and the macro tokens, through
+//! `syn` and `proc-macro2`:
 //!
 //! - in the syntax tree (outer and inner attributes at every depth): every `allow` and every
 //!   `warn` is a finding, with or without a reason, alone or inside `cfg_attr` (the lint levels
 //!   come from `gate/lints.toml`, and a `warn` lets `cargo clippy -- -D warnings` pass with a
-//!   denied lint printed as a warning; `deny` and `forbid` raise a level and pass); a bare
-//!   `expect` or `ignore` is left to clippy, except inside a `cfg_attr`, where the compiler may
-//!   not see the attribute on this machine and a missing reason is a finding too;
+//!   denied lint printed as a warning; `deny` and `forbid` raise a level and pass), and every
+//!   `expect(…)` without `reason = …` and every bare `ignore` is a finding too, alone or inside a
+//!   `cfg_attr` (`ignore = "…"` passes);
 //! - in the tokens of macro calls and macro definitions, at every depth: each `#` [`!`] bracket
-//!   group is read as an attribute, judged the same way, and an `expect(…)` without
-//!   `reason = …` and a bare `ignore` are findings too (`ignore = "…"` passes). A group that does
+//!   group is read as an attribute and judged the same way. A group that does
 //!   not parse as an attribute (`#[$m]`, as in `$(#[$m:meta])*`) is judged by its identifiers:
 //!   an `allow` or `warn` in it is a finding, anything else is left to the reviews (Ruling 9);
 //! - everywhere, in the tree and in macro tokens, with or without a reason, an `allow` or `expect`
@@ -32,7 +32,7 @@ use syn::Meta;
 use syn::Token;
 use syn::punctuated::Punctuated;
 
-use super::attrs::{Attribute, Body, Place, attributes, split_args};
+use super::attrs::{Attribute, Body, attributes, split_args};
 use super::{Inputs, Rule};
 use crate::verdict::Finding;
 use crate::view::{Source, has_ident};
@@ -54,11 +54,11 @@ const WARN: &str = "a `warn` attribute: lint levels are set in `gate/lints.toml`
 /// told. Every one is a finding wherever it stands; `deny` and `forbid` raise a level and pass.
 const LOWERING: [(&str, &str); 2] = [("allow", ALLOW), ("warn", WARN)];
 
-/// What an `expect` without a reason is told, in macro tokens.
-const EXPECT: &str = "an `#[expect]` without a reason, inside a macro where clippy does not see it";
+/// What an `expect` without a reason is told, wherever it stands.
+const EXPECT: &str = "an `expect` without a reason: give one with `reason = \"…\"`";
 
-/// What an `ignore` without a reason is told, in macro tokens.
-const IGNORE: &str = "an `#[ignore]` without a reason, inside a macro where clippy does not see it";
+/// What an `ignore` without a reason is told, wherever it stands.
+const IGNORE: &str = "an `ignore` without a reason: give one with `#[ignore = \"…\"]`";
 
 /// The lints that guard the others: `unexpected_cfgs` is `forbid`, the other three are `deny`.
 const GUARDS: [&str; 4] = [
@@ -101,15 +101,15 @@ pub fn findings(source: &Source) -> Vec<Finding> {
 /// What is wrong with `attribute`: one message per problem.
 fn judge(attribute: &Attribute) -> Vec<String> {
     match &attribute.body {
-        Body::Meta(meta) => problems(meta, attribute.place == Place::Macro),
+        Body::Meta(meta) => problems(meta),
         Body::Unparsed(tokens) => unparsed_problems(tokens),
     }
 }
 
-/// What is wrong with the attribute `meta`: one message per problem. `needs_reason` is whether
-/// clippy cannot be relied on to ask `expect` and `ignore` for a reason: in macro tokens, and
-/// inside a `cfg_attr` anywhere, whose attribute the compiler may not see on this machine.
-fn problems(meta: &Meta, needs_reason: bool) -> Vec<String> {
+/// What is wrong with the attribute `meta`: one message per problem. An `expect` and an `ignore`
+/// need a reason wherever they stand: clippy never sees a macro's tokens, a `cfg_attr` the
+/// compiler may not apply, or an item that a `cfg` strips on the machine that checks.
+fn problems(meta: &Meta) -> Vec<String> {
     let Some(name) = meta.path().get_ident().map(ToString::to_string) else {
         return Vec::new();
     };
@@ -129,12 +129,12 @@ fn problems(meta: &Meta, needs_reason: bool) -> Vec<String> {
         ("cfg_attr", Meta::List(list)) => cfg_attr_problems(&list.tokens),
         ("expect", Meta::List(list)) => {
             let mut found = guard_messages(&list.tokens);
-            if needs_reason && !has_reason(&list.tokens) {
+            if !has_reason(&list.tokens) {
                 found.push(EXPECT.to_owned());
             }
             found
         }
-        ("ignore", Meta::Path(_)) if needs_reason => vec![IGNORE.to_owned()],
+        ("ignore", Meta::Path(_)) => vec![IGNORE.to_owned()],
         _ => Vec::new(),
     }
 }
@@ -151,7 +151,7 @@ fn cfg_attr_problems(tokens: &TokenStream) -> Vec<String> {
         Ok(args) => args
             .iter()
             .skip(1)
-            .flat_map(|meta| problems(meta, true))
+            .flat_map(|meta| problems(meta))
             .collect(),
         Err(_) => unparsed_problems(tokens),
     }
@@ -346,9 +346,36 @@ mod tests {
         }
     }
 
+    // AC: CE-08.8
     #[test]
-    fn expect_and_ignore_in_the_tree_are_left_to_clippy() {
+    fn expect_and_ignore_in_the_tree_need_a_reason_too() {
         let text = "#[expect(dead_code)]\nfn a() {}\n#[test]\n#[ignore]\nfn b() {}\n";
+        assert_eq!(
+            judged(text),
+            [(1, EXPECT.to_owned()), (4, IGNORE.to_owned())]
+        );
+        let inner = "fn f() {\n    #![expect(unused)]\n}\n";
+        assert_eq!(judged(inner), [(2, EXPECT.to_owned())]);
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn a_reasonless_expect_or_ignore_behind_a_cfg_is_a_finding() {
+        // Clippy never sees an item that a `cfg` strips on the machine that checks.
+        let windows = "#[cfg(windows)]\n#[test]\n#[ignore]\nfn a() {}\n";
+        assert_eq!(judged(windows), [(3, IGNORE.to_owned())]);
+        let linux = "#[cfg(target_os = \"linux\")]\n#[expect(dead_code)]\nfn a() {}\n";
+        assert_eq!(judged(linux), [(2, EXPECT.to_owned())]);
+        let macos = "#[cfg(target_os = \"macos\")]\n#[test]\n#[ignore]\nfn a() {}\n";
+        assert_eq!(judged(macos), [(3, IGNORE.to_owned())]);
+    }
+
+    // AC: CE-08.8
+    #[test]
+    fn an_expect_or_ignore_with_a_reason_behind_a_cfg_passes() {
+        let text = "#[cfg(windows)]\n#[test]\n#[ignore = \"why\"]\nfn a() {}\n\
+                    #[cfg(target_os = \"linux\")]\n#[expect(dead_code, reason = \"why\")]\n\
+                    fn b() {}\n";
         assert_eq!(judged(text), []);
     }
 

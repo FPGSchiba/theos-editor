@@ -1,9 +1,9 @@
 //! The attributes of a Rust file, for the rules of `lints` that judge them (rules 2 and 3).
 //!
 //! `syn` reads the syntax tree and `proc-macro2` the tokens; nothing here lexes Rust. Every
-//! attribute of a file comes out once, with its line and where it was found: in the syntax tree
-//! (outer and inner, at every depth), or in the tokens of a macro call or `macro_rules!` body (each
-//! `#` [`!`] bracket group, at every depth). A rule keeps only its judgement and its messages.
+//! attribute of a file comes out once, with its line: from the syntax tree (outer and inner, at
+//! every depth), or from the tokens of a macro call or `macro_rules!` body (each `#` [`!`] bracket
+//! group, at every depth). A rule keeps only its judgement and its messages.
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 use syn::Meta;
@@ -11,15 +11,6 @@ use syn::spanned::Spanned;
 use syn::visit::Visit;
 
 use crate::view::line_of;
-
-/// Where an attribute was found.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Place {
-    /// In the syntax tree, where clippy judges `expect` and `ignore`.
-    Tree,
-    /// In the tokens of a macro, where clippy sees nothing.
-    Macro,
-}
 
 /// What an attribute says, as far as `syn` can read it.
 #[derive(Clone, Debug)]
@@ -36,8 +27,6 @@ pub enum Body {
 pub struct Attribute {
     /// The line of its `#`.
     pub line: u32,
-    /// Where it was found.
-    pub place: Place,
     /// What it says.
     pub body: Body,
 }
@@ -95,7 +84,6 @@ impl Collector {
                             .map_or(Body::Unparsed(content), |meta| Body::Meta(Box::new(meta)));
                         self.found.push(Attribute {
                             line: line_of(pound.span()),
-                            place: Place::Macro,
                             body,
                         });
                     }
@@ -111,7 +99,6 @@ impl<'ast> Visit<'ast> for Collector {
     fn visit_attribute(&mut self, attribute: &'ast syn::Attribute) {
         self.found.push(Attribute {
             line: line_of(attribute.pound_token.span()),
-            place: Place::Tree,
             body: Body::Meta(Box::new(attribute.meta.clone())),
         });
     }
@@ -133,22 +120,12 @@ mod tests {
     }
 
     #[test]
-    fn tree_and_macro_attributes_come_with_line_and_place() {
+    fn tree_and_macro_attributes_come_with_their_line() {
         let found = read(
             "#![a]\n#[b]\nfn f() { #![c] }\nm! { #[d] x { #![e] } }\nmacro_rules! q { () => { #[f] } }\n",
         );
-        let places: Vec<(u32, Place)> = found.iter().map(|a| (a.line, a.place)).collect();
-        assert_eq!(
-            places,
-            [
-                (1, Place::Tree),
-                (2, Place::Tree),
-                (3, Place::Tree),
-                (4, Place::Macro),
-                (4, Place::Macro),
-                (5, Place::Macro),
-            ]
-        );
+        let lines: Vec<u32> = found.iter().map(|a| a.line).collect();
+        assert_eq!(lines, [1, 2, 3, 4, 4, 5]);
     }
 
     #[test]

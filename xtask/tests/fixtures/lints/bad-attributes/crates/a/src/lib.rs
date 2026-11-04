@@ -1,5 +1,5 @@
 //! Synthetic fixture: attributes that rule 3 refuses, one finding on each of lines 4, 6, 9, 12,
-//! 15, 16, 20, 22, 35 and 38. The attributes of lines 28 and 32 pass.
+//! 15, 16, 20, 22, 24, 35 and 38. The attributes of lines 28 and 32 pass.
 
 #![allow(missing_docs)]
 

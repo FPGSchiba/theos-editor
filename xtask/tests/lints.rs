@@ -235,13 +235,14 @@ fn bad_attributes_in_sources_fail() -> TestResult {
             (Some("crates/a/src/lib.rs"), Some(16)),
             (Some("crates/a/src/lib.rs"), Some(20)),
             (Some("crates/a/src/lib.rs"), Some(22)),
+            (Some("crates/a/src/lib.rs"), Some(24)),
             (Some("crates/a/src/lib.rs"), Some(35)),
             (Some("crates/a/src/lib.rs"), Some(38)),
         ]
     );
     let allow = "an `allow` attribute: use `#[expect(…, reason = \"…\")]`, or fix the code";
-    let expect = "an `#[expect]` without a reason, inside a macro where clippy does not see it";
-    let ignore = "an `#[ignore]` without a reason, inside a macro where clippy does not see it";
+    let expect = "an `expect` without a reason: give one with `reason = \"…\"`";
+    let ignore = "an `ignore` without a reason: give one with `#[ignore = \"…\"]`";
     let guard = "an `allow` or `expect` of `clippy::ignore_without_reason`, one of the lints \
                  that guard the others (spec §5.2)";
     let warn = "a `warn` attribute: lint levels are set in `gate/lints.toml`; a lower level \
@@ -254,7 +255,7 @@ fn bad_attributes_in_sources_fail() -> TestResult {
     assert_eq!(
         messages,
         [
-            allow, allow, allow, allow, expect, ignore, allow, guard, warn, warn
+            allow, allow, allow, allow, expect, ignore, allow, guard, ignore, warn, warn
         ]
     );
 
@@ -702,6 +703,35 @@ fn a_cfg_attr_in_the_tree_needs_a_reason_for_ignore_and_expect() -> TestResult {
     let verdict = lint_source(
         "#[test]\n#[cfg_attr(windows, ignore = \"slow\")]\n\
          #[cfg_attr(windows, expect(dead_code, reason = \"kept\"))]\nfn a() {}\n",
+    )?;
+    assert!(verdict.passed(), "{:?}", verdict.findings);
+    Ok(())
+}
+
+// AC: CE-08.8
+#[test]
+fn a_reasonless_expect_or_ignore_in_the_tree_is_judged_behind_a_cfg() -> TestResult {
+    // Clippy never sees an item that a `cfg` strips on the machine that checks, so the reason is
+    // asked for wherever the attribute stands.
+    for (line, lib_rs) in [
+        (3, "#[cfg(windows)]\n#[test]\n#[ignore]\nfn a() {}\n"),
+        (
+            2,
+            "#[cfg(target_os = \"linux\")]\n#[expect(dead_code)]\nfn a() {}\n",
+        ),
+        (1, "#[expect(dead_code)]\nfn a() {}\n"),
+        (2, "#[test]\n#[ignore]\nfn a() {}\n"),
+    ] {
+        let verdict = lint_source(lib_rs)?;
+        assert_eq!(
+            places(&verdict),
+            [(Some("crates/a/src/lib.rs"), Some(line))],
+            "{lib_rs}"
+        );
+    }
+    let verdict = lint_source(
+        "#[cfg(windows)]\n#[test]\n#[ignore = \"slow\"]\nfn a() {}\n\
+         #[cfg(target_os = \"linux\")]\n#[expect(dead_code, reason = \"kept\")]\nfn b() {}\n",
     )?;
     assert!(verdict.passed(), "{:?}", verdict.findings);
     Ok(())

@@ -11,8 +11,9 @@
 //! - `cfg_names` (rule 2): `cfg` and `cfg_attr` attributes use only the names of
 //!   `gate/cfg-names.toml`, so that every check builds and measures the same code.
 //! - `attributes` (rule 3): no `allow` or `warn` attribute anywhere, no `expect` or `ignore`
-//!   without a reason in the tokens of a macro or inside a `cfg_attr` (where clippy does not
-//!   look), and no `allow` or `expect` of a lint that guards the others (`unexpected_cfgs`, the
+//!   without a reason anywhere (clippy does not see macro tokens, nor an item that a `cfg` strips
+//!   on the checking machine), and no `allow` or `expect` of a lint that guards the others
+//!   (`unexpected_cfgs`, the
 //!   two allow lints, `ignore_without_reason`) or of the groups `clippy::pedantic` and
 //!   `clippy::restriction` that contain them. It reads the syntax tree and the tokens of macro
 //!   calls and `macro_rules!` bodies.
