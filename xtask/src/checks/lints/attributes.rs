@@ -412,9 +412,9 @@ mod tests {
         assert_eq!(judged(other), []);
     }
 
+    // AC: CE-08.8
     #[test]
     fn warn_attributes_are_findings_everywhere_allow_is() {
-        // AC: CE-08.8
         for text in [
             "#![warn(warnings)]\n",
             "#[warn(clippy::unwrap_used)]\nfn a() {}\n",
@@ -432,9 +432,9 @@ mod tests {
         assert_eq!(judged(inner), [(2, WARN.to_owned())]);
     }
 
+    // AC: CE-08.8
     #[test]
     fn deny_and_forbid_raise_a_level_and_are_not_findings() {
-        // AC: CE-08.8
         let text = "#![deny(warnings)]\n#![forbid(unsafe_code)]\n#[deny(clippy::unwrap_used)]\n\
                     fn a() {}\n#[cfg_attr(test, forbid(unused))]\nfn b() {}\n\
                     m! { #[deny(dead_code)] fn c() }\n";
