@@ -200,13 +200,11 @@ fn a_test_in_a_file_that_no_build_runs_does_not_prove_an_ac() -> TestResult {
     assert_eq!(verdict.findings.len(), 1, "{:?}", verdict.findings);
     assert!(verdict.findings[0].message.contains("CE-90.2"));
     assert!(
-        table.contains("CE-90.2   tests/never.rs:4 would_prove_the_second (does not count)
-"),
+        table.contains("CE-90.2   tests/never.rs:4 would_prove_the_second (does not count)\n"),
         "{table}"
     );
     assert!(
-        table.contains("CE-90.1   src/lib.rs:5 proves_the_first
-"),
+        table.contains("CE-90.1   src/lib.rs:5 proves_the_first\n"),
         "{table}"
     );
     Ok(())

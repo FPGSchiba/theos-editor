@@ -387,14 +387,9 @@ mod tests {
 
     #[test]
     fn inner_attributes_of_the_file_are_judged() {
-        assert_eq!(lines("#![cfg(miri)]
-fn f() {}
-"), [1]);
-        assert_eq!(lines("//! Docs.
-#![cfg_attr(coverage, inline)]
-"), [2]);
-        assert_eq!(lines("#![cfg(feature = \"x\")]
-"), Vec::<u32>::new());
+        assert_eq!(lines("#![cfg(miri)]\nfn f() {}\n"), [1]);
+        assert_eq!(lines("//! Docs.\n#![cfg_attr(coverage, inline)]\n"), [2]);
+        assert_eq!(lines("#![cfg(feature = \"x\")]\n"), Vec::<u32>::new());
     }
 
     #[test]
