@@ -177,6 +177,23 @@ fn a_tag_above_a_test_in_an_inline_module_counts() -> TestResult {
 
 // AC: CE-08.6
 #[test]
+fn a_test_in_a_module_that_no_build_compiles_does_not_prove_an_ac() -> TestResult {
+    let (verdict, table) = trace("disabled-test-module", Some("P90"))?;
+    assert_eq!(verdict.findings.len(), 1, "{:?}", verdict.findings);
+    assert!(verdict.findings[0].message.contains("CE-90.2"));
+    assert!(
+        table.contains("CE-90.2   src/lib.rs:12 would_prove_the_second (does not count)\n"),
+        "{table}"
+    );
+    assert!(
+        table.contains("CE-90.1   src/lib.rs:5 proves_the_first\n"),
+        "{table}"
+    );
+    Ok(())
+}
+
+// AC: CE-08.6
+#[test]
 fn a_tag_inside_a_string_is_not_a_tag() -> TestResult {
     let (verdict, table) = trace("string-looks-like-a-tag", Some("P90"))?;
     assert!(verdict.passed(), "{:?}", verdict.findings);

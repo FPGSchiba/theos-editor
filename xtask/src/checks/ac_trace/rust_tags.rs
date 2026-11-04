@@ -10,7 +10,9 @@
 //!
 //! - `#[ignore…]`, or a `#[cfg_attr(…, …ignore…)]` which may ignore it on some targets;
 //! - a `#[cfg(…)]` whose predicate names anything but the target (`TARGET_WORDS`), or that is
-//!   `any()`, which is always false.
+//!   `any()`, which is always false;
+//! - the same `#[cfg(…)]` rule on an enclosing module or function, except that `test` is allowed
+//!   there (`#[cfg(test)] mod tests` is the ordinary pattern).
 //!
 //! A file that no test target compiles proves nothing: its tags are dangling (Ruling 11).
 
@@ -19,7 +21,7 @@ use std::collections::BTreeMap;
 use proc_macro2::{TokenStream, TokenTree};
 use syn::spanned::Spanned;
 use syn::visit::Visit;
-use syn::{AttrStyle, Attribute, ItemFn, Meta};
+use syn::{AttrStyle, Attribute, ItemFn, ItemMod, Meta};
 
 use super::{Comment, Tag, classify, dangling, malformed};
 use crate::verdict::Finding;
@@ -74,7 +76,9 @@ pub fn scan(source: &Source, in_test_target: bool) -> (Vec<Tag>, Vec<Finding>) {
                 (None, true) => findings.push(dangling(
                     &source.path,
                     comment.line,
-                    "no test follows: a tag must be in the run of `//` comment lines, each                      alone on its line, that ends directly above a test's first attribute or                      doc comment",
+                    "no test follows: a tag must be in the run of `//` comment lines, each \
+                     alone on its line, that ends directly above a test's first attribute or \
+                     doc comment",
                 )),
             },
         }
@@ -92,6 +96,8 @@ struct Test {
 #[derive(Default)]
 struct TestFinder {
     tests: BTreeMap<u32, Test>,
+    /// How many enclosing modules and functions carry a `cfg` that some build does not satisfy.
+    switched_off: usize,
 }
 
 impl TestFinder {
@@ -131,13 +137,35 @@ impl<'ast> Visit<'ast> for TestFinder {
                 .entry(line_of(first.span()))
                 .or_insert_with(|| Test {
                     name: function.sig.ident.to_string(),
-                    counts: attributes
-                        .iter()
-                        .all(|attribute| keeps_test_running(attribute)),
+                    counts: self.switched_off == 0
+                        && attributes
+                            .iter()
+                            .all(|attribute| keeps_test_running(attribute)),
                 });
         }
+        let off = !encloses_running_tests(&function.attrs);
+        self.switched_off += usize::from(off);
         syn::visit::visit_item_fn(self, function);
+        self.switched_off -= usize::from(off);
     }
+
+    fn visit_item_mod(&mut self, module: &'ast ItemMod) {
+        let off = !encloses_running_tests(&module.attrs);
+        self.switched_off += usize::from(off);
+        syn::visit::visit_item_mod(self, module);
+        self.switched_off -= usize::from(off);
+    }
+}
+
+/// Whether the `cfg` attributes of an enclosing module or function leave the tests inside in every
+/// build of a target: they name only `test` and the target, and none is `any()`.
+fn encloses_running_tests(attributes: &[Attribute]) -> bool {
+    attributes.iter().all(
+        |attribute| match (&attribute.meta, attribute.path().is_ident("cfg")) {
+            (Meta::List(list), true) => names_only(&list.tokens, true),
+            _ => true,
+        },
+    )
 }
 
 /// Whether the last segment of the attribute's path is `test`, `rstest` or `test_case`.
@@ -163,24 +191,24 @@ fn keeps_test_running(attribute: &Attribute) -> bool {
     if path.is_ident("cfg_attr") {
         !has_ident(&list.tokens, "ignore")
     } else if path.is_ident("cfg") {
-        names_only_the_target(&list.tokens)
+        names_only(&list.tokens, false)
     } else {
         true
     }
 }
 
-/// Whether the predicate `tokens` of a `cfg` names only the target and the combinators, and
-/// has no `any()`.
-fn names_only_the_target(tokens: &TokenStream) -> bool {
+/// Whether the predicate `tokens` of a `cfg` names only the target and the combinators (and
+/// `test` when `allow_test`), and has no `any()`.
+fn names_only(tokens: &TokenStream, allow_test: bool) -> bool {
     let trees: Vec<TokenTree> = tokens.clone().into_iter().collect();
     trees.iter().enumerate().all(|(index, tree)| match tree {
         TokenTree::Ident(word) => {
-            TARGET_WORDS.contains(&word.to_string().as_str())
+            (TARGET_WORDS.contains(&word.to_string().as_str()) || (allow_test && word == "test"))
                 && !(word == "any"
                     && matches!(trees.get(index + 1),
                         Some(TokenTree::Group(group)) if group.stream().is_empty()))
         }
-        TokenTree::Group(group) => names_only_the_target(&group.stream()),
+        TokenTree::Group(group) => names_only(&group.stream(), allow_test),
         TokenTree::Punct(_) | TokenTree::Literal(_) => true,
     })
 }
@@ -311,6 +339,102 @@ mod tests {
             assert_eq!(findings[0].file.as_deref(), Some("src/lib.rs"));
             assert_eq!(findings[0].line, Some(1));
         }
+    }
+
+    /// Whether the tag above the test in `lines` counts.
+    fn tag_counts(lines: &[&str]) -> bool {
+        only_tag(lines).counts
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn a_test_in_a_module_counts_only_when_the_module_cfg_names_test_or_the_target() {
+        let cases = [
+            ("#[cfg(test)]", true),
+            ("#[cfg(windows)]", true),
+            ("#[cfg(all(test, unix))]", true),
+            ("#[cfg(feature = \"never\")]", false),
+            ("#[cfg(any())]", false),
+            ("#[cfg(all(test, feature = \"x\"))]", false),
+            ("#[cfg(miri)]", false),
+        ];
+        for (cfg, expected) in cases {
+            let lines = [
+                cfg,
+                "mod t {",
+                "    // AC: CE-08.1",
+                "    #[test]",
+                "    fn inner() {}",
+                "}",
+            ];
+            assert_eq!(tag_counts(&lines), expected, "{cfg}");
+        }
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn a_cfg_on_any_enclosing_module_decides() {
+        for (outer, inner, expected) in [
+            ("#[cfg(test)]", "#[cfg(feature = \"never\")]", false),
+            ("#[cfg(feature = \"never\")]", "#[cfg(test)]", false),
+            ("#[cfg(test)]", "#[cfg(windows)]", true),
+        ] {
+            let lines = [
+                outer,
+                "mod a {",
+                inner,
+                "    mod b {",
+                "        // AC: CE-08.1",
+                "        #[test]",
+                "        fn inner() {}",
+                "    }",
+                "}",
+            ];
+            assert_eq!(tag_counts(&lines), expected, "{outer} {inner}");
+        }
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn a_test_in_a_function_body_follows_the_cfg_of_the_function() {
+        for (cfg, expected) in [
+            ("#[cfg(windows)]", true),
+            ("#[cfg(feature = \"never\")]", false),
+            ("#[cfg(any())]", false),
+        ] {
+            let lines = [
+                cfg,
+                "fn outer() {",
+                "    // AC: CE-08.1",
+                "    #[test]",
+                "    fn inner() {}",
+                "}",
+            ];
+            assert_eq!(tag_counts(&lines), expected, "{cfg}");
+        }
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn a_module_without_cfg_does_not_stop_a_test_from_counting() {
+        assert!(tag_counts(&[
+            "mod t {",
+            "    // AC: CE-08.1",
+            "    #[test]",
+            "    fn inner() {}",
+            "}",
+        ]));
+    }
+
+    #[test]
+    fn the_dangling_message_reads_as_one_line_of_prose() {
+        let (_, findings) = scan_lines(&["// AC: CE-08.1", "fn helper() {}"]);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert!(
+            findings[0].message.contains("no test follows"),
+            "{findings:?}"
+        );
+        assert!(!findings[0].message.contains("  "), "{findings:?}");
     }
 
     // AC: CE-08.6
