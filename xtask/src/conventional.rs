@@ -148,6 +148,22 @@ pub fn wording_problems(summary: &str) -> Vec<String> {
     problems
 }
 
+/// The problem of a summary that fits the limit by itself but not with ` (#N)`, which GitHub
+/// appends to the subject of a squash commit (`squash_merge_commit_title = PR_TITLE`), where
+/// `commit-msg` judges it on `main`. A summary that is over the limit already has the finding of
+/// [`header_problems`].
+#[must_use]
+pub fn squash_problem(header: &Header, number: u64) -> Option<String> {
+    let length = header.summary.chars().count();
+    let squashed = length + format!(" (#{number})").chars().count();
+    (length <= MAX_SUMMARY && squashed > MAX_SUMMARY).then(|| {
+        format!(
+            "the squash commit on `main` gets ` (#{number})` after the summary, which then has \
+             {squashed} characters; the limit is {MAX_SUMMARY}: shorten the title"
+        )
+    })
+}
+
 /// The longest summary, in characters.
 const MAX_SUMMARY: usize = 72;
 

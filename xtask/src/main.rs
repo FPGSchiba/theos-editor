@@ -247,7 +247,7 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
             branch,
         } => {
             let branch = commit_msg::branch_kind(&Git::new(&root), branch.as_deref())?;
-            pr_title::check_title(title, &branch)
+            pr_title::check_title(title, &branch, None)
         }
         Command::PrBody { body_file: None } => pr_body::run(&root, ci.as_ref(), &mut out)?,
         Command::PrBody {

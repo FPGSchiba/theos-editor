@@ -3,7 +3,7 @@
 //!
 //! The title becomes the squash commit on `main`, so it is held to the rules of
 //! [`header_problems`] as well: the limit of 72 characters counts the whole summary, suffix
-//! included, and the rules for the words (no capital first, no full stop last) also apply to the
+//! included (and ` (#N)` too, when the number of the pull request is known), and the rules for the words (no capital first, no full stop last) also apply to the
 //! words before the suffix. The core is [`check_title`]: a title and a branch in, a verdict out.
 //! [`run`] takes both from the pull request event.
 
@@ -13,7 +13,7 @@ use std::path::Path;
 
 use crate::branch::{BranchKind, Phase, parse_branch};
 use crate::ci::CiEvent;
-use crate::conventional::{header_problems, parse_header, wording_problems};
+use crate::conventional::{header_problems, parse_header, squash_problem, wording_problems};
 use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
@@ -26,9 +26,13 @@ use crate::{Error, Result};
 /// `spec/PNN-…` end with ` (PNN)`, `gate/…` with ` (gate)`, `docs/…` with ` (docs)` and `fix/…`
 /// with any of the three. A `spec/` title is also `docs(spec): …`. A branch that is `main` or has
 /// any other name fails, because there is nothing to match the title with.
+///
+/// `number` is the number of the pull request, when it is known: GitHub appends ` (#N)` to the
+/// summary of the squash commit, so the limit of the summary is held to the summary and that
+/// suffix. A local run has no number and judges the summary alone.
 #[must_use]
-pub fn check_title(title: &str, branch: &BranchKind) -> Verdict {
-    let findings = problems(title, branch)
+pub fn check_title(title: &str, branch: &BranchKind, number: Option<u64>) -> Verdict {
+    let findings = problems(title, branch, number)
         .into_iter()
         .map(Finding::new)
         .collect();
@@ -46,6 +50,7 @@ pub fn run(_root: &Path, ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<V
         Some(CiEvent::PullRequest(pull_request)) => Ok(check_title(
             &pull_request.title,
             &parse_branch(&pull_request.head_ref),
+            Some(pull_request.number),
         )),
         // The title stays out of the error: errors are printed as they are, and the runner reads
         // workflow commands in what it is given. Findings are marked line by line instead.
@@ -59,6 +64,8 @@ pub fn run(_root: &Path, ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<V
 
 /// What a branch asks of a title that is not a release title.
 struct Rule {
+    /// The number of the pull request, if it is known.
+    number: Option<u64>,
     /// The branch as a finding names it, such as ``a `phase/P02-…` branch``.
     branch: String,
     /// What the summary must end with; `None` for any of the three.
@@ -86,12 +93,13 @@ impl fmt::Display for Suffix {
 }
 
 /// Everything wrong with `title` on `branch`, one sentence for each problem.
-fn problems(title: &str, branch: &BranchKind) -> Vec<String> {
+fn problems(title: &str, branch: &BranchKind, number: Option<u64>) -> Vec<String> {
     let release = is_release_title(title);
     let titled_on = |name: String, suffix: Option<Suffix>, spec: bool| {
         titled(
             title,
             &Rule {
+                number,
                 branch: name,
                 suffix,
                 spec,
@@ -145,10 +153,14 @@ fn titled(title: &str, rule: &Rule) -> Vec<String> {
         Err(problem) => return vec![problem],
     };
     let mut problems = header_problems(&header);
+    problems.extend(
+        rule.number
+            .and_then(|number| squash_problem(&header, number)),
+    );
     // The suffix ends the summary, so `header_problems` cannot see a full stop before it, as in
     // `add thing. (P02)`. The rules for the words apply to the summary without the suffix too;
     // what the whole summary has already is not said twice. The limit of 72 characters stays
-    // with the whole summary, because the title becomes the squash commit.
+    // with the whole summary, and with the squash subject when the number is known.
     if let Some((words, _)) = split_suffix(&header.summary) {
         for problem in wording_problems(words) {
             if !problems.contains(&problem) {
@@ -218,7 +230,20 @@ mod tests {
     use crate::ci::{PullRequestEvent, PushEvent};
 
     fn check(title: &str, branch: &str) -> Verdict {
-        check_title(title, &parse_branch(branch))
+        check_title(title, &parse_branch(branch), None)
+    }
+
+    fn check_numbered(title: &str, branch: &str, number: u64) -> Verdict {
+        check_title(title, &parse_branch(branch), Some(number))
+    }
+
+    /// A phase title whose summary has exactly `length` characters.
+    fn title_with_summary(length: usize) -> String {
+        let suffix = " (P02)";
+        format!(
+            "feat(content): {}{suffix}",
+            "a".repeat(length - suffix.len())
+        )
     }
 
     /// The findings of `check`, one per line.
@@ -418,6 +443,40 @@ mod tests {
         // Everything wrong is reported at once: the scope, the capital and the missing suffix.
         let verdict = check("feat(nope): Records", "phase/P02-x");
         assert_eq!(verdict.findings.len(), 3, "{:?}", verdict.findings);
+    }
+
+    // AC: CE-08.9
+    #[test]
+    fn the_squash_subject_with_the_pull_request_number_is_held_to_the_limit() {
+        // GitHub appends ` (#N)` to the squash subject, and `commit-msg` judges it on `main`.
+        let seventy = title_with_summary(70);
+        let verdict = check_numbered(&seventy, "phase/P02-x", 7);
+        assert!(!verdict.passed(), "{:?}", verdict.findings);
+        let said = messages(&verdict);
+        assert!(said.contains("squash") && said.contains("75"), "{said}");
+        assert!(said.contains("shorten"), "{said}");
+        let verdict = check_numbered(&title_with_summary(66), "phase/P02-x", 7);
+        assert!(verdict.passed(), "{:?}", verdict.findings);
+        // 67 + 5 = 72 is still within the limit; 68 + 5 = 73 is not.
+        assert!(check_numbered(&title_with_summary(67), "phase/P02-x", 7).passed());
+        assert!(!check_numbered(&title_with_summary(68), "phase/P02-x", 7).passed());
+        // A local run has no number, so the rule stays as it was.
+        assert_passes(&seventy, "phase/P02-x");
+    }
+
+    // AC: CE-08.9
+    #[test]
+    fn a_pull_request_number_with_more_digits_counts_its_length() {
+        // ` (#1234)` is 8 characters: 64 + 8 = 72 passes, 65 + 8 = 73 fails.
+        assert!(check_numbered(&title_with_summary(64), "phase/P02-x", 1234).passed());
+        assert!(!check_numbered(&title_with_summary(65), "phase/P02-x", 1234).passed());
+    }
+
+    // AC: CE-08.9
+    #[test]
+    fn a_title_over_the_limit_is_said_once() {
+        let verdict = check_numbered(&title_with_summary(80), "phase/P02-x", 7);
+        assert_eq!(verdict.findings.len(), 1, "{:?}", verdict.findings);
     }
 
     // AC: CE-08.9
