@@ -15,7 +15,7 @@ Round trip (`P10_VARIANTS=prosemirror:best-effort`, non-strict), 77 rows per eng
 | best effort | 74 | 3 | 0 | 0 | 77 `span` |
 | stock (for comparison) | 13 | 10 | 54 | 0 | none |
 
-Every unedited file is identical, the CRLF file to its LF form. Under `P10_STRICT=1` (every tag but `@long`) 4 checks fail per engine, listed
+Every unedited file is identical, the CRLF file to its LF form. Under `P10_STRICT=1` (every tag but `@long`) 3 checks fail per engine (the Task 17 run, `report/`), listed
 below; every feature, input and integration check that compares bytes passes (`F-source-mode`, `F-link-popover-escape`,
 `N-keymap-undo-redo`, `N-external-caret`, all IME, dead-key and `I-insert-*` rows).
 
@@ -31,9 +31,9 @@ below; every feature, input and integration check that compares bytes passes (`F
   bold and the DOM parser drops the leading space, so the document is `lists.Pasted **rich** text.`, and that is what is saved (a span edit,
   the bold written by the serializer's inline form). Via api (`pasteText`, plain) the row is identical. Named fix: paste as plain text
   (`transformPastedHTML` or a `handlePaste` that inserts `text/plain`), an editor behaviour shared with stock, not a save-path one.
-- **`F-link-popover-kind-filter` (both engines).** Not a byte check: typing `[[` in an `at::` line opens no popover. It fails in the stock
-  column too, since Task 15: the attribute lines are a code-like `beat_attrs` node, and the typing plugin opens no popover in code. Same
-  editor, so the same result; left as it is.
+- **`F-link-popover-kind-filter`** no longer fails. It did in both columns from Task 15 on (typing `[[` in an `at::` line opened no popover,
+  because the attribute lines became a code-like `beat_attrs` node); Task 15's fix round (commit 282433a) fixed it for both, and the
+  Task 17 run has it `ok` (`report/features.md`).
 
 ## Level per edit kind (corpus and probes)
 
@@ -55,7 +55,7 @@ below; every feature, input and integration check that compares bytes passes (`F
 | Enter at the end of a top-level paragraph, then typing: mid-file (before a heading) and on the last block of a file that ends with a newline, each with and without a save (`text()`) between Enter and typing | span, the same bytes in all four | The new paragraph is `\n\nNew one.` behind the old one and the final newline stays (probes: exact bytes, level, and the saved text parses to the editor's document). Between Enter and typing the empty paragraph owns a blank line between two blank lines. Fix round 1; before it, the save in between made the fallback merge the new paragraph into the next block. |
 | The same on the last block of a file without a final newline, with a save between | block, a final newline added | Variant M1 of the separator class (finding below): `…graph.\n\nNew one.\n` instead of `…graph.\n\nNew one.`. Without a save between it is span. |
 | Enter in the middle of a callout or quote line | span | A blank quote line with the line's prefix: `\n>\n> ` (probe). |
-| Enter at the end of the last paragraph of a voice, design or note callout | block | The editor (stock `splitBlock`) makes a `callout_caption` there, so typing goes into a `— ` caption line; the callout is written again. For design the saved `> — New one.` does not parse back to the document (the design parser has no caption: it reloads as a paragraph), and the empty caption `> — ` saved between Enter and typing does not parse back for any type. Variant M2 (finding below). |
+| Enter at the end of the last paragraph of a voice, design or note callout | block | The editor (stock `splitBlock`) makes a `callout_caption` there, so typing goes into a `— ` caption line; the callout is written again. For design the saved `> — New one.` does not parse back to the document (the design parser has no caption: it reloads as a paragraph), and the empty caption `> — ` saved between Enter and typing does not parse back for any type. Variant M2 (finding below). Probe `Enter at the end of a callout (variant M2)` (voice and design, both engines): the serializer writes the callout again, so a line break inside its paragraph becomes a space, and the design caption reloads as a paragraph. |
 | Enter in a plain quote's last line, a save, typing | span, then block | The save is `> A quote.\n>\n> \n` (span); the keystroke after it is written again (a nested empty paragraph has no line of its own). |
 | Enter in a callout title when the callout has nothing else (`leaveTitle` adds a paragraph), a save | block, a blank line leaks behind the callout | Variant O2 (finding below). |
 | Enter at the end of a callout paragraph that has a paragraph after it | no change | Stock `splitBlock` refuses there, so there is nothing to save (Node check). |
@@ -156,8 +156,8 @@ the history (the stock code path) and makes the result the new loaded state. Sou
   the commands of this editor and undo make minimal steps, so this is theoretical here.
 - Several pending changes are mapped one after another at the next query, each with a parse of its run; `text()` after a long burst of typing
   in one place is one change.
-- What the editor does is the stock editor's: paste semantics (above), Enter in list items (no `prosemirror-schema-list`), the popover in
-  attribute lines (above).
+- What the editor does is the stock editor's: paste semantics (above), Enter in list items (no `prosemirror-schema-list`), Enter at the end
+  of a callout paragraph (variant M2 below).
 - Cost: `reset` tokenizes the body once more than stock (the block ranges); typing costs the same as stock (a queue push).
 
 ## Finding: the bytes between blocks have no node in a ProseMirror tree

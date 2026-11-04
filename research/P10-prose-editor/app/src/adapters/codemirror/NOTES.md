@@ -3,15 +3,16 @@
 Variant `codemirror`, `@codemirror/view` 6.43.15. State after Task 8 (the base), its fix round 1, Task 9 (links), Task 10 (callouts) and Task 11 (beats).
 `tests/e2e/codemirror-probes.spec.ts` (`@harness`) probes what the measured suites cannot see.
 
-## Still failing under `P10_STRICT=1`
+## Under `P10_STRICT=1`
 
-Run: `P10_STRICT=1 P10_VARIANTS=codemirror pnpm exec playwright test --grep "@beats|@base|@integration|@input|@links|@callouts"`. Chromium and WebKit fail the same two checks;
-everything else passes (`F-live-preview` and `I-spellcheck-off` included).
+Run: `P10_STRICT=1 P10_VARIANTS=codemirror pnpm exec playwright test --grep "@beats|@base|@integration|@input|@links|@callouts"`. In the Task 17 run (`report/`)
+every round-trip row is identical (60 of 60 edits per engine), and every feature, integration and input check is `ok` but the WebKit IME `gap`.
+After Task 11 Chromium and WebKit failed the two checks below; they were the harness driver, and ruling 22 (Task 7c) made it scroll to the row.
 
-| Check | Why it fails | Tried |
+| Check | Why it failed | Tried |
 |---|---|---|
-| `@beats beat-param-add-order via input` (S-901, beat 4) | The `input` driver waits 3 s for `[data-beat-row="4"]` and does not scroll. CodeMirror draws the viewport only (about 13 lines of the 45 of the record, up to beat 3); beat 4 is below the fold, so its row is not in the DOM. | Nothing beyond the feature itself: the whole-document render of Task 9 was dropped on purpose (ruling 19), and the driver may not change (ruling 17). The `api` driver passes. |
-| `@beats beat-param-add-no-dash via input` (S-901, beat 5) | The same, for beat 5. | The same. |
+| `@beats beat-param-add-order via input` (S-901, beat 4), fixed | The `input` driver waited 3 s for `[data-beat-row="4"]` and did not scroll. CodeMirror draws the viewport only (about 13 lines of the 45 of the record, up to beat 3); beat 4 is below the fold, so its row is not in the DOM. | Nothing beyond the feature itself: the whole-document render of Task 9 was dropped on purpose (ruling 19), and the driver may not change (ruling 17). The `api` driver passes. |
+| `@beats beat-param-add-no-dash via input` (S-901, beat 5), fixed | The same, for beat 5. | The same. |
 
 ## What the base does, and how
 
@@ -144,7 +145,7 @@ Files: `beats.ts` (finds the beats, plans a `beat-param` change by the oracle's 
   heading). Nothing else changes. The selection is not moved.
 
 Known limits of the beats: a row that is redrawn (context change, edit elsewhere in its lines) loses an open input; the editor does not take the focus back after a
-commit; an unknown key (`synthetic::`) is shown but cannot be edited from the row; the rows below the fold are not in the DOM (see the table above).
+commit; an unknown key (`synthetic::`) is shown but cannot be edited from the row; the rows below the fold are not in the DOM until the editor is scrolled there (CodeMirror draws the viewport; the drivers scroll, ruling 22).
 
 ## Known limits of the base
 

@@ -217,6 +217,43 @@ test.describe('@harness prosemirror:best-effort · paragraph breaks in a callout
   });
 });
 
+/** The node types of the children of the first callout: in the editor, and in the saved text parsed again. */
+async function calloutChildren(page: Page, saved: string): Promise<{ editor: string[]; reloaded: string[] }> {
+  const types = (doc: { firstChild: { forEach(f: (child: { type: { name: string } }) => void): void } | null }): string[] => {
+    const names: string[] = [];
+    doc.firstChild?.forEach((child) => names.push(child.type.name));
+    return names;
+  };
+  return { editor: types(schema.nodeFromJSON(await editorDoc(page))), reloaded: types(parseBody(splitFrontMatter(saved).body)) };
+}
+
+test.describe('@harness prosemirror:best-effort · Enter at the end of a callout (variant M2)', () => {
+  // Stock `splitBlock` makes a `callout_caption` behind the last paragraph of a callout, so typing goes
+  // into a caption, and the serializer writes the whole callout again: the line break inside its
+  // paragraph, which the edit did not touch, becomes a space. Design has no caption in the data model,
+  // and its parser has none, so the saved caption reloads as a paragraph.
+  const cases = [
+    { type: 'voice', head: '> [!voice] [[throat-kin]]', text: 'A voice line', reloads: true },
+    { type: 'design', head: '> [!design]', text: 'A designer remark', reloads: false },
+  ];
+  for (const { type, head, text: words, reloads } of cases) {
+    test(`${type}: Enter at the end of the last paragraph and typing write the callout again, at block level`, async ({ page }) => {
+      const body = `${head}\n> ${words}\n> on two lines.\n\nAfter.\n`;
+      await openText(page, body);
+      await caretTo(page, body.indexOf('on two lines.') + 'on two lines.'.length);
+      await page.keyboard.press('Enter');
+      await page.keyboard.type('New one.');
+      const saved = await text(page);
+      expect(saved).toBe(`${head}\n> ${words} on two lines.\n>\n> — New one.\n\nAfter.\n`);
+      expect(await level(page)).toBe('block');
+      const children = await calloutChildren(page, saved);
+      expect(children.editor).toEqual(['callout_title', 'paragraph', 'callout_caption']);
+      expect(await reparses(page, saved)).toBe(reloads);
+      expect(children.reloaded).toEqual(reloads ? children.editor : ['callout_title', 'paragraph', 'paragraph']);
+    });
+  }
+});
+
 test.describe('@harness prosemirror:best-effort · offsets, modes and beats', () => {
   test('offsets refer to the saved bytes: caretTo and caret agree after edits', async ({ page }) => {
     const source = await open(page, BELIEF);

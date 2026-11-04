@@ -17,17 +17,17 @@ What the stock parser and serializer change, file by file (`fm + serialize(parse
 
 | Change | Seen in |
 |---|---|
-| Soft line breaks become a space: a paragraph of several lines is one long line (attribute lines `at::`/`with::`/`says::`, callout heads and bodies, wrapped prose) | every file that has a wrapped paragraph or a callout or beats: B-901, links, voices, f04-terrain, synthetic-notes, S-004, S-901, synthetic-crlf, whitespace |
-| `[[id]]` and `[[id\|text]]` are escaped as `\[\[id\|text\]\]`; `[!voice]` as `\[!voice\]` | every file with links or callouts |
+| Soft line breaks become a space: a paragraph of several lines is one long line (wrapped prose, wrapped quote and callout paragraphs, a table, which stays a paragraph). Callout titles (Task 14) and beat attribute lines (Task 15) are nodes of their own and keep their lines | every file with a soft line break in a paragraph: B-901, links, voices, T-901, synthetic-crlf, whitespace |
+| A voice line that starts with `--` is escaped as `\--`. (Links and `[!type]` were escaped until the wikilink node of Task 13 and the callout node of Task 14; both are written raw now.) | voices |
 | The final newline of the file is dropped | every file that ends with one (all but the 5 identical ones) |
 | Setext headings become ATX (`# Title`, `## Title`) | B-901 |
 | `_x_` becomes `*x*`, `__x__` becomes `**x**` | B-901 |
 | A hard break (two trailing spaces) becomes a backslash break; trailing spaces of a line are lost | B-901, whitespace |
 | Bullets `-`, `+` and `*` all become `*`, `1)` becomes `1.`, a list of ones is renumbered 1, 2, 3, adjacent lists are separated by two blank lines | T-901 |
 | Several blank lines between blocks collapse to one; trailing spaces of a paragraph line are lost | whitespace |
-| A table (not CommonMark) stays a paragraph of text | T-901 |
+| A table (not CommonMark) stays a paragraph of text; the thematic break `***` becomes `---` | T-901 |
 
-Identical in all rows: fates-shrine-v5, C-031, f04-terrain-v1, mother-ilse (empty body) and synthetic-no-final-newline (each short, plain, or without a body). `synthetic-characters` differs only by the dropped final newline (its edit rows are block level for that reason).
+Identical in all rows: fates-shrine-v5, C-031, f04-terrain-v1, mother-ilse (empty body) and synthetic-no-final-newline (each short, plain, or without a body). f04-terrain, synthetic-notes, S-004, S-901, synthetic-characters and f04-choir-hall differ only by the dropped final newline, one byte (Task 17 run, `report/round-trip.md`).
 
 **2. Features that belonged to later tasks (ruling 18).** `F-live-preview` and `I-spellcheck-off` pass since Task 15 (beats). `N-reactive` and `N-remount` pass since Task 13 (chips).
 
@@ -79,9 +79,9 @@ Strict run `--grep "@links|I-[a-z-]*-chip|N-remount|N-reactive"`: before 15 fail
 - **Caret and delete** (`linkkeys.ts`, `keymap.ts`). Commands before the base keymap: ArrowLeft/Right step over a chip, Backspace and Delete take it whole. Done as commands, so no engine's native caret rules matter.
 - **Typing** (`typing.ts`, `linkkeys.ts`). A plugin state `{from, to, query, dismissed}` for the `[[query` before the caret (no `[ ] |`, at most 80 characters, not in code), started by an insertion transaction (undo, paste and external changes do not start it), kept while the caret stays in the same text, marked `tu-typing__q`. It stays plain text. A hand-typed closing `]]` turns it into a chip (`handleTextInput`).
 - **Popover** (`popover.ts`). A plugin view mounts `LinkPopover` into a fixed element on `document.body`, below the caret (above when no room); unmounted on its `onclose` (Escape), on blur, when typing ends and with the editor. Options: `ctx.search(query, place)`. Picking replaces `[[query` with the node. A new `ctx` object makes it search again.
-- **Place** (`typing.ts`). The stock parser makes the line breaks of a paragraph spaces, so the lines `at::`, `with::` ... of a beat are one paragraph. The place is the last `key::` (at the start of the text or after a space) before the caret in the textblock, not the key of the caret's line. Approximation: a `key::` typed in a sentence would count.
+- **Place** (`typing.ts`). Since Task 15 the attribute lines of a beat are one code-like `beat_attrs` block that keeps its line breaks, and the place is the key of the caret's line (since commit 282433a). In any other textblock the stock parser makes the line breaks of a paragraph spaces, so the place is the last `key::` (at the start of the text or after a space) before the caret; approximation: a `key::` typed in a sentence would count.
 - **apply** (`edits.ts`). `link-insert` inserts the node at the anchor (what typing `[[query` and picking leaves); `link-delete` deletes the node at the `[[` offset. In Source mode both edit the text.
-- **Callout titles and beat lines.** Links in beat lines are chips. Since Task 14 a callout title is raw text of the callout node (the head draws its links), so it has no chips. (What the stock parser does to the lines themselves is the soft-break item above.)
+- **Callout titles and beat lines.** Since Task 14 a callout title, and since Task 15 a beat heading and the attribute lines, are code-like raw text (the head or the row draws their links), so while one of them is raw its links are text, not chips. In attribute lines `[[` opens the popover and a pick inserts the link as text (`popover.ts`, since commit 282433a); in a callout title it does not open.
 
 Still failing under strict (all bytes, none from the link node):
 
@@ -128,4 +128,4 @@ Limits: the `beat` attr of an attribute block is set at parse time, so raw-editi
 ## Seam for the best-effort column (Task 16)
 
 - **Body model** (`body.ts`). What Write mode saves and what the offsets refer to are one object, `BodyModel`; `stockBody()` is what this adapter did inline before (`serializeBody` for `text()`, the `Tracker` for `sourceText`, `toPos`, `caret`, `applyExternal`). The adapter class is exported and takes a body model (stock by default). Only a model that defines `observe` gets a `dispatchTransaction`, so the stock view is created as before. `PositionMap` has one new public method, `offsets(pos)` (candidate source offsets of a position); the alignment is unchanged. A full non-strict stock run before and after the seam records identical rows (all 154 round-trip rows with their hunks, and every feature, input and integration row).
-- **Observed in the Task 16 baseline run:** `F-link-popover-kind-filter` fails in both engines ("typing `[[fates` in an at:: line opens no popover"). Since Task 15 the attribute lines are a code-like `beat_attrs` node, and the typing plugin opens no popover in code, so the Links section above ("all feature checks pass") no longer holds for that check.
+- **Observed in the Task 16 baseline run:** `F-link-popover-kind-filter` failed in both engines ("typing `[[fates` in an at:: line opens no popover"), because since Task 15 the attribute lines are a code-like `beat_attrs` node and the typing plugin opened no popover in code. Fixed in Task 15's fix round (commit 282433a: `takesLinks` accepts `beat_attrs`); the Task 17 run has it `ok` in both columns and engines (`report/features.md`).
