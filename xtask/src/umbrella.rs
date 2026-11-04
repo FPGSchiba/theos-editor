@@ -198,7 +198,8 @@ fn phase_rows(text: &str) -> Result<Vec<(Phase, String, String)>> {
         };
         if name.is_empty() || repo.is_empty() {
             return Err(error(format!(
-                "the row of {phase} in the phase table (line {number}) is too short or has an                  empty name or repository"
+                "the row of {phase} in the phase table (line {number}) is too short or has an \
+                 empty name or repository"
             )));
         }
         // Names and repositories are written to the output of checks, and the umbrella is part
@@ -479,6 +480,17 @@ mod tests {
                 "{name}: {result:?}"
             );
         }
+    }
+
+    #[test]
+    fn the_error_of_a_short_row_reads_as_one_line_of_prose() {
+        let text = "| Phase | Name | Repo |\n|---|---|---|\n| P90 | A |\n";
+        let message = match parse(text) {
+            Err(error) => error.to_string(),
+            Ok(_) => String::new(),
+        };
+        assert!(message.contains("empty name or repository"), "{message}");
+        assert!(!message.contains("  "), "{message}");
     }
 
     // AC: CE-08.6

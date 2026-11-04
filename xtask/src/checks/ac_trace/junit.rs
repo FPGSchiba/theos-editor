@@ -221,7 +221,11 @@ mod tests {
 
     #[test]
     fn cdata_comments_and_a_declaration_inside_a_case_do_not_change_its_result() -> TestResult {
-        let xml = "<testsuites><testsuite name=\"s\">            <testcase name=\"a\"><!-- <failure/> --><?note <failure/> ?>            <system-out><![CDATA[<failure/></testcase>]]></system-out></testcase>            <testcase name=\"b\"><!-- c --><failure/><![CDATA[<skipped/>]]></testcase>            </testsuite></testsuites>";
+        let xml = "<testsuites><testsuite name=\"s\">\
+            <testcase name=\"a\"><!-- <failure/> --><?note <failure/> ?>\
+            <system-out><![CDATA[<failure/></testcase>]]></system-out></testcase>\
+            <testcase name=\"b\"><!-- c --><failure/><![CDATA[<skipped/>]]></testcase>\
+            </testsuite></testsuites>";
         let results = parse(xml)?;
         assert_eq!(results.get("a"), Some(&true));
         assert_eq!(results.get("b"), Some(&false));
