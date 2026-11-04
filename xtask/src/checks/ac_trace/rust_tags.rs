@@ -1,11 +1,12 @@
 //! Tags in Rust sources: a `// AC: <id>` comment above a test.
 //!
-//! `syn` finds the tests (every `fn` with a test attribute, at any depth: inline modules and
-//! function bodies included) and [`line_comments`] the `//` comments (a line inside a string is
-//! not one), so nothing here lexes Rust. A tag is directly above its test when it is the last
-//! `//` comment of a run of comment-only lines that ends on the line above the test's first
-//! attribute or doc comment; a comment after an attribute on the same line is not in the way.
-//! A test counts as proof unless it is switched off:
+//! `syn` finds the tests (every `fn` with an outer test attribute, at any depth: inline modules
+//! and function bodies included) and [`line_comments`] the `//` comments (a line inside a string
+//! is not one), so nothing here lexes Rust. The comments directly above a test are the run of
+//! `//` comments, each alone on its line, that ends on the line above the test's first outer
+//! attribute or doc comment; a blank line or a code line ends the run. Every tag line in the run
+//! is a tag of the test, so an explanation may stand between a tag and the attributes. A test
+//! counts as proof unless it is switched off:
 //!
 //! - `#[ignore…]`, or a `#[cfg_attr(…, …ignore…)]` which may ignore it on some targets;
 //! - a `#[cfg(…)]` whose predicate names anything but the target (`TARGET_WORDS`), or that is
@@ -18,11 +19,11 @@ use std::collections::BTreeMap;
 use proc_macro2::{TokenStream, TokenTree};
 use syn::spanned::Spanned;
 use syn::visit::Visit;
-use syn::{Attribute, ItemFn, Meta, Visibility};
+use syn::{AttrStyle, Attribute, ItemFn, Meta};
 
 use super::{Comment, Tag, classify, dangling, malformed};
 use crate::verdict::Finding;
-use crate::view::{LineComment, Source, line_comments, line_of};
+use crate::view::{LineComment, Source, has_ident, line_comments, line_of};
 
 /// What a predicate of `#[cfg(…)]` may name and still leave the test in every build of a target.
 const TARGET_WORDS: [&str; 7] = [
@@ -38,10 +39,10 @@ const TARGET_WORDS: [&str; 7] = [
 /// Finds the tags in the Rust file `source`; `in_test_target` says whether a test target compiles
 /// it.
 ///
-/// A comment that starts like a tag and is not one, and a tag that is not directly above a test,
-/// are findings; so is every tag of a file that no test target compiles. A tag above a test that
-/// is switched off is a [`Tag`] that does not count. A file that did not parse has none: the
-/// view reports it.
+/// A comment that starts like a tag and is not one, and a tag that is not among the comments
+/// directly above a test, are findings; so is every tag of a file that no test target compiles.
+/// A tag above a test that is switched off is a [`Tag`] that does not count. A file that did not
+/// parse has none: the view reports it.
 #[must_use]
 pub fn scan(source: &Source, in_test_target: bool) -> (Vec<Tag>, Vec<Finding>) {
     let (Some(file), Some(tokens)) = (&source.file, &source.tokens) else {
@@ -49,35 +50,33 @@ pub fn scan(source: &Source, in_test_target: bool) -> (Vec<Tag>, Vec<Finding>) {
     };
     let mut finder = TestFinder::default();
     finder.visit_file(file);
+    let comments = line_comments(&source.text, tokens);
+    let owners = finder.owners(&comments);
     let mut tags = Vec::new();
     let mut findings = Vec::new();
-    for comment in line_comments(&source.text, tokens) {
+    for comment in &comments {
         match classify(&comment.text) {
             Comment::Other => {}
             Comment::Malformed => findings.push(malformed(&source.path, comment.line)),
-            Comment::Tag(ids) => {
-                let test = finder.test_below(&comment);
-                match (test, in_test_target) {
-                    (Some(test), true) => tags.push(Tag {
-                        file: source.path.clone(),
-                        line: comment.line,
-                        ids,
-                        test: Some(test.name.clone()),
-                        counts: test.counts,
-                    }),
-                    (_, false) => findings.push(dangling(
-                        &source.path,
-                        comment.line,
-                        "the file is one that no test target compiles",
-                    )),
-                    (None, true) => findings.push(dangling(
-                        &source.path,
-                        comment.line,
-                        "no test starts on the next line (the tag is the last comment line \
-                         right above the test's attributes)",
-                    )),
-                }
-            }
+            Comment::Tag(ids) => match (owners.get(&comment.line), in_test_target) {
+                (_, false) => findings.push(dangling(
+                    &source.path,
+                    comment.line,
+                    "the file is one that no test target compiles",
+                )),
+                (Some(test), true) => tags.push(Tag {
+                    file: source.path.clone(),
+                    line: comment.line,
+                    ids,
+                    test: Some(test.name.clone()),
+                    counts: test.counts,
+                }),
+                (None, true) => findings.push(dangling(
+                    &source.path,
+                    comment.line,
+                    "no test follows: a tag must be in the run of `//` comment lines, each                      alone on its line, that ends directly above a test's first attribute or                      doc comment",
+                )),
+            },
         }
     }
     (tags, findings)
@@ -89,63 +88,56 @@ struct Test {
     counts: bool,
 }
 
-/// The tests of a file, by the line of their first attribute or doc comment.
+/// The tests of a file, by the line of their first outer attribute or doc comment.
 #[derive(Default)]
 struct TestFinder {
     tests: BTreeMap<u32, Test>,
 }
 
 impl TestFinder {
-    /// The test that `comment` is directly above: it is alone on its line, and a test starts on
-    /// the next line.
-    fn test_below(&self, comment: &LineComment) -> Option<&Test> {
-        if comment.alone {
-            self.tests.get(&(comment.line + 1))
-        } else {
-            None
+    /// The test each comment line is above, for the lines of the run of comments (alone on their
+    /// line) that ends directly above the test.
+    fn owners(&self, comments: &[LineComment]) -> BTreeMap<u32, &Test> {
+        let alone: BTreeMap<u32, bool> = comments
+            .iter()
+            .map(|comment| (comment.line, comment.alone))
+            .collect();
+        let mut owners = BTreeMap::new();
+        for (start, test) in &self.tests {
+            let mut line = *start;
+            while line > 1 && alone.get(&(line - 1)) == Some(&true) {
+                line -= 1;
+                owners.insert(line, test);
+            }
         }
+        owners
     }
 }
 
 impl<'ast> Visit<'ast> for TestFinder {
     fn visit_item_fn(&mut self, function: &'ast ItemFn) {
-        if let Some(first) = function.attrs.first()
-            && function.attrs.iter().any(is_test_attribute)
-            && !has_gap(function)
+        // `syn` lists the inner attributes of the body too; they say nothing about the test.
+        let attributes: Vec<&Attribute> = function
+            .attrs
+            .iter()
+            .filter(|attribute| attribute.style == AttrStyle::Outer)
+            .collect();
+        if let Some(first) = attributes.first()
+            && attributes
+                .iter()
+                .any(|attribute| is_test_attribute(attribute))
         {
             self.tests
                 .entry(line_of(first.span()))
                 .or_insert_with(|| Test {
                     name: function.sig.ident.to_string(),
-                    counts: function.attrs.iter().all(keeps_test_running),
+                    counts: attributes
+                        .iter()
+                        .all(|attribute| keeps_test_running(attribute)),
                 });
         }
         syn::visit::visit_item_fn(self, function);
     }
-}
-
-/// Whether a blank line (or more) separates the attributes and doc comments of `function`
-/// from each other or from the function: such a tag is not directly above its test.
-fn has_gap(function: &ItemFn) -> bool {
-    let item = if matches!(function.vis, Visibility::Inherited) {
-        function.sig.span()
-    } else {
-        function.vis.span()
-    };
-    let mut previous_end: Option<usize> = None;
-    let lines = function
-        .attrs
-        .iter()
-        .map(Spanned::span)
-        .chain([item])
-        .map(|span| (span.start().line, span.end().line));
-    for (start, end) in lines {
-        if previous_end.is_some_and(|previous| start > previous + 1) {
-            return true;
-        }
-        previous_end = Some(end);
-    }
-    false
 }
 
 /// Whether the last segment of the attribute's path is `test`, `rstest` or `test_case`.
@@ -169,7 +161,7 @@ fn keeps_test_running(attribute: &Attribute) -> bool {
         return true;
     };
     if path.is_ident("cfg_attr") {
-        !has_ident(&list.tokens, |word| word == "ignore")
+        !has_ident(&list.tokens, "ignore")
     } else if path.is_ident("cfg") {
         names_only_the_target(&list.tokens)
     } else {
@@ -190,16 +182,6 @@ fn names_only_the_target(tokens: &TokenStream) -> bool {
         }
         TokenTree::Group(group) => names_only_the_target(&group.stream()),
         TokenTree::Punct(_) | TokenTree::Literal(_) => true,
-    })
-}
-
-/// Whether some identifier of `tokens`, at any depth, satisfies `test`. Strings are literals, so
-/// the words in them are not identifiers.
-fn has_ident(tokens: &TokenStream, test: fn(&str) -> bool) -> bool {
-    tokens.clone().into_iter().any(|tree| match tree {
-        TokenTree::Ident(word) => test(&word.to_string()),
-        TokenTree::Group(group) => has_ident(&group.stream(), test),
-        TokenTree::Punct(_) | TokenTree::Literal(_) => false,
     })
 }
 
@@ -336,16 +318,16 @@ mod tests {
     fn rust_tag_with_blank_line_is_dangling() {
         for lines in [
             &["// AC: CE-08.1", "", "#[test]", "fn works() {}"][..],
-            &["// AC: CE-08.1", "#[test]", "", "fn works() {}"],
             &[
                 "// AC: CE-08.1",
+                "",
                 "// a plain comment",
                 "#[test]",
                 "fn works() {}",
             ],
             &[
                 "// AC: CE-08.1",
-                "//// not a doc line",
+                "fn helper() {}",
                 "#[test]",
                 "fn works() {}",
             ],
@@ -354,6 +336,118 @@ mod tests {
             assert!(tags.is_empty(), "{lines:?}: {tags:?}");
             assert_eq!(findings.len(), 1, "{lines:?}: {findings:?}");
         }
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn a_tag_among_the_comments_above_a_test_counts() {
+        // Spec §5.10, controller ruling: the whole run of comments above the test is read.
+        for lines in [
+            &[
+                "// AC: CE-08.1",
+                "// an explanation",
+                "#[test]",
+                "fn works() {}",
+            ][..],
+            &[
+                "// AC: CE-08.1",
+                "//// not a doc line",
+                "#[test]",
+                "fn works() {}",
+            ],
+            &[
+                "// an explanation",
+                "// AC: CE-08.1",
+                "#[test]",
+                "fn works() {}",
+            ],
+        ] {
+            let tag = only_tag(lines);
+            assert_eq!(tag.test.as_deref(), Some("works"), "{lines:?}");
+        }
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn two_tag_lines_in_a_row_above_a_test_both_count() {
+        let (tags, findings) = scan_lines(&[
+            "// AC: CE-08.1",
+            "// AC: CE-08.2, CE-08.3",
+            "#[test]",
+            "fn works() {}",
+        ]);
+        assert!(findings.is_empty(), "{findings:?}");
+        let found: Vec<(u32, usize)> = tags.iter().map(|tag| (tag.line, tag.ids.len())).collect();
+        assert_eq!(found, [(1, 1), (2, 2)]);
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn a_tag_below_a_doc_comment_is_inside_the_test_and_dangling() {
+        let (tags, findings) = scan_lines(&[
+            "/// What it proves.",
+            "// AC: CE-08.1",
+            "#[test]",
+            "fn works() {}",
+        ]);
+        assert!(tags.is_empty(), "{tags:?}");
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].line, Some(2));
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn blank_lines_and_comments_inside_the_item_do_not_matter() {
+        for lines in [
+            &["// AC: CE-08.1", "#[test]", "", "fn works() {}"][..],
+            &[
+                "// AC: CE-08.1",
+                "#[test]",
+                "// a note",
+                "#[cfg(windows)]",
+                "fn works() {}",
+            ],
+        ] {
+            assert!(only_tag(lines).counts, "{lines:?}");
+        }
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn inner_attributes_of_the_body_do_not_hide_the_test() {
+        // `syn` lists a body's inner attributes among the function's attributes.
+        let tag = only_tag(&[
+            "// AC: CE-08.1",
+            "#[test]",
+            "fn works() {",
+            "    #![expect(unused_variables, reason = \"a probe\")]",
+            "    let x = 1;",
+            "}",
+        ]);
+        assert!(tag.counts);
+        // An `ignore` in the body is not the test's attribute.
+        let tag = only_tag(&[
+            "// AC: CE-08.1",
+            "#[test]",
+            "fn works() {",
+            "    #![ignore]",
+            "}",
+        ]);
+        assert!(tag.counts);
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn a_file_that_did_not_parse_has_no_tags() {
+        let (source, finding) = parse_source(
+            "src/lib.rs",
+            b"// AC: CE-08.1
+#[test
+",
+        );
+        assert!(finding.is_some());
+        let (tags, findings) = scan(&source, true);
+        assert!(tags.is_empty() && findings.is_empty());
     }
 
     // AC: CE-08.6
@@ -454,14 +548,21 @@ mod tests {
             "#[test]",
             "fn third() {}",
         ]);
+        // Spec §5.10, controller ruling: both tag lines above `third` count.
         let found: Vec<(u32, &str)> = tags
             .iter()
             .map(|tag| (tag.line, tag.ids[0].as_str()))
             .collect();
-        assert_eq!(found, [(1, "CE-08.1"), (5, "CE-08.2"), (9, "CE-08.4")]);
-        // The first of two tag lines in a row is not directly above the test.
-        assert_eq!(findings.len(), 1, "{findings:?}");
-        assert_eq!(findings[0].line, Some(8));
+        assert_eq!(
+            found,
+            [
+                (1, "CE-08.1"),
+                (5, "CE-08.2"),
+                (8, "CE-08.3"),
+                (9, "CE-08.4")
+            ]
+        );
+        assert!(findings.is_empty(), "{findings:?}");
     }
 
     // AC: CE-08.6

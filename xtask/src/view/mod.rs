@@ -23,7 +23,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub use comments::{LineComment, line_comments};
-pub use source::{Source, line_of, parse_source};
+pub use source::{Source, has_ident, line_of, parse_source};
 
 use crate::verdict::Finding;
 use crate::{Error, Result};

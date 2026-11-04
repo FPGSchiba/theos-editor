@@ -31,7 +31,7 @@ use syn::punctuated::Punctuated;
 use super::attrs::{Attribute, Body, Place, attributes, split_args};
 use super::{Inputs, Rule};
 use crate::verdict::Finding;
-use crate::view::Source;
+use crate::view::{Source, has_ident};
 
 /// The rule, as `RULES` lists it.
 pub const RULE: Rule = Rule {
@@ -141,15 +141,6 @@ fn unparsed_problems(tokens: &TokenStream) -> Vec<String> {
     } else {
         Vec::new()
     }
-}
-
-/// Whether the identifier `word` is anywhere in `tokens`.
-fn has_ident(tokens: &TokenStream, word: &str) -> bool {
-    tokens.clone().into_iter().any(|tree| match tree {
-        TokenTree::Ident(ident) => ident == word,
-        TokenTree::Group(group) => has_ident(&group.stream(), word),
-        _ => false,
-    })
 }
 
 /// Whether the arguments `tokens` of an `expect(…)` have a `reason = …` of their own.

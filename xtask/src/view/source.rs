@@ -6,7 +6,7 @@
 use std::borrow::Cow;
 use std::str::FromStr;
 
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Span, TokenStream, TokenTree};
 
 use crate::verdict::Finding;
 
@@ -70,6 +70,17 @@ pub fn parse_source(path: &str, bytes: &[u8]) -> (Source, Option<Finding>) {
 #[must_use]
 pub fn line_of(span: Span) -> u32 {
     u32::try_from(span.start().line).unwrap_or(u32::MAX)
+}
+
+/// Whether the identifier `word` is anywhere in `tokens`, at any depth. Strings are literals, so
+/// the words in them are not identifiers.
+#[must_use]
+pub fn has_ident(tokens: &TokenStream, word: &str) -> bool {
+    tokens.clone().into_iter().any(|tree| match tree {
+        TokenTree::Ident(ident) => ident == word,
+        TokenTree::Group(group) => has_ident(&group.stream(), word),
+        TokenTree::Punct(_) | TokenTree::Literal(_) => false,
+    })
 }
 
 /// `text` with a leading byte-order mark and the shebang line `syn` found (`shebang` is
@@ -153,6 +164,14 @@ mod tests {
             .next()
             .ok_or("no token")?;
         assert_eq!(&text[first.span().byte_range()], "#");
+        Ok(())
+    }
+
+    #[test]
+    fn an_identifier_is_found_at_any_depth_and_not_in_a_string() -> TestResult {
+        let tokens: TokenStream = "a(b, c[d]) \"e\"".parse().map_err(|e| format!("{e}"))?;
+        assert!(has_ident(&tokens, "a") && has_ident(&tokens, "d"));
+        assert!(!has_ident(&tokens, "e") && !has_ident(&tokens, "z"));
         Ok(())
     }
 

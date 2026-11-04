@@ -185,6 +185,16 @@ fn a_tag_inside_a_string_is_not_a_tag() -> TestResult {
 }
 
 #[test]
+fn a_file_of_the_view_that_does_not_parse_is_a_finding() -> TestResult {
+    let (verdict, _) = trace("unparseable-file", None)?;
+    assert_eq!(verdict.findings.len(), 1, "{:?}", verdict.findings);
+    let finding = &verdict.findings[0];
+    assert_eq!(finding.file.as_deref(), Some("src/data.rs"));
+    assert_eq!(finding.line, Some(1));
+    Ok(())
+}
+
+#[test]
 fn research_folders_are_scanned() -> TestResult {
     // Without a phase the table lists every criterion that has a tag, wherever the test is.
     let (verdict, table) = trace("complete-phase", None)?;
