@@ -23,9 +23,14 @@ Versions, as researched and measured (variant `codemirror` in [`variants.ts`][va
 Quoted from [`comparison.md`][comparison] (`Stage: final`, sections Matrix and Measured scores)
 and the reports of the run of 2026-11-03 (commit 6b22b2b, Windows, Chromium 156, WebKit 27.2).
 
-- **Totals: CodeMirror 6 44, ProseMirror/Tiptap 34** of 54 (42 and 33 on paper), no knockout.
+- **Totals: CodeMirror 6 42, ProseMirror/Tiptap 32** of 54 (42 and 33 on paper), no knockout.
   The 10 points come from byte stability (6), link chips (2) and callouts (2); every other
-  criterion scores the same. Milkdown (33), Lexical (31) and Monaco (25) were scored on paper.
+  criterion scores the same. Milkdown (33), Lexical (31) and Monaco (25) were scored on paper
+  only. ProseMirror stays the runner-up although its measured 32 is below Milkdown's paper 33
+  (ruling 33). Spec §4.4 replaces paper scores with measured ones for the top two only, so the
+  totals do not stand on one footing, and it names a paper candidate only on a knockout. Milkdown
+  sits on ProseMirror's tree model, so the separator class below would likely meet it too, and
+  likely the raw-line findings; neither is measured.
 - **Byte-stable Markdown** (criterion 1, weight 3; G5): CodeMirror 6 3, ProseMirror 1
   ([`round-trip.md`][round-trip]). CodeMirror 6 kept all 17 unedited corpus files and all 60
   edits identical to the oracle, through commands and real input, in both engines; its adapter
@@ -53,19 +58,24 @@ and the reports of the run of 2026-11-03 (commit 6b22b2b, Windows, Chromium 156,
   (Python-2.0, permissive), is ProseMirror's.
 - **Not scored:** ProseMirror's stock schema holds a soft line break as a space, so its Write mode
   cannot show line breaks as written (spec §3).
-- **Readings the scores rest on** (comparison, Top two and Measured scores; the rulings are
-  listed in the P10 PR). ProseMirror was prototyped by Jann's decision of 2026-10-31 on a paper
-  tie with Milkdown. Two rulings were made at scoring time, after the results: ruling 29 (a
-  recorded defect is a known bug only on a construct the corpus holds, or an everyday edit of
-  one) set ProseMirror's criteria 3 and 4 to 1; ruling 30 (the stress file is usable if it opens,
-  typing lands and the editor does not hang) raised its criterion 7 to 3. The comparison lists
-  what other readings would move, in weighted points for ProseMirror: criterion 1 at 2 if only
-  the pastes decide, +3; criteria 3 and 4 at 2 if those defects count as limits, +2 each;
-  criterion 6 at 3 for both if the unmeasured parts are left to P11, +2 each; criterion 2 at 2 if
-  the undo history lost at a mode switch counts, −2; criterion 7 at 2 if usable means a latency
-  bound, −1. With the four that favour it (criteria 1, 3, 4 and 6) ProseMirror has 43 against
-  46; with known bugs read broadly for both, 32 against 38. Each reading applied to both alike
-  keeps the order.
+- **Readings and rulings the scores rest on** (comparison, Top two and Measured scores; the
+  rulings are listed in the P10 PR). ProseMirror was prototyped by Jann's decision of 2026-10-31
+  on a paper tie with Milkdown. Two rulings were made at scoring time, after the results: ruling
+  29 (a recorded defect is a known bug only on a construct the corpus holds, or an everyday edit
+  of one) set ProseMirror's criteria 3 and 4 to 1; ruling 30 (the stress file is usable if it
+  opens, typing lands and the editor does not hang) raised its criterion 7 to 3. Ruling 32 rests
+  on code reading: both prototypes leave spell check on in raw attribute lines and raw callout
+  titles (where ProseMirror's link ids are plain text), which `I-spellcheck-off` did not see,
+  because it reads only chips and rendered rows. Under ruling 29 that set criterion 6 of both to
+  1; the first measured totals were 44 and 34. The comparison lists what other readings would
+  move, in weighted points: ProseMirror's criterion 1 at 2 if only the pastes decide, +3; its
+  criteria 3 and 4 at 2 if those defects count as limits, +2 each; criterion 6 at 2 for both if
+  the raw-line spell check counts as a limit, +2 each, or at 3 if the unmeasured parts are also
+  left to P11, +4 each; ProseMirror's criterion 2 at 2 if the undo history lost at a mode switch
+  counts, −2; its criterion 7 at 2 if usable means a latency bound, −1. With the four that favour
+  ProseMirror (criteria 1, 3 and 4 at 2, criterion 6 at 3 for both) it has 43 against 46; with
+  known bugs read broadly for both, 30 against 36. Each reading applied to both alike keeps the
+  order.
 - **Unequal probing:** three review rounds probed Enter at block boundaries in ProseMirror; none
   probed Enter in CodeMirror 6's callouts and lists. CodeMirror 6's record there is clean partly
   because nobody looked, though its Enter only inserts a newline into the text, which is the file.
@@ -92,7 +102,9 @@ P12 ports the prototype's patterns ([CodeMirror notes][cm-notes]); it imports no
 - Index and findings (CE-35.2): a context state field set by an effect, so a new index or new
   findings redraw the widgets without re-creating the editor.
 - Spell check: CodeMirror defaults to `spellcheck="false"`, so prose turns it on through
-  `contentAttributes` and widget hosts carry `spellcheck="false"`.
+  `contentAttributes` and widget hosts carry `spellcheck="false"`. Raw attribute lines and raw
+  callout titles are not opted out, although spec §4.7 asks for spell check off on attribute
+  lines and ids, so P12 adds `spellcheck="false"` to them, for example with a line decoration.
 - External change (CE-34.2): the prototype got it from the harness as ready changes and applied
   them as one transaction kept out of the history (`external.ts`). P12 must compute the changes
   from the reloaded file: `@codemirror/merge` `diff()` was researched at 6.12.3 but not used, so
@@ -112,10 +124,14 @@ P12 ports the prototype's patterns ([CodeMirror notes][cm-notes]); it imports no
   The stock fix is `insertNewlineContinueMarkup` (`@codemirror/lang-markdown`, researched 6.5.2),
   not tried with the prototype's own `Language` (`index.ts`). P12 probes Enter in callouts and
   lists, which P10 did not.
+- Spell check is on in raw attribute lines and raw callout titles (criterion 6 at 1, ruling 32).
+  `I-spellcheck-off` read only chips and rendered rows, so P12's test must also read the raw
+  lines.
 - Beat rows: the editor does not regain focus after a row commit, and a redrawn row loses an open
-  input. The beat field rescans the whole body on every document, selection or context change,
-  which matters for long records. The shared `BeatRow` lets no unknown key be edited from the row
-  (`isBeatKey`); that is fixed in the component.
+  input. The beat field rescans the whole body on every document, selection or context change, a
+  cost the long-document numbers already include (459 beats in the large file). The shared
+  `BeatRow` lets no unknown key be edited from the row (`isBeatKey`); the fix belongs in that
+  component, not in the editor.
 - Links in voice titles are chips only while the title is raw: `VoiceHead` has none.
 - A `Design note:` line inside a callout gets no `tu-note`, although the data model allows it.
 - Not tried: a composition inside a typed `[[query` or in a callout title. Undoing a pick does
@@ -124,7 +140,7 @@ P12 ports the prototype's patterns ([CodeMirror notes][cm-notes]); it imports no
   if P12 lets Source mode edit it.
 - The editor parses for display only; links and findings come from `theos-content` (spec §7).
 - Upstream: one maintainer wrote 120 of the 124 `@codemirror/view` commits in the 12 months
-  researched.
+  researched (ProseMirror's core has the same maintainer).
 
 **What P11 must check in the real webviews** (Playwright's engines are not the Tauri webviews;
 facts in the [webviews dossier][webviews]):
@@ -153,8 +169,9 @@ facts in the [webviews dossier][webviews]):
 
 ## Alternative
 
-**ProseMirror/Tiptap**, 34 points, built as plain ProseMirror (`prosemirror-view` 1.42.9,
-`prosemirror-markdown` 1.13.9, no Tiptap) with the best-effort save path. In its favour: every
+**ProseMirror/Tiptap**, 32 points, the runner-up by ruling 33 although Milkdown has 33 on paper
+(see Why), built as plain ProseMirror (`prosemirror-view` 1.42.9, `prosemirror-markdown` 1.13.9,
+no Tiptap) with the best-effort save path. In its favour: every
 manifest edit but the two pastes reached span level in both engines, and so did every
 composition and dead key in Chromium. It matches CodeMirror 6 on front matter, beats, Svelte 5
 integration and long documents, and its front matter and modes took 57 lines against 144
@@ -167,8 +184,9 @@ constructs P12 renders. It would cost instead ([best-effort notes][pm-be-notes],
   M2, O2) are open, and a new kind of boundary edit can add one that only the byte tests find.
 - Plain-text paste and a soft-break node in schema and parser, named but not built; the node is
   also what spec §3's line breaks as written need.
-- Still to build: chips in raw lines and Enter in callouts (above), and an undo history that
-  survives a Write/Source switch.
+- Still to build: chips in raw lines and Enter in callouts (above), spell check off on raw
+  attribute lines and raw titles (CodeMirror 6 needs that too), and an undo history that survives
+  a Write/Source switch.
 - Already paid in the prototype, and needed only because the document is a tree: a 322-line map
   from file offsets to tree positions.
 - Slower on very long files: the stress-file numbers above.
@@ -179,7 +197,8 @@ constructs P12 renders. It would cost instead ([best-effort notes][pm-be-notes],
 
 Jann names the reason. If ProseMirror/Tiptap does not share it, this record is rewritten for
 ProseMirror/Tiptap (plain ProseMirror with the best-effort save path) in the same PR. If it shares
-the reason, P10 goes back to the comparison with the reason as a new criterion (spec §4.9).
+the reason, P10 goes back to the comparison with the reason as a new criterion (spec §4.9); there
+Milkdown is the named next candidate (comparison, Measured scores).
 
 [spec]: ../specs/phases/P10-prose-editor.md
 [research]: ../../research/P10-prose-editor/README.md

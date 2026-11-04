@@ -14,8 +14,8 @@ exists (spec §5).
    edits, in Chromium and WebKit. ProseMirror reached 5 of 17 and 8 of 60 with its stock
    serializer, and 17 of 17 and 57 of 60 with the best-effort save path, at 3325 adapter lines
    against 1332.
-3. Final totals: CodeMirror 6 44, ProseMirror/Tiptap 34 of 54, no knockout. The lead comes from
-   byte stability, link chips and callouts.
+3. Final totals: CodeMirror 6 42, ProseMirror/Tiptap 32 of 54, no knockout. The lead comes from
+   byte stability, link chips and callouts; spell check is 1 for both (raw attribute lines).
 4. Long documents: both meet spec §4.8 on the 250 KB file. ProseMirror's 2.5 MB stress file opens
    in 2.3 s and types at medians of 140–184 ms.
 5. Recommendation: CodeMirror 6, proposed. Spelling marks and OS input methods in the real
@@ -34,7 +34,8 @@ exists (spec §5).
 ## How to run
 
 From `research/P10-prose-editor/app/`, with Node 24 or later (`engines`). Node 25 and later no
-longer ship corepack ([Node.js docs][corepack]); there, run `npm install -g corepack` first.
+longer ship corepack ([Node.js docs][corepack-node]); there, run `npm install -g corepack` first
+([corepack README][corepack]).
 
 ```text
 corepack enable
@@ -78,10 +79,11 @@ them, or repeating the steps in `prosemirror:best-effort` to compare, takes long
    underline, and a right-click offers suggestions; picking one replaces only that word. This is
    the CodeMirror risk the decision record lists for P11: reports of no marks in a CodeMirror
    editor on Chromium 152. Chips get no marks. Then open `records/story/scripts/S-004.md`. In
-   Write mode the attribute lines of a beat are a row widget, and a click opens the row's input,
-   so put the caret in the `## Beat 1` heading and press ArrowDown until the raw lines show. Go
-   down to `when:: T1`, press End and type ` recieve`: no mark there either (Ctrl+Z takes it
-   back).
+   Write mode the attribute lines of a beat are a row widget, and a click opens the row's input.
+   Click the beat heading (`1 · Arrival` in Write mode) and press ArrowDown until the raw lines
+   show. Go down to `when:: T1`, press End and type ` recieve` and a space. Expected in both
+   prototypes: a mark, because the raw `key:: value` lines are not opted out (a known gap, see the
+   record); off the caret, the row shows the value without one. Ctrl+Z takes it back.
 3. **Dead keys, Swiss German layout.** Add the layout under Windows Settings, Time & language,
    Language & region, if needed, and switch to it with Win+Space. Type `^` then `e`, and `¨` then
    `u`, in three places: in a paragraph, right after the chip in
@@ -108,7 +110,8 @@ webviews (decision record, Consequences for P12).
 [comparison]: comparison.md
 [dossiers]: dossiers/
 [webviews]: dossiers/webviews.md
-[corepack]: https://nodejs.org/dist/latest/docs/api/corepack.html
+[corepack-node]: https://nodejs.org/docs/latest-v24.x/api/corepack.html
+[corepack]: https://github.com/nodejs/corepack#readme
 [corpus]: corpus/
 [report]: report/
 [app]: app/
