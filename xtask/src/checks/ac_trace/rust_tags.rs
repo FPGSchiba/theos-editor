@@ -9,7 +9,7 @@
 //! counts as proof unless it is switched off:
 //!
 //! - `#[ignore…]`, or a `#[cfg_attr(…, …ignore…)]` which may ignore it on some targets;
-//! - a `#[cfg(…)]` whose predicate names anything but the target (`TARGET_WORDS`), or that is
+//! - a `#[cfg(…)]` whose predicate names anything but the target (`CfgNames::for_target`), or that is
 //!   `any()`, which is always false;
 //! - the same `#[cfg(…)]` rule on an enclosing module or function, except that `test` is allowed
 //!   there (`#[cfg(test)] mod tests` is the ordinary pattern).
@@ -18,25 +18,16 @@
 
 use std::collections::BTreeMap;
 
-use proc_macro2::{TokenStream, TokenTree};
+use proc_macro2::TokenStream;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 use syn::{AttrStyle, Attribute, ItemFn, ItemMod, Meta};
 
 use super::{Comment, Tag, classify, dangling, malformed};
+use crate::checks::lints::CfgNames;
+use crate::checks::lints::cfg_names::judge;
 use crate::verdict::Finding;
 use crate::view::{LineComment, Source, has_ident, line_comments, line_of};
-
-/// What a predicate of `#[cfg(…)]` may name and still leave the test in every build of a target.
-const TARGET_WORDS: [&str; 7] = [
-    "windows",
-    "unix",
-    "target_os",
-    "target_family",
-    "any",
-    "all",
-    "not",
-];
 
 /// Finds the tags in the Rust file `source`; `in_test_target` says whether a test target compiles
 /// it.
@@ -197,20 +188,13 @@ fn keeps_test_running(attribute: &Attribute) -> bool {
     }
 }
 
-/// Whether the predicate `tokens` of a `cfg` names only the target and the combinators (and
-/// `test` when `allow_test`), and has no `any()`.
+/// Whether the predicate `tokens` of a `cfg` names only the target (and `test` when
+/// `allow_test`), as `lints::cfg_names::judge` reads it with the names of
+/// [`CfgNames::for_target`]. An `any()` never counts, and neither does a predicate that cannot be
+/// read.
 fn names_only(tokens: &TokenStream, allow_test: bool) -> bool {
-    let trees: Vec<TokenTree> = tokens.clone().into_iter().collect();
-    trees.iter().enumerate().all(|(index, tree)| match tree {
-        TokenTree::Ident(word) => {
-            (TARGET_WORDS.contains(&word.to_string().as_str()) || (allow_test && word == "test"))
-                && !(word == "any"
-                    && matches!(trees.get(index + 1),
-                        Some(TokenTree::Group(group)) if group.stream().is_empty()))
-        }
-        TokenTree::Group(group) => names_only(&group.stream(), allow_test),
-        TokenTree::Punct(_) | TokenTree::Literal(_) => true,
-    })
+    syn::parse2::<Meta>(tokens.clone())
+        .is_ok_and(|predicate| judge(&predicate, &CfgNames::for_target(allow_test)).is_ok())
 }
 
 #[cfg(test)]
@@ -368,6 +352,23 @@ mod tests {
                 "}",
             ];
             assert_eq!(tag_counts(&lines), expected, "{cfg}");
+        }
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn only_the_target_os_and_family_keys_leave_a_test_counting() {
+        // The spec: a test does not count when its cfg names anything besides the target OS.
+        for (cfg, expected) in [
+            ("#[cfg(target_os = \"linux\")]", true),
+            ("#[cfg(target_family = \"unix\")]", true),
+            ("#[cfg(not(target_os = \"macos\"))]", true),
+            ("#[cfg(target_env = \"msvc\")]", false),
+            ("#[cfg(target_arch = \"aarch64\")]", false),
+            ("#[cfg(all(unix, target_pointer_width = \"64\"))]", false),
+            ("#[cfg(false)]", false),
+        ] {
+            assert_eq!(counts(&[cfg, "#[test]"]), expected, "{cfg}");
         }
     }
 

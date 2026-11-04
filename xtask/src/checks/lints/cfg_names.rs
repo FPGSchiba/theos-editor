@@ -58,6 +58,24 @@ pub struct CfgNames {
 }
 
 impl CfgNames {
+    /// The names that leave a test running in every build of a target (`ac-trace` counts a test
+    /// only then): `unix`, `windows`, the keys `target_os` and `target_family`, and `test` when
+    /// `with_test` (an enclosing module or function may be `#[cfg(test)]`). It does not read
+    /// `gate/cfg-names.toml`: the other `target_*` keys name more than the target OS, and a test
+    /// under them is not a proof on every target.
+    #[must_use]
+    pub fn for_target(with_test: bool) -> Self {
+        let set = |words: &[&str]| words.iter().map(|word| (*word).to_owned()).collect();
+        let mut names: BTreeSet<String> = set(&["unix", "windows"]);
+        if with_test {
+            names.insert("test".to_owned());
+        }
+        Self {
+            names,
+            keys: set(&["target_os", "target_family"]),
+        }
+    }
+
     /// Reads `gate/cfg-names.toml` of the repository at `root`.
     ///
     /// # Errors
