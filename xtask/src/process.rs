@@ -3,11 +3,14 @@
 //! The checks that are cargo commands (`fmt`, `clippy`, `test`, `docs`, `deny`) describe what to
 //! run as [`CargoCommand`] values, which keeps their arguments testable without running them.
 //! The child gets an argument list, never a shell. [`run_cargo`] shows the child's output;
-//! [`capture_cargo`] reads it.
+//! [`capture_cargo`] reads it, and [`capture_cargo_showing_stderr`] reads it while cargo's stderr
+//! stays visible.
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+
+use cargo_metadata::{Metadata, MetadataCommand};
 
 use crate::{Error, Result};
 
@@ -47,6 +50,78 @@ pub fn run_cargo(root: &Path, cmd: &CargoCommand) -> Result<bool> {
 pub fn capture_cargo(root: &Path, cmd: &CargoCommand) -> Result<Option<String>> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
     capture_program(&cargo, root, cmd)
+}
+
+/// Runs cargo in `root` like [`capture_cargo`], but lets cargo's stderr through to ours, so a
+/// long command shows its progress and its diagnostics to the person who runs it.
+///
+/// Returns what cargo wrote to stdout when it exited with 0, and `None` otherwise.
+///
+/// # Errors
+///
+/// Fails when cargo cannot be started.
+pub fn capture_cargo_showing_stderr(root: &Path, cmd: &CargoCommand) -> Result<Option<String>> {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
+    tracing::debug!(args = ?cmd.args, root = %root.display(), "capture, showing stderr");
+    let output = command(&cargo, root, cmd)
+        .stderr(Stdio::inherit())
+        .output()
+        .map_err(|source| Error::Command {
+            program: cargo.to_string_lossy().into_owned(),
+            args: cmd.args.clone(),
+            status: None,
+            stderr: source.to_string(),
+        })?;
+    Ok(output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).into_owned()))
+}
+
+/// The metadata of the workspace at `root`, without the dependencies when `no_deps`.
+///
+/// # Errors
+///
+/// Fails when cargo cannot be started, fails, or writes something else than the metadata.
+pub(crate) fn cargo_metadata(
+    root: &Path,
+    no_deps: bool,
+    locked: bool,
+    offline: bool,
+) -> Result<Metadata> {
+    let mut args = vec!["metadata", "--format-version", "1"];
+    for (wanted, flag) in [
+        (no_deps, "--no-deps"),
+        (locked, "--locked"),
+        (offline, "--offline"),
+    ] {
+        if wanted {
+            args.push(flag);
+        }
+    }
+    let command = CargoCommand {
+        args: args.iter().map(|arg| (*arg).to_owned()).collect(),
+        env: Vec::new(),
+    };
+    let stdout = capture_cargo(root, &command)?.ok_or_else(|| Error::Missing {
+        what: format!(
+            "the metadata of the workspace: `cargo {}` failed, and what it said can quote the              manifests of the pull request, so it is not shown; run it in the repository to              read it",
+            args.join(" ")
+        ),
+    })?;
+    // Cargo writes the metadata as one line of JSON.
+    let json = stdout
+        .lines()
+        .find(|line| line.starts_with('{'))
+        .ok_or_else(|| metadata_parse_error("it has no JSON"))?;
+    MetadataCommand::parse(json).map_err(|_| metadata_parse_error("it is not what was expected"))
+}
+
+fn metadata_parse_error(message: &str) -> Error {
+    Error::Parse {
+        what: "the output of `cargo metadata`".to_owned(),
+        message: message.to_owned(),
+    }
 }
 
 /// Runs `rustc -vV` in `root` with the rustc that belongs to the cargo that runs the gate, and

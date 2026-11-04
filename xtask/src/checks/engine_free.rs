@@ -30,11 +30,11 @@ use std::fs;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 
-use cargo_metadata::{Dependency, DependencyKind, Metadata, MetadataCommand, Package, PackageId};
+use cargo_metadata::{Dependency, DependencyKind, Metadata, Package, PackageId};
 use serde::Deserialize;
 
 use crate::ci::CiEvent;
-use crate::process::{CargoCommand, capture_cargo};
+use crate::process::cargo_metadata;
 use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
@@ -155,10 +155,10 @@ pub fn run(root: &Path, _ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<V
 ///
 /// Fails when cargo cannot be started, fails, or writes something else than the metadata.
 pub fn check(root: &Path, engine: &EngineCrates, locked: bool, offline: bool) -> Result<Verdict> {
-    let declared = metadata(root, true, locked, offline)?;
+    let declared = cargo_metadata(root, true, locked, offline)?;
     let mut findings = declared_findings(&declared, engine);
     let mut notes = Vec::new();
-    match metadata(root, false, locked, offline) {
+    match cargo_metadata(root, false, locked, offline) {
         Ok(resolved) => findings.extend(resolved_findings(&resolved, engine)),
         Err(error) if !findings.is_empty() => notes.push(format!(
             "the resolved level did not run, because the dependency graph could not be read: \
@@ -171,50 +171,6 @@ pub fn check(root: &Path, engine: &EngineCrates, locked: bool, offline: bool) ->
         findings,
         notes,
     })
-}
-
-/// The metadata of the workspace at `root`, without the dependencies when `no_deps`.
-pub(crate) fn metadata(
-    root: &Path,
-    no_deps: bool,
-    locked: bool,
-    offline: bool,
-) -> Result<Metadata> {
-    let mut args = vec!["metadata", "--format-version", "1"];
-    for (wanted, flag) in [
-        (no_deps, "--no-deps"),
-        (locked, "--locked"),
-        (offline, "--offline"),
-    ] {
-        if wanted {
-            args.push(flag);
-        }
-    }
-    let command = CargoCommand {
-        args: args.iter().map(|arg| (*arg).to_owned()).collect(),
-        env: Vec::new(),
-    };
-    let stdout = capture_cargo(root, &command)?.ok_or_else(|| Error::Missing {
-        what: format!(
-            "the metadata of the workspace: `cargo {}` failed, and what it said can quote the \
-             manifests of the pull request, so it is not shown; run it in the repository to \
-             read it",
-            args.join(" ")
-        ),
-    })?;
-    // Cargo writes the metadata as one line of JSON.
-    let json = stdout
-        .lines()
-        .find(|line| line.starts_with('{'))
-        .ok_or_else(|| parse_error("it has no JSON"))?;
-    MetadataCommand::parse(json).map_err(|_| parse_error("it is not what was expected"))
-}
-
-fn parse_error(message: &str) -> Error {
-    Error::Parse {
-        what: "the output of `cargo metadata`".to_owned(),
-        message: message.to_owned(),
-    }
 }
 
 /// Why a package or dependency is an engine crate, for the message.

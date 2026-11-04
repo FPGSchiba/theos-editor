@@ -27,6 +27,8 @@
 //! - [`umbrella`]: the umbrella spec's phases and acceptance criteria, which `ac-trace` and
 //!   `commit-msg` read their ids from.
 //! - [`tools`]: the pinned tools (`gate/tools.toml`) and the `tools` check.
+//! - [`view`]: the workspace view, the files cargo compiles and what `syn` reads in them, which
+//!   the checks that read code share.
 //! - [`gate`]: `cargo xtask gate`, which runs the checks above that need no pull request, in
 //!   order, and writes one verdict table.
 
@@ -45,5 +47,6 @@ pub mod report;
 pub mod tools;
 pub mod umbrella;
 pub mod verdict;
+pub mod view;
 
 pub use error::{Error, Result};

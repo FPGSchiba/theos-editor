@@ -35,10 +35,11 @@ pub use llvm_json::{CrateCoverage, parse_llvm_cov};
 use thresholds::THRESHOLDS_FILE;
 pub use thresholds::{CrateClass, Thresholds};
 
-use crate::checks::engine_free;
 use crate::ci::CiEvent;
 use crate::git::Git;
-use crate::process::{CargoCommand, capture_cargo, capture_rustc_version, run_cargo};
+use crate::process::{
+    CargoCommand, capture_cargo, capture_rustc_version, cargo_metadata, run_cargo,
+};
 use crate::tools::parse_version;
 use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
@@ -230,7 +231,7 @@ fn io_error(path: &Path) -> impl FnOnce(std::io::Error) -> Error + '_ {
 
 /// The names of the workspace members at `root`.
 fn workspace_members(root: &Path) -> Result<Vec<String>> {
-    let metadata = engine_free::metadata(root, true, true, false)?;
+    let metadata = cargo_metadata(root, true, true, false)?;
     Ok(metadata
         .workspace_packages()
         .iter()
