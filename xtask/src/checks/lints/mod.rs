@@ -11,16 +11,18 @@
 //! - `cfg_names` (rule 2): `cfg` and `cfg_attr` attributes use only the names of
 //!   `gate/cfg-names.toml`, so that every check builds and measures the same code.
 //! - `attributes` (rule 3): no `allow` attribute anywhere, no `expect` or `ignore` without a
-//!   reason in the tokens of a macro (where clippy does not look), and no `allow` or `expect` of
-//!   a lint that guards the others. It reads the syntax tree and the tokens of macro calls and
-//!   `macro_rules!` bodies.
+//!   reason in the tokens of a macro or inside a `cfg_attr` (where clippy does not look), and no
+//!   `allow` or `expect` of a lint that guards the others (`unexpected_cfgs`, the two allow
+//!   lints, `ignore_without_reason`) or of the groups `clippy::pedantic` and
+//!   `clippy::restriction` that contain them. It reads the syntax tree and the tokens of macro
+//!   calls and `macro_rules!` bodies.
 //! - `config_files` (rule 4): the lint tables, the manifests and the mirrored configuration
 //!   files, which are read as text and TOML and need no view.
 //!
 //! What is left to the reviews: an attribute that a macro forwards through a metavariable
 //! (`#[$m]` in a macro body) is not judged, while the tokens of the invocation, where the
-//! attribute is written, are; a cfg predicate with a metavariable is not judged, `cfg!(…)` in an expression is not an attribute, and a file that no target compiles is
-//! not read at all.
+//! attribute is written, are; a cfg predicate with a metavariable is not judged, `cfg!(…)` in an
+//! expression is not an attribute, and a file that no target compiles is not read at all.
 //!
 //! The view's own findings (a file that does not parse) come first. Findings name the file and the
 //! line and say what is wrong, never what is written there, with one exception: the cfg rule

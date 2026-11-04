@@ -1,5 +1,5 @@
-//! Rule 3 of `lints`: no `allow` attribute, and no `expect` or `ignore` without a reason where
-//! clippy does not look.
+//! Rule 3 of `lints`: no `allow` attribute, no guard lint silenced, and no `expect` or `ignore`
+//! without a reason where clippy does not look.
 //!
 //! The lint levels forbid `#[allow]` and require a reason on `#[expect]` and `#[ignore]`, but
 //! clippy reads only the syntax tree: it does not see an attribute that is written in the tokens
@@ -7,8 +7,9 @@
 //! `proc-macro2`:
 //!
 //! - in the syntax tree (outer and inner attributes at every depth): every `allow` is a finding,
-//!   with or without a reason, alone or inside `cfg_attr`; `expect` and `ignore` are left to
-//!   clippy;
+//!   with or without a reason, alone or inside `cfg_attr`; a bare `expect` or `ignore` is left to
+//!   clippy, except inside a `cfg_attr`, where the compiler may not see the attribute on this
+//!   machine and a missing reason is a finding too;
 //! - in the tokens of macro calls and macro definitions, at every depth: each `#` [`!`] bracket
 //!   group is read as an attribute, judged the same way, and an `expect(…)` without
 //!   `reason = …` and a bare `ignore` are findings too (`ignore = "…"` passes). A group that does
@@ -17,8 +18,9 @@
 //! - everywhere, in the tree and in macro tokens, with or without a reason, an `allow` or `expect`
 //!   that names one of the lints that guard the others (`unexpected_cfgs`,
 //!   `clippy::allow_attributes`, `clippy::allow_attributes_without_reason`,
-//!   `clippy::ignore_without_reason`) is a finding (spec §5.2): `forbid` on a lint stops rustc
-//!   from honouring such an attribute, but clippy's guard lints are only `deny`.
+//!   `clippy::ignore_without_reason`) or one of the groups that contain them
+//!   (`clippy::pedantic`, `clippy::restriction`) is a finding (spec §5.2): `forbid` on a lint
+//!   stops rustc from honouring such an attribute, but clippy's guard lints are only `deny`.
 //!
 //! A string or a comment is one token that is never an attribute. An attribute that a macro
 //! forwards through a metavariable is judged where the invocation writes it.
@@ -117,7 +119,8 @@ fn problems(meta: &Meta, needs_reason: bool) -> Vec<String> {
 }
 
 /// The problems of the attributes that `cfg_attr(predicate, attribute…)` applies, whose tokens are
-/// `tokens`; they are judged for a reason wherever the `cfg_attr` stands. Arguments that do not parse (a metavariable) are judged by their identifiers.
+/// `tokens`; they are judged for a reason wherever the `cfg_attr` stands. Arguments that do not
+/// parse (a metavariable) are judged by their identifiers.
 fn cfg_attr_problems(tokens: &TokenStream) -> Vec<String> {
     let parsed = syn::parse::Parser::parse2(
         Punctuated::<Meta, Token![,]>::parse_terminated,
