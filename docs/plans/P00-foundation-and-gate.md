@@ -1233,9 +1233,10 @@ Changes to Part 1's task rules, for Part 2:
   no network), carries a `Cargo.lock` (Ruling 13) and a one-line `README` saying it is synthetic.
 - **Commits.** As Part 1, with `Co-Authored-By` naming the model that wrote the commit (ledger
   ruling) and `Phase: P00`. Before each commit: `cargo fmt --all`, `cargo clippy --workspace
-  --all-targets --locked -- -D warnings`, `cargo nextest run --workspace --locked`, and from
-  Task 16 on the lints of spec §5.2 at `forbid` are in force: no `#[allow]` anywhere, a reason on
-  every `#[expect]` and `#[ignore]`, no cfg name outside `gate/cfg-names.toml`.
+  --all-targets --locked -- -D warnings`, `cargo nextest run --workspace --locked`, and the lint
+  levels of spec §5.2 (revision 1a) hold from Task 16 on: no `#[allow]` anywhere, a reason on
+  every `#[expect]` and `#[ignore]`, no cfg name outside `gate/cfg-names.toml`, no `allow` or
+  `expect` of a guard lint.
 - **Branch stays green.** Every task leaves `cargo nextest run --workspace --locked` green, with
   one exception: on the merged head a6b6659 two tests already fail
   (`settings::ruleset_contexts_equal_gate_md_checks`, `workflows::required_contexts_are_pr_jobs`)
@@ -1346,6 +1347,14 @@ Recorded here and in the ledger; every one goes into the PR description.
     echo the diagnostics (they can quote the pull request's code and the runner reads what xtask
     prints); cargo's own stderr is shown as it runs — same choice as `engine_free::metadata` —
     cost if wrong: a reader opens the job log one step up.
+25. Ruling (spec revision 1a, Jann, 4 Nov 2026): `unexpected_cfgs` is `forbid`, the three clippy
+    guard lints stay `deny`, and rule 3 of `lints` also refuses any `allow` or `expect` that
+    names one of the four guard lints — Task 16 found that `forbid` makes rustc refuse (E0453)
+    clap's derive, whose code allows `clippy::pedantic` and `clippy::restriction` — cost if
+    wrong: none beyond the spec amendment.
+26. Ruling: Tasks 17–21 run before Task 16, which waits until the revision 1a spec PR is merged
+    — they do not depend on the lint levels, and building against an unmerged spec text is
+    avoided — cost if wrong: none (the order of independent tasks).
 
 **Rulings of Part 1 that revision 1 retires** (they bound the code that Tasks 23–25 delete):
 
@@ -1512,25 +1521,28 @@ Fixed values:
 
 ---
 
-### Task 16: The four guarding lints at `forbid`
+### Task 16: The four guard lints at their levels
 
-Suggested implementer model: mid-tier. ACs: none directly (spec §5.2; the clippy run of every
-later task proves the levels hold).
+Suggested implementer model: mid-tier. ACs: none directly (spec §5.2 as amended by revision 1a;
+the clippy run of every later task proves the levels hold). Runs after Tasks 17–21, once the
+revision 1a spec PR is merged (Ruling 26).
 
 **Files:** Modify `gate/lints.toml`, `Cargo.toml` (`[workspace.lints]`), `xtask/tests/lints.rs`.
 
 **Interfaces:** none new. `lints::workspace_lints_match` (Task 8) keeps the mirror equal.
 
-Fixed values: the list of spec §5.2, byte for byte in both files: `[rust]` gains
-`unexpected_cfgs = "forbid"` after `missing_docs`; `[clippy]` has `allow_attributes = "forbid"`,
-`allow_attributes_without_reason = "forbid"` and, new, `ignore_without_reason = "forbid"` after
-it; every other line as today. The fixture `xtask/tests/fixtures/lints/clean/gate/lints.toml`
+Fixed values: the list of spec §5.2 (revision 1a), byte for byte in both files: `[rust]` gains
+`unexpected_cfgs = "forbid"` after `missing_docs`; `[clippy]` keeps `allow_attributes = "deny"`
+and `allow_attributes_without_reason = "deny"` and gains `ignore_without_reason = "deny"` after
+them; every other line as today. `forbid` on the three clippy lints is refused by rustc (E0453)
+at clap's derives (Ruling 25). The fixture `xtask/tests/fixtures/lints/clean/gate/lints.toml`
 mirrors only a subset and needs no change.
 
-- [ ] **Step 1: Write the failing test** `the_gate_forbids_the_lints_that_guard_the_others` in
+- [ ] **Step 1: Write the failing test** `the_gate_guards_the_lints_that_guard_the_others` in
   `xtask/tests/lints.rs`: parse the real `gate/lints.toml` as `toml::Table` and assert
-  `rust.unexpected_cfgs`, `clippy.allow_attributes`, `clippy.allow_attributes_without_reason`
-  and `clippy.ignore_without_reason` are each the string `"forbid"`.
+  `rust.unexpected_cfgs` is the string `"forbid"` and `clippy.allow_attributes`,
+  `clippy.allow_attributes_without_reason` and `clippy.ignore_without_reason` are each the
+  string `"deny"`.
 - [ ] **Step 2:** Run it. Expected: FAIL.
 - [ ] **Step 3:** Edit both files.
 - [ ] **Step 4:** Run `cargo clippy --workspace --all-targets --locked -- -D warnings`,
@@ -1538,7 +1550,7 @@ mirrors only a subset and needs no change.
   not know `ignore_without_reason` under that name, stop and report (spec §11 lets the builder
   follow a rename, but a rename is a plan change to record, not a silent one). If our own code
   trips one of the four, fix the code (a reason, a declared cfg), never the level.
-- [ ] **Step 5:** Commit: `build(gate): forbid the lints that guard the others`.
+- [ ] **Step 5:** Commit: `build(gate): set the levels of the lints that guard the others`.
 
 ---
 
@@ -2004,10 +2016,14 @@ Suggested implementer model: mid-tier. ACs: none directly (spec §5.4 `lints`, �
   macro tokens (`visit_macro`, recursing into every group): each `#` [`!`] bracket group is
   parsed with `syn::parse2::<Meta>`; on success, the same judgement, plus a finding for
   `expect(…)` without a `reason = …` entry among its nested metas and for a bare `ignore`
-  (`ignore = "…"` passes); on failure, Ruling 9. Messages are fixed sentences: "an `allow`
-  attribute: use `#[expect(…, reason = \"…\")]`, or fix the code", "an `#[expect]` without a
-  reason, inside a macro where clippy does not see it", "an `#[ignore]` without a reason, inside
-  a macro where clippy does not see it".
+  (`ignore = "…"` passes); on failure, Ruling 9. Everywhere, tree and macro tokens alike, an
+  `allow` or `expect` whose lint list names `unexpected_cfgs`, `clippy::allow_attributes`,
+  `clippy::allow_attributes_without_reason` or `clippy::ignore_without_reason` is a finding,
+  also inside `cfg_attr` and with a reason (spec §5.2 and §5.10 rule 3, revision 1a). Messages
+  are fixed sentences: "an `allow` attribute: use `#[expect(…, reason = \"…\")]`, or fix the
+  code", "an `#[expect]` without a reason, inside a macro where clippy does not see it", "an
+  `#[ignore]` without a reason, inside a macro where clippy does not see it", and "an `allow`
+  or `expect` of `<lint>`, one of the lints that guard the others (spec §5.2)".
 
 Fixed values, `bad-attributes/crates/a/src/lib.rs` (its module doc lists the lines):
 `#![allow(missing_docs)]`; `#[allow(dead_code)] fn silenced() {}`;
@@ -2015,8 +2031,9 @@ Fixed values, `bad-attributes/crates/a/src/lib.rs` (its module doc lists the lin
 `mod m { #![allow(unused, reason = "in one line") ] }`;
 `macro_rules! q { () => { #[expect(dead_code)] fn a() {} #[test] #[ignore] fn b() {} } }`;
 `macro_rules! fwd { ($(#[$m:meta])* fn $n:ident()) => { $(#[$m])* fn $n() {} } } fwd! { #[allow(dead_code)] fn c() }`;
+`#[expect(clippy::ignore_without_reason, reason = "try")] #[test] #[ignore] fn guarded() {}`;
 and, to pass, `#[expect(dead_code, reason = "kept")] fn kept() {}` and
-`#[test] #[ignore = "slow"] fn slow() {}` — six findings, none on the last two lines.
+`#[test] #[ignore = "slow"] fn slow() {}` — seven findings, none on the last two lines.
 
 - [ ] **Step 1: Write the failing tests.** Unit tests in `attributes.rs` over `parse_source` text:
   `outer_and_inner_allow_are_findings_with_their_line`, `allow_inside_cfg_attr_is_a_finding`,
@@ -2025,8 +2042,11 @@ and, to pass, `#[expect(dead_code, reason = "kept")] fn kept() {}` and
   `expect_and_ignore_without_reason_in_macro_tokens_are_findings_and_with_a_reason_pass`,
   `expect_and_ignore_in_the_tree_are_left_to_clippy`, `a_forwarded_attribute_is_not_judged`
   (`$(#[$m:meta])*` and `#[$m]`), `derives_doc_comments_and_cfg_attr_derive_pass`,
-  `text_in_strings_and_comments_is_not_an_attribute`. In `tests/lints.rs`:
-  `bad_attributes_in_sources_fail` asserts the six places above;
+  `text_in_strings_and_comments_is_not_an_attribute`,
+  `an_allow_or_expect_of_a_guard_lint_is_a_finding` (each of the four lints, with a reason,
+  outer and inner, inside `cfg_attr` and in macro tokens; `#[expect(clippy::unwrap_used, reason
+  = "…")]` passes). In `tests/lints.rs`: `bad_attributes_in_sources_fail` asserts the seven
+  places above;
   `every_rule_is_registered_once` expects `["sources", "cfg-names", "attributes",
   "config-files"]`. Remove, naming each in the commit body with the test that replaces it:
   `fixture_compiled_through_path_fails`, `manifest_path_into_fixtures_fails`,
