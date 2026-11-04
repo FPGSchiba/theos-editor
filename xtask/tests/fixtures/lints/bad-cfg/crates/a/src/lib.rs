@@ -14,6 +14,6 @@ pub fn e() {}
 pub fn f() {}
 #[cfg(false)]
 pub fn g() {}
-#[cfg_attr(not(clippy), allow(dead_code))]
+#[cfg_attr(not(clippy), inline)]
 pub fn h() {}
 macro_rules! m { () => { #[cfg(not(clippy))] fn g() {} } }

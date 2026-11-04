@@ -50,7 +50,9 @@ fn copy_fixture(case: Option<&str>) -> TestResult<tempfile::TempDir> {
 
 /// The verdict of `lints` on the repository at `root`, over the view of the copy.
 fn lint(root: &Path) -> TestResult<Verdict> {
-    lint_listing(root, &[])
+    let files = repo_files(root)?;
+    let view = View::build(root, ViewOptions::FIXTURE)?;
+    Ok(lints::check(root, &files, &view)?)
 }
 
 /// The verdict of the configuration-file rule alone, which needs no view.
@@ -225,11 +227,36 @@ fn bad_attributes_in_sources_fail() -> TestResult {
     assert_eq!(
         places(&verdict),
         [
-            (Some("crates/a/src/lib.rs"), Some(3)),
-            (Some("crates/a/src/lib.rs"), Some(5)),
-            (Some("crates/a/src/lib.rs"), Some(8)),
+            (Some("crates/a/src/lib.rs"), Some(4)),
+            (Some("crates/a/src/lib.rs"), Some(6)),
+            (Some("crates/a/src/lib.rs"), Some(9)),
             (Some("crates/a/src/lib.rs"), Some(12)),
+            (Some("crates/a/src/lib.rs"), Some(15)),
+            (Some("crates/a/src/lib.rs"), Some(16)),
+            (Some("crates/a/src/lib.rs"), Some(20)),
+            (Some("crates/a/src/lib.rs"), Some(22)),
         ]
+    );
+    let messages: Vec<&str> = verdict
+        .findings
+        .iter()
+        .map(|finding| finding.message.as_str())
+        .collect();
+    assert!(
+        messages[0].starts_with("an `allow` attribute"),
+        "{messages:?}"
+    );
+    assert!(
+        messages[4].starts_with("an `#[expect]` without a reason"),
+        "{messages:?}"
+    );
+    assert!(
+        messages[5].starts_with("an `#[ignore]` without a reason"),
+        "{messages:?}"
+    );
+    assert!(
+        messages[7].contains("`clippy::ignore_without_reason`"),
+        "{messages:?}"
     );
 
     // The same file under `tests/fixtures/` is test data and is not read.
@@ -266,69 +293,30 @@ fn write(root: &Path, relative: &str, text: &str) -> TestResult {
     Ok(())
 }
 
-/// The verdict of `lints` on the repository at `root`, with the files `extra` listed as well:
-/// the walk that lists a copy leaves out every folder called `target`.
-fn lint_listing(root: &Path, extra: &[&str]) -> TestResult<Verdict> {
-    let mut files = repo_files(root)?;
-    files.extend(extra.iter().map(|file| (*file).to_owned()));
-    let view = View::build(root, ViewOptions::FIXTURE)?;
-    Ok(lints::check(root, &files, &view)?)
-}
-
 #[test]
-fn source_in_a_folder_named_target_or_node_modules_is_scanned() -> TestResult {
+fn source_in_a_folder_named_target_or_node_modules_is_judged() -> TestResult {
     // `mod target;` builds `src/target/mod.rs`, so it is source however it is called.
-    let allow = "#[allow(dead_code)]\nfn f() {}\n";
     let dir = copy_fixture(None)?;
-    write(dir.path(), "crates/a/src/target/x.rs", allow)?;
-    write(dir.path(), "crates/a/src/node_modules/x.rs", allow)?;
-    let verdict = lint_listing(
+    write(
         dir.path(),
-        &["crates/a/src/target/x.rs", "crates/a/src/node_modules/x.rs"],
+        "crates/a/src/lib.rs",
+        "mod target;
+mod node_modules;
+",
     )?;
+    let allow = "#[allow(dead_code)]
+fn f() {}
+";
+    write(dir.path(), "crates/a/src/target/mod.rs", allow)?;
+    write(dir.path(), "crates/a/src/node_modules/mod.rs", allow)?;
+    let verdict = lint(dir.path())?;
     assert_eq!(
         places(&verdict),
         [
-            (Some("crates/a/src/target/x.rs"), Some(1)),
-            (Some("crates/a/src/node_modules/x.rs"), Some(1)),
+            (Some("crates/a/src/node_modules/mod.rs"), Some(1)),
+            (Some("crates/a/src/target/mod.rs"), Some(1)),
         ]
     );
-
-    // The build folder of the root is the only `target` that is left alone.
-    let dir = copy_fixture(None)?;
-    write(dir.path(), "target/debug/build/x.rs", allow)?;
-    let verdict = lint_listing(dir.path(), &["target/debug/build/x.rs"])?;
-    assert!(verdict.passed(), "{:?}", verdict.findings);
-    Ok(())
-}
-
-#[test]
-fn manifest_path_into_fixtures_fails() -> TestResult {
-    let verdict = lint_case("manifest-path-into-fixtures")?;
-    let message = only_finding(&verdict, "crates/a/Cargo.toml");
-    assert!(message.contains("tests/fixtures/"), "{message}");
-    Ok(())
-}
-
-#[test]
-fn a_main_rs_or_mod_rs_directly_in_fixtures_fails() -> TestResult {
-    // Cargo builds `tests/fixtures/main.rs` as a test called `fixtures`, and `mod fixtures;` in
-    // `tests/` builds `tests/fixtures/mod.rs`. The files are written here, because in this
-    // repository they would be findings of their own.
-    for name in ["main.rs", "mod.rs"] {
-        let dir = copy_fixture(None)?;
-        let file = format!("crates/a/tests/fixtures/{name}");
-        write(dir.path(), &file, "fn main() {}\n")?;
-        let verdict = lint(dir.path())?;
-        only_finding(&verdict, &file);
-
-        // One folder deeper, where a case of the fixtures lives, nothing builds them.
-        let dir = copy_fixture(None)?;
-        let deeper = format!("crates/a/tests/fixtures/case/{name}");
-        write(dir.path(), &deeper, "fn main() {}\n")?;
-        let verdict = lint(dir.path())?;
-        assert!(verdict.passed(), "{name}: {:?}", verdict.findings);
-    }
     Ok(())
 }
 
@@ -358,7 +346,7 @@ fn the_command_passes_a_clean_repository_and_fails_a_dirty_one() -> TestResult {
     let table = String::from_utf8_lossy(&fail.stdout);
     assert_eq!(fail.status.code(), Some(1), "{fail:?}");
     assert!(table.contains("FAIL  lints"), "{table}");
-    assert!(table.contains("crates/a/src/lib.rs:5: "), "{table}");
+    assert!(table.contains("crates/a/src/lib.rs:6: "), "{table}");
     Ok(())
 }
 
@@ -403,11 +391,13 @@ fn code_reached_from_src_but_outside_it_fails() -> TestResult {
         ),
     ] {
         let verdict = lint_lib(lib_rs)?;
-        assert_eq!(
-            found_with(&verdict, OUTSIDE_SRC),
-            [(Some(file), None)],
-            "{lib_rs}"
-        );
+        // An `include!` is a finding of its own, at its line in `lib.rs`.
+        let mut expected = vec![(Some(file), None)];
+        if lib_rs.starts_with("include!") {
+            expected.push((Some("crates/a/src/lib.rs"), Some(1)));
+            expected.sort();
+        }
+        assert_eq!(places(&verdict), expected, "{lib_rs}");
     }
     Ok(())
 }
@@ -456,12 +446,11 @@ fn xtask_source_leaving_src_fails() -> TestResult {
     write(dir.path(), "xtask/real.rs", "fn main() {}\n")?;
     let verdict = lint(dir.path())?;
     assert_eq!(
-        found_with(&verdict, OUTSIDE_SRC),
-        [(Some("xtask/real.rs"), None)]
-    );
-    assert_eq!(
-        found_with(&verdict, "`include!` in"),
-        [(Some("xtask/src/main.rs"), Some(1))]
+        places(&verdict),
+        [
+            (Some("xtask/real.rs"), None),
+            (Some("xtask/src/main.rs"), Some(1)),
+        ]
     );
     Ok(())
 }
@@ -495,7 +484,7 @@ fn manifest_target_outside_src_fails() -> TestResult {
     ] {
         let verdict = lint_manifest(extra, &[file, "src/y.rs"])?;
         assert_eq!(
-            found_with(&verdict, OUTSIDE_SRC),
+            places(&verdict),
             [(Some(format!("crates/a/{file}").as_str()), None)],
             "{extra}"
         );
@@ -596,16 +585,19 @@ fn a_cfg_that_hides_code_from_coverage_fails() -> TestResult {
         "#[cfg(\n    not(coverage)\n)]\npub fn f() {}\n",
     ] {
         let verdict = lint_source(lib_rs)?;
-        let found = cfg_messages(&verdict);
-        assert_eq!(found.len(), 1, "{lib_rs}: {:?}", verdict.findings);
-        assert!(found[0].contains("`coverage"), "{lib_rs}: {}", found[0]);
+        assert_eq!(
+            verdict.findings.len(),
+            1,
+            "{lib_rs}: {:?}",
+            verdict.findings
+        );
+        let finding = &verdict.findings[0];
+        assert_eq!(finding.file.as_deref(), Some("crates/a/src/lib.rs"));
+        assert!(
+            finding.message.contains("`coverage"),
+            "{lib_rs}: {finding:?}"
+        );
     }
-
-    let verdict = lint_case("coverage-cfg")?;
-    assert_eq!(
-        found_with(&verdict, "cfg-names.toml"),
-        [(Some("crates/a/src/lib.rs"), Some(3))]
-    );
     Ok(())
 }
 
@@ -672,23 +664,22 @@ pub fn f() {}
         "#[cfg_attr(test, allow(dead_code))]
 pub fn f() {}
 ",
-        "#[test] pub fn a() {} #[ignore] #[test] pub fn b() {}
-",
-        "#[test] #[expect(dead_code)] pub fn c() {}
+        "macro_rules! m { ($($t:tt)*) => { $($t)* }; }
+m! { #[allow(dead_code)] pub fn b() {} }
 ",
         "/* /* */ \" */ #[allow(dead_code)] pub fn f() {} // \"
 ",
     ] {
         let verdict = lint_source(lib_rs)?;
+        let line = if lib_rs.starts_with("macro_rules! m { ($") {
+            2
+        } else {
+            1
+        };
         assert_eq!(
-            verdict.findings.len(),
-            1,
-            "{lib_rs}: {:?}",
-            verdict.findings
-        );
-        assert_eq!(
-            verdict.findings[0].file.as_deref(),
-            Some("crates/a/src/lib.rs")
+            places(&verdict),
+            [(Some("crates/a/src/lib.rs"), Some(line))],
+            "{lib_rs}"
         );
     }
     Ok(())
@@ -724,10 +715,7 @@ pub fn f() {}
 fn a_path_attribute_after_code_is_judged_by_rule_1() -> TestResult {
     // The `#[path]` is in the middle of a line; the file it names exists, so cargo checks it.
     let verdict = lint_lib("pub fn a() {} #[path = \"../lib/real.rs\"] mod x;\n")?;
-    assert_eq!(
-        found_with(&verdict, OUTSIDE_SRC),
-        [(Some("crates/a/lib/real.rs"), None)]
-    );
+    assert_eq!(places(&verdict), [(Some("crates/a/lib/real.rs"), None)]);
     let verdict = lint_lib("pub fn a() {} #[path = \"inner.rs\"] mod x;\n")?;
     assert!(verdict.passed(), "{:?}", verdict.findings);
     Ok(())
@@ -813,9 +801,13 @@ pub fn f() {}
         ),
     ] {
         let verdict = lint_source(lib_rs)?;
-        let found = cfg_messages(&verdict);
-        assert_eq!(found.len(), 1, "{lib_rs}: {:?}", verdict.findings);
-        let message = found[0];
+        assert_eq!(
+            verdict.findings.len(),
+            1,
+            "{lib_rs}: {:?}",
+            verdict.findings
+        );
+        let message = verdict.findings[0].message.as_str();
         assert!(
             message.contains(&format!("`{name}`")),
             "{lib_rs}: {message}"
@@ -882,25 +874,12 @@ fn the_gate_guards_the_lints_that_guard_the_others() -> TestResult {
     Ok(())
 }
 
-/// The findings of the verdict whose message contains `needle`, as file and line.
-fn found_with<'a>(verdict: &'a Verdict, needle: &str) -> Vec<(Option<&'a str>, Option<u32>)> {
-    verdict
-        .findings
-        .iter()
-        .filter(|finding| finding.message.contains(needle))
-        .map(|finding| (finding.file.as_deref(), finding.line))
-        .collect()
-}
-
-/// What rule 1 says of a file compiled from outside `src/`.
-const OUTSIDE_SRC: &str = "from outside its `src/`";
-
 // AC: CE-08.8
 #[test]
 fn library_code_outside_src_fails() -> TestResult {
     let verdict = lint_case("outside-src")?;
     assert_eq!(
-        found_with(&verdict, OUTSIDE_SRC),
+        places(&verdict),
         [
             (Some("crates/a/tests/helper.rs"), None),
             (Some("crates/a/tools/main.rs"), None),
@@ -914,7 +893,9 @@ fn library_code_outside_src_fails() -> TestResult {
 // AC: CE-08.8
 #[test]
 fn test_targets_may_compile_anything() -> TestResult {
-    let dir = copy_fixture(Some("outside-src"))?;
+    // A test target compiles a fixture through `#[path]`: clippy lints what it compiles, and
+    // `coverage` does not measure it.
+    let dir = copy_fixture(None)?;
     write(
         dir.path(),
         "crates/a/tests/it.rs",
@@ -926,14 +907,7 @@ fn test_targets_may_compile_anything() -> TestResult {
         "pub fn c() {}\n",
     )?;
     let verdict = lint(dir.path())?;
-    let outside = found_with(&verdict, OUTSIDE_SRC);
-    assert!(
-        outside
-            .iter()
-            .all(|(file, _)| *file != Some("crates/a/tests/fixtures/case/lib.rs")),
-        "{outside:?}"
-    );
-    assert_eq!(outside.len(), 2, "{outside:?}");
+    assert!(verdict.passed(), "{:?}", verdict.findings);
     Ok(())
 }
 
@@ -942,11 +916,7 @@ fn test_targets_may_compile_anything() -> TestResult {
 fn include_in_library_code_fails() -> TestResult {
     let verdict = lint_case("include-in-src")?;
     // The `include!` is on line 3; the `include_str!` on line 6 reads data.
-    assert_eq!(
-        found_with(&verdict, "`include!` in"),
-        [(Some("crates/a/src/lib.rs"), Some(3))]
-    );
-    assert_eq!(found_with(&verdict, OUTSIDE_SRC), []);
+    assert_eq!(places(&verdict), [(Some("crates/a/src/lib.rs"), Some(3))]);
     Ok(())
 }
 
@@ -962,9 +932,32 @@ fn a_build_script_compiles_from_build_rs() -> TestResult {
             .join("plain"),
         dir.path(),
     )?;
+    // The overlay brings its own manifests; the crates inherit the workspace lints as the rest
+    // of the gate demands, so that the whole verdict is the rules about the sources.
+    fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join("lints")
+            .join("clean")
+            .join("Cargo.toml"),
+        dir.path().join("Cargo.toml"),
+    )?;
+    for name in ["a", "b"] {
+        let manifest = dir.path().join("crates").join(name).join("Cargo.toml");
+        let text = fs::read_to_string(&manifest)?;
+        fs::write(
+            &manifest,
+            format!(
+                "{text}
+[lints]
+workspace = true
+"
+            ),
+        )?;
+    }
     let verdict = lint(dir.path())?;
-    assert_eq!(found_with(&verdict, OUTSIDE_SRC), []);
-    assert_eq!(found_with(&verdict, "`include!` in"), []);
+    assert!(verdict.passed(), "{:?}", verdict.findings);
     Ok(())
 }
 
@@ -972,11 +965,7 @@ fn a_build_script_compiles_from_build_rs() -> TestResult {
 #[test]
 fn refused_cfg_names_fail_with_their_line() -> TestResult {
     let verdict = lint_case("bad-cfg")?;
-    let found: Vec<_> = verdict
-        .findings
-        .iter()
-        .filter(|finding| finding.message.contains("cfg-names.toml"))
-        .collect();
+    let found = &verdict.findings;
     let words = [
         "clippy",
         "debug_assertions",
@@ -1041,16 +1030,6 @@ fn cfg_names_toml_is_what_the_pinned_rustc_prints() -> TestResult {
     Ok(())
 }
 
-/// The messages of the findings of rule 2 (cfg names).
-fn cfg_messages(verdict: &Verdict) -> Vec<&str> {
-    verdict
-        .findings
-        .iter()
-        .map(|finding| finding.message.as_str())
-        .filter(|message| message.contains("cfg-names.toml"))
-        .collect()
-}
-
 // AC: CE-08.8
 #[test]
 fn cfg_names_that_stable_rustc_refuses_fail_the_check() -> TestResult {
@@ -1074,7 +1053,7 @@ fn a_target_outside_the_repository_is_reported_at_its_absolute_path() -> TestRes
     let absolute = outside.path().join("lib.rs");
     let manifest_path = absolute.to_string_lossy().into_owned();
     let verdict = lint_manifest(&format!("[lib]\npath = '{manifest_path}'\n"), &[])?;
-    let found = found_with(&verdict, OUTSIDE_SRC);
+    let found = places(&verdict);
     let [(Some(file), None)] = found.as_slice() else {
         return Err(format!("expected one finding at the file: {found:?}").into());
     };
@@ -1095,10 +1074,7 @@ fn a_backslash_path_never_passes() -> TestResult {
     let lib_rs = "#[path = \"..\\\\lib\\\\real.rs\"]\nmod real;\n";
     if cfg!(windows) {
         let verdict = lint_lib(lib_rs)?;
-        assert_eq!(
-            found_with(&verdict, OUTSIDE_SRC),
-            [(Some("crates/a/lib/real.rs"), None)]
-        );
+        assert_eq!(places(&verdict), [(Some("crates/a/lib/real.rs"), None)]);
         Ok(())
     } else {
         let dir = copy_fixture(None)?;

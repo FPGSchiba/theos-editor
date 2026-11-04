@@ -155,7 +155,7 @@ pub fn judge(predicate: &Meta, names: &CfgNames) -> std::result::Result<(), Stri
 
 /// The comma-separated arguments of a list, each as its own tokens; a trailing comma adds none.
 /// Commas inside a group belong to the group, so nesting needs no parser of ours.
-fn split_args(tokens: &TokenStream) -> Vec<TokenStream> {
+pub(super) fn split_args(tokens: &TokenStream) -> Vec<TokenStream> {
     let mut args = Vec::new();
     let mut current = TokenStream::new();
     for tree in tokens.clone() {

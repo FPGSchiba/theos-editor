@@ -16,16 +16,11 @@
 //!   `rust-toolchain.toml`.
 //!
 //! The rule reads file names and TOML only, so it needs no workspace view ([`findings`]).
-//! Until Task 24 it also holds the manifest checks of the retired fixture and `src/` scans.
 
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
-use super::fixture_routes::{
-    MANIFEST_FIXTURES, fixture_entry_points, manifest_leads_into_fixtures,
-};
-use super::src_bounds::manifest_findings;
 use super::{Inputs, Rule, at_file};
 use crate::checks::ac_trace::is_fixture;
 use crate::verdict::Finding;
@@ -69,7 +64,6 @@ pub fn findings(root: &Path, files: &[String]) -> Result<Vec<Finding>> {
         mirror(root, files, copy, original, &mut findings)?;
     }
     findings.extend(stray_config(files));
-    findings.extend(fixture_entry_points(files));
     findings.sort_by(|a, b| (&a.file, a.line).cmp(&(&b.file, b.line)));
     Ok(findings)
 }
@@ -191,10 +185,6 @@ fn crate_manifests(root: &Path, files: &[String], findings: &mut Vec<Finding>) -
                  workspace lints",
             ));
         }
-        if manifest_leads_into_fixtures(path, &manifest) {
-            findings.push(at_file(path, MANIFEST_FIXTURES));
-        }
-        findings.extend(manifest_findings(path, &manifest));
     }
     Ok(())
 }

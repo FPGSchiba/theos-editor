@@ -1,425 +1,414 @@
-//! The attribute scan of the `lints` check: an `allow(…)`, an `expect(…)` without a reason and
-//! an `ignore` without one, in the attributes of a Rust source, and a `path` of an attribute that
-//! leads into a fixtures folder (which `fixture_routes.rs` judges).
+//! Rule 3 of `lints`: no `allow` attribute, and no `expect` or `ignore` without a reason where
+//! clippy does not look.
+//!
+//! The lint levels forbid `#[allow]` and require a reason on `#[expect]` and `#[ignore]`, but
+//! clippy reads only the syntax tree: it does not see an attribute that is written in the tokens
+//! of a macro call or of a `macro_rules!` body. The rule reads both, through `syn` and
+//! `proc-macro2`:
+//!
+//! - in the syntax tree (outer and inner attributes at every depth): every `allow` is a finding,
+//!   with or without a reason, alone or inside `cfg_attr`; `expect` and `ignore` are left to
+//!   clippy;
+//! - in the tokens of macro calls and macro definitions, at every depth: each `#` [`!`] bracket
+//!   group is read as an attribute, judged the same way, and an `expect(…)` without
+//!   `reason = …` and a bare `ignore` are findings too (`ignore = "…"` passes). A group that does
+//!   not parse as an attribute (`#[$m]`, as in `$(#[$m:meta])*`) is judged by its identifiers:
+//!   an `allow` in it is a finding, anything else is left to the reviews (Ruling 9);
+//! - everywhere, in the tree and in macro tokens, with or without a reason, an `allow` or `expect`
+//!   that names one of the lints that guard the others (`unexpected_cfgs`,
+//!   `clippy::allow_attributes`, `clippy::allow_attributes_without_reason`,
+//!   `clippy::ignore_without_reason`) is a finding (spec §5.2): `forbid` on a lint stops rustc
+//!   from honouring such an attribute, but clippy's guard lints are only `deny`.
+//!
+//! A string or a comment is one token that is never an attribute. An attribute that a macro
+//! forwards through a metavariable is judged where the invocation writes it.
 
-use super::attribute_reader::read_attributes;
-use super::fixture_routes::path_problem;
-use super::tokens::Token;
+use proc_macro2::{Delimiter, TokenStream, TokenTree};
+use syn::Meta;
+use syn::Token;
+use syn::punctuated::Punctuated;
+use syn::spanned::Spanned;
+use syn::visit::Visit;
+
+use super::cfg_names::split_args;
+use super::{Inputs, Rule};
 use crate::verdict::Finding;
+use crate::view::{Source, line_of};
 
-const ALLOW_FOUND: &str = "`allow(…)` in an attribute: a lint is not silenced; fix the cause, or \
-                           use `#[expect(…, reason = \"…\")]` for a lint that is expected";
-const EXPECT_FOUND: &str = "`expect(…)` without `reason = \"…\"`: say why the lint is expected";
-const IGNORE_FOUND: &str = "`ignore` without a reason: write `#[ignore = \"…\"]`";
+/// The rule, as `RULES` lists it.
+pub const RULE: Rule = Rule {
+    name: "attributes",
+    run: |inputs: &Inputs<'_>| Ok(inputs.view.sources().flat_map(findings).collect()),
+};
 
-/// The findings for the attributes of the Rust source `text` of the file `file`, in file order.
-///
-/// An attribute is found when it has `allow(` (also inside `cfg_attr`), when it has `expect(`
-/// and no `reason = "…"` with something in it, or when it is `ignore` (also inside `cfg_attr`)
-/// and has no `= "…"` with something in it. A `path = …` of an attribute (also inside `cfg_attr`)
-/// is found when it leads into a `tests/fixtures/` folder, out of the `src/` of its crate, or
-/// cannot be followed. The attributes come from the token stream (`attribute_reader.rs`): inner and
-/// outer, anywhere in a line, over several lines, in function and macro bodies. Only whole words
-/// count, and words in comments and strings do not.
+/// What an `allow` is told.
+const ALLOW: &str = "an `allow` attribute: use `#[expect(…, reason = \"…\")]`, or fix the code";
+
+/// What an `expect` without a reason is told, in macro tokens.
+const EXPECT: &str = "an `#[expect]` without a reason, inside a macro where clippy does not see it";
+
+/// What an `ignore` without a reason is told, in macro tokens.
+const IGNORE: &str = "an `#[ignore]` without a reason, inside a macro where clippy does not see it";
+
+/// The lints that guard the others: `unexpected_cfgs` is `forbid`, the other three are `deny`.
+const GUARDS: [&str; 4] = [
+    "unexpected_cfgs",
+    "clippy::allow_attributes",
+    "clippy::allow_attributes_without_reason",
+    "clippy::ignore_without_reason",
+];
+
+/// Where an attribute was found.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Place {
+    /// In the syntax tree, where clippy judges `expect` and `ignore`.
+    Tree,
+    /// In the tokens of a macro, where clippy sees nothing.
+    Macro,
+}
+
+/// The findings of one file, in line order.
 #[must_use]
-pub fn scan_attributes(file: &str, text: &str) -> Vec<Finding> {
-    read_attributes(text)
+pub fn findings(source: &Source) -> Vec<Finding> {
+    let Some(file) = &source.file else {
+        return Vec::new();
+    };
+    let mut walker = Walker {
+        path: &source.path,
+        findings: Vec::new(),
+    };
+    walker.visit_file(file);
+    walker.findings.sort_by_key(|finding| finding.line);
+    walker.findings
+}
+
+/// What is wrong with the attribute `meta`: one message per problem.
+fn problems(meta: &Meta, place: Place) -> Vec<String> {
+    let Some(name) = meta.path().get_ident().map(ToString::to_string) else {
+        return Vec::new();
+    };
+    match (name.as_str(), meta) {
+        ("cfg_attr", Meta::List(list)) => cfg_attr_problems(&list.tokens, place),
+        ("allow", Meta::List(list)) => {
+            let guards = guard_messages(&list.tokens);
+            if guards.is_empty() {
+                vec![ALLOW.to_owned()]
+            } else {
+                guards
+            }
+        }
+        ("allow", _) => vec![ALLOW.to_owned()],
+        ("expect", Meta::List(list)) => {
+            let mut found = guard_messages(&list.tokens);
+            if place == Place::Macro && !has_reason(&list.tokens) {
+                found.push(EXPECT.to_owned());
+            }
+            found
+        }
+        ("ignore", Meta::Path(_)) if place == Place::Macro => vec![IGNORE.to_owned()],
+        _ => Vec::new(),
+    }
+}
+
+/// The problems of the attributes that `cfg_attr(predicate, attribute…)` applies, whose tokens are
+/// `tokens`. Arguments that do not parse (a metavariable) are judged by their identifiers.
+fn cfg_attr_problems(tokens: &TokenStream, place: Place) -> Vec<String> {
+    let parsed = syn::parse::Parser::parse2(
+        Punctuated::<Meta, Token![,]>::parse_terminated,
+        tokens.clone(),
+    );
+    match parsed {
+        Ok(args) => args
+            .iter()
+            .skip(1)
+            .flat_map(|meta| problems(meta, place))
+            .collect(),
+        Err(_) => unparsed_problems(tokens),
+    }
+}
+
+/// An attribute that `syn` cannot read is judged by its identifiers (Ruling 9): an `allow`
+/// anywhere in it is a finding.
+fn unparsed_problems(tokens: &TokenStream) -> Vec<String> {
+    if has_ident(tokens, "allow") {
+        vec![ALLOW.to_owned()]
+    } else {
+        Vec::new()
+    }
+}
+
+/// Whether the identifier `word` is anywhere in `tokens`.
+fn has_ident(tokens: &TokenStream, word: &str) -> bool {
+    tokens.clone().into_iter().any(|tree| match tree {
+        TokenTree::Ident(ident) => ident == word,
+        TokenTree::Group(group) => has_ident(&group.stream(), word),
+        _ => false,
+    })
+}
+
+/// Whether the arguments `tokens` of an `expect(…)` have a `reason = …` of their own.
+fn has_reason(tokens: &TokenStream) -> bool {
+    split_args(tokens).iter().any(|arg| {
+        let mut trees = arg.clone().into_iter();
+        matches!(trees.next(), Some(TokenTree::Ident(ident)) if ident == "reason")
+            && matches!(trees.next(), Some(TokenTree::Punct(punct)) if punct.as_char() == '=')
+    })
+}
+
+/// A message for each guard lint that the lint list `tokens` names.
+fn guard_messages(tokens: &TokenStream) -> Vec<String> {
+    split_args(tokens)
         .iter()
-        .flat_map(|attribute| judge(file, attribute.line, &attribute.body))
+        .filter_map(lint_path)
+        .filter(|lint| GUARDS.contains(&lint.as_str()))
+        .map(|lint| {
+            format!(
+                "an `allow` or `expect` of `{lint}`, one of the lints that guard the others \
+                 (spec §5.2)"
+            )
+        })
         .collect()
 }
 
-/// The findings for the attribute with the tokens `tokens`, which starts on `line`.
-fn judge(file: &str, line: u32, tokens: &[Token<'_>]) -> Vec<Finding> {
-    // The first word is the name of the attribute: `ignore`, or `cfg_attr` that has `ignore` in it.
-    let name = tokens
-        .iter()
-        .position(|token| matches!(token, Token::Word(_)));
-    let conditional = name.is_some_and(|index| tokens[index] == Token::Word("cfg_attr"));
-    let mut findings = Vec::new();
-    for (index, token) in tokens.iter().enumerate() {
-        let Token::Word(word) = token else {
-            continue;
-        };
-        let after = &tokens[index + 1..];
-        let opens = after.first() == Some(&Token::Symbol(b'('));
-        let message = match *word {
-            "allow" if opens => Some(ALLOW_FOUND),
-            "expect" if opens && !has_reason(&after[1..]) => Some(EXPECT_FOUND),
-            "ignore" if (name == Some(index) || conditional) && !has_value(after) => {
-                Some(IGNORE_FOUND)
-            }
-            "path"
-                if (name == Some(index) || conditional)
-                    && after.first() == Some(&Token::Symbol(b'=')) =>
-            {
-                path_problem(file, &after[1..])
-            }
-            _ => None,
-        };
-        findings.extend(message.map(|message| Finding::at(file, line, message)));
-    }
-    findings
-}
-
-/// Whether `tokens` start with `= "…"`, a string that says something.
-fn has_value(tokens: &[Token<'_>]) -> bool {
-    matches!(tokens, [Token::Symbol(b'='), Token::Text(text), ..] if !is_blank(text))
-}
-
-/// Whether the arguments `tokens` of an `expect(`, up to the closing bracket, have a
-/// `reason = "…"` that says something.
-fn has_reason(tokens: &[Token<'_>]) -> bool {
-    let mut depth = 1_usize;
-    for (index, token) in tokens.iter().enumerate() {
-        match token {
-            Token::Symbol(b'(') => depth += 1,
-            Token::Symbol(b')') => {
-                depth -= 1;
-                if depth == 0 {
-                    return false;
-                }
-            }
-            Token::Word("reason") if has_value(&tokens[index + 1..]) => return true,
-            _ => {}
+/// The lint `tokens` name, as `a::b`, when they are nothing but a path.
+fn lint_path(tokens: &TokenStream) -> Option<String> {
+    let mut path = String::new();
+    for tree in tokens.clone() {
+        match tree {
+            TokenTree::Ident(ident) => path.push_str(&ident.to_string()),
+            TokenTree::Punct(punct) if punct.as_char() == ':' => path.push(':'),
+            _ => return None,
         }
     }
-    false
+    (!path.is_empty()).then_some(path)
 }
 
-/// Whether the string literal `literal`, as written, has nothing in it but white space.
-fn is_blank(literal: &str) -> bool {
-    match (literal.find('"'), literal.rfind('"')) {
-        (Some(open), Some(close)) if open < close => literal[open + 1..close].trim().is_empty(),
-        _ => true,
+/// Walks one file and collects the findings of its attributes.
+struct Walker<'a> {
+    path: &'a str,
+    findings: Vec<Finding>,
+}
+
+impl Walker<'_> {
+    /// The `#` `[`…`]` and `#` `!` `[`…`]` groups of the tokens of a macro, at any depth.
+    fn scan_tokens(&mut self, tokens: &TokenStream) {
+        let trees: Vec<TokenTree> = tokens.clone().into_iter().collect();
+        for (index, tree) in trees.iter().enumerate() {
+            match tree {
+                TokenTree::Punct(pound) if pound.as_char() == '#' => {
+                    let mut rest = trees[index + 1..].iter();
+                    let mut next = rest.next();
+                    if matches!(next, Some(TokenTree::Punct(bang)) if bang.as_char() == '!') {
+                        next = rest.next();
+                    }
+                    if let Some(TokenTree::Group(group)) = next
+                        && group.delimiter() == Delimiter::Bracket
+                    {
+                        self.judge_group(line_of(pound.span()), &group.stream());
+                    }
+                }
+                TokenTree::Group(group) => self.scan_tokens(&group.stream()),
+                _ => {}
+            }
+        }
+    }
+
+    /// Judges the content of a bracket group that follows a `#` in macro tokens.
+    fn judge_group(&mut self, line: u32, content: &TokenStream) {
+        let found = match syn::parse2::<Meta>(content.clone()) {
+            Ok(meta) => problems(&meta, Place::Macro),
+            Err(_) => unparsed_problems(content),
+        };
+        for message in found {
+            self.findings.push(Finding::at(self.path, line, message));
+        }
+    }
+}
+
+impl<'ast> Visit<'ast> for Walker<'_> {
+    fn visit_attribute(&mut self, attribute: &'ast syn::Attribute) {
+        let line = line_of(attribute.pound_token.span());
+        for message in problems(&attribute.meta, Place::Tree) {
+            self.findings.push(Finding::at(self.path, line, message));
+        }
+    }
+
+    fn visit_macro(&mut self, mac: &'ast syn::Macro) {
+        self.scan_tokens(&mac.tokens);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::testing::{lines_of, source};
     use super::*;
+    use crate::view::parse_source;
 
-    /// The findings for the source file made of `lines`.
-    fn scan(lines: &[&str]) -> Vec<Finding> {
-        scan_attributes("src/lib.rs", &source(lines))
+    /// The line and message of every finding for the source `text`.
+    fn judged(text: &str) -> Vec<(u32, String)> {
+        let (source, finding) = parse_source("crates/a/src/lib.rs", text.as_bytes());
+        assert!(finding.is_none(), "{finding:?}");
+        findings(&source)
+            .into_iter()
+            .map(|finding| (finding.line.unwrap_or(0), finding.message))
+            .collect()
+    }
+
+    fn lines(text: &str) -> Vec<u32> {
+        judged(text).into_iter().map(|(line, _)| line).collect()
     }
 
     #[test]
-    fn allow_attribute_found() {
-        let findings = scan(&["#[allow(dead_code)]", "fn f() {}"]);
-        assert_eq!(findings.len(), 1, "{findings:?}");
-        assert_eq!(findings[0].file.as_deref(), Some("src/lib.rs"));
-        assert_eq!(findings[0].line, Some(1));
-        assert!(findings[0].message.contains("allow"), "{findings:?}");
-
-        let findings = scan(&[
-            "mod m {",
-            "    #[allow(clippy::too_many_lines, dead_code)]",
-            "    fn f() {}",
-            "}",
-        ]);
-        assert_eq!(lines_of(&findings), [Some(2)]);
-    }
-
-    #[test]
-    fn inner_allow_found() {
-        let findings = scan(&["//! Docs.", "", "#![allow(missing_docs)]"]);
-        assert_eq!(lines_of(&findings), [Some(3)]);
-        let findings = scan(&["mod m {", "    #![allow(dead_code)]", "}"]);
-        assert_eq!(lines_of(&findings), [Some(2)]);
-    }
-
-    #[test]
-    fn cfg_attr_allow_found() {
-        let findings = scan(&["#[cfg_attr(test, allow(dead_code))]", "fn f() {}"]);
-        assert_eq!(lines_of(&findings), [Some(1)]);
-        let findings = scan(&[
-            "#[cfg_attr(",
-            "    test,",
-            "    allow(dead_code)",
-            ")]",
-            "fn f() {}",
-        ]);
-        assert_eq!(lines_of(&findings), [Some(1)]);
-    }
-
-    #[test]
-    fn expect_without_reason_found() {
-        for attribute in [
-            "#[expect(dead_code)]",
-            "#![expect(clippy::too_many_lines)]",
-            "#[cfg_attr(test, expect(dead_code))]",
-            "#[expect(dead_code, because = \"x\")]",
-        ] {
-            let findings = scan(&[attribute, "fn f() {}"]);
-            assert_eq!(findings.len(), 1, "{attribute}: {findings:?}");
-            assert_eq!(findings[0].line, Some(1), "{attribute}");
-            assert!(findings[0].message.contains("expect"), "{attribute}");
-        }
-    }
-
-    #[test]
-    fn expect_with_reason_passes() {
-        for attribute in [
-            "#[expect(dead_code, reason = \"used by the tests\")]",
-            "#![expect(clippy::too_many_lines, reason = \"one table\")]",
-            "#[expect(dead_code, reason=\"no spaces\")]",
-            "#[cfg_attr(test, expect(dead_code, reason = \"only tests use it\"))]",
-            "#[expect(dead_code, reason = r#\"a \"raw\" reason\"#)]",
-        ] {
-            let findings = scan(&[attribute, "fn f() {}"]);
-            assert!(findings.is_empty(), "{attribute}: {findings:?}");
-        }
-    }
-
-    #[test]
-    fn bare_ignore_found() {
-        for attribute in [
-            "#[ignore]",
-            "#[cfg_attr(windows, ignore)]",
-            "#[cfg_attr(not(windows), ignore)]",
-        ] {
-            let findings = scan(&["#[test]", attribute, "fn f() {}"]);
-            assert_eq!(findings.len(), 1, "{attribute}: {findings:?}");
-            assert_eq!(findings[0].line, Some(2), "{attribute}");
-            assert!(findings[0].message.contains("ignore"), "{attribute}");
-        }
-    }
-
-    #[test]
-    fn ignore_with_reason_passes() {
-        for attribute in [
-            "#[ignore = \"needs the network\"]",
-            "#[ignore=\"no spaces\"]",
-            "#[cfg_attr(windows, ignore = \"slow on windows\")]",
-            "#[cfg_attr(not(feature = \"slow\"), ignore = \"slow\")]",
-        ] {
-            let findings = scan(&["#[test]", attribute, "fn f() {}"]);
-            assert!(findings.is_empty(), "{attribute}: {findings:?}");
-        }
-    }
-
-    #[test]
-    fn allow_in_doc_comment_ignored() {
-        let findings = scan(&[
-            "/// #[allow(dead_code)]",
-            "//! #![allow(dead_code)]",
-            "// #[allow(dead_code)]",
-            "    /// #[allow(dead_code)]",
-            "    // #[expect(dead_code)]",
-            "let text = \"#[allow(dead_code)]\";",
-            "fn f() {}",
-        ]);
-        assert!(findings.is_empty(), "{findings:?}");
-    }
-
-    #[test]
-    fn multi_line_attribute_joined() {
-        // The reason is on a later line than the `expect(`.
-        let findings = scan(&[
-            "#[expect(",
-            "    dead_code,",
-            "    reason = \"used by the tests\"",
-            ")]",
-            "fn f() {}",
-        ]);
-        assert!(findings.is_empty(), "{findings:?}");
-
-        // No reason on any of the lines: the finding is at the first line.
-        let findings = scan(&["fn a() {}", "#[expect(", "    dead_code", ")]", "fn f() {}"]);
-        assert_eq!(lines_of(&findings), [Some(2)]);
-
-        // A bracket in a string does not end the attribute early.
-        let findings = scan(&[
-            "#[doc = \"a ] bracket\"]",
-            "#[cfg_attr(",
-            "    test,",
-            "    doc = \"another ] one\",",
-            "    allow(dead_code)",
-            ")]",
-        ]);
-        assert_eq!(lines_of(&findings), [Some(2)]);
-
-        // The next attribute is read from its own line.
-        let findings = scan(&[
-            "#[cfg_attr(",
-            "    test,",
-            "    derive(Debug)",
-            ")]",
-            "#[allow(dead_code)]",
-            "struct S;",
-        ]);
-        assert_eq!(lines_of(&findings), [Some(5)]);
-    }
-
-    #[test]
-    fn words_are_not_substrings() {
-        let findings = scan(&[
-            "#[disallow(x)]",
-            "#[allow_internal_unstable(x)]",
-            "#[should_panic(expected = \"x\")]",
-            "#[cfg_attr(test, expected(x))]",
-            "#[cfg(feature = \"ignore\")]",
-            "#[derive(Debug)]",
-            "#[doc = \"allow(x) and expect(y) and ignore\"]",
-            "#[expect(dead_code, reason = \"the allow(x) rule\")]",
-        ]);
-        assert!(findings.is_empty(), "{findings:?}");
-    }
-
-    #[test]
-    fn comments_inside_an_attribute_do_not_count() {
-        // A `reason` in a comment is no reason.
-        let findings = scan(&[
-            "#[expect(",
-            "    dead_code, // reason = \"x\"",
-            ")]",
-            "#[expect(dead_code, /* reason = \"y\" */)]",
-        ]);
-        assert_eq!(lines_of(&findings), [Some(1), Some(4)]);
-        // And an `allow(` in a comment is no allow.
-        let findings = scan(&[
-            "#[expect(",
-            "    dead_code, // allow(x) would not do",
-            "    reason = \"r\"",
-            ")]",
-        ]);
-        assert!(findings.is_empty(), "{findings:?}");
-    }
-
-    #[test]
-    fn a_reason_must_say_something() {
-        for attribute in [
-            "#[expect(dead_code, reason = \"\")]",
-            "#[expect(dead_code, reason = \"   \")]",
-            "#[expect(dead_code, reason)]",
-            "#[expect(dead_code, reason = reason)]",
-            "#[ignore = \"\"]",
-            "#[ignore = \" \"]",
-            "#[cfg_attr(windows, ignore = \"\")]",
-        ] {
-            let findings = scan(&[attribute, "fn f() {}"]);
-            assert_eq!(findings.len(), 1, "{attribute}: {findings:?}");
-        }
-    }
-
-    #[test]
-    fn every_attribute_on_a_line_is_read() {
-        let findings = scan(&[
-            "#[test] #[ignore] fn a() {}",
-            "#[derive(Debug)] #[allow(dead_code)] struct S;",
-            "#[test] #[ignore = \"slow\"] fn b() {}",
-            "#[cfg_attr(test, derive(Debug))] #[expect(dead_code)]",
-        ]);
-        assert_eq!(lines_of(&findings), [Some(1), Some(2), Some(4)]);
-    }
-
-    #[test]
-    fn an_attribute_that_is_never_closed_is_still_read() {
-        let findings = scan(&["fn a() {}", "#[allow(dead_code"]);
-        assert_eq!(lines_of(&findings), [Some(2)]);
-    }
-
-    #[test]
-    fn findings_are_in_file_order_with_their_lines() {
-        let findings = scan(&[
-            "#[allow(a)]",
-            "fn a() {}",
-            "",
-            "#[expect(b)]",
-            "fn b() {}",
-            "#[test]",
-            "#[ignore]",
-            "fn c() {}",
-        ]);
-        assert_eq!(lines_of(&findings), [Some(1), Some(4), Some(7)]);
-    }
-
-    #[test]
-    fn crlf_line_ends_do_not_matter() {
-        let findings = scan_attributes("a.rs", "#[allow(dead_code)]\r\nfn f() {}\r\n");
-        assert_eq!(lines_of(&findings), [Some(1)]);
-        let text = "#[expect(\r\n    dead_code,\r\n    reason = \"x\"\r\n)]\r\nfn f() {}\r\n";
-        let findings = scan_attributes("a.rs", text);
-        assert!(findings.is_empty(), "{findings:?}");
-    }
-
-    #[test]
-    fn attributes_are_read_wherever_they_stand() {
-        for text in [
-            "#[rustfmt::skip] pub mod m { #![allow(clippy::unwrap_used)] pub fn f() {} }",
-            "fn a() {} #[allow(dead_code)] fn b() {}",
-            "fn f() { #[allow(unused)] let x = 1; }",
-            "fn f() { #![allow(unused)] }",
-            "macro_rules! m { () => { #[allow(dead_code)] fn x() {} } }",
-            "macro_rules! m { () => { fn x() {} }; ($a:ident) => { #[allow(dead_code)] fn $a() {} } }",
-            "#[allow(
-    dead_code,
-    unused
-)]
-fn f() {}",
-            "#[cfg_attr(test, allow(dead_code))]
-fn f() {}",
-            "#[derive(Debug)] #[cfg_attr(unix, allow(dead_code))] struct S;",
-            "mod m {
-    #![allow(dead_code)]
-}",
-        ] {
-            let findings = scan_attributes("a.rs", text);
-            assert_eq!(findings.len(), 1, "{text}: {findings:?}");
-        }
-        let findings = scan(&["fn f() {", "    let a = 1; #[ignore] fn g() {}", "}"]);
-        assert_eq!(lines_of(&findings), [Some(2)]);
-        let findings = scan(&["fn f() { #[expect(dead_code)] let x = 1; }"]);
-        assert_eq!(findings.len(), 1, "{findings:?}");
-    }
-
-    #[test]
-    fn a_path_attribute_is_read_wherever_it_stands() {
-        let findings = scan_attributes(
-            "crates/a/src/lib.rs",
-            "pub fn a() {} #[path = \"../outside.rs\"] mod x;
-",
+    fn outer_and_inner_allow_are_findings_with_their_line() {
+        let text = "#![allow(missing_docs)]\n\n#[allow(dead_code)]\nfn a() {}\n\
+                    fn b() { #[allow(unused)] let _x = 1; }\n\
+                    #[allow(\n    clippy::too_many_lines,\n    dead_code\n)]\nfn c() {}\n";
+        let found = judged(text);
+        assert_eq!(
+            found.iter().map(|(line, _)| *line).collect::<Vec<_>>(),
+            [1, 3, 5, 6]
         );
-        assert_eq!(findings.len(), 1, "{findings:?}");
-        assert!(findings[0].message.contains("src/"), "{findings:?}");
-    }
-
-    #[test]
-    fn strings_comments_and_char_literals_never_make_an_attribute() {
-        for text in [
-            "const S: &str = \"#[allow(x)]\";",
-            "const S: &str = r#\"#[allow(x)]\"#;",
-            "const S: &str = r##\"a \"# #[allow(x)]\"##;",
-            "// #[allow(x)]
-fn f() {}",
-            "/* #[allow(x)] */ fn f() {}",
-            "/// #[allow(x)]
-fn f() {}",
-            "//! #![allow(x)]
-fn f() {}",
-            "fn f() -> char { '#' }",
-            "fn f() { let c = b'['; let d = '\''; }",
-        ] {
-            let findings = scan_attributes("a.rs", text);
-            assert!(findings.is_empty(), "{text}: {findings:?}");
-        }
-    }
-
-    #[test]
-    fn nested_block_comments_cannot_hide_an_attribute() {
-        // rustc nests `/* */`: the quote below is inside the comment, so the attribute is code.
-        let text = "/* /* */ \" */ #[allow(x)] fn f() {} // \"
-";
-        let findings = scan_attributes("a.rs", text);
-        assert_eq!(findings.len(), 1, "{findings:?}");
-        // And an attribute inside the nested comment is not one.
-        let findings = scan_attributes(
-            "a.rs",
-            "/* a /* b */ #[allow(x)] */ fn f() {}
-",
+        assert!(
+            found.iter().all(|(_, message)| message == ALLOW),
+            "{found:?}"
         );
-        assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    #[test]
+    fn allow_inside_cfg_attr_is_a_finding() {
+        assert_eq!(lines("#[cfg_attr(test, allow(unused))]\nfn a() {}\n"), [1]);
+        assert_eq!(
+            lines(
+                "#[cfg_attr(\n    test,\n    derive(Debug),\n    allow(dead_code)\n)]\nstruct S;\n"
+            ),
+            [1]
+        );
+        assert_eq!(
+            lines("#[cfg_attr(a, cfg_attr(b, allow(unused)))]\nfn a() {}\n"),
+            [1]
+        );
+        assert_eq!(lines("#![cfg_attr(test, allow(unused))]\n"), [1]);
+    }
+
+    #[test]
+    fn an_inner_allow_with_a_reason_in_a_one_line_module_is_a_finding() {
+        assert_eq!(
+            lines("mod m { #![allow(unused, reason = \"in one line\") ] }\n"),
+            [1]
+        );
+        assert_eq!(
+            lines("#[allow(dead_code, reason = \"why\")]\nfn a() {}\n"),
+            [1]
+        );
+    }
+
+    #[test]
+    fn allow_in_a_macro_invocation_and_in_a_macro_rules_body_are_findings() {
+        let text = "macro_rules! q { () => { #[allow(dead_code)] fn a() {} } }\n\
+                    q! { }\n\
+                    fwd! { #[allow(dead_code)] fn c() }\n\
+                    fn f() { m!(nested { #![allow(unused)] }); }\n";
+        assert_eq!(lines(text), [1, 3, 4]);
+    }
+
+    #[test]
+    fn expect_and_ignore_without_reason_in_macro_tokens_are_findings_and_with_a_reason_pass() {
+        let text = "macro_rules! q { () => { #[expect(dead_code)] fn a() {} \
+                    #[test] #[ignore] fn b() {} } }\n";
+        let found = judged(text);
+        assert_eq!(
+            found,
+            [(1, EXPECT.to_owned()), (1, IGNORE.to_owned())],
+            "{found:?}"
+        );
+        let passing = "macro_rules! q { () => { #[expect(dead_code, reason = \"kept\")] fn a() {} \
+                       #[test] #[ignore = \"slow\"] fn b() {} } }\n\
+                       m! { #[cfg_attr(test, expect(unused, reason = \"x\"))] fn c() }\n";
+        assert_eq!(judged(passing), []);
+        // Inside `cfg_attr` the same judgement applies, and a blank-looking list is not a reason.
+        let nested = "m! { #[cfg_attr(test, expect(unused))] #[cfg_attr(test, ignore)] fn c() }\n";
+        assert_eq!(
+            judged(nested),
+            [(1, EXPECT.to_owned()), (1, IGNORE.to_owned())]
+        );
+    }
+
+    #[test]
+    fn expect_and_ignore_in_the_tree_are_left_to_clippy() {
+        let text = "#[expect(dead_code)]\nfn a() {}\n#[test]\n#[ignore]\nfn b() {}\n";
+        assert_eq!(judged(text), []);
+    }
+
+    #[test]
+    fn a_forwarded_attribute_is_not_judged() {
+        let text = "macro_rules! fwd {\n    ($(#[$m:meta])* fn $n:ident()) => { $(#[$m])* fn $n() {} };\n    \
+                    ($(#[$a:meta])+ struct $s:ident;) => { #[$a] struct $s; };\n}\n";
+        assert_eq!(judged(text), []);
+        // An `allow` ident in an attribute that cannot be read is still caught (Ruling 9).
+        assert_eq!(
+            lines("macro_rules! m { ($x:ty) => { #[allow($x)] fn a() {} } }\n"),
+            [1]
+        );
+    }
+
+    #[test]
+    fn derives_doc_comments_and_cfg_attr_derive_pass() {
+        let text = "//! Docs.\n/// Docs.\n#[derive(Debug, Clone)]\n#[cfg_attr(test, derive(PartialEq))]\n\
+                    #[doc = \"allow\"]\n#[rustfmt::skip]\nstruct S;\n\
+                    #[cfg(test)]\nmod tests {}\n";
+        assert_eq!(judged(text), []);
+    }
+
+    #[test]
+    fn text_in_strings_and_comments_is_not_an_attribute() {
+        let text = "const A: &str = \"#[allow(dead_code)]\";\n\
+                    const B: &str = r#\"\n#![allow(dead_code)]\n\"#;\n\
+                    // #[allow(dead_code)]\n/* #[allow(dead_code)] */\n/// #[allow(dead_code)]\n\
+                    /* /* */ \" */ fn f() {} // \"\n\
+                    fn g() -> char { '#' }\n\
+                    m! { \"#[allow(x)]\" }\n";
+        assert_eq!(judged(text), []);
+    }
+
+    #[test]
+    fn an_allow_or_expect_of_a_guard_lint_is_a_finding() {
+        for lint in GUARDS {
+            let message = format!(
+                "an `allow` or `expect` of `{lint}`, one of the lints that guard the others \
+                 (spec §5.2)"
+            );
+            for text in [
+                format!("#[allow({lint}, reason = \"r\")]\nfn a() {{}}\n"),
+                format!("#![allow({lint}, reason = \"r\")]\n"),
+                format!("#[expect({lint}, reason = \"r\")]\nfn a() {{}}\n"),
+                format!("#![expect({lint}, reason = \"r\")]\n"),
+                format!("#[cfg_attr(test, expect({lint}, reason = \"r\"))]\nfn a() {{}}\n"),
+                format!("#[cfg_attr(test, allow({lint}, reason = \"r\"))]\nfn a() {{}}\n"),
+                format!(
+                    "macro_rules! m {{ () => {{ #[expect({lint}, reason = \"r\")] fn a() {{}} }} }}\n"
+                ),
+                format!("m! {{ #[allow({lint}, reason = \"r\")] fn a() }}\n"),
+                format!("#[expect(dead_code, {lint}, reason = \"r\")]\nfn a() {{}}\n"),
+            ] {
+                assert_eq!(judged(&text), [(1, message.clone())], "{text}");
+            }
+        }
+        let other = "#[expect(clippy::unwrap_used, reason = \"r\")]\nfn a() {}\n\
+                     m! { #[expect(clippy::unwrap_used, reason = \"r\")] fn b() }\n\
+                     #[expect(my::unexpected_cfgs, reason = \"r\")]\nfn c() {}\n";
+        assert_eq!(judged(other), []);
+    }
+
+    #[test]
+    fn findings_are_in_line_order_and_a_file_that_did_not_parse_has_none() {
+        let text = "m! { #[allow(a)] fn a() }\n#[allow(b)]\nfn b() {}\nm! { #[allow(c)] fn c() }\n";
+        assert_eq!(lines(text), [1, 2, 4]);
+        let (source, _) = parse_source("a.rs", b"fn {");
+        assert_eq!(findings(&source), []);
+    }
+
+    #[test]
+    fn a_byte_order_mark_does_not_move_the_line() {
+        let (source, _) = parse_source("a.rs", "\u{feff}#[allow(a)]\nfn a() {}\n".as_bytes());
+        assert_eq!(findings(&source)[0].line, Some(1));
     }
 }
