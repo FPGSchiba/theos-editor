@@ -235,6 +235,8 @@ fn bad_attributes_in_sources_fail() -> TestResult {
             (Some("crates/a/src/lib.rs"), Some(16)),
             (Some("crates/a/src/lib.rs"), Some(20)),
             (Some("crates/a/src/lib.rs"), Some(22)),
+            (Some("crates/a/src/lib.rs"), Some(35)),
+            (Some("crates/a/src/lib.rs"), Some(38)),
         ]
     );
     let allow = "an `allow` attribute: use `#[expect(…, reason = \"…\")]`, or fix the code";
@@ -242,6 +244,8 @@ fn bad_attributes_in_sources_fail() -> TestResult {
     let ignore = "an `#[ignore]` without a reason, inside a macro where clippy does not see it";
     let guard = "an `allow` or `expect` of `clippy::ignore_without_reason`, one of the lints \
                  that guard the others (spec §5.2)";
+    let warn = "a `warn` attribute: lint levels are set in `gate/lints.toml`; a lower level \
+                here lets `cargo clippy -- -D warnings` pass with the lint printed as a warning";
     let messages: Vec<&str> = verdict
         .findings
         .iter()
@@ -249,7 +253,9 @@ fn bad_attributes_in_sources_fail() -> TestResult {
         .collect();
     assert_eq!(
         messages,
-        [allow, allow, allow, allow, expect, ignore, allow, guard]
+        [
+            allow, allow, allow, allow, expect, ignore, allow, guard, warn, warn
+        ]
     );
 
     // The same file under `tests/fixtures/` is test data and is not read.

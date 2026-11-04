@@ -1,20 +1,22 @@
-//! Rule 3 of `lints`: no `allow` attribute, no guard lint silenced, and no `expect` or `ignore`
-//! without a reason where clippy does not look.
+//! Rule 3 of `lints`: no `allow` or `warn` attribute, no guard lint silenced, and no `expect` or
+//! `ignore` without a reason where clippy does not look.
 //!
 //! The lint levels forbid `#[allow]` and require a reason on `#[expect]` and `#[ignore]`, but
 //! clippy reads only the syntax tree: it does not see an attribute that is written in the tokens
 //! of a macro call or of a `macro_rules!` body. The rule reads both, through `syn` and
 //! `proc-macro2`:
 //!
-//! - in the syntax tree (outer and inner attributes at every depth): every `allow` is a finding,
-//!   with or without a reason, alone or inside `cfg_attr`; a bare `expect` or `ignore` is left to
-//!   clippy, except inside a `cfg_attr`, where the compiler may not see the attribute on this
-//!   machine and a missing reason is a finding too;
+//! - in the syntax tree (outer and inner attributes at every depth): every `allow` and every
+//!   `warn` is a finding, with or without a reason, alone or inside `cfg_attr` (the lint levels
+//!   come from `gate/lints.toml`, and a `warn` lets `cargo clippy -- -D warnings` pass with a
+//!   denied lint printed as a warning; `deny` and `forbid` raise a level and pass); a bare
+//!   `expect` or `ignore` is left to clippy, except inside a `cfg_attr`, where the compiler may
+//!   not see the attribute on this machine and a missing reason is a finding too;
 //! - in the tokens of macro calls and macro definitions, at every depth: each `#` [`!`] bracket
 //!   group is read as an attribute, judged the same way, and an `expect(…)` without
 //!   `reason = …` and a bare `ignore` are findings too (`ignore = "…"` passes). A group that does
 //!   not parse as an attribute (`#[$m]`, as in `$(#[$m:meta])*`) is judged by its identifiers:
-//!   an `allow` in it is a finding, anything else is left to the reviews (Ruling 9);
+//!   an `allow` or `warn` in it is a finding, anything else is left to the reviews (Ruling 9);
 //! - everywhere, in the tree and in macro tokens, with or without a reason, an `allow` or `expect`
 //!   that names one of the lints that guard the others (`unexpected_cfgs`,
 //!   `clippy::allow_attributes`, `clippy::allow_attributes_without_reason`,
@@ -44,6 +46,14 @@ pub const RULE: Rule = Rule {
 /// What an `allow` is told.
 const ALLOW: &str = "an `allow` attribute: use `#[expect(…, reason = \"…\")]`, or fix the code";
 
+/// What a `warn` is told.
+const WARN: &str = "a `warn` attribute: lint levels are set in `gate/lints.toml`; a lower level \
+                    here lets `cargo clippy -- -D warnings` pass with the lint printed as a warning";
+
+/// The attributes that lower a lint level below what `gate/lints.toml` sets, each with what it is
+/// told. Every one is a finding wherever it stands; `deny` and `forbid` raise a level and pass.
+const LOWERING: [(&str, &str); 2] = [("allow", ALLOW), ("warn", WARN)];
+
 /// What an `expect` without a reason is told, in macro tokens.
 const EXPECT: &str = "an `#[expect]` without a reason, inside a macro where clippy does not see it";
 
@@ -61,6 +71,14 @@ const GUARDS: [&str; 4] = [
 /// The lint groups that contain guard lints: `clippy::pedantic` and `clippy::restriction` hold
 /// `ignore_without_reason` and the two allow lints, so naming them silences the guards as well.
 const GROUPS: [&str; 2] = ["clippy::pedantic", "clippy::restriction"];
+
+/// What a level-lowering attribute called `name` is told, if it is one.
+fn lowering(name: &str) -> Option<&'static str> {
+    LOWERING
+        .iter()
+        .find(|(lowering, _)| *lowering == name)
+        .map(|(_, message)| *message)
+}
 
 /// The findings of one file, in line order.
 #[must_use]
@@ -95,17 +113,20 @@ fn problems(meta: &Meta, needs_reason: bool) -> Vec<String> {
     let Some(name) = meta.path().get_ident().map(ToString::to_string) else {
         return Vec::new();
     };
+    if let Some(message) = lowering(&name) {
+        // An `allow` of a guard lint is told which guard it silences, which is the sharper message.
+        let guards = match meta {
+            Meta::List(list) if name == "allow" => guard_messages(&list.tokens),
+            _ => Vec::new(),
+        };
+        return if guards.is_empty() {
+            vec![message.to_owned()]
+        } else {
+            guards
+        };
+    }
     match (name.as_str(), meta) {
         ("cfg_attr", Meta::List(list)) => cfg_attr_problems(&list.tokens),
-        ("allow", Meta::List(list)) => {
-            let guards = guard_messages(&list.tokens);
-            if guards.is_empty() {
-                vec![ALLOW.to_owned()]
-            } else {
-                guards
-            }
-        }
-        ("allow", _) => vec![ALLOW.to_owned()],
         ("expect", Meta::List(list)) => {
             let mut found = guard_messages(&list.tokens);
             if needs_reason && !has_reason(&list.tokens) {
@@ -136,14 +157,15 @@ fn cfg_attr_problems(tokens: &TokenStream) -> Vec<String> {
     }
 }
 
-/// An attribute that `syn` cannot read is judged by its identifiers (Ruling 9): an `allow`
-/// anywhere in it is a finding.
+/// An attribute that `syn` cannot read is judged by its identifiers (Ruling 9): an `allow` or a
+/// `warn` anywhere in it is a finding.
 fn unparsed_problems(tokens: &TokenStream) -> Vec<String> {
-    if has_ident(tokens, "allow") {
-        vec![ALLOW.to_owned()]
-    } else {
-        Vec::new()
-    }
+    LOWERING
+        .iter()
+        .find(|(name, _)| has_ident(tokens, name))
+        .map(|(_, message)| (*message).to_owned())
+        .into_iter()
+        .collect()
 }
 
 /// Whether the arguments `tokens` of an `expect(…)` have a `reason = …` of their own.
@@ -388,6 +410,35 @@ mod tests {
                      m! { #[expect(clippy::unwrap_used, reason = \"r\")] fn b() }\n\
                      #[expect(my::unexpected_cfgs, reason = \"r\")]\nfn c() {}\n";
         assert_eq!(judged(other), []);
+    }
+
+    #[test]
+    fn warn_attributes_are_findings_everywhere_allow_is() {
+        // AC: CE-08.8
+        for text in [
+            "#![warn(warnings)]\n",
+            "#[warn(clippy::unwrap_used)]\nfn a() {}\n",
+            "#[cfg_attr(test, warn(unused))]\nfn a() {}\n",
+            "#![cfg_attr(test, warn(unused))]\n",
+            "macro_rules! q { () => { #[warn(dead_code)] fn a() {} } }\n",
+            "m! { #[warn(dead_code)] fn c() }\n",
+            "macro_rules! m { ($x:ty) => { #[warn($x)] fn a() {} } }\n",
+        ] {
+            assert_eq!(judged(text), [(1, WARN.to_owned())], "{text}");
+        }
+        let statement = "fn f() {\n    #[warn(clippy::unwrap_used)]\n    let _x = 1;\n}\n";
+        assert_eq!(judged(statement), [(2, WARN.to_owned())]);
+        let inner = "fn f() {\n    #![warn(unused)]\n}\n";
+        assert_eq!(judged(inner), [(2, WARN.to_owned())]);
+    }
+
+    #[test]
+    fn deny_and_forbid_raise_a_level_and_are_not_findings() {
+        // AC: CE-08.8
+        let text = "#![deny(warnings)]\n#![forbid(unsafe_code)]\n#[deny(clippy::unwrap_used)]\n\
+                    fn a() {}\n#[cfg_attr(test, forbid(unused))]\nfn b() {}\n\
+                    m! { #[deny(dead_code)] fn c() }\n";
+        assert_eq!(judged(text), []);
     }
 
     #[test]
