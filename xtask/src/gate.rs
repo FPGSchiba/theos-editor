@@ -14,6 +14,7 @@ use std::path::Path;
 use crate::checks::{ac_trace, cargo_cmds, commit_msg, coverage, engine_free, lints};
 use crate::ci::CiEvent;
 use crate::verdict::{Check, Finding, GATE_ORDER, Verdict};
+use crate::view::Shared;
 use crate::{Error, Result, report, tools};
 
 /// Runs every check of [`GATE_ORDER`] in `root`, and writes the verdict table to `out` after the
@@ -27,9 +28,11 @@ use crate::{Error, Result, report, tools};
 ///
 /// Fails only when `out` cannot be written.
 pub fn run(root: &Path, ci: Option<&CiEvent>, out: &mut dyn Write) -> Result<Vec<Verdict>> {
+    // The checks that read code share one view, built when the first of them asks for it.
+    let shared = Shared::new();
     run_checks(
         &GATE_ORDER,
-        |check, out| run_check(check, root, ci, out),
+        |check, out| run_check(check, root, ci, &shared, out),
         out,
     )
 }
@@ -41,6 +44,7 @@ fn run_check(
     check: Check,
     root: &Path,
     ci: Option<&CiEvent>,
+    shared: &Shared,
     out: &mut dyn Write,
 ) -> Result<Verdict> {
     match check {
@@ -48,7 +52,7 @@ fn run_check(
         Check::Fmt | Check::Clippy | Check::Test | Check::Docs | Check::Deny => {
             cargo_cmds::run(check, root, ci, out)
         }
-        Check::Lints => lints::run(root, ci, out),
+        Check::Lints => lints::run(root, ci, shared, out),
         Check::EngineFree => engine_free::run(root, ci, out),
         Check::AcTrace => ac_trace::run(root, ci, out),
         Check::CommitMsg => commit_msg::run(root, ci, out),
@@ -360,7 +364,7 @@ mod tests {
     fn a_check_that_needs_a_pull_request_is_not_run_by_the_gate() {
         let mut out = Vec::new();
         for check in PR_ONLY.into_iter().chain([Check::Github]) {
-            let result = run_check(check, Path::new("."), None, &mut out);
+            let result = run_check(check, Path::new("."), None, &Shared::new(), &mut out);
             assert!(
                 matches!(result, Err(Error::Missing { .. })),
                 "{check:?}: {result:?}"

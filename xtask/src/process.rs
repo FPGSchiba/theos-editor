@@ -161,7 +161,7 @@ pub fn capture_rustc_version(root: &Path) -> Result<Option<String>> {
 
 /// The program to run for rustc: `rustc_env` when it is not empty, else `rustc` in the folder of
 /// `cargo` when there is one, else plain `rustc`.
-fn rustc_program(cargo: Option<&OsStr>, rustc_env: Option<&OsStr>) -> OsString {
+pub fn rustc_program(cargo: Option<&OsStr>, rustc_env: Option<&OsStr>) -> OsString {
     if let Some(rustc) = rustc_env.filter(|rustc| !rustc.is_empty()) {
         return rustc.to_owned();
     }

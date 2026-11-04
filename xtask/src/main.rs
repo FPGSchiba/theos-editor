@@ -23,6 +23,7 @@ use xtask::gate;
 use xtask::git::Git;
 use xtask::github::settings;
 use xtask::verdict::{Check, Verdict};
+use xtask::view::Shared;
 use xtask::{Error, ci, report, tools};
 
 /// Gate tooling for the theos-editor workspace (`docs/gate.md`).
@@ -194,6 +195,7 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
     // The cause goes into the message, so that the plain `{error}` of `main` shows it.
     let ci = ci::from_env()
         .map_err(|error| anyhow::anyhow!("cannot read the GitHub Actions event: {error}"))?;
+    let shared = Shared::new();
     let mut out = std::io::stdout().lock();
     // One arm per subcommand. A built check reads `<module>::run(&root, ci.as_ref(), &mut out)?`.
     let verdict: Verdict = match &cli.command {
@@ -221,7 +223,7 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         Command::Coverage { base } => {
             coverage::run_with_base(&root, ci.as_ref(), base.as_deref(), &mut out)?
         }
-        Command::Lints => lints::run(&root, ci.as_ref(), &mut out)?,
+        Command::Lints => lints::run(&root, ci.as_ref(), &shared, &mut out)?,
         Command::AcTrace { phase: None } => ac_trace::run(&root, ci.as_ref(), &mut out)?,
         Command::AcTrace { phase } => ac_trace::run_phase(&root, *phase, ci.is_some(), &mut out)?,
         Command::CommitMsg {
