@@ -1,0 +1,369 @@
+{
+  "commit": "6b22b2b32d8c3669f09c8fb170aaa2b4173a4c88",
+  "os": "Windows_NT 10.0.26300 x64",
+  "browsers": {
+    "chromium": "156.0.8078.4",
+    "webkit": "27.2"
+  },
+  "date": "2026-11-03T17:50:21.734Z",
+  "kind": "input",
+  "rows": [
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "I-deadkey-circ-chip",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"ê\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "I-deadkey-circ-prose",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"ê\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "I-deadkey-circ-voice",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"ê\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "I-deadkey-uml-chip",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"ü\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "I-deadkey-uml-prose",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"ü\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "I-deadkey-uml-voice",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"ü\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "I-ime-ja-chip",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"日本語\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "I-ime-ja-prose",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"日本語\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "I-ime-ja-voice",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"日本語\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "I-spellcheck-off",
+      "ok": true,
+      "detail": "5 chips and 2 beat rows have spellcheck off"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "chromium",
+      "check": "I-spellcheck-prose",
+      "ok": true,
+      "detail": "prose in a contenteditable <div> with spellcheck on"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "I-ime-webkit",
+      "ok": false,
+      "detail": "gap: no composition input in Playwright WebKit"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "I-insert-chip",
+      "ok": true,
+      "detail": "saved bytes equal the oracle insert of \"日本語êü\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "I-insert-prose",
+      "ok": true,
+      "detail": "saved bytes equal the oracle insert of \"日本語êü\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "I-insert-voice",
+      "ok": true,
+      "detail": "saved bytes equal the oracle insert of \"日本語êü\""
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "I-spellcheck-off",
+      "ok": true,
+      "detail": "5 chips and 2 beat rows have spellcheck off"
+    },
+    {
+      "variant": "codemirror",
+      "engine": "webkit",
+      "check": "I-spellcheck-prose",
+      "ok": true,
+      "detail": "prose in a contenteditable <div> with spellcheck on"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "I-deadkey-circ-chip",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"ê\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "I-deadkey-circ-prose",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"ê\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "I-deadkey-circ-voice",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"ê\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "I-deadkey-uml-chip",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"ü\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "I-deadkey-uml-prose",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"ü\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "I-deadkey-uml-voice",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"ü\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "I-ime-ja-chip",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"日本語\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "I-ime-ja-prose",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"日本語\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "I-ime-ja-voice",
+      "ok": true,
+      "detail": "compositionstart 1, compositionend 1; saved bytes equal the oracle insert of \"日本語\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "I-spellcheck-off",
+      "ok": true,
+      "detail": "5 chips and 2 beat rows have spellcheck off"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "chromium",
+      "check": "I-spellcheck-prose",
+      "ok": true,
+      "detail": "prose in a contenteditable <p> with spellcheck on"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "I-ime-webkit",
+      "ok": false,
+      "detail": "gap: no composition input in Playwright WebKit"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "I-insert-chip",
+      "ok": true,
+      "detail": "saved bytes equal the oracle insert of \"日本語êü\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "I-insert-prose",
+      "ok": true,
+      "detail": "saved bytes equal the oracle insert of \"日本語êü\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "I-insert-voice",
+      "ok": true,
+      "detail": "saved bytes equal the oracle insert of \"日本語êü\""
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "I-spellcheck-off",
+      "ok": true,
+      "detail": "5 chips and 2 beat rows have spellcheck off"
+    },
+    {
+      "variant": "prosemirror:best-effort",
+      "engine": "webkit",
+      "check": "I-spellcheck-prose",
+      "ok": true,
+      "detail": "prose in a contenteditable <p> with spellcheck on"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "I-deadkey-circ-chip",
+      "ok": false,
+      "detail": "compositionstart 1, compositionend 1; the saved text differs from the oracle insert of \"ê\" at 12:69, 389 byte(s) beyond it"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "I-deadkey-circ-prose",
+      "ok": false,
+      "detail": "compositionstart 1, compositionend 1; the saved text differs from the oracle insert of \"ê\" at 12:69, 391 byte(s) beyond it"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "I-deadkey-circ-voice",
+      "ok": false,
+      "detail": "compositionstart 1, compositionend 1; the saved text differs from the oracle insert of \"ê\" at 16:72, 880 byte(s) beyond it"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "I-deadkey-uml-chip",
+      "ok": false,
+      "detail": "compositionstart 1, compositionend 1; the saved text differs from the oracle insert of \"ü\" at 12:69, 389 byte(s) beyond it"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "I-deadkey-uml-prose",
+      "ok": false,
+      "detail": "compositionstart 1, compositionend 1; the saved text differs from the oracle insert of \"ü\" at 12:69, 391 byte(s) beyond it"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "I-deadkey-uml-voice",
+      "ok": false,
+      "detail": "compositionstart 1, compositionend 1; the saved text differs from the oracle insert of \"ü\" at 16:72, 880 byte(s) beyond it"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "I-ime-ja-chip",
+      "ok": false,
+      "detail": "compositionstart 1, compositionend 1; the saved text differs from the oracle insert of \"日本語\" at 12:69, 389 byte(s) beyond it"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "I-ime-ja-prose",
+      "ok": false,
+      "detail": "compositionstart 1, compositionend 1; the saved text differs from the oracle insert of \"日本語\" at 12:69, 398 byte(s) beyond it"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "I-ime-ja-voice",
+      "ok": false,
+      "detail": "compositionstart 1, compositionend 1; the saved text differs from the oracle insert of \"日本語\" at 16:72, 887 byte(s) beyond it"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "I-spellcheck-off",
+      "ok": true,
+      "detail": "5 chips and 2 beat rows have spellcheck off"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "chromium",
+      "check": "I-spellcheck-prose",
+      "ok": true,
+      "detail": "prose in a contenteditable <p> with spellcheck on"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "I-ime-webkit",
+      "ok": false,
+      "detail": "gap: no composition input in Playwright WebKit"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "I-insert-chip",
+      "ok": false,
+      "detail": "the saved text differs from the oracle insert of \"日本語êü\" at 12:69, 389 byte(s) beyond it"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "I-insert-prose",
+      "ok": false,
+      "detail": "the saved text differs from the oracle insert of \"日本語êü\" at 12:69, 402 byte(s) beyond it"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "I-insert-voice",
+      "ok": false,
+      "detail": "the saved text differs from the oracle insert of \"日本語êü\" at 16:72, 891 byte(s) beyond it"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "I-spellcheck-off",
+      "ok": true,
+      "detail": "5 chips and 2 beat rows have spellcheck off"
+    },
+    {
+      "variant": "prosemirror:stock",
+      "engine": "webkit",
+      "check": "I-spellcheck-prose",
+      "ok": true,
+      "detail": "prose in a contenteditable <p> with spellcheck on"
+    }
+  ]
+}

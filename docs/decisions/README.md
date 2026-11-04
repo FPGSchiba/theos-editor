@@ -29,4 +29,4 @@ are added here as numbered records (`NNNN-<slug>.md`) in a PR that waits for Jan
 | 2026-10-31 | One SemVer product version for all crates; tags `vX.Y.Z` only from the release pipeline; milestones 0.1 (S2) to 1.0 (S7). |
 | 2026-10-31 | Releases through release-plz (release PR merged by Jann, one tag) and a tag-triggered workflow for Windows and Linux artifacts with checksums and provenance. |
 | 2026-10-31 | macOS is a supported platform: universal builds in every release, tested weekly and before each release (not per PR); ad-hoc signed until an Apple Developer ID is added. |
-| open | Prose editor component — decided by phase P10. |
+| 2026-11-04 | The manuscript editor (P12) is built on CodeMirror 6 as a live preview over the Markdown source: [0001](0001-prose-editor.md). |

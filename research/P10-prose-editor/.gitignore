@@ -1,0 +1,4 @@
+generated/
+app/test-results/
+app/playwright-report/
+app/dist/
