@@ -1,8 +1,8 @@
 //! The `pr-body` check: the description of a pull request has every section of the pull request
 //! template, and each one has content (`docs/gate.md` §1).
 //!
-//! Template and description are read with `pulldown-cmark` (`CommonMark`, [`crate::markdown`]), so a
-//! heading inside a code block or an HTML comment is no heading. The sections are the level-two
+//! Template and description are read with `pulldown-cmark` (`CommonMark`, [`crate::markdown`]), so
+//! a heading inside a code block or an HTML comment is no heading. The sections are the level-two
 //! headings of `.github/pull_request_template.md`. Each must appear in the description, in any
 //! order and with extra sections allowed, and it has content when it holds text or code other than
 //! HTML comments and whitespace, so a description that keeps only the comments of the template

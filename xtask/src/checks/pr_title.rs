@@ -3,8 +3,9 @@
 //!
 //! The title becomes the squash commit on `main`, so it is held to the rules of
 //! [`header_problems`] as well: the limit of 72 characters counts the whole summary, suffix
-//! included (and ` (#N)` too, when the number of the pull request is known), and the rules for the words (no capital first, no full stop last) also apply to the
-//! words before the suffix. The core is [`check_title`]: a title and a branch in, a verdict out.
+//! included (and ` (#N)` too, when the number of the pull request is known), and the rules for
+//! the words (no capital first, no full stop last) also apply to the words before the suffix. The
+//! core is [`check_title`]: a title and a branch in, a verdict out.
 //! [`run`] takes both from the pull request event.
 
 use std::fmt;

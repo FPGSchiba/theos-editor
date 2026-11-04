@@ -1,9 +1,10 @@
-//! `ac-trace` over fixture repositories (`tests/fixtures/ac-trace/<case>/`), each with an excerpt of
-//! the umbrella spec in the format of the real one: P90 is built in `theos-editor` and has the
+//! `ac-trace` over fixture repositories (`tests/fixtures/ac-trace/<case>/`), each with an excerpt
+//! of the umbrella spec in the format of the real one: P90 is built in `theos-editor` and has the
 //! criteria CE-90.1 and CE-90.2, P91 is built in `tower-of-theos`.
 //!
-//! Each fixture is a one-crate workspace, copied to a temporary directory first, where `cargo check`
-//! builds the view; in this repository `ac-trace` leaves everything under `tests/fixtures/` alone.
+//! Each fixture is a one-crate workspace, copied to a temporary directory first, where `cargo
+//! check` builds the view; in this repository `ac-trace` leaves everything under
+//! `tests/fixtures/` alone.
 
 use std::error::Error;
 use std::fs;

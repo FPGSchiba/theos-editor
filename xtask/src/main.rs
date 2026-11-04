@@ -198,7 +198,8 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
     let shared = Shared::new();
     let mut out = std::io::stdout().lock();
     // One arm per subcommand. A built check reads `<module>::run(&root, ci.as_ref(), &mut out)?`;
-    // the checks that read code (`lints`, `ac-trace`) also take `&shared`, the view built on first use.
+    // the checks that read code (`lints`, `ac-trace`) also take `&shared`, the view built on first
+    // use.
     let verdict: Verdict = match &cli.command {
         Command::Tools {
             print_install_spec: true,

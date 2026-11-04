@@ -9,8 +9,8 @@
 //! counts as proof unless it is switched off:
 //!
 //! - `#[ignore…]`, or a `#[cfg_attr(…, …ignore…)]` which may ignore it on some targets;
-//! - a `#[cfg(…)]` whose predicate names anything but the target (`CfgNames::for_target`), or that is
-//!   `any()`, which is always false;
+//! - a `#[cfg(…)]` whose predicate names anything but the target (`CfgNames::for_target`), or that
+//!   is `any()`, which is always false;
 //! - the same `#[cfg(…)]` rule on an enclosing module or function, except that `test` is allowed
 //!   there (`#[cfg(test)] mod tests` is the ordinary pattern).
 //!
