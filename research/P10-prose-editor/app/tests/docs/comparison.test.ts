@@ -46,6 +46,8 @@ const TIE_ORDER = [
   'Maintenance',
   'Long documents',
 ] as const;
+/** The repo path of the measurement reports (spec §4.6–4.8); a measured cell cites at least one of them. */
+const REPORTS = 'research/P10-prose-editor/report/';
 /** Controller ruling 12 (P10 ledger): Jann's recorded decision on a tie that ruling 11 cannot break. */
 const DECISION = /^Tie decided by Jann \((\d{4}-\d{2}-\d{2})\): (.+)$/;
 
@@ -188,7 +190,9 @@ describe('comparison.md (CE-06.1)', () => {
     }
     // Ruling 12: such a tie is settled by exactly one recorded decision of Jann, listed second.
     const tied = ranked.filter((s) => s.knockout === second.knockout && byRank(s, second) === 0).map((s) => s.name);
-    const decisions = md.split('\n').map((line) => DECISION.exec(line)).filter((m): m is RegExpExecArray => m !== null);
+    // Only a line of the "## Top two" section counts, not a quote of it elsewhere in the file.
+    const decisions = (section(md, 'Top two') ?? '').split('\n').map((line) => DECISION.exec(line))
+      .filter((m): m is RegExpExecArray => m !== null);
     expect(decisions, `spec §4.4 and ruling 11 do not decide between ${tied.join(' and ')}, and no single `
       + '"Tie decided by Jann (<YYYY-MM-DD>): <candidate>" line settles it').toHaveLength(1);
     const [, date, pick] = decisions[0] ?? [];
@@ -217,5 +221,36 @@ describe('comparison.md (CE-06.1)', () => {
       }
     }
     expect(citedSources(section(md, 'Webviews') ?? '').size, 'the "## Webviews" section cites its facts').toBeGreaterThan(0);
+  });
+
+  // AC: CE-06.1
+  it('at stage final the top two carry measured scores', () => {
+    const md = read();
+    const matrix = matrixOf(md);
+    const sources = parseSources(md);
+    expect(md.split('\n').filter((line) => line === 'Stage: final'), 'the "Stage: final" line').toHaveLength(1);
+    const lines = md.split('\n').filter((line) => line.startsWith('Top two: '));
+    expect(lines).toHaveLength(1);
+    const topTwo = (lines[0] ?? '').slice('Top two: '.length).split(', ');
+    expect(topTwo).toHaveLength(2);
+    for (const [index, candidate] of CANDIDATES.entries()) {
+      const top = topTwo.includes(candidate);
+      for (const { name } of CRITERIA) {
+        const cell = cellOf(matrix, name, index);
+        const label = `${name} / ${candidate}`;
+        // Spec §4.4: measured scores for the top two on criteria 1–8; maintenance keeps its paper score.
+        if (!top || name === 'Maintenance') {
+          expect(cell.measured, `${label}: no measured score`).toBeUndefined();
+          continue;
+        }
+        if (name === LICENCE && cell.measured === undefined) continue;
+        expect(cell.measured, `${label}: <paper>→<measured>`).toBeDefined();
+        const reports = cell.sources.filter((id) => {
+          const ref = sources.get(id)?.ref ?? '';
+          return ref.startsWith(REPORTS) && existsSync(fileURLToPath(new URL(`../../../report/${ref.slice(REPORTS.length)}`, import.meta.url)));
+        });
+        expect(reports, `${label} cites no source whose ref is a file of ${REPORTS}: ${cell.sources.join(', ')}`).not.toHaveLength(0);
+      }
+    }
   });
 });
