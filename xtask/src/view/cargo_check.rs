@@ -10,9 +10,9 @@ use std::path::{Path, PathBuf};
 
 use cargo_metadata::{Message, PackageId, TargetKind as CargoKind};
 
-use super::dep_info::{dep_info_of, parse_dep_info, repo_relative};
+use super::dep_info::{build_script_dep_info, dep_info_of, parse_dep_info, repo_relative};
 use super::{Artifact, TargetKind, ViewOptions};
-use crate::process::{CargoCommand, capture_cargo_showing_stderr, cargo_metadata};
+use crate::process::{CargoCommand, cargo_metadata, cargo_output_showing_stderr};
 use crate::{Error, Result};
 
 /// The command whose artifacts make the view.
@@ -39,10 +39,10 @@ pub fn check_command(options: ViewOptions) -> CargoCommand {
     }
 }
 
-/// What the check says to run to read the diagnostics; the error does not quote them, because
-/// they can quote the pull request's code.
-const READ_THE_DIAGNOSTICS: &str = "run `cargo check --workspace --all-targets --locked` in the \
-                                    repository to read the diagnostics";
+/// What the error says when the check fails; it does not quote the diagnostics, because they can
+/// quote the pull request's code.
+const CHECK_FAILED: &str = "the check failed; run `cargo check --workspace --all-targets \
+                            --locked` in the repository to read the diagnostics";
 
 /// The artifacts of the members of the workspace at `root`, as `cargo check --workspace
 /// --all-targets` builds them, each with the files its dep-info lists.
@@ -52,6 +52,9 @@ const READ_THE_DIAGNOSTICS: &str = "run `cargo check --workspace --all-targets -
 /// Fails when cargo cannot give the metadata, cannot be started, or fails to check the
 /// workspace (the error names the command to run and does not echo cargo's diagnostics), when
 /// its messages are not what was expected, or when an artifact has no readable dep-info.
+///
+/// `root` should be absolute: paths of cargo's messages are, and are made relative to it. The
+/// artifacts are sorted by package, kind, name and test, whatever order cargo built them in.
 pub fn artifacts(root: &Path, options: ViewOptions) -> Result<Vec<Artifact>> {
     let metadata = cargo_metadata(root, true, options.locked, options.offline)?;
     let members: BTreeMap<&PackageId, (&str, String)> = metadata
@@ -66,24 +69,26 @@ pub fn artifacts(root: &Path, options: ViewOptions) -> Result<Vec<Artifact>> {
         .collect();
 
     let command = check_command(options);
-    let failed = |message: &str| Error::Command {
+    let output = cargo_output_showing_stderr(root, &command)?;
+    let failed = || Error::Command {
         program: "cargo".to_owned(),
         args: command.args.clone(),
-        status: None,
-        stderr: message.to_owned(),
+        status: output.status.code(),
+        stderr: CHECK_FAILED.to_owned(),
     };
-    let stdout = capture_cargo_showing_stderr(root, &command)?
-        .ok_or_else(|| failed(READ_THE_DIAGNOSTICS))?;
+    if !output.status.success() {
+        return Err(failed());
+    }
 
     let mut artifacts = Vec::new();
-    for message in Message::parse_stream(Cursor::new(stdout)) {
+    for message in Message::parse_stream(Cursor::new(&output.stdout)) {
         let message = message.map_err(|_| Error::Parse {
             what: "the output of `cargo check`".to_owned(),
             message: "a line is not a cargo message".to_owned(),
         })?;
         match message {
             Message::BuildFinished(finished) if !finished.success => {
-                return Err(failed(READ_THE_DIAGNOSTICS));
+                return Err(failed());
             }
             Message::CompilerArtifact(artifact) => {
                 let Some((package, manifest_dir)) = members.get(&artifact.package_id) else {
@@ -117,6 +122,9 @@ pub fn artifacts(root: &Path, options: ViewOptions) -> Result<Vec<Artifact>> {
             _ => {}
         }
     }
+    artifacts.sort_by(|a, b| {
+        (&a.package, a.kind, &a.name, a.test).cmp(&(&b.package, b.kind, &b.name, b.test))
+    });
     Ok(artifacts)
 }
 
@@ -146,35 +154,19 @@ fn target_kind(kind: Option<&CargoKind>) -> Result<TargetKind> {
 
 /// The dep-info file of the artifact whose first file is `first`.
 ///
-/// A build script's first file can be `build-script-build[.exe]`, without a hash (cargo links
-/// it to the hashed one beside it); its dep-info is then the one `build_script_build-*.d` in
-/// the same folder, which cargo gives to this script alone.
+/// Cargo reports a build script as a hard link without the hash (`build-script-build`), on every
+/// OS, so its dep-info is found from the folder (`<package>-<hash>`) instead.
 fn find_dep_info(first: &Path, kind: TargetKind) -> Result<PathBuf> {
-    let named = dep_info_of(first);
-    if named.is_file() || kind != TargetKind::BuildScript {
-        return Ok(named);
+    if kind != TargetKind::BuildScript {
+        return Ok(dep_info_of(first));
     }
-    let folder = first.parent().unwrap_or(first);
-    let listing = fs::read_dir(folder).map_err(|source| Error::Io {
-        path: folder.to_path_buf(),
-        source,
-    })?;
-    let mut found = listing
-        .filter_map(std::result::Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.file_name().is_some_and(|name| {
-                let name = name.to_string_lossy();
-                name.starts_with("build_script_build-")
-                    && Path::new(&*name)
-                        .extension()
-                        .is_some_and(|extension| extension == "d")
-            })
-        });
-    match (found.next(), found.next()) {
-        (Some(only), None) => Ok(only),
-        _ => Ok(named),
-    }
+    first
+        .parent()
+        .and_then(build_script_dep_info)
+        .ok_or_else(|| Error::Parse {
+            what: "a cargo build script artifact".to_owned(),
+            message: "its folder has no hash to name its dep-info file by".to_owned(),
+        })
 }
 
 #[cfg(test)]

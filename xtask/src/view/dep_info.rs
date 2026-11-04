@@ -9,8 +9,8 @@ use std::path::{Component, Path, PathBuf};
 
 /// The files a dep-info text lists: the lines that end with `:` (rustc writes one such target
 /// per input file, with no dependencies after it; the output lines have dependencies after the
-/// colon), with `\ ` read as a space, other backslashes as `/`, and comment lines (`# env-dep:`
-/// and the like) skipped. Sorted and without duplicates.
+/// colon), with a leading `\\?\` dropped, `\ ` read as a space, other backslashes as `/`, and
+/// comment lines (`# env-dep:` and the like) skipped. Sorted and without duplicates.
 #[must_use]
 pub fn parse_dep_info(text: &str) -> Vec<String> {
     let mut files: Vec<String> = text
@@ -18,6 +18,7 @@ pub fn parse_dep_info(text: &str) -> Vec<String> {
         .map(str::trim_end)
         .filter(|line| !line.starts_with('#'))
         .filter_map(|line| line.strip_suffix(':'))
+        .map(|path| path.strip_prefix(r"\\?\").unwrap_or(path))
         .filter(|path| !path.is_empty())
         .map(unescape)
         .collect();
@@ -26,16 +27,16 @@ pub fn parse_dep_info(text: &str) -> Vec<String> {
     files
 }
 
-/// Reads rustc's escapes (`\ ` and `\#` are the character itself), and takes every other
-/// backslash for a Windows path separator.
+/// Reads rustc's one escape (`\ ` is a space), and takes every other backslash for a Windows
+/// path separator.
 fn unescape(path: &str) -> String {
     let mut out = String::with_capacity(path.len());
     let mut chars = path.chars().peekable();
     while let Some(c) = chars.next() {
         if c != '\\' {
             out.push(c);
-        } else if let Some(escaped) = chars.next_if(|next| matches!(next, ' ' | '#')) {
-            out.push(escaped);
+        } else if chars.next_if_eq(&' ').is_some() {
+            out.push(' ');
         } else {
             out.push('/');
         }
@@ -109,7 +110,7 @@ fn same(a: &str, b: &str) -> bool {
 pub fn repo_relative(root: &Path, file: &str) -> String {
     let root = Normal::of(&root.to_string_lossy());
     let mut normal = Normal::of(file);
-    if !normal.absolute() {
+    if !normal.absolute() && !root.text().is_empty() {
         normal = Normal::of(&format!("{}/{file}", root.text()));
     }
     let file = normal;
@@ -141,6 +142,17 @@ pub fn dep_info_of(artifact_file: &Path) -> PathBuf {
     artifact_file.with_file_name(format!("{stem}.d"))
 }
 
+/// The dep-info file of a build script whose files are in `folder`, which cargo names
+/// `<package>-<hash>`: `build_script_build-<hash>.d` in it. The first file cargo reports for a
+/// build script is a hard link without the hash (`build-script-build`), so [`dep_info_of`] cannot
+/// find it from there. `None` when the folder's name has no hash.
+#[must_use]
+pub fn build_script_dep_info(folder: &Path) -> Option<PathBuf> {
+    let name = folder.file_name()?.to_string_lossy();
+    let (_, hash) = name.rsplit_once('-')?;
+    (!hash.is_empty()).then(|| folder.join(format!("build_script_build-{hash}.d")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +168,44 @@ mod tests {
                     c\\ d.rs:\n\
                     # env-dep:CARGO_PKG_NAME=xtask\n";
         assert_eq!(parse_dep_info(text), ["c d.rs", "xtask/src/main.rs"]);
+    }
+
+    #[test]
+    fn rustc_escapes_only_spaces() {
+        assert_eq!(parse_dep_info("crates\\#x\\a.rs:\n"), ["crates/#x/a.rs"]);
+    }
+
+    #[test]
+    fn a_verbatim_line_reaches_repo_relative_without_its_prefix() {
+        let root = std::env::temp_dir().join("repo");
+        let line = format!(
+            "\\\\?\\{}:\n",
+            root.join("crates").join("a").join("data.txt").display()
+        );
+        let files = parse_dep_info(&line);
+        assert_eq!(files.len(), 1);
+        assert_eq!(repo_relative(&root, &files[0]), "crates/a/data.txt");
+    }
+
+    #[test]
+    fn a_relative_root_is_not_a_root_directory() {
+        assert_eq!(
+            repo_relative(Path::new("."), "crates/a/x.rs"),
+            "crates/a/x.rs"
+        );
+    }
+
+    #[test]
+    fn a_build_script_has_its_dep_info_in_its_folder_by_hash() {
+        let folder = Path::new("target")
+            .join("debug")
+            .join("build")
+            .join("my-pkg-0a1b");
+        assert_eq!(
+            build_script_dep_info(&folder),
+            Some(folder.join("build_script_build-0a1b.d"))
+        );
+        assert_eq!(build_script_dep_info(Path::new("nohash")), None);
     }
 
     #[test]

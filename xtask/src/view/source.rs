@@ -16,7 +16,9 @@ pub struct Source {
     pub path: String,
     /// The text, with a byte-order mark and shebang line as they are in the file.
     pub text: String,
-    /// The syntax tree, or `None` when the text does not parse.
+    /// The syntax tree, or `None` when the text does not parse. `syn` reads the text without its
+    /// byte-order mark and shebang line, so only the lines of its spans match [`Source::text`],
+    /// not their byte ranges; take byte ranges from [`Source::tokens`].
     pub file: Option<syn::File>,
     /// The tokens of the text, or `None` when it does not parse. Their byte ranges and lines
     /// match [`Source::text`].
@@ -51,7 +53,7 @@ pub fn parse_source(path: &str, bytes: &[u8]) -> (Source, Option<Finding>) {
         Ok(file) => file,
         Err(error) => return unreadable(text.to_owned(), Some(line_of(error.span()))),
     };
-    let tokens = match TokenStream::from_str(&blank_prelude(text)) {
+    let tokens = match TokenStream::from_str(&blank_prelude(text, file.shebang.as_deref())) {
         Ok(tokens) => tokens,
         Err(error) => return unreadable(text.to_owned(), Some(line_of(error.span()))),
     };
@@ -70,22 +72,17 @@ pub fn line_of(span: Span) -> u32 {
     u32::try_from(span.start().line).unwrap_or(u32::MAX)
 }
 
-/// `text` with a leading byte-order mark and shebang line replaced by spaces of the same byte
-/// length, which is what `syn::parse_file` skips; the tokens of the result sit at the same byte
-/// offsets and lines as in `text`.
-pub(crate) fn blank_prelude(text: &str) -> Cow<'_, str> {
+/// `text` with a leading byte-order mark and the shebang line `syn` found (`shebang` is
+/// `syn::File::shebang`, so syn's and rustc's rule decides what a shebang is) replaced by spaces
+/// of the same byte length; the tokens of the result sit at the same byte offsets and lines as
+/// in `text`.
+fn blank_prelude<'a>(text: &'a str, shebang: Option<&str>) -> Cow<'a, str> {
     let mark_len = if text.starts_with('\u{feff}') {
         '\u{feff}'.len_utf8()
     } else {
         0
     };
-    let rest = &text[mark_len..];
-    let shebang_len = if rest.starts_with("#!") && !rest[2..].trim_start().starts_with('[') {
-        rest.find('\n').unwrap_or(rest.len())
-    } else {
-        0
-    };
-    let blank = mark_len + shebang_len;
+    let blank = mark_len + shebang.map_or(0, str::len);
     if blank == 0 {
         return Cow::Borrowed(text);
     }
@@ -129,13 +126,34 @@ mod tests {
     #[test]
     fn a_byte_order_mark_and_a_shebang_are_blanked_with_their_length() {
         let text = "\u{feff}#!/usr/bin/env run\nfn a() {}\n";
-        let blank = blank_prelude(text);
-        assert_eq!(blank.len(), text.len());
-        assert!(blank.starts_with(' ') && blank.ends_with("\nfn a() {}\n"));
         let (source, finding) = parse_source("a.rs", text.as_bytes());
         assert!(finding.is_none() && source.tokens.is_some());
-        // An inner attribute is not a shebang.
-        assert!(matches!(blank_prelude("#![deny(x)]\n"), Cow::Borrowed(_)));
+        let shebang = source.file.and_then(|file| file.shebang);
+        assert_eq!(shebang.as_deref(), Some("#!/usr/bin/env run"));
+        let blank = blank_prelude(text, shebang.as_deref());
+        assert_eq!(blank.len(), text.len());
+        assert!(blank.starts_with(' ') && blank.ends_with("\nfn a() {}\n"));
+        assert!(matches!(
+            blank_prelude("#![deny(x)]\n", None),
+            Cow::Borrowed(_)
+        ));
+    }
+
+    #[test]
+    fn an_inner_attribute_after_a_comment_is_not_a_shebang() -> TestResult {
+        // `syn` and rustc skip the comment, so this is an inner attribute, and its tokens stay.
+        let text = "#!/*c*/[allow(dead_code)]\nfn a() {}\n";
+        let (source, finding) = parse_source("a.rs", text.as_bytes());
+        assert!(finding.is_none(), "{finding:?}");
+        assert!(source.file.ok_or("no file")?.shebang.is_none());
+        let first = source
+            .tokens
+            .ok_or("no tokens")?
+            .into_iter()
+            .next()
+            .ok_or("no token")?;
+        assert_eq!(&text[first.span().byte_range()], "#");
+        Ok(())
     }
 
     #[test]

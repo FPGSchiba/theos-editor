@@ -8,8 +8,6 @@ use std::ops::Range;
 
 use proc_macro2::{TokenStream, TokenTree};
 
-use super::source::blank_prelude;
-
 /// A `//` comment that is not a doc comment.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct LineComment {
@@ -25,18 +23,17 @@ pub struct LineComment {
 /// listed, and neither are doc comments.
 #[must_use]
 pub fn line_comments(text: &str, tokens: &TokenStream) -> Vec<LineComment> {
-    let text = blank_prelude(text);
     let mut ranges = Vec::new();
     leaf_ranges(tokens, &mut ranges);
     let mut comments = Vec::new();
     let mut cursor = 0;
     for range in ranges {
         if range.start > cursor {
-            scan_gap(&text, cursor..range.start, &mut comments);
+            scan_gap(text, cursor..range.start, &mut comments);
         }
         cursor = cursor.max(range.end);
     }
-    scan_gap(&text, cursor..text.len(), &mut comments);
+    scan_gap(text, cursor..text.len(), &mut comments);
     comments
 }
 
@@ -59,7 +56,11 @@ fn leaf_ranges(tokens: &TokenStream, ranges: &mut Vec<Range<usize>>) {
 
 /// Finds the comments in `text[gap]`, which holds only whitespace and comments.
 fn scan_gap(text: &str, gap: Range<usize>, comments: &mut Vec<LineComment>) {
-    let mut at = gap.start;
+    let mut at = if gap.start == 0 {
+        prelude_end(text, gap.end)
+    } else {
+        gap.start
+    };
     while at < gap.end {
         let rest = &text[at..gap.end];
         if rest.starts_with("/*") {
@@ -73,6 +74,24 @@ fn scan_gap(text: &str, gap: Range<usize>, comments: &mut Vec<LineComment>) {
         } else {
             at += rest.chars().next().map_or(1, char::len_utf8);
         }
+    }
+}
+
+/// Where a byte-order mark and a shebang line end at the start of the first gap, which ends at
+/// `gap_end`. Whatever is left of the shebang's syntax is for the tokens: a `#!` that starts an
+/// inner attribute is a token, so it is in no gap.
+fn prelude_end(text: &str, gap_end: usize) -> usize {
+    let mark = if text.starts_with('\u{feff}') {
+        '\u{feff}'.len_utf8().min(gap_end)
+    } else {
+        0
+    };
+    if gap_end > mark && text[mark..].starts_with("#!") {
+        text[mark..gap_end]
+            .find('\n')
+            .map_or(gap_end, |newline| mark + newline)
+    } else {
+        mark
     }
 }
 

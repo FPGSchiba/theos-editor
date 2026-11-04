@@ -148,6 +148,8 @@ fn a_workspace_that_does_not_check_is_an_error() -> TestResult {
         Err(error @ xtask::Error::Command { .. }) => {
             let text = error.to_string();
             assert!(!text.contains("fn {"), "{text}");
+            assert!(text.contains("exited with status"), "{text}");
+            assert!(text.contains("the check failed"), "{text}");
             assert!(
                 text.contains("cargo check --workspace --all-targets --locked"),
                 "{text}"
@@ -171,5 +173,57 @@ fn shared_builds_the_view_once() -> TestResult {
     let second = shared.view(dir.path())?;
     assert!(std::ptr::eq(first, second));
     assert!(second.source("crates/a/src/extra.rs").is_none());
+    Ok(())
+}
+
+#[test]
+fn a_failed_build_is_not_tried_again() -> TestResult {
+    let dir = copy_case("does-not-check")?;
+    let shared = Shared::with(ViewOptions::FIXTURE);
+    let first = shared.view(dir.path()).err().ok_or("the build passed")?;
+    assert!(matches!(first, xtask::Error::Command { .. }), "{first}");
+    // Were cargo run again, this valid file would make the second call succeed.
+    fs::write(dir.path().join("crates/a/src/lib.rs"), "//! Fixed.\n")?;
+    let second = shared.view(dir.path()).err().ok_or("the build ran again")?;
+    let text = second.to_string();
+    assert!(text.contains("failed earlier in this run"), "{text}");
+    assert!(text.contains(&first.to_string()), "{text}");
+    Ok(())
+}
+
+#[test]
+fn artifacts_come_in_a_fixed_order() -> TestResult {
+    let dir = copy_case("plain")?;
+    let view = View::build(dir.path(), ViewOptions::FIXTURE)?;
+    let order: Vec<(&str, TargetKind, &str, bool)> = view
+        .artifacts
+        .iter()
+        .map(|a| (a.package.as_str(), a.kind, a.name.as_str(), a.test))
+        .collect();
+    assert!(order.windows(2).all(|pair| pair[0] <= pair[1]), "{order:?}");
+    Ok(())
+}
+
+#[test]
+fn a_relative_root_gives_repo_relative_paths() -> TestResult {
+    // The copy goes next to the repository's target folder, so a path relative to the current
+    // directory (the package's folder when tests run) reaches it on every drive.
+    let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("target");
+    fs::create_dir_all(&base)?;
+    let dir = tempfile::tempdir_in(&base)?;
+    copy_dir(&fixtures().join("plain"), dir.path())?;
+    let name = dir.path().file_name().ok_or("no name")?;
+    let relative = Path::new("..").join("target").join(name);
+    assert!(relative.is_relative());
+    let view = View::build(&relative, ViewOptions::FIXTURE)?;
+    let lib = find(&view, "a", TargetKind::Lib, false)?;
+    assert_eq!(lib.manifest_dir, "crates/a");
+    assert_eq!(lib.src_path, "crates/a/src/lib.rs");
+    assert_eq!(
+        files(lib),
+        BTreeSet::from(["crates/a/src/lib.rs", "crates/a/src/sub.rs"])
+    );
     Ok(())
 }

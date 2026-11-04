@@ -51,7 +51,7 @@ impl ViewOptions {
 }
 
 /// What kind of target an artifact is built from.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum TargetKind {
     /// A library of any crate type, a procedural macro included.
     Lib,
@@ -106,6 +106,13 @@ impl View {
     /// Fails when cargo fails ([`cargo_check::artifacts`]) or a file of an artifact cannot be
     /// read. A file that does not parse is a finding of the view, not an error.
     pub fn build(root: &Path, options: ViewOptions) -> Result<Self> {
+        // Cargo's messages carry absolute paths, so every path is made repo-relative against an
+        // absolute root.
+        let root = std::path::absolute(root).map_err(|source| Error::Io {
+            path: root.to_path_buf(),
+            source,
+        })?;
+        let root = root.as_path();
         let artifacts = cargo_check::artifacts(root, options)?;
         let rust_files: BTreeSet<&str> = artifacts
             .iter()
@@ -160,6 +167,8 @@ impl View {
 pub struct Shared {
     options: ViewOptions,
     cell: OnceCell<View>,
+    /// Why the build failed, once it has: cargo is not run a second time in the same run.
+    failure: OnceCell<String>,
 }
 
 impl Shared {
@@ -175,6 +184,7 @@ impl Shared {
         Self {
             options,
             cell: OnceCell::new(),
+            failure: OnceCell::new(),
         }
     }
 
@@ -183,13 +193,24 @@ impl Shared {
     ///
     /// # Errors
     ///
-    /// Fails like [`View::build`]; a failed build is tried again by the next call.
+    /// Fails like [`View::build`]. A failed build is not tried again: later calls fail with an
+    /// error that says so and repeats the first one's text.
     pub fn view(&self, root: &Path) -> Result<&View> {
         if let Some(view) = self.cell.get() {
             return Ok(view);
         }
-        let view = View::build(root, self.options)?;
-        Ok(self.cell.get_or_init(|| view))
+        if let Some(why) = self.failure.get() {
+            return Err(Error::Missing {
+                what: format!("the workspace view, whose build failed earlier in this run: {why}"),
+            });
+        }
+        match View::build(root, self.options) {
+            Ok(view) => Ok(self.cell.get_or_init(|| view)),
+            Err(error) => {
+                self.failure.get_or_init(|| error.to_string());
+                Err(error)
+            }
+        }
     }
 }
 

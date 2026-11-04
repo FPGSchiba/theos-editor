@@ -8,7 +8,7 @@
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 
 use cargo_metadata::{Metadata, MetadataCommand};
 
@@ -53,7 +53,8 @@ pub fn capture_cargo(root: &Path, cmd: &CargoCommand) -> Result<Option<String>> 
 }
 
 /// Runs cargo in `root` like [`capture_cargo`], but lets cargo's stderr through to ours, so a
-/// long command shows its progress and its diagnostics to the person who runs it.
+/// long command shows its progress to the person who runs it. (With `--message-format=json`
+/// cargo writes the compiler's diagnostics to stdout as JSON, so they are captured, not shown.)
 ///
 /// Returns what cargo wrote to stdout when it exited with 0, and `None` otherwise.
 ///
@@ -61,9 +62,23 @@ pub fn capture_cargo(root: &Path, cmd: &CargoCommand) -> Result<Option<String>> 
 ///
 /// Fails when cargo cannot be started.
 pub fn capture_cargo_showing_stderr(root: &Path, cmd: &CargoCommand) -> Result<Option<String>> {
+    let output = cargo_output_showing_stderr(root, cmd)?;
+    Ok(output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).into_owned()))
+}
+
+/// Like [`capture_cargo_showing_stderr`], but returns the whole output, so the caller can say
+/// how cargo ended.
+///
+/// # Errors
+///
+/// Fails when cargo cannot be started.
+pub(crate) fn cargo_output_showing_stderr(root: &Path, cmd: &CargoCommand) -> Result<Output> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
     tracing::debug!(args = ?cmd.args, root = %root.display(), "capture, showing stderr");
-    let output = command(&cargo, root, cmd)
+    command(&cargo, root, cmd)
         .stderr(Stdio::inherit())
         .output()
         .map_err(|source| Error::Command {
@@ -71,11 +86,7 @@ pub fn capture_cargo_showing_stderr(root: &Path, cmd: &CargoCommand) -> Result<O
             args: cmd.args.clone(),
             status: None,
             stderr: source.to_string(),
-        })?;
-    Ok(output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).into_owned()))
+        })
 }
 
 /// The metadata of the workspace at `root`, without the dependencies when `no_deps`.
@@ -105,7 +116,9 @@ pub(crate) fn cargo_metadata(
     };
     let stdout = capture_cargo(root, &command)?.ok_or_else(|| Error::Missing {
         what: format!(
-            "the metadata of the workspace: `cargo {}` failed, and what it said can quote the              manifests of the pull request, so it is not shown; run it in the repository to              read it",
+            "the metadata of the workspace: `cargo {}` failed, and what it said can quote the \
+             manifests of the pull request, so it is not shown; run it in the repository to \
+             read it",
             args.join(" ")
         ),
     })?;
@@ -350,6 +363,24 @@ mod tests {
             output.is_some_and(|text| text.lines().any(|line| line.starts_with("release: "))),
             "rustc -vV has no release line"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn a_workspace_without_metadata_is_an_error_that_quotes_nothing() -> crate::Result<()> {
+        let dir = tempfile::tempdir().map_err(|source| crate::Error::Io {
+            path: PathBuf::from("temporary directory"),
+            source,
+        })?;
+        let error = cargo_metadata(dir.path(), true, false, true)
+            .err()
+            .map(|error| error.to_string());
+        let text = error.unwrap_or_default();
+        assert!(
+            text.contains("failed, and what it said can quote the manifests of the pull request"),
+            "{text}"
+        );
+        assert!(!text.contains("  "), "{text}");
         Ok(())
     }
 
