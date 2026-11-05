@@ -488,7 +488,8 @@ impl<'a> Syncer<'a> {
     /// `None` for given bytes, which leaves no times so that the next sync reads the file.
     fn settle(&mut self, path: &str, bytes: &[u8], stamp: Option<Stamp>) -> Result<(), IndexError> {
         let hash = sha256_hex(bytes);
-        let same = self.file_row(path)?.is_some_and(|row| row.hash == hash);
+        let known = self.file_row(path)?;
+        let same = known.as_ref().is_some_and(|row| row.hash == hash);
         let racy = stamp.is_none_or(|stamp| is_racy(stamp.mtime_ns, now_ns()));
         if same {
             if stamp.is_some() {
@@ -504,7 +505,13 @@ impl<'a> Syncer<'a> {
                 .as_ref()
                 .map(|row| (row.id.as_str(), row.facts.as_str())),
         )?;
-        write::replace(self.conn, path, &new)?;
+        // A path without a `files` row has no rows to delete (see `write`): a cold build only
+        // inserts.
+        if known.is_some() {
+            write::replace(self.conn, path, &new)?;
+        } else {
+            write::insert(self.conn, path, &new)?;
+        }
         self.put_file(path, stamp, &hash, racy)?;
         self.reparsed(path);
         Ok(())

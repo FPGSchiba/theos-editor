@@ -1,5 +1,9 @@
 //! Replacing the rows of one path: delete everything the path has, then insert its new rows.
 //!
+//! A path has rows only while it has a `files` row: every write of a path's rows writes its
+//! `files` row in the same transaction, and [`delete_all`] deletes that row with the others. A
+//! path without a `files` row is new, so its rows are inserted without deleting first.
+//!
 //! Every statement here runs once per record or row, so each one comes from the connection's
 //! statement cache ([`Connection::prepare_cached`]) and is compiled once per connection.
 
@@ -41,7 +45,8 @@ fn delete_rows(conn: &Connection, path: &str) -> rusqlite::Result<()> {
     Ok(())
 }
 
-fn insert(conn: &Connection, path: &str, rows: &RecordRows) -> rusqlite::Result<()> {
+/// Inserts `rows` for `path`, which has no rows yet: it has no `files` row.
+pub(crate) fn insert(conn: &Connection, path: &str, rows: &RecordRows) -> rusqlite::Result<()> {
     if let Some(row) = &rows.record {
         let mut stmt = conn.prepare_cached(
             "INSERT INTO records (path, id, id_fold, kind, title, status, front, body_start, \
