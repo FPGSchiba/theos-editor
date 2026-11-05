@@ -4,6 +4,7 @@ mod edit;
 mod index;
 mod normalize;
 mod span;
+mod utf16;
 
 pub use edit::{EditError, TextEdit, apply_edits};
 pub use index::{Position, PositionError, TextIndex};

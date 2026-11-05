@@ -50,23 +50,47 @@ pub enum PositionError {
         /// The requested column.
         column: usize,
     },
+    /// The UTF-16 offset falls between the two halves of a surrogate pair.
+    #[error("utf-16 offset {utf16} is inside a surrogate pair")]
+    InsideSurrogatePair {
+        /// The offending UTF-16 offset.
+        utf16: usize,
+    },
 }
 
 /// An LF text together with the byte offset where each line starts.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TextIndex {
-    text: String,
-    line_starts: Vec<usize>,
+    pub(super) text: String,
+    /// Byte offset where each line starts.
+    pub(super) line_starts: Vec<usize>,
+    /// UTF-16 offset where each line starts, parallel to `line_starts`.
+    pub(super) utf16_starts: Vec<usize>,
 }
 
 impl TextIndex {
     /// Indexes `text`, which must already use LF line endings (see [`super::normalize`]).
     #[must_use]
     pub fn new(text: String) -> TextIndex {
-        let line_starts = std::iter::once(0)
+        let line_starts: Vec<usize> = std::iter::once(0)
             .chain(text.match_indices('\n').map(|(i, _)| i + 1))
             .collect();
-        TextIndex { text, line_starts }
+        let mut utf16_starts = Vec::with_capacity(line_starts.len());
+        let mut utf16 = 0;
+        let mut previous = 0;
+        for &start in &line_starts {
+            utf16 += text[previous..start]
+                .chars()
+                .map(char::len_utf16)
+                .sum::<usize>();
+            utf16_starts.push(utf16);
+            previous = start;
+        }
+        TextIndex {
+            text,
+            line_starts,
+            utf16_starts,
+        }
     }
 
     /// The indexed text.
