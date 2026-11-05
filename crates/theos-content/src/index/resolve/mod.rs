@@ -110,22 +110,6 @@ fn folder_of(path: &str) -> &str {
     path.rsplit_once('/').map_or("", |(folder, _)| folder)
 }
 
-/// Every record path in the store.
-pub(crate) fn record_paths(conn: &Connection) -> Result<BTreeSet<String>, IndexError> {
-    let mut stmt = conn.prepare("SELECT path FROM records")?;
-    Ok(stmt
-        .query_map([], |row| row.get(0))?
-        .collect::<Result<_, _>>()?)
-}
-
-/// Every id fold in the store.
-pub(crate) fn id_folds(conn: &Connection) -> Result<BTreeSet<String>, IndexError> {
-    let mut stmt = conn.prepare("SELECT DISTINCT id_fold FROM records")?;
-    Ok(stmt
-        .query_map([], |row| row.get(0))?
-        .collect::<Result<_, _>>()?)
-}
-
 /// Replaces the `links` findings of each of `sources` with the findings of [`LINK_RULES`], read
 /// against the records the links name.
 pub(crate) fn relink(

@@ -115,6 +115,8 @@ struct Syncer<'a> {
     registry: &'a KindRegistry,
     root: &'a Path,
     update: Update,
+    /// The ids whose link facts changed, old and new (spec §5.9 step 4).
+    affected: BTreeSet<String>,
 }
 
 impl Index {
@@ -186,6 +188,7 @@ impl Index {
             registry: &self.registry,
             root: &self.root,
             update: Update::default(),
+            affected: BTreeSet::new(),
         };
         work(&mut syncer)?;
         syncer.resolve()?;
@@ -196,19 +199,57 @@ impl Index {
 }
 
 impl Syncer<'_> {
-    /// Step 4: when anything changed, relink every record and recheck every id fold (plan ruling
-    /// L26). Every record that was not re-parsed counts as relinked.
+    /// Step 4: relink the re-parsed records and the records that link to an affected id, and
+    /// recheck the id folds of the affected ids only (CE-12.2). `relinked` lists those that were
+    /// not re-parsed.
     fn resolve(&mut self) -> Result<(), IndexError> {
-        if self.update.reparsed.is_empty() && self.update.removed.is_empty() {
+        if self.affected.is_empty() && self.update.reparsed.is_empty() {
             return Ok(());
         }
-        let paths = resolve::record_paths(self.conn)?;
-        resolve::relink(self.conn, self.registry, &paths)?;
-        resolve::recheck_ids(self.conn, &resolve::id_folds(self.conn)?)?;
-        self.update.relinked = paths
+        let mut sources: BTreeSet<String> = self.update.reparsed.iter().cloned().collect();
+        let mut stmt = self
+            .conn
+            .prepare("SELECT DISTINCT path FROM links WHERE target = ?1")?;
+        for id in &self.affected {
+            for path in stmt.query_map([id], |row| row.get::<_, String>(0))? {
+                sources.insert(path?);
+            }
+        }
+        drop(stmt);
+        for path in &self.update.removed {
+            sources.remove(path);
+        }
+        resolve::relink(self.conn, self.registry, &sources)?;
+        let folds = self
+            .affected
+            .iter()
+            .map(|id| id.to_ascii_lowercase())
+            .collect();
+        resolve::recheck_ids(self.conn, &folds)?;
+        self.update.relinked = sources
             .into_iter()
             .filter(|path| !self.update.reparsed.contains(path))
             .collect();
+        Ok(())
+    }
+
+    /// Step 2 of the affected set: before the rows of `path` are replaced or deleted, compare
+    /// the id and facts they hold with the `new` ones, none when the record goes away. A record
+    /// that appears or disappears counts as changed.
+    fn touch(&mut self, path: &str, new: Option<(&str, &str)>) -> Result<(), IndexError> {
+        let old: Option<(String, String)> = self
+            .conn
+            .query_row(
+                "SELECT id, facts FROM records WHERE path = ?1",
+                [path],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        if old.as_ref().map(|(_, facts)| facts.as_str()) == new.map(|(_, facts)| facts) {
+            return Ok(());
+        }
+        self.affected.extend(old.map(|(id, _)| id));
+        self.affected.extend(new.map(|(id, _)| id.to_owned()));
         Ok(())
     }
 
@@ -304,7 +345,14 @@ impl Syncer<'_> {
             return Ok(());
         }
         let checked = check_record(self.registry, path, bytes);
-        write::replace(self.conn, path, &rows::rows(path, checked, self.registry))?;
+        let new = rows::rows(path, checked, self.registry);
+        self.touch(
+            path,
+            new.record
+                .as_ref()
+                .map(|row| (row.id.as_str(), row.facts.as_str())),
+        )?;
+        write::replace(self.conn, path, &new)?;
         self.put_file(path, stamp, &hash, racy)?;
         self.update.reparsed.push(path.to_owned());
         Ok(())
@@ -318,6 +366,7 @@ impl Syncer<'_> {
         }) {
             return Ok(());
         }
+        self.touch(path, None)?;
         write::delete_all(self.conn, path)?;
         write::insert_finding(self.conn, &path_finding(path), "record")?;
         self.put_file(path, Some(stamp), "", false)?;
@@ -333,6 +382,7 @@ impl Syncer<'_> {
         stamp: Stamp,
         error: &std::io::Error,
     ) -> Result<(), IndexError> {
+        self.touch(path, None)?;
         write::delete_all(self.conn, path)?;
         write::insert_finding(self.conn, &read_finding(path, error), "record")?;
         self.put_file(path, Some(stamp), "", true)?;
@@ -343,6 +393,7 @@ impl Syncer<'_> {
     /// Step 2 for one path: delete its rows, when it has any.
     fn remove(&mut self, path: &str) -> Result<(), IndexError> {
         if self.file_row(path)?.is_some() {
+            self.touch(path, None)?;
             write::delete_all(self.conn, path)?;
             self.update.removed.push(path.to_owned());
         }

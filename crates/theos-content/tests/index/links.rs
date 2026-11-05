@@ -373,16 +373,15 @@ fn backlinks_and_children() -> TestResult {
 }
 
 #[test]
-fn a_change_relinks_every_other_record_and_a_removal_clears_duplicates() -> TestResult {
+fn a_removal_relinks_its_backlinks_and_clears_duplicates() -> TestResult {
     let mut index = indexed()?;
     assert_eq!(index.sync()?, theos_content::Update::default());
-    let total = index.records()?.len();
     let update = index.apply(&[theos_content::Change::Removed {
         path: "dialogue/synthetic-twin.md".to_owned(),
     }])?;
     assert_eq!(update.removed, ["dialogue/synthetic-twin.md"]);
     assert_eq!(update.reparsed.len(), 0);
-    assert_eq!(update.relinked.len(), total - 1);
+    assert_eq!(update.relinked, ["concepts/synthetic-concept.md"]);
     let left = index.findings_for("things/synthetic-twin.md")?;
     assert!(
         left.iter().all(|f| f.rule != "index/duplicate-id"),
