@@ -28,6 +28,26 @@ impl TempProject {
         Ok(TempProject { dir })
     }
 
+    /// A project in a temporary folder with the records of P02's corpus (`records/` and
+    /// `malformed/`) together and a `theos.toml`.
+    pub fn corpus() -> Result<TempProject, Box<dyn std::error::Error>> {
+        let project = TempProject::new()?;
+        for part in ["records", "malformed"] {
+            copy_dir(&corpus_dir().join(part), project.root())?;
+        }
+        Ok(project)
+    }
+
+    /// This project with one more file of the given bytes.
+    pub fn with_file(self, rel: &str, bytes: &[u8]) -> std::io::Result<TempProject> {
+        let path = self.path(rel);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, bytes)?;
+        Ok(self)
+    }
+
     /// The project folder.
     pub fn root(&self) -> &Path {
         self.dir.path()
@@ -74,7 +94,8 @@ impl TempProject {
     }
 }
 
-/// Copies the folder `from` into the existing folder `to`, recursively.
+/// Copies the folder `from` into the existing folder `to`, recursively; a folder that both have
+/// is merged.
 fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
     for entry in std::fs::read_dir(from)? {
         let entry = entry?;
@@ -109,6 +130,14 @@ pub fn keys(findings: &[Finding]) -> Vec<Key> {
         .collect()
 }
 
+/// The folder of P02's corpus.
+pub fn corpus_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("corpus")
+}
+
 /// The folder of the fixture project `name`.
 pub fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -141,4 +170,41 @@ pub fn expected(path: &Path) -> Result<Vec<Key>, Box<dyn std::error::Error>> {
         .into_iter()
         .map(|f| (f.path, f.rule, f.severity, f.line, f.column))
         .collect())
+}
+
+#[derive(serde::Deserialize)]
+struct CrlfExpectation {
+    input: String,
+    #[serde(flatten)]
+    key: Expectation,
+}
+
+#[derive(serde::Deserialize)]
+struct IndexExpectations {
+    project: Vec<Expectation>,
+    crlf: Vec<CrlfExpectation>,
+}
+
+/// What `expected-index.toml` lists: the findings of the corpus project, and those of the CRLF
+/// files that have no twin among the records, each with the name of its input file.
+pub struct IndexExpectation {
+    /// The `[[project]]` tables, in the shape of [`keys`].
+    pub project: Vec<Key>,
+    /// The `[[crlf]]` tables: the input file name and the [`Key`] of the finding.
+    pub crlf: Vec<(String, Key)>,
+}
+
+/// The `[[project]]` and `[[crlf]]` tables of the `expected-index.toml` at `path`.
+pub fn expected_index(path: &Path) -> Result<IndexExpectation, Box<dyn std::error::Error>> {
+    let text = std::fs::read_to_string(path)?;
+    let parsed: IndexExpectations = toml::from_str(&text)?;
+    let key = |f: Expectation| (f.path, f.rule, f.severity, f.line, f.column);
+    Ok(IndexExpectation {
+        project: parsed.project.into_iter().map(key).collect(),
+        crlf: parsed
+            .crlf
+            .into_iter()
+            .map(|c| (c.input, key(c.key)))
+            .collect(),
+    })
 }

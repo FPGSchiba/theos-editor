@@ -1,0 +1,298 @@
+# synthetic fixture list (P03), not canon. Checked by hand against docs/specs/phases/
+# P03-kinds-index-search-lenses.md section 5.4 and 5.5 and the fixture texts. Every finding of
+# the project: path, rule, severity, line and column. `record/utf8` is added by the test, which
+# applies bytes that are not UTF-8 (a fixture file is text).
+
+[[finding]]
+path = "canon/formalism/E931.md"
+rule = "schema/value"
+severity = "error"
+line = 6
+column = 9
+
+[[finding]]
+path = "canon/formalism/E931.md"
+rule = "schema/value"
+severity = "error"
+line = 7
+column = 12
+
+[[finding]]
+path = "concepts/synthetic-concept/synthetic-concept-v3.md"
+rule = "schema/value"
+severity = "error"
+line = 7
+column = 12
+
+[[finding]]
+path = "concepts/synthetic-concept/synthetic-concept-v3.md"
+rule = "schema/value"
+severity = "error"
+line = 9
+column = 7
+
+[[finding]]
+path = "concepts/synthetic-concept/synthetic-concept-v3.md"
+rule = "schema/value"
+severity = "error"
+line = 11
+column = 10
+
+[[finding]]
+path = "concepts/synthetic-concept/synthetic-concept-v3.md"
+rule = "schema/value"
+severity = "error"
+line = 12
+column = 17
+
+[[finding]]
+path = "concepts/synthetic-concept/synthetic-concept-v3.md"
+rule = "schema/value"
+severity = "error"
+line = 13
+column = 9
+
+[[finding]]
+path = "concepts/synthetic-concept/synthetic-concept-v3.md"
+rule = "schema/value"
+severity = "error"
+line = 14
+column = 8
+
+[[finding]]
+path = "concepts/synthetic-concept/synthetic-concept-v4.md"
+rule = "schema/value"
+severity = "error"
+line = 9
+column = 9
+
+[[finding]]
+path = "concepts/synthetic-concept/synthetic-concept-v4.md"
+rule = "schema/value"
+severity = "error"
+line = 10
+column = 10
+
+[[finding]]
+path = "concepts/synthetic-concept/synthetic-other-v1.md"
+rule = "schema/version-id"
+severity = "error"
+line = 3
+column = 5
+
+[[finding]]
+path = "lore/beliefs/B-931.md"
+rule = "schema/value"
+severity = "error"
+line = 7
+column = 10
+
+[[finding]]
+path = "lore/clues/C-931.md"
+rule = "schema/required"
+severity = "error"
+line = 4
+column = 7
+
+[[finding]]
+path = "lore/topics/synthetic-bad-in-world.md"
+rule = "schema/topic-counterpart"
+severity = "error"
+line = 4
+column = 7
+
+[[finding]]
+path = "lore/topics/synthetic-bad-in-world.md"
+rule = "schema/topic-track"
+severity = "error"
+line = 7
+column = 8
+
+[[finding]]
+path = "lore/topics/synthetic-url-explaining.md"
+rule = "schema/value"
+severity = "error"
+line = 8
+column = 9
+
+[[finding]]
+path = "lore/truths/T-12.md"
+rule = "schema/id"
+severity = "error"
+line = 3
+column = 5
+
+[[finding]]
+path = "lore/truths/T-931.md"
+rule = "schema/required"
+severity = "error"
+line = 4
+column = 7
+
+[[finding]]
+path = "lore/truths/T-932.md"
+rule = "schema/value"
+severity = "error"
+line = 7
+column = 9
+
+[[finding]]
+path = "maps/synthetic-map/synthetic-map-v2.md"
+rule = "schema/unknown-field"
+severity = "warning"
+line = 12
+column = 1
+
+[[finding]]
+path = "people/synthetic-folk-bad.md"
+rule = "schema/value"
+severity = "error"
+line = 6
+column = 11
+
+[[finding]]
+path = "people/synthetic-folk-bad.md"
+rule = "schema/value"
+severity = "error"
+line = 8
+column = 9
+
+[[finding]]
+path = "people/synthetic-folk-bad.md"
+rule = "schema/value"
+severity = "error"
+line = 9
+column = 15
+
+[[finding]]
+path = "people/synthetic-folk-lens-text.md"
+rule = "schema/value"
+severity = "error"
+line = 6
+column = 7
+
+[[finding]]
+path = "people/synthetic-folk-unknown.md"
+rule = "schema/unknown-entry"
+severity = "warning"
+line = 8
+column = 3
+
+[[finding]]
+path = "things/synthetic-anchor.md"
+rule = "yaml/anchor"
+severity = "error"
+line = 5
+column = 8
+
+[[finding]]
+path = "things/synthetic-bom.md"
+rule = "record/bom"
+severity = "error"
+line = 1
+column = 1
+
+[[finding]]
+path = "things/synthetic-misnamed.md"
+rule = "index/file-name"
+severity = "error"
+line = 3
+column = 5
+
+[[finding]]
+path = "things/synthetic-missing-type.md"
+rule = "schema/required"
+severity = "error"
+line = 4
+column = 7
+
+[[finding]]
+path = "things/synthetic-no-closing.md"
+rule = "record/closing-line"
+severity = "error"
+line = 1
+column = 1
+
+[[finding]]
+path = "things/synthetic-no-id.md"
+rule = "schema/id"
+severity = "error"
+line = 3
+column = 7
+
+[[finding]]
+path = "things/synthetic-no-kind.md"
+rule = "schema/kind"
+severity = "error"
+line = 1
+column = 1
+
+[[finding]]
+path = "things/synthetic-no-opening.md"
+rule = "record/opening-line"
+severity = "error"
+line = 1
+column = 1
+
+[[finding]]
+path = "things/synthetic-unknown-kind.md"
+rule = "schema/kind"
+severity = "error"
+line = 4
+column = 7
+
+[[finding]]
+path = "things/synthetic-unknown.md"
+rule = "schema/unknown-field"
+severity = "warning"
+line = 7
+column = 1
+
+[[finding]]
+path = "world/synthetic-band-bad.md"
+rule = "schema/value"
+severity = "error"
+line = 6
+column = 19
+
+[[finding]]
+path = "world/synthetic-band-bad.md"
+rule = "schema/value"
+severity = "error"
+line = 8
+column = 9
+
+[[finding]]
+path = "world/synthetic-band-bad.md"
+rule = "schema/value"
+severity = "error"
+line = 9
+column = 7
+
+[[finding]]
+path = "world/synthetic-band-bad.md"
+rule = "schema/value"
+severity = "error"
+line = 10
+column = 7
+
+[[finding]]
+path = "world/synthetic-band/f01-synthetic/synthetic-place-bad.md"
+rule = "schema/value"
+severity = "error"
+line = 6
+column = 9
+
+[[finding]]
+path = "world/synthetic-band/f02-synthetic.md"
+rule = "schema/value"
+severity = "error"
+line = 8
+column = 9
+
+[[finding]]
+path = "world/synthetic-band/f03-synthetic.md"
+rule = "schema/value"
+severity = "error"
+line = 8
+column = 9
