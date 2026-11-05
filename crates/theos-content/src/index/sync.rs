@@ -376,26 +376,29 @@ impl<'a> Syncer<'a> {
         Ok(())
     }
 
-    /// Step 2 of the affected set: before the rows of `path` are replaced or deleted, note the
-    /// old and `new` id folds for the recheck, and compare the id and facts the rows hold with the
-    /// `new` ones, none when the record goes away. A record that appears or disappears counts as
-    /// changed.
-    fn touch(&mut self, path: &str, new: Option<(&str, &str)>) -> Result<(), IndexError> {
-        let old: Option<(String, String)> = self
+    /// The id and link facts that the rows of `path` hold, none when it has no record row.
+    fn old_facts(&self, path: &str) -> Result<Option<(String, String)>, IndexError> {
+        Ok(self
             .conn
             .prepare_cached("SELECT id, facts FROM records WHERE path = ?1")?
             .query_row([path], |row| Ok((row.get(0)?, row.get(1)?)))
-            .optional()?;
+            .optional()?)
+    }
+
+    /// Step 2 of the affected set: before the rows of a path are replaced or deleted, note the
+    /// old and `new` id folds for the recheck, and compare the `old` id and facts, which the rows
+    /// hold, with the `new` ones; either is none when there is no record. A record that appears
+    /// or disappears counts as changed.
+    fn touch(&mut self, old: Option<(String, String)>, new: Option<(&str, &str)>) {
         self.rechecked
             .extend(old.iter().map(|(id, _)| resolve::id_fold(id)));
         self.rechecked
             .extend(new.iter().map(|(id, _)| resolve::id_fold(id)));
         if old.as_ref().map(|(_, facts)| facts.as_str()) == new.map(|(_, facts)| facts) {
-            return Ok(());
+            return;
         }
         self.affected.extend(old.map(|(id, _)| id));
         self.affected.extend(new.map(|(id, _)| id.to_owned()));
-        Ok(())
     }
 
     /// Steps 1 and 2 for the whole project.
@@ -441,7 +444,10 @@ impl<'a> Syncer<'a> {
         match source {
             Source::Gone => self.remove(path),
             _ if is_ignored(self.root, path) => self.remove(path),
-            Source::Given(bytes) => self.settle(path, &bytes, None),
+            Source::Given(bytes) => {
+                let known = self.file_row(path)?;
+                self.settle(path, &bytes, None, known.as_ref())
+            }
             Source::Disk if !is_listed(self.root, path) => self.remove(path),
             Source::Disk => match std::fs::metadata(self.root.join(path)) {
                 Ok(meta) if meta.is_file() => self.on_disk(
@@ -467,7 +473,8 @@ impl<'a> Syncer<'a> {
 
     /// Step 1 for one file: read it unless its size and time say it is unchanged.
     fn on_disk(&mut self, path: &str, stamp: Stamp) -> Result<(), IndexError> {
-        if let Some(row) = self.file_row(path)?
+        let known = self.file_row(path)?;
+        if let Some(row) = &known
             && !row.racy
             && row.size == i64::try_from(stamp.size).ok()
             && row.mtime_ns == Some(stamp.mtime_ns)
@@ -477,7 +484,7 @@ impl<'a> Syncer<'a> {
         match std::fs::read(self.root.join(path)) {
             Ok(bytes) => {
                 self.update.read.push(path.to_owned());
-                self.settle(path, &bytes, Some(stamp))
+                self.settle(path, &bytes, Some(stamp), known.as_ref())
             }
             Err(error) if error.kind() == ErrorKind::NotFound => self.remove(path),
             Err(error) => self.unreadable(path, stamp, &error),
@@ -486,10 +493,16 @@ impl<'a> Syncer<'a> {
 
     /// Step 3 for one record whose `bytes` are known. `stamp` is the file's size and time, or
     /// `None` for given bytes, which leaves no times so that the next sync reads the file.
-    fn settle(&mut self, path: &str, bytes: &[u8], stamp: Option<Stamp>) -> Result<(), IndexError> {
+    /// `known` is the path's `files` row, as the caller read it.
+    fn settle(
+        &mut self,
+        path: &str,
+        bytes: &[u8],
+        stamp: Option<Stamp>,
+        known: Option<&FileRow>,
+    ) -> Result<(), IndexError> {
         let hash = sha256_hex(bytes);
-        let known = self.file_row(path)?;
-        let same = known.as_ref().is_some_and(|row| row.hash == hash);
+        let same = known.is_some_and(|row| row.hash == hash);
         let racy = stamp.is_none_or(|stamp| is_racy(stamp.mtime_ns, now_ns()));
         if same {
             if stamp.is_some() {
@@ -499,17 +512,18 @@ impl<'a> Syncer<'a> {
         }
         let checked = check_record(self.registry, path, bytes);
         let new = rows::rows(path, checked, self.registry);
-        self.touch(
-            path,
-            new.record
-                .as_ref()
-                .map(|row| (row.id.as_str(), row.facts.as_str())),
-        )?;
-        // A path without a `files` row has no rows to delete (see `write`): a cold build only
-        // inserts.
+        let facts = new
+            .record
+            .as_ref()
+            .map(|row| (row.id.as_str(), row.facts.as_str()));
+        // A path without a `files` row has no rows (see `write`): nothing to look up or delete,
+        // so a cold build only inserts.
         if known.is_some() {
+            let old = self.old_facts(path)?;
+            self.touch(old, facts);
             write::replace(self.conn, path, &new)?;
         } else {
+            self.touch(None, facts);
             write::insert(self.conn, path, &new)?;
         }
         self.put_file(path, stamp, &hash, racy)?;
@@ -525,7 +539,8 @@ impl<'a> Syncer<'a> {
         }) {
             return Ok(());
         }
-        self.touch(path, None)?;
+        let old = self.old_facts(path)?;
+        self.touch(old, None);
         write::delete_all(self.conn, path)?;
         write::insert_finding(self.conn, &path_finding(path), "record")?;
         self.put_file(path, Some(stamp), "", false)?;
@@ -541,7 +556,8 @@ impl<'a> Syncer<'a> {
         stamp: Stamp,
         error: &std::io::Error,
     ) -> Result<(), IndexError> {
-        self.touch(path, None)?;
+        let old = self.old_facts(path)?;
+        self.touch(old, None);
         write::delete_all(self.conn, path)?;
         write::insert_finding(self.conn, &read_finding(path, error), "record")?;
         self.put_file(path, Some(stamp), "", true)?;
@@ -553,7 +569,8 @@ impl<'a> Syncer<'a> {
     /// call no longer counts as a re-parse: the path is gone.
     fn remove(&mut self, path: &str) -> Result<(), IndexError> {
         if self.file_row(path)?.is_some() {
-            self.touch(path, None)?;
+            let old = self.old_facts(path)?;
+            self.touch(old, None);
             write::delete_all(self.conn, path)?;
             self.update.reparsed.retain(|other| other != path);
             self.update.removed.push(path.to_owned());
