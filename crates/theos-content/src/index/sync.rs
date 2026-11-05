@@ -56,14 +56,16 @@ impl Change {
     }
 }
 
-/// What a sync, update or apply did; every list is sorted.
+/// What a sync, update or apply did; every list is sorted. A path is in at most one of
+/// `reparsed` and `removed`: when one call changes a path more than once, its last change
+/// decides.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Update {
-    /// The files read from disk.
+    /// The files read from disk, also one that a later change of the same call removed.
     pub read: Vec<String>,
-    /// The records whose rows were replaced.
+    /// The records whose rows were replaced and that still exist.
     pub reparsed: Vec<String>,
-    /// The records that were removed.
+    /// The records that were removed and are gone.
     pub removed: Vec<String>,
     /// The records whose links were recomputed without being re-parsed.
     pub relinked: Vec<String>,
@@ -426,7 +428,7 @@ impl Syncer<'_> {
         )?;
         write::replace(self.conn, path, &new)?;
         self.put_file(path, stamp, &hash, racy)?;
-        self.update.reparsed.push(path.to_owned());
+        self.reparsed(path);
         Ok(())
     }
 
@@ -442,7 +444,7 @@ impl Syncer<'_> {
         write::delete_all(self.conn, path)?;
         write::insert_finding(self.conn, &path_finding(path), "record")?;
         self.put_file(path, Some(stamp), "", false)?;
-        self.update.reparsed.push(path.to_owned());
+        self.reparsed(path);
         Ok(())
     }
 
@@ -458,18 +460,27 @@ impl Syncer<'_> {
         write::delete_all(self.conn, path)?;
         write::insert_finding(self.conn, &read_finding(path, error), "record")?;
         self.put_file(path, Some(stamp), "", true)?;
-        self.update.reparsed.push(path.to_owned());
+        self.reparsed(path);
         Ok(())
     }
 
-    /// Step 2 for one path: delete its rows, when it has any.
+    /// Step 2 for one path: delete its rows, when it has any. A change of it earlier in the same
+    /// call no longer counts as a re-parse: the path is gone.
     fn remove(&mut self, path: &str) -> Result<(), IndexError> {
         if self.file_row(path)?.is_some() {
             self.touch(path, None)?;
             write::delete_all(self.conn, path)?;
+            self.update.reparsed.retain(|other| other != path);
             self.update.removed.push(path.to_owned());
         }
         Ok(())
+    }
+
+    /// Notes that the rows of `path` were replaced. A removal of it earlier in the same call no
+    /// longer counts: the path exists again, and step 4 must relink it.
+    fn reparsed(&mut self, path: &str) {
+        self.update.removed.retain(|other| other != path);
+        self.update.reparsed.push(path.to_owned());
     }
 
     fn file_row(&self, path: &str) -> Result<Option<FileRow>, IndexError> {

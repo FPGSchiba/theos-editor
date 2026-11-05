@@ -353,6 +353,112 @@ fn backslashes_in_given_paths_are_read_as_slashes() -> TestResult {
     Ok(())
 }
 
+const LINKED: &str = "things/synthetic-linked.md";
+const FIRST: &str = "things/synthetic-first.md";
+const SECOND: &str = "things/synthetic-second.md";
+
+/// A thing with the given body.
+fn thing_with(id: &str, title: &str, body: &str) -> String {
+    format!(
+        "---\n# synthetic fixture (P03), not canon\nid: {id}\nkind: thing\ntitle: {title}\ntype: synthetic\n---\n{body}\n"
+    )
+}
+
+/// A project of [`LINKED`], which has a dangling link, and two things that link to it.
+fn linked_project() -> Result<(TempProject, Index), Box<dyn std::error::Error>> {
+    let project = TempProject::new()?;
+    project.write(
+        LINKED,
+        &thing_with(
+            "synthetic-linked",
+            "synthetic linked",
+            "See [[synthetic-nowhere]].",
+        ),
+    )?;
+    for (path, id) in [(FIRST, "synthetic-first"), (SECOND, "synthetic-second")] {
+        project.write(
+            path,
+            &thing_with(id, "synthetic", "See [[synthetic-linked]]."),
+        )?;
+    }
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    Ok((project, index))
+}
+
+/// The dump of a fresh in-memory index over the folder of `project`.
+fn fresh_dump(project: &TempProject) -> Result<String, Box<dyn std::error::Error>> {
+    let mut fresh = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    fresh.sync()?;
+    Ok(fresh.dump()?)
+}
+
+fn dangles(findings: &[theos_content::Finding]) -> bool {
+    findings.iter().any(|f| {
+        f.path == LINKED && f.rule == "link/dangling" && f.message.contains("synthetic-nowhere")
+    })
+}
+
+// AC: CE-12.2
+#[test]
+fn a_path_removed_and_given_again_in_one_list_is_reparsed() -> TestResult {
+    let (project, mut index) = linked_project()?;
+    let text = thing_with(
+        "synthetic-linked",
+        "synthetic linked, retitled",
+        "See [[synthetic-nowhere]].",
+    );
+    project.write(LINKED, &text)?;
+    let changes = [
+        Change::Removed {
+            path: LINKED.to_owned(),
+        },
+        Change::text(LINKED, text),
+    ];
+    let expected = Update {
+        read: Vec::new(),
+        reparsed: paths(&[LINKED]),
+        removed: Vec::new(),
+        relinked: paths(&[FIRST, SECOND]),
+    };
+    let before = index.dump()?;
+    let preview = index.preview(&changes)?;
+    assert_eq!(preview.update, expected);
+    assert!(dangles(&preview.findings), "{:#?}", preview.findings);
+    assert_eq!(index.dump()?, before);
+
+    assert_eq!(index.apply(&changes)?, expected);
+    assert!(dangles(&index.findings_for(LINKED)?));
+    assert_eq!(index.dump()?, fresh_dump(&project)?);
+    Ok(())
+}
+
+// AC: CE-12.2
+#[test]
+fn a_path_given_and_removed_in_one_list_is_removed() -> TestResult {
+    let (project, mut index) = linked_project()?;
+    project.remove(LINKED)?;
+    let changes = [
+        Change::text(
+            LINKED,
+            thing_with("synthetic-linked", "synthetic linked, retitled", "x"),
+        ),
+        Change::Removed {
+            path: LINKED.to_owned(),
+        },
+    ];
+    let expected = Update {
+        read: Vec::new(),
+        reparsed: Vec::new(),
+        removed: paths(&[LINKED]),
+        relinked: paths(&[FIRST, SECOND]),
+    };
+    assert_eq!(index.preview(&changes)?.update, expected);
+    assert_eq!(index.apply(&changes)?, expected);
+    assert_eq!(index.dump()?, fresh_dump(&project)?);
+    Ok(())
+}
+
 #[test]
 fn paths_outside_the_walk_are_ignored() -> TestResult {
     let project = TempProject::new()?;
