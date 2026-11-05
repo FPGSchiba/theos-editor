@@ -107,6 +107,48 @@ fn a_damaged_cache_and_a_new_fingerprint_rebuild_the_same_index() -> TestResult 
     Ok(())
 }
 
+/// Overwrites the root page of `table` in the cache `file` with garbage. Opening the cache reads
+/// page 1 and `meta`; the sync reads `files` and the records.
+fn damage_table(file: &std::path::Path, table: &str) -> TestResult {
+    use std::io::{Seek, SeekFrom, Write};
+    let conn = rusqlite::Connection::open(file)?;
+    let page_size: i64 = conn.query_row("PRAGMA page_size", [], |r| r.get(0))?;
+    let root: i64 = conn.query_row(
+        "SELECT rootpage FROM sqlite_master WHERE name = ?1",
+        [table],
+        |r| r.get(0),
+    )?;
+    drop(conn);
+    assert!(root > 1, "`{table}` is on page {root}");
+    let offset = u64::try_from((root - 1) * page_size)?;
+    let page_size = usize::try_from(page_size)?;
+    let garbage = "synthetic garbage ".repeat(page_size);
+    let mut cache = std::fs::OpenOptions::new().write(true).open(file)?;
+    cache.seek(SeekFrom::Start(offset))?;
+    cache.write_all(&garbage.as_bytes()[..page_size])?;
+    Ok(())
+}
+
+// AC: CE-12.4
+#[test]
+fn a_cache_damaged_past_its_first_page_is_rebuilt() -> TestResult {
+    let project = TempProject::copy_of("links")?;
+    let registry = parts::builtin()?;
+    let (first, _) = Index::open(&project.project()?, &registry)?;
+    drop(first);
+    let file = project.root().join(CACHE).join("index.sqlite");
+    damage_table(&file, "files")?;
+    let (second, update) = Index::open(&project.project()?, &registry)?;
+    let mut fresh = Index::in_memory(&project.project()?, &registry)?;
+    fresh.sync()?;
+    assert_eq!(second.dump()?, fresh.dump()?);
+    assert_ne!(update.reparsed.len(), 0);
+    drop(second);
+    let (_third, update) = Index::open(&project.project()?, &registry)?;
+    assert_eq!(update.reparsed.len(), 0);
+    Ok(())
+}
+
 #[test]
 fn a_foreign_meta_table_is_rebuilt() -> TestResult {
     let project = TempProject::copy_of("links")?;

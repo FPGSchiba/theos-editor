@@ -39,7 +39,8 @@ pub struct Index {
 
 impl Index {
     /// Opens the cache `<root>/.theos/cache/index.sqlite` of `project` and syncs it with the
-    /// folder, reading only the files whose size or time changed.
+    /// folder, reading only the files whose size or time changed. A cache that turns out to be
+    /// damaged during that first sync is deleted and built again once.
     ///
     /// # Errors
     ///
@@ -50,14 +51,25 @@ impl Index {
             .join(".theos")
             .join("cache")
             .join("index.sqlite");
-        let store = Store::open(&file, &Identity::current(registry))?;
-        let mut index = Index {
-            root: project.root().to_path_buf(),
-            registry: registry.clone(),
-            store,
+        let identity = Identity::current(registry);
+        let open = || -> Result<(Index, Update), IndexError> {
+            let mut index = Index {
+                root: project.root().to_path_buf(),
+                registry: registry.clone(),
+                store: Store::open(&file, &identity)?,
+            };
+            let update = index.sync()?;
+            Ok((index, update))
         };
-        let update = index.sync()?;
-        Ok((index, update))
+        // Opening reads only page 1 and `meta`; damage elsewhere shows in the sync. The failed
+        // index is dropped by then, so the cache files are closed and can be deleted.
+        match open() {
+            Err(IndexError::Sqlite(error)) if store::is_damage(&error) => {
+                store::discard(&file, &error)?;
+                open()
+            }
+            other => other,
+        }
     }
 
     /// An empty index in memory: [`Index::sync`] fills it from the folder, [`Index::apply`] from

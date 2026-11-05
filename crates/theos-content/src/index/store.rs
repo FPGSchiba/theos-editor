@@ -49,8 +49,7 @@ impl Store {
         }
         match Self::try_open(file, identity) {
             Err(IndexError::Sqlite(error)) if is_damage(&error) => {
-                tracing::warn!(path = %file.display(), %error, "the index cache is damaged; rebuilding it");
-                remove_cache(file)?;
+                discard(file, &error)?;
                 Self::try_open(file, identity)
             }
             other => other,
@@ -155,11 +154,22 @@ fn has_every_table(conn: &Connection) -> Result<bool, rusqlite::Error> {
     Ok(usize::try_from(present).is_ok_and(|n| n == TABLES.len()))
 }
 
-fn is_damage(error: &rusqlite::Error) -> bool {
+/// Whether SQLite says that the cache file is not a database or is corrupt.
+pub(crate) fn is_damage(error: &rusqlite::Error) -> bool {
     matches!(
         error.sqlite_error_code(),
         Some(ErrorCode::NotADatabase | ErrorCode::DatabaseCorrupt)
     )
+}
+
+/// Deletes the damaged cache `file`, with a `tracing` warning, so that it is built again.
+///
+/// # Errors
+///
+/// Fails with [`IndexError::CacheInUse`] when a file of the cache cannot be deleted.
+pub(crate) fn discard(file: &Path, error: &rusqlite::Error) -> Result<(), IndexError> {
+    tracing::warn!(path = %file.display(), %error, "the index cache is damaged; rebuilding it");
+    remove_cache(file)
 }
 
 /// Maps `SQLITE_BUSY` to [`IndexError::Busy`]; everything else stays a SQLite error.
