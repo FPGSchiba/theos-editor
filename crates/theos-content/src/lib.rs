@@ -23,6 +23,7 @@
 //! conversion of [`TextIndex`].
 
 pub mod body;
+pub mod check;
 pub mod finding;
 pub mod kinds;
 pub mod parts;

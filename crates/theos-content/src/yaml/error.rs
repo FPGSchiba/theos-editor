@@ -54,31 +54,62 @@ pub enum YamlRule {
 }
 
 impl YamlRule {
+    /// Every rule, in the order of the phase spec.
+    pub const ALL: [YamlRule; 21] = [
+        YamlRule::Anchor,
+        YamlRule::Alias,
+        YamlRule::Tag,
+        YamlRule::BlockScalar,
+        YamlRule::ControlCharacter,
+        YamlRule::OneLineScalar,
+        YamlRule::Escape,
+        YamlRule::FlowMap,
+        YamlRule::Layout,
+        YamlRule::ListOfMaps,
+        YamlRule::NestedMap,
+        YamlRule::ListInList,
+        YamlRule::OneLineList,
+        YamlRule::TopLevelMap,
+        YamlRule::TabIndent,
+        YamlRule::DuplicateKey,
+        YamlRule::Key,
+        YamlRule::ComplexKey,
+        YamlRule::DocumentMarker,
+        YamlRule::EmptyValue,
+        YamlRule::Syntax,
+    ];
+
     /// The kebab-case name of the rule, as the phase spec lists it (`syntax` for the crate).
     #[must_use]
     pub fn as_str(self) -> &'static str {
+        self.id().strip_prefix("yaml/").unwrap_or_default()
+    }
+
+    /// The rule id of a finding, `yaml/<name>`.
+    #[must_use]
+    pub fn id(self) -> &'static str {
         match self {
-            YamlRule::Anchor => "anchor",
-            YamlRule::Alias => "alias",
-            YamlRule::Tag => "tag",
-            YamlRule::BlockScalar => "block-scalar",
-            YamlRule::ControlCharacter => "control-character",
-            YamlRule::OneLineScalar => "one-line-scalar",
-            YamlRule::Escape => "escape",
-            YamlRule::FlowMap => "flow-map",
-            YamlRule::Layout => "layout",
-            YamlRule::ListOfMaps => "list-of-maps",
-            YamlRule::NestedMap => "nested-map",
-            YamlRule::ListInList => "list-in-list",
-            YamlRule::OneLineList => "one-line-list",
-            YamlRule::TopLevelMap => "top-level-map",
-            YamlRule::TabIndent => "tab-indent",
-            YamlRule::DuplicateKey => "duplicate-key",
-            YamlRule::Key => "key",
-            YamlRule::ComplexKey => "complex-key",
-            YamlRule::DocumentMarker => "document-marker",
-            YamlRule::EmptyValue => "empty-value",
-            YamlRule::Syntax => "syntax",
+            YamlRule::Anchor => "yaml/anchor",
+            YamlRule::Alias => "yaml/alias",
+            YamlRule::Tag => "yaml/tag",
+            YamlRule::BlockScalar => "yaml/block-scalar",
+            YamlRule::ControlCharacter => "yaml/control-character",
+            YamlRule::OneLineScalar => "yaml/one-line-scalar",
+            YamlRule::Escape => "yaml/escape",
+            YamlRule::FlowMap => "yaml/flow-map",
+            YamlRule::Layout => "yaml/layout",
+            YamlRule::ListOfMaps => "yaml/list-of-maps",
+            YamlRule::NestedMap => "yaml/nested-map",
+            YamlRule::ListInList => "yaml/list-in-list",
+            YamlRule::OneLineList => "yaml/one-line-list",
+            YamlRule::TopLevelMap => "yaml/top-level-map",
+            YamlRule::TabIndent => "yaml/tab-indent",
+            YamlRule::DuplicateKey => "yaml/duplicate-key",
+            YamlRule::Key => "yaml/key",
+            YamlRule::ComplexKey => "yaml/complex-key",
+            YamlRule::DocumentMarker => "yaml/document-marker",
+            YamlRule::EmptyValue => "yaml/empty-value",
+            YamlRule::Syntax => "yaml/syntax",
         }
     }
 }
@@ -95,4 +126,45 @@ pub struct YamlError {
     pub span: Span,
     /// Line and column of the start of `span`, in record coordinates.
     pub position: Position,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Exhaustive, so a new rule must be added here and then to [`YamlRule::ALL`].
+    fn index(rule: YamlRule) -> usize {
+        match rule {
+            YamlRule::Anchor => 0,
+            YamlRule::Alias => 1,
+            YamlRule::Tag => 2,
+            YamlRule::BlockScalar => 3,
+            YamlRule::ControlCharacter => 4,
+            YamlRule::OneLineScalar => 5,
+            YamlRule::Escape => 6,
+            YamlRule::FlowMap => 7,
+            YamlRule::Layout => 8,
+            YamlRule::ListOfMaps => 9,
+            YamlRule::NestedMap => 10,
+            YamlRule::ListInList => 11,
+            YamlRule::OneLineList => 12,
+            YamlRule::TopLevelMap => 13,
+            YamlRule::TabIndent => 14,
+            YamlRule::DuplicateKey => 15,
+            YamlRule::Key => 16,
+            YamlRule::ComplexKey => 17,
+            YamlRule::DocumentMarker => 18,
+            YamlRule::EmptyValue => 19,
+            YamlRule::Syntax => 20,
+        }
+    }
+
+    #[test]
+    fn all_lists_every_rule_once_and_names_follow_ids() {
+        for (at, rule) in YamlRule::ALL.iter().enumerate() {
+            assert_eq!(index(*rule), at);
+            assert_eq!(rule.id(), format!("yaml/{}", rule.as_str()));
+        }
+        assert_eq!(YamlRule::Syntax.as_str(), "syntax");
+    }
 }
