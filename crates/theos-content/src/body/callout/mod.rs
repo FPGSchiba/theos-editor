@@ -34,7 +34,8 @@ pub struct Callout {
     pub name_span: Span,
     /// The fold marker after `]`, if any.
     pub fold: Option<Fold>,
-    /// The rest of the first line after one optional space; may be empty.
+    /// The title after the marker and fold sign, without the spaces and tabs at both ends; empty
+    /// when there is none.
     pub title_span: Span,
     /// From the start of the second line to the end of the callout; may be empty.
     pub content_span: Span,
