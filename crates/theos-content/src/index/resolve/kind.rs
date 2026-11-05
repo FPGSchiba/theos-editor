@@ -1,7 +1,7 @@
 //! `link/kind`: the record a link names is of a kind its slot does not allow.
 
-use super::{LinkRule, SourceRecord, TargetInfo, Targets, at_link, with_article};
-use crate::finding::{Finding, Severity};
+use super::{LinkRule, SourceRecord, TargetInfo, Targets, at_link};
+use crate::finding::{Finding, Severity, with_article};
 use crate::index::slots::Slot;
 use crate::kinds::{KindRegistry, Target};
 

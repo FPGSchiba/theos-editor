@@ -1,7 +1,7 @@
 //! `index/placement`: a record whose file is not where the placement of its kind puts it.
 
-use super::{LinkRule, SourceRecord, Targets, at_link, finding, folder_of, with_article};
-use crate::finding::{Finding, Severity};
+use super::{LinkRule, SourceRecord, Targets, at_link, finding, folder_of};
+use crate::finding::{Finding, Severity, with_article};
 use crate::index::slots::Slot;
 use crate::kinds::{KindRegistry, Placement};
 

@@ -1,7 +1,7 @@
 //! `link/dangling`: a link whose id names no record, or whose beat does not exist.
 
-use super::{LinkRule, SourceRecord, Targets, at_link, with_article};
-use crate::finding::{Finding, Severity};
+use super::{LinkRule, SourceRecord, Targets, at_link};
+use crate::finding::{Finding, Severity, with_article};
 use crate::kinds::KindRegistry;
 
 /// The rule.

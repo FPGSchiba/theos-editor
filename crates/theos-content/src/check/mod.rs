@@ -376,6 +376,31 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn messages_name_the_kind_with_its_article() -> Result<(), Box<dyn std::error::Error>> {
+        let npc = run(
+            "people/a.md",
+            b"---\nid: a\nkind: npc\nparent: f\ncolour: red\n---\n",
+        )?;
+        let messages: Vec<&str> = npc.findings.iter().map(|f| f.message.as_str()).collect();
+        assert!(messages.contains(&"an npc needs `title`"), "{messages:?}");
+        assert!(
+            messages.contains(&"`colour` is not a field of an npc"),
+            "{messages:?}"
+        );
+        let equation = run(
+            "canon/formalism/E930.md",
+            b"---\nid: E930\nkind: equation\ntitle: E\nstatus: draft\ngenerated: true\n---\n",
+        )?;
+        let messages: Vec<&str> = equation
+            .findings
+            .iter()
+            .map(|f| f.message.as_str())
+            .collect();
+        assert_eq!(messages, ["an equation needs `source`"]);
+        Ok(())
+    }
+
     // AC: CE-11.1
     #[test]
     fn a_broken_front_matter_stops_the_schema() -> Result<(), Box<dyn std::error::Error>> {

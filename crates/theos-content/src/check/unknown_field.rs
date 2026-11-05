@@ -1,7 +1,7 @@
 //! `schema/unknown-field` (warning): a field the kind does not have.
 
 use super::{SchemaRule, Subject};
-use crate::finding::Severity;
+use crate::finding::{Severity, with_article};
 use crate::kinds::Problem;
 
 /// The rule.
@@ -19,7 +19,11 @@ fn run(subject: &Subject<'_>) -> Vec<Problem> {
         .filter(|field| subject.spec.field(&field.key).is_none())
         .map(|field| Problem {
             span: field.key_span,
-            message: format!("`{}` is not a field of a {}", field.key, subject.spec.name),
+            message: format!(
+                "`{}` is not a field of {}",
+                field.key,
+                with_article(subject.spec.name)
+            ),
         })
         .collect()
 }

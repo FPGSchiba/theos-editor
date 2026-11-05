@@ -69,9 +69,33 @@ impl fmt::Display for Finding {
     }
 }
 
+/// `a` or `an` before `word`, for messages that name a kind; `npc` is read as letters, so it
+/// takes `an`.
+pub(crate) fn with_article(word: &str) -> String {
+    let article = if word.starts_with(['a', 'e', 'i', 'o', 'u']) || word.starts_with("npc") {
+        "an"
+    } else {
+        "a"
+    };
+    format!("{article} {word}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn kinds_take_their_article() {
+        for (kind, want) in [
+            ("npc", "an npc"),
+            ("equation", "an equation"),
+            ("item", "an item"),
+            ("thing", "a thing"),
+            ("belief", "a belief"),
+        ] {
+            assert_eq!(with_article(kind), want);
+        }
+    }
 
     fn finding(path: &str, rule: &str, position: Option<Position>) -> Finding {
         Finding {

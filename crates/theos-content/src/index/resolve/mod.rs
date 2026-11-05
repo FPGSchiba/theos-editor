@@ -95,16 +95,6 @@ fn at_link(rule: &LinkRule, source: &SourceRecord, link: &LinkRow, message: Stri
     finding(rule, source, (link.span, link.position), message)
 }
 
-/// `a` or `an` before `word`; `npc` is read as letters, so it takes `an`.
-fn with_article(word: &str) -> String {
-    let article = if word.starts_with(['a', 'e', 'i', 'o', 'u']) || word.starts_with("npc") {
-        "an"
-    } else {
-        "a"
-    };
-    format!("{article} {word}")
-}
-
 /// The folder of a project-relative path: everything before the last `/`, or empty.
 fn folder_of(path: &str) -> &str {
     path.rsplit_once('/').map_or("", |(folder, _)| folder)

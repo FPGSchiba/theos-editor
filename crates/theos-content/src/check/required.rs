@@ -1,7 +1,7 @@
 //! `schema/required`: every required field is there.
 
 use super::{SchemaRule, Subject};
-use crate::finding::Severity;
+use crate::finding::{Severity, with_article};
 use crate::kinds::Problem;
 
 /// The rule.
@@ -21,7 +21,7 @@ fn run(subject: &Subject<'_>) -> Vec<Problem> {
         .filter(|field| subject.front.get(field.key).is_none())
         .map(|field| Problem {
             span: subject.kind_span,
-            message: format!("a {} needs `{}`", subject.spec.name, field.key),
+            message: format!("{} needs `{}`", with_article(subject.spec.name), field.key),
         })
         .collect()
 }
