@@ -177,12 +177,7 @@ pub(super) fn block_edits(
             None => first.start,
         };
         let spelled = encode_all(new, &gap.inserted, Slot::BlockItem)?;
-        let lines = wrapped(
-            &spelled,
-            &format!("{indent}- "),
-            "
-",
-        );
+        let lines = wrapped(&spelled, &format!("{indent}- "), "\n");
         if !lines.is_empty() {
             edits.push(TextEdit {
                 span: Span::new(at, at),

@@ -123,11 +123,7 @@ fn list_edits_change_only_the_field_lines() -> Result<(), Box<dyn Error>> {
     let inside = new_region
         .get(new.text())
         .ok_or("region outside the new text")?;
-    assert!(inside.contains(
-        "  # a comment between block items
-
-"
-    ));
+    assert!(inside.contains("  # a comment between block items\n\n"));
     let field = new
         .front_matter()
         .map_err(ToString::to_string)?
