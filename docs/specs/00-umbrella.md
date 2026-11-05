@@ -84,13 +84,14 @@ Slices say what Jann can do once their phases are merged; Jira tracks slices.
 | P16 | Generative screens: Concepts, ComfyUI, Maps | theos-editor | S7 | P09, P12 |
 | P17 | AI drafts and semantic search | theos-editor | S7 | P04, P15 |
 | P18 | Installer, first run, Code preset | theos-editor | S7 | P14 |
+| P19 | Comments | theos-editor | S5 | P12, P13 |
 
 Core track runs in order P00 → P02 → … → P07. P01, P08 and P10 can run in parallel sessions in
 their own worktrees. UI phases start after P06.
 
 Slices: **S1** write lore now (P01, P10) · **S2** canon checks (P00, P02–P05) · **S3** propose and
-review (P06, P07) · **S4** maps (P08, P09) · **S5** core UI (P11–P13) · **S6** complete UI (P14,
-P15) · **S7** pictures and places (P16–P18).
+review (P06, P07) · **S4** maps (P08, P09) · **S5** core UI (P11–P13, P19) · **S6** complete UI
+(P14, P15) · **S7** pictures and places (P16–P18).
 
 ---
 
@@ -432,6 +433,49 @@ From this phase the gate includes `ui` (added by an approved gate PR inside this
 **CE-50 Code preset**
 - CE-50.1 Plain files open in a code view.
 - CE-50.2 "Open in VS Code" for the current file.
+
+### P19 · Comments
+
+Comments on passages of a record, as designed in `docs/decisions/0002-comments-on-text.md`. Its
+agent tools need the wording for G7 and CE-23.1 proposed in decision 0002 §10, which Jann settles
+before this phase starts. The UI references for the margin, Review and Changes are added in this
+phase's spec PR (G18).
+
+**CE-51 Comment threads and anchors**
+- CE-51.1 A record's threads are read from `.theos/comments/<id>.toml`; a comment file that does
+  not parse is a finding with its path, and its record still opens.
+- CE-51.2 After an edit made outside the editor, a passage that moved is found again, an edited
+  passage attaches as changed, and a deleted passage is orphaned, never attached elsewhere.
+
+**CE-52 Comment commands**
+- CE-52.1 Opening, replying to, resolving, reopening and deleting a thread, and editing or
+  withdrawing a comment, are commands with undo; none changes a record's bytes.
+- CE-52.2 A comment written by an MCP process while the editor writes another to the same file
+  is kept, and so is the editor's.
+- CE-52.3 Renaming an id renames its comment file in the same command; deleting a record keeps
+  its threads, which show as orphaned.
+
+**CE-53 Comments over MCP**
+- CE-53.1 `comment_list` and `comment_read` work over stdio; `comment_read` returns the passage
+  with its lines and every comment with its author and time; threads on locked records are
+  flagged and threads on `never` truths are marked, as in CE-18.3.
+- CE-53.2 `comment_open` and `comment_reply` add comments under the session's name and change no
+  record; agents cannot resolve, reopen, edit, withdraw or delete, and the comment tools of a
+  paused session fail with "paused".
+- CE-53.3 `comment_propose` creates a review entry linked to its thread; approving it resolves
+  the thread, rejecting it keeps the thread open with the note.
+
+**CE-54 Comments in the editor**
+- CE-54.1 Selecting a passage and adding a comment opens a thread in the margin next to it;
+  replying, resolving and reopening work there, and every comment shows its author and time.
+- CE-54.2 A thread's passage follows typing, undo and outside changes; saving re-anchors exactly
+  the threads whose passage moved or changed, and no others.
+- CE-54.3 A thread whose passage is gone is listed as detached, with its quote, and can be
+  re-attached or resolved.
+- CE-54.4 An agent's comment or proposal appears in the open record without a reload and is
+  marked as the agent's.
+- CE-54.5 A review entry shows the threads its proposal resolves; Changes lists comment files
+  apart from record changes.
 
 ---
 

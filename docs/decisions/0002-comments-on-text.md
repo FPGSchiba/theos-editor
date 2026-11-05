@@ -1,16 +1,17 @@
 # 0002 · Comments on text sections
 
 A proposal for Jann. It decides how comments on passages of a record are stored, anchored,
-threaded and offered over MCP, and which phases build them. It changes no acceptance criterion
-(AC): the criteria in §9 and the wording in §10 are proposals for Jann to add to the umbrella
-spec.
+threaded and offered over MCP, and which phase builds them: a new phase, P19 · Comments (§8). The
+same PR adds P19 and its acceptance criteria (ACs) to the umbrella spec (§9). It changes no
+existing AC: the wording for G7 and CE-23.1 in §10 is a proposal that Jann applies.
 
 ## Status
 
 proposed · 2026-11-05 · accepted when Jann merges the PR
-`docs(docs): comments on text sections (docs)`. On acceptance, Jann adds the criteria of §9 and
-the wording of §10 to `docs/specs/00-umbrella.md` and `docs/architecture.md` in a PR of their
-own.
+`docs(docs): comments on text sections (docs)`. Merging it accepts this design and adds P19 to
+`docs/specs/00-umbrella.md` and `docs/status.md`, as Jann asked on 5 Nov 2026. Jann settles the
+wording of §10 for G7 and CE-23.1 before P19 starts. The changes to `docs/architecture.md` and
+`docs/specs/data-model.md` (§10) come with P19's spec.
 
 Sources: the P10 comments probe ([notes][probe-notes], [behaviours][probe-tests]),
 [decision 0001][0001], the P02 phase spec (`docs/specs/phases/P02-records-and-grammars.md`, in
@@ -46,7 +47,7 @@ record through a comment.
 | Threads | `open` or `resolved`. Whether the passage is attached, changed or orphaned is computed on every read. Only people resolve and reopen. | 4 |
 | MCP | Read: `comment_list`, `comment_read`. Agent writes: `comment_open`, `comment_reply`, `comment_propose`. | 5 |
 | Agent replies | A reply is a comment, not a proposal. Every change to a record stays a proposal. This needs one sentence in G7 and one in CE-23.1 (§10). | 5.3 |
-| Phases | P02 exposes positions; P05 builds the model, the files, re-anchoring and MCP read; P06 the commands; P07 the agent tools and the review link; P12 the margin; P13 Review and Changes. | 8, 9 |
+| Phases | P02 exposes positions. A new phase, P19 · Comments (slice S5, after P12 and P13), builds everything else at once: model, file, re-anchoring, commands, MCP tools, margin, Review and Changes. | 8, 9 |
 
 ## 1. Storage
 
@@ -86,7 +87,7 @@ editor and `theos` can see and sync.
 - `.theos/` is already "not records" for the index (P01 spec §5), Obsidian hides dot folders,
   and tower-of-theos's `.gitattributes` already forces LF for `toml` (CE-01.2).
 - Keyed by record id, not path. Moving a record to another folder changes nothing; renaming its
-  id renames its comment file in the same command (CE-20.3, P06).
+  id renames its comment file in the same command (CE-20.3; P19 extends P06's rename).
 - Not beside the record (`lore/truths/T-012.comments.toml`): that puts non-record files into the
   kind folders, which P01's layout and P03's index would have to learn to skip, and moving a
   record to a new parent would have to carry them along.
@@ -253,7 +254,7 @@ A pure function in `theos-content`, `resolve(anchor, text)`, returning
 
 A wrong attachment is worse than an orphan. Step 3 therefore errs towards orphaning, and the
 phase that builds it tests near misses: a repeated phrase, a sentence moved to another
-paragraph, one word changed, a passage rewritten. Step 3 is required (CE-51.2). P05 builds it on
+paragraph, one word changed, a passage rewritten. Step 3 is required (CE-51.2). P19 builds it on
 a maintained Rust port of diff-match-patch if one passes its probe. Otherwise it builds it on
 `similar` alone: a character diff of the quote against the text around `start` gives the best
 matching range and its ratio. Our code is only the glue between the crate and the rules above.
@@ -268,7 +269,7 @@ Separately, a thread knows whether its passage was **edited since it was opened*
 text differs from its `opened_quote`. The margin then shows that original quote, and
 `comment_read` returns it.
 
-**Inside the app** (P12): CodeMirror maps the ranges through typing, undo and outside changes.
+**Inside the app**: CodeMirror maps the ranges through typing, undo and outside changes.
 Deleting the whole passage drops the mark, and the thread shows as orphaned until undo brings
 the text back. **On save**, the editor updates the stored anchor of each thread whose live range
 differs from it: its text differs from the stored quote, or `resolve` on the saved text would
@@ -336,7 +337,7 @@ record's comment file. Git keeps the earlier values.
    Two readers therefore agree on where a thread points: `resolve` is one function, run on the
    same text. Agents write comments and proposals only (§5.2).
 
-Project-wide lists, such as `comment_list` across all records, read every comment file; P05 may
+Project-wide lists, such as `comment_list` across all records, read every comment file; P19 may
 cache that in `.theos/cache` like the index.
 
 ### 3.5 Probes for this proposal
@@ -349,7 +350,7 @@ cache that in `.theos/cache` like the index.
     offset, then writing the whole file again, changed only those lines;
   - a CRLF copy of a file keeps the CRs inside the text, hence the rule in §2.
 - The CodeMirror facts of §3.1 come from the P10 probe.
-- Not probed: a Rust port of diff-match-patch, and `similar`. P05 probes them before its plan
+- Not probed: a Rust port of diff-match-patch, and `similar`. P19 probes them before its plan
   (engineering directive 2); step 3 of §3.3 needs at least `similar`.
 
 ## 4. Threads
@@ -379,7 +380,7 @@ cache that in `.theos/cache` like the index.
 
 ## 5. MCP
 
-### 5.1 Read tools (P05)
+### 5.1 Read tools
 
 **`comment_list`**
 - Input: `record` (an id, optional); `state` (`open` by default, `resolved`, `all`); `anchor`
@@ -405,7 +406,7 @@ cache that in `.theos/cache` like the index.
 Lines and columns follow P02 (from 1, columns in Unicode scalar values), so Claude can quote
 them back.
 
-### 5.2 Agent tools (P07)
+### 5.2 Agent tools
 
 **`comment_open`**
 - Input: `record`, `quote` (the passage as text), `near_line` (optional), `text`.
@@ -479,80 +480,51 @@ thread brings the passage back, and the thread with it (§3.1).
 
 ## 8. Phases
 
+**One new phase, P19 · Comments**, slice S5, after P12 and P13 (Jann, 5 Nov 2026). It builds the
+whole feature at once, at the point where it is usable: before the margin exists, nobody can
+create comments comfortably, so pieces built earlier could not be tried for real.
+
 | Phase | Builds | Where |
 |---|---|---|
 | P02 (now) | Spans as byte offsets into the LF text of the whole record; line and column (from 1, columns in Unicode scalar values); a `TextIndex` that converts offsets to line and column and to UTF-16 offsets, and back. No comment code. | `theos-content` |
-| P05 | The thread model; reading comment files (`theos check` names a file that does not parse and a comment file whose record is gone); `resolve` (§3.3); the read tools `comment_list` and `comment_read`. | `theos-content`, `theos-mcp` |
-| P06 | Comment commands with undo; writing comment files under the repo lock; renaming an id renames its comment file (CE-20.3). | `theos-studio` |
-| P07 | `comment_open`, `comment_reply`, `comment_propose`, and `resolves` on `codex_propose`; approval marks the proposal approved and resolves the thread; rejection marks it rejected, with the note. | `theos-studio`, `theos-mcp` |
-| P12 | Margin threads, commenting on a selection, live mapping, anchor updates on save, the Detached list, agent comments appearing while the record is open; the UI references for them (below). | `editor-ui`, `theos-editor`, `docs/ui/` |
-| P13 | Review shows the threads an entry resolves; Changes lists comment files apart from records; the UI references for them. | `editor-ui`, `docs/ui/` |
+| P19 | The thread model, the comment file, `resolve` (§3.3); comment commands with undo, writing under the repo lock, the rename of an id extended to the comment file (CE-20.3); `comment_list`, `comment_read`, `comment_open`, `comment_reply`, `comment_propose`, and `resolves` on `codex_propose`; approval and rejection updating the thread; margin threads, commenting on a selection, live mapping, anchor updates on save, the Detached list; threads in Review and comment files in Changes; `theos check` naming a comment file that does not parse or whose record is gone; the UI references for all of it. | `theos-content`, `theos-studio`, `theos-mcp`, `theos`, `theos-editor`, `editor-ui`, `docs/ui/` |
 
-**UI references** (G13, G18). `docs/ui/screens/` has no comment states yet. P12's spec PR adds
-them to the screens that show the manuscript editor: margin threads with replies, the composer,
-the Detached list. P13's spec PR adds threads to `07-review` and comment files to `08-git`. Both
-are built from `design/theos-ui/` as G18 requires. They are protected paths, so they wait for
-Jann with their spec.
+**What P19 needs from earlier phases:** P02's positions; P06's command layer, undo and rename;
+P07's sessions, propose path and review entries; P12's manuscript editor; P13's Review and
+Changes screens. P19 extends what they built and replaces nothing.
+
+**UI references** (G13, G18). `docs/ui/screens/` has no comment states yet. P19's spec PR adds
+them: margin threads with replies, the composer and the Detached list on the screens that show
+the manuscript editor; threads in `07-review`; comment files in `08-git`. They are built from
+`design/theos-ui/` as G18 requires, and wait for Jann with the spec.
 
 **Why the quote anchor and re-anchoring are in `theos-content`:** they are pure functions of
 text, shared by MCP, the CLI and the editor.
 
-**Why P05 builds them, not P03 or P02:** P03's index needs nothing from comments, and P05 is the
-first phase that serves them. None of P02's ACs needs comments, and building them there would
-put an unproven feature into the phase the whole core track waits for. What P02 must not get
-wrong is the coordinate system, because every stored anchor depends on it; that is all P02
-builds.
+**Why not in P02:** none of P02's ACs needs comments, and P02 is the phase the whole core track
+waits for. What P02 must not get wrong is the coordinate system, because every stored anchor
+depends on it. That is all P02 builds. The UTF-16 conversion is needed by P12 as well, so it is
+built in P02 or, at the latest, in P12 (P02 spec §6).
 
-## 9. Proposed acceptance criteria
+**If P19 turns out too big**, its spec splits it into a back-end phase and a UI phase. The
+criteria stay as they are.
 
-For Jann to add to `docs/specs/00-umbrella.md`. The numbers are suggestions.
+## 9. Acceptance criteria
 
-**P02**, only if Jann wants the conversion proven as an AC (the P02 spec builds it either way
-once this record is accepted):
-- CE-09.5 Every position in a parse result converts between byte offset, line and column, and
-  UTF-16 offset, and back.
+This PR adds them to `docs/specs/00-umbrella.md`, §3 P19. Where each one comes from:
 
-**P05 · CE-51 Comment threads**
-- CE-51.1 A record's threads are read from `.theos/comments/<id>.toml`; a comment file that does
-  not parse is a finding with its path, and its record still opens.
-- CE-51.2 After an edit made outside the editor, a passage that moved is found again, an edited
-  passage attaches as changed, and a deleted passage is orphaned, never attached elsewhere.
-- CE-51.3 `comment_list` and `comment_read` work over stdio; `comment_read` returns the passage
-  with its lines and every comment with its author and time.
-- CE-51.4 Threads on locked records are flagged, and threads on `never` truths are marked, as in
-  CE-18.3.
+| Criteria | Design |
+|---|---|
+| CE-51.1, CE-51.2 Comment threads and anchors | §2, §3.3 |
+| CE-52.1 to CE-52.3 Comment commands | §2 (writing), §7 (undo), §1 (rename) |
+| CE-53.1 to CE-53.3 Comments over MCP | §5, §6 |
+| CE-54.1 to CE-54.5 Comments in the editor, Review and Changes | §3.4, §4, §8 (UI references) |
 
-**P06 · CE-52 Comment commands**
-- CE-52.1 Opening, replying to, resolving, reopening and deleting a thread, and editing or
-  withdrawing a comment, are commands with undo; none changes a record's bytes.
-- CE-52.2 A comment written by an MCP process while the editor writes another to the same file
-  is kept, and so is the editor's.
-- CE-52.3 Renaming an id renames its comment file in the same command.
-- CE-52.4 Deleting a record keeps its threads, which show as orphaned.
+CE-53.2 needs the wording of §10 in G7 and CE-23.1; Jann settles it before P19 starts.
 
-**P07 · CE-53 Comments for agents**
-- CE-53.1 `comment_open` and `comment_reply` add comments under the session's name and change no
-  record.
-- CE-53.2 `comment_propose` creates a review entry linked to its thread; approving it resolves
-  the thread, rejecting it keeps the thread open with the note.
-- CE-53.3 Agents cannot resolve, reopen, edit, withdraw or delete; the comment tools of a paused
-  session fail with "paused".
+## 10. Wording for Jann
 
-**P12 · CE-54 Comments in the manuscript editor**
-- CE-54.1 Selecting a passage and adding a comment opens a thread in the margin next to it;
-  replying, resolving and reopening work there, and every comment shows its author and time.
-- CE-54.2 A thread's passage follows typing, undo and outside changes; saving re-anchors exactly
-  the threads whose passage moved or changed, and no others.
-- CE-54.3 A thread whose passage is gone is listed as detached, with its quote, and can be
-  re-attached or resolved.
-- CE-54.4 An agent's comment or proposal appears in the open record without a reload and is
-  marked as the agent's.
-
-**P13 · CE-55 Comments in Review and Changes**
-- CE-55.1 A review entry shows the threads its proposal resolves.
-- CE-55.2 Changes lists comment files apart from record changes.
-
-## 10. Wording for Jann (with the criteria)
+Not changed by this PR. Jann applies or changes it before P19 starts.
 
 - **G7.** Now: "MCP: stdio only, `rmcp`, tool names `^[a-z][a-z0-9_]*$`, agents only propose."
   Proposed: "MCP: stdio only, `rmcp`, tool names `^[a-z][a-z0-9_]*$`, agents only propose
@@ -560,9 +532,9 @@ once this record is accepted):
 - **CE-23.1.** Now: "Two parallel sessions never touch the human working tree or each other."
   Proposed: "Two parallel sessions never touch the human working tree or each other, except to
   write comments (decision 0002)." Not needed under S3.
-- **Architecture** §2 (`.theos/comments/` in the tree) and §9 (the five tools).
-- **Data model:** a short section saying that comments are not records and live in
-  `.theos/comments/`.
+- **Architecture** §2 (`.theos/comments/` in the tree) and §9 (the five tools), and the **data
+  model**: a short section saying that comments are not records and live in `.theos/comments/`.
+  These come with P19's spec PR.
 
 ## 11. Risks
 
@@ -572,15 +544,17 @@ once this record is accepted):
 | The editor and an MCP process write the same comment file at once, and one change is lost | Every write re-reads the file under the repo lock (§2); CE-52.2 tests it |
 | Two machines change the same record's comments before a pull | An ordinary text conflict in a readable file, listed with its record (CE-36.3); rare for one author |
 | An agent floods a record with comments | Agents only open and reply; pausing a session stops them; Jann can delete threads |
-| The margin with many threads and overlapping passages is unprobed (§3.1) | P12 probes it before its plan |
+| The margin with many threads and overlapping passages is unprobed (§3.1) | P19 probes it before its plan |
+| P19 is large: Rust model, commands, MCP tools and UI in one phase | Its spec may split it into a back-end and a UI phase (§8); the criteria stay |
 | Comments of deleted records pile up | `theos check` lists comment files without a record; deleting one is one command |
 
 ## 12. If rejected
 
 Jann names what to change: the storage (S2 or S3, or one file per thread instead of per
-record), the anchors (A1 or A3), or replies as proposals (§5.3). This record is rewritten in the
-same PR. P02 is affected only if its positions change. Under S2, P02's body grammar would have to
-parse and round-trip the markers, which needs a new P02 criterion.
+record), the anchors (A1 or A3), replies as proposals (§5.3), or the phase plan (§8). This record
+and the P19 entry of the umbrella are rewritten in the same PR. P02 is affected only if its
+positions change. Under S2, P02's body grammar would have to parse and round-trip the markers,
+which needs a new P02 criterion.
 
 [0001]: 0001-prose-editor.md
 [probe-notes]: ../../research/P10-prose-editor/app/src/probes/comments/NOTES.md
