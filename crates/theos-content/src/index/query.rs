@@ -42,7 +42,8 @@ pub struct LinkRef {
     pub position: Position,
 }
 
-const LINK_COLUMNS: &str = "SELECT source_id, path, slot, target, fragment, span_start, span_end,                             line, col FROM links";
+const LINK_COLUMNS: &str = "SELECT source_id, path, slot, target, fragment, span_start, span_end, \
+     line, col FROM links";
 
 const FINDING_COLUMNS: &str =
     "SELECT path, id, rule, severity, span_start, span_end, line, col, message FROM findings";
@@ -128,7 +129,9 @@ impl Index {
     pub fn children(&self, id: &str) -> Result<Vec<LinkRef>, IndexError> {
         self.link_rows(
             &format!(
-                "{LINK_COLUMNS} WHERE target = ?1                  AND slot IN ('field:parent', 'field:concept', 'field:map')                  ORDER BY path, span_start"
+                "{LINK_COLUMNS} WHERE target = ?1 \
+                 AND slot IN ('field:parent', 'field:concept', 'field:map') \
+                 ORDER BY path, span_start"
             ),
             [id],
         )
