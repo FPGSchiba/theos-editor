@@ -1,9 +1,13 @@
 //! Bodies: one pulldown-cmark pass, the top-level blocks, wikilinks and malformed constructs.
 
+mod callout;
+mod design_note;
 mod events;
 mod links;
 mod malformed;
 
+pub use callout::{Callout, CalloutTitle, Design, Fold, Token, Voice};
+pub use design_note::{DesignNote, DesignNoteForm};
 pub use links::Link;
 pub use malformed::{Malformed, MalformedKind};
 
@@ -26,6 +30,10 @@ pub struct Block {
 pub enum BlockKind {
     /// A heading, ATX or setext.
     Heading,
+    /// A top-level callout: the index into [`Body::callouts`].
+    Callout(usize),
+    /// A top-level `Design note:` paragraph: the index into [`Body::design_notes`].
+    DesignNote(usize),
     /// Anything else.
     Other,
 }
@@ -36,6 +44,8 @@ pub struct Body {
     span: Span,
     blocks: Vec<Block>,
     links: Vec<Link>,
+    callouts: Vec<Callout>,
+    design_notes: Vec<DesignNote>,
     malformed: Vec<Malformed>,
 }
 
@@ -44,14 +54,19 @@ impl Body {
     #[must_use]
     pub fn parse(index: &TextIndex, span: Span) -> Body {
         let events = Events::new(index.text(), span);
-        let blocks = blocks(&events);
         let (links, mut malformed) = links::scan(index, &events);
         malformed.extend(malformed::scan(index, &events));
+        let (callouts, bad_titles) = callout::scan(index, &events, &links);
+        malformed.extend(bad_titles);
+        let design_notes = design_note::scan(&events, &callouts);
+        let blocks = blocks(&events, &callouts, &design_notes);
         malformed.sort_by_key(|m| m.span.start);
         Body {
             span,
             blocks,
             links,
+            callouts,
+            design_notes,
             malformed,
         }
     }
@@ -74,6 +89,18 @@ impl Body {
         &self.links
     }
 
+    /// Every callout at any depth, in document order.
+    #[must_use]
+    pub fn callouts(&self) -> &[Callout] {
+        &self.callouts
+    }
+
+    /// Every design note, in document order.
+    #[must_use]
+    pub fn design_notes(&self) -> &[DesignNote] {
+        &self.design_notes
+    }
+
     /// The malformed constructs, in order.
     #[must_use]
     pub fn malformed(&self) -> &[Malformed] {
@@ -81,16 +108,25 @@ impl Body {
     }
 }
 
-fn blocks(events: &Events<'_>) -> Vec<Block> {
+fn blocks(events: &Events<'_>, callouts: &[Callout], notes: &[DesignNote]) -> Vec<Block> {
     let mut blocks = Vec::new();
     for ((event, span), &owner) in events.items.iter().zip(&events.block_of) {
         if owner != blocks.len() {
             continue;
         }
-        let kind = if matches!(event, Event::Start(Tag::Heading { .. })) {
-            BlockKind::Heading
-        } else {
-            BlockKind::Other
+        let kind = match event {
+            Event::Start(Tag::Heading { .. }) => BlockKind::Heading,
+            Event::Start(Tag::BlockQuote(_)) => callouts
+                .iter()
+                .position(|c| c.depth == 1 && c.span.start == span.start)
+                .map_or(BlockKind::Other, BlockKind::Callout),
+            Event::Start(Tag::Paragraph) => notes
+                .iter()
+                .position(|n| {
+                    n.span.start == span.start && matches!(n.form, DesignNoteForm::Paragraph { .. })
+                })
+                .map_or(BlockKind::Other, BlockKind::DesignNote),
+            _ => BlockKind::Other,
         };
         blocks.push(Block { span: *span, kind });
     }

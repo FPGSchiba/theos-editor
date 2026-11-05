@@ -1,0 +1,175 @@
+//! Finds the callouts in the shared events and reads their titles through the registry.
+
+use pulldown_cmark::{Event, Tag};
+
+use super::title;
+use super::{Callout, CalloutTitle, Fold, TitleInput, grammar};
+use crate::body::events::Events;
+use crate::body::links::Link;
+use crate::body::malformed::Malformed;
+use crate::text::{Span, TextIndex};
+
+/// The parts of a `[!type]+` marker, as offsets into the record text.
+struct Marker {
+    name_span: Span,
+    fold: Option<Fold>,
+    title_start: usize,
+}
+
+/// Reads `[!type]`, an optional fold sign and one optional space at `start`.
+fn marker(source: &str, start: usize) -> Option<Marker> {
+    let rest = source.get(start..)?.strip_prefix("[!")?;
+    let name_len = rest
+        .char_indices()
+        .find(|&(i, c)| !(c.is_ascii_alphabetic() || i > 0 && (c.is_ascii_digit() || c == '-')))
+        .map_or(rest.len(), |(i, _)| i);
+    if name_len == 0 || !rest[name_len..].starts_with(']') {
+        return None;
+    }
+    let name_start = start + 2;
+    let mut at = name_start + name_len + 1;
+    let fold = match source.as_bytes().get(at) {
+        Some(b'+') => Some(Fold::Open),
+        Some(b'-') => Some(Fold::Closed),
+        _ => None,
+    };
+    at += usize::from(fold.is_some());
+    at += usize::from(source.as_bytes().get(at) == Some(&b' '));
+    Some(Marker {
+        name_span: Span::new(name_start, name_start + name_len),
+        fold,
+        title_start: at,
+    })
+}
+
+/// The index of the `End` that closes the `Start` at `open`.
+fn closing(events: &Events<'_>, open: usize) -> usize {
+    let mut depth = 0usize;
+    for (i, (event, _)) in events.items.iter().enumerate().skip(open) {
+        match event {
+            Event::Start(_) => depth += 1,
+            Event::End(_) => {
+                depth -= 1;
+                if depth == 0 {
+                    return i;
+                }
+            }
+            _ => {}
+        }
+    }
+    events.items.len().saturating_sub(1)
+}
+
+/// The spans of the paragraphs that are direct children of the quote opened at `open`.
+fn child_paragraphs(events: &Events<'_>, open: usize, close: usize) -> Vec<Span> {
+    let mut depth = 0usize;
+    let mut found = Vec::new();
+    for (event, span) in &events.items[open + 1..close] {
+        match event {
+            Event::Start(tag) => {
+                if depth == 0 && matches!(tag, Tag::Paragraph) {
+                    found.push(*span);
+                }
+                depth += 1;
+            }
+            Event::End(_) => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    found
+}
+
+/// The caption: the last line of `last` when it starts with `— ` and is not the title line.
+fn caption(source: &str, last: Span, is_title_paragraph: bool) -> Option<Span> {
+    let text = last.get(source)?.trim_end_matches('\n');
+    let line_start = text.rfind('\n').map_or(0, |at| at + 1);
+    if is_title_paragraph && line_start == 0 {
+        return None;
+    }
+    let line = &text[line_start..];
+    let shown = line.trim_start_matches(['>', ' ']);
+    shown.starts_with("— ").then(|| {
+        let start = last.start + line_start + (line.len() - shown.len());
+        Span::new(start, last.start + text.len())
+    })
+}
+
+/// Recognises every callout, parses its title and reports the malformed titles.
+pub(crate) fn scan(
+    index: &TextIndex,
+    events: &Events<'_>,
+    links: &[Link],
+) -> (Vec<Callout>, Vec<Malformed>) {
+    let source = events.source;
+    let mut callouts = Vec::new();
+    let mut bad = Vec::new();
+    let mut depth = 0usize;
+    for (i, (event, quote)) in events.items.iter().enumerate() {
+        match event {
+            Event::Start(Tag::BlockQuote(_)) => depth += 1,
+            Event::End(pulldown_cmark::TagEnd::BlockQuote(_)) => {
+                depth = depth.saturating_sub(1);
+                continue;
+            }
+            _ => continue,
+        }
+        let Some((Event::Start(Tag::Paragraph), first)) = events.items.get(i + 1) else {
+            continue;
+        };
+        let Some(marker) = marker(source, first.start) else {
+            continue;
+        };
+        let close = closing(events, i);
+        let line_end = first
+            .get(source)
+            .and_then(|p| p.find('\n'))
+            .map_or_else(|| first.end, |at| first.start + at);
+        let title_span = Span::new(marker.title_start.min(line_end), line_end);
+        let content_start = (line_end + 1).min(quote.end);
+        let paragraphs = child_paragraphs(events, i, close);
+        let caption_span = paragraphs
+            .last()
+            .and_then(|last| caption(source, *last, *last == *first));
+        let name = marker
+            .name_span
+            .get(source)
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        let inside: Vec<Link> = links
+            .iter()
+            .filter(|l| title_span.start <= l.span.start && l.span.end <= title_span.end)
+            .cloned()
+            .collect();
+        let title = match grammar(&name) {
+            None => Some(CalloutTitle::Other),
+            Some(grammar) => {
+                let tokens = title::split(index, title_span, &inside);
+                let input = TitleInput {
+                    index,
+                    title_span,
+                    tokens: &tokens,
+                    links: &inside,
+                };
+                match grammar.parse(&input) {
+                    Ok(title) => Some(title),
+                    Err(report) => {
+                        bad.push(report);
+                        None
+                    }
+                }
+            }
+        };
+        callouts.push(Callout {
+            span: *quote,
+            depth,
+            name,
+            name_span: marker.name_span,
+            fold: marker.fold,
+            title_span,
+            content_span: Span::new(content_start, quote.end),
+            caption_span,
+            title,
+        });
+    }
+    (callouts, bad)
+}

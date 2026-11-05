@@ -45,3 +45,45 @@ file = "things/synthetic-malformed-links.md"
 kind = "embed"
 line = 24
 column = 10
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 11
+column = 12
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 14
+column = 35
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 17
+column = 30
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 20
+column = 12
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 23
+column = 12
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 26
+column = 12
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 29
+column = 11

@@ -15,7 +15,10 @@ pub mod yaml;
 #[cfg(test)]
 mod test_support;
 
-pub use body::{Block, BlockKind, Body, Link, Malformed, MalformedKind};
+pub use body::{
+    Block, BlockKind, Body, Callout, CalloutTitle, Design, DesignNote, DesignNoteForm, Fold, Link,
+    Malformed, MalformedKind, Token, Voice,
+};
 pub use record::{ReadError, Record, RecordEditError, RecordError, decode, read_record};
 pub use text::{Position, Span, TextEdit, TextIndex, apply_edits};
 pub use yaml::{YamlError, YamlRule};
