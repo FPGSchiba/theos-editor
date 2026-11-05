@@ -22,4 +22,4 @@ pub use body::{
 };
 pub use record::{ReadError, Record, RecordEditError, RecordError, decode, read_record};
 pub use text::{Position, Span, TextEdit, TextIndex, apply_edits};
-pub use yaml::{YamlError, YamlRule};
+pub use yaml::{Order, PatchError, PatchOp, YamlError, YamlRule};

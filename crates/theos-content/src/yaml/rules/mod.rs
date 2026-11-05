@@ -25,6 +25,8 @@ use super::input::Marked;
 use super::{Input, YamlError, YamlRule};
 
 /// One rule of the restricted YAML.
+pub(crate) use key::is_key_name;
+
 pub(crate) trait Rule {
     /// The first violation of this rule in `input`, in document order.
     fn check(&self, input: &Input<'_>) -> Option<YamlError>;

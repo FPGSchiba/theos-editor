@@ -1,0 +1,121 @@
+//! The edits of one op: which bytes of the front matter change and what takes their place.
+
+use super::{Order, PatchError, PatchOp};
+use crate::record::Record;
+use crate::text::{Span, TextEdit};
+use crate::yaml::{Field, FrontMatter, RawEntry, RawValue, Slot, Value, encode, is_key_name};
+
+/// The edits that carry out `op` on `record`.
+pub(super) fn edits(
+    record: &Record,
+    op: &PatchOp,
+    order: &Order,
+) -> Result<Vec<TextEdit>, PatchError> {
+    let front = record
+        .front_matter()
+        .map_err(|error| PatchError::FrontMatter(error.clone()))?;
+    match op {
+        PatchOp::Set { key, value } => match front.get(key) {
+            Some(field) => set_existing(record, field, value),
+            None => insert(record, front, key, value, order),
+        },
+        PatchOp::Remove { key } => {
+            let field = front.get(key).ok_or_else(|| PatchError::NotFound {
+                key: key.clone(),
+                entry: None,
+            })?;
+            Ok(vec![replace(field.lines, String::new())])
+        }
+    }
+}
+
+fn replace(span: Span, replacement: String) -> TextEdit {
+    TextEdit { span, replacement }
+}
+
+/// Writes `value` over the existing `field`.
+///
+/// A scalar over a scalar replaces only the value bytes. Every other combination rewrites the
+/// field's lines; that includes a list over a list and a map over a map until the per-item and
+/// per-entry edits of the list and map patchers take those over here.
+fn set_existing(
+    record: &Record,
+    field: &Field,
+    value: &RawValue,
+) -> Result<Vec<TextEdit>, PatchError> {
+    if let (Value::Scalar(old), RawValue::Text(new)) = (&field.value, value) {
+        let spelled = encode(new, Some(old.style), Slot::Field)?;
+        return Ok(vec![replace(old.span, spelled)]);
+    }
+    let comment = field.comment.and_then(|span| span.get(record.text()));
+    let text = field_text(&field.key, value, comment)?;
+    Ok(vec![replace(field.lines, text)])
+}
+
+/// Inserts a new field after the last present field that `order` puts before it.
+fn insert(
+    record: &Record,
+    front: &FrontMatter,
+    key: &str,
+    value: &RawValue,
+    order: &Order,
+) -> Result<Vec<TextEdit>, PatchError> {
+    if !is_key_name(key) {
+        return Err(PatchError::Key {
+            key: key.to_owned(),
+        });
+    }
+    let wanted = order.position(key).ok_or_else(|| PatchError::NotInOrder {
+        key: key.to_owned(),
+    })?;
+    let before = front
+        .fields
+        .iter()
+        .filter_map(|field| order.position(&field.key).map(|place| (place, field)))
+        .filter(|(place, _)| *place < wanted)
+        .max_by_key(|(place, _)| *place);
+    let at = match (before, front.fields.first()) {
+        (Some((_, field)), _) => field.lines.end,
+        (None, Some(first)) => first.lines.start,
+        (None, None) => record.front_span().start,
+    };
+    let text = field_text(key, value, None)?;
+    Ok(vec![replace(Span::new(at, at), text)])
+}
+
+/// The text of a whole field, newline included, with `comment` after the key line when given.
+fn field_text(key: &str, value: &RawValue, comment: Option<&str>) -> Result<String, PatchError> {
+    let mut tail = String::new();
+    let mut out = match value {
+        RawValue::Text(text) => format!("{key}: {}", encode(text, None, Slot::Field)?),
+        RawValue::List(items) => format!("{key}: {}", flow_list(items)?),
+        RawValue::Map(entries) => {
+            for (name, entry) in entries {
+                if !is_key_name(name) {
+                    return Err(PatchError::Key { key: name.clone() });
+                }
+                let spelled = match entry {
+                    RawEntry::Text(text) => encode(text, None, Slot::Entry)?,
+                    RawEntry::List(items) => flow_list(items)?,
+                };
+                tail.extend(["  ", name, ": ", &spelled, "\n"]);
+            }
+            format!("{key}:")
+        }
+    };
+    if let Some(comment) = comment {
+        out.push(' ');
+        out.push_str(comment);
+    }
+    out.push('\n');
+    out.push_str(&tail);
+    Ok(out)
+}
+
+fn flow_list(items: &[String]) -> Result<String, PatchError> {
+    let spelled = items
+        .iter()
+        .map(|item| encode(item, None, Slot::FlowItem))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(format!("[{}]", spelled.join(", ")))
+}

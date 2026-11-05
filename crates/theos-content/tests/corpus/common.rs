@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
+use theos_content::Span;
 
 /// The fixture corpus directory.
 pub fn corpus() -> PathBuf {
@@ -70,4 +71,12 @@ pub fn project_records() -> Result<Vec<PathBuf>, Box<dyn Error>> {
         files.extend(md_files(&malformed)?);
     }
     Ok(files)
+}
+
+/// The text without the bytes of `span`; the whole text when there is no span.
+pub fn cut(text: &str, span: Option<Span>) -> String {
+    match span {
+        Some(span) => format!("{}{}", &text[..span.start], &text[span.end..]),
+        None => text.to_owned(),
+    }
 }

@@ -5,14 +5,17 @@ mod encode;
 mod error;
 mod input;
 mod model;
+mod patch;
 mod rules;
 mod scalar;
 
-pub use encode::{EncodeError, Slot, encode};
+pub use encode::EncodeError;
+pub(crate) use encode::{Slot, encode};
 pub use error::{YamlError, YamlRule};
 pub(crate) use input::Input;
 pub use model::{
     Entry, EntryValue, Field, FrontMatter, Item, List, ListStyle, Map, RawEntry, RawValue, Value,
 };
-pub(crate) use rules::first_error;
+pub use patch::{Order, PatchError, PatchOp};
+pub(crate) use rules::{first_error, is_key_name};
 pub use scalar::{Decimal, Lexical, Scalar, ScalarError, ScalarStyle};

@@ -7,12 +7,16 @@ use crate::record::Record;
 
 /// Where in the front matter an encoded value is written.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Slot {
+pub(crate) enum Slot {
     /// The value of a top-level field: `key: <value>`.
     Field,
     /// An item of a flow list: `key: [<value>]`.
     FlowItem,
     /// An item of a block list: `  - <value>`.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the block-list patcher of Task 15 writes these")
+    )]
     BlockItem,
     /// The value of an entry of a map: `  e: <value>`.
     Entry,
@@ -35,7 +39,11 @@ pub enum EncodeError {
 /// # Errors
 ///
 /// `Unrepresentable` when `text` has a line break or a control character other than a tab.
-pub fn encode(text: &str, keep: Option<ScalarStyle>, slot: Slot) -> Result<String, EncodeError> {
+pub(crate) fn encode(
+    text: &str,
+    keep: Option<ScalarStyle>,
+    slot: Slot,
+) -> Result<String, EncodeError> {
     if text.chars().any(|c| c.is_control() && c != '\t') {
         return Err(EncodeError::Unrepresentable {
             text: text.to_owned(),
