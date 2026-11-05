@@ -448,9 +448,13 @@ impl<'a, 'b> Builder<'a, 'b> {
         let start = self
             .line_span(key_span.start)
             .map_or(key_span.start, |s| s.start);
-        let end = self
-            .line_span(last_end.saturating_sub(1))
-            .map_or(last_end, |s| s.end);
+        // the last value byte may be the tail of a multi-byte character: use that character
+        let text = self.input.index.text();
+        let mut last = last_end.saturating_sub(1);
+        while last > 0 && !text.is_char_boundary(last) {
+            last -= 1;
+        }
+        let end = self.line_span(last).map_or(last_end, |s| s.end);
         Span::new(start, end)
     }
 
@@ -652,6 +656,20 @@ topic: synthetic-voices-in-world\n";
         };
         assert_eq!(list.items.len(), 2);
         assert_eq!(slice(&r, l.lines), "l:\n  - a\n  # note\n  - b\n");
+        Ok(())
+    }
+
+    // AC: CE-09.2
+    #[test]
+    fn lines_end_after_a_value_that_ends_in_a_multi_byte_character() -> TestResult {
+        let (r, model) = front_of("title: A¡\nlens:\n  stance: ö\nnext: 1\n")?;
+        assert_eq!(slice(&r, field(&model, "title")?.lines), "title: A¡\n");
+        let lens = field(&model, "lens")?;
+        assert_eq!(slice(&r, lens.lines), "lens:\n  stance: ö\n");
+        let Value::Map(map) = &lens.value else {
+            return Err("lens is a map".into());
+        };
+        assert_eq!(slice(&r, map.entries[0].lines), "  stance: ö\n");
         Ok(())
     }
 
