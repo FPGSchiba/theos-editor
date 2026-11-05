@@ -23,6 +23,8 @@
 //! conversion of [`TextIndex`].
 
 pub mod body;
+pub mod finding;
+pub mod kinds;
 pub mod project;
 pub mod record;
 pub mod text;
@@ -35,6 +37,10 @@ pub use body::{
     Attribute, AttributeValue, Beat, Block, BlockKind, Body, Callout, CalloutTitle, Design,
     DesignNote, DesignNoteForm, Fold, Link, Malformed, MalformedKind, Note, NoteState, Token,
     Voice,
+};
+pub use finding::{Finding, Severity};
+pub use kinds::{
+    BodyGrammar, FieldSpec, FieldType, KindRegistry, KindSpec, Placement, RegistryError, Target,
 };
 pub use project::{Project, ProjectError, SCHEMA_VERSION};
 pub use record::{ReadError, Record, RecordEditError, RecordError, decode, read_record};
