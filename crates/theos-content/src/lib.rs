@@ -30,6 +30,7 @@ pub mod parts;
 pub mod project;
 pub mod record;
 pub mod text;
+pub mod walk;
 pub mod yaml;
 
 #[cfg(test)]
@@ -47,4 +48,5 @@ pub use kinds::{
 pub use project::{Project, ProjectError, SCHEMA_VERSION};
 pub use record::{ReadError, Record, RecordEditError, RecordError, decode, read_record};
 pub use text::{Position, Span, TextEdit, TextIndex, apply_edits};
+pub use walk::is_record_path;
 pub use yaml::{MapProblem, Order, PatchError, PatchOp, YamlError, YamlRule};
