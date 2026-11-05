@@ -1,0 +1,25 @@
+# synthetic fixture (P02), not canon: each CRLF input and the LF file it must read like.
+
+[[twin]]
+input = "S-004.md"
+lf = "../records/story/scripts/S-004.md"
+
+[[twin]]
+input = "B-901.md"
+lf = "../records/lore/beliefs/B-901.md"
+
+[[twin]]
+input = "f04-terrain.md"
+lf = "../records/maps/f04-terrain.md"
+
+[[twin]]
+input = "synthetic-crlf.md"
+lf = "synthetic-crlf.lf.md"
+
+[[twin]]
+input = "mixed.md"
+lf = "mixed.lf.md"
+
+[[twin]]
+input = "lone-cr.md"
+lf = "lone-cr.lf.md"

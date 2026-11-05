@@ -59,3 +59,13 @@ pub fn cases(path: &Path) -> Result<Vec<Case>, Box<dyn Error>> {
         .map_err(|error| format!("cannot parse {}: {error}", path.display()))?;
     Ok(parsed.case)
 }
+
+/// Every valid record of the corpus: `records/` and, once it exists, `malformed/`.
+pub fn project_records() -> Result<Vec<PathBuf>, Box<dyn Error>> {
+    let mut files = md_files(&corpus().join("records"))?;
+    let malformed = corpus().join("malformed");
+    if malformed.is_dir() {
+        files.extend(md_files(&malformed)?);
+    }
+    Ok(files)
+}
