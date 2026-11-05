@@ -13,6 +13,8 @@ pub enum YamlRule {
     Tag,
     /// A block scalar (`|` or `>`).
     BlockScalar,
+    /// A control character other than a tab in a scalar.
+    ControlCharacter,
     /// A scalar that spans more than one line.
     OneLineScalar,
     /// An escape sequence in a double-quoted scalar.
@@ -54,6 +56,7 @@ impl YamlRule {
             YamlRule::Alias => "alias",
             YamlRule::Tag => "tag",
             YamlRule::BlockScalar => "block-scalar",
+            YamlRule::ControlCharacter => "control-character",
             YamlRule::OneLineScalar => "one-line-scalar",
             YamlRule::Escape => "escape",
             YamlRule::FlowMap => "flow-map",

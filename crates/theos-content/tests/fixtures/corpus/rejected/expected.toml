@@ -29,6 +29,12 @@ line = 4
 column = 1
 
 [[case]]
+file = "control-character.md"
+rule = "control-character"
+line = 4
+column = 5
+
+[[case]]
 file = "directive.md"
 rule = "document-marker"
 line = 2

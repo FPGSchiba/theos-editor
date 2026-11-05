@@ -1,7 +1,7 @@
 //! Encoding a raw text value into the spelling a front-matter slot takes. Our own parser decides
 //! whether a text can stay plain; this module never lexes YAML itself.
 
-use super::scalar::{ScalarStyle, spell};
+use super::scalar::{ScalarStyle, is_forbidden_control, spell};
 use super::{EntryValue, Value};
 use crate::record::Record;
 
@@ -40,7 +40,7 @@ pub(crate) fn encode(
     keep: Option<ScalarStyle>,
     slot: Slot,
 ) -> Result<String, EncodeError> {
-    if text.chars().any(|c| c.is_control() && c != '\t') {
+    if text.chars().any(is_forbidden_control) {
         return Err(EncodeError::Unrepresentable {
             text: text.to_owned(),
         });

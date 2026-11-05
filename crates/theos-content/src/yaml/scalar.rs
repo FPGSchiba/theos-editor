@@ -217,6 +217,12 @@ impl Scalar {
     }
 }
 
+/// Whether `c` cannot appear in a scalar: a control character other than a tab. The reader's
+/// `control-character` rule and the encoder both use this one predicate.
+pub(crate) fn is_forbidden_control(c: char) -> bool {
+    c.is_control() && c != '\t'
+}
+
 /// The source spelling of `text` in `style`: plain as is, single-quoted with `'` doubled,
 /// double-quoted with `\` and `"` escaped.
 pub(crate) fn spell(style: ScalarStyle, text: &str) -> String {

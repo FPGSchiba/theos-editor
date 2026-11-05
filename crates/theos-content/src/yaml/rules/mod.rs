@@ -4,6 +4,7 @@ mod alias;
 mod anchor;
 mod block_scalar;
 mod complex_key;
+mod control_character;
 mod document_marker;
 mod duplicate_key;
 mod empty_value;
@@ -48,6 +49,7 @@ pub(crate) const RULES: &[&dyn Rule] = &[
     &one_line_list::OneLineList,
     &top_level_map::TopLevelMap,
     &tab_indent::TabIndent,
+    &control_character::ControlCharacter,
     &duplicate_key::DuplicateKey,
     &key::Key,
     &empty_value::EmptyValue,
