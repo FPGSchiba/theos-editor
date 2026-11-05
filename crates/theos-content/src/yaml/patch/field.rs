@@ -1,9 +1,12 @@
 //! The edits of one op: which bytes of the front matter change and what takes their place.
 
+use super::list::{block_edits, flow_edits};
 use super::{Order, PatchError, PatchOp};
 use crate::record::Record;
 use crate::text::{Span, TextEdit};
-use crate::yaml::{Field, FrontMatter, RawEntry, RawValue, Slot, Value, encode, is_key_name};
+use crate::yaml::{
+    Field, FrontMatter, ListStyle, RawEntry, RawValue, Slot, Value, encode, is_key_name,
+};
 
 /// The edits that carry out `op` on `record`.
 pub(super) fn edits(
@@ -35,18 +38,31 @@ fn replace(span: Span, replacement: String) -> TextEdit {
 
 /// Writes `value` over the existing `field`.
 ///
-/// A scalar over a scalar replaces only the value bytes. Every other combination rewrites the
-/// field's lines; that includes a list over a list and a map over a map until the per-item and
-/// per-entry edits of the list and map patchers take those over here.
+/// A scalar over a scalar replaces only the value bytes, and a list over a list edits per item
+/// (see `list.rs`), so kept items keep their bytes. Every other combination rewrites the field's
+/// lines; that includes a map over a map until the per-entry edits of the map patcher take it
+/// over here, and a block list written empty, which becomes `key: []`.
 fn set_existing(
     record: &Record,
     field: &Field,
     value: &RawValue,
 ) -> Result<Vec<TextEdit>, PatchError> {
-    if let (Value::Scalar(old), RawValue::Text(new)) = (&field.value, value) {
-        let spelled = encode(new, Some(old.style), Slot::Field)?;
-        return Ok(vec![replace(old.span, spelled)]);
+    match (&field.value, value) {
+        (Value::Scalar(old), RawValue::Text(new)) => {
+            let spelled = encode(new, Some(old.style), Slot::Field)?;
+            Ok(vec![replace(old.span, spelled)])
+        }
+        (Value::List(old), RawValue::List(new)) => match old.style {
+            ListStyle::Flow => flow_edits(old, new),
+            ListStyle::Block if !new.is_empty() => block_edits(record.text(), old, new),
+            ListStyle::Block => rewrite(record, field, value),
+        },
+        _ => rewrite(record, field, value),
     }
+}
+
+/// Replaces the whole lines of `field` with `value` written from scratch.
+fn rewrite(record: &Record, field: &Field, value: &RawValue) -> Result<Vec<TextEdit>, PatchError> {
     let comment = field.comment.and_then(|span| span.get(record.text()));
     let text = field_text(&field.key, value, comment)?;
     Ok(vec![replace(field.lines, text)])

@@ -2,6 +2,7 @@
 //! result verified by parsing it again. Per-item list edits and per-entry map edits build on this.
 
 mod field;
+mod list;
 mod verify;
 
 use std::collections::BTreeMap;

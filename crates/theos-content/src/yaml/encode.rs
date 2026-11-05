@@ -13,10 +13,6 @@ pub(crate) enum Slot {
     /// An item of a flow list: `key: [<value>]`.
     FlowItem,
     /// An item of a block list: `  - <value>`.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the block-list patcher of Task 15 writes these")
-    )]
     BlockItem,
     /// The value of an entry of a map: `  e: <value>`.
     Entry,

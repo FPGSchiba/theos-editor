@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 pulldown-cmark.workspace = true
+similar.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 yaml-rust2.workspace = true
