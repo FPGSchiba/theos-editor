@@ -76,6 +76,15 @@ pub struct Token {
     pub span: Span,
 }
 
+/// A block of a callout's content: a direct child of the quote.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ContentBlock {
+    /// The block's bytes, without the title line and the caption line.
+    pub span: Span,
+    /// Whether the block is a paragraph.
+    pub paragraph: bool,
+}
+
 /// What a title grammar reads.
 pub(crate) struct TitleInput<'a> {
     /// The record's index, for positions.
@@ -86,8 +95,8 @@ pub(crate) struct TitleInput<'a> {
     pub tokens: &'a [TitleToken],
     /// The links inside the title.
     pub links: &'a [Link],
-    /// The paragraphs of the content without the title line and the caption line.
-    pub content: &'a [Span],
+    /// The blocks of the content without the title line and the caption line.
+    pub content: &'a [ContentBlock],
     /// How many block quotes enclose the callout, itself included.
     pub depth: usize,
 }

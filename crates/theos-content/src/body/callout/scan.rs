@@ -3,7 +3,7 @@
 use pulldown_cmark::{Event, Tag};
 
 use super::title;
-use super::{Callout, CalloutTitle, Fold, TitleGrammar, TitleInput, grammar};
+use super::{Callout, CalloutTitle, ContentBlock, Fold, TitleGrammar, TitleInput, grammar};
 use crate::body::events::Events;
 use crate::body::links::Link;
 use crate::body::malformed::Malformed;
@@ -68,19 +68,26 @@ fn closing(events: &Events<'_>, open: usize) -> usize {
     events.items.len().saturating_sub(1)
 }
 
-/// The spans of the paragraphs that are direct children of the quote opened at `open`.
-fn child_paragraphs(events: &Events<'_>, open: usize, close: usize) -> Vec<Span> {
+/// The blocks that are direct children of the quote opened at `open`, in document order.
+fn child_blocks(events: &Events<'_>, open: usize, close: usize) -> Vec<ContentBlock> {
     let mut depth = 0usize;
     let mut found = Vec::new();
     for (event, span) in &events.items[open + 1..close] {
         match event {
             Event::Start(tag) => {
-                if depth == 0 && matches!(tag, Tag::Paragraph) {
-                    found.push(*span);
+                if depth == 0 {
+                    found.push(ContentBlock {
+                        span: *span,
+                        paragraph: matches!(tag, Tag::Paragraph),
+                    });
                 }
                 depth += 1;
             }
             Event::End(_) => depth = depth.saturating_sub(1),
+            Event::Rule if depth == 0 => found.push(ContentBlock {
+                span: *span,
+                paragraph: false,
+            }),
             _ => {}
         }
     }
@@ -102,29 +109,29 @@ fn caption(source: &str, last: Span, is_title_paragraph: bool) -> Option<Span> {
     })
 }
 
-/// The content paragraphs: the child paragraphs without the title line and the caption line.
-fn content_paragraphs(
+/// The content blocks: the child blocks without the title line and the caption line.
+/// `caption` is the paragraph that ends in the caption line with that line.
+fn content_blocks(
     source: &str,
-    paragraphs: &[Span],
+    blocks: &[ContentBlock],
     first: Span,
     title_end: usize,
-    caption: Option<Span>,
-) -> Vec<Span> {
-    let caption_line_start = caption.and_then(|c| source[..c.start].rfind('\n').map(|at| at + 1));
-    paragraphs
+    caption: Option<(Span, Span)>,
+) -> Vec<ContentBlock> {
+    blocks
         .iter()
-        .enumerate()
-        .filter_map(|(at, paragraph)| {
-            let mut span = *paragraph;
+        .filter_map(|block| {
+            let mut span = block.span;
             if span == first {
                 span.start = (title_end + 1).min(span.end);
             }
-            if at + 1 == paragraphs.len()
-                && let Some(line_start) = caption_line_start
+            if let Some((captioned, caption)) = caption
+                && block.span == captioned
+                && let Some(line_start) = source[..caption.start].rfind('\n').map(|at| at + 1)
             {
                 span.end = line_start.min(span.end);
             }
-            (span.start < span.end).then_some(span)
+            (span.start < span.end).then_some(ContentBlock { span, ..*block })
         })
         .collect()
 }
@@ -161,18 +168,21 @@ pub(crate) fn scan(
             .map_or_else(|| first.end, |at| first.start + at);
         let title_span = trimmed(source, marker.title_start.min(line_end), line_end);
         let content_start = (line_end + 1).min(quote.end);
-        let paragraphs = child_paragraphs(events, i, close);
+        let blocks = child_blocks(events, i, close);
         let name = marker
             .name_span
             .get(source)
             .unwrap_or_default()
             .to_ascii_lowercase();
         let registered = grammar(&name);
-        let caption_span = paragraphs
-            .last()
+        let last_paragraph = blocks.iter().rev().find(|block| block.paragraph);
+        let caption = last_paragraph
             .filter(|_| registered.is_some_and(TitleGrammar::captioned))
-            .and_then(|last| caption(source, *last, *last == *first));
-        let content = content_paragraphs(source, &paragraphs, *first, line_end, caption_span);
+            .and_then(|last| {
+                caption(source, last.span, last.span == *first).map(|line| (last.span, line))
+            });
+        let caption_span = caption.map(|(_, line)| line);
+        let content = content_blocks(source, &blocks, *first, line_end, caption);
         let inside: Vec<Link> = links
             .iter()
             .filter(|l| title_span.start <= l.span.start && l.span.end <= title_span.end)

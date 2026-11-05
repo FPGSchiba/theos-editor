@@ -19,8 +19,9 @@ pub struct Note {
     pub state: NoteState,
     /// The bytes of the whole state token.
     pub state_span: Span,
-    /// The content without title line and caption: lines with the quote prefix removed, joined by
-    /// one space per paragraph, paragraphs joined by an empty line.
+    /// The content without title line and caption, blocks joined by an empty line: a paragraph
+    /// is its lines joined by one space; a list, code block or nested quote keeps its lines as
+    /// written, with the quote prefix removed.
     pub text: String,
 }
 
@@ -130,22 +131,39 @@ fn resolved_by(input: &TitleInput<'_>, token: &Token) -> Option<NoteState> {
         .map(|link| NoteState::ResolvedBy(link.clone()))
 }
 
-/// The text of the content paragraphs of the callout.
+/// The text of the content blocks of the callout, separated by one empty line. A paragraph is
+/// its trimmed lines joined by one space; any other block keeps its lines as they are, without
+/// the quote prefix (the block's own first line starts after it already).
 fn note_text(input: &TitleInput<'_>) -> String {
     let source = input.index.text();
-    let paragraphs: Vec<String> = input
+    let blocks: Vec<String> = input
         .content
         .iter()
-        .filter_map(|paragraph| paragraph.get(source))
-        .map(|paragraph| {
-            paragraph
-                .lines()
-                .map(|line| strip_quotes(line, input.depth).trim())
-                .collect::<Vec<_>>()
-                .join(" ")
+        .filter_map(|block| Some((block, block.span.get(source)?)))
+        .map(|(block, text)| {
+            // A block that starts after its quote prefix has no prefix on its first line.
+            let starts_line = block.span.start == 0
+                || source.as_bytes().get(block.span.start - 1) == Some(&b'\n');
+            let lines =
+                text.trim_end_matches('\n')
+                    .lines()
+                    .enumerate()
+                    .map(|(at, line)| match at {
+                        0 if !starts_line => line,
+                        _ => strip_quotes(line, input.depth),
+                    });
+            if block.paragraph {
+                lines.map(str::trim).collect::<Vec<_>>().join(" ")
+            } else {
+                let mut kept: Vec<&str> = lines.collect();
+                while kept.last().is_some_and(|line| line.trim().is_empty()) {
+                    kept.pop();
+                }
+                kept.join("\n")
+            }
         })
         .collect();
-    paragraphs.join("\n\n")
+    blocks.join("\n\n")
 }
 
 /// Removes up to `depth` `>` markers, each with at most one following space.

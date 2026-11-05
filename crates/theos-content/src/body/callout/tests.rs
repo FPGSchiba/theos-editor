@@ -313,3 +313,30 @@ fn whitespace_around_a_title_is_not_part_of_it() {
     assert_eq!(design.text.as_ref().map(|t| &*t.text), Some("Door width"));
     assert_eq!(r.body().malformed(), []);
 }
+
+// AC: CE-10.2
+#[test]
+fn note_text_keeps_lists_and_code_blocks() {
+    let r = body(
+        "> [!note] n1 · open\n\
+         > Fix these:\n\
+         >\n\
+         > - the stairs\n\
+         > - the door\n\
+         >\n\
+         > ```text\n\
+         > code  x\n\
+         >   indented\n\
+         > ```\n\
+         >\n\
+         > > quoted\n\
+         > > more\n\
+         >\n\
+         > — Jann\n",
+    );
+    assert_eq!(
+        note(r.body().callouts()[0].title.as_ref()).text,
+        "Fix these:\n\n- the stairs\n- the door\n\n```text\ncode  x\n  indented\n```\n\n> quoted\n> more"
+    );
+    assert_eq!(r.body().callouts().len(), 1);
+}
