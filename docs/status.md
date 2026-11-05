@@ -8,7 +8,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 |---|---|---|---|---|---|
 | P00 | Foundation and gate | theos-editor | done | #5, #9, #10 | #7 |
 | P01 | Content layout and templates | tower-of-theos | done | #4 | tower-of-theos#2 |
-| P02 | Records and grammars | theos-editor | spec-pr | #16 | |
+| P02 | Records and grammars | theos-editor | in-progress | #16 | |
 | P03 | Kinds, index, search, lenses | theos-editor | todo | | |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | todo | | |
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
@@ -31,14 +31,9 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 
 - P00's macOS `platforms` evidence is still open: the run on #7 got no GitHub runner (macOS
   capacity). The weekly Monday run, or a re-run, gives it.
-- The P02 spec (#16) waits for Jann's approval. Jann chose the recommended approach for all four
-  questions of its §4.3 (review of #16). It records Jann's decisions of 5 Nov 2026 on slug ids
-  and `accuracy: false`, on CRLF, and on what "the restricted YAML parser is ours" means.
-- Comments on text sections: proposal 0002 (#15) waits for Jann. Merging it adds phase P19
-  (Comments, slice S5, after P12 and P13) with its criteria CE-51 to CE-54 to the umbrella.
-  Before P19 starts, Jann settles the wording for G7 and CE-23.1 proposed in 0002 §10, which
-  P19's agent tools need. The P02 spec builds the UTF-16 positions 0002 asks for only once 0002
-  is accepted.
+- Comments on text sections (decision 0002, #15, phase P19): before P19 starts, Jann settles the
+  wording for G7 and CE-23.1 proposed in 0002 §10, which P19's agent tools need. P02 builds the
+  UTF-16 positions 0002 asks for.
 - Three sentences of the P10 corpus read like lore claims (B-901's link text, "the Cutter is
   near", "the operator-plate names a Listener"). P02's fixture copies reword them neutrally until
   Jann, or a session that can read Confluence, confirms they are canon.
