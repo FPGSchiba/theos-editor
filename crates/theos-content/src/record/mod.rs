@@ -7,6 +7,7 @@ mod split;
 pub use error::{ReadError, RecordEditError, RecordError};
 pub use read::{decode, read_record};
 
+use crate::body::Body;
 use crate::text::{Span, TextEdit, TextIndex, apply_edits, normalize};
 use crate::yaml::{FrontMatter, Input, YamlError};
 
@@ -18,6 +19,7 @@ pub struct Record {
     front_span: Span,
     body_span: Span,
     front: Result<FrontMatter, YamlError>,
+    body: Body,
 }
 
 impl Record {
@@ -35,12 +37,14 @@ impl Record {
         let (front_span, body_span) = split::split(&text)?;
         let index = TextIndex::new(text.into_owned());
         let front = FrontMatter::from_input(&Input::new(&index, front_span));
+        let body = Body::parse(&index, body_span);
         Ok(Record {
             index,
             was_normalized,
             front_span,
             body_span,
             front,
+            body,
         })
     }
 
@@ -72,6 +76,13 @@ impl Record {
     #[must_use]
     pub fn body_span(&self) -> Span {
         self.body_span
+    }
+
+    /// The parsed body: blocks, wikilinks and malformed constructs; present even when the
+    /// front matter is invalid.
+    #[must_use]
+    pub fn body(&self) -> &Body {
+        &self.body
     }
 
     /// The first violation of the restricted YAML in the front matter, if any.

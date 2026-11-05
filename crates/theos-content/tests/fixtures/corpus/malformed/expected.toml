@@ -1,0 +1,47 @@
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-unclosed"
+line = 10
+column = 20
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-unclosed"
+line = 12
+column = 15
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-unclosed"
+line = 14
+column = 23
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-target"
+line = 16
+column = 22
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-target"
+line = 18
+column = 8
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-target"
+line = 20
+column = 9
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-target"
+line = 22
+column = 30
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "embed"
+line = 24
+column = 10

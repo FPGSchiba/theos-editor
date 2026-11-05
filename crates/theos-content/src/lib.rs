@@ -7,6 +7,7 @@
 //! forbidden form, each reporting its line and column). Everything else follows in later P02
 //! tasks.
 
+pub mod body;
 pub mod record;
 pub mod text;
 pub mod yaml;
@@ -14,6 +15,7 @@ pub mod yaml;
 #[cfg(test)]
 mod test_support;
 
+pub use body::{Block, BlockKind, Body, Link, Malformed, MalformedKind};
 pub use record::{ReadError, Record, RecordEditError, RecordError, decode, read_record};
 pub use text::{Position, Span, TextEdit, TextIndex, apply_edits};
 pub use yaml::{YamlError, YamlRule};

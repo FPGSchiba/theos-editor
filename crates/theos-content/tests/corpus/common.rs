@@ -38,6 +38,8 @@ pub fn md_files(dir: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
 pub struct Case {
     /// The fixture file, relative to the `expected.toml`.
     pub file: String,
+    /// The kind of malformed construct the case expects.
+    pub kind: Option<String>,
     /// The rule the file must fail with.
     pub rule: Option<String>,
     /// The line of the error.

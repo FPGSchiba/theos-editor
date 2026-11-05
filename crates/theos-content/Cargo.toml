@@ -10,6 +10,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+pulldown-cmark.workspace = true
 thiserror.workspace = true
 yaml-rust2.workspace = true
 
