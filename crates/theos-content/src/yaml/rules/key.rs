@@ -1,4 +1,4 @@
-//! Rule `key`: a key that is not plain or does not match `^[a-z][a-z0-9_]*$`.
+//! Rule `key`: a key that is not a plain scalar or does not match `^[a-z][a-z0-9_]*$`.
 
 use yaml_rust2::Event;
 use yaml_rust2::scanner::TScalarStyle;
@@ -25,7 +25,8 @@ impl Rule for Key {
                     Event::Scalar(name, style, ..) => {
                         *style != TScalarStyle::Plain || !is_key_name(name)
                     }
-                    _ => false,
+                    // A key that is no scalar (`[a]: 1`).
+                    _ => true,
                 }
         })
     }
@@ -43,5 +44,15 @@ mod tests {
         assert_eq!(front_error("k-2: 3\n"), want);
         assert_eq!(front_error("\"a\": 1\n"), want);
         assert_eq!(front_error("m:\n  B: 1\n"), Some(("key", "3:3".to_owned())));
+    }
+
+    // AC: CE-09.3
+    #[test]
+    fn a_key_must_be_a_scalar() {
+        assert_eq!(front_error("[a]: 1\n"), Some(("key", "2:1".to_owned())));
+        assert_eq!(
+            front_error("m:\n  [a, b]: 1\n"),
+            Some(("key", "3:3".to_owned()))
+        );
     }
 }

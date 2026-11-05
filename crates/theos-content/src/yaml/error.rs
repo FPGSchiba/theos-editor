@@ -21,6 +21,9 @@ pub enum YamlRule {
     Escape,
     /// A flow map (`{a: 1}`).
     FlowMap,
+    /// A spelling of a layout that the reader refuses: an indented map, a space before a colon,
+    /// a list item on the line after its dash.
+    Layout,
     /// A list of maps.
     ListOfMaps,
     /// A map nested deeper than the model allows.
@@ -60,6 +63,7 @@ impl YamlRule {
             YamlRule::OneLineScalar => "one-line-scalar",
             YamlRule::Escape => "escape",
             YamlRule::FlowMap => "flow-map",
+            YamlRule::Layout => "layout",
             YamlRule::ListOfMaps => "list-of-maps",
             YamlRule::NestedMap => "nested-map",
             YamlRule::ListInList => "list-in-list",

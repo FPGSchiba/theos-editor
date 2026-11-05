@@ -255,3 +255,27 @@ file = "escape-tab.md"
 rule = "escape"
 line = 4
 column = 4
+
+[[case]]
+file = "layout-indented-map.md"
+rule = "layout"
+line = 3
+column = 3
+
+[[case]]
+file = "layout-space-before-colon.md"
+rule = "layout"
+line = 4
+column = 2
+
+[[case]]
+file = "layout-item-on-next-line.md"
+rule = "layout"
+line = 5
+column = 3
+
+[[case]]
+file = "key-flow-sequence.md"
+rule = "key"
+line = 4
+column = 1

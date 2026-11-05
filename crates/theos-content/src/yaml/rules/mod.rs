@@ -10,6 +10,7 @@ mod duplicate_key;
 mod empty_value;
 mod flow_map;
 mod key;
+mod layout;
 mod list_in_list;
 mod list_of_maps;
 mod nested_map;
@@ -52,6 +53,7 @@ pub(crate) const RULES: &[&dyn Rule] = &[
     &control_character::ControlCharacter,
     &duplicate_key::DuplicateKey,
     &key::Key,
+    &layout::Layout,
     &empty_value::EmptyValue,
 ];
 
