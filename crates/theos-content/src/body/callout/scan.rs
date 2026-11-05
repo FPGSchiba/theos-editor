@@ -224,12 +224,14 @@ pub(crate) fn scan(
                     Ok(title) => Some(title),
                     Err(report) => {
                         let faults = link_faults(reported, title_span);
-                        // Wrong only because of links that are already reported: one finding.
-                        let only_links = covers_unclosed(reported, report.span)
-                            || !faults.is_empty()
-                                && parse(&with_stand_ins(&inside, &faults)).is_ok();
-                        if !only_links {
+                        if covers_unclosed(reported, report.span) {
+                            // Wrong only because of a link already reported: one finding.
+                        } else if faults.is_empty() {
                             bad.push(report);
+                        } else if let Err(second) = parse(&with_stand_ins(&inside, &faults)) {
+                            // The title is also wrong without the bad links: report that
+                            // independent fault at its own position, not the link again.
+                            bad.push(second);
                         }
                         None
                     }

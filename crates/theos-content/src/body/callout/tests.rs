@@ -378,6 +378,63 @@ fn a_bad_link_does_not_hide_another_fault_of_the_title() {
     assert_eq!(kinds("> [!voice] [[world/tower]]\n"), ["link-target"]);
 }
 
+// AC: CE-10.3
+#[test]
+fn a_second_title_fault_is_reported_at_its_own_position() {
+    let found = |text: &str| -> Vec<(String, usize, usize, String)> {
+        body(text)
+            .body()
+            .malformed()
+            .iter()
+            .map(|m| {
+                (
+                    m.kind.as_str().to_owned(),
+                    m.position.line,
+                    m.position.column,
+                    m.message.clone(),
+                )
+            })
+            .collect()
+    };
+    let link = "`a/b` is not a record id with an optional beat number";
+    let want =
+        |kind: &str, col: usize, message: &str| (kind.to_owned(), 4, col, message.to_owned());
+    let tier = "expected a belief link, or one tier as the last token";
+    let mut got = found(
+        "> [!voice] [[a/b]] · T1 · x
+",
+    );
+    got.sort();
+    assert_eq!(
+        got,
+        [
+            want("callout-title", 27, tier),
+            want("link-target", 12, link)
+        ]
+    );
+    // The same fault without the bad link, for the exact wording.
+    assert_eq!(
+        found(
+            "> [!voice] [[a]] · T1 · x
+"
+        ),
+        [want("callout-title", 25, tier)]
+    );
+    let state = "a note title needs a state";
+    let mut got = found(
+        "> [!note] n1 · [[a/b]]
+",
+    );
+    got.sort();
+    assert_eq!(
+        got,
+        [
+            want("callout-title", 11, state),
+            want("link-target", 16, link)
+        ]
+    );
+}
+
 // AC: CE-10.2
 #[test]
 fn a_caption_under_a_list_is_the_caption() {
