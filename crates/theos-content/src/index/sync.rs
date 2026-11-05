@@ -312,9 +312,9 @@ impl Syncer<'_> {
             )
             .optional()?;
         self.rechecked
-            .extend(old.iter().map(|(id, _)| id.to_ascii_lowercase()));
+            .extend(old.iter().map(|(id, _)| resolve::id_fold(id)));
         self.rechecked
-            .extend(new.iter().map(|(id, _)| id.to_ascii_lowercase()));
+            .extend(new.iter().map(|(id, _)| resolve::id_fold(id)));
         if old.as_ref().map(|(_, facts)| facts.as_str()) == new.map(|(_, facts)| facts) {
             return Ok(());
         }

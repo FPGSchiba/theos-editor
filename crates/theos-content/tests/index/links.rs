@@ -429,3 +429,29 @@ fn a_removal_relinks_its_backlinks_and_clears_duplicates() -> TestResult {
     );
     Ok(())
 }
+
+// AC: CE-12.3
+#[test]
+fn equal_ids_with_letters_beyond_ascii_are_duplicates() -> TestResult {
+    let project = TempProject::new()?;
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    let things = "things/synthetic-Ärger.md";
+    let other = "other/synthetic-Ärger.md";
+    let text = "---\n# synthetic fixture (P03), not canon\nid: synthetic-Ärger\nkind: thing\ntitle: Synthetic thing\ntype: synthetic\n---\nSynthetic text.\n";
+    let duplicates = |index: &Index| -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        Ok(index
+            .findings()?
+            .into_iter()
+            .filter(|f| f.rule == "index/duplicate-id")
+            .map(|f| f.path)
+            .collect())
+    };
+    index.apply(&[Change::text(things, text), Change::text(other, text)])?;
+    assert_eq!(duplicates(&index)?, [other, things]);
+
+    index.apply(&[Change::Removed {
+        path: other.to_owned(),
+    }])?;
+    assert_eq!(duplicates(&index)?, Vec::<String>::new());
+    Ok(())
+}

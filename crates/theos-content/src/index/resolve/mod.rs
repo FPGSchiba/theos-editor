@@ -18,7 +18,7 @@ mod kind;
 mod placement;
 mod targets;
 
-pub(crate) use duplicate::{ID_RULE, recheck_ids};
+pub(crate) use duplicate::{ID_RULE, id_fold, recheck_ids};
 
 /// What a link to an id depends on: one record that has the id.
 pub(crate) struct TargetInfo {

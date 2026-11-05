@@ -3,6 +3,7 @@
 use rusqlite::{Connection, params};
 
 use crate::finding::Finding;
+use crate::index::resolve::id_fold;
 use crate::index::rows::{RecordRows, Shape};
 use crate::yaml::ScalarStyle;
 
@@ -44,7 +45,7 @@ fn insert(conn: &Connection, path: &str, rows: &RecordRows) -> rusqlite::Result<
             params![
                 row.path,
                 row.id,
-                row.id.to_lowercase(),
+                id_fold(&row.id),
                 row.kind,
                 row.title,
                 row.status,

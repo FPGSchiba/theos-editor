@@ -16,15 +16,18 @@ pub(crate) const ID_RULE: (&str, Severity) = ("index/duplicate-id", Severity::Er
 /// The step name of the findings that [`recheck_ids`] makes.
 const STEP: &str = "ids";
 
+/// The fold of an id: its ASCII letters in lower case, every other character as it is. Two ids
+/// are duplicates when their folds are equal; the `id_fold` column holds this fold.
+pub(crate) fn id_fold(id: &str) -> String {
+    id.to_ascii_lowercase()
+}
+
 /// The paths that share an id apart from ASCII case, from `(path, id)` pairs. A group has at
 /// least two paths, sorted; the groups come in the order of their folded id.
 pub(crate) fn duplicate_groups(ids: &[(String, String)]) -> Vec<Vec<String>> {
     let mut groups: BTreeMap<String, BTreeSet<&str>> = BTreeMap::new();
     for (path, id) in ids {
-        groups
-            .entry(id.to_ascii_lowercase())
-            .or_default()
-            .insert(path);
+        groups.entry(id_fold(id)).or_default().insert(path);
     }
     groups
         .into_values()
@@ -33,7 +36,8 @@ pub(crate) fn duplicate_groups(ids: &[(String, String)]) -> Vec<Vec<String>> {
         .collect()
 }
 
-/// Replaces the `ids` findings of every record whose id fold is in `folds`.
+/// Replaces the `ids` findings of every record whose id fold is in `folds`, each made by
+/// [`id_fold`].
 pub(crate) fn recheck_ids(conn: &Connection, folds: &BTreeSet<String>) -> Result<(), IndexError> {
     for fold in folds {
         conn.execute(
@@ -127,5 +131,11 @@ mod tests {
             duplicate_groups(&ids),
             [["a/Foo.md".to_owned(), "b/foo.md".to_owned()]]
         );
+    }
+
+    #[test]
+    fn the_fold_lowers_ascii_letters_only() {
+        assert_eq!(id_fold("SYNTHETIC-Ärger"), "synthetic-Ärger");
+        assert_ne!(id_fold("Ärger"), id_fold("ärger"));
     }
 }
