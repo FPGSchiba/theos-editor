@@ -2,7 +2,7 @@
 //! schema rules every kind shares and then the checks of the kind itself.
 //!
 //! The order of the rules is the order of the phase spec's table. Each schema rule is one
-//! module with one `RULE` constant, registered by one line in [`SCHEMA_RULES`].
+//! module with one `RULE` constant, registered by one line in `SCHEMA_RULES`.
 
 mod decode;
 mod file_name;
