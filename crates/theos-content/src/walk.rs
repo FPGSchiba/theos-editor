@@ -47,12 +47,19 @@ pub struct WalkError {
     source: ignore::Error,
 }
 
-/// Whether a project-relative path (with `/`) is a record: it ends in `.md`, is not a
-/// `README.md`, and is not under `templates/records/`, `tools/` or `attachments/`.
+/// Whether a project-relative path (with `/`) is a record: a plain relative path (not empty, not
+/// starting with `/`, no `\` or `:`, no empty, `.` or `..` component, no component starting
+/// with `.`, which the walk skips as hidden) that ends in `.md`, is not a `README.md`, and is
+/// not under `templates/records/`, `tools/` or `attachments/`.
 #[must_use]
 pub fn is_record_path(path: &str) -> bool {
+    let plain = !path.contains(['\\', ':'])
+        && path
+            .split('/')
+            .all(|part| !part.is_empty() && !part.starts_with('.'));
     let name = path.rsplit('/').next().unwrap_or(path);
-    path.strip_suffix(".md").is_some()
+    plain
+        && path.strip_suffix(".md").is_some()
         && name != "README.md"
         && !["templates/records/", "tools/", "attachments/"]
             .iter()
@@ -193,6 +200,18 @@ mod tests {
             ("attachments/x.md", false),
             ("notes.MD", false),
             ("x.txt", false),
+            ("", false),
+            (".md", false),
+            ("../x.md", false),
+            ("a/../x.md", false),
+            ("/etc/x.md", false),
+            ("C:/x.md", false),
+            ("a\\b.md", false),
+            ("a//b.md", false),
+            ("./a.md", false),
+            (".obsidian/x.md", false),
+            ("lore/.hidden.md", false),
+            ("lore/", false),
         ];
         for (path, want) in table {
             assert_eq!(is_record_path(path), want, "{path}");

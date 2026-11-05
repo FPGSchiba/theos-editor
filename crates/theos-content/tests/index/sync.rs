@@ -324,3 +324,21 @@ fn findings_are_sorted_and_print_like_p05() -> TestResult {
     assert_eq!(lines, expected);
     Ok(())
 }
+
+#[test]
+fn paths_outside_the_walk_are_ignored() -> TestResult {
+    let project = TempProject::new()?;
+    three(&project)?;
+    let outside = project.root().join("../outside.md");
+    std::fs::write(&outside, thing("outside", "synthetic outside"))?;
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    let before = index.dump()?;
+    let result = index.update(&["../outside.md"]);
+    std::fs::remove_file(&outside)?;
+    assert_eq!(result?, Update::default());
+    let hidden = Change::text(".obsidian/x.md", thing("x", "synthetic hidden"));
+    assert_eq!(index.apply(&[hidden])?, Update::default());
+    assert_eq!(index.dump()?, before);
+    Ok(())
+}
