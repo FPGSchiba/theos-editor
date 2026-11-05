@@ -1,7 +1,7 @@
 //! The cache file: rebuilds are invisible, preview changes nothing, two processes share it.
 
 use theos_content::kinds::{BodyGrammar, IdRule, KindSpec};
-use theos_content::{Change, FieldSpec, FieldType, Hit, Index, Placement, parts};
+use theos_content::{Change, FieldSpec, FieldType, Hit, Index, Placement, Update, parts};
 
 use crate::common::TempProject;
 
@@ -289,6 +289,77 @@ fn preview_of_text_that_fails_to_split() -> TestResult {
         .map(|f| f.rule.as_str())
         .collect();
     assert_eq!(rules, vec!["record/opening-line"]);
+    Ok(())
+}
+
+/// The dump and the findings of a fresh in-memory index with `registry` over `project`.
+fn fresh_with(
+    project: &TempProject,
+    registry: &theos_content::KindRegistry,
+) -> Result<(String, Vec<theos_content::Finding>), Box<dyn std::error::Error>> {
+    let mut fresh = Index::in_memory(&project.project()?, registry)?;
+    fresh.sync()?;
+    Ok((fresh.dump()?, fresh.findings()?))
+}
+
+const TESTED: &str = "tests/synthetic-tested.md";
+
+fn tested(title: &str) -> String {
+    format!(
+        "---\n# synthetic fixture (P03), not canon\nid: synthetic-tested\nkind: synthetic-test\ntitle: {title}\n---\nSynthetic text.\n"
+    )
+}
+
+// AC: CE-12.4
+#[test]
+fn two_builds_on_one_cache_never_mix_their_rows() -> TestResult {
+    let project = TempProject::new()?;
+    project.write(TESTED, &tested("synthetic one"))?;
+    project.write(
+        "things/synthetic-plain.md",
+        "---\n# synthetic fixture (P03), not canon\nid: synthetic-plain\nkind: thing\ntitle: Synthetic plain\ntype: synthetic\n---\nSee [[synthetic-tested]].\n",
+    )?;
+    let builtin = parts::builtin()?;
+    let mut more = parts::builtin()?;
+    more.register("test", test_kind())?;
+
+    // A opens; B, another build, opens the same cache and rebuilds it for itself.
+    let (mut a, _) = Index::open(&project.project()?, &builtin)?;
+    let (mut b, _) = Index::open(&project.project()?, &more)?;
+    assert_eq!(b.dump()?, fresh_with(&project, &more)?.0);
+
+    // A's next write first rebuilds the cache for A, and never writes A's rows under B's
+    // identity. The rebuild has synced the folder, so the sync itself finds nothing to do.
+    project.write(TESTED, &tested("synthetic two"))?;
+    assert_eq!(a.sync()?, Update::default());
+    let (a_dump, a_findings) = fresh_with(&project, &builtin)?;
+    assert_eq!(a.findings()?, a_findings);
+    assert_eq!(a.dump()?, a_dump);
+
+    // B's next write and a reopen of B give B's fresh build.
+    b.sync()?;
+    let (b_dump, _) = fresh_with(&project, &more)?;
+    assert_eq!(b.dump()?, b_dump);
+    drop(b);
+    let (b, _) = Index::open(&project.project()?, &more)?;
+    assert_eq!(b.dump()?, b_dump);
+
+    // A preview rebuilds for A too: the rebuild is committed, the preview's own change is not.
+    let preview = a.preview(&[Change::text(TESTED, tested("synthetic three"))])?;
+    let only_the_preview = Update {
+        reparsed: vec![TESTED.to_owned()],
+        ..Update::default()
+    };
+    assert_eq!(preview.update, only_the_preview);
+    assert_eq!(a.findings()?, a_findings);
+    assert_eq!(a.dump()?, a_dump);
+
+    // And A's next apply keeps A's identity: nothing is rebuilt, and the stored bytes change
+    // nothing.
+    let update = a.apply(&[Change::text(TESTED, tested("synthetic two"))])?;
+    assert_eq!(update, Update::default());
+    assert_eq!(a.findings()?, a_findings);
+    drop(b);
     Ok(())
 }
 

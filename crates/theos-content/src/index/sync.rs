@@ -12,7 +12,8 @@ use sha2::{Digest, Sha256};
 
 use crate::check::check_record;
 use crate::finding::{Finding, Severity};
-use crate::index::store::map_error;
+use crate::index::identity::Identity;
+use crate::index::store::{self, map_error};
 use crate::index::{Index, IndexError, query, resolve, rows, write};
 use crate::kinds::KindRegistry;
 use crate::walk::{Walked, WalkedPath, is_record_path, mtime_ns, walk};
@@ -59,6 +60,9 @@ impl Change {
 /// What a sync, update or apply did; every list is sorted. A path is in at most one of
 /// `reparsed` and `removed`: when one call changes a path more than once, its last change
 /// decides.
+///
+/// When another build has rebuilt the cache file, a call first rebuilds it for this build (see
+/// [`Index`]); the update reports only the call's own work.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Update {
     /// The files read from disk, also one that a later change of the same call removed.
@@ -221,6 +225,11 @@ impl Index {
 
     /// Runs `work` in one `BEGIN IMMEDIATE` transaction, lets `read` look at the result, and
     /// then commits or, when `commit` is false, rolls back.
+    ///
+    /// A cache file whose `meta` is another build's (one that opened the same file since) is
+    /// first rebuilt for this build and synced with the folder, in a transaction of its own that
+    /// is committed also for a preview; then `work` runs in a new one. The update reports `work`
+    /// only. An in-memory cache belongs to this index alone and is not checked.
     fn transact<T>(
         &mut self,
         work: impl FnOnce(&mut Syncer<'_>) -> Result<(), IndexError>,
@@ -232,30 +241,53 @@ impl Index {
             Some(path) => map_error(error, path),
             None => IndexError::Sqlite(error),
         };
-        let tx = self
-            .store
-            .conn
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(busy)?;
-        let mut syncer = Syncer {
-            conn: &tx,
-            registry: &self.registry,
-            root: &self.root,
-            update: Update::default(),
-            affected: BTreeSet::new(),
-            rechecked: BTreeSet::new(),
-        };
-        work(&mut syncer)?;
-        syncer.resolve()?;
-        let update = syncer.update.sorted();
-        let read = read(&tx, &update)?;
-        if commit {
-            tx.commit()?;
-        } else {
-            tx.rollback()?;
+        loop {
+            let tx = self
+                .store
+                .conn
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(busy)?;
+            if let Some(file) = &path
+                && !store::holds(&tx, &self.identity)?
+            {
+                tracing::warn!(
+                    path = %file.display(),
+                    "another build rebuilt the index cache; rebuilding it for this one"
+                );
+                rebuild(&tx, &self.registry, &self.root, &self.identity)?;
+                tx.commit()?;
+                // Checked again under the new write lock: another build may have rebuilt the
+                // cache once more in between.
+                continue;
+            }
+            let mut syncer = Syncer::new(&tx, &self.registry, &self.root);
+            work(&mut syncer)?;
+            syncer.resolve()?;
+            let update = syncer.update.sorted();
+            let read = read(&tx, &update)?;
+            if commit {
+                tx.commit()?;
+            } else {
+                tx.rollback()?;
+            }
+            return Ok((update, read));
         }
-        Ok((update, read))
     }
+}
+
+/// Rebuilds the cache in `tx` for the build of `identity`: the empty schema with its `meta`,
+/// then every record of the folder at `root` (spec §5.8, identity).
+fn rebuild(
+    tx: &Connection,
+    registry: &KindRegistry,
+    root: &Path,
+    identity: &Identity,
+) -> Result<(), IndexError> {
+    store::rebuild(tx, identity)?;
+    let walked = walk(root)?;
+    let mut syncer = Syncer::new(tx, registry, root);
+    syncer.sync(&walked)?;
+    syncer.resolve()
 }
 
 /// Step 3 for each given change.
@@ -269,7 +301,19 @@ fn apply_changes(work: &mut Syncer<'_>, changes: &[Change]) -> Result<(), IndexE
     Ok(())
 }
 
-impl Syncer<'_> {
+impl<'a> Syncer<'a> {
+    /// The work of one transaction on `conn`, before any change.
+    fn new(conn: &'a Connection, registry: &'a KindRegistry, root: &'a Path) -> Syncer<'a> {
+        Syncer {
+            conn,
+            registry,
+            root,
+            update: Update::default(),
+            affected: BTreeSet::new(),
+            rechecked: BTreeSet::new(),
+        }
+    }
+
     /// Step 4: relink the re-parsed records and the records that link to an affected id
     /// (CE-12.2), and recheck the id folds of the re-parsed and removed records. `relinked` lists
     /// those that were relinked without being re-parsed.

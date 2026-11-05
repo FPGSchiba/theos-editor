@@ -1,5 +1,6 @@
 //! What a cache was built from; when it changes, the cache is rebuilt.
 
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
 use sha2::{Digest, Sha256};
@@ -15,6 +16,7 @@ pub(crate) const FORMAT: i64 = 1;
 pub(crate) const SOURCE: &str = env!("THEOS_CONTENT_SOURCE_HASH");
 
 /// The six facts a cache is valid for.
+#[derive(Clone)]
 pub(crate) struct Identity {
     pub format: i64,
     pub crate_version: &'static str,
@@ -47,6 +49,14 @@ impl Identity {
             ("rules", self.rules.clone()),
             ("source", self.source.to_owned()),
         ]
+    }
+
+    /// The `meta` table of this identity, by key.
+    pub(crate) fn meta(&self) -> BTreeMap<String, String> {
+        self.pairs()
+            .into_iter()
+            .map(|(key, value)| (key.to_owned(), value))
+            .collect()
     }
 }
 

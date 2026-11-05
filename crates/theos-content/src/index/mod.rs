@@ -31,9 +31,15 @@ use store::Store;
 
 /// The index of a content project: its records, links, beats, findings and search rows, kept in
 /// SQLite. Queries read the store; the index keeps no copy of the rows.
+///
+/// Another build (another registry or `theos-content` source) may open the same cache file and
+/// rebuild it for itself. Every write of this index first checks the cache's identity and, when
+/// it is another build's, rebuilds the cache for this one before it does its own work.
 pub struct Index {
     root: PathBuf,
     registry: KindRegistry,
+    /// The identity of this build, which every write checks against the cache's `meta`.
+    identity: Identity,
     store: Store,
 }
 
@@ -57,6 +63,7 @@ impl Index {
                 root: project.root().to_path_buf(),
                 registry: registry.clone(),
                 store: Store::open(&file, &identity)?,
+                identity: identity.clone(),
             };
             let update = index.sync()?;
             Ok((index, update))
@@ -79,10 +86,12 @@ impl Index {
     ///
     /// Fails when SQLite fails.
     pub fn in_memory(project: &Project, registry: &KindRegistry) -> Result<Index, IndexError> {
+        let identity = Identity::current(registry);
         Ok(Index {
             root: project.root().to_path_buf(),
             registry: registry.clone(),
-            store: Store::in_memory(&Identity::current(registry))?,
+            store: Store::in_memory(&identity)?,
+            identity,
         })
     }
 }

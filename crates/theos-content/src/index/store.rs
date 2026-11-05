@@ -102,23 +102,29 @@ impl Store {
 /// Rebuilds the schema in one write transaction when the identity or the tables do not match.
 fn prepare(conn: &mut Connection, identity: &Identity) -> Result<(), IndexError> {
     let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    let wanted: BTreeMap<String, String> = identity
-        .pairs()
-        .into_iter()
-        .map(|(key, value)| (key.to_owned(), value))
-        .collect();
-    if stored_meta(&tx)? != Some(wanted.clone()) || !has_every_table(&tx)? {
-        for table in TABLES {
-            tx.execute_batch(&format!("DROP TABLE IF EXISTS {table};"))?;
-        }
-        tx.execute_batch(SCHEMA)?;
-        let mut insert = tx.prepare("INSERT INTO meta (key, value) VALUES (?1, ?2)")?;
-        for (key, value) in &wanted {
-            insert.execute([key, value])?;
-        }
-        drop(insert);
+    if !holds(&tx, identity)? || !has_every_table(&tx)? {
+        rebuild(&tx, identity)?;
     }
     tx.commit()?;
+    Ok(())
+}
+
+/// Whether the `meta` table of the cache is that of `identity`. Another build that opened the
+/// same cache file since has rebuilt it with its own.
+pub(crate) fn holds(conn: &Connection, identity: &Identity) -> Result<bool, rusqlite::Error> {
+    Ok(stored_meta(conn)? == Some(identity.meta()))
+}
+
+/// Drops every table and creates the empty schema with the `meta` of `identity`.
+pub(crate) fn rebuild(conn: &Connection, identity: &Identity) -> Result<(), rusqlite::Error> {
+    for table in TABLES {
+        conn.execute_batch(&format!("DROP TABLE IF EXISTS {table};"))?;
+    }
+    conn.execute_batch(SCHEMA)?;
+    let mut insert = conn.prepare("INSERT INTO meta (key, value) VALUES (?1, ?2)")?;
+    for (key, value) in identity.meta() {
+        insert.execute([key, value])?;
+    }
     Ok(())
 }
 
