@@ -25,6 +25,7 @@
 pub mod body;
 pub mod check;
 pub mod finding;
+pub mod index;
 pub mod kinds;
 pub mod parts;
 pub mod project;
@@ -42,6 +43,7 @@ pub use body::{
     Voice,
 };
 pub use finding::{Finding, Severity};
+pub use index::IndexError;
 pub use kinds::{
     BodyGrammar, FieldSpec, FieldType, KindRegistry, KindSpec, Placement, RegistryError, Target,
 };
