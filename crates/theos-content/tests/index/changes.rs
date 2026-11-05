@@ -1,6 +1,6 @@
 //! Relinking only what a change touches: each change updates its record and its backlinks.
 
-use theos_content::{Index, Update, parts};
+use theos_content::{Change, Index, Update, parts};
 
 use crate::common::TempProject;
 
@@ -47,6 +47,33 @@ fn script(second_beat: bool) -> String {
     text
 }
 
+fn truth(title: &str) -> String {
+    format!(
+        "---\n{MARK}id: T-940\nkind: truth\ntitle: {title}\nstatus: draft\ntarget: hinted\ntopic: synthetic-subject-explaining\n---\nSynthetic statement A.\n"
+    )
+}
+
+/// A `thing` with the id `T-940`, the twin of [`TRUTH`].
+const TWIN: &str = "dialogue/T-940.md";
+
+fn twin(title: &str) -> String {
+    format!(
+        "---\n{MARK}id: T-940\nkind: thing\ntitle: {title}\ntype: synthetic\n---\nSynthetic twin text.\n"
+    )
+}
+
+/// The paths of the `index/duplicate-id` findings, sorted.
+fn duplicates(index: &Index) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut paths: Vec<String> = index
+        .findings()?
+        .into_iter()
+        .filter(|f| f.rule == "index/duplicate-id")
+        .map(|f| f.path)
+        .collect();
+    paths.sort();
+    Ok(paths)
+}
+
 fn in_world(track: &str) -> String {
     format!(
         "---\n{MARK}id: synthetic-subject-in-world\nkind: topic\ntitle: Synthetic subject, in-world\nstatus: draft\ntrack: {track}\ncounterpart: synthetic-subject-explaining\n---\nSynthetic in-world text.\n"
@@ -87,12 +114,7 @@ fn write_project(project: &TempProject) -> std::io::Result<()> {
             ),
         ),
         (IN_WORLD, in_world("in-world")),
-        (
-            TRUTH,
-            format!(
-                "---\n{MARK}id: T-940\nkind: truth\ntitle: Synthetic truth A\nstatus: draft\ntarget: hinted\ntopic: synthetic-subject-explaining\n---\nSynthetic statement A.\n"
-            ),
-        ),
+        (TRUTH, truth("Synthetic truth A")),
         (BELIEF, belief("B-940", "Synthetic belief A")),
         (SCRIPT, script(true)),
         (READER, reader("")),
@@ -208,32 +230,42 @@ fn each_change_updates_its_record_and_its_backlinks() -> TestResult {
 fn duplicates_come_and_go_with_changes() -> TestResult {
     let project = TempProject::new()?;
     let mut index = opened(&project)?;
-    let twin = "dialogue/T-940.md";
-    let duplicates = |index: &Index| -> Result<Vec<String>, Box<dyn std::error::Error>> {
-        Ok(index
-            .findings()?
-            .into_iter()
-            .filter(|f| f.rule == "index/duplicate-id")
-            .map(|f| f.path)
-            .collect())
-    };
     assert_eq!(duplicates(&index)?, Vec::<String>::new());
 
-    project.write(
-        twin,
-        &format!(
-            "---\n{MARK}id: T-940\nkind: thing\ntitle: Synthetic twin\ntype: synthetic\n---\nSynthetic twin text.\n"
-        ),
-    )?;
+    project.write(TWIN, &twin("Synthetic twin"))?;
     index.sync()?;
-    let mut both = duplicates(&index)?;
-    both.sort();
-    assert_eq!(both, [twin, TRUTH]);
+    assert_eq!(duplicates(&index)?, [TWIN, TRUTH]);
     assert_eq!(index.dump()?, fresh_dump(&project)?);
 
-    project.remove(twin)?;
+    project.remove(TWIN)?;
     index.sync()?;
     assert_eq!(duplicates(&index)?, Vec::<String>::new());
+    assert_eq!(index.dump()?, fresh_dump(&project)?);
+    Ok(())
+}
+
+// AC: CE-12.3
+#[test]
+fn a_duplicate_stays_reported_when_a_twin_is_edited() -> TestResult {
+    let project = TempProject::new()?;
+    let mut index = opened(&project)?;
+    project.write(TWIN, &twin("Synthetic twin"))?;
+    index.sync()?;
+    assert_eq!(duplicates(&index)?, [TWIN, TRUTH]);
+
+    // An edit on disk that leaves the link facts as they were.
+    project.write(TWIN, &twin("Synthetic twin, retitled"))?;
+    let update = index.sync()?;
+    assert_eq!(update, lists(&[TWIN], &[TWIN], &[], &[]));
+    assert_eq!(duplicates(&index)?, [TWIN, TRUTH]);
+    assert_eq!(index.dump()?, fresh_dump(&project)?);
+
+    // The same through `apply`, on the other twin.
+    let retitled = truth("Synthetic truth A, retitled");
+    project.write(TRUTH, &retitled)?;
+    let update = index.apply(&[Change::text(TRUTH, retitled)])?;
+    assert_eq!(update, lists(&[], &[TRUTH], &[], &[]));
+    assert_eq!(duplicates(&index)?, [TWIN, TRUTH]);
     assert_eq!(index.dump()?, fresh_dump(&project)?);
     Ok(())
 }

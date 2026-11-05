@@ -128,6 +128,10 @@ struct Syncer<'a> {
     update: Update,
     /// The ids whose link facts changed, old and new (spec §5.9 step 4).
     affected: BTreeSet<String>,
+    /// The id folds of every record whose rows were replaced or deleted, old and new: replacing
+    /// the rows deletes the record's duplicate-id findings, so they are recomputed even when the
+    /// link facts stayed.
+    rechecked: BTreeSet<String>,
 }
 
 impl Index {
@@ -237,6 +241,7 @@ impl Index {
             root: &self.root,
             update: Update::default(),
             affected: BTreeSet::new(),
+            rechecked: BTreeSet::new(),
         };
         work(&mut syncer)?;
         syncer.resolve()?;
@@ -263,11 +268,12 @@ fn apply_changes(work: &mut Syncer<'_>, changes: &[Change]) -> Result<(), IndexE
 }
 
 impl Syncer<'_> {
-    /// Step 4: relink the re-parsed records and the records that link to an affected id, and
-    /// recheck the id folds of the affected ids only (CE-12.2). `relinked` lists those that were
-    /// not re-parsed.
+    /// Step 4: relink the re-parsed records and the records that link to an affected id
+    /// (CE-12.2), and recheck the id folds of the re-parsed and removed records. `relinked` lists
+    /// those that were relinked without being re-parsed.
     fn resolve(&mut self) -> Result<(), IndexError> {
-        if self.affected.is_empty() && self.update.reparsed.is_empty() {
+        let untouched = self.affected.is_empty() && self.rechecked.is_empty();
+        if untouched && self.update.reparsed.is_empty() {
             return Ok(());
         }
         let mut sources: BTreeSet<String> = self.update.reparsed.iter().cloned().collect();
@@ -284,12 +290,7 @@ impl Syncer<'_> {
             sources.remove(path);
         }
         resolve::relink(self.conn, self.registry, &sources)?;
-        let folds = self
-            .affected
-            .iter()
-            .map(|id| id.to_ascii_lowercase())
-            .collect();
-        resolve::recheck_ids(self.conn, &folds)?;
+        resolve::recheck_ids(self.conn, &self.rechecked)?;
         self.update.relinked = sources
             .into_iter()
             .filter(|path| !self.update.reparsed.contains(path))
@@ -297,9 +298,10 @@ impl Syncer<'_> {
         Ok(())
     }
 
-    /// Step 2 of the affected set: before the rows of `path` are replaced or deleted, compare
-    /// the id and facts they hold with the `new` ones, none when the record goes away. A record
-    /// that appears or disappears counts as changed.
+    /// Step 2 of the affected set: before the rows of `path` are replaced or deleted, note the
+    /// old and `new` id folds for the recheck, and compare the id and facts the rows hold with the
+    /// `new` ones, none when the record goes away. A record that appears or disappears counts as
+    /// changed.
     fn touch(&mut self, path: &str, new: Option<(&str, &str)>) -> Result<(), IndexError> {
         let old: Option<(String, String)> = self
             .conn
@@ -309,6 +311,10 @@ impl Syncer<'_> {
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()?;
+        self.rechecked
+            .extend(old.iter().map(|(id, _)| id.to_ascii_lowercase()));
+        self.rechecked
+            .extend(new.iter().map(|(id, _)| id.to_ascii_lowercase()));
         if old.as_ref().map(|(_, facts)| facts.as_str()) == new.map(|(_, facts)| facts) {
             return Ok(());
         }
