@@ -73,7 +73,11 @@ impl Store {
 
     fn try_open(file: &Path, identity: &Identity) -> Result<Store, IndexError> {
         let mut conn = Connection::open(file).map_err(|e| map_error(e, file))?;
+        // In WAL mode, `synchronous = NORMAL` syncs the file at checkpoints instead of at every
+        // commit. A power loss may then lose the last commits but never damages the file; the
+        // cache is derived from the files, and the next sync reads again what such a commit held.
         conn.busy_timeout(BUSY_TIMEOUT)
+            .and_then(|()| conn.pragma_update(None, "synchronous", "NORMAL"))
             .map_err(|e| map_error(e, file))?;
         // Two processes that open a new cache at once can meet SQLITE_BUSY at once, when the
         // second one switches the file to WAL: SQLite does not call the busy handler there.
@@ -280,6 +284,11 @@ mod tests {
             .conn
             .query_row("PRAGMA journal_mode", [], |r| r.get(0))?;
         assert_eq!(mode, "wal");
+        // 1 is NORMAL: commits are not synced, checkpoints are.
+        let synchronous: i64 = store
+            .conn
+            .query_row("PRAGMA synchronous", [], |r| r.get(0))?;
+        assert_eq!(synchronous, 1);
         Ok(())
     }
 
