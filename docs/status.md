@@ -8,7 +8,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 |---|---|---|---|---|---|
 | P00 | Foundation and gate | theos-editor | done | #5, #9, #10 | #7 |
 | P01 | Content layout and templates | tower-of-theos | done | #4 | tower-of-theos#2 |
-| P02 | Records and grammars | theos-editor | pr-open | #16 | |
+| P02 | Records and grammars | theos-editor | pr-open | #16 | #17 |
 | P03 | Kinds, index, search, lenses | theos-editor | todo | | |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | todo | | |
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
