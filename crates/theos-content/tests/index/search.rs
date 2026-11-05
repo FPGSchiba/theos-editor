@@ -134,6 +134,21 @@ fn query_syntax_is_plain_text() -> TestResult {
     Ok(())
 }
 
+// AC: CE-13.1
+#[test]
+fn control_characters_in_a_query_separate_words() -> TestResult {
+    let index = indexed()?;
+    for query in ["a\0b", "\"lantern\0\"", "\u{7}", "lantern\u{1b}"] {
+        index.search(query, 10)?;
+    }
+    assert_eq!(
+        ids(&index.search("lantern\0", 20)?),
+        ids(&index.search("lantern", 20)?)
+    );
+    assert_eq!(index.search("\0\u{7f}", 20)?.len(), 0);
+    Ok(())
+}
+
 #[test]
 fn a_quoted_value_with_escapes_matches_as_a_whole() -> TestResult {
     let hits = indexed()?.search("lantern", 20)?;

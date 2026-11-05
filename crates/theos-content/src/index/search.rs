@@ -92,12 +92,14 @@ impl Index {
 }
 
 /// Quotes the words and phrases of `query` so FTS5 reads them as plain terms; none left gives
-/// `None`. A `"` ends the current word and opens a phrase, which runs to the next `"`.
+/// `None`. A `"` ends the current word and opens a phrase, which runs to the next `"`. A control
+/// character is read as a space, so it separates words and never reaches FTS5, which takes a
+/// NUL for the end of the query.
 pub(crate) fn fts_query(query: &str) -> Option<String> {
     let mut terms = Vec::new();
     let mut current = String::new();
     let mut phrase = false;
-    for c in query.chars() {
+    for c in query.chars().map(|c| if c.is_control() { ' ' } else { c }) {
         if c == '"' {
             terms.push(std::mem::take(&mut current));
             phrase = !phrase;
@@ -370,6 +372,17 @@ mod tests {
         assert_eq!(fts_query("\"a b\" c").as_deref(), Some("\"a b\" \"c\""));
         assert_eq!(fts_query("a\"b").as_deref(), Some("\"a\" \"b\""));
         assert_eq!(fts_query("x\"y z").as_deref(), Some("\"x\" \"y z\""));
+    }
+
+    #[test]
+    fn control_characters_separate_words() {
+        assert_eq!(fts_query("a\0b").as_deref(), Some("\"a\" \"b\""));
+        assert_eq!(
+            fts_query("a\u{7}b\u{1b}c").as_deref(),
+            Some("\"a\" \"b\" \"c\"")
+        );
+        assert_eq!(fts_query("\"a\0b\"").as_deref(), Some("\"a b\""));
+        assert_eq!(fts_query("\0\u{7f}"), None);
     }
 
     #[test]
