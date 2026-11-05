@@ -277,3 +277,39 @@ fn malformed_note_titles_report_their_line() {
     assert_eq!(got, want);
     assert!(r.body().callouts().iter().all(|c| c.title.is_none()));
 }
+
+// AC: CE-10.2
+#[test]
+fn whitespace_around_a_title_is_not_part_of_it() {
+    let r = body("> [!voice] [[a]] · T1 \n> hi\n");
+    let c = &r.body().callouts()[0];
+    assert_eq!(at(&r, c.title_span), "[[a]] · T1");
+    assert_eq!(
+        voice(c.title.as_ref()).tier.as_ref().map(|t| &*t.text),
+        Some("T1")
+    );
+
+    let r = body("> [!voice] [[a]] · T1  \n> hi\n");
+    let c = &r.body().callouts()[0];
+    assert_eq!(at(&r, c.title_span), "[[a]] · T1");
+    assert!(c.title.is_some());
+
+    let r = body("> [!note] n1 · open \n");
+    let c = &r.body().callouts()[0];
+    assert_eq!(note(c.title.as_ref()).state, NoteState::Open);
+    assert_eq!(at(&r, c.title_span), "n1 · open");
+
+    let r = body("> [!note]  n1 · open\n");
+    let c = &r.body().callouts()[0];
+    assert_eq!(at(&r, c.title_span), "n1 · open");
+    assert_eq!(note(c.title.as_ref()).number, 1);
+
+    let r = body("> [!design] Door width\t \n");
+    let c = &r.body().callouts()[0];
+    assert_eq!(at(&r, c.title_span), "Door width");
+    let Some(CalloutTitle::Design(design)) = &c.title else {
+        panic!("not a design title: {:?}", c.title);
+    };
+    assert_eq!(design.text.as_ref().map(|t| &*t.text), Some("Door width"));
+    assert_eq!(r.body().malformed(), []);
+}

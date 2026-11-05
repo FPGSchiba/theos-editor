@@ -42,6 +42,14 @@ fn marker(source: &str, start: usize) -> Option<Marker> {
     })
 }
 
+/// The span `start..end` of `source` without the spaces and tabs at both ends.
+fn trimmed(source: &str, start: usize, end: usize) -> Span {
+    let text = source.get(start..end).unwrap_or_default();
+    let head = text.len() - text.trim_start_matches([' ', '\t']).len();
+    let kept = text.trim_matches([' ', '\t']).len();
+    Span::new(start + head, start + head + kept)
+}
+
 /// The index of the `End` that closes the `Start` at `open`.
 fn closing(events: &Events<'_>, open: usize) -> usize {
     let mut depth = 0usize;
@@ -151,7 +159,7 @@ pub(crate) fn scan(
             .get(source)
             .and_then(|p| p.find('\n'))
             .map_or_else(|| first.end, |at| first.start + at);
-        let title_span = Span::new(marker.title_start.min(line_end), line_end);
+        let title_span = trimmed(source, marker.title_start.min(line_end), line_end);
         let content_start = (line_end + 1).min(quote.end);
         let paragraphs = child_paragraphs(events, i, close);
         let name = marker
