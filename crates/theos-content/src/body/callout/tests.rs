@@ -377,3 +377,22 @@ fn a_bad_link_does_not_hide_another_fault_of_the_title() {
     assert_eq!(kinds("> [!note] [[a/b]] · open\n"), both);
     assert_eq!(kinds("> [!voice] [[world/tower]]\n"), ["link-target"]);
 }
+
+// AC: CE-10.2
+#[test]
+fn a_caption_under_a_list_is_the_caption() {
+    let r = body("> [!note] n1 · open\n> Fix these:\n>\n> - the stairs\n> - the door\n> — Jann\n");
+    let c = &r.body().callouts()[0];
+    assert_eq!(c.caption_span.map(|s| at(&r, s)), Some("— Jann"));
+    assert_eq!(
+        note(c.title.as_ref()).text,
+        "Fix these:\n\n- the stairs\n- the door"
+    );
+
+    let r = body("> [!voice] [[a]] · T1\n> - one\n> — Mother Ilse\n");
+    let c = &r.body().callouts()[0];
+    assert_eq!(c.caption_span.map(|s| at(&r, s)), Some("— Mother Ilse"));
+
+    let r = body("> [!note] n1 · open\n> text\n>\n> ```\n> — code\n> ```\n");
+    assert_eq!(r.body().callouts()[0].caption_span, None);
+}

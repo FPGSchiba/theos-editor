@@ -94,8 +94,26 @@ fn child_blocks(events: &Events<'_>, open: usize, close: usize) -> Vec<ContentBl
     found
 }
 
-/// The caption: the last line of `last` when it starts with `— ` and is not the title line.
-fn caption(source: &str, last: Span, is_title_paragraph: bool) -> Option<Span> {
+/// The last paragraph (or list item) of the quote opened at `open`, in document order at any
+/// depth, except inside a nested block quote: a nested callout has its own caption.
+fn last_paragraph(events: &Events<'_>, open: usize, close: usize) -> Option<Span> {
+    let mut nested = 0usize;
+    let mut last = None;
+    for (event, span) in &events.items[open + 1..close] {
+        match event {
+            Event::Start(Tag::BlockQuote(_)) => nested += 1,
+            Event::End(pulldown_cmark::TagEnd::BlockQuote(_)) => nested = nested.saturating_sub(1),
+            // A tight list item has its text without a paragraph around it.
+            Event::Start(Tag::Paragraph | Tag::Item) if nested == 0 => last = Some(*span),
+            _ => {}
+        }
+    }
+    last
+}
+
+/// The caption: the last line of `last` when it starts with `— `, is the last non-blank line of
+/// the `quote` and is not the title line.
+fn caption(source: &str, quote: Span, last: Span, is_title_paragraph: bool) -> Option<Span> {
     let text = last.get(source)?.trim_end_matches('\n');
     let line_start = text.rfind('\n').map_or(0, |at| at + 1);
     if is_title_paragraph && line_start == 0 {
@@ -103,20 +121,22 @@ fn caption(source: &str, last: Span, is_title_paragraph: bool) -> Option<Span> {
     }
     let line = &text[line_start..];
     let shown = line.trim_start_matches(['>', ' ']);
-    shown.starts_with("— ").then(|| {
+    let end = last.start + text.len();
+    let tail = source.get(end..quote.end.max(end))?;
+    (shown.starts_with("— ") && tail.chars().all(|c| c.is_whitespace() || c == '>')).then(|| {
         let start = last.start + line_start + (line.len() - shown.len());
-        Span::new(start, last.start + text.len())
+        Span::new(start, end)
     })
 }
 
-/// The content blocks: the child blocks without the title line and the caption line.
-/// `caption` is the paragraph that ends in the caption line with that line.
+/// The content blocks: the child blocks without the title line and the caption line, which the
+/// block that holds it ends before.
 fn content_blocks(
     source: &str,
     blocks: &[ContentBlock],
     first: Span,
     title_end: usize,
-    caption: Option<(Span, Span)>,
+    caption: Option<Span>,
 ) -> Vec<ContentBlock> {
     blocks
         .iter()
@@ -125,8 +145,9 @@ fn content_blocks(
             if span == first {
                 span.start = (title_end + 1).min(span.end);
             }
-            if let Some((captioned, caption)) = caption
-                && block.span == captioned
+            if let Some(caption) = caption
+                && block.span.start <= caption.start
+                && caption.end <= block.span.end
                 && let Some(line_start) = source[..caption.start].rfind('\n').map(|at| at + 1)
             {
                 span.end = line_start.min(span.end);
@@ -176,14 +197,10 @@ pub(crate) fn scan(
             .unwrap_or_default()
             .to_ascii_lowercase();
         let registered = grammar(&name);
-        let last_paragraph = blocks.iter().rev().find(|block| block.paragraph);
-        let caption = last_paragraph
+        let caption_span = last_paragraph(events, i, close)
             .filter(|_| registered.is_some_and(TitleGrammar::captioned))
-            .and_then(|last| {
-                caption(source, last.span, last.span == *first).map(|line| (last.span, line))
-            });
-        let caption_span = caption.map(|(_, line)| line);
-        let content = content_blocks(source, &blocks, *first, line_end, caption);
+            .and_then(|last| caption(source, *quote, last, last == *first));
+        let content = content_blocks(source, &blocks, *first, line_end, caption_span);
         let inside: Vec<Link> = links
             .iter()
             .filter(|l| title_span.start <= l.span.start && l.span.end <= title_span.end)
