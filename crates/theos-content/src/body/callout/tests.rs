@@ -401,8 +401,7 @@ fn a_second_title_fault_is_reported_at_its_own_position() {
         |kind: &str, col: usize, message: &str| (kind.to_owned(), 4, col, message.to_owned());
     let tier = "expected a belief link, or one tier as the last token";
     let mut got = found(
-        "> [!voice] [[a/b]] · T1 · x
-",
+        "> [!voice] [[a/b]] · T1 · x\n",
     );
     got.sort();
     assert_eq!(
@@ -415,15 +414,13 @@ fn a_second_title_fault_is_reported_at_its_own_position() {
     // The same fault without the bad link, for the exact wording.
     assert_eq!(
         found(
-            "> [!voice] [[a]] · T1 · x
-"
+            "> [!voice] [[a]] · T1 · x\n"
         ),
         [want("callout-title", 25, tier)]
     );
     let state = "a note title needs a state";
     let mut got = found(
-        "> [!note] n1 · [[a/b]]
-",
+        "> [!note] n1 · [[a/b]]\n",
     );
     got.sort();
     assert_eq!(
