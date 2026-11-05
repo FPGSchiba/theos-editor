@@ -266,6 +266,21 @@ mod tests {
         assert_eq!(r.body().malformed()[0].position.to_string(), "4:3");
     }
 
+    // AC: CE-10.3
+    #[test]
+    fn an_escaped_bracket_does_not_start_a_link() {
+        let r = record("id: a\n", "see \\[[x]] here\n");
+        assert_eq!(r.body().malformed(), []);
+        let r = record("id: a\n", "\\\\[[x\n");
+        let got: Vec<_> = r
+            .body()
+            .malformed()
+            .iter()
+            .map(|m| (m.kind.as_str(), m.position.to_string()))
+            .collect();
+        assert_eq!(got, [("link-unclosed", "4:3".to_owned())]);
+    }
+
     // AC: CE-10.4
     #[test]
     fn blocks_tile_the_body() {

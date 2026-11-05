@@ -74,6 +74,13 @@ impl Malformed {
     }
 }
 
+/// Whether the character at `at` is escaped: an odd number of backslashes stands before it.
+fn is_escaped(source: &str, at: usize) -> bool {
+    let before = source.get(..at).unwrap_or_default();
+    let backslashes = before.len() - before.trim_end_matches('\\').len();
+    backslashes % 2 == 1
+}
+
 /// Embeds and unclosed `[[`, read from the events.
 pub(crate) fn scan(index: &TextIndex, events: &Events<'_>) -> Vec<Malformed> {
     let mut found = Vec::new();
@@ -117,6 +124,9 @@ pub(crate) fn scan(index: &TextIndex, events: &Events<'_>) -> Vec<Malformed> {
         };
         for (at, _) in source.match_indices("[[") {
             let start = range.start + at;
+            if is_escaped(events.source, start) {
+                continue;
+            }
             found.push(Malformed::new(
                 index,
                 MalformedKind::LinkUnclosed,
