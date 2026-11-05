@@ -6,7 +6,7 @@ mod events;
 mod links;
 mod malformed;
 
-pub use callout::{Callout, CalloutTitle, Design, Fold, Token, Voice};
+pub use callout::{Callout, CalloutTitle, Design, Fold, Note, NoteState, Token, Voice};
 pub use design_note::{DesignNote, DesignNoteForm};
 pub use links::Link;
 pub use malformed::{Malformed, MalformedKind};
@@ -176,7 +176,7 @@ mod tests {
             "",
             "# Head [[c]]",
             "",
-            "> [!note] title [[d]]",
+            "> [!note] n1 · [[d]] · open",
             "> body",
             "",
             "`[[e]]` and <!-- [[f]] -->",

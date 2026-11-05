@@ -87,3 +87,39 @@ file = "lore/topics/synthetic-malformed-voices-in-world.md"
 kind = "callout-title"
 line = 29
 column = 11
+
+[[case]]
+file = "maps/synthetic-malformed-notes.md"
+kind = "callout-title"
+line = 13
+column = 11
+
+[[case]]
+file = "maps/synthetic-malformed-notes.md"
+kind = "callout-title"
+line = 16
+column = 11
+
+[[case]]
+file = "maps/synthetic-malformed-notes.md"
+kind = "callout-title"
+line = 19
+column = 11
+
+[[case]]
+file = "maps/synthetic-malformed-notes.md"
+kind = "callout-title"
+line = 22
+column = 16
+
+[[case]]
+file = "maps/synthetic-malformed-notes.md"
+kind = "callout-title"
+line = 25
+column = 23
+
+[[case]]
+file = "maps/synthetic-malformed-notes.md"
+kind = "callout-title"
+line = 28
+column = 11

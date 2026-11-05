@@ -178,3 +178,102 @@ fn only_voice_callouts_have_captions() {
         Some("— y")
     );
 }
+
+fn note(title: Option<&CalloutTitle>) -> &Note {
+    match title {
+        Some(CalloutTitle::Note(note)) => note,
+        other => panic!("not a note title: {other:?}"),
+    }
+}
+
+// AC: CE-10.2
+#[test]
+fn note_states_are_recognised() {
+    let r = body("> [!note] n3 · [[f04-terrain-v2]] · open\n");
+    let n = note(r.body().callouts()[0].title.as_ref());
+    assert_eq!((n.id.text.as_str(), n.number), ("n3", 3));
+    assert_eq!(at(&r, n.id.span), "n3");
+    assert_eq!(
+        n.version.as_ref().map(|v| v.target.as_str()),
+        Some("f04-terrain-v2")
+    );
+    assert_eq!(n.state, NoteState::Open);
+    assert_eq!(at(&r, n.state_span), "open");
+
+    let r = body("> [!note] n4 · resolved by [[fates-shrine-v5]]\n");
+    let n = note(r.body().callouts()[0].title.as_ref());
+    let NoteState::ResolvedBy(link) = &n.state else {
+        panic!("not resolved: {:?}", n.state);
+    };
+    assert_eq!(link.target, "fates-shrine-v5");
+    assert_eq!(n.version, None);
+    assert_eq!(at(&r, n.state_span), "resolved by [[fates-shrine-v5]]");
+    assert_eq!(n.state.spelling(), "resolved by [[fates-shrine-v5]]");
+
+    let r = body("> [!note] n5 · dropped\n");
+    let n = note(r.body().callouts()[0].title.as_ref());
+    assert_eq!(n.state, NoteState::Dropped);
+    assert_eq!(at(&r, n.state_span), "dropped");
+    assert_eq!(n.state.spelling(), "dropped");
+
+    let r = body("> [!note] n6 · closed\n");
+    let n = note(r.body().callouts()[0].title.as_ref());
+    assert_eq!(n.state, NoteState::Unknown("closed".to_owned()));
+    assert_eq!(at(&r, n.state_span), "closed");
+    assert_eq!(n.state.spelling(), "closed");
+
+    let r = body("> [!note]- n2 · open\n");
+    let c = &r.body().callouts()[0];
+    assert_eq!(c.fold, Some(Fold::Closed));
+    assert_eq!(note(c.title.as_ref()).number, 2);
+    assert_eq!(r.body().malformed(), []);
+}
+
+// AC: CE-10.2
+#[test]
+fn note_text_leaves_out_title_and_caption() {
+    let r = body(
+        "> [!note] n3 · [[f04-terrain-v2]] · open\n\
+         > Lakes cover a tenth of the floor; the valley should drain east, toward the rim.\n\
+         > — Jann\n",
+    );
+    assert_eq!(
+        note(r.body().callouts()[0].title.as_ref()).text,
+        "Lakes cover a tenth of the floor; the valley should drain east, toward the rim."
+    );
+
+    let r = body("> [!note] n1 · open\n> a\n> b\nlazy\n>\n> c [[x|y]]\n> — Jann\n");
+    assert_eq!(
+        note(r.body().callouts()[0].title.as_ref()).text,
+        "a b lazy\n\nc [[x|y]]"
+    );
+
+    let r = body("> [!note] n1 · open\n> — Jann\n");
+    assert_eq!(note(r.body().callouts()[0].title.as_ref()).text, "");
+}
+
+// AC: CE-10.3
+#[test]
+fn malformed_note_titles_report_their_line() {
+    let forms = [
+        "[!note] open",
+        "[!note] n1",
+        "[!note] n1 · [[v]]",
+        "[!note] n1 · resolved by",
+        "[!note] n1 · open · extra",
+        "[!note] n1·open",
+    ];
+    let text = forms.join("\n\n").replace("[!", "> [!") + "\n";
+    let r = body(&text);
+    let got: Vec<_> = r
+        .body()
+        .malformed()
+        .iter()
+        .map(|m| (m.kind.as_str(), m.position.line))
+        .collect();
+    let want: Vec<_> = (0..forms.len())
+        .map(|i| ("callout-title", 4 + 2 * i))
+        .collect();
+    assert_eq!(got, want);
+    assert!(r.body().callouts().iter().all(|c| c.title.is_none()));
+}

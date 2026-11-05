@@ -94,6 +94,33 @@ fn caption(source: &str, last: Span, is_title_paragraph: bool) -> Option<Span> {
     })
 }
 
+/// The content paragraphs: the child paragraphs without the title line and the caption line.
+fn content_paragraphs(
+    source: &str,
+    paragraphs: &[Span],
+    first: Span,
+    title_end: usize,
+    caption: Option<Span>,
+) -> Vec<Span> {
+    let caption_line_start = caption.and_then(|c| source[..c.start].rfind('\n').map(|at| at + 1));
+    paragraphs
+        .iter()
+        .enumerate()
+        .filter_map(|(at, paragraph)| {
+            let mut span = *paragraph;
+            if span == first {
+                span.start = (title_end + 1).min(span.end);
+            }
+            if at + 1 == paragraphs.len()
+                && let Some(line_start) = caption_line_start
+            {
+                span.end = line_start.min(span.end);
+            }
+            (span.start < span.end).then_some(span)
+        })
+        .collect()
+}
+
 /// Recognises every callout, parses its title and reports the malformed titles.
 pub(crate) fn scan(
     index: &TextIndex,
@@ -137,6 +164,7 @@ pub(crate) fn scan(
             .last()
             .filter(|_| registered.is_some_and(TitleGrammar::captioned))
             .and_then(|last| caption(source, *last, *last == *first));
+        let content = content_paragraphs(source, &paragraphs, *first, line_end, caption_span);
         let inside: Vec<Link> = links
             .iter()
             .filter(|l| title_span.start <= l.span.start && l.span.end <= title_span.end)
@@ -151,6 +179,8 @@ pub(crate) fn scan(
                     title_span,
                     tokens: &tokens,
                     links: &inside,
+                    content: &content,
+                    depth,
                 };
                 match grammar.parse(&input) {
                     Ok(title) => Some(title),

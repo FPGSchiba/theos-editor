@@ -2,6 +2,7 @@
 //! registry of title grammars (one module per callout type, one line in [`GRAMMARS`]).
 
 mod design;
+mod note;
 mod scan;
 mod title;
 mod voice;
@@ -10,6 +11,7 @@ mod voice;
 mod tests;
 
 pub use design::Design;
+pub use note::{Note, NoteState};
 pub use voice::Voice;
 
 pub(crate) use scan::scan;
@@ -59,6 +61,8 @@ pub enum CalloutTitle {
     Voice(Voice),
     /// A design remark.
     Design(Design),
+    /// A note with its state and text.
+    Note(Note),
     /// A type without a grammar: plain data.
     Other,
 }
@@ -82,7 +86,10 @@ pub(crate) struct TitleInput<'a> {
     pub tokens: &'a [TitleToken],
     /// The links inside the title.
     pub links: &'a [Link],
-    // Task 11's note grammar adds the content paragraphs, caption and depth it needs.
+    /// The paragraphs of the content without the title line and the caption line.
+    pub content: &'a [Span],
+    /// How many block quotes enclose the callout, itself included.
+    pub depth: usize,
 }
 
 /// The grammar of one callout type.
@@ -96,7 +103,11 @@ pub(crate) trait TitleGrammar {
 }
 
 /// The registry: one line per callout type with a title grammar.
-const GRAMMARS: &[&dyn TitleGrammar] = &[&voice::VoiceGrammar, &design::DesignGrammar];
+const GRAMMARS: &[&dyn TitleGrammar] = &[
+    &voice::VoiceGrammar,
+    &design::DesignGrammar,
+    &note::NoteGrammar,
+];
 
 /// The grammar registered for the callout type `name`.
 fn grammar(name: &str) -> Option<&'static dyn TitleGrammar> {
