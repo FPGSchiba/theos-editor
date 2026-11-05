@@ -27,7 +27,8 @@ pub(crate) struct Input<'a> {
     pub tokens: Vec<Marked<TokenType>>,
     /// The parser's events, as delivered to `MarkedEventReceiver`.
     pub events: Vec<Marked<Event>>,
-    /// The crate's own error, rule `Syntax`.
+    /// The YAML crate's error, or the reader's early-end error where the scanner ended the stream
+    /// before the front matter ended; rule `Syntax` either way.
     pub crate_error: Option<YamlError>,
 }
 

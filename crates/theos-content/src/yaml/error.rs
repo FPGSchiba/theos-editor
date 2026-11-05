@@ -13,7 +13,8 @@ pub enum YamlRule {
     Tag,
     /// A block scalar (`|` or `>`).
     BlockScalar,
-    /// A control character other than a tab in a scalar.
+    /// A control character other than a tab anywhere in the front matter: scalars, comments and
+    /// blank lines.
     ControlCharacter,
     /// A scalar that spans more than one line.
     OneLineScalar,
@@ -46,7 +47,8 @@ pub enum YamlRule {
     DocumentMarker,
     /// A key with no value.
     EmptyValue,
-    /// An error of the YAML crate itself.
+    /// An error of the YAML crate itself, or the reader's own "the front matter ends early here"
+    /// when the scanner ended the stream before the end of the front matter.
     Syntax,
 }
 

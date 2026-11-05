@@ -91,7 +91,7 @@ pub(crate) struct ContentBlock {
 pub(crate) struct TitleInput<'a> {
     /// The record's index, for positions.
     pub index: &'a TextIndex,
-    /// The bytes of the title line after the marker.
+    /// The title after the marker and the fold sign, trimmed.
     pub title_span: Span,
     /// The title split at ` · `.
     pub tokens: &'a [TitleToken],
