@@ -108,6 +108,15 @@ pub enum IndexError {
         /// The cache file.
         path: PathBuf,
     },
+    /// Another theos build kept rebuilding the cache while this write tried to own it.
+    #[error(
+        "the index cache {} keeps being rebuilt by another theos build: close one of the theos          processes",
+        path.display()
+    )]
+    Contended {
+        /// The cache file.
+        path: PathBuf,
+    },
     /// The cache folder or file cannot be created or deleted.
     #[error("cannot create or delete the index cache {}: {source}", path.display())]
     Cache {

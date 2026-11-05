@@ -145,9 +145,12 @@ impl Index {
     /// and racy ones, are read; those whose bytes differ are parsed again; paths the walk no
     /// longer sees are removed. One transaction.
     ///
+    /// A cache file that another theos build keeps rebuilding is rebuilt at most three times per
+    /// call; then the call fails with [`IndexError::Contended`].
+    ///
     /// # Errors
     ///
-    /// Fails when the walk fails or SQLite fails; nothing is changed then.
+    /// Fails when the walk fails, SQLite fails or the cache is contended; nothing is changed then.
     pub fn sync(&mut self) -> Result<Update, IndexError> {
         let walked = walk(&self.root)?;
         self.run(|work| work.sync(&walked))
@@ -159,9 +162,12 @@ impl Index {
     /// (another case, a symbolic link). A `\` in a path is read as `/`, so paths joined on
     /// Windows work.
     ///
+    /// A cache file that another theos build keeps rebuilding is rebuilt at most three times per
+    /// call; then the call fails with [`IndexError::Contended`].
+    ///
     /// # Errors
     ///
-    /// Fails when SQLite fails; nothing is changed then.
+    /// Fails when SQLite fails or the cache is contended; nothing is changed then.
     pub fn update(&mut self, paths: &[&str]) -> Result<Update, IndexError> {
         self.run(|work| {
             for path in paths {
@@ -177,9 +183,12 @@ impl Index {
     /// and what the index holds for it is removed. A `\` in a path is read as `/`, so paths
     /// joined on Windows work; the index stores the path with `/`.
     ///
+    /// A cache file that another theos build keeps rebuilding is rebuilt at most three times per
+    /// call; then the call fails with [`IndexError::Contended`].
+    ///
     /// # Errors
     ///
-    /// Fails when SQLite fails; nothing is changed then.
+    /// Fails when SQLite fails or the cache is contended; nothing is changed then.
     pub fn apply(&mut self, changes: &[Change]) -> Result<Update, IndexError> {
         self.run(|work| apply_changes(work, changes))
     }
@@ -191,9 +200,12 @@ impl Index {
     /// stored findings are the ones it would leave. A `\` in a path is read as `/`, as in
     /// [`Index::apply`].
     ///
+    /// A cache file that another theos build keeps rebuilding is rebuilt at most three times per
+    /// call; then the call fails with [`IndexError::Contended`].
+    ///
     /// # Errors
     ///
-    /// Fails when SQLite fails.
+    /// Fails when SQLite fails or the cache is contended.
     pub fn preview(&mut self, changes: &[Change]) -> Result<Preview, IndexError> {
         let given = changes.iter().filter_map(|change| match change {
             Change::Content { path, .. } => Some(slashed(path)),
@@ -232,7 +244,10 @@ impl Index {
     /// A cache file whose `meta` is another build's (one that opened the same file since) is
     /// first rebuilt for this build and synced with the folder, in a transaction of its own that
     /// is committed also for a preview; then `work` runs in a new one. The update reports `work`
-    /// only. An in-memory cache belongs to this index alone and is not checked.
+    /// only. After [`MAX_REBUILDS`] such rebuilds in one call the cache is still not this
+    /// build's: another build keeps rebuilding it, and the call fails with
+    /// [`IndexError::Contended`]. An in-memory cache belongs to this index alone and is not
+    /// checked.
     fn transact<T>(
         &mut self,
         work: impl FnOnce(&mut Syncer<'_>) -> Result<(), IndexError>,
@@ -244,6 +259,7 @@ impl Index {
             Some(path) => map_error(error, path),
             None => IndexError::Sqlite(error),
         };
+        let mut rebuilds = 0;
         loop {
             let tx = self
                 .store
@@ -253,6 +269,10 @@ impl Index {
             if let Some(file) = &path
                 && !store::holds(&tx, &self.identity)?
             {
+                if !may_rebuild(rebuilds) {
+                    return Err(IndexError::Contended { path: file.clone() });
+                }
+                rebuilds += 1;
                 tracing::warn!(
                     path = %file.display(),
                     "another build rebuilt the index cache; rebuilding it for this one"
@@ -276,6 +296,15 @@ impl Index {
             return Ok((update, read));
         }
     }
+}
+
+/// How many times one write rebuilds a cache that another build took over again and again.
+const MAX_REBUILDS: u32 = 3;
+
+/// Whether a write that has rebuilt the cache `rebuilds` times in this call may rebuild it once
+/// more, or must give up with [`IndexError::Contended`].
+fn may_rebuild(rebuilds: u32) -> bool {
+    rebuilds < MAX_REBUILDS
 }
 
 /// Rebuilds the cache in `tx` for the build of `identity`: the empty schema with its `meta`,
@@ -637,6 +666,20 @@ fn read_finding(path: &str, error: &std::io::Error) -> Finding {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // AC: CE-12.4
+    #[test]
+    fn a_write_rebuilds_a_foreign_cache_at_most_three_times() {
+        assert!((0..MAX_REBUILDS).all(may_rebuild));
+        assert_eq!(MAX_REBUILDS, 3);
+        assert!(!may_rebuild(3));
+        assert!(!may_rebuild(4));
+        let message = IndexError::Contended {
+            path: "x/cache.db".into(),
+        }
+        .to_string();
+        assert!(message.contains("x/cache.db") && message.contains("close one of the theos"));
+    }
 
     #[test]
     fn the_racy_window() {
