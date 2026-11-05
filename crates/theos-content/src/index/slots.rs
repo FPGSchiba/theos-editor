@@ -98,7 +98,7 @@ impl fmt::Display for Slot {
         match self {
             Slot::Field(key) => write!(f, "`{key}`"),
             Slot::LensEntry(key) => write!(f, "`lens.{key}`"),
-            Slot::Beat(key) => write!(f, "a `{key}::` link"),
+            Slot::Beat(key) => write!(f, "the `{key}::` link"),
             Slot::VoiceSpeaker => f.write_str("a voice speaker"),
             Slot::VoiceBelief => f.write_str("a voice belief"),
             Slot::NoteVersion => f.write_str("a note version"),
@@ -165,7 +165,7 @@ mod tests {
             [
                 "`home`",
                 "`lens.unaware_of`",
-                "a `with::` link",
+                "the `with::` link",
                 "a voice speaker",
                 "a voice belief",
                 "a note version",

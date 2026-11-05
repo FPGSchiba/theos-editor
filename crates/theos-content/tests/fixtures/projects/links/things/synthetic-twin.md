@@ -1,0 +1,8 @@
+---
+# synthetic fixture (P03), not canon
+id: synthetic-twin
+kind: thing
+title: Synthetic twin A
+type: synthetic
+---
+Synthetic twin text.

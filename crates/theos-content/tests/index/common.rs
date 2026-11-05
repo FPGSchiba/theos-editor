@@ -67,8 +67,11 @@ impl TempProject {
     }
 }
 
-/// Path, rule, severity, line and column of each finding; 0 and 0 when it has no position.
-pub fn keys(findings: &[Finding]) -> Vec<(String, String, String, usize, usize)> {
+/// Path, rule, severity, line and column of a finding.
+pub type Key = (String, String, String, usize, usize);
+
+/// The [`Key`] of each finding; 0 and 0 when it has no position.
+pub fn keys(findings: &[Finding]) -> Vec<Key> {
     findings
         .iter()
         .map(|f| {
@@ -82,4 +85,38 @@ pub fn keys(findings: &[Finding]) -> Vec<(String, String, String, usize, usize)>
             )
         })
         .collect()
+}
+
+/// The folder of the fixture project `name`.
+pub fn fixture(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("projects")
+        .join(name)
+}
+
+#[derive(serde::Deserialize)]
+struct Expectation {
+    path: String,
+    rule: String,
+    severity: String,
+    line: usize,
+    column: usize,
+}
+
+#[derive(serde::Deserialize)]
+struct Expectations {
+    finding: Vec<Expectation>,
+}
+
+/// The `[[finding]]` tables of the `expected.toml` at `path`, in the shape of [`keys`].
+pub fn expected(path: &Path) -> Result<Vec<Key>, Box<dyn std::error::Error>> {
+    let text = std::fs::read_to_string(path)?;
+    let parsed: Expectations = toml::from_str(&text)?;
+    Ok(parsed
+        .finding
+        .into_iter()
+        .map(|f| (f.path, f.rule, f.severity, f.line, f.column))
+        .collect())
 }

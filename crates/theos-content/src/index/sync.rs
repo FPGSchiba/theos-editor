@@ -13,7 +13,7 @@ use sha2::{Digest, Sha256};
 use crate::check::check_record;
 use crate::finding::{Finding, Severity};
 use crate::index::store::map_error;
-use crate::index::{Index, IndexError, rows, write};
+use crate::index::{Index, IndexError, resolve, rows, write};
 use crate::kinds::KindRegistry;
 use crate::walk::{Walked, WalkedPath, is_record_path, mtime_ns, walk};
 
@@ -188,6 +188,7 @@ impl Index {
             update: Update::default(),
         };
         work(&mut syncer)?;
+        syncer.resolve()?;
         let update = syncer.update.sorted();
         tx.commit()?;
         Ok(update)
@@ -195,6 +196,22 @@ impl Index {
 }
 
 impl Syncer<'_> {
+    /// Step 4: when anything changed, relink every record and recheck every id fold (plan ruling
+    /// L26). Every record that was not re-parsed counts as relinked.
+    fn resolve(&mut self) -> Result<(), IndexError> {
+        if self.update.reparsed.is_empty() && self.update.removed.is_empty() {
+            return Ok(());
+        }
+        let paths = resolve::record_paths(self.conn)?;
+        resolve::relink(self.conn, self.registry, &paths)?;
+        resolve::recheck_ids(self.conn, &resolve::id_folds(self.conn)?)?;
+        self.update.relinked = paths
+            .into_iter()
+            .filter(|path| !self.update.reparsed.contains(path))
+            .collect();
+        Ok(())
+    }
+
     /// Steps 1 and 2 for the whole project.
     fn sync(&mut self, walked: &[Walked]) -> Result<(), IndexError> {
         let mut seen = BTreeSet::new();

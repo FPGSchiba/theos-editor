@@ -1,0 +1,205 @@
+# Checked by hand against docs/specs/phases/P03-kinds-index-search-lenses.md section 5.5 and 5.6
+# and the fixture texts. Every finding of the project: path, rule, severity, line and column.
+
+[[finding]]
+path = "concepts/synthetic-concept.md"
+rule = "link/kind"
+severity = "error"
+line = 15
+column = 16
+
+[[finding]]
+path = "concepts/synthetic-concept.md"
+rule = "link/kind"
+severity = "error"
+line = 15
+column = 40
+
+[[finding]]
+path = "dialogue/synthetic-dialogue.md"
+rule = "link/kind"
+severity = "error"
+line = 6
+column = 10
+
+[[finding]]
+path = "dialogue/synthetic-twin.md"
+rule = "index/duplicate-id"
+severity = "error"
+line = 3
+column = 5
+
+[[finding]]
+path = "dialogue/synthetic-twin.md"
+rule = "index/placement"
+severity = "warning"
+line = 4
+column = 7
+
+[[finding]]
+path = "lore/beliefs/B-931.md"
+rule = "link/kind"
+severity = "error"
+line = 7
+column = 11
+
+[[finding]]
+path = "lore/beliefs/B-931.md"
+rule = "link/kind"
+severity = "error"
+line = 8
+column = 8
+
+[[finding]]
+path = "lore/clues/C-930.md"
+rule = "link/dangling"
+severity = "error"
+line = 11
+column = 9
+
+[[finding]]
+path = "lore/synthetic-stray.md"
+rule = "index/placement"
+severity = "warning"
+line = 4
+column = 7
+
+[[finding]]
+path = "lore/topics/synthetic-other-in-world.md"
+rule = "link/kind"
+severity = "error"
+line = 8
+column = 14
+
+[[finding]]
+path = "lore/truths/T-931.md"
+rule = "link/kind"
+severity = "error"
+line = 8
+column = 12
+
+[[finding]]
+path = "lore/truths/T-931.md"
+rule = "link/kind"
+severity = "error"
+line = 9
+column = 8
+
+[[finding]]
+path = "maps/synthetic-map.md"
+rule = "link/kind"
+severity = "error"
+line = 6
+column = 7
+
+[[finding]]
+path = "people/synthetic-folk/synthetic-wrong.md"
+rule = "link/kind"
+severity = "error"
+line = 7
+column = 7
+
+[[finding]]
+path = "people/synthetic-folk/synthetic-wrong.md"
+rule = "link/kind"
+severity = "error"
+line = 9
+column = 16
+
+[[finding]]
+path = "people/synthetic-folk/synthetic-wrong.md"
+rule = "link/dangling"
+severity = "error"
+line = 11
+column = 27
+
+[[finding]]
+path = "people/synthetic-lost.md"
+rule = "index/placement"
+severity = "warning"
+line = 6
+column = 9
+
+[[finding]]
+path = "story/scripts/S-930.md"
+rule = "link/kind"
+severity = "error"
+line = 20
+column = 6
+
+[[finding]]
+path = "story/scripts/S-930.md"
+rule = "link/kind"
+severity = "error"
+line = 21
+column = 8
+
+[[finding]]
+path = "story/scripts/S-930.md"
+rule = "link/kind"
+severity = "error"
+line = 22
+column = 8
+
+[[finding]]
+path = "story/scripts/S-930.md"
+rule = "link/kind"
+severity = "error"
+line = 23
+column = 11
+
+[[finding]]
+path = "story/scripts/S-930.md"
+rule = "link/kind"
+severity = "error"
+line = 25
+column = 12
+
+[[finding]]
+path = "story/scripts/S-930.md"
+rule = "link/kind"
+severity = "error"
+line = 25
+column = 24
+
+[[finding]]
+path = "things/synthetic-broken.md"
+rule = "yaml/anchor"
+severity = "error"
+line = 5
+column = 8
+
+[[finding]]
+path = "things/synthetic-misnamed.md"
+rule = "index/file-name"
+severity = "error"
+line = 3
+column = 5
+
+[[finding]]
+path = "things/synthetic-refs.md"
+rule = "link/dangling"
+severity = "error"
+line = 10
+column = 27
+
+[[finding]]
+path = "things/synthetic-refs.md"
+rule = "link/dangling"
+severity = "error"
+line = 12
+column = 23
+
+[[finding]]
+path = "things/synthetic-refs.md"
+rule = "link/dangling"
+severity = "error"
+line = 18
+column = 14
+
+[[finding]]
+path = "things/synthetic-twin.md"
+rule = "index/duplicate-id"
+severity = "error"
+line = 3
+column = 5

@@ -52,7 +52,9 @@ impl Identity {
 
 /// Every rule with its default severity that the index reports.
 pub(crate) fn rule_set() -> Vec<(&'static str, Severity)> {
-    crate::check::rules()
+    let mut rules = crate::check::rules();
+    rules.extend(crate::index::resolve::rule_set());
+    rules
 }
 
 /// The SHA-256 of the sorted lines `rule<TAB>severity`, as lower-case hex.

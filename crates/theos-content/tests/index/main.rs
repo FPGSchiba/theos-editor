@@ -2,4 +2,5 @@
 
 mod common;
 mod kinds;
+mod links;
 mod sync;

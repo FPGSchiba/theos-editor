@@ -9,13 +9,15 @@ use crate::walk::WalkError;
 mod dump;
 mod identity;
 mod query;
+mod resolve;
 mod rows;
 pub mod slots;
 mod store;
 mod sync;
 mod write;
 
-pub use query::RecordSummary;
+pub use query::{LinkRef, RecordSummary};
+pub use slots::Slot;
 pub use sync::{Change, Update};
 
 use identity::Identity;
