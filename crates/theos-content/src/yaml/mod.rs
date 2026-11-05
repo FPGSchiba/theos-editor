@@ -16,6 +16,6 @@ pub(crate) use input::Input;
 pub use model::{
     Entry, EntryValue, Field, FrontMatter, Item, List, ListStyle, Map, RawEntry, RawValue, Value,
 };
-pub use patch::{Order, PatchError, PatchOp};
+pub use patch::{MapProblem, Order, PatchError, PatchOp};
 pub(crate) use rules::{first_error, is_key_name};
 pub use scalar::{Decimal, Lexical, Scalar, ScalarError, ScalarStyle};

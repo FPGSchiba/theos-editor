@@ -93,6 +93,17 @@ impl Order {
     }
 }
 
+/// What is wrong with a map that [`Record::set`] was asked to write.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum MapProblem {
+    /// The map has no entry; a field is removed with [`Record::remove`].
+    #[error("a map needs at least one entry")]
+    Empty,
+    /// The map names an entry twice.
+    #[error("the entry `{0}` occurs twice")]
+    DuplicateEntry(String),
+}
+
 /// Why a patch produced no record.
 #[derive(Debug, thiserror::Error)]
 pub enum PatchError {
@@ -125,6 +136,14 @@ pub enum PatchError {
         /// The field.
         key: String,
     },
+    /// A map value the front matter cannot hold; remove a field with `remove`, not an empty map.
+    #[error("`{key}` cannot be written as a map: {reason}")]
+    Map {
+        /// The field.
+        key: String,
+        /// What is wrong with the map.
+        reason: MapProblem,
+    },
     /// A value the front matter cannot hold.
     #[error(transparent)]
     Encode(#[from] EncodeError),
@@ -146,6 +165,7 @@ impl Record {
     /// # Errors
     ///
     /// The [`PatchError`] of the first op that fails; no text is returned then.
+    /// [`PatchError::Map`] when a `Set` writes a map with no entry or a repeated entry name.
     pub fn patch(&self, ops: &[PatchOp], order: &Order) -> Result<Record, PatchError> {
         let mut current = self.clone();
         for op in ops {
@@ -354,6 +374,40 @@ mod tests {
             Err(PatchError::NotInOrder { .. })
         ));
         assert!(matches!(rec.remove("zz"), Err(PatchError::NotFound { .. })));
+    }
+
+    #[test]
+    fn maps_the_front_matter_cannot_hold_are_refused_up_front() {
+        use crate::yaml::RawEntry;
+        let rec = record("m:\n  e: v\na: 1\n", "");
+        let order = Order::new(["m", "a", "n"]);
+        let twice = vec![
+            ("e".to_owned(), RawEntry::Text("1".into())),
+            ("e".to_owned(), RawEntry::Text("2".into())),
+        ];
+        for key in ["m", "n"] {
+            let empty = rec.set(key, RawValue::Map(vec![]), &order);
+            assert!(
+                matches!(
+                    &empty,
+                    Err(PatchError::Map {
+                        reason: MapProblem::Empty,
+                        ..
+                    })
+                ),
+                "{key}: {empty:?}"
+            );
+            let dup = rec.set(key, RawValue::Map(twice.clone()), &order);
+            assert!(
+                matches!(&dup, Err(PatchError::Map { reason: MapProblem::DuplicateEntry(name), .. }) if name == "e"),
+                "{key}: {dup:?}"
+            );
+        }
+        let message = rec.set("n", RawValue::Map(vec![]), &order).map(|_| ());
+        assert_eq!(
+            message.map_err(|e| e.to_string()),
+            Err("`n` cannot be written as a map: a map needs at least one entry".to_owned())
+        );
     }
 
     #[test]

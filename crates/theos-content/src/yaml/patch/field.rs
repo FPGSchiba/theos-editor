@@ -2,7 +2,7 @@
 
 use super::list::{block_edits, flow_edits};
 use super::map;
-use super::{Order, PatchError, PatchOp};
+use super::{MapProblem, Order, PatchError, PatchOp};
 use crate::record::Record;
 use crate::text::{Span, TextEdit};
 use crate::yaml::{Field, FrontMatter, ListStyle, RawValue, Slot, Value, encode, is_key_name};
@@ -17,10 +17,13 @@ pub(super) fn edits(
         .front_matter()
         .map_err(|error| PatchError::FrontMatter(error.clone()))?;
     match op {
-        PatchOp::Set { key, value } => match front.get(key) {
-            Some(field) => set_existing(record, field, value),
-            None => insert(record, front, key, value, order),
-        },
+        PatchOp::Set { key, value } => {
+            check_map(key, value)?;
+            match front.get(key) {
+                Some(field) => set_existing(record, field, value),
+                None => insert(record, front, key, value, order),
+            }
+        }
         PatchOp::Remove { key } => {
             let field = front.get(key).ok_or_else(|| PatchError::NotFound {
                 key: key.clone(),
@@ -42,6 +45,30 @@ pub(super) fn edits(
             })?;
             map::remove_entry(field, entry)
         }
+    }
+}
+
+/// Refuses a map the front matter cannot hold: no entry, or one entry name twice.
+fn check_map(key: &str, value: &RawValue) -> Result<(), PatchError> {
+    let RawValue::Map(entries) = value else {
+        return Ok(());
+    };
+    let problem = if entries.is_empty() {
+        Some(MapProblem::Empty)
+    } else {
+        entries.iter().enumerate().find_map(|(at, (name, _))| {
+            entries[..at]
+                .iter()
+                .any(|(earlier, _)| earlier == name)
+                .then(|| MapProblem::DuplicateEntry(name.clone()))
+        })
+    };
+    match problem {
+        Some(reason) => Err(PatchError::Map {
+            key: key.to_owned(),
+            reason,
+        }),
+        None => Ok(()),
     }
 }
 
