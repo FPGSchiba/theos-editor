@@ -191,9 +191,10 @@ fn remove_cache(file: &Path) -> Result<(), IndexError> {
         match std::fs::remove_file(PathBuf::from(name)) {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => {
+            Err(source) => {
                 return Err(IndexError::CacheInUse {
                     path: file.to_path_buf(),
+                    source,
                 });
             }
         }
@@ -361,6 +362,19 @@ mod tests {
         std::fs::write(&blocker, "a file")?;
         let result = Store::open(&blocker.join("index.db"), &identity());
         assert!(matches!(result, Err(IndexError::Cache { .. })));
+        Ok(())
+    }
+
+    #[test]
+    fn a_cache_that_cannot_be_deleted_keeps_the_cause() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        // A folder in the place of the file cannot be deleted as a file.
+        let file = dir.path().join("index.db");
+        std::fs::create_dir(&file)?;
+        let error = remove_cache(&file).err().ok_or("the delete must fail")?;
+        assert!(matches!(&error, IndexError::CacheInUse { path, .. } if *path == file));
+        assert!(error.to_string().contains(&file.display().to_string()));
+        assert!(std::error::Error::source(&error).is_some(), "{error:?}");
         Ok(())
     }
 

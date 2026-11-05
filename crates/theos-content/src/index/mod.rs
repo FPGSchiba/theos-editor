@@ -107,11 +107,17 @@ pub enum IndexError {
         /// The cause.
         source: std::io::Error,
     },
-    /// The cache is damaged and another process holds it open, so it cannot be replaced.
-    #[error("the index cache {} is damaged and in use: close the other theos processes", path.display())]
+    /// The cache is damaged and a file of it cannot be deleted, mostly because another process
+    /// holds it open, so it cannot be replaced.
+    #[error(
+        "the index cache {} is damaged and in use: close the other theos processes ({source})",
+        path.display()
+    )]
     CacheInUse {
         /// The cache file.
         path: PathBuf,
+        /// Why the delete failed.
+        source: std::io::Error,
     },
     /// The walk of the project failed.
     #[error(transparent)]
