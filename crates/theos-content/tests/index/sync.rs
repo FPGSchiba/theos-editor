@@ -476,3 +476,85 @@ fn paths_outside_the_walk_are_ignored() -> TestResult {
     assert_eq!(index.dump()?, before);
     Ok(())
 }
+
+// AC: CE-12.2
+#[test]
+fn gitignored_paths_are_ignored_by_update_apply_and_preview() -> TestResult {
+    let project = TempProject::new()?;
+    three(&project)?;
+    project.write(".gitignore", "drafts/\n")?;
+    project.write("drafts/d.md", &thing("d", "synthetic draft"))?;
+    project.write("sub/.gitignore", "e.md\n")?;
+    project.write("sub/e.md", &thing("e", "synthetic e"))?;
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    let before = index.dump()?;
+    assert_eq!(before, fresh_dump(&project)?);
+
+    assert_eq!(
+        index.update(&["drafts/d.md", "sub/e.md"])?,
+        Update::default()
+    );
+    let given = [
+        Change::text("drafts/d.md", thing("d", "synthetic draft, edited")),
+        Change::text("sub/e.md", thing("e", "synthetic e, edited")),
+    ];
+    assert_eq!(index.preview(&given)?.update, Update::default());
+    assert_eq!(index.apply(&given)?, Update::default());
+    assert_eq!(index.dump()?, before);
+
+    // A record that a new `.gitignore` line hides is no record any more: a change of it
+    // removes what the index holds, as the next sync would.
+    project.write(".gitignore", "drafts/\nthings/c.md\n")?;
+    let update = index.update(&["things/c.md"])?;
+    assert_eq!(update.removed, paths(&["things/c.md"]));
+    assert_eq!(index.dump()?, fresh_dump(&project)?);
+    Ok(())
+}
+
+// AC: CE-12.2
+#[test]
+fn a_path_the_walk_would_not_list_is_not_read() -> TestResult {
+    let project = TempProject::new()?;
+    three(&project)?;
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    let before = index.dump()?;
+    // Another spelling of a file name, and a path through a file.
+    let update = index.update(&["Things/a.md", "things/A.md", "things/a.md/x.md"])?;
+    assert_eq!(update, Update::default());
+    assert_eq!(index.dump()?, before);
+
+    // A rename that changes only the case: the old spelling is gone, the new one is a record.
+    std::fs::rename(
+        project.root().join("things/a.md"),
+        project.root().join("things/A.md"),
+    )?;
+    let update = index.update(&["things/a.md", "things/A.md"])?;
+    assert_eq!(update.removed, paths(&["things/a.md"]));
+    assert_eq!(update.reparsed, paths(&["things/A.md"]));
+    assert_eq!(index.dump()?, fresh_dump(&project)?);
+    Ok(())
+}
+
+/// The walk does not follow symbolic links; `update` does not read one either.
+#[cfg(unix)]
+#[test]
+fn a_symbolic_link_is_not_read() -> TestResult {
+    let project = TempProject::new()?;
+    three(&project)?;
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    let before = index.dump()?;
+    std::os::unix::fs::symlink(
+        project.root().join("things/a.md"),
+        project.root().join("things/l.md"),
+    )?;
+    std::os::unix::fs::symlink(project.root().join("things"), project.root().join("linked"))?;
+    assert_eq!(
+        index.update(&["things/l.md", "linked/b.md"])?,
+        Update::default()
+    );
+    assert_eq!(index.dump()?, before);
+    Ok(())
+}

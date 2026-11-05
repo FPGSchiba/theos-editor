@@ -334,6 +334,11 @@ enum Edit {
     ReAdd(usize),
     /// `[Content a, Removed a]`: a file given with a new title and removed.
     AddRemove(usize),
+    /// Changes the case of the first letter of a file name, and nothing else.
+    Recase(usize),
+    /// Adds `dialogue/` to the root `.gitignore`, or takes it out again. It always reaches the
+    /// index through a sync: `update` and `apply` take records, not ignore files.
+    Ignore,
 }
 
 /// How the edit of a step reaches the index.
@@ -449,6 +454,18 @@ fn bumped(stem: &str) -> String {
     format!("{stem}-r")
 }
 
+/// `name` with the case of its first letter changed.
+fn recased(name: &str) -> String {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_lowercase() => {
+            format!("{}{}", first.to_ascii_uppercase(), chars.as_str())
+        }
+        Some(first) => format!("{}{}", first.to_ascii_lowercase(), chars.as_str()),
+        None => String::new(),
+    }
+}
+
 fn folder_and_name(path: &str) -> (&str, &str) {
     path.rsplit_once('/').unwrap_or(("", path))
 }
@@ -522,6 +539,12 @@ fn plan(files: &BTreeMap<String, String>, edit: &Edit) -> Plan {
             .map(|(path, text)| vec![(path.clone(), None), (path, Some(retitled(&text)))]),
         Edit::AddRemove(n) => pick(n, &any)
             .map(|(path, text)| vec![(path.clone(), Some(retitled(&text))), (path, None)]),
+        Edit::Recase(n) => pick(n, &any).map(|(path, text)| {
+            let (folder, name) = folder_and_name(&path);
+            let new_path = format!("{folder}/{}", recased(name));
+            vec![(path, None), (new_path, Some(text))]
+        }),
+        Edit::Ignore => None,
     };
     without_case_twins(files, planned.unwrap_or_default())
 }
@@ -603,7 +626,18 @@ fn history(steps: &[(Edit, Via)]) -> TestResult {
         &index.dump()?,
         &fresh_dump_with(&project, &registry)?,
     )?;
+    let mut ignored = false;
     for (number, (edit, via)) in steps.iter().enumerate() {
+        let mut via = *via;
+        if let Edit::Ignore = edit {
+            ignored = !ignored;
+            if ignored {
+                project.write(".gitignore", "dialogue/\n")?;
+            } else {
+                project.remove(".gitignore")?;
+            }
+            via = Via::Sync;
+        }
         let plan = plan(&files, edit);
         for (path, text) in &plan {
             if let Some(text) = text {
@@ -614,36 +648,42 @@ fn history(steps: &[(Edit, Via)]) -> TestResult {
                 project.remove(path)?;
             }
         }
-        let given: Vec<Change> = plan
-            .iter()
-            .map(|(path, text)| match text {
-                Some(text) => Change::text(path.clone(), text.clone()),
-                None => Change::Removed { path: path.clone() },
-            })
-            .collect();
-        match via {
-            Via::Sync => {
-                index.sync()?;
-            }
-            Via::Update => {
-                let mut paths: Vec<&str> = Vec::new();
-                for (path, _) in &plan {
-                    if !paths.contains(&path.as_str()) {
-                        paths.push(path);
-                    }
-                }
-                index.update(&paths)?;
-            }
-            Via::Apply => {
-                index.apply(&given)?;
-            }
-            Via::Preview => previewed(&mut index, &plan, &given)?,
-        }
+        reach(&mut index, &plan, via)?;
         same_dump(
             &format!("after step {number}, {edit:?} via {via:?}"),
             &index.dump()?,
             &fresh_dump_with(&project, &registry)?,
         )?;
+    }
+    Ok(())
+}
+
+/// Brings the changes of `plan`, already written to the folder, to the index the way `via` says.
+fn reach(index: &mut Index, plan: &Plan, via: Via) -> TestResult {
+    let given: Vec<Change> = plan
+        .iter()
+        .map(|(path, text)| match text {
+            Some(text) => Change::text(path.clone(), text.clone()),
+            None => Change::Removed { path: path.clone() },
+        })
+        .collect();
+    match via {
+        Via::Sync => {
+            index.sync()?;
+        }
+        Via::Update => {
+            let mut paths: Vec<&str> = Vec::new();
+            for (path, _) in plan {
+                if !paths.contains(&path.as_str()) {
+                    paths.push(path);
+                }
+            }
+            index.update(&paths)?;
+        }
+        Via::Apply => {
+            index.apply(&given)?;
+        }
+        Via::Preview => previewed(index, plan, &given)?,
     }
     Ok(())
 }
@@ -692,6 +732,8 @@ fn edit() -> impl Strategy<Value = Edit> {
         (0..5usize).prop_map(Edit::Add),
         n().prop_map(Edit::ReAdd),
         n().prop_map(Edit::AddRemove),
+        n().prop_map(Edit::Recase),
+        Just(Edit::Ignore),
     ]
 }
 

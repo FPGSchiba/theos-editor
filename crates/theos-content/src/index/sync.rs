@@ -16,7 +16,7 @@ use crate::index::identity::Identity;
 use crate::index::store::{self, map_error};
 use crate::index::{Index, IndexError, query, resolve, rows, write};
 use crate::kinds::KindRegistry;
-use crate::walk::{Walked, WalkedPath, is_record_path, mtime_ns, walk};
+use crate::walk::{Walked, WalkedPath, is_ignored, is_listed, is_record_path, mtime_ns, walk};
 
 /// A file whose time lies within this many nanoseconds before it was hashed is racy.
 const RACY_WINDOW_NS: i64 = 2_000_000_000;
@@ -154,8 +154,10 @@ impl Index {
     }
 
     /// Does what [`Index::sync`] does for the given project-relative paths only. A path that is
-    /// not a record is ignored; one that no longer exists is removed. A `\` in a path is read as
-    /// `/`, so paths joined on Windows work.
+    /// not a record is ignored; one that no longer exists is removed. So is one that the walk
+    /// would not list: a path that a `.gitignore` hides, or one spelled unlike the file on disk
+    /// (another case, a symbolic link). A `\` in a path is read as `/`, so paths joined on
+    /// Windows work.
     ///
     /// # Errors
     ///
@@ -171,8 +173,9 @@ impl Index {
 
     /// Commits the given changes. A content whose bytes equal the stored ones changes nothing;
     /// otherwise the record is parsed again, with no file times, so the next sync reads the file.
-    /// A path that is not a record is ignored. A `\` in a path is read as `/`, so paths joined
-    /// on Windows work; the index stores the path with `/`.
+    /// A path that is not a record is ignored; one that a `.gitignore` hides is no record either,
+    /// and what the index holds for it is removed. A `\` in a path is read as `/`, so paths
+    /// joined on Windows work; the index stores the path with `/`.
     ///
     /// # Errors
     ///
@@ -399,7 +402,10 @@ impl<'a> Syncer<'a> {
         Ok(())
     }
 
-    /// One change of `update` or `apply`, at `path` with `\` read as `/`.
+    /// One change of `update` or `apply`, at `path` with `\` read as `/`. A path that is no
+    /// record by its name is ignored. One that the walk would not list, since a `.gitignore`
+    /// hides it or, for a path read from disk, no file of that spelling is listed, is no record
+    /// of the project either: the index holds nothing for it, so whatever it held is removed.
     fn change(&mut self, path: &str, source: Source) -> Result<(), IndexError> {
         let path = slashed(path);
         let path = path.as_str();
@@ -408,7 +414,9 @@ impl<'a> Syncer<'a> {
         }
         match source {
             Source::Gone => self.remove(path),
+            _ if is_ignored(self.root, path) => self.remove(path),
             Source::Given(bytes) => self.settle(path, &bytes, None),
+            Source::Disk if !is_listed(self.root, path) => self.remove(path),
             Source::Disk => match std::fs::metadata(self.root.join(path)) {
                 Ok(meta) if meta.is_file() => self.on_disk(
                     path,

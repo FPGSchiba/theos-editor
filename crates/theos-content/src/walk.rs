@@ -4,10 +4,11 @@
 //! inside the project are honoured (never those of parent folders or the user's global one), and
 //! P01's not-records (`README.md`, `templates/records/`, `tools/`, `attachments/`) are left out.
 
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use ignore::WalkBuilder;
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
 
 /// A project-relative record path, with `/` on every OS.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -64,6 +65,71 @@ pub fn is_record_path(path: &str) -> bool {
         && !["templates/records/", "tools/", "attachments/"]
             .iter()
             .any(|prefix| path.starts_with(prefix))
+}
+
+/// Whether the `.gitignore` files inside the project at `root` hide the record path `path`
+/// (project-relative, with `/`) from [`walk`]. As in the walk, each folder of the path and then
+/// the file are matched against the `.gitignore` of every folder above them, the deepest first,
+/// and the first file that has a rule for them decides; a hidden folder hides everything below
+/// it, also a file that a `!` line names. Lines that do not parse are skipped, as the walk skips
+/// them.
+pub(crate) fn is_ignored(root: &Path, path: &str) -> bool {
+    let parts: Vec<&str> = path.split('/').collect();
+    let mut matchers: Vec<Gitignore> = Vec::new();
+    let mut entry = root.to_path_buf();
+    for (depth, part) in parts.iter().enumerate() {
+        matchers.push(gitignore(&entry));
+        entry.push(part);
+        let is_dir = depth + 1 < parts.len();
+        let decided = matchers
+            .iter()
+            .rev()
+            .map(|matcher| matcher.matched(&entry, is_dir))
+            .find(|found| !found.is_none());
+        if decided.is_some_and(|found| found.is_ignore()) {
+            return true;
+        }
+    }
+    false
+}
+
+/// The rules of the `.gitignore` file in `dir`; none when there is no such file.
+fn gitignore(dir: &Path) -> Gitignore {
+    let mut builder = GitignoreBuilder::new(dir);
+    // A missing file adds nothing, and a line that does not parse is left out; the walk treats
+    // both the same way.
+    let _ = builder.add(dir.join(".gitignore"));
+    builder.build().unwrap_or_else(|_| Gitignore::empty())
+}
+
+/// Whether [`walk`] would list the record path `path` (project-relative, with `/`) below `root`:
+/// each folder of it is an entry of its parent folder that is a folder, and its file an entry
+/// that is a file, each spelled exactly as given. A name in another case, a path through a file
+/// and a symbolic link, which the walk does not follow, are not listed.
+pub(crate) fn is_listed(root: &Path, path: &str) -> bool {
+    let parts: Vec<&str> = path.split('/').collect();
+    let mut dir: PathBuf = root.to_path_buf();
+    for (depth, part) in parts.iter().enumerate() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            return false;
+        };
+        let is_dir = depth + 1 < parts.len();
+        let listed = entries.filter_map(Result::ok).any(|entry| {
+            entry.file_name() == **part
+                && entry.file_type().is_ok_and(|kind| {
+                    if is_dir {
+                        kind.is_dir()
+                    } else {
+                        kind.is_file()
+                    }
+                })
+        });
+        if !listed {
+            return false;
+        }
+        dir.push(part);
+    }
+    true
 }
 
 /// The modification time of a file in nanoseconds since the UNIX epoch, negative before it.
@@ -219,6 +285,93 @@ mod tests {
             .map(|p| WalkedPath::Utf8((*p).to_owned()))
             .collect();
         assert_eq!(paths, want);
+    }
+
+    #[test]
+    fn is_ignored_agrees_with_the_walk() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        let files = [
+            "a.md",
+            "x.log.md",
+            "drafts/d.md",
+            "drafts/keep.md",
+            "sub/b.md",
+            "sub/c.md",
+            "sub/deep/x.md",
+            "sub/deep/y.md",
+            "w/y.md",
+            "w/z.md",
+            "kept/ignored-name.md",
+            "kept/again.md",
+        ];
+        for rel in files {
+            put(root, rel, "x\n");
+        }
+        // A folder rule, a `!` line under an ignored folder (never read, as the walk never
+        // enters it), a glob, a deeper file that overrides and one that adds, a `!` line that
+        // keeps one file of an ignored pattern, and a line that does not parse.
+        put(
+            root,
+            ".gitignore",
+            "drafts/\n!drafts/keep.md\n*.log.md\nc.md\nw/*\n!w/y.md\nignored-name.md\n[\n",
+        );
+        put(root, "drafts/.gitignore", "!keep.md\n");
+        put(root, "sub/.gitignore", "!c.md\nb.md\ndeep/x.md\n");
+        put(root, "kept/.gitignore", "!ignored-name.md\nagain.md\n");
+        let walked: Vec<String> = walk(root)
+            .expect("walk")
+            .into_iter()
+            .map(|w| w.path.as_str().to_owned())
+            .collect();
+        assert_eq!(
+            walked,
+            [
+                "a.md",
+                "kept/ignored-name.md",
+                "sub/c.md",
+                "sub/deep/y.md",
+                "w/y.md"
+            ]
+        );
+        for rel in files {
+            assert_eq!(
+                is_ignored(root, rel),
+                !walked.iter().any(|w| w == rel),
+                "{rel}"
+            );
+        }
+    }
+
+    #[test]
+    fn is_listed_takes_the_names_on_disk() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        put(root, "things/a.md", "x\n");
+        assert!(is_listed(root, "things/a.md"));
+        for rel in [
+            "Things/a.md",
+            "things/A.md",
+            "things/b.md",
+            "nowhere/a.md",
+            "things/a.md/x.md",
+            "things",
+        ] {
+            assert!(!is_listed(root, rel), "{rel}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn is_listed_does_not_follow_symbolic_links() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        put(root, "things/a.md", "x\n");
+        std::os::unix::fs::symlink(root.join("things/a.md"), root.join("things/l.md"))
+            .expect("symlink");
+        std::os::unix::fs::symlink(root.join("things"), root.join("linked")).expect("symlink");
+        assert!(!is_listed(root, "things/l.md"));
+        assert!(!is_listed(root, "linked/a.md"));
     }
 
     #[test]
