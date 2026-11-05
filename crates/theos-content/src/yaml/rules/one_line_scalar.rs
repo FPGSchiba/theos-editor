@@ -3,7 +3,6 @@
 //! start of the scalar.
 
 use yaml_rust2::Event;
-use yaml_rust2::scanner::TScalarStyle;
 
 use super::Rule;
 use crate::yaml::scalar::{ScalarStyle, spelled_end};
@@ -17,12 +16,7 @@ impl Rule for OneLineScalar {
             let Event::Scalar(text, style, ..) = &event.value else {
                 return None;
             };
-            let style = match style {
-                TScalarStyle::Plain => ScalarStyle::Plain,
-                TScalarStyle::SingleQuoted => ScalarStyle::SingleQuoted,
-                TScalarStyle::DoubleQuoted => ScalarStyle::DoubleQuoted,
-                _ => return None,
-            };
+            let style = ScalarStyle::from_crate(*style)?;
             let source = input.index.text();
             let first_difference = spelled_end(source, event.offset, style, text).err()?;
             let is_escape = style == ScalarStyle::DoubleQuoted

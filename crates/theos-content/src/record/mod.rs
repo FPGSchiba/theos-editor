@@ -8,7 +8,7 @@ pub use error::{ReadError, RecordEditError, RecordError};
 pub use read::{decode, read_record};
 
 use crate::text::{Span, TextEdit, TextIndex, apply_edits, normalize};
-use crate::yaml::{Input, YamlError, first_error};
+use crate::yaml::{FrontMatter, Input, YamlError};
 
 /// A record read from text: its LF text and the spans of front matter and body.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -17,7 +17,7 @@ pub struct Record {
     was_normalized: bool,
     front_span: Span,
     body_span: Span,
-    front_error: Option<YamlError>,
+    front: Result<FrontMatter, YamlError>,
 }
 
 impl Record {
@@ -34,13 +34,13 @@ impl Record {
         let (text, was_normalized) = normalize(input);
         let (front_span, body_span) = split::split(&text)?;
         let index = TextIndex::new(text.into_owned());
-        let front_error = first_error(&Input::new(&index, front_span));
+        let front = FrontMatter::from_input(&Input::new(&index, front_span));
         Ok(Record {
             index,
             was_normalized,
             front_span,
             body_span,
-            front_error,
+            front,
         })
     }
 
@@ -77,7 +77,16 @@ impl Record {
     /// The first violation of the restricted YAML in the front matter, if any.
     #[must_use]
     pub fn front_matter_error(&self) -> Option<&YamlError> {
-        self.front_error.as_ref()
+        self.front.as_ref().err()
+    }
+
+    /// The front matter as a model with spans, or the first violation of the restricted YAML.
+    ///
+    /// # Errors
+    ///
+    /// The same [`YamlError`] as [`Record::front_matter_error`].
+    pub fn front_matter(&self) -> Result<&FrontMatter, &YamlError> {
+        self.front.as_ref()
     }
 
     /// Applies `edits` to [`Record::text`] and parses the result; the new record is LF.

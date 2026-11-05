@@ -1,6 +1,8 @@
 //! Scalars of the restricted YAML: their text, style and place, and the typed readings a field
 //! asks for. A scalar is typed by the field that holds it, never by its spelling (ruling D1).
 
+use yaml_rust2::scanner::TScalarStyle;
+
 use crate::text::{Position, Span};
 
 /// How a scalar is written in the source.
@@ -12,6 +14,18 @@ pub enum ScalarStyle {
     SingleQuoted,
     /// In `"…"`, with `\\` and `\"` as the only escapes.
     DoubleQuoted,
+}
+
+impl ScalarStyle {
+    /// The style of a scalar the YAML crate read; `None` for a block scalar.
+    pub(crate) fn from_crate(style: TScalarStyle) -> Option<ScalarStyle> {
+        match style {
+            TScalarStyle::Plain => Some(ScalarStyle::Plain),
+            TScalarStyle::SingleQuoted => Some(ScalarStyle::SingleQuoted),
+            TScalarStyle::DoubleQuoted => Some(ScalarStyle::DoubleQuoted),
+            _ => None,
+        }
+    }
 }
 
 /// A scalar with its decoded text and where it stands in the record.
@@ -241,9 +255,7 @@ pub(crate) fn spelled_end(
 mod tests {
     use super::*;
     use crate::test_support::record;
-    use crate::yaml::Input;
-    use yaml_rust2::Event;
-    use yaml_rust2::scanner::TScalarStyle;
+    use crate::yaml::Value;
 
     fn scalar(text: &str, style: ScalarStyle) -> Scalar {
         Scalar {
@@ -258,30 +270,13 @@ mod tests {
         scalar(text, ScalarStyle::Plain)
     }
 
-    /// The scalar of the value of the first key, with its span from `spelled_end`.
+    /// The scalar of the value of the first field of `front`.
     fn value_of(front: &str) -> Option<Scalar> {
         let r = record(front, "");
-        let input = Input::new(r.index(), r.front_span());
-        let event = input
-            .events
-            .iter()
-            .filter(|e| matches!(e.value, Event::Scalar(..)))
-            .nth(1)?;
-        let Event::Scalar(text, style, ..) = &event.value else {
-            return None;
-        };
-        let style = match style {
-            TScalarStyle::SingleQuoted => ScalarStyle::SingleQuoted,
-            TScalarStyle::DoubleQuoted => ScalarStyle::DoubleQuoted,
-            _ => ScalarStyle::Plain,
-        };
-        let end = spelled_end(r.text(), event.offset, style, text).ok()?;
-        Some(Scalar {
-            text: text.clone(),
-            style,
-            span: Span::new(event.offset, end),
-            position: event.position,
-        })
+        match &r.front_matter().ok()?.fields.first()?.value {
+            Value::Scalar(scalar) => Some(scalar.clone()),
+            _ => None,
+        }
     }
 
     // AC: CE-09.3

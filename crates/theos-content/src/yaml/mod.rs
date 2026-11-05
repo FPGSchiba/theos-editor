@@ -3,10 +3,14 @@
 
 mod error;
 mod input;
+mod model;
 mod rules;
 mod scalar;
 
 pub use error::{YamlError, YamlRule};
 pub(crate) use input::Input;
+pub use model::{
+    Entry, EntryValue, Field, FrontMatter, Item, List, ListStyle, Map, RawEntry, RawValue, Value,
+};
 pub(crate) use rules::first_error;
 pub use scalar::{Decimal, Lexical, Scalar, ScalarError, ScalarStyle};
