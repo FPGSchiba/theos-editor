@@ -594,7 +594,7 @@ on Windows before the phase is claimed done (CLAUDE.md).
 | P06 | The patcher (CE-20); `TextEdit` and `apply_edits`; link `target_span`s in the body and scalar spans in the front matter for renaming an id (CE-20.3); `was_normalized()` for saving CRLF records |
 | P09 | Notes: id, version link, state with its span (to resolve a note, CE-30.1), and text without the caption (run requests, CE-29.6) |
 | P12 | The body model as the authority for links, beats and callouts (decision 0001); positions in UTF-16 through `TextIndex` (**depends on 0002**, see below); the corpus for its display tests |
-| 0002 (comments) | **Depends on 0002.** Spans are byte offsets into the LF text of the whole record, the same for the same text; line and column as in §5.2; `TextIndex` converts to UTF-16 and back. Anchors (P05 under 0002) are stored in these coordinates, so they must not change after P02. If 0002 is not accepted before P02's plan is written, the UTF-16 conversion moves to P12, and everything else stays. |
+| 0002 (comments) | **Depends on 0002.** Spans are byte offsets into the LF text of the whole record, the same for the same text; line and column as in §5.2; `TextIndex` converts to UTF-16 and back. Anchors (phase P19 under 0002) are stored in these coordinates, so they must not change after P02. If 0002 is not accepted before P02's plan is written, the UTF-16 conversion moves to P12, and everything else stays. |
 
 ## 7. Risks
 

@@ -33,9 +33,11 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 - The P02 spec (#16) waits for Jann. Jann picks the approaches of its §4.3 and checks the
   rulings of its §9. It records Jann's decisions of 5 Nov 2026 on slug ids and `accuracy: false`,
   on CRLF, and on what "the restricted YAML parser is ours" means.
-- Comments on text sections: proposal 0002 (#15) waits for Jann. On acceptance, Jann adds its
-  criteria (§9) and the wording for G7 and CE-23.1 (§10) to the umbrella. The P02 spec builds the
-  UTF-16 positions 0002 asks for only once 0002 is accepted.
+- Comments on text sections: proposal 0002 (#15) waits for Jann. Merging it adds phase P19
+  (Comments, slice S5, after P12 and P13) with its criteria CE-51 to CE-54 to the umbrella.
+  Before P19 starts, Jann settles the wording for G7 and CE-23.1 proposed in 0002 §10, which
+  P19's agent tools need. The P02 spec builds the UTF-16 positions 0002 asks for only once 0002
+  is accepted.
 - Three sentences of the P10 corpus read like lore claims (B-901's link text, "the Cutter is
   near", "the operator-plate names a Listener"). P02's fixture copies reword them neutrally until
   Jann, or a session that can read Confluence, confirms they are canon.
