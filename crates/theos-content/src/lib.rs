@@ -23,6 +23,7 @@
 //! conversion of [`TextIndex`].
 
 pub mod body;
+pub mod project;
 pub mod record;
 pub mod text;
 pub mod yaml;
@@ -35,6 +36,7 @@ pub use body::{
     DesignNote, DesignNoteForm, Fold, Link, Malformed, MalformedKind, Note, NoteState, Token,
     Voice,
 };
+pub use project::{Project, ProjectError, SCHEMA_VERSION};
 pub use record::{ReadError, Record, RecordEditError, RecordError, decode, read_record};
 pub use text::{Position, Span, TextEdit, TextIndex, apply_edits};
 pub use yaml::{MapProblem, Order, PatchError, PatchOp, YamlError, YamlRule};
