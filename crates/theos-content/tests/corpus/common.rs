@@ -1,5 +1,6 @@
 //! Helpers shared by the corpus tests: finding fixture files and reading `expected.toml`.
 
+use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -10,14 +11,13 @@ pub fn corpus() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/corpus")
 }
 
-/// Every `.md` file under `dir`, recursively, sorted.
-pub fn md_files(dir: &Path) -> Vec<PathBuf> {
+/// Every `.md` file under `dir`, recursively, sorted; an unreadable directory is an error.
+pub fn md_files(dir: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
     let mut files = Vec::new();
     let mut pending = vec![dir.to_path_buf()];
     while let Some(current) = pending.pop() {
-        let Ok(entries) = fs::read_dir(&current) else {
-            continue;
-        };
+        let entries = fs::read_dir(&current)
+            .map_err(|error| format!("cannot read {}: {error}", current.display()))?;
         for path in entries.filter_map(|entry| entry.ok().map(|e| e.path())) {
             if path.is_dir() {
                 pending.push(path);
@@ -27,7 +27,7 @@ pub fn md_files(dir: &Path) -> Vec<PathBuf> {
         }
     }
     files.sort();
-    files
+    Ok(files)
 }
 
 /// One expectation of an `expected.toml`.
@@ -49,7 +49,10 @@ struct Cases {
 }
 
 /// The `[[case]]` entries of the TOML file at `path`.
-pub fn cases(path: &Path) -> Vec<Case> {
-    let text = fs::read_to_string(path).unwrap_or_default();
-    toml::from_str::<Cases>(&text).map_or_else(|_| Vec::new(), |parsed| parsed.case)
+pub fn cases(path: &Path) -> Result<Vec<Case>, Box<dyn Error>> {
+    let text = fs::read_to_string(path)
+        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let parsed: Cases = toml::from_str(&text)
+        .map_err(|error| format!("cannot parse {}: {error}", path.display()))?;
+    Ok(parsed.case)
 }

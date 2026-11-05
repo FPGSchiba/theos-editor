@@ -30,8 +30,9 @@ fn failure(bytes: &[u8]) -> Option<(String, usize, usize)> {
 #[test]
 fn rejected_files_fail_with_rule_line_and_column() -> Result<(), Box<dyn Error>> {
     let dir = corpus().join("rejected");
-    let cases = cases(&dir.join("expected.toml"));
-    let files = md_files(&dir);
+    let cases = cases(&dir.join("expected.toml"))?;
+    let files = md_files(&dir)?;
+    assert!(!files.is_empty(), "the rejected corpus is not empty");
     assert_eq!(files.len(), cases.len(), "one case per file");
     for file in files {
         let name = file

@@ -93,3 +93,123 @@ file = "tag.md"
 rule = "tag"
 line = 4
 column = 4
+
+[[case]]
+file = "block-scalar-literal.md"
+rule = "block-scalar"
+line = 4
+column = 4
+
+[[case]]
+file = "block-scalar-folded.md"
+rule = "block-scalar"
+line = 4
+column = 4
+
+[[case]]
+file = "list-of-maps.md"
+rule = "list-of-maps"
+line = 5
+column = 5
+
+[[case]]
+file = "nested-map.md"
+rule = "nested-map"
+line = 6
+column = 5
+
+[[case]]
+file = "list-in-list-block.md"
+rule = "list-in-list"
+line = 5
+column = 5
+
+[[case]]
+file = "list-in-list-flow.md"
+rule = "list-in-list"
+line = 4
+column = 8
+
+[[case]]
+file = "one-line-list.md"
+rule = "one-line-list"
+line = 4
+column = 4
+
+[[case]]
+file = "one-line-list-comment.md"
+rule = "one-line-list"
+line = 4
+column = 4
+
+[[case]]
+file = "top-level-scalar.md"
+rule = "top-level-map"
+line = 3
+column = 1
+
+[[case]]
+file = "top-level-list.md"
+rule = "top-level-map"
+line = 3
+column = 1
+
+[[case]]
+file = "tab-indent-key.md"
+rule = "tab-indent"
+line = 4
+column = 1
+
+[[case]]
+file = "tab-indent-block.md"
+rule = "tab-indent"
+line = 5
+column = 1
+
+[[case]]
+file = "duplicate-key.md"
+rule = "duplicate-key"
+line = 5
+column = 1
+
+[[case]]
+file = "duplicate-entry-key.md"
+rule = "duplicate-key"
+line = 6
+column = 3
+
+[[case]]
+file = "key-upper-case.md"
+rule = "key"
+line = 4
+column = 1
+
+[[case]]
+file = "key-hyphen.md"
+rule = "key"
+line = 4
+column = 1
+
+[[case]]
+file = "key-quoted.md"
+rule = "key"
+line = 4
+column = 1
+
+[[case]]
+file = "entry-key-upper-case.md"
+rule = "key"
+line = 5
+column = 3
+
+[[case]]
+file = "empty-value.md"
+rule = "empty-value"
+line = 4
+column = 3
+
+[[case]]
+file = "empty-item.md"
+rule = "empty-value"
+line = 5
+column = 4
