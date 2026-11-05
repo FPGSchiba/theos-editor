@@ -28,7 +28,8 @@ pub struct Field {
     pub value: Value,
     /// From the start of the key's line to the end of the last value line, `\n` included.
     pub lines: Span,
-    /// The key line's trailing comment, `#` to the end of the line without the newline.
+    /// The key line's trailing comment or, when the value is on a later line and the key line
+    /// has none, the comment after the value: `#` to the end of the line without the newline.
     pub comment: Option<Span>,
 }
 
@@ -93,7 +94,8 @@ pub struct Entry {
     pub value: EntryValue,
     /// From the start of the key's line to the end of the last value line, `\n` included.
     pub lines: Span,
-    /// The key line's trailing comment, without the newline.
+    /// The key line's trailing comment or, when the value is on a later line and the key line
+    /// has none, the comment after the value, without the newline.
     pub comment: Option<Span>,
 }
 

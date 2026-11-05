@@ -18,7 +18,8 @@ pub enum YamlRule {
     ControlCharacter,
     /// A scalar that spans more than one line.
     OneLineScalar,
-    /// An escape sequence in a double-quoted scalar.
+    /// An escape sequence in a double-quoted scalar other than a double backslash
+    /// and a backslash-quote.
     Escape,
     /// A flow map (`{a: 1}`).
     FlowMap,
@@ -31,7 +32,7 @@ pub enum YamlRule {
     NestedMap,
     /// A list inside a list.
     ListInList,
-    /// A flow list that spans more than one line.
+    /// A flow list that spans more than one line, or a block list as the value of a map entry.
     OneLineList,
     /// A front matter that is not a map.
     TopLevelMap,
@@ -45,7 +46,7 @@ pub enum YamlRule {
     ComplexKey,
     /// A document marker or directive (`...`, `%YAML`).
     DocumentMarker,
-    /// A key with no value.
+    /// A key with no value, or a list item (`- `) with no value.
     EmptyValue,
     /// An error of the YAML crate itself, or the reader's own "the front matter ends early here"
     /// when the scanner ended the stream before the end of the front matter.
