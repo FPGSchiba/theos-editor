@@ -177,3 +177,67 @@ fn the_search_fixture_has_the_expected_findings() -> TestResult {
     );
     Ok(())
 }
+
+/// The one match of `query` in `column` of the record `id`.
+fn one(
+    query: &str,
+    id: &str,
+    pick: impl Fn(&Column) -> bool,
+) -> Result<(Match, String), Box<dyn std::error::Error>> {
+    let hits = indexed()?.search(query, 20)?;
+    let found = hit(&hits, id)?;
+    let mut picked = found.matches.iter().filter(|m| pick(&m.column));
+    let m = picked.next().ok_or("no match in the column")?.clone();
+    assert!(picked.next().is_none(), "more than one match");
+    Ok((m, text_of(&found.path)?))
+}
+
+// AC: CE-13.1
+#[test]
+fn a_plain_field_value_matches_word_by_word() -> TestResult {
+    let (m, text) = one("prism", "synthetic-fielded", |c| *c != Column::Body)?;
+    assert_eq!(
+        m.column,
+        Column::Field {
+            key: "type".to_owned(),
+            entry: None
+        }
+    );
+    assert_eq!(&text[m.span.start..m.span.end], "prism");
+    assert_eq!((m.position.line, m.position.column), (6, 17));
+    assert_eq!(m.line, "type: synthetic prism");
+    Ok(())
+}
+
+// AC: CE-13.1
+#[test]
+fn a_quoted_lens_entry_matches_word_by_word_past_the_quote() -> TestResult {
+    let (m, text) = one("quartz", "synthetic-speaker", |c| *c != Column::Body)?;
+    assert_eq!(
+        m.column,
+        Column::Field {
+            key: "lens".to_owned(),
+            entry: Some("stance".to_owned())
+        }
+    );
+    assert_eq!(&text[m.span.start..m.span.end], "quartz");
+    assert_eq!((m.position.line, m.position.column), (8, 22));
+    assert_eq!(m.line, "  stance: \"synthetic quartz stance\"");
+    Ok(())
+}
+
+// AC: CE-13.1
+#[test]
+fn multi_byte_words_count_chars_in_columns() -> TestResult {
+    let (title, text) = one("cafe", "synthetic-cafe", |c| *c == Column::Title)?;
+    assert_eq!(&text[title.span.start..title.span.end], "Café");
+    assert_eq!(title.span.end - title.span.start, 5);
+    assert_eq!((title.position.line, title.position.column), (5, 18));
+    assert_eq!(title.line, "title: Synthetic Café");
+    let (body, text) = one("mere", "synthetic-cafe", |c| *c == Column::Body)?;
+    assert_eq!(&text[body.span.start..body.span.end], "Mère");
+    assert_eq!(body.span.end - body.span.start, 5);
+    assert_eq!((body.position.line, body.position.column), (8, 1));
+    assert_eq!(body.line, "Mère");
+    Ok(())
+}
