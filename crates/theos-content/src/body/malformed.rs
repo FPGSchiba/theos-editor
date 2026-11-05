@@ -76,16 +76,26 @@ impl Malformed {
     }
 }
 
-/// Whether `span` covers a link or embed fault already in `reported`: that fault is the one
-/// finding of the construct, so a grammar does not report its attribute or title as well.
-pub(crate) fn covers_link_fault(reported: &[Malformed], span: Span) -> bool {
+/// Whether `span` holds an unclosed `[[` already in `reported`: that fault is the one finding of
+/// the construct, because no shape can be checked around a link that never ends.
+pub(crate) fn covers_unclosed(reported: &[Malformed], span: Span) -> bool {
     reported.iter().any(|fault| {
-        matches!(
-            fault.kind,
-            MalformedKind::LinkUnclosed | MalformedKind::LinkTarget | MalformedKind::Embed
-        ) && span.start <= fault.span.start
+        fault.kind == MalformedKind::LinkUnclosed
+            && span.start <= fault.span.start
             && fault.span.end <= span.end
     })
+}
+
+/// The bytes of the link-target and embed faults of `reported` inside `span`, in document order.
+pub(crate) fn link_faults(reported: &[Malformed], span: Span) -> Vec<Span> {
+    let mut spans: Vec<Span> = reported
+        .iter()
+        .filter(|fault| matches!(fault.kind, MalformedKind::LinkTarget | MalformedKind::Embed))
+        .map(|fault| fault.span)
+        .filter(|fault| span.start <= fault.start && fault.end <= span.end)
+        .collect();
+    spans.sort_by_key(|fault| fault.start);
+    spans
 }
 
 /// Whether the character at `at` is escaped: an odd number of backslashes stands before it.

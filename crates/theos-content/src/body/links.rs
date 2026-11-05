@@ -28,6 +28,21 @@ pub struct Link {
 }
 
 impl Link {
+    /// A link that only occupies `span`; it stands in for a reported fault in a shape check and is
+    /// never part of a result.
+    fn stand_in(span: Span) -> Link {
+        Link {
+            span,
+            target: String::new(),
+            target_span: span,
+            fragment: None,
+            fragment_span: None,
+            shown: None,
+            shown_span: None,
+            block: 0,
+        }
+    }
+
     /// The fragment as a beat number.
     #[must_use]
     pub fn beat(&self) -> Option<u32> {
@@ -49,6 +64,18 @@ impl Link {
         text.push_str("]]");
         text
     }
+}
+
+/// The links of `inside` with a stand-in for every fault in `faults`, in document order: the shape
+/// check of a grammar then treats a link that is already reported as a well-formed one.
+pub(crate) fn with_stand_ins(inside: &[Link], faults: &[Span]) -> Vec<Link> {
+    let mut all: Vec<Link> = inside
+        .iter()
+        .cloned()
+        .chain(faults.iter().map(|&span| Link::stand_in(span)))
+        .collect();
+    all.sort_by_key(|link| link.span.start);
+    all
 }
 
 fn valid_target(target: &str) -> bool {

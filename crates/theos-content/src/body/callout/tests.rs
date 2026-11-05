@@ -356,3 +356,24 @@ fn a_bad_link_in_a_title_is_reported_once() {
     assert_eq!(kinds("> [!voice] [[world/tower]]\n"), [("link-target", 4)]);
     assert_eq!(kinds("> [!voice] [[a]] · x y\n"), [("callout-title", 4)]);
 }
+
+// AC: CE-10.3
+#[test]
+fn a_bad_link_does_not_hide_another_fault_of_the_title() {
+    let kinds = |text: &str| {
+        let r = body(text);
+        let mut found: Vec<_> = r
+            .body()
+            .malformed()
+            .iter()
+            .map(|m| m.kind.as_str())
+            .collect();
+        found.sort_unstable();
+        found
+    };
+    let both = ["callout-title", "link-target"];
+    assert_eq!(kinds("> [!voice] [[a]] · T1 · [[b/c]]\n"), both);
+    assert_eq!(kinds("> [!note] n1 · [[a/b]]\n"), both);
+    assert_eq!(kinds("> [!note] [[a/b]] · open\n"), both);
+    assert_eq!(kinds("> [!voice] [[world/tower]]\n"), ["link-target"]);
+}

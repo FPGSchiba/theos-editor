@@ -164,3 +164,28 @@ fn a_bad_link_in_an_attribute_is_reported_once() {
     let r = record("id: a\n", "## Beat 1 — A\nat:: [[x]], plain\n");
     assert_eq!(found(&r), [("beat-attribute", 5)]);
 }
+
+// AC: CE-10.3
+#[test]
+fn a_bad_link_does_not_hide_another_fault_of_the_attribute() {
+    let kinds = |value: &str| {
+        let r = record("id: a\n", &format!("## Beat 1 — A\n{value}\n"));
+        let mut found: Vec<_> = r
+            .body()
+            .malformed()
+            .iter()
+            .map(|m| m.kind.as_str())
+            .collect();
+        found.sort_unstable();
+        found
+    };
+    let both = ["beat-attribute", "link-target"];
+    assert_eq!(kinds("at:: [[world/tower]] [[b]]"), both);
+    assert_eq!(kinds("when:: [[world/tower]]"), both);
+    assert_eq!(kinds("at:: [[world/tower]], plain"), both);
+    assert_eq!(kinds("at:: [[world/tower]]"), ["link-target"]);
+    assert_eq!(
+        kinds("at:: [[world/tower]], [[a/b]]"),
+        ["link-target", "link-target"]
+    );
+}

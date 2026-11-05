@@ -5,8 +5,8 @@ use pulldown_cmark::{Event, Tag};
 use super::title;
 use super::{Callout, CalloutTitle, ContentBlock, Fold, TitleGrammar, TitleInput, grammar};
 use crate::body::events::Events;
-use crate::body::links::Link;
-use crate::body::malformed::{Malformed, covers_link_fault};
+use crate::body::links::{Link, with_stand_ins};
+use crate::body::malformed::{Malformed, covers_unclosed, link_faults};
 use crate::text::{Span, TextIndex};
 
 /// The parts of a `[!type]+` marker, as offsets into the record text.
@@ -192,19 +192,26 @@ pub(crate) fn scan(
         let title = match registered {
             None => Some(CalloutTitle::Other),
             Some(grammar) => {
-                let tokens = title::split(index, title_span, &inside);
-                let input = TitleInput {
-                    index,
-                    title_span,
-                    tokens: &tokens,
-                    links: &inside,
-                    content: &content,
-                    depth,
+                let parse = |links: &[Link]| {
+                    let tokens = title::split(index, title_span, links);
+                    grammar.parse(&TitleInput {
+                        index,
+                        title_span,
+                        tokens: &tokens,
+                        links,
+                        content: &content,
+                        depth,
+                    })
                 };
-                match grammar.parse(&input) {
+                match parse(&inside) {
                     Ok(title) => Some(title),
                     Err(report) => {
-                        if !covers_link_fault(reported, report.span) {
+                        let faults = link_faults(reported, title_span);
+                        // Wrong only because of links that are already reported: one finding.
+                        let only_links = covers_unclosed(reported, report.span)
+                            || !faults.is_empty()
+                                && parse(&with_stand_ins(&inside, &faults)).is_ok();
+                        if !only_links {
                             bad.push(report);
                         }
                         None

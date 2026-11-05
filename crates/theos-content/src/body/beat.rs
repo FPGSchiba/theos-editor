@@ -8,8 +8,8 @@ use pulldown_cmark::{Event, HeadingLevel, Tag, TagEnd};
 
 use super::callout::Token;
 use super::events::Events;
-use super::links::Link;
-use super::malformed::{Malformed, MalformedKind, covers_link_fault};
+use super::links::{Link, with_stand_ins};
+use super::malformed::{Malformed, MalformedKind, covers_unclosed, link_faults};
 use crate::text::{Span, TextIndex};
 
 #[cfg(test)]
@@ -315,16 +315,44 @@ fn read_attributes(
                 value_span,
                 line_span,
             }),
-            // A bad link in the value is already reported; that is the one finding.
-            Err(_) if covers_link_fault(reported, value_span) => {}
-            Err(message) => bad.push(Malformed::new(
-                index,
-                MalformedKind::BeatAttribute,
-                format!("attribute `{key}`: {message}"),
-                line_span,
-            )),
+            Err(message) => {
+                if !is_only_a_link_fault(events.source, key, value, value_span, links, reported) {
+                    bad.push(Malformed::new(
+                        index,
+                        MalformedKind::BeatAttribute,
+                        format!("attribute `{key}`: {message}"),
+                        line_span,
+                    ));
+                }
+            }
         }
     }
+}
+
+/// Whether the value is wrong only because of links that are already reported: the shape reads
+/// right once every reported link or embed counts as a well-formed link. An unclosed `[[` in the
+/// value is the one finding of it.
+fn is_only_a_link_fault(
+    source: &str,
+    key: &str,
+    value: &str,
+    span: Span,
+    links: &[Link],
+    reported: &[Malformed],
+) -> bool {
+    if covers_unclosed(reported, span) {
+        return true;
+    }
+    let faults = link_faults(reported, span);
+    if faults.is_empty() {
+        return false;
+    }
+    let inside: Vec<Link> = links
+        .iter()
+        .filter(|l| span.start <= l.span.start && l.span.end <= span.end)
+        .cloned()
+        .collect();
+    read_value(source, key, value, span, &with_stand_ins(&inside, &faults)).is_ok()
 }
 
 /// Shapes `value` by its key.
