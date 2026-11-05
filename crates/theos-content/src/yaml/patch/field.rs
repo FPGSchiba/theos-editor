@@ -1,12 +1,11 @@
 //! The edits of one op: which bytes of the front matter change and what takes their place.
 
 use super::list::{block_edits, flow_edits};
+use super::map;
 use super::{Order, PatchError, PatchOp};
 use crate::record::Record;
 use crate::text::{Span, TextEdit};
-use crate::yaml::{
-    Field, FrontMatter, ListStyle, RawEntry, RawValue, Slot, Value, encode, is_key_name,
-};
+use crate::yaml::{Field, FrontMatter, ListStyle, RawValue, Slot, Value, encode, is_key_name};
 
 /// The edits that carry out `op` on `record`.
 pub(super) fn edits(
@@ -29,6 +28,20 @@ pub(super) fn edits(
             })?;
             Ok(vec![replace(field.lines, String::new())])
         }
+        PatchOp::SetEntry { key, entry, value } => {
+            if let Some(field) = front.get(key) {
+                return map::set_entry(record.text(), field, entry, value, order);
+            }
+            let map = RawValue::Map(vec![(entry.clone(), value.clone())]);
+            insert(record, front, key, &map, order)
+        }
+        PatchOp::RemoveEntry { key, entry } => {
+            let field = front.get(key).ok_or_else(|| PatchError::NotFound {
+                key: key.clone(),
+                entry: None,
+            })?;
+            map::remove_entry(field, entry)
+        }
     }
 }
 
@@ -39,9 +52,9 @@ fn replace(span: Span, replacement: String) -> TextEdit {
 /// Writes `value` over the existing `field`.
 ///
 /// A scalar over a scalar replaces only the value bytes, and a list over a list edits per item
-/// (see `list.rs`), so kept items keep their bytes. Every other combination rewrites the field's
-/// lines; that includes a map over a map until the per-entry edits of the map patcher take it
-/// over here, and a block list written empty, which becomes `key: []`.
+/// (see `list.rs`), so kept items keep their bytes; a map over a map edits per entry (see
+/// `map.rs`) unless it reorders the kept entries. Every other combination rewrites the field's
+/// lines; that includes a block list written empty, which becomes `key: []`.
 fn set_existing(
     record: &Record,
     field: &Field,
@@ -57,6 +70,9 @@ fn set_existing(
             ListStyle::Block if !new.is_empty() => block_edits(record.text(), old, new),
             ListStyle::Block => rewrite(record, field, value),
         },
+        (Value::Map(old), RawValue::Map(new)) if map::edits_per_entry(old, new) => {
+            map::map_edits(record.text(), old, new)
+        }
         _ => rewrite(record, field, value),
     }
 }
@@ -107,14 +123,7 @@ fn field_text(key: &str, value: &RawValue, comment: Option<&str>) -> Result<Stri
         RawValue::List(items) => format!("{key}: {}", flow_list(items)?),
         RawValue::Map(entries) => {
             for (name, entry) in entries {
-                if !is_key_name(name) {
-                    return Err(PatchError::Key { key: name.clone() });
-                }
-                let spelled = match entry {
-                    RawEntry::Text(text) => encode(text, None, Slot::Entry)?,
-                    RawEntry::List(items) => flow_list(items)?,
-                };
-                tail.extend(["  ", name, ": ", &spelled, "\n"]);
+                tail.push_str(&map::entry_line("  ", name, entry, None)?);
             }
             format!("{key}:")
         }
@@ -128,7 +137,7 @@ fn field_text(key: &str, value: &RawValue, comment: Option<&str>) -> Result<Stri
     Ok(out)
 }
 
-fn flow_list(items: &[String]) -> Result<String, PatchError> {
+pub(super) fn flow_list(items: &[String]) -> Result<String, PatchError> {
     let spelled = items
         .iter()
         .map(|item| encode(item, None, Slot::FlowItem))

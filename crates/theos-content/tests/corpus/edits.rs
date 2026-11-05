@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fs;
 
 use theos_content::Span;
-use theos_content::yaml::RawValue;
+use theos_content::yaml::{RawEntry, RawValue};
 use theos_content::{Order, Record};
 
 use crate::common::{corpus, cut, only_region_changed};
@@ -129,5 +129,74 @@ fn list_edits_change_only_the_field_lines() -> Result<(), Box<dyn Error>> {
         .map_err(ToString::to_string)?
         .get("held_by");
     assert_eq!(field.map(|f| f.value.to_raw()), Some(raw));
+    Ok(())
+}
+
+/// The lines of the field `key` and its raw value, or an error.
+fn field_of(record: &Record, key: &str) -> Result<(Span, RawValue), Box<dyn Error>> {
+    let field = record
+        .front_matter()
+        .map_err(ToString::to_string)?
+        .get(key)
+        .ok_or("field missing")?;
+    Ok((field.lines, field.value.to_raw()))
+}
+
+fn entry_order(key: &str, entries: &[&str]) -> Order {
+    Order::new([key]).with_entries(key, entries.iter().copied())
+}
+
+// AC: CE-09.2
+#[test]
+fn map_edits_change_only_the_field_lines() -> Result<(), Box<dyn Error>> {
+    let ilse = corpus().join("records/people/hearth-folk/fates-cult/mother-ilse.md");
+    let old = Record::parse(&fs::read_to_string(ilse)?)?;
+    let (old_lines, _) = field_of(&old, "lens")?;
+    let wary = RawEntry::Text("wary".to_owned());
+    let order = entry_order("lens", &["stance", "speaks_to"]);
+    let added = old.set_entry("lens", "stance", wary.clone(), &order)?;
+    let changed = added.set_entry(
+        "lens",
+        "speaks_to",
+        RawEntry::Text("all".to_owned()),
+        &order,
+    )?;
+    let removed = changed.remove_entry("lens", "speaks_to")?;
+    for new in [&added, &changed, &removed] {
+        let (new_lines, _) = field_of(new, "lens")?;
+        assert_eq!(
+            cut(old.text(), Some(old_lines)),
+            cut(new.text(), Some(new_lines))
+        );
+    }
+    let (_, raw) = field_of(&removed, "lens")?;
+    assert_eq!(raw, RawValue::Map(vec![("stance".to_owned(), wary)]));
+
+    let comments = "things/synthetic-yaml-comments.md";
+    let path = corpus().join("records").join(comments);
+    let old = Record::parse(&fs::read_to_string(path)?)?;
+    let (region, _) = field_of(&old, "lens")?;
+    let order = entry_order("lens", &["speaks_to", "stance", "role"]);
+    let added = old.set_entry("lens", "stance", RawEntry::Text("calm".to_owned()), &order)?;
+    let edited = added.set_entry("lens", "role", RawEntry::Text("warden".to_owned()), &order)?;
+    let removed = edited.remove_entry("lens", "speaks_to")?;
+    for new in [&added, &edited, &removed] {
+        assert!(only_region_changed(old.text(), new.text(), region));
+    }
+    // the comments between the entries survive in the untouched entries' neighbourhood
+    assert!(added.text().contains(
+        "  speaks_to: children   # a comment after an entry\n  stance: calm\n  # a comment between entries\n  role: keeper\n"
+    ));
+    assert!(
+        edited
+            .text()
+            .contains("  role: warden\n  # a comment after the last entry\n")
+    );
+    assert!(removed.text().contains(
+        "  # a comment before the first entry
+  stance: calm
+  # a comment between entries
+"
+    ));
     Ok(())
 }

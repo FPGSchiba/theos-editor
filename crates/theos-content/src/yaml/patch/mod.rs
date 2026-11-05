@@ -1,13 +1,14 @@
 //! The front-matter patcher: setting, inserting and removing whole fields as span edits, each
-//! result verified by parsing it again. Per-item list edits and per-entry map edits build on this.
+//! result verified by parsing it again. Per-item list edits (`list.rs`) and per-entry map edits (`map.rs`) build on this.
 
 mod field;
 mod list;
+mod map;
 mod verify;
 
 use std::collections::BTreeMap;
 
-use super::{EncodeError, RawValue, YamlError};
+use super::{EncodeError, RawEntry, RawValue, YamlError};
 use crate::record::{Record, RecordEditError};
 
 /// One change to the front matter.
@@ -24,6 +25,23 @@ pub enum PatchOp {
     Remove {
         /// The field.
         key: String,
+    },
+    /// Write `value` as the entry `entry` of the map field `key`: replaces the entry when present,
+    /// inserts it by the entry order otherwise, and inserts the field when it is missing.
+    SetEntry {
+        /// The map field.
+        key: String,
+        /// The entry of the map.
+        entry: String,
+        /// The raw value to write.
+        value: RawEntry,
+    },
+    /// Delete the entry `entry` of the map field `key`; the field goes with its last entry.
+    RemoveEntry {
+        /// The map field.
+        key: String,
+        /// The entry of the map.
+        entry: String,
     },
 }
 
@@ -160,6 +178,40 @@ impl Record {
     pub fn remove(&self, key: &str) -> Result<Record, PatchError> {
         let op = PatchOp::Remove {
             key: key.to_owned(),
+        };
+        self.patch(&[op], &Order::default())
+    }
+
+    /// Sets the entry `entry` of the map field `key`; a new entry goes where `order` puts it.
+    ///
+    /// # Errors
+    ///
+    /// See [`Record::patch`]; [`PatchError::NotAMap`] when the field is not a map.
+    pub fn set_entry(
+        &self,
+        key: &str,
+        entry: &str,
+        value: RawEntry,
+        order: &Order,
+    ) -> Result<Record, PatchError> {
+        let op = PatchOp::SetEntry {
+            key: key.to_owned(),
+            entry: entry.to_owned(),
+            value,
+        };
+        self.patch(&[op], order)
+    }
+
+    /// Removes the entry `entry` of the map field `key`; the field goes with its last entry.
+    ///
+    /// # Errors
+    ///
+    /// See [`Record::patch`]; [`PatchError::NotFound`] when the field or the entry is absent and
+    /// [`PatchError::NotAMap`] when the field is not a map.
+    pub fn remove_entry(&self, key: &str, entry: &str) -> Result<Record, PatchError> {
+        let op = PatchOp::RemoveEntry {
+            key: key.to_owned(),
+            entry: entry.to_owned(),
         };
         self.patch(&[op], &Order::default())
     }
