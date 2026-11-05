@@ -18,7 +18,10 @@ pub fn md_files(dir: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
     while let Some(current) = pending.pop() {
         let entries = fs::read_dir(&current)
             .map_err(|error| format!("cannot read {}: {error}", current.display()))?;
-        for path in entries.filter_map(|entry| entry.ok().map(|e| e.path())) {
+        for entry in entries {
+            let path = entry
+                .map_err(|error| format!("cannot read an entry of {}: {error}", current.display()))?
+                .path();
             if path.is_dir() {
                 pending.push(path);
             } else if path.extension().is_some_and(|ext| ext == "md") {
