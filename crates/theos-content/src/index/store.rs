@@ -26,6 +26,10 @@ const SCHEMA: &str = include_str!("schema.sql");
 /// How long a connection waits for another process holding the write lock.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// How many prepared statements a connection keeps: more than the distinct statements that a
+/// sync runs once per record, row or id, so that none of them is compiled twice.
+const STATEMENT_CACHE: usize = 64;
+
 /// An open cache.
 pub(crate) struct Store {
     pub(crate) conn: Connection,
@@ -99,8 +103,10 @@ impl Store {
     }
 }
 
-/// Rebuilds the schema in one write transaction when the identity or the tables do not match.
+/// Sets the statement cache, and rebuilds the schema in one write transaction when the identity
+/// or the tables do not match.
 fn prepare(conn: &mut Connection, identity: &Identity) -> Result<(), IndexError> {
+    conn.set_prepared_statement_cache_capacity(STATEMENT_CACHE);
     let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     if !holds(&tx, identity)? || !has_every_table(&tx)? {
         rebuild(&tx, identity)?;

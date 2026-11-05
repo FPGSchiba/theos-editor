@@ -40,12 +40,12 @@ pub(crate) fn duplicate_groups(ids: &[(String, String)]) -> Vec<Vec<String>> {
 /// [`id_fold`].
 pub(crate) fn recheck_ids(conn: &Connection, folds: &BTreeSet<String>) -> Result<(), IndexError> {
     for fold in folds {
-        conn.execute(
+        conn.prepare_cached(
             "DELETE FROM findings WHERE step = ?2 \
              AND path IN (SELECT path FROM records WHERE id_fold = ?1)",
-            [fold.as_str(), STEP],
-        )?;
-        let mut stmt = conn.prepare("SELECT path, id FROM records WHERE id_fold = ?1")?;
+        )?
+        .execute([fold.as_str(), STEP])?;
+        let mut stmt = conn.prepare_cached("SELECT path, id FROM records WHERE id_fold = ?1")?;
         let ids = stmt
             .query_map([fold], |row| Ok((row.get(0)?, row.get(1)?)))?
             .collect::<Result<Vec<(String, String)>, _>>()?;
@@ -89,27 +89,26 @@ pub(crate) fn recheck_ids(conn: &Connection, folds: &BTreeSet<String>) -> Result
 /// The span and position of the `id` value, or 1:1 when the record has none.
 fn id_at(conn: &Connection, path: &str) -> Result<(Span, Position), IndexError> {
     let found = conn
-        .query_row(
+        .prepare_cached(
             "SELECT span_start, span_end, line, col FROM field_values \
              WHERE path = ?1 AND field = 'id' AND entry IS NULL AND item IS NULL",
-            [path],
-            |row| {
-                let n = |i| {
-                    row.get::<_, i64>(i)
-                        .map(|value| usize::try_from(value).unwrap_or_default())
-                };
-                Ok((
-                    Span {
-                        start: n(0)?,
-                        end: n(1)?,
-                    },
-                    Position {
-                        line: n(2)?,
-                        column: n(3)?,
-                    },
-                ))
-            },
-        )
+        )?
+        .query_row([path], |row| {
+            let n = |i| {
+                row.get::<_, i64>(i)
+                    .map(|value| usize::try_from(value).unwrap_or_default())
+            };
+            Ok((
+                Span {
+                    start: n(0)?,
+                    end: n(1)?,
+                },
+                Position {
+                    line: n(2)?,
+                    column: n(3)?,
+                },
+            ))
+        })
         .optional()?;
     Ok(found.unwrap_or((Span::default(), Position { line: 1, column: 1 })))
 }

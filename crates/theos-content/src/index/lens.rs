@@ -176,7 +176,7 @@ impl Index {
         let mut stmt = self
             .store
             .conn
-            .prepare("SELECT path, kind FROM records WHERE id = ?1 ORDER BY path")?;
+            .prepare_cached("SELECT path, kind FROM records WHERE id = ?1 ORDER BY path")?;
         let rows = stmt.query_map([id], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
         })?;
@@ -233,7 +233,7 @@ impl Index {
 
     /// The `lens` rows of a record, in file order.
     fn lens_nodes(&self, path: &str) -> Result<Vec<Node>, IndexError> {
-        let mut stmt = self.store.conn.prepare(
+        let mut stmt = self.store.conn.prepare_cached(
             "SELECT entry, item, shape, text, span_start, span_end, line, col, valid \
              FROM field_values WHERE path = ?1 AND field = 'lens' ORDER BY rowid",
         )?;

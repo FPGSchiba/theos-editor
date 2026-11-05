@@ -80,7 +80,7 @@ impl Index {
         };
         let limit = i64::try_from(limit).unwrap_or(i64::MAX);
         let conn = &self.store.conn;
-        let mut stmt = conn.prepare(SQL)?;
+        let mut stmt = conn.prepare_cached(SQL)?;
         let markers = (OPEN.to_string(), CLOSE.to_string());
         let rows = stmt.query_map(params![query, markers.0, markers.1, limit], Raw::read)?;
         let mut hits = Vec::new();
@@ -283,25 +283,22 @@ impl Value {
                                    FROM field_values";
 
     fn title(conn: &Connection, path: &str) -> rusqlite::Result<Option<Value>> {
-        conn.query_row(
-            &format!(
-                "{} WHERE path = ?1 AND field = 'title' AND entry IS NULL AND item IS NULL \
-                 AND shape = 'scalar'",
-                Value::COLUMNS
-            ),
-            [path],
-            Value::read,
-        )
+        conn.prepare_cached(&format!(
+            "{} WHERE path = ?1 AND field = 'title' AND entry IS NULL AND item IS NULL \
+             AND shape = 'scalar'",
+            Value::COLUMNS
+        ))?
+        .query_row([path], Value::read)
         .optional()
     }
 
     fn field(conn: &Connection, path: &str, search_line: usize) -> rusqlite::Result<Option<Value>> {
         let line = i64::try_from(search_line).unwrap_or(i64::MAX);
-        conn.query_row(
-            &format!("{} WHERE path = ?1 AND search_line = ?2", Value::COLUMNS),
-            params![path, line],
-            Value::read,
-        )
+        conn.prepare_cached(&format!(
+            "{} WHERE path = ?1 AND search_line = ?2",
+            Value::COLUMNS
+        ))?
+        .query_row(params![path, line], Value::read)
         .optional()
     }
 

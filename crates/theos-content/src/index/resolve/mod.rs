@@ -110,10 +110,8 @@ pub(crate) fn relink(
     let records = targets::load_sources(conn, sources)?;
     let targets = targets::load_targets(conn, registry, &records)?;
     for source in &records {
-        conn.execute(
-            "DELETE FROM findings WHERE path = ?1 AND step = ?2",
-            [source.path.as_str(), STEP],
-        )?;
+        conn.prepare_cached("DELETE FROM findings WHERE path = ?1 AND step = ?2")?
+            .execute([source.path.as_str(), STEP])?;
         for rule in LINK_RULES {
             for found in (rule.run)(source, &targets, registry) {
                 insert_finding(conn, &found, STEP)?;

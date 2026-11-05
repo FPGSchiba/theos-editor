@@ -19,11 +19,10 @@ pub(super) fn load_sources(
     let mut sources = Vec::new();
     for path in paths {
         let record = conn
-            .query_row(
-                "SELECT id, kind FROM records WHERE path = ?1",
-                [path],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
-            )
+            .prepare_cached("SELECT id, kind FROM records WHERE path = ?1")?
+            .query_row([path], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+            })
             .optional()?;
         let Some((id, kind)) = record else { continue };
         sources.push(SourceRecord {
@@ -44,28 +43,27 @@ fn offset(value: i64) -> usize {
 
 fn kind_at(conn: &Connection, path: &str) -> Result<Option<(Span, Position)>, IndexError> {
     Ok(conn
-        .query_row(
+        .prepare_cached(
             "SELECT span_start, span_end, line, col FROM field_values \
              WHERE path = ?1 AND field = 'kind' AND entry IS NULL AND item IS NULL",
-            [path],
-            |row| {
-                Ok((
-                    Span {
-                        start: offset(row.get(0)?),
-                        end: offset(row.get(1)?),
-                    },
-                    Position {
-                        line: offset(row.get(2)?),
-                        column: offset(row.get(3)?),
-                    },
-                ))
-            },
-        )
+        )?
+        .query_row([path], |row| {
+            Ok((
+                Span {
+                    start: offset(row.get(0)?),
+                    end: offset(row.get(1)?),
+                },
+                Position {
+                    line: offset(row.get(2)?),
+                    column: offset(row.get(3)?),
+                },
+            ))
+        })
         .optional()?)
 }
 
 fn links(conn: &Connection, path: &str) -> Result<Vec<LinkRow>, IndexError> {
-    let mut stmt = conn.prepare(
+    let mut stmt = conn.prepare_cached(
         "SELECT slot, beat, target, fragment, span_start, span_end, line, col FROM links \
          WHERE path = ?1 ORDER BY span_start",
     )?;
@@ -114,7 +112,7 @@ pub(super) fn load_targets(
     let mut targets = Targets::new();
     for id in ids {
         let mut stmt =
-            conn.prepare("SELECT path, kind FROM records WHERE id = ?1 ORDER BY path")?;
+            conn.prepare_cached("SELECT path, kind FROM records WHERE id = ?1 ORDER BY path")?;
         let records = stmt
             .query_map([id], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
@@ -147,7 +145,7 @@ fn narrow_values(
     let Some(spec) = kind.and_then(|kind| registry.kind(kind)) else {
         return Ok(BTreeMap::new());
     };
-    let mut stmt = conn.prepare(
+    let mut stmt = conn.prepare_cached(
         "SELECT field, text FROM field_values WHERE path = ?1 AND entry IS NULL \
          AND item IS NULL AND shape = 'scalar' AND valid = 1 AND text IS NOT NULL",
     )?;
@@ -163,7 +161,7 @@ fn narrow_values(
 }
 
 fn beat_numbers(conn: &Connection, path: &str) -> Result<BTreeSet<u32>, IndexError> {
-    let mut stmt = conn.prepare("SELECT number FROM beats WHERE path = ?1")?;
+    let mut stmt = conn.prepare_cached("SELECT number FROM beats WHERE path = ?1")?;
     let numbers = stmt
         .query_map([path], |row| row.get::<_, u32>(0))?
         .collect::<Result<_, _>>()?;

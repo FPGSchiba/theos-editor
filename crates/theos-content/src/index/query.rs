@@ -150,13 +150,13 @@ impl Index {
     }
 
     fn link_rows(&self, sql: &str, params: impl Params) -> Result<Vec<LinkRef>, IndexError> {
-        let mut stmt = self.store.conn.prepare(sql)?;
+        let mut stmt = self.store.conn.prepare_cached(sql)?;
         let rows = stmt.query_map(params, link)?;
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
     fn summaries(&self, sql: &str, params: impl Params) -> Result<Vec<RecordSummary>, IndexError> {
-        let mut stmt = self.store.conn.prepare(sql)?;
+        let mut stmt = self.store.conn.prepare_cached(sql)?;
         let rows = stmt.query_map(params, |row| {
             Ok(RecordSummary {
                 id: row.get(0)?,
@@ -188,7 +188,7 @@ fn finding_rows_in(
     sql: &str,
     params: impl Params,
 ) -> Result<Vec<Finding>, IndexError> {
-    let mut stmt = conn.prepare(sql)?;
+    let mut stmt = conn.prepare_cached(sql)?;
     let rows = stmt.query_map(params, finding)?;
     Ok(rows.collect::<Result<_, _>>()?)
 }

@@ -357,7 +357,7 @@ impl<'a> Syncer<'a> {
         let mut sources: BTreeSet<String> = self.update.reparsed.iter().cloned().collect();
         let mut stmt = self
             .conn
-            .prepare("SELECT DISTINCT path FROM links WHERE target = ?1")?;
+            .prepare_cached("SELECT DISTINCT path FROM links WHERE target = ?1")?;
         for id in &self.affected {
             for path in stmt.query_map([id], |row| row.get::<_, String>(0))? {
                 sources.insert(path?);
@@ -383,11 +383,8 @@ impl<'a> Syncer<'a> {
     fn touch(&mut self, path: &str, new: Option<(&str, &str)>) -> Result<(), IndexError> {
         let old: Option<(String, String)> = self
             .conn
-            .query_row(
-                "SELECT id, facts FROM records WHERE path = ?1",
-                [path],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
+            .prepare_cached("SELECT id, facts FROM records WHERE path = ?1")?
+            .query_row([path], |row| Ok((row.get(0)?, row.get(1)?)))
             .optional()?;
         self.rechecked
             .extend(old.iter().map(|(id, _)| resolve::id_fold(id)));
@@ -567,18 +564,15 @@ impl<'a> Syncer<'a> {
     fn file_row(&self, path: &str) -> Result<Option<FileRow>, IndexError> {
         Ok(self
             .conn
-            .query_row(
-                "SELECT size, mtime_ns, hash, racy FROM files WHERE path = ?1",
-                [path],
-                |row| {
-                    Ok(FileRow {
-                        size: row.get(0)?,
-                        mtime_ns: row.get(1)?,
-                        hash: row.get(2)?,
-                        racy: row.get(3)?,
-                    })
-                },
-            )
+            .prepare_cached("SELECT size, mtime_ns, hash, racy FROM files WHERE path = ?1")?
+            .query_row([path], |row| {
+                Ok(FileRow {
+                    size: row.get(0)?,
+                    mtime_ns: row.get(1)?,
+                    hash: row.get(2)?,
+                    racy: row.get(3)?,
+                })
+            })
             .optional()?)
     }
 
@@ -589,17 +583,17 @@ impl<'a> Syncer<'a> {
         hash: &str,
         racy: bool,
     ) -> Result<(), IndexError> {
-        self.conn.execute(
+        let mut stmt = self.conn.prepare_cached(
             "INSERT OR REPLACE INTO files (path, size, mtime_ns, hash, racy) \
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![
-                path,
-                stamp.and_then(|stamp| i64::try_from(stamp.size).ok()),
-                stamp.map(|stamp| stamp.mtime_ns),
-                hash,
-                racy
-            ],
         )?;
+        stmt.execute(rusqlite::params![
+            path,
+            stamp.and_then(|stamp| i64::try_from(stamp.size).ok()),
+            stamp.map(|stamp| stamp.mtime_ns),
+            hash,
+            racy
+        ])?;
         Ok(())
     }
 }
