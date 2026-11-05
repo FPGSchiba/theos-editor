@@ -8,7 +8,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 |---|---|---|---|---|---|
 | P00 | Foundation and gate | theos-editor | done | #5, #9, #10 | #7 |
 | P01 | Content layout and templates | tower-of-theos | done | #4 | tower-of-theos#2 |
-| P02 | Records and grammars | theos-editor | spec-pr | PR_SPEC | |
+| P02 | Records and grammars | theos-editor | spec-pr | #16 | |
 | P03 | Kinds, index, search, lenses | theos-editor | todo | | |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | todo | | |
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
@@ -30,7 +30,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 
 - P00's macOS `platforms` evidence is still open: the run on #7 got no GitHub runner (macOS
   capacity). The weekly Monday run, or a re-run, gives it.
-- The P02 spec (PR_SPEC) waits for Jann. Jann picks the approaches of its §4.3 and checks the
+- The P02 spec (#16) waits for Jann. Jann picks the approaches of its §4.3 and checks the
   rulings of its §9. It records Jann's decisions of 5 Nov 2026 on slug ids and `accuracy: false`,
   on CRLF, and on what "the restricted YAML parser is ours" means.
 - Comments on text sections: proposal 0002 (#15) waits for Jann. On acceptance, Jann adds its
