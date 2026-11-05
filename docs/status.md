@@ -30,9 +30,9 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 
 - P00's macOS `platforms` evidence is still open: the run on #7 got no GitHub runner (macOS
   capacity). The weekly Monday run, or a re-run, gives it.
-- The P02 spec (#16) waits for Jann. Jann picks the approaches of its §4.3 and checks the
-  rulings of its §9. It records Jann's decisions of 5 Nov 2026 on slug ids and `accuracy: false`,
-  on CRLF, and on what "the restricted YAML parser is ours" means.
+- The P02 spec (#16) waits for Jann's approval. Jann chose the recommended approach for all four
+  questions of its §4.3 (review of #16). It records Jann's decisions of 5 Nov 2026 on slug ids
+  and `accuracy: false`, on CRLF, and on what "the restricted YAML parser is ours" means.
 - Comments on text sections: proposal 0002 (#15) waits for Jann. Merging it adds phase P19
   (Comments, slice S5, after P12 and P13) with its criteria CE-51 to CE-54 to the umbrella.
   Before P19 starts, Jann settles the wording for G7 and CE-23.1 proposed in 0002 §10, which

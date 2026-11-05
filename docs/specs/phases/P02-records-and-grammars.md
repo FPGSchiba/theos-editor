@@ -87,6 +87,10 @@ real records are added once the lore import exists.
 - **Comments on text sections** are not decided yet. Proposal 0002 is open as its own PR
   (#15). This spec builds only what its ACs need, plus the interfaces 0002 asks of P02,
   marked "depends on 0002" (§6). (D4.)
+- **Ruling (Jann, review of #16): the four approaches of §4.3 are all (a)**, the recommended ones:
+  the YAML rules read tokens and events; the body grammar is `pulldown-cmark` plus three small
+  grammars; the patcher replaces value spans and patches lists per item and maps per entry; the
+  round trips run through the model and the edit paths.
 
 ### 4.2 Probe: the pinned crates on toolchain 1.99.1 (5 Nov 2026)
 
@@ -144,7 +148,7 @@ with `MarkedEventReceiver`, and its public `Scanner`) and `pulldown-cmark` 0.13.
 construct CE-09.3 names is visible with its exact position. The six gaps above are each one small
 rule over the crate's output.
 
-### 4.3 Approaches (Jann picks in this review; the recommendation comes first)
+### 4.3 Approaches (Jann chose (a) for all four in the review of #16)
 
 **Where the YAML rules get their positions**
 - (a) **Tokens and events** (recommended). The rules read the `Scanner`'s tokens for the
@@ -640,7 +644,10 @@ on Windows before the phase is claimed done (CLAUDE.md).
   without attributes; `Beat 5 - x`; `## Beats`; `## Beat x — y`; several links with and
   without commas; prose directly after the attributes in the same paragraph.
 
-## 9. Rulings (Claude's calls; open to change in this review)
+## 9. Rulings (Claude's calls)
+
+The first ruling and the list ruling below carry out approaches Jann chose in §4.3; the others
+are Claude's calls inside them.
 
 - Ruling: the YAML rules use the scanner's tokens and the parser's events (§4.3) — exact
   positions for every indicator, both from the pinned crate — cost if wrong: one extra pass over
