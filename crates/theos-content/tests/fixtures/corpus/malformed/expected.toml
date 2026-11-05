@@ -1,0 +1,197 @@
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-unclosed"
+line = 10
+column = 20
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-unclosed"
+line = 12
+column = 15
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-unclosed"
+line = 14
+column = 23
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-target"
+line = 16
+column = 22
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-target"
+line = 18
+column = 8
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-target"
+line = 20
+column = 9
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "link-target"
+line = 22
+column = 30
+
+[[case]]
+file = "things/synthetic-malformed-links.md"
+kind = "embed"
+line = 24
+column = 10
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 11
+column = 12
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 14
+column = 35
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 17
+column = 30
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 20
+column = 12
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 23
+column = 12
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 26
+column = 12
+
+[[case]]
+file = "lore/topics/synthetic-malformed-voices-in-world.md"
+kind = "callout-title"
+line = 29
+column = 11
+
+[[case]]
+file = "maps/synthetic-malformed-notes.md"
+kind = "callout-title"
+line = 13
+column = 11
+
+[[case]]
+file = "maps/synthetic-malformed-notes.md"
+kind = "callout-title"
+line = 16
+column = 11
+
+[[case]]
+file = "maps/synthetic-malformed-notes.md"
+kind = "callout-title"
+line = 19
+column = 11
+
+[[case]]
+file = "maps/synthetic-malformed-notes.md"
+kind = "callout-title"
+line = 22
+column = 16
+
+[[case]]
+file = "maps/synthetic-malformed-notes.md"
+kind = "callout-title"
+line = 25
+column = 23
+
+[[case]]
+file = "maps/synthetic-malformed-notes.md"
+kind = "callout-title"
+line = 28
+column = 11
+
+[[case]]
+file = "story/scripts/S-901.md"
+kind = "beat-heading"
+line = 39
+column = 1
+
+[[case]]
+file = "story/scripts/S-904.md"
+kind = "beat-attribute"
+line = 12
+column = 1
+
+[[case]]
+file = "story/scripts/S-904.md"
+kind = "beat-attribute"
+line = 13
+column = 1
+
+[[case]]
+file = "story/scripts/S-904.md"
+kind = "beat-attribute"
+line = 14
+column = 1
+
+[[case]]
+file = "story/scripts/S-904.md"
+kind = "beat-attribute"
+line = 15
+column = 1
+
+[[case]]
+file = "story/scripts/S-904.md"
+kind = "beat-attribute"
+line = 16
+column = 1
+
+[[case]]
+file = "story/scripts/S-904.md"
+kind = "beat-heading"
+line = 18
+column = 1
+
+[[case]]
+file = "story/scripts/S-904.md"
+kind = "beat-heading"
+line = 20
+column = 1
+
+[[case]]
+file = "story/scripts/S-904.md"
+kind = "beat-heading"
+line = 22
+column = 1
+
+[[case]]
+file = "story/scripts/S-904.md"
+kind = "beat-heading"
+line = 24
+column = 1
+
+[[case]]
+file = "story/scripts/S-904.md"
+kind = "beat-heading"
+line = 26
+column = 1
+
+[[case]]
+file = "story/scripts/S-904.md"
+kind = "misplaced-attributes"
+line = 30
+column = 1

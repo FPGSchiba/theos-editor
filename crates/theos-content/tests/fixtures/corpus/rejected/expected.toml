@@ -1,0 +1,287 @@
+[[case]]
+file = "alias-after-unicode.md"
+rule = "alias"
+line = 4
+column = 17
+
+[[case]]
+file = "alias.md"
+rule = "alias"
+line = 4
+column = 4
+
+[[case]]
+file = "anchor.md"
+rule = "anchor"
+line = 4
+column = 4
+
+[[case]]
+file = "bom.md"
+rule = "bom"
+line = 1
+column = 1
+
+[[case]]
+file = "complex-key.md"
+rule = "complex-key"
+line = 4
+column = 1
+
+[[case]]
+file = "control-character.md"
+rule = "control-character"
+line = 4
+column = 5
+
+[[case]]
+file = "control-character-nul.md"
+rule = "control-character"
+line = 4
+column = 9
+
+[[case]]
+file = "directive.md"
+rule = "document-marker"
+line = 2
+column = 1
+
+[[case]]
+file = "document-end.md"
+rule = "document-marker"
+line = 4
+column = 1
+
+[[case]]
+file = "flow-map-template.md"
+rule = "flow-map"
+line = 4
+column = 8
+
+[[case]]
+file = "flow-map.md"
+rule = "flow-map"
+line = 4
+column = 4
+
+[[case]]
+file = "no-closing-line.md"
+rule = "closing-line"
+line = 1
+column = 1
+
+[[case]]
+file = "no-opening-line.md"
+rule = "opening-line"
+line = 1
+column = 1
+
+[[case]]
+file = "syntax-backtick.md"
+rule = "syntax"
+line = 4
+column = 4
+
+[[case]]
+file = "syntax-indent.md"
+rule = "syntax"
+line = 6
+column = 3
+
+[[case]]
+file = "syntax-nested-value.md"
+rule = "syntax"
+line = 4
+column = 5
+
+[[case]]
+file = "syntax-reserved.md"
+rule = "syntax"
+line = 4
+column = 4
+
+[[case]]
+file = "tag.md"
+rule = "tag"
+line = 4
+column = 4
+
+[[case]]
+file = "block-scalar-literal.md"
+rule = "block-scalar"
+line = 4
+column = 4
+
+[[case]]
+file = "block-scalar-folded.md"
+rule = "block-scalar"
+line = 4
+column = 4
+
+[[case]]
+file = "list-of-maps.md"
+rule = "list-of-maps"
+line = 5
+column = 5
+
+[[case]]
+file = "nested-map.md"
+rule = "nested-map"
+line = 6
+column = 5
+
+[[case]]
+file = "list-in-list-block.md"
+rule = "list-in-list"
+line = 5
+column = 5
+
+[[case]]
+file = "list-in-list-flow.md"
+rule = "list-in-list"
+line = 4
+column = 8
+
+[[case]]
+file = "one-line-list.md"
+rule = "one-line-list"
+line = 4
+column = 4
+
+[[case]]
+file = "one-line-list-comment.md"
+rule = "one-line-list"
+line = 4
+column = 4
+
+[[case]]
+file = "top-level-scalar.md"
+rule = "top-level-map"
+line = 3
+column = 1
+
+[[case]]
+file = "top-level-list.md"
+rule = "top-level-map"
+line = 3
+column = 1
+
+[[case]]
+file = "tab-indent-key.md"
+rule = "tab-indent"
+line = 4
+column = 1
+
+[[case]]
+file = "tab-indent-block.md"
+rule = "tab-indent"
+line = 5
+column = 1
+
+[[case]]
+file = "duplicate-key.md"
+rule = "duplicate-key"
+line = 5
+column = 1
+
+[[case]]
+file = "duplicate-entry-key.md"
+rule = "duplicate-key"
+line = 6
+column = 3
+
+[[case]]
+file = "key-upper-case.md"
+rule = "key"
+line = 4
+column = 1
+
+[[case]]
+file = "key-hyphen.md"
+rule = "key"
+line = 4
+column = 1
+
+[[case]]
+file = "key-quoted.md"
+rule = "key"
+line = 4
+column = 1
+
+[[case]]
+file = "entry-key-upper-case.md"
+rule = "key"
+line = 5
+column = 3
+
+[[case]]
+file = "empty-value.md"
+rule = "empty-value"
+line = 4
+column = 3
+
+[[case]]
+file = "empty-item.md"
+rule = "empty-value"
+line = 5
+column = 4
+
+[[case]]
+file = "block-list-in-map.md"
+rule = "one-line-list"
+line = 6
+column = 5
+
+[[case]]
+file = "one-line-scalar-plain.md"
+rule = "one-line-scalar"
+line = 4
+column = 4
+
+[[case]]
+file = "one-line-scalar-single.md"
+rule = "one-line-scalar"
+line = 4
+column = 4
+
+[[case]]
+file = "one-line-scalar-double.md"
+rule = "one-line-scalar"
+line = 4
+column = 4
+
+[[case]]
+file = "escape-newline.md"
+rule = "escape"
+line = 4
+column = 4
+
+[[case]]
+file = "escape-tab.md"
+rule = "escape"
+line = 4
+column = 4
+
+[[case]]
+file = "layout-indented-map.md"
+rule = "layout"
+line = 3
+column = 3
+
+[[case]]
+file = "layout-space-before-colon.md"
+rule = "layout"
+line = 4
+column = 2
+
+[[case]]
+file = "layout-item-on-next-line.md"
+rule = "layout"
+line = 5
+column = 3
+
+[[case]]
+file = "key-flow-sequence.md"
+rule = "key"
+line = 4
+column = 1
