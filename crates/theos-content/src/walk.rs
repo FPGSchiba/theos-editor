@@ -359,6 +359,8 @@ mod tests {
         ] {
             assert!(!is_listed(root, rel), "{rel}");
         }
+        // A folder that cannot be listed lists nothing.
+        assert!(!is_listed(&root.join("missing"), "a.md"));
     }
 
     #[cfg(unix)]
