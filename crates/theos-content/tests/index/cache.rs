@@ -210,6 +210,26 @@ fn preview_returns_what_update_stores_and_changes_nothing() -> TestResult {
 }
 
 #[test]
+fn preview_of_the_stored_bytes_returns_the_stored_findings() -> TestResult {
+    let (project, mut index) = project_with_index()?;
+    let stored = index.findings_for(DANGLING)?;
+    assert_ne!(stored.len(), 0);
+    let bytes = std::fs::read(project.root().join(DANGLING))?;
+    for path in [DANGLING.to_owned(), DANGLING.replace('/', "\\")] {
+        let unchanged = Change::Content {
+            path,
+            bytes: bytes.clone(),
+        };
+        let preview = index.preview(&[unchanged])?;
+        assert_eq!(preview.update, theos_content::Update::default());
+        assert_eq!(preview.findings, stored);
+    }
+    let readme = index.preview(&[Change::text("README.md", "# synthetic\n")])?;
+    assert_eq!(readme.findings.len(), 0);
+    Ok(())
+}
+
+#[test]
 fn preview_of_a_removal_and_a_rename() -> TestResult {
     let (project, mut index) = project_with_index()?;
     let dump = index.dump()?;

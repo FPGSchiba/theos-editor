@@ -85,12 +85,13 @@ impl Update {
 }
 
 /// What [`Index::preview`] found: the update the changes would make and the findings it would
-/// leave on every re-parsed or relinked record.
+/// leave on every re-parsed or relinked record and on every record given as content.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Preview {
     /// What an apply of the changes would do.
     pub update: Update,
-    /// The findings of every re-parsed or relinked record, ordered like [`Index::findings`].
+    /// The findings of every re-parsed or relinked record and of every record given as content,
+    /// also one whose bytes equal the stored ones, ordered like [`Index::findings`].
     pub findings: Vec<Finding>,
 }
 
@@ -170,22 +171,28 @@ impl Index {
         self.run(|work| apply_changes(work, changes))
     }
 
-    /// Does what [`Index::apply`] does, reads the findings of every re-parsed or relinked record,
-    /// and rolls everything back: the cache is not changed. The findings are those
-    /// [`Index::apply`] would store, ordered like [`Index::findings`]. A `\` in a path is read
-    /// as `/`, as in [`Index::apply`].
+    /// Does what [`Index::apply`] does, reads the findings of every re-parsed or relinked record
+    /// and of every record given as content, and rolls everything back: the cache is not
+    /// changed. The findings are those [`Index::apply`] would leave, ordered like
+    /// [`Index::findings`]; a content equal to the stored bytes is not parsed again, and its
+    /// stored findings are the ones it would leave. A `\` in a path is read as `/`, as in
+    /// [`Index::apply`].
     ///
     /// # Errors
     ///
     /// Fails when SQLite fails.
     pub fn preview(&mut self, changes: &[Change]) -> Result<Preview, IndexError> {
+        let given = changes.iter().filter_map(|change| match change {
+            Change::Content { path, .. } => Some(slashed(path)),
+            Change::Removed { .. } => None,
+        });
+        let given: BTreeSet<String> = given.filter(|path| is_record_path(path)).collect();
         let (update, findings) = self.transact(
             |work| apply_changes(work, changes),
             |conn, update| {
-                let mut paths: Vec<&String> =
+                let mut paths: BTreeSet<&String> =
                     update.reparsed.iter().chain(&update.relinked).collect();
-                paths.sort();
-                paths.dedup();
+                paths.extend(&given);
                 let mut findings = Vec::new();
                 for path in paths {
                     findings.extend(query::findings_in(conn, path)?);
