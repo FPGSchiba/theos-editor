@@ -141,7 +141,7 @@ fn is_damage(error: &rusqlite::Error) -> bool {
 }
 
 /// Maps `SQLITE_BUSY` to [`IndexError::Busy`]; everything else stays a SQLite error.
-fn map_error(error: rusqlite::Error, path: &Path) -> IndexError {
+pub(crate) fn map_error(error: rusqlite::Error, path: &Path) -> IndexError {
     if error.sqlite_error_code() == Some(ErrorCode::DatabaseBusy) {
         IndexError::Busy {
             path: path.to_path_buf(),

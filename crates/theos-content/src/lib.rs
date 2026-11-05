@@ -43,7 +43,7 @@ pub use body::{
     Voice,
 };
 pub use finding::{Finding, Severity};
-pub use index::IndexError;
+pub use index::{Change, Index, IndexError, RecordSummary, Update};
 pub use kinds::{
     BodyGrammar, FieldSpec, FieldType, KindRegistry, KindSpec, Placement, RegistryError, Target,
 };

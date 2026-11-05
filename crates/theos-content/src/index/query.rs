@@ -1,0 +1,146 @@
+//! The basic queries of the index. Each one reads the store; nothing is cached.
+
+use rusqlite::types::Type;
+use rusqlite::{Params, Row};
+
+use crate::finding::{Finding, Severity};
+use crate::index::{Index, IndexError};
+use crate::text::{Position, Span};
+
+/// What the index knows of a record at a glance.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecordSummary {
+    /// The id (the file stem).
+    pub id: String,
+    /// The project-relative path with `/`.
+    pub path: String,
+    /// The kind, when the front matter names a registered one.
+    pub kind: Option<String>,
+    /// The text of the `title` scalar.
+    pub title: Option<String>,
+    /// The text of the `status` scalar.
+    pub status: Option<String>,
+}
+
+const FINDING_COLUMNS: &str =
+    "SELECT path, id, rule, severity, span_start, span_end, line, col, message FROM findings";
+
+/// Findings without a position come first; `message` and `span_start` make the order total.
+const FINDING_ORDER: &str = "ORDER BY path, line, col, rule, message, span_start";
+
+const RECORD_COLUMNS: &str = "SELECT id, path, kind, title, status FROM records";
+
+impl Index {
+    /// Every finding, ordered by path, line, column and rule.
+    ///
+    /// # Errors
+    ///
+    /// Fails when SQLite fails.
+    pub fn findings(&self) -> Result<Vec<Finding>, IndexError> {
+        self.finding_rows(&format!("{FINDING_COLUMNS} {FINDING_ORDER}"), [])
+    }
+
+    /// The findings of one path, in the same order.
+    ///
+    /// # Errors
+    ///
+    /// Fails when SQLite fails.
+    pub fn findings_for(&self, path: &str) -> Result<Vec<Finding>, IndexError> {
+        self.finding_rows(
+            &format!("{FINDING_COLUMNS} WHERE path = ?1 {FINDING_ORDER}"),
+            [path],
+        )
+    }
+
+    /// Every record, ordered by path.
+    ///
+    /// # Errors
+    ///
+    /// Fails when SQLite fails.
+    pub fn records(&self) -> Result<Vec<RecordSummary>, IndexError> {
+        self.summaries(&format!("{RECORD_COLUMNS} ORDER BY path"), [])
+    }
+
+    /// The records with this id: several when the id is duplicated.
+    ///
+    /// # Errors
+    ///
+    /// Fails when SQLite fails.
+    pub fn record(&self, id: &str) -> Result<Vec<RecordSummary>, IndexError> {
+        self.summaries(
+            &format!("{RECORD_COLUMNS} WHERE id = ?1 ORDER BY path"),
+            [id],
+        )
+    }
+
+    /// The records of a kind, ordered by path.
+    ///
+    /// # Errors
+    ///
+    /// Fails when SQLite fails.
+    pub fn records_of_kind(&self, kind: &str) -> Result<Vec<RecordSummary>, IndexError> {
+        self.summaries(
+            &format!("{RECORD_COLUMNS} WHERE kind = ?1 ORDER BY path"),
+            [kind],
+        )
+    }
+
+    fn summaries(&self, sql: &str, params: impl Params) -> Result<Vec<RecordSummary>, IndexError> {
+        let mut stmt = self.store.conn.prepare(sql)?;
+        let rows = stmt.query_map(params, |row| {
+            Ok(RecordSummary {
+                id: row.get(0)?,
+                path: row.get(1)?,
+                kind: row.get(2)?,
+                title: row.get(3)?,
+                status: row.get(4)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    fn finding_rows(&self, sql: &str, params: impl Params) -> Result<Vec<Finding>, IndexError> {
+        let mut stmt = self.store.conn.prepare(sql)?;
+        let rows = stmt.query_map(params, finding)?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+}
+
+/// One `findings` row, in the column order of [`FINDING_COLUMNS`].
+fn finding(row: &Row<'_>) -> rusqlite::Result<Finding> {
+    let severity: String = row.get(3)?;
+    let severity = Severity::parse(&severity).ok_or_else(|| {
+        rusqlite::Error::FromSqlConversionFailure(
+            3,
+            Type::Text,
+            format!("unknown severity `{severity}`").into(),
+        )
+    })?;
+    let span = match (offset(row, 4)?, offset(row, 5)?) {
+        (Some(start), Some(end)) => Some(Span { start, end }),
+        _ => None,
+    };
+    let position = match (offset(row, 6)?, offset(row, 7)?) {
+        (Some(line), Some(column)) => Some(Position { line, column }),
+        _ => None,
+    };
+    Ok(Finding {
+        rule: row.get(2)?,
+        severity,
+        path: row.get(0)?,
+        id: row.get(1)?,
+        span,
+        position,
+        message: row.get(8)?,
+    })
+}
+
+/// A nullable integer column as an offset, line or column.
+fn offset(row: &Row<'_>, column: usize) -> rusqlite::Result<Option<usize>> {
+    let Some(value) = row.get::<_, Option<i64>>(column)? else {
+        return Ok(None);
+    };
+    usize::try_from(value)
+        .map(Some)
+        .map_err(|_| rusqlite::Error::IntegralValueOutOfRange(column, value))
+}
