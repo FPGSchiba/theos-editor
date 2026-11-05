@@ -621,8 +621,11 @@ version = "0.0.0"
 name = "theos-content"
 version = "0.0.0"
 dependencies = [
+ "serde",
  "tempfile",
  "thiserror",
+ "toml",
+ "yaml-rust2",
 ]
 
 [[package]]

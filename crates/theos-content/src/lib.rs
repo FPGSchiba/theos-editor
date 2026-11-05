@@ -7,9 +7,11 @@
 
 pub mod record;
 pub mod text;
+pub mod yaml;
 
 #[cfg(test)]
 mod test_support;
 
 pub use record::{ReadError, Record, RecordEditError, RecordError, decode, read_record};
 pub use text::{Position, Span, TextEdit, TextIndex, apply_edits};
+pub use yaml::{YamlError, YamlRule};

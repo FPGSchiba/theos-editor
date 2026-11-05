@@ -9,3 +9,10 @@ pub(crate) fn record(front: &str, body: &str) -> Record {
         Err(error) => panic!("test record does not parse: {error}"),
     }
 }
+
+/// The rule name and `line:column` of the first front-matter error of `front` (tests only).
+pub(crate) fn front_error(front: &str) -> Option<(&'static str, String)> {
+    record(front, "")
+        .front_matter_error()
+        .map(|error| (error.rule.as_str(), error.position.to_string()))
+}

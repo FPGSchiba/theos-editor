@@ -1,0 +1,95 @@
+[[case]]
+file = "alias-after-unicode.md"
+rule = "alias"
+line = 4
+column = 17
+
+[[case]]
+file = "alias.md"
+rule = "alias"
+line = 4
+column = 4
+
+[[case]]
+file = "anchor.md"
+rule = "anchor"
+line = 4
+column = 4
+
+[[case]]
+file = "bom.md"
+rule = "bom"
+line = 1
+column = 1
+
+[[case]]
+file = "complex-key.md"
+rule = "complex-key"
+line = 4
+column = 1
+
+[[case]]
+file = "directive.md"
+rule = "document-marker"
+line = 2
+column = 1
+
+[[case]]
+file = "document-end.md"
+rule = "document-marker"
+line = 4
+column = 1
+
+[[case]]
+file = "flow-map-template.md"
+rule = "flow-map"
+line = 4
+column = 8
+
+[[case]]
+file = "flow-map.md"
+rule = "flow-map"
+line = 4
+column = 4
+
+[[case]]
+file = "no-closing-line.md"
+rule = "closing-line"
+line = 1
+column = 1
+
+[[case]]
+file = "no-opening-line.md"
+rule = "opening-line"
+line = 1
+column = 1
+
+[[case]]
+file = "syntax-backtick.md"
+rule = "syntax"
+line = 4
+column = 4
+
+[[case]]
+file = "syntax-indent.md"
+rule = "syntax"
+line = 5
+column = 3
+
+[[case]]
+file = "syntax-nested-value.md"
+rule = "syntax"
+line = 4
+column = 5
+
+[[case]]
+file = "syntax-reserved.md"
+rule = "syntax"
+line = 4
+column = 4
+
+[[case]]
+file = "tag.md"
+rule = "tag"
+line = 4
+column = 4
