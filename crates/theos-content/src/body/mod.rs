@@ -312,20 +312,8 @@ mod tests {
 
     #[test]
     fn links_know_their_block() {
-        let text = "para [[a]]
-
-# Head [[c]]
-
-- item [[d]]
-
-> quote [[e]]
-
-end [[f]]
-";
-        let r = record(
-            "id: a
-", text,
-        );
+        let text = "para [[a]]\n\n# Head [[c]]\n\n- item [[d]]\n\n> quote [[e]]\n\nend [[f]]\n";
+        let r = record("id: a\n", text);
         let blocks = r.body().blocks();
         assert_eq!(blocks.len(), 5);
         let got: Vec<_> = r
