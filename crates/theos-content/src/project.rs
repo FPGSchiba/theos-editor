@@ -1,11 +1,10 @@
 //! The project: `theos.toml` and the data model version this build reads.
 
 use crate::text::{Position, TextIndex, normalize};
-use serde::Deserialize;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use toml::Spanned;
-use toml::Value;
+use toml::de::DeTable;
+use toml::{Table, Value};
 
 /// The data model version this build reads.
 pub const SCHEMA_VERSION: i64 = 1;
@@ -27,7 +26,7 @@ pub enum ProjectError {
         /// The underlying error.
         source: std::io::Error,
     },
-    /// `theos.toml` is not valid TOML (or has a wrongly typed key we read).
+    /// `theos.toml` is not valid TOML.
     #[error("theos.toml: {message}")]
     Toml {
         /// The `toml` crate's message, with line and column.
@@ -74,25 +73,11 @@ pub enum ProjectError {
     },
 }
 
-#[derive(Deserialize)]
-struct RawFile {
-    #[serde(default)]
-    project: RawProject,
-    #[serde(default)]
-    parts: RawParts,
-}
-
-#[derive(Default, Deserialize)]
-struct RawProject {
-    name: Option<Value>,
-    kind: Option<Value>,
-    schema_version: Option<Spanned<Value>>,
-}
-
-#[derive(Default, Deserialize)]
-struct RawParts {
-    #[serde(default)]
-    enabled: Vec<String>,
+/// The byte offset of `[project] schema_version`'s value, from the span-keeping parser.
+fn version_offset(text: &str) -> Option<usize> {
+    let parsed = DeTable::parse(text).ok()?;
+    let project = parsed.get_ref().get("project")?.get_ref().as_table()?;
+    Some(project.get("schema_version")?.span().start)
 }
 
 /// A content project: its root and what `theos.toml` says about it.
@@ -127,22 +112,25 @@ impl Project {
         })?;
         let text = String::from_utf8_lossy(&bytes);
         let (text, _) = normalize(&text);
-        let raw: RawFile = toml::from_str(&text).map_err(|e| ProjectError::Toml {
+        let table: Table = toml::from_str(&text).map_err(|e| ProjectError::Toml {
             message: e.to_string(),
         })?;
-        let version = raw
-            .project
-            .schema_version
-            .ok_or(ProjectError::NoSchemaVersion)?;
+        let project = table.get("project").and_then(Value::as_table);
+        let (Some(version), Some(offset)) = (
+            project.and_then(|t| t.get("schema_version")),
+            version_offset(&text),
+        ) else {
+            return Err(ProjectError::NoSchemaVersion);
+        };
         let position = TextIndex::new(text.to_string())
-            .position(version.span().start)
+            .position(offset)
             .map_err(|e| ProjectError::Toml {
                 message: e.to_string(),
             })?;
-        let Value::Integer(found) = *version.get_ref() else {
+        let &Value::Integer(found) = version else {
             return Err(ProjectError::NotAnInteger {
                 position,
-                found: version.get_ref().to_string(),
+                found: version.to_string(),
             });
         };
         match found.cmp(&SCHEMA_VERSION) {
@@ -150,15 +138,23 @@ impl Project {
             std::cmp::Ordering::Less => return Err(ProjectError::Older { position, found }),
             std::cmp::Ordering::Equal => {}
         }
-        let text_of = |v: Option<Value>| match v {
-            Some(Value::String(s)) => Some(s),
+        let text_of = |key: &str| match project.and_then(|t| t.get(key)) {
+            Some(Value::String(s)) => Some(s.clone()),
             _ => None,
+        };
+        let enabled_parts = match table.get("parts").and_then(|p| p.get("enabled")) {
+            Some(Value::Array(items)) => items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect(),
+            _ => Vec::new(),
         };
         Ok(Project {
             root: root.to_path_buf(),
-            name: text_of(raw.project.name),
-            kind: text_of(raw.project.kind),
-            enabled_parts: raw.parts.enabled,
+            name: text_of("name"),
+            kind: text_of("kind"),
+            enabled_parts,
         })
     }
 
@@ -299,5 +295,52 @@ mod tests {
             (p.name(), p.kind(), p.enabled_parts().len()),
             (None, None, 0)
         );
+    }
+
+    // AC: CE-11.3
+    #[test]
+    fn only_schema_version_is_judged() {
+        let newer = "[project]
+schema_version = 2
+[parts]
+enabled = \"x\"
+";
+        assert!(matches!(
+            open_text(newer),
+            Err(ProjectError::Newer { found: 2, .. })
+        ));
+        let p = open_text(
+            "[project]
+schema_version = 1
+[parts]
+enabled = \"x\"
+",
+        )
+        .expect("opens");
+        assert_eq!(p.enabled_parts(), [] as [String; 0]);
+        let p = open_text(&BASE.replace("\"codex\", ", "3, \"codex\", ")).expect("opens");
+        assert_eq!(p.enabled_parts().len(), 8);
+        assert!(matches!(
+            open_text(
+                "project = \"x\"
+"
+            ),
+            Err(ProjectError::NoSchemaVersion)
+        ));
+    }
+
+    #[test]
+    fn unknown_keys_and_tables_are_ignored() {
+        let text = format!(
+            "{BASE}[other]
+anything = [1, {{ a = 2 }}]
+"
+        )
+        .replace(
+            "kind           = \"content\"",
+            "kind           = \"content\"
+extra = 1.5",
+        );
+        assert!(open_text(&text).is_ok());
     }
 }
