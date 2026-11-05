@@ -5,6 +5,8 @@ mod spec;
 mod types;
 mod value;
 
+use std::collections::BTreeSet;
+
 use regex::Regex;
 
 pub use spec::{
@@ -106,6 +108,35 @@ impl KindRegistry {
     #[must_use]
     pub fn id_fits(&self, kind: &str, id: &str) -> bool {
         self.find(kind).is_some_and(|r| r.id.is_match(id))
+    }
+
+    /// Every field some target narrows by, in any slot: the fields whose value another record's
+    /// links depend on (`track`, for one). A change of such a value is a link fact (spec §5.9).
+    #[must_use]
+    pub fn narrow_fields(&self) -> BTreeSet<&'static str> {
+        let mut fields = BTreeSet::new();
+        let mut take = |targets: &[Target]| {
+            fields.extend(targets.iter().filter_map(|t| t.narrow).map(|n| n.field));
+        };
+        take(VOICE_SPEAKER);
+        take(VOICE_BELIEF);
+        for entry in LENS_ENTRIES {
+            if let FieldType::Link(targets) | FieldType::Links(targets) = entry.ty {
+                take(targets);
+            }
+        }
+        for spec in self.kinds() {
+            for field in &spec.fields {
+                if let FieldType::Link(targets) | FieldType::Links(targets) = field.ty {
+                    take(targets);
+                }
+            }
+            for attribute in spec.body.beats.unwrap_or(&[]) {
+                take(attribute.targets);
+            }
+            take(spec.body.notes.unwrap_or(&[]));
+        }
+        fields
     }
 
     /// A 64-digit lower-case hex fingerprint of every kind and its part, independent of the

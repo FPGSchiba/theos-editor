@@ -13,6 +13,12 @@ mod identity;
     not(test),
     expect(dead_code, reason = "wired into the index by Task 10")
 )]
+mod rows;
+pub mod slots;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "wired into the index by Task 10")
+)]
 mod store;
 
 /// A failure of the index.
