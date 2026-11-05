@@ -3,6 +3,7 @@
 mod fingerprint;
 mod spec;
 mod types;
+mod value;
 
 use regex::Regex;
 
@@ -13,6 +14,7 @@ pub use spec::{
 pub use types::{
     FieldType, LENS_ENTRIES, LensEntry, Narrow, TIERS, Target, VOICE_BELIEF, VOICE_SPEAKER,
 };
+pub use value::ValueRef;
 
 /// Why a kind could not be registered.
 #[derive(Debug, thiserror::Error)]
