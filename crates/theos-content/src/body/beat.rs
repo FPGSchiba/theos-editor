@@ -9,7 +9,7 @@ use pulldown_cmark::{Event, HeadingLevel, Tag, TagEnd};
 use super::callout::Token;
 use super::events::Events;
 use super::links::Link;
-use super::malformed::{Malformed, MalformedKind};
+use super::malformed::{Malformed, MalformedKind, covers_link_fault};
 use crate::text::{Span, TextIndex};
 
 #[cfg(test)]
@@ -116,6 +116,7 @@ pub(crate) fn scan(
     index: &TextIndex,
     events: &Events<'_>,
     links: &[Link],
+    reported: &[Malformed],
     body_end: usize,
 ) -> (Vec<Beat>, Vec<Malformed>) {
     let starts = block_starts(events);
@@ -146,18 +147,40 @@ pub(crate) fn scan(
                 line,
             )),
             Heading::Beat(mut beat) => {
-                let next = starts.get(block + 1).map(|&i| &events.items[i]);
-                if let Some((Event::Start(Tag::Paragraph), paragraph)) = next {
-                    if paragraph.start == item_span.end {
-                        read_attributes(index, events, links, *paragraph, &mut beat, &mut bad);
-                    } else if first_line_is_attribute(events.source, *paragraph) {
-                        bad.push(Malformed::new(
-                            index,
-                            MalformedKind::MisplacedAttributes,
-                            "attribute lines must directly follow the beat heading",
-                            first_line(events.source, *paragraph).0,
-                        ));
+                // The paragraphs right after the heading, up to the first other block.
+                let mut paragraphs =
+                    starts[block + 1..]
+                        .iter()
+                        .map_while(|&i| match &events.items[i] {
+                            (Event::Start(Tag::Paragraph), paragraph) => Some(*paragraph),
+                            _ => None,
+                        });
+                // Paragraphs that a blank line separates from the heading or from its attribute
+                // lines: attribute lines there are not read, so they are reported.
+                let mut detached: Vec<Span> = Vec::new();
+                match paragraphs.next() {
+                    Some(first) if first.start == item_span.end => {
+                        read_attributes(index, events, links, reported, first, &mut beat, &mut bad);
+                        if first_line_is_attribute(events.source, first) {
+                            detached.extend(paragraphs);
+                        }
                     }
+                    Some(first) => {
+                        detached.push(first);
+                        detached.extend(paragraphs);
+                    }
+                    None => {}
+                }
+                for paragraph in detached
+                    .into_iter()
+                    .take_while(|p| first_line_is_attribute(events.source, *p))
+                {
+                    bad.push(Malformed::new(
+                        index,
+                        MalformedKind::MisplacedAttributes,
+                        "attribute lines directly follow the beat heading, without a blank line",
+                        first_line(events.source, paragraph).0,
+                    ));
                 }
                 open = Some(beats.len());
                 beats.push(beat);
@@ -259,6 +282,7 @@ fn read_attributes(
     index: &TextIndex,
     events: &Events<'_>,
     links: &[Link],
+    reported: &[Malformed],
     paragraph: Span,
     beat: &mut Beat,
     bad: &mut Vec<Malformed>,
@@ -291,6 +315,8 @@ fn read_attributes(
                 value_span,
                 line_span,
             }),
+            // A bad link in the value is already reported; that is the one finding.
+            Err(_) if covers_link_fault(reported, value_span) => {}
             Err(message) => bad.push(Malformed::new(
                 index,
                 MalformedKind::BeatAttribute,

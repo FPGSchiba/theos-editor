@@ -74,6 +74,18 @@ impl Malformed {
     }
 }
 
+/// Whether `span` covers a link or embed fault already in `reported`: that fault is the one
+/// finding of the construct, so a grammar does not report its attribute or title as well.
+pub(crate) fn covers_link_fault(reported: &[Malformed], span: Span) -> bool {
+    reported.iter().any(|fault| {
+        matches!(
+            fault.kind,
+            MalformedKind::LinkUnclosed | MalformedKind::LinkTarget | MalformedKind::Embed
+        ) && span.start <= fault.span.start
+            && fault.span.end <= span.end
+    })
+}
+
 /// Whether the character at `at` is escaped: an odd number of backslashes stands before it.
 fn is_escaped(source: &str, at: usize) -> bool {
     let before = source.get(..at).unwrap_or_default();

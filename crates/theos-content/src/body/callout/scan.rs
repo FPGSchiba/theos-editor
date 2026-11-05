@@ -6,7 +6,7 @@ use super::title;
 use super::{Callout, CalloutTitle, ContentBlock, Fold, TitleGrammar, TitleInput, grammar};
 use crate::body::events::Events;
 use crate::body::links::Link;
-use crate::body::malformed::Malformed;
+use crate::body::malformed::{Malformed, covers_link_fault};
 use crate::text::{Span, TextIndex};
 
 /// The parts of a `[!type]+` marker, as offsets into the record text.
@@ -141,6 +141,7 @@ pub(crate) fn scan(
     index: &TextIndex,
     events: &Events<'_>,
     links: &[Link],
+    reported: &[Malformed],
 ) -> (Vec<Callout>, Vec<Malformed>) {
     let source = events.source;
     let mut callouts = Vec::new();
@@ -203,7 +204,9 @@ pub(crate) fn scan(
                 match grammar.parse(&input) {
                     Ok(title) => Some(title),
                     Err(report) => {
-                        bad.push(report);
+                        if !covers_link_fault(reported, report.span) {
+                            bad.push(report);
+                        }
                         None
                     }
                 }

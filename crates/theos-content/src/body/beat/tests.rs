@@ -141,3 +141,26 @@ fn misplaced_attributes_are_reported() {
     assert_eq!(found(&r), [("misplaced-attributes", 6)]);
     assert_eq!(r.body().beats()[0].attributes, []);
 }
+
+// AC: CE-10.3
+#[test]
+fn an_attribute_paragraph_after_the_attribute_lines_is_reported() {
+    let r = record("id: a\n", "## Beat 1 — A\nat:: [[x]]\n\nwhen:: T1\n");
+    assert_eq!(found(&r), [("misplaced-attributes", 7)]);
+    assert_eq!(keys(&r, 0), [("at", "[[x]]".to_owned())]);
+
+    let r = record(
+        "id: a\n",
+        "## Beat 1 — A\nat:: [[x]]\n\nplain prose\n\nwhen:: T1\n",
+    );
+    assert_eq!(found(&r), []);
+}
+
+// AC: CE-10.3
+#[test]
+fn a_bad_link_in_an_attribute_is_reported_once() {
+    let r = record("id: a\n", "## Beat 1 — A\nat:: [[world/tower]]\n");
+    assert_eq!(found(&r), [("link-target", 5)]);
+    let r = record("id: a\n", "## Beat 1 — A\nat:: [[x]], plain\n");
+    assert_eq!(found(&r), [("beat-attribute", 5)]);
+}

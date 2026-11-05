@@ -340,3 +340,19 @@ fn note_text_keeps_lists_and_code_blocks() {
     );
     assert_eq!(r.body().callouts().len(), 1);
 }
+
+// AC: CE-10.3
+#[test]
+fn a_bad_link_in_a_title_is_reported_once() {
+    let kinds = |text: &str| {
+        let r = body(text);
+        r.body()
+            .malformed()
+            .iter()
+            .map(|m| (m.kind.as_str(), m.position.line))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(kinds("> [!voice] ![[a]]\n"), [("embed", 4)]);
+    assert_eq!(kinds("> [!voice] [[world/tower]]\n"), [("link-target", 4)]);
+    assert_eq!(kinds("> [!voice] [[a]] · x y\n"), [("callout-title", 4)]);
+}

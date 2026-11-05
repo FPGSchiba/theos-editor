@@ -63,10 +63,10 @@ impl Body {
         let events = Events::new(index.text(), span);
         let (links, mut malformed) = links::scan(index, &events);
         malformed.extend(malformed::scan(index, &events));
-        let (callouts, bad_titles) = callout::scan(index, &events, &links);
+        let (callouts, bad_titles) = callout::scan(index, &events, &links, &malformed);
         malformed.extend(bad_titles);
         let design_notes = design_note::scan(&events, &callouts);
-        let (beats, bad_beats) = beat::scan(index, &events, &links, span.end);
+        let (beats, bad_beats) = beat::scan(index, &events, &links, &malformed, span.end);
         malformed.extend(bad_beats);
         let blocks = blocks(&events, &callouts, &design_notes, &beats);
         malformed.sort_by_key(|m| m.span.start);
