@@ -3,7 +3,7 @@
 use pulldown_cmark::{Event, Tag};
 
 use super::title;
-use super::{Callout, CalloutTitle, Fold, TitleInput, grammar};
+use super::{Callout, CalloutTitle, Fold, TitleGrammar, TitleInput, grammar};
 use crate::body::events::Events;
 use crate::body::links::Link;
 use crate::body::malformed::Malformed;
@@ -127,20 +127,22 @@ pub(crate) fn scan(
         let title_span = Span::new(marker.title_start.min(line_end), line_end);
         let content_start = (line_end + 1).min(quote.end);
         let paragraphs = child_paragraphs(events, i, close);
-        let caption_span = paragraphs
-            .last()
-            .and_then(|last| caption(source, *last, *last == *first));
         let name = marker
             .name_span
             .get(source)
             .unwrap_or_default()
             .to_ascii_lowercase();
+        let registered = grammar(&name);
+        let caption_span = paragraphs
+            .last()
+            .filter(|_| registered.is_some_and(TitleGrammar::captioned))
+            .and_then(|last| caption(source, *last, *last == *first));
         let inside: Vec<Link> = links
             .iter()
             .filter(|l| title_span.start <= l.span.start && l.span.end <= title_span.end)
             .cloned()
             .collect();
-        let title = match grammar(&name) {
+        let title = match registered {
             None => Some(CalloutTitle::Other),
             Some(grammar) => {
                 let tokens = title::split(index, title_span, &inside);

@@ -21,6 +21,10 @@ impl TitleGrammar for DesignGrammar {
         "design"
     }
 
+    fn captioned(&self) -> bool {
+        false
+    }
+
     fn parse(&self, input: &TitleInput<'_>) -> Result<CalloutTitle, Malformed> {
         let text = input
             .title_span

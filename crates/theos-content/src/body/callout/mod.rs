@@ -89,6 +89,8 @@ pub(crate) struct TitleInput<'a> {
 pub(crate) trait TitleGrammar {
     /// The callout type in lower case.
     fn name(&self) -> &'static str;
+    /// Whether callouts of this type end in a `— ` caption line.
+    fn captioned(&self) -> bool;
     /// Reads the title.
     fn parse(&self, input: &TitleInput<'_>) -> Result<CalloutTitle, Malformed>;
 }

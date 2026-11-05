@@ -165,3 +165,16 @@ fn voice_contents_are_exposed() {
     let c = &r.body().callouts()[0];
     assert_eq!(at(&r, c.content_span).trim_end(), "> The hall sings.");
 }
+
+#[test]
+fn only_voice_callouts_have_captions() {
+    for name in ["tip", "design"] {
+        let r = body(&format!("> [!{name}] x\n> — y\n"));
+        assert_eq!(r.body().callouts()[0].caption_span, None, "{name}");
+    }
+    let r = body("> [!voice] [[a]]\n> — y\n");
+    assert_eq!(
+        r.body().callouts()[0].caption_span.map(|s| at(&r, s)),
+        Some("— y")
+    );
+}

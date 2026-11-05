@@ -25,6 +25,10 @@ impl TitleGrammar for VoiceGrammar {
         "voice"
     }
 
+    fn captioned(&self) -> bool {
+        true
+    }
+
     fn parse(&self, input: &TitleInput<'_>) -> Result<CalloutTitle, Malformed> {
         let fail = |span: Span, message: &str| {
             Malformed::new(input.index, MalformedKind::CalloutTitle, message, span)
