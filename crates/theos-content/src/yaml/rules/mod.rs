@@ -14,6 +14,7 @@ mod list_of_maps;
 mod nested_map;
 mod nodes;
 mod one_line_list;
+mod one_line_scalar;
 mod tab_indent;
 mod tag;
 mod top_level_map;
@@ -38,6 +39,7 @@ pub(crate) const RULES: &[&dyn Rule] = &[
     &complex_key::ComplexKey,
     &document_marker::DocumentMarker,
     &block_scalar::BlockScalar,
+    &one_line_scalar::OneLineScalar,
     &list_of_maps::ListOfMaps,
     &nested_map::NestedMap,
     &list_in_list::ListInList,

@@ -73,7 +73,7 @@ column = 4
 [[case]]
 file = "syntax-indent.md"
 rule = "syntax"
-line = 5
+line = 6
 column = 3
 
 [[case]]
@@ -219,3 +219,33 @@ file = "block-list-in-map.md"
 rule = "one-line-list"
 line = 6
 column = 5
+
+[[case]]
+file = "one-line-scalar-plain.md"
+rule = "one-line-scalar"
+line = 4
+column = 4
+
+[[case]]
+file = "one-line-scalar-single.md"
+rule = "one-line-scalar"
+line = 4
+column = 4
+
+[[case]]
+file = "one-line-scalar-double.md"
+rule = "one-line-scalar"
+line = 4
+column = 4
+
+[[case]]
+file = "escape-newline.md"
+rule = "escape"
+line = 4
+column = 4
+
+[[case]]
+file = "escape-tab.md"
+rule = "escape"
+line = 4
+column = 4
