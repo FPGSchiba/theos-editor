@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rusqlite::{Connection, ErrorCode, TransactionBehavior};
 
@@ -72,12 +72,27 @@ impl Store {
         let mut conn = Connection::open(file).map_err(|e| map_error(e, file))?;
         conn.busy_timeout(BUSY_TIMEOUT)
             .map_err(|e| map_error(e, file))?;
-        conn.pragma_update(None, "journal_mode", "WAL")
-            .map_err(|e| map_error(e, file))?;
-        prepare(&mut conn, identity).map_err(|error| match error {
-            IndexError::Sqlite(error) => map_error(error, file),
-            other => other,
-        })?;
+        // Two processes that open a new cache at once can meet SQLITE_BUSY at once, when the
+        // second one switches the file to WAL: SQLite does not call the busy handler there.
+        // So a busy answer is retried until the busy timeout has passed.
+        let started = Instant::now();
+        loop {
+            let tried = conn
+                .pragma_update(None, "journal_mode", "WAL")
+                .map_err(|e| map_error(e, file))
+                .and_then(|()| {
+                    prepare(&mut conn, identity).map_err(|error| match error {
+                        IndexError::Sqlite(error) => map_error(error, file),
+                        other => other,
+                    })
+                });
+            match tried {
+                Err(IndexError::Busy { .. }) if started.elapsed() < BUSY_TIMEOUT => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                other => break other?,
+            }
+        }
         Ok(Store {
             conn,
             path: Some(file.to_path_buf()),
@@ -118,7 +133,14 @@ fn stored_meta(conn: &Connection) -> Result<Option<BTreeMap<String, String>>, ru
     if !exists {
         return Ok(None);
     }
-    let mut stmt = conn.prepare("SELECT key, value FROM meta")?;
+    // A `meta` table of another shape is a foreign file: it differs, so it is rebuilt.
+    let mut stmt = match conn.prepare("SELECT key, value FROM meta") {
+        Ok(stmt) => stmt,
+        Err(rusqlite::Error::SqlInputError { msg, .. }) if msg.contains("no such column") => {
+            return Ok(None);
+        }
+        Err(error) => return Err(error),
+    };
     let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
     rows.collect::<Result<_, _>>().map(Some)
 }

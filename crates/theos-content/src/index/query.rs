@@ -1,7 +1,7 @@
 //! The basic queries of the index. Each one reads the store; nothing is cached.
 
 use rusqlite::types::Type;
-use rusqlite::{Params, Row};
+use rusqlite::{Connection, Params, Row};
 
 use crate::finding::{Finding, Severity};
 use crate::index::slots::Slot;
@@ -167,10 +167,27 @@ impl Index {
     }
 
     fn finding_rows(&self, sql: &str, params: impl Params) -> Result<Vec<Finding>, IndexError> {
-        let mut stmt = self.store.conn.prepare(sql)?;
-        let rows = stmt.query_map(params, finding)?;
-        Ok(rows.collect::<Result<_, _>>()?)
+        finding_rows_in(&self.store.conn, sql, params)
     }
+}
+
+/// The findings of one path on `conn`, in the order of [`Index::findings_for`].
+pub(super) fn findings_in(conn: &Connection, path: &str) -> Result<Vec<Finding>, IndexError> {
+    finding_rows_in(
+        conn,
+        &format!("{FINDING_COLUMNS} WHERE path = ?1 {FINDING_ORDER}"),
+        [path],
+    )
+}
+
+fn finding_rows_in(
+    conn: &Connection,
+    sql: &str,
+    params: impl Params,
+) -> Result<Vec<Finding>, IndexError> {
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt.query_map(params, finding)?;
+    Ok(rows.collect::<Result<_, _>>()?)
 }
 
 /// One `findings` row, in the column order of [`FINDING_COLUMNS`].

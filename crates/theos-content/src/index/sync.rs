@@ -13,7 +13,7 @@ use sha2::{Digest, Sha256};
 use crate::check::check_record;
 use crate::finding::{Finding, Severity};
 use crate::index::store::map_error;
-use crate::index::{Index, IndexError, resolve, rows, write};
+use crate::index::{Index, IndexError, query, resolve, rows, write};
 use crate::kinds::KindRegistry;
 use crate::walk::{Walked, WalkedPath, is_record_path, mtime_ns, walk};
 
@@ -82,6 +82,16 @@ impl Update {
         }
         self
     }
+}
+
+/// What [`Index::preview`] found: the update the changes would make and the findings it would
+/// leave on every re-parsed or relinked record.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Preview {
+    /// What an apply of the changes would do.
+    pub update: Update,
+    /// The findings of every re-parsed or relinked record, ordered like [`Index::findings`].
+    pub findings: Vec<Finding>,
 }
 
 /// Where the bytes of a change come from: the three changes of spec §5.9.
@@ -155,17 +165,33 @@ impl Index {
     ///
     /// Fails when SQLite fails; nothing is changed then.
     pub fn apply(&mut self, changes: &[Change]) -> Result<Update, IndexError> {
-        self.run(|work| {
-            for change in changes {
-                match change {
-                    Change::Content { path, bytes } => {
-                        work.change(path, Source::Given(bytes.clone()))?;
-                    }
-                    Change::Removed { path } => work.change(path, Source::Gone)?,
+        self.run(|work| apply_changes(work, changes))
+    }
+
+    /// Does what [`Index::apply`] does, reads the findings of every re-parsed or relinked record,
+    /// and rolls everything back: the cache is not changed. The findings are those
+    /// [`Index::apply`] would store, ordered like [`Index::findings`].
+    ///
+    /// # Errors
+    ///
+    /// Fails when SQLite fails.
+    pub fn preview(&mut self, changes: &[Change]) -> Result<Preview, IndexError> {
+        let (update, findings) = self.transact(
+            |work| apply_changes(work, changes),
+            |conn, update| {
+                let mut paths: Vec<&String> =
+                    update.reparsed.iter().chain(&update.relinked).collect();
+                paths.sort();
+                paths.dedup();
+                let mut findings = Vec::new();
+                for path in paths {
+                    findings.extend(query::findings_in(conn, path)?);
                 }
-            }
-            Ok(())
-        })
+                Ok(findings)
+            },
+            false,
+        )?;
+        Ok(Preview { update, findings })
     }
 
     /// Runs `work` in one `BEGIN IMMEDIATE` transaction and commits it.
@@ -173,6 +199,18 @@ impl Index {
         &mut self,
         work: impl FnOnce(&mut Syncer<'_>) -> Result<(), IndexError>,
     ) -> Result<Update, IndexError> {
+        self.transact(work, |_, _| Ok(()), true)
+            .map(|(update, ())| update)
+    }
+
+    /// Runs `work` in one `BEGIN IMMEDIATE` transaction, lets `read` look at the result, and
+    /// then commits or, when `commit` is false, rolls back.
+    fn transact<T>(
+        &mut self,
+        work: impl FnOnce(&mut Syncer<'_>) -> Result<(), IndexError>,
+        read: impl FnOnce(&Connection, &Update) -> Result<T, IndexError>,
+        commit: bool,
+    ) -> Result<(Update, T), IndexError> {
         let path = self.store.path.clone();
         let busy = |error| match &path {
             Some(path) => map_error(error, path),
@@ -193,9 +231,25 @@ impl Index {
         work(&mut syncer)?;
         syncer.resolve()?;
         let update = syncer.update.sorted();
-        tx.commit()?;
-        Ok(update)
+        let read = read(&tx, &update)?;
+        if commit {
+            tx.commit()?;
+        } else {
+            tx.rollback()?;
+        }
+        Ok((update, read))
     }
+}
+
+/// Step 3 for each given change.
+fn apply_changes(work: &mut Syncer<'_>, changes: &[Change]) -> Result<(), IndexError> {
+    for change in changes {
+        match change {
+            Change::Content { path, bytes } => work.change(path, Source::Given(bytes.clone()))?,
+            Change::Removed { path } => work.change(path, Source::Gone)?,
+        }
+    }
+    Ok(())
 }
 
 impl Syncer<'_> {

@@ -45,7 +45,7 @@ pub use body::{
 pub use finding::{Finding, Severity};
 pub use index::{
     Change, Column, EffectiveLens, HeldBelief, Hit, IgnoredEntry, Index, IndexError, Layer,
-    LensData, LensValue, LinkRef, Match, Origin, Overridden, RecordSummary, Slot, Update,
+    LensData, LensValue, LinkRef, Match, Origin, Overridden, Preview, RecordSummary, Slot, Update,
 };
 pub use kinds::{
     BodyGrammar, FieldSpec, FieldType, KindRegistry, KindSpec, Placement, RegistryError, Target,

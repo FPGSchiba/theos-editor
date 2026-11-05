@@ -21,6 +21,13 @@ impl TempProject {
         Ok(TempProject { dir })
     }
 
+    /// A project in a temporary folder with the files of the fixture project `name`.
+    pub fn copy_of(name: &str) -> Result<TempProject, Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        copy_dir(&fixture(name), dir.path())?;
+        Ok(TempProject { dir })
+    }
+
     /// The project folder.
     pub fn root(&self) -> &Path {
         self.dir.path()
@@ -65,6 +72,21 @@ impl TempProject {
     pub fn time(&self, rel: &str) -> std::io::Result<SystemTime> {
         std::fs::metadata(self.path(rel))?.modified()
     }
+}
+
+/// Copies the folder `from` into the existing folder `to`, recursively.
+fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            std::fs::create_dir_all(&target)?;
+            copy_dir(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
 }
 
 /// Path, rule, severity, line and column of a finding.

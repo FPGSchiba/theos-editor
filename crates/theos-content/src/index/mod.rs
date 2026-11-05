@@ -24,7 +24,7 @@ pub use lens::{
 pub use query::{LinkRef, RecordSummary};
 pub use search::{Column, Hit, Match};
 pub use slots::Slot;
-pub use sync::{Change, Update};
+pub use sync::{Change, Preview, Update};
 
 use identity::Identity;
 use store::Store;
