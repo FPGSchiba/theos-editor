@@ -102,13 +102,19 @@ pub(crate) fn relative(root: &Path, path: &Path) -> Option<WalkedPath> {
     })
 }
 
-/// Walks `root` and returns its record files sorted by path.
+/// Walks `root` and returns its record files sorted by path. A file or folder that vanishes
+/// during the walk is left out, as if the walk had come after its removal.
 ///
 /// # Errors
 ///
-/// Returns [`WalkError`] when any entry cannot be read.
+/// Returns [`WalkError`] when the root or any entry that still exists cannot be read.
 pub fn walk(root: &Path) -> Result<Vec<Walked>, WalkError> {
-    let walker = WalkBuilder::new(root)
+    collect(root, walker(root))
+}
+
+/// The walker of spec §5.7 over `root`.
+fn walker(root: &Path) -> ignore::Walk {
+    WalkBuilder::new(root)
         .hidden(true)
         .parents(false)
         .ignore(false)
@@ -117,17 +123,28 @@ pub fn walk(root: &Path) -> Result<Vec<Walked>, WalkError> {
         .git_exclude(false)
         .require_git(false)
         .follow_links(false)
-        .build();
+        .build()
+}
+
+/// The record files among the `entries` of a walk of `root`, sorted by path.
+fn collect(
+    root: &Path,
+    entries: impl IntoIterator<Item = Result<ignore::DirEntry, ignore::Error>>,
+) -> Result<Vec<Walked>, WalkError> {
     let mut found = Vec::new();
-    for entry in walker {
-        let entry = entry?;
+    for entry in entries {
+        let Some(entry) = keep(entry)? else {
+            continue;
+        };
         if !entry.file_type().is_some_and(|t| t.is_file()) {
             continue;
         }
         let Some(path) = relative(root, entry.path()) else {
             continue;
         };
-        let meta = entry.metadata()?;
+        let Some(meta) = keep(entry.metadata())? else {
+            continue;
+        };
         found.push(Walked {
             path,
             size: meta.len(),
@@ -136,6 +153,25 @@ pub fn walk(root: &Path) -> Result<Vec<Walked>, WalkError> {
     }
     found.sort_by(|a, b| a.path.as_str().cmp(b.path.as_str()));
     Ok(found)
+}
+
+/// The value of one step of the walk, or `None` when its entry vanished after its folder was
+/// listed (a rename or delete during the walk): the file is no longer there, so it is skipped.
+/// A missing root and every other error stay fatal.
+fn keep<T>(step: Result<T, ignore::Error>) -> Result<Option<T>, WalkError> {
+    match step {
+        Ok(value) => Ok(Some(value)),
+        Err(error) if vanished(&error) => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Whether `error` says that an entry below the root no longer exists.
+fn vanished(error: &ignore::Error) -> bool {
+    error.depth().is_some_and(|depth| depth > 0)
+        && error
+            .io_error()
+            .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
 }
 
 #[cfg(test)]
@@ -240,6 +276,66 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let err = walk(&dir.path().join("nope")).expect_err("must fail");
         assert!(err.to_string().starts_with("cannot walk the project"));
+    }
+
+    /// An I/O error of `kind` at `depth`, as `ignore` reports one from `walkdir`.
+    fn io_error(kind: std::io::ErrorKind, depth: usize) -> ignore::Error {
+        ignore::Error::WithPath {
+            path: "things/a.md".into(),
+            err: Box::new(ignore::Error::WithDepth {
+                depth,
+                err: Box::new(ignore::Error::Io(std::io::Error::from(kind))),
+            }),
+        }
+    }
+
+    #[test]
+    fn an_entry_that_vanished_during_the_walk_is_skipped() {
+        let vanished: Result<u8, _> = Err(io_error(std::io::ErrorKind::NotFound, 1));
+        assert!(matches!(keep(vanished), Ok(None)));
+        assert!(matches!(keep(Ok::<u8, ignore::Error>(7)), Ok(Some(7))));
+    }
+
+    #[test]
+    fn a_folder_that_vanished_during_the_walk_is_left_out() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        put(dir.path(), "a.md", "x\n");
+        let gone = std::iter::once(Err(io_error(std::io::ErrorKind::NotFound, 1)));
+        let walked = collect(dir.path(), walker(dir.path()).chain(gone)).expect("walk");
+        let paths: Vec<_> = walked.iter().map(|w| w.path.clone()).collect();
+        assert_eq!(paths, vec![WalkedPath::Utf8("a.md".to_owned())]);
+    }
+
+    /// Only Unix reads the metadata of an entry after listing its folder; Windows gets it with
+    /// the listing.
+    #[cfg(unix)]
+    #[test]
+    fn a_file_deleted_before_its_metadata_is_read_is_left_out() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        put(dir.path(), "a.md", "x\n");
+        put(dir.path(), "b.md", "x\n");
+        let doomed = dir.path().join("b.md");
+        let entries = walker(dir.path()).inspect(|entry| {
+            if entry.as_ref().is_ok_and(|e| e.path() == doomed) {
+                fs::remove_file(&doomed).expect("remove");
+            }
+        });
+        let walked = collect(dir.path(), entries).expect("walk");
+        let paths: Vec<_> = walked.iter().map(|w| w.path.clone()).collect();
+        assert_eq!(paths, vec![WalkedPath::Utf8("a.md".to_owned())]);
+    }
+
+    #[test]
+    fn other_walk_errors_stay_fatal() {
+        let errors = [
+            io_error(std::io::ErrorKind::PermissionDenied, 1),
+            io_error(std::io::ErrorKind::NotFound, 0),
+            ignore::Error::Io(std::io::Error::from(std::io::ErrorKind::NotFound)),
+        ];
+        for error in errors {
+            let shown = error.to_string();
+            assert!(keep::<u8>(Err(error)).is_err(), "{shown}");
+        }
     }
 
     #[test]
