@@ -325,6 +325,34 @@ fn findings_are_sorted_and_print_like_p05() -> TestResult {
     Ok(())
 }
 
+// AC: CE-12.2
+#[test]
+fn backslashes_in_given_paths_are_read_as_slashes() -> TestResult {
+    let project = TempProject::new()?;
+    three(&project)?;
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    project.write("things/a.md", &thing("a", "a much longer synthetic title"))?;
+    let update = index.update(&["things\\a.md"])?;
+    assert_eq!(update.read, paths(&["things/a.md"]));
+    assert_eq!(update.reparsed, paths(&["things/a.md"]));
+
+    let added = Change::text("things\\d.md", thing("d", "synthetic d"));
+    let preview = index.preview(std::slice::from_ref(&added))?;
+    assert_eq!(preview.update.reparsed, paths(&["things/d.md"]));
+    let update = index.apply(&[added])?;
+    assert_eq!(update.reparsed, paths(&["things/d.md"]));
+    let stored: Vec<String> = index.record("d")?.into_iter().map(|r| r.path).collect();
+    assert_eq!(stored, paths(&["things/d.md"]));
+
+    let update = index.apply(&[Change::Removed {
+        path: "things\\d.md".to_owned(),
+    }])?;
+    assert_eq!(update.removed, paths(&["things/d.md"]));
+    assert_eq!(index.update(&["C:\\things\\b.md"])?, Update::default());
+    Ok(())
+}
+
 #[test]
 fn paths_outside_the_walk_are_ignored() -> TestResult {
     let project = TempProject::new()?;

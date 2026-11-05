@@ -25,14 +25,14 @@ const RACY_WINDOW_NS: i64 = 2_000_000_000;
 pub enum Change {
     /// A record with the given bytes.
     Content {
-        /// The project-relative path with `/`.
+        /// The project-relative path; a `\` is read as `/`.
         path: String,
         /// The bytes of the file.
         bytes: Vec<u8>,
     },
     /// A record that is gone.
     Removed {
-        /// The project-relative path with `/`.
+        /// The project-relative path; a `\` is read as `/`.
         path: String,
     },
 }
@@ -143,7 +143,8 @@ impl Index {
     }
 
     /// Does what [`Index::sync`] does for the given project-relative paths only. A path that is
-    /// not a record is ignored; one that no longer exists is removed.
+    /// not a record is ignored; one that no longer exists is removed. A `\` in a path is read as
+    /// `/`, so paths joined on Windows work.
     ///
     /// # Errors
     ///
@@ -159,7 +160,8 @@ impl Index {
 
     /// Commits the given changes. A content whose bytes equal the stored ones changes nothing;
     /// otherwise the record is parsed again, with no file times, so the next sync reads the file.
-    /// A path that is not a record is ignored.
+    /// A path that is not a record is ignored. A `\` in a path is read as `/`, so paths joined
+    /// on Windows work; the index stores the path with `/`.
     ///
     /// # Errors
     ///
@@ -170,7 +172,8 @@ impl Index {
 
     /// Does what [`Index::apply`] does, reads the findings of every re-parsed or relinked record,
     /// and rolls everything back: the cache is not changed. The findings are those
-    /// [`Index::apply`] would store, ordered like [`Index::findings`].
+    /// [`Index::apply`] would store, ordered like [`Index::findings`]. A `\` in a path is read
+    /// as `/`, as in [`Index::apply`].
     ///
     /// # Errors
     ///
@@ -337,8 +340,10 @@ impl Syncer<'_> {
         Ok(())
     }
 
-    /// One change of `update` or `apply`.
+    /// One change of `update` or `apply`, at `path` with `\` read as `/`.
     fn change(&mut self, path: &str, source: Source) -> Result<(), IndexError> {
+        let path = slashed(path);
+        let path = path.as_str();
         if !is_record_path(path) {
             return Ok(());
         }
@@ -492,6 +497,12 @@ impl Syncer<'_> {
         )?;
         Ok(())
     }
+}
+
+/// A given project-relative path with every `\` replaced by `/`, so that a path joined by
+/// `std::path` on Windows names the same record. No record path holds a `\`.
+fn slashed(path: &str) -> String {
+    path.replace('\\', "/")
 }
 
 /// Whether a file with this time, hashed at `now_ns`, must be hashed again next time: its time
