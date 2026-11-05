@@ -47,11 +47,7 @@ fn block_list_in_entry(input: &Input<'_>) -> Option<YamlError> {
                 && node.parents.len() >= 2
                 && node.parents.last() == Some(&Container::Map)
         })
-        .find(|node| {
-            !input.tokens.iter().any(|token| {
-                token.value == TokenType::FlowSequenceStart && token.offset == node.event.offset
-            })
-        })
+        .find(|node| !input.is_flow_sequence(node.event.offset))
         .map(|node| input.error(YamlRule::OneLineList, node.event, message))
 }
 

@@ -2,7 +2,6 @@
 //! occupies, built from the events `yaml-rust2` delivers once the subset rules have passed.
 
 use yaml_rust2::Event;
-use yaml_rust2::scanner::TokenType;
 
 use super::input::Marked;
 use super::scalar::{Scalar, ScalarStyle, spelled_end};
@@ -324,9 +323,7 @@ impl<'a, 'b> Builder<'a, 'b> {
     }
 
     fn list(&mut self, start: &Marked<Event>) -> Result<List, YamlError> {
-        let is_flow = self.input.tokens.iter().any(|token| {
-            token.value == TokenType::FlowSequenceStart && token.offset == start.offset
-        });
+        let is_flow = self.input.is_flow_sequence(start.offset);
         let mut items = Vec::new();
         loop {
             let event = self.take()?;

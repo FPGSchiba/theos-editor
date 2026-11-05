@@ -77,6 +77,14 @@ impl<'a> Input<'a> {
         input
     }
 
+    /// Whether the sequence whose start event is at `offset` is a flow list (`[a, b]`): the
+    /// scanner has a `[` token there, while a block list's event sits at its first `-`.
+    pub fn is_flow_sequence(&self, offset: usize) -> bool {
+        self.tokens
+            .iter()
+            .any(|token| token.value == TokenType::FlowSequenceStart && token.offset == offset)
+    }
+
     /// An error of `rule` at `at`, spanning its first character.
     pub fn error<T>(&self, rule: YamlRule, at: &Marked<T>, message: &str) -> YamlError {
         YamlError {
