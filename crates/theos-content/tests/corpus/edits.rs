@@ -3,10 +3,11 @@
 use std::error::Error;
 use std::fs;
 
+use theos_content::Span;
 use theos_content::yaml::RawValue;
 use theos_content::{Order, Record};
 
-use crate::common::{corpus, cut};
+use crate::common::{corpus, cut, only_region_changed};
 
 fn check(file: &str, key: &str, value: &str) -> Result<(), Box<dyn Error>> {
     let path = corpus().join("records").join(file);
@@ -102,14 +103,29 @@ fn list_edits_change_only_the_field_lines() -> Result<(), Box<dyn Error>> {
     let comments = "things/synthetic-yaml-comments.md";
     check_list(comments, "held_by", |items| with(items, "new-kin"))?;
     check_list(comments, "held_by", without_first)?;
-    // a reorder can move the comment lines out of the field's lines, so only their survival and
-    // the read-back are checked
+    // a reorder can move the comment lines behind the last item, so the old field's lines are
+    // the region: every byte outside it is unchanged and the comment and blank line survive in it
     let path = corpus().join("records").join(comments);
     let old = Record::parse(&fs::read_to_string(path)?)?;
+    let region = old
+        .front_matter()
+        .map_err(ToString::to_string)?
+        .get("held_by")
+        .ok_or("field missing")?
+        .lines;
     let raw = RawValue::List(vec!["hearth-folk".to_owned(), "throat-kin".to_owned()]);
     let new = old.set("held_by", raw.clone(), &Order::default())?;
-    assert!(new.text().contains(
+    assert!(only_region_changed(old.text(), new.text(), region));
+    let new_region = Span::new(
+        region.start,
+        new.text().len() - (old.text().len() - region.end),
+    );
+    let inside = new_region
+        .get(new.text())
+        .ok_or("region outside the new text")?;
+    assert!(inside.contains(
         "  # a comment between block items
+
 "
     ));
     let field = new

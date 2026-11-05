@@ -80,3 +80,12 @@ pub fn cut(text: &str, span: Option<Span>) -> String {
         None => text.to_owned(),
     }
 }
+
+/// Whether `new` equals `old` in every byte before and after `region` of `old` (CE-09.2: an edit
+/// changes only the bytes of one field's lines).
+pub fn only_region_changed(old: &str, new: &str, region: Span) -> bool {
+    let tail = old.len() - region.end;
+    new.len() >= region.start + tail
+        && new[..region.start] == old[..region.start]
+        && new[new.len() - tail..] == old[region.end..]
+}
