@@ -68,7 +68,12 @@ impl FieldSpec {
     #[must_use]
     pub fn check(&self, value: ValueRef<'_>) -> Vec<Problem> {
         let mut problems = self.ty.check(self.key, value);
-        if let (true, ValueRef::List(list)) = (self.required, value)
+        let is_list_type = matches!(
+            self.ty,
+            FieldType::TextList | FieldType::Links(_) | FieldType::NoteIds
+        );
+        if let (true, true, ValueRef::List(list)) = (self.required, is_list_type, value)
+            && problems.is_empty()
             && list.items.is_empty()
         {
             problems.push(problem(
@@ -466,6 +471,29 @@ mod tests {
         assert!(shape[0].1.starts_with("`lens` must be a map"));
         ok("lens:\n  mood: x\n", lens);
         ok("lens:\n  tier: T1\n  unaware_of: [T-930]\n", lens);
+    }
+
+    #[test]
+    fn a_wrongly_shaped_required_value_gives_one_problem() {
+        let title = run(
+            "title: []
+",
+            field("title", FieldType::Text, true),
+        );
+        assert_eq!(title.len(), 1, "{title:?}");
+        let floors = run(
+            "floors: []
+",
+            field("floors", FieldType::FloorRange, true),
+        );
+        assert_eq!(floors.len(), 1, "{floors:?}");
+        let held = run(
+            "held_by: []
+",
+            field("held_by", FieldType::Links(TARGETS), true),
+        );
+        assert_eq!(held.len(), 1, "{held:?}");
+        assert!(held[0].1.contains("must not be empty"));
     }
 
     #[test]
