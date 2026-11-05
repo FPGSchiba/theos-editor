@@ -41,9 +41,9 @@ record through a comment.
 
 | Question | Recommendation | § |
 |---|---|---|
-| Storage | Files beside the content, never inside it: one folder per thread under `.theos/comments/<record id>/`, one small TOML file per event (open, reply, resolve, …). Files are only ever added, so git merges them without conflicts. | 1, 2 |
+| Storage | Beside the content, never inside it: one TOML file per commented record, `.theos/comments/<record id>.toml`, holding its threads and comments and edited in place. Git keeps the history. | 1, 2 |
 | Anchor | A text quote with 32 characters of prefix and suffix, plus byte offsets and a hash of the record text: W3C Web Annotation's TextQuoteSelector with a TextPositionSelector. The editor maps anchors through every edit; after outside edits a reader finds the quote again. An anchor that is found neither exactly nor nearly is orphaned, never guessed. | 3 |
-| Threads | `open` or `resolved`, derived from the events. Whether the passage is attached, changed or orphaned is computed on every read. Only people resolve and reopen. | 4 |
+| Threads | `open` or `resolved`. Whether the passage is attached, changed or orphaned is computed on every read. Only people resolve and reopen. | 4 |
 | MCP | Read: `comment_list`, `comment_read`. Agent writes: `comment_open`, `comment_reply`, `comment_propose`. | 5 |
 | Agent replies | A reply is a comment, not a proposal. Every change to a record stays a proposal. This needs one sentence in G7 and one in CE-23.1 (§10). | 5.3 |
 | Phases | P02 exposes positions; P05 builds the model, the files, re-anchoring and MCP read; P06 the commands; P07 the agent tools and the review link; P12 the margin; P13 Review and Changes. | 8, 9 |
@@ -64,15 +64,15 @@ marker or in a sidecar.
 | | S1 files in the tree | S2 markers in the Markdown | S3 files on a git ref |
 |---|---|---|---|
 | Canonical text (G5) | untouched | every comment action edits the record; a marker inside a link, a beat attribute or a callout title breaks the P02 grammar | untouched |
-| The record's diff (CE-21.2) | clean; comments are new files under `.theos/comments/` | comment noise in the record's field and word diff | clean; comments never show in Changes |
-| Merges | conflict-free, because files are only added (§2) | conflicts inside prose when two sides comment near each other | needs our own sync: fetch, merge the two comment refs, push. Git merges add-only trees cleanly (`git merge-tree`) |
+| The record's diff (CE-21.2) | clean; comments change their own file under `.theos/comments/` | comment noise in the record's field and word diff | clean; comments never show in Changes |
+| Merges | an ordinary text conflict only when two machines change the same record's comments before a pull (§2) | conflicts inside prose when two sides comment near each other | needs our own sync: fetch, merge the two comment refs, push |
 | Other readers of the text | see nothing | P02's grammar and round trip, the word check (G8 `inworld-vocab`), the ledger, note text sent to generators, compile previews and LLM prompts (G9) must all strip markers | see nothing |
-| Agents | add new files; CE-23.1 needs a sentence (§10) | a comment is a record edit, so a proposal, and impossible on canon records, which are locked against agents (CE-26.2) | write to the ref and touch no working tree; CE-23.1 holds as written |
+| Agents | write comments into the comment file; CE-23.1 needs a sentence (§10) | a comment is a record edit, so a proposal, and impossible on canon records, which are locked against agents (CE-26.2) | write to the ref and touch no working tree; CE-23.1 holds as written |
 | Anchoring | re-anchoring after outside edits (§3) | exact and free: the markers move with the text | as S1 |
 | Travels with a copy of the record file | no; the thread names the record id | yes | no |
 | Visible in git, GitHub, VS Code | yes | yes | no: GitHub does not browse refs outside `refs/heads`; only `theos` and the editor show them |
 | Sync and backup | ordinary commit and push | ordinary | a plain `git push` leaves them behind; P06's push must push the ref and a fresh clone must fetch it |
-| Cost | a folder reader and an event writer | a grammar, a round trip and stripping in five places | S1 plus git plumbing in `theos-vcs` |
+| Cost | a reader and writer of one TOML file per record | a grammar, a round trip and stripping in five places | S1 plus git plumbing in `theos-vcs` |
 
 **Recommendation: S1.** The text stays untouched (G5). S2's one advantage, free anchoring, is
 matched closely enough by quote anchoring (§3), while S2 leaks markers into every reader of the
@@ -86,84 +86,105 @@ editor and `theos` can see and sync.
 - `.theos/` is already "not records" for the index (P01 spec §5), Obsidian hides dot folders,
   and tower-of-theos's `.gitattributes` already forces LF for `toml` (CE-01.2).
 - Keyed by record id, not path. Moving a record to another folder changes nothing; renaming its
-  id moves the folder in the same command (CE-20.3, P06).
+  id renames its comment file in the same command (CE-20.3, P06).
 - Not beside the record (`lore/truths/T-012.comments.toml`): that puts non-record files into the
   kind folders, which P01's layout and P03's index would have to learn to skip, and moving a
   record to a new parent would have to carry them along.
 
 ## 2. Files
 
-```text
-.theos/comments/
-  T-012/                          record id
-    t-7f3a9c/                     thread id: "t-" and 6 random hex digits, unique per record
-      20261105T140211Z-a41c.toml  one event: UTC time and 4 random hex digits
-      20261105T141502Z-0b7e.toml
-```
-
-Each event is one small TOML file, written once and never changed. TOML because comment text has
-line breaks: the pinned `toml` 1.1.8 writes them as readable multi-line strings and reads them
-back exactly (§3.5). Restricted YAML forbids multi-line scalars, and JSON writes `\n` escapes.
-Files are read and written with `serde` and `toml`; there is no format of our own.
+**One TOML file per commented record, edited in place:** `.theos/comments/<record id>.toml`. It
+holds the record's threads and their comments. A record without comments has no file. Git keeps
+the history.
 
 ```toml
-# opens a thread
-event = "open"
-author = "Jann Erhardt"
-by = "human"
-at = 2026-11-05T14:02:11Z
-text = '''
-Is this passage still right after the split?
-'''
+# .theos/comments/T-012.toml — comments on T-012; written by the editor and `theos`
+[[thread]]
+id = "t-7f3a9c"              # "t-" and 6 random hex digits, unique per record
+state = "open"               # open | resolved
+opened_quote = "The binders call them ancestors"   # the passage when the thread was opened
 
-[anchor]
+[thread.anchor]
 quote = "The binders call them ancestors"
 prefix = "…the 32 characters before…"
 suffix = "…the 32 characters after…"
-start = 412          # byte offsets into the record text (LF line endings), end exclusive
+start = 412                  # byte offsets into the record text (LF line endings), end exclusive
 end = 443
-seen = "9d6239…"     # SHA-256 of the record text the offsets refer to (64 hex digits)
-```
+seen = "9d6239…"             # SHA-256 of the record text the offsets refer to (64 hex digits)
 
-```toml
-# a reply from an agent
-event = "reply"
+[[thread.comment]]
+id = "c-a41c"                # "c-" and 4 random hex digits, unique per thread
+author = "Jann Erhardt"
+by = "human"
+at = 2026-11-05T14:02:11Z
+text = """
+Is this passage still right after the split?
+"""
+
+[[thread.comment]]
+id = "c-0b7e"
 author = "Claude"
 by = "agent"
 session = "s-0012"
 at = 2026-11-05T14:05:40Z
-text = '''
+text = """
 I proposed a shorter wording as review entry r-17.
-'''
+"""
+
+[[thread.proposal]]
+entry = "r-17"
+summary = "Shorter wording of the passage"
+status = "pending"           # pending | approved | rejected
 ```
 
-**Event kinds**
+**What a change does to the file**
 
-| Event | Written by | Fields besides `event`, `author`, `by`, `session`, `at` |
-|---|---|---|
-| `open` | person or agent | `text`, `[anchor]` |
-| `reply` | person or agent | `text` |
-| `resolve` | person, or the approval of a linked proposal | `entry` when an approval resolved it |
-| `reopen` | person | – |
-| `anchor` | person (the editor on save, or a re-attach by hand) | `[anchor]` |
-| `edit` | the person who wrote the comment | `comment` (the file name of the edited event), `text` |
-| `retract` | the person who wrote the comment | `comment` |
-| `proposal` | agent | `entry` (review entry), `summary` |
-| `review` | the approval or rejection command | `entry`, `outcome` (`approved` or `rejected`), `note` |
+| Action | Change |
+|---|---|
+| open a thread | a new `[[thread]]` table with its anchor and first comment |
+| reply | a new `[[thread.comment]]` |
+| resolve, reopen | `state`, and `resolved_by` and `resolved_at` when resolved |
+| the passage changed (§3.4) | the values of `[thread.anchor]` |
+| edit a comment | its `text`, and `edited_at` |
+| withdraw a comment | `withdrawn = true`; its text is removed |
+| an agent proposes an edit | a new `[[thread.proposal]]` |
+| approval or rejection of that proposal | its `status` and `note`; an approval also resolves the thread |
+| delete a thread | its table goes; when the last one goes, the file goes |
 
-A thread is the fold of its events in file-name order (time, then the random part). A reader
-ignores fields it does not know, so a new field is not a breaking change; a new event kind is.
+**Format.** TOML, because comment text has line breaks. The pinned `toml` 1.1.8 writes them as
+readable multi-line strings, and writes nested threads and comments as `[[thread]]` and
+`[[thread.comment]]` tables, and reads both back exactly (§3.5). Restricted YAML forbids
+multi-line scalars, and JSON writes `\n` escapes. Files are read and written with `serde` and
+`toml`; there is no format of our own. A reader ignores fields it does not know, so a new field
+is not a breaking change.
 
-**Why one file per event.** Git merges added files without conflicts. Jann's reply on `main`
-and Claude's reply written at the same moment never collide, and neither do two machines. A
-single file per thread or per record, appended to, conflicts whenever both sides append. Git's
-`merge=union` driver would join the two appended blocks, but its conflict refinement keeps lines
-the two blocks share (`event = "reply"`, `by = "human"`) only once. Two events can then merge
-into one with duplicate keys, which is no longer valid TOML.
+**Writing.**
+- Every write reads the file, changes it, and writes it whole and atomically (a temporary file
+  renamed over it), while holding the repo lock (architecture §8). So a reply that an agent
+  writes while Jann resolves a thread in the editor loses neither change. The editor never
+  writes its copy from memory: it re-reads the file under the lock.
+- The output is deterministic: fixed field order, threads in the order they were opened,
+  comments in time order. A change therefore shows only its own lines in a diff. In the probe, a
+  new reply added its lines and a new anchor offset changed one line, and nothing else moved.
 
-**Deleting** a thread removes its folder (people only). A thread folder without its `open`
-event, because one branch deleted the thread and another replied to it, loads as an orphaned
-fragment, and `theos check` names it.
+**Why edited in place, and why one file per record.**
+- **Git already keeps the history** (Jann, review of this record). An earlier draft used one
+  append-only file per event, so that two branches or machines writing the same thread could
+  never conflict. Under this record's own design that case is rare:
+  - every writer works in the one working tree, the editor directly and agents through the
+    command layer (§5.3), and the lock serialises them;
+  - a git conflict needs two machines, or a branch, that change the same record's comments
+    before a pull.
+
+  The append-only design paid for that rare case with a growing pile of files.
+- **A conflict that does happen** is an ordinary text conflict in a readable file. It is listed
+  with its record, like any pull conflict (CE-36.3).
+- **One file per record, not per thread:**
+  - one read when a record opens;
+  - one rename when its id changes;
+  - the Changes screen groups by record anyway (architecture §7).
+
+  One file per thread would only make the two-machine conflict rarer.
 
 **Line endings.** The reader turns CRLF inside text values into LF. The probe shows that `toml`
 keeps a CR that a Windows tool wrote into the file.
@@ -244,20 +265,20 @@ matching range and its ratio. Our code is only the glue between the crate and th
 - `orphaned`.
 
 Separately, a thread knows whether its passage was **edited since it was opened**: the current
-text differs from the quote of its `open` event. The margin then shows that original quote, and
+text differs from its `opened_quote`. The margin then shows that original quote, and
 `comment_read` returns it.
 
 **Inside the app** (P12): CodeMirror maps the ranges through typing, undo and outside changes.
 Deleting the whole passage drops the mark, and the thread shows as orphaned until undo brings
-the text back. **On save**, the editor writes an `anchor` event for each thread whose live range
-differs from its stored anchor: its text differs from the stored quote, or `resolve` on the
-saved text would not return the live range. After a save, every thread of the record is
-therefore attached exactly. Threads whose passage did not move or change get no event, so
-typing elsewhere in the record writes nothing.
+the text back. **On save**, the editor updates the stored anchor of each thread whose live range
+differs from it: its text differs from the stored quote, or `resolve` on the saved text would
+not return the live range. After a save, every thread of the record is therefore attached
+exactly. Threads whose passage did not move or change are left alone, so typing elsewhere in the
+record writes nothing.
 
-**After outside edits and merges**, the comment files merge cleanly (§2), git merges the record,
-and every reader runs `resolve`. A merge conflict in the record is resolved first; the anchors
-resolve on the result.
+**After outside edits and merges**, git merges the record and the comment file, and every reader
+runs `resolve`. A merge conflict in the record is resolved first; the anchors resolve on the
+result.
 
 **Orphaned** means one of these:
 
@@ -266,8 +287,8 @@ resolve on the result.
 - the passage is empty.
 
 An orphaned thread keeps its quote and its comments. It is listed under "Detached" in the margin
-and in `comment_list`, and it can be re-attached to a new selection (an `anchor` event),
-resolved or deleted. It is never dropped.
+and in `comment_list`, and it can be re-attached to a new selection (a new anchor), resolved or
+deleted. It is never dropped.
 
 **Positions.** Offsets are bytes of the record's text, front matter included, with LF line
 endings: the coordinates of every span in P02 (P02 spec §5.2). The editor converts them to and
@@ -277,14 +298,13 @@ front matter.
 
 ### 3.4 The life of an anchor, step by step
 
-An event file is never edited. When a passage changes, its thread gets a new `anchor` event, as a
-new file; the older ones stay as history.
+When a passage changes, the editor updates the `[thread.anchor]` values of its thread in the
+record's comment file. Git keeps the earlier values.
 
-1. **Opening a record.** The editor reads that record's comment folder,
-   `.theos/comments/<id>/`, and nothing else: every thread folder and every event file in it. It
-   folds the events into threads and runs `resolve` (§3.3) on the text as loaded. It converts
-   the offsets to UTF-16 with P02's `TextIndex` and puts one mark per thread into CodeMirror.
-   Orphaned threads go to the Detached list.
+1. **Opening a record.** The editor reads that record's comment file,
+   `.theos/comments/<id>.toml`, and no other. It runs `resolve` (§3.3) for each thread on the
+   text as loaded, converts the offsets to UTF-16 with P02's `TextIndex`, and puts one mark per
+   thread into CodeMirror. Orphaned threads go to the Detached list.
 2. **Typing.** CodeMirror maps every mark through every change (§3.1). No comment file is read
    or written:
    - typing before a passage shifts its mark;
@@ -296,34 +316,38 @@ new file; the older ones stay as history.
      identifies it: nothing is written. The stored offsets and hash are then stale, on purpose.
      They are only hints, and the next read finds the passage by its quote (§3.3, step 2), one
      search in one record.
-   - **No**: the editor writes an `anchor` event, with the live mark's text as the new quote,
+   - **No**: the editor updates the thread's anchor with the live mark's text as the new quote,
      its new prefix, suffix and offsets, and the hash of the saved text. Two cases lead here:
      - the passage's own text changed;
      - a repeated phrase whose surroundings changed so much that the stored anchor would now
        pick another occurrence.
 
-   A save thus writes one file per thread whose passage itself changed, and usually none.
-4. **New events from elsewhere**, such as an agent's reply or a thread opened with
-   `comment_open`. The editor watches the open record's comment folder and folds new files in as
-   they appear (CE-54.4). A new `anchor` event re-places its mark.
+   A save thus touches the comment file only when a commented passage itself changed: usually
+   not at all, otherwise a few lines.
+4. **Changes from elsewhere**, such as an agent's reply or a thread opened with `comment_open`.
+   The editor watches the open record's comment file and reloads its threads when it changes
+   (CE-54.4). A changed anchor re-places its mark.
 5. **Outside edits**, such as an approved proposal, a git merge, or a change in VS Code.
    - While the record is open, CE-34.2 reloads a clean record as a change, and CodeMirror maps
      the marks through it as in step 2.
    - While it is closed, nothing happens until someone reads it. Then `resolve` places each
-     thread, and the next save in the editor writes an `anchor` event where the passage changed.
-6. **MCP and the CLI only read.** They run `resolve` on the record as it is on disk and never
-   write `anchor` events. Two readers therefore agree on where a thread points: `resolve` is one
-   function, run on the same text.
+     thread, and the next save in the editor updates the anchors whose passage changed.
+6. **MCP and the CLI never update anchors.** They run `resolve` on the record as it is on disk.
+   Two readers therefore agree on where a thread points: `resolve` is one function, run on the
+   same text. Agents write comments and proposals only (§5.2).
 
-A passage reworked over many saves collects a few `anchor` files. The margin shows the latest;
-the thread's history shows them all. Project-wide lists, such as `comment_list` across all
-records, read every comment folder, and P05 may cache that in `.theos/cache` like the index.
+Project-wide lists, such as `comment_list` across all records, read every comment file; P05 may
+cache that in `.theos/cache` like the index.
 
 ### 3.5 Probes for this proposal
 
-- `toml` 1.1.8 on toolchain 1.99.1: an event with multi-line text (quotes, a backslash, a tab,
-  non-ASCII, an emoji) and a datetime serialises with `'''` and `"""` strings, and deserialises
-  equal. A CRLF copy of the file keeps the CRs inside the text, hence the rule in §2.
+- `toml` 1.1.8 on toolchain 1.99.1:
+  - a comment with multi-line text (quotes, a backslash, a tab, non-ASCII, an emoji) and a
+    datetime serialises with `'''` and `"""` strings, and deserialises equal;
+  - a file of two threads with nested comments serialises as `[[thread]]`, `[thread.anchor]` and
+    `[[thread.comment]]` tables and deserialises equal. Adding a reply and changing one anchor
+    offset, then writing the whole file again, changed only those lines;
+  - a CRLF copy of a file keeps the CRs inside the text, hence the rule in §2.
 - The CodeMirror facts of §3.1 come from the P10 probe.
 - Not probed: a Rust port of diff-match-patch, and `similar`. P05 probes them before its plan
   (engineering directive 2); step 3 of §3.3 needs at least `similar`.
@@ -332,20 +356,21 @@ records, read every comment folder, and P05 may cache that in `.theos/cache` lik
 
 - **State:** `open` or `resolved`.
   - `open` → `resolved`: a person resolves it, or Jann approves a proposal that names the thread
-    (the approval writes `review` and `resolve`).
+    (the approval marks the proposal approved and resolves the thread).
   - `resolved` → `open`: a person reopens it.
   - Agents never resolve or reopen.
 - **Anchor status**, computed and never stored: `attached`, `changed` (found only by a near
   match, §3.3), or `orphaned`. It is independent of the state: an orphaned thread can be open.
   "Edited since opened" is a separate flag (§3.3).
-- **Comments:** the text of the `open` event and of every `reply`. Each has an author, `by`
-  (human or agent), the session for agents, a time, and Markdown text in which `[[id]]` links
-  show as chips.
-  - An `edit` replaces a comment's text, which then shows "edited".
-  - A `retract` shows "withdrawn" in the comment's place.
+- **Comments:** the first comment and every reply. Each has an author, `by` (human or agent), the
+  session for agents, a time, and Markdown text in which `[[id]]` links show as chips.
+  - Editing replaces a comment's text, which then shows "edited".
+  - Withdrawing removes the text and shows "withdrawn" in the comment's place.
   - Only the author edits or withdraws a comment, and only people do.
-- **Proposals:** a `proposal` event shows in the thread as "Claude proposed an edit (r-17)", with
-  its summary and a link to Review. The `review` event shows the outcome.
+- **Proposals:** a proposal shows in the thread as "Claude proposed an edit (r-17)", with its
+  summary, a link to Review and its status (pending, approved, rejected with the note).
+- **History:** who resolved a thread and when is in the file (`resolved_by`, `resolved_at`).
+  Everything earlier is in git (`git log -p` on the comment file).
 - **Replying to a resolved thread** needs a reopen first. Agents get "thread is resolved".
 - **Who:** people by git's `user.name` (G6: git through its command line); agents as "Claude"
   with the session id (architecture §8).
@@ -371,11 +396,11 @@ records, read every comment folder, and P05 may cache that in `.theos/cache` lik
 - Input: `thread`.
 - Output: the fields of `comment_list`, plus:
   - `passage`: its `text`, and the paragraph around it as `before` and `after`;
-  - `original_quote`: the quote of the `open` event, when the passage was edited since;
+  - `original_quote`: the thread's `opened_quote`, when the passage was edited since;
   - `proposable`: whether a session can propose on the passage (§5.2);
   - `comments`: `id`, `author`, `by`, `session`, `at`, `text`, `edited_at`, `withdrawn`;
-  - `history`: the resolve, reopen, anchor and review events, with author and time;
-  - `proposals`: `entry`, `summary`, `status` (pending, approved or rejected).
+  - `resolved_by`, `resolved_at`;
+  - `proposals`: `entry`, `summary`, `status` (pending, approved or rejected), `note`.
 
 Lines and columns follow P02 (from 1, columns in Unicode scalar values), so Claude can quote
 them back.
@@ -398,7 +423,7 @@ them back.
 - Input: `thread`, `replacement` (the new text of the passage), `note`.
 - Output: `entry` (the review entry) and `findings`.
 - An ordinary proposal through the command layer (architecture §5): it replaces the passage as
-  attached now, runs every check, and adds a `proposal` event to the thread.
+  attached now, runs every check, and records the proposal in the thread.
 - Fails for an orphaned thread, for a locked record (CE-26.2), and on blocking findings, which
   it returns while committing nothing (CE-26.3).
 - It edits the record as the session sees it, like every proposal: the session worktree on
@@ -427,15 +452,17 @@ pattern.
   would always fail, and canon is where questions matter most.
 
 **Cost.** G7 says "agents only propose", and CE-23.1 says sessions "never touch the human working
-tree". Under S1, an agent's comment is a new file under `.theos/comments/` in that tree. §10
-proposes one sentence for each. Under S3, only the G7 sentence is needed.
+tree". Under S1, an agent's comment is a change to a comment file in that tree. §10 proposes one
+sentence for each. Under S3, only the G7 sentence is needed.
 
-Agents only add files. They never edit or delete an event, and never resolve, reopen or delete
-a thread.
+Agents only add comments and replies, and their proposals are recorded in the thread. The tools
+allow nothing else: agents never change or remove anything else in a comment file, and never
+resolve, reopen or delete a thread.
 
 **If Jann prefers no change to G7 and CE-23.1**, replies become proposals. They are written on
 the session branch and shown at once in the margin as pending, since the session worktree is on
-disk, and they reach `main` when Jann approves the session's entry.
+disk, and they reach `main` when Jann approves the session's entry. Merging them can then
+conflict with Jann's own comments on the same record (§2).
 
 ## 6. G9 and `never` truths
 
@@ -446,19 +473,19 @@ prompt, so G9 is unaffected.
 ## 7. Undo
 
 Comment actions are commands (architecture §5): opening, replying, resolving, reopening,
-editing, withdrawing and deleting are each undone by one undo. Undoing an added event deletes its
-file; undoing a thread deletion restores the folder. In the editor, undoing a text edit that
-orphaned a thread brings the passage back, and the thread with it (§3.1).
+editing, withdrawing and deleting are each undone by one undo, which restores the comment file's
+earlier bytes, as every undo does (CE-20.2). In the editor, undoing a text edit that orphaned a
+thread brings the passage back, and the thread with it (§3.1).
 
 ## 8. Phases
 
 | Phase | Builds | Where |
 |---|---|---|
 | P02 (now) | Spans as byte offsets into the LF text of the whole record; line and column (from 1, columns in Unicode scalar values); a `TextIndex` that converts offsets to line and column and to UTF-16 offsets, and back. No comment code. | `theos-content` |
-| P05 | The thread model; reading the event files (`theos check` names a file that does not parse and a thread whose record is gone); `resolve` (§3.3); the read tools `comment_list` and `comment_read`. | `theos-content`, `theos-mcp` |
-| P06 | Comment commands with undo; writing event files; renaming an id moves its comments folder (CE-20.3). | `theos-studio` |
-| P07 | `comment_open`, `comment_reply`, `comment_propose`, and `resolves` on `codex_propose`; approval writes `review` and `resolve`, rejection writes `review`. | `theos-studio`, `theos-mcp` |
-| P12 | Margin threads, commenting on a selection, live mapping, anchor events on save, the Detached list, agent comments appearing while the record is open; the UI references for them (below). | `editor-ui`, `theos-editor`, `docs/ui/` |
+| P05 | The thread model; reading comment files (`theos check` names a file that does not parse and a comment file whose record is gone); `resolve` (§3.3); the read tools `comment_list` and `comment_read`. | `theos-content`, `theos-mcp` |
+| P06 | Comment commands with undo; writing comment files under the repo lock; renaming an id renames its comment file (CE-20.3). | `theos-studio` |
+| P07 | `comment_open`, `comment_reply`, `comment_propose`, and `resolves` on `codex_propose`; approval marks the proposal approved and resolves the thread; rejection marks it rejected, with the note. | `theos-studio`, `theos-mcp` |
+| P12 | Margin threads, commenting on a selection, live mapping, anchor updates on save, the Detached list, agent comments appearing while the record is open; the UI references for them (below). | `editor-ui`, `theos-editor`, `docs/ui/` |
 | P13 | Review shows the threads an entry resolves; Changes lists comment files apart from records; the UI references for them. | `editor-ui`, `docs/ui/` |
 
 **UI references** (G13, G18). `docs/ui/screens/` has no comment states yet. P12's spec PR adds
@@ -486,21 +513,22 @@ once this record is accepted):
   UTF-16 offset, and back.
 
 **P05 · CE-51 Comment threads**
-- CE-51.1 Comment threads under `.theos/comments/` are read with their record; an event file
-  that does not parse is a finding with its path, and the thread's other events still load.
+- CE-51.1 A record's threads are read from `.theos/comments/<id>.toml`; a comment file that does
+  not parse is a finding with its path, and its record still opens.
 - CE-51.2 After an edit made outside the editor, a passage that moved is found again, an edited
   passage attaches as changed, and a deleted passage is orphaned, never attached elsewhere.
-- CE-51.3 Two branches that add comments to the same thread merge without a conflict.
-- CE-51.4 `comment_list` and `comment_read` work over stdio; `comment_read` returns the passage
+- CE-51.3 `comment_list` and `comment_read` work over stdio; `comment_read` returns the passage
   with its lines and every comment with its author and time.
-- CE-51.5 Threads on locked records are flagged, and threads on `never` truths are marked, as in
+- CE-51.4 Threads on locked records are flagged, and threads on `never` truths are marked, as in
   CE-18.3.
 
 **P06 · CE-52 Comment commands**
 - CE-52.1 Opening, replying to, resolving, reopening and deleting a thread, and editing or
   withdrawing a comment, are commands with undo; none changes a record's bytes.
-- CE-52.2 Renaming an id moves its threads in the same command.
-- CE-52.3 Deleting a record keeps its threads, which show as orphaned.
+- CE-52.2 A comment written by an MCP process while the editor writes another to the same file
+  is kept, and so is the editor's.
+- CE-52.3 Renaming an id renames its comment file in the same command.
+- CE-52.4 Deleting a record keeps its threads, which show as orphaned.
 
 **P07 · CE-53 Comments for agents**
 - CE-53.1 `comment_open` and `comment_reply` add comments under the session's name and change no
@@ -531,7 +559,7 @@ once this record is accepted):
   changes to records and settings; they may add comments (decision 0002)."
 - **CE-23.1.** Now: "Two parallel sessions never touch the human working tree or each other."
   Proposed: "Two parallel sessions never touch the human working tree or each other, except to
-  add comment files (decision 0002)." Not needed under S3.
+  write comments (decision 0002)." Not needed under S3.
 - **Architecture** §2 (`.theos/comments/` in the tree) and §9 (the five tools).
 - **Data model:** a short section saying that comments are not records and live in
   `.theos/comments/`.
@@ -541,18 +569,18 @@ once this record is accepted):
 | Risk | Mitigation |
 |---|---|
 | Near re-anchoring attaches to the wrong passage | Errs towards orphaned; near-miss tests (§3.3); the margin shows a changed passage next to its stored quote |
-| Many small files: a thread with ten replies is ten files | Reading a record's threads is one folder walk (`.theos/comments/<id>/`); the index may cache them in `.theos/cache` if that is ever slow |
+| The editor and an MCP process write the same comment file at once, and one change is lost | Every write re-reads the file under the repo lock (§2); CE-52.2 tests it |
+| Two machines change the same record's comments before a pull | An ordinary text conflict in a readable file, listed with its record (CE-36.3); rare for one author |
 | An agent floods a record with comments | Agents only open and reply; pausing a session stops them; Jann can delete threads |
 | The margin with many threads and overlapping passages is unprobed (§3.1) | P12 probes it before its plan |
-| Comments of deleted records pile up | `theos check` lists threads without a record; deleting one is one command |
-| Clocks of two machines differ | Events sort by time, then by name; a resolve and a reopen written at the same moment on two machines can land in either order; the thread's history shows both |
+| Comments of deleted records pile up | `theos check` lists comment files without a record; deleting one is one command |
 
 ## 12. If rejected
 
-Jann names what to change: the storage (S2 or S3), the anchors (A1 or A3), or replies as
-proposals (§5.3). This record is rewritten in the same PR. P02 is affected only if its positions
-change. Under S2, P02's body grammar would have to parse and round-trip the markers, which needs
-a new P02 criterion.
+Jann names what to change: the storage (S2 or S3, or one file per thread instead of per
+record), the anchors (A1 or A3), or replies as proposals (§5.3). This record is rewritten in the
+same PR. P02 is affected only if its positions change. Under S2, P02's body grammar would have to
+parse and round-trip the markers, which needs a new P02 criterion.
 
 [0001]: 0001-prose-editor.md
 [probe-notes]: ../../research/P10-prose-editor/app/src/probes/comments/NOTES.md
