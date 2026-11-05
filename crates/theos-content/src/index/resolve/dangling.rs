@@ -1,4 +1,5 @@
-//! `link/dangling`: a link whose id names no record, or whose beat does not exist.
+//! `link/dangling`: a link whose id names no record, or whose beat does not exist. A beat
+//! reference whose target has no known kind is left to the target's own finding.
 
 use super::{LinkRule, SourceRecord, Targets, at_link};
 use crate::finding::{Finding, Severity, with_article};
@@ -27,11 +28,12 @@ fn run(source: &SourceRecord, targets: &Targets, registry: &KindRegistry) -> Vec
             let number = fragment.parse::<u32>().ok();
             let scripts: Vec<_> = infos.iter().filter(|info| has_beats(&info.kind)).collect();
             if scripts.is_empty() {
-                let what = infos[0]
-                    .kind
-                    .as_deref()
-                    .map_or_else(|| "of no known kind".to_owned(), with_article);
-                format!("`{id}` is {what}; only scripts have beats")
+                // A target without a known kind has its own finding, which says what is wrong
+                // (spec §5.6).
+                let Some(kind) = infos.iter().find_map(|info| info.kind.as_deref()) else {
+                    continue;
+                };
+                format!("`{id}` is {}; only scripts have beats", with_article(kind))
             } else if number.is_some_and(|n| scripts.iter().any(|info| info.beats.contains(&n))) {
                 continue;
             } else {

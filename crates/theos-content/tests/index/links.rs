@@ -1,9 +1,9 @@
 //! Link resolution over the `links/` fixture project: slots, kinds, dangling links, duplicate
 //! ids and placement.
 
-use theos_content::{Finding, Index, Project, parts};
+use theos_content::{Change, Finding, Index, Project, parts};
 
-use crate::common::{expected, fixture, keys};
+use crate::common::{TempProject, expected, fixture, keys};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -333,6 +333,46 @@ fn duplicates_dangling_and_file_names_are_findings_with_paths() -> TestResult {
     // Right references and self links resolve.
     let refs = index.findings_for("things/synthetic-refs.md")?;
     assert_eq!(refs.len(), 3);
+    Ok(())
+}
+
+/// A record of the unknown kind `synthetic-unknown`.
+fn unknown_kind(id: &str) -> String {
+    format!("---\n# synthetic fixture (P03), not canon\nid: {id}\nkind: synthetic-unknown\n---\n")
+}
+
+#[test]
+fn a_beat_reference_to_a_record_of_no_known_kind_is_left_to_its_target() -> TestResult {
+    let project = TempProject::new()?;
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    let source = "things/synthetic-beat-refs.md";
+    index.apply(&[
+        Change::text(
+            source,
+            "---\n# synthetic fixture (P03), not canon\nid: synthetic-beat-refs\nkind: thing\n\
+             title: Synthetic beat references\ntype: synthetic\n---\n\
+             No known kind: [[S-931#1]]\n\nOne known kind among two: [[B-932#1]]\n",
+        ),
+        Change::text("story/scripts/S-931.md", unknown_kind("S-931")),
+        Change::text("drafts/B-932.md", unknown_kind("B-932")),
+        Change::text(
+            "lore/beliefs/B-932.md",
+            "---\n# synthetic fixture (P03), not canon\nid: B-932\nkind: belief\n\
+             title: Synthetic belief C\n---\nSynthetic stance C.\n",
+        ),
+    ])?;
+    let dangling: Vec<String> = index
+        .findings_for(source)?
+        .into_iter()
+        .filter(|f| f.rule == "link/dangling")
+        .map(|f| f.message)
+        .collect();
+    assert_eq!(dangling, ["`B-932` is a belief; only scripts have beats"]);
+    let unknown = index.findings_for("story/scripts/S-931.md")?;
+    assert!(
+        unknown.iter().any(|f| f.rule == "schema/kind"),
+        "{unknown:?}"
+    );
     Ok(())
 }
 
