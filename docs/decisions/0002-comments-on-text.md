@@ -14,7 +14,7 @@ own.
 
 Sources: the P10 comments probe ([notes][probe-notes], [behaviours][probe-tests]),
 [decision 0001][0001], the P02 phase spec (`docs/specs/phases/P02-records-and-grammars.md`, in
-its spec PR), and the probes of §3.4.
+its spec PR), and the probes of §3.5.
 
 ## Goal
 
@@ -103,7 +103,7 @@ editor and `theos` can see and sync.
 
 Each event is one small TOML file, written once and never changed. TOML because comment text has
 line breaks: the pinned `toml` 1.1.8 writes them as readable multi-line strings and reads them
-back exactly (§3.4). Restricted YAML forbids multi-line scalars, and JSON writes `\n` escapes.
+back exactly (§3.5). Restricted YAML forbids multi-line scalars, and JSON writes `\n` escapes.
 Files are read and written with `serde` and `toml`; there is no format of our own.
 
 ```toml
@@ -275,7 +275,51 @@ from UTF-16 with P02's `TextIndex`. Prefix and suffix are 32 Unicode scalar valu
 (hypothes.is uses 32). Version 1 offers selections in the body only; the model also allows the
 front matter.
 
-### 3.4 Probes for this proposal
+### 3.4 The life of an anchor, step by step
+
+An event file is never edited. When a passage changes, its thread gets a new `anchor` event, as a
+new file; the older ones stay as history.
+
+1. **Opening a record.** The editor reads that record's comment folder,
+   `.theos/comments/<id>/`, and nothing else: every thread folder and every event file in it. It
+   folds the events into threads and runs `resolve` (§3.3) on the text as loaded. It converts
+   the offsets to UTF-16 with P02's `TextIndex` and puts one mark per thread into CodeMirror.
+   Orphaned threads go to the Detached list.
+2. **Typing.** CodeMirror maps every mark through every change (§3.1). No comment file is read
+   or written:
+   - typing before a passage shifts its mark;
+   - typing inside it grows the mark;
+   - deleting all of it drops the mark, and the thread shows as detached until undo.
+3. **Saving.** The editor writes the record first. Then it asks, for each thread: would the
+   stored anchor, resolved on the saved text, find exactly the live mark?
+   - **Yes**, for example after typing elsewhere, or when the passage moved but its text still
+     identifies it: nothing is written. The stored offsets and hash are then stale, on purpose.
+     They are only hints, and the next read finds the passage by its quote (§3.3, step 2), one
+     search in one record.
+   - **No**: the editor writes an `anchor` event, with the live mark's text as the new quote,
+     its new prefix, suffix and offsets, and the hash of the saved text. Two cases lead here:
+     - the passage's own text changed;
+     - a repeated phrase whose surroundings changed so much that the stored anchor would now
+       pick another occurrence.
+
+   A save thus writes one file per thread whose passage itself changed, and usually none.
+4. **New events from elsewhere**, such as an agent's reply or a thread opened with
+   `comment_open`. The editor watches the open record's comment folder and folds new files in as
+   they appear (CE-54.4). A new `anchor` event re-places its mark.
+5. **Outside edits**, such as an approved proposal, a git merge, or a change in VS Code.
+   - While the record is open, CE-34.2 reloads a clean record as a change, and CodeMirror maps
+     the marks through it as in step 2.
+   - While it is closed, nothing happens until someone reads it. Then `resolve` places each
+     thread, and the next save in the editor writes an `anchor` event where the passage changed.
+6. **MCP and the CLI only read.** They run `resolve` on the record as it is on disk and never
+   write `anchor` events. Two readers therefore agree on where a thread points: `resolve` is one
+   function, run on the same text.
+
+A passage reworked over many saves collects a few `anchor` files. The margin shows the latest;
+the thread's history shows them all. Project-wide lists, such as `comment_list` across all
+records, read every comment folder, and P05 may cache that in `.theos/cache` like the index.
+
+### 3.5 Probes for this proposal
 
 - `toml` 1.1.8 on toolchain 1.99.1: an event with multi-line text (quotes, a backslash, a tab,
   non-ASCII, an emoji) and a datetime serialises with `'''` and `"""` strings, and deserialises
