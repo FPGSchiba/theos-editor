@@ -21,7 +21,9 @@ pub enum MalformedKind {
     BeatHeading,
     /// A beat attribute that does not parse.
     BeatAttribute,
-    /// Attributes where no beat heading precedes them.
+    /// An attribute-form paragraph (`key:: value`) that a blank line separates from the beat
+    /// heading or from the beat's attribute lines; it is not read as attributes. A `key:: value`
+    /// line outside a beat is left alone.
     MisplacedAttributes,
 }
 

@@ -39,7 +39,7 @@ pub struct Callout {
     /// From the start of the second line to the end of the callout; may be empty.
     pub content_span: Span,
     /// The last line of the last paragraph when it starts with `— `, from the dash to the line
-    /// end.
+    /// end. Only voice and note callouts have one; it is `None` for every other type.
     pub caption_span: Option<Span>,
     /// The parsed title; `None` when the title is malformed (a report exists).
     pub title: Option<CalloutTitle>,
