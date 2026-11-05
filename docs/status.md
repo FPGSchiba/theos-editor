@@ -59,8 +59,6 @@ Rows P20–P28 come from umbrella version 2, which waits for Jann in its docs PR
 - Umbrella version 2 (world atlas, quests, art from lore; P20–P28) waits for Jann in #19.
   It keeps P03's CE-11.1 to the kinds of umbrella version 1, so the P03 spec (#18) needs no change;
   the new kinds get their schemas in P21 and P26.
-- `CONTRIBUTING.md` §5 plans 1.0.0 when S7 is done. Slices S8 and S9 come after that; whether they
-  ship as 1.x minor releases or move 1.0.0 is Jann's call (a protected change).
 
 ## Needs a private session (Confluence, Jira, plugin)
 
