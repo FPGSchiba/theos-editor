@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>14 · Quests — flow editor — Theos Editor reference</title>
+<!--
+  Reference screen 14 of the Theos content editor, exported from the design canvas on 2026-11-05.
+  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
+-->
+<link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
+<link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<style>
+body{margin:0;background:#060810}
+a{color:#3ef0ff}a:hover{color:#e4ecff}
+.tu-shell.cs{height:900px}
+:where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
+:where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
+@media (max-width:1000px){
+.tu-shell.cs{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:var(--h-titlebar) auto auto minmax(0,1fr) var(--h-statusbar)}
+.cs .tu-rail{flex-direction:row;width:auto;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}
+.cs .tu-rail .tu-rail__item{width:60px;flex-shrink:0}
+.cs .tu-rail__spacer{display:none}
+.cs .tu-toolbar{height:auto;flex-wrap:wrap;padding:6px 10px}
+.cs .tu-shell__work{flex-wrap:wrap}
+.cs .tu-shell__work > *{flex:1 1 100% !important;min-height:320px}
+}
+</style>
+</head>
+<body>
+<div class="tu-shell cs" style="--tu-font-i: var(--font-ui)">
+
+  <header class="tu-titlebar">
+    <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <span class="tu-titlebar__sep">▸</span><span>tower-of-theos</span>
+    <span class="tu-titlebar__sep">▸</span><span>story/quests</span>
+    <span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Scripts</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-pip is-reject"></span>validator · 1 error</span>
+    <span class="tu-statuspip"><span class="tu-pip is-warn"></span>1 unsaved</span>
+  </header>
+
+  <div class="tu-toolbar">
+    <label class="tu-input" style="width: 240px;"><span class="tu-input__icon">~</span><input type="text" aria-label="Find quest" placeholder="find quest or step"></label>
+    <span class="tu-divider"></span>
+    <span class="tu-seg" aria-label="View"><button class="tu-seg__opt is-active" type="button">Flow</button><button class="tu-seg__opt" type="button">Write</button><button class="tu-seg__opt" type="button">Source</button></span>
+    <span class="tu-divider"></span>
+    <button class="tu-btn tu-btn--ghost" type="button"><span class="tu-btn__icon">▸</span>Walk a path as T1</button>
+    <span class="tu-spacer"></span>
+    <button class="tu-btn tu-btn--secondary" type="button"><span class="tu-btn__icon">+</span>Step</button>
+    <button class="tu-btn tu-btn--secondary" type="button"><span class="tu-btn__icon">+</span>Outcome</button>
+    <button class="tu-btn tu-btn--secondary" type="button">Show on atlas</button>
+    <button class="tu-btn tu-btn--accent" type="button">Save Ctrl+S</button>
+  </div>
+
+  <nav class="tu-rail" aria-label="Layout presets">
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◈</span><span class="tu-rail__label">Codex</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⌾</span><span class="tu-rail__label">Atlas</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⋈</span><span class="tu-rail__label">Graph</span></button>
+    <button class="tu-rail__item is-active" type="button" aria-current="true"><span class="tu-rail__glyph">¶</span><span class="tu-rail__label">Scripts</span><span class="tu-rail__badge is-reject">!</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◫</span><span class="tu-rail__label">Concepts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">△</span><span class="tu-rail__label">Maps</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◴</span><span class="tu-rail__label">Review</span><span class="tu-rail__badge">3</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">±</span><span class="tu-rail__label">Changes</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">&lt;/&gt;</span><span class="tu-rail__label">Code</span></button>
+    <div class="tu-rail__spacer"></div>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⚙</span><span class="tu-rail__label">Settings</span></button>
+  </nav>
+
+  <div class="tu-shell__work">
+
+    <!-- Quest list -->
+    <section class="tu-window" style="flex: 0 0 232px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab" type="button">Scripts</button><button class="tu-tab is-active" type="button">Quests</button><button class="tu-tab" type="button">Dialogue</button></div></div>
+      <div class="tu-window__body">
+        <div class="tu-tree">
+          <div class="tu-tree__row is-root"><span class="tu-mono" style="color: var(--sig-attention);">━</span><span class="tu-tree__name">Main</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="quest"></span><span class="tu-tree__name">Q-001 The climb</span><span class="tu-tree__tag">all</span></div>
+          <div class="tu-tree__row is-root"><span class="tu-mono" style="color: var(--sig-info);">━</span><span class="tu-tree__name">Trials</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="quest"></span><span class="tu-tree__name">Q-101 Trial of F01</span><span class="tu-tree__tag">F01</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="quest"></span><span class="tu-tree__name">Q-103 Trial of F03</span><span class="tu-tree__tag">draft</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="quest"></span><span class="tu-tree__name">Q-104 Trial of the Choir-hall</span><span class="tu-tree__tag">F04</span></div>
+          <div class="tu-tree__row is-root"><span class="tu-mono" style="color: var(--sig-script);">┅</span><span class="tu-tree__name">Side</span></div>
+          <div class="tu-tree__row is-entity is-selected" style="--depth: 1;"><span class="tu-kind" data-kind="quest"></span><span class="tu-tree__name">Q-012 The binders' price</span><span class="tu-tree__tag" style="color: var(--sig-reject);">✕</span></div>
+          <div class="tu-tree__row" style="--depth: 2;"><span class="tu-tree__idx">1</span><span class="tu-tree__name">Find the lost choir-boy</span></div>
+          <div class="tu-tree__row" style="--depth: 2;"><span class="tu-tree__idx">2</span><span class="tu-tree__name">Bring him home</span><span class="tu-tree__tag" style="color: var(--sig-reject);">✕</span></div>
+          <div class="tu-tree__row" style="--depth: 2;"><span class="tu-tree__idx">3</span><span class="tu-tree__name">The naming-song</span></div>
+          <div class="tu-tree__row" style="--depth: 2;"><span class="tu-tree__idx">4</span><span class="tu-tree__name">Turned away</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="quest"></span><span class="tu-tree__name">Q-013 The fen road</span><span class="tu-tree__tag">F04</span></div>
+        </div>
+        <div style="margin-top: auto; padding: 8px 10px; border-top: 1px solid var(--border); font: 400 10px/14px var(--font-mono); color: var(--textDim);">a quest is one file; its steps are headings inside it, and the arrows are attribute lines on each step</div>
+      </div>
+    </section>
+
+    <!-- Flow and step editor -->
+    <section class="tu-window" style="flex: 1 1 600px;">
+      <div class="tu-tabbar">
+        <div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button"><span class="tu-kind" data-kind="quest"></span>Q-012 ●</button></div>
+        <div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div>
+      </div>
+      <div class="tu-window__body">
+        <header class="tu-rechead tu-manuscript" style="padding: 14px 20px 10px;">
+          <div class="tu-rechead__top">
+            <span class="tu-kind tu-rechead__glyph" data-kind="quest"></span>
+            <span class="tu-rechead__id">Q-012</span>
+            <span class="tu-rechead__kind">quest · side · on F04 · giver Elder Vass</span>
+            <span class="tu-rechead__right"><span class="tu-status" data-status="draft">Draft</span></span>
+          </div>
+          <h1 class="tu-rechead__title" style="font-size: 22px; line-height: 28px;">The binders' price</h1>
+          <div class="tu-rechead__meta"><span>story/quests/Q-012.md</span><span>4 steps · 2 paths · reveals 1 clue</span><span>requires Q-010</span></div>
+        </header>
+
+        <div style="padding: 10px 12px; border-bottom: 1px solid var(--border); overflow-x: auto; background-color: var(--bg); background-image: linear-gradient(var(--border) 0.5px, transparent 0.5px), linear-gradient(90deg, var(--border) 0.5px, transparent 0.5px); background-size: 24px 24px;">
+          <div style="position: relative; width: 788px; height: 290px;">
+            <svg width="39" height="8" viewBox="0 0 39 8" preserveAspectRatio="none" style="position: absolute; left: 228px; top: 146px; width: 39px; height: 8px; overflow: visible; fill: none; stroke: #7d8bb1; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-1" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#7d8bb1" stroke="none" style="stroke: none; fill: #7d8bb1; fill: context-stroke"/></marker></defs><path d="M 0 4 L 35 4" marker-end="url(#dc-arrow-head-filled-1)"></path></svg>
+            <svg width="40" height="8" viewBox="0 0 40 8" preserveAspectRatio="none" style="position: absolute; left: 480px; top: 136px; width: 40px; height: 8px; overflow: visible; fill: none; stroke: #7d8bb1; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M 0 4 L 40 4"></path></svg>
+            <svg width="8" height="72" viewBox="0 0 8 72" preserveAspectRatio="none" style="position: absolute; left: 516px; top: 68px; width: 8px; height: 72px; overflow: visible; fill: none; stroke: #7d8bb1; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M 4 72 L 4 0"></path></svg>
+            <svg width="39" height="8" viewBox="0 0 39 8" preserveAspectRatio="none" style="position: absolute; left: 520px; top: 64px; width: 39px; height: 8px; overflow: visible; fill: none; stroke: #7d8bb1; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-2" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#7d8bb1" stroke="none" style="stroke: none; fill: #7d8bb1; fill: context-stroke"/></marker></defs><path d="M 0 4 L 35 4" marker-end="url(#dc-arrow-head-filled-2)"></path></svg>
+            <svg width="40" height="8" viewBox="0 0 40 8" preserveAspectRatio="none" style="position: absolute; left: 480px; top: 156px; width: 40px; height: 8px; overflow: visible; fill: none; stroke: #7d8bb1; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M 0 4 L 40 4"></path></svg>
+            <svg width="8" height="72" viewBox="0 0 8 72" preserveAspectRatio="none" style="position: absolute; left: 516px; top: 160px; width: 8px; height: 72px; overflow: visible; fill: none; stroke: #7d8bb1; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M 4 0 L 4 72"></path></svg>
+            <svg width="39" height="8" viewBox="0 0 39 8" preserveAspectRatio="none" style="position: absolute; left: 520px; top: 228px; width: 39px; height: 8px; overflow: visible; fill: none; stroke: #7d8bb1; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-3" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#7d8bb1" stroke="none" style="stroke: none; fill: #7d8bb1; fill: context-stroke"/></marker></defs><path d="M 0 4 L 35 4" marker-end="url(#dc-arrow-head-filled-3)"></path></svg>
+
+            <div style="position: absolute; left: 16px; top: 92px; font: 600 10px/16px var(--font-mono); color: #7d8bb1;">▶ start · giver ◉ Elder Vass</div>
+            <div style="position: absolute; left: 16px; top: 120px; width: 212px; height: 60px; box-sizing: border-box; padding: 8px 10px; display: flex; align-items: center; background: #0b1120; border: 1px solid #1f2b48; font: 400 10px/15px var(--font-mono); color: #7d8bb1;"><span><b style="color: #e4ecff;">1 · Find the lost choir-boy</b><br>⌂ reed marsh · ⊛ marsh-lurker</span></div>
+            <div style="position: absolute; left: 268px; top: 120px; width: 212px; height: 60px; box-sizing: border-box; padding: 8px 10px; display: flex; align-items: center; background: #0b1120; border: 1px solid #ff8b2e; box-shadow: inset 0 0 0 1px #ff8b2e66, 0 0 12px #ff8b2e33; font: 400 10px/15px var(--font-mono); color: #7d8bb1;"><span><b style="color: #e4ecff;">2 · Bring him home</b> <b style="color: #ff516f;">✕ 1</b><br>⌂ Thornstead · ◉ Elder Vass</span></div>
+            <div style="position: absolute; left: 560px; top: 38px; width: 212px; height: 60px; box-sizing: border-box; padding: 8px 10px; display: flex; align-items: center; background: #0b1120; border: 1px solid #1f2b48; border-right: 3px solid #29e8a5; font: 400 10px/15px var(--font-mono); color: #7d8bb1;"><span><b style="color: #e4ecff;">3 · The naming-song</b><br>⌂ Fates' shrine · ◔ C-031</span></div>
+            <div style="position: absolute; left: 560px; top: 202px; width: 212px; height: 60px; box-sizing: border-box; padding: 8px 10px; display: flex; align-items: center; background: #0b1120; border: 1px solid #1f2b48; border-right: 3px solid #ff516f; font: 400 10px/15px var(--font-mono); color: #7d8bb1;"><span><b style="color: #e4ecff;">4 · Turned away</b><br>no place · ends in failure</span></div>
+            <div style="position: absolute; left: 532px; top: 96px; width: 32px; text-align: center; font: 600 11px/16px var(--font-mono); color: #c9c3ff;">pay</div>
+            <div style="position: absolute; left: 532px; top: 188px; width: 52px; text-align: center; font: 600 11px/16px var(--font-mono); color: #c9c3ff;">refuse</div>
+          </div>
+        </div>
+
+        <div class="tu-manuscript" style="padding: 14px 20px 20px; display: flex; flex-direction: column; gap: 8px;">
+          <h3 style="margin: 0; font: 600 15px/24px var(--font-ui); color: var(--text);"><span class="tu-mono tu-dim" style="font-size: 12px;">2 ·</span> Bring him home</h3>
+          <div class="tu-beat">
+            <span class="tu-beat__param"><span class="tu-beat__key">At</span><span class="tu-beat__val"><span class="tu-kind" data-kind="location"></span>Thornstead</span></span><span class="tu-beat__sep">·</span>
+            <span class="tu-beat__param"><span class="tu-beat__key">With</span><span class="tu-beat__val"><span class="tu-kind" data-kind="npc"></span>Elder Vass</span></span><span class="tu-beat__sep">·</span>
+            <span class="tu-beat__param"><span class="tu-beat__key">Dialogue</span><span class="tu-beat__val"><span class="tu-kind" data-kind="document"></span>vass-thanks</span></span><span class="tu-beat__sep">·</span>
+            <span class="tu-beat__param"><span class="tu-beat__key">On</span><span class="tu-beat__val">pay → 3</span></span><span class="tu-beat__sep">·</span>
+            <span class="tu-beat__param" style="border: 1px dashed var(--sig-reject);"><span class="tu-beat__key" style="color: var(--sig-reject);">On</span><span class="tu-beat__val">refuse → 4</span></span>
+          </div>
+          <div class="tu-prose"><p>The boy is home. Vass offers to pay the binders' price so the shrine can sing his name again, or the player can tell her the price is too high.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step inspector, paths, checks -->
+    <div style="flex: 0 0 316px; display: flex; flex-direction: column; gap: 4px; min-width: 0;">
+      <section class="tu-window" style="flex: 0 0 auto;">
+        <div class="tu-tabbar"><div class="tu-tabbar__title"><span class="tu-kind" data-kind="quest"></span>Step 2 · Bring him home</div></div>
+        <div class="tu-fm" style="border: 0;">
+          <div class="tu-fm__row"><span class="tu-fm__key">at</span><span class="tu-fm__val"><span class="tu-link" data-kind="location"><span class="tu-kind" data-kind="location"></span><span class="tu-link__title">Thornstead</span></span></span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">with</span><span class="tu-fm__val"><span class="tu-link" data-kind="npc"><span class="tu-kind" data-kind="npc"></span><span class="tu-link__title">Elder Vass</span></span></span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">dialogue</span><span class="tu-fm__val"><span class="tu-link" data-kind="document"><span class="tu-kind" data-kind="document"></span><span class="tu-link__title">vass-thanks</span></span></span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">on</span><span class="tu-fm__val">pay → 3 · refuse → 4</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">after</span><span class="tu-fm__val tu-dim">—</span></div>
+          <div class="tu-fm__row"><span class="tu-fm__key">when</span><span class="tu-fm__val"><span class="tu-tiertag">T1</span></span></div>
+        </div>
+      </section>
+
+      <section class="tu-window" style="flex: 0 0 auto;">
+        <div class="tu-tabbar"><div class="tu-tabbar__title">Paths · generated</div></div>
+        <div class="tu-window__body">
+          <div class="tu-prop"><span class="tu-mono" style="color: var(--sig-approve);">✓</span><span class="tu-prop__val">1 → 2 → 3 · success</span><span class="tu-prop__type">C-031 · T-012 hinted</span></div>
+          <div class="tu-prop"><span class="tu-mono" style="color: var(--sig-reject);">✕</span><span class="tu-prop__val">1 → 2 → 4 · failure</span><span class="tu-prop__type">reveals nothing</span></div>
+        </div>
+      </section>
+
+      <section class="tu-window is-hot" style="flex: 1 1 auto;">
+        <div class="tu-tabbar"><div class="tu-tabbar__title">Validation <span class="tu-badge is-reject">1</span></div></div>
+        <div class="tu-window__body">
+          <div class="tu-val" data-sev="error" style="border-top: 0;"><span class="tu-val__sev"></span><span class="tu-val__msg">Step 2 can end in “refuse”, but vass-thanks has no section for it. Add the lines Vass says when the player refuses.</span><div class="tu-val__meta"><span class="tu-val__rule">quest-dialogue</span></div><button class="tu-btn tu-btn--secondary tu-btn--sm tu-val__act" type="button">Add section</button></div>
+          <div class="tu-val" data-sev="pass"><span class="tu-val__sev"></span><span class="tu-val__msg">Every step is reachable from step 1, and both paths end.</span><div class="tu-val__meta"><span class="tu-val__rule">quest-flow</span></div></div>
+          <div class="tu-val" data-sev="pass"><span class="tu-val__sev"></span><span class="tu-val__msg">No path pushes T-012 past “hinted”.</span><div class="tu-val__meta"><span class="tu-val__rule">no-overshoot · per path</span></div></div>
+          <div class="tu-val" data-sev="info"><span class="tu-val__sev"></span><span class="tu-val__msg">Step 4 has no place, so the atlas draws that path only up to step 2.</span><div class="tu-val__meta"><span class="tu-val__rule">quest-route</span></div></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="tu-statusbar">
+    <span class="tu-statusbar__brand">THEOS//EDITOR</span>
+    <span>v0.6.0 · scripts layout</span>
+    <span class="tu-statuspip"><span class="tu-pip is-warn"></span>Q-012 unsaved</span>
+    <span>9 quests · 37 steps</span>
+    <span class="tu-spacer"></span>
+    <span>step 2 · ln 22 · md</span>
+  </footer>
+</div>
+</body>
+</html>

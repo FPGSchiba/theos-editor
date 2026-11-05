@@ -1,7 +1,8 @@
 # UI reference
 
-The eleven screens of the Theos Content Studio concept, exported from the design canvas on
-31 Oct 2026 at 1440 × 900.
+The fifteen screens of the Theos Content Studio concept, exported from the design canvas at
+1440 × 900: screens 01–11 on 31 Oct 2026, screens 12–15 (atlas, quests, generating from lore) on
+5 Nov 2026.
 
 - **`screens/NN-<name>.html` is the reference.** Each file is plain HTML that uses only
   `design/theos-ui/tokens.css`, `design/theos-ui/components/bundle.css` and a short block of page
@@ -27,6 +28,14 @@ Where the sample content disagrees with `docs/specs/data-model.md` (for example 
 | `09-start` | Start — projects | P14 |
 | `10-settings` | Settings — git page | P14 |
 | `11-maps` | Maps — runs, seeds, pick | P16 |
+| `12-atlas` | Atlas — floor map, layers, place panel | P25 |
+| `13-atlas-tower` | Atlas — the Tower view | P25 |
+| `14-quest` | Quests — flow editor | P24 |
+| `15-generate` | Concepts — generate from lore | P27 |
+
+Screens 01–11 show the rail without Atlas; screens 12–15 show it after Codex. P25 adds the entry
+to every screen. The camera thumbnails on screen 15 are clay renders of the floor-0 blockout (the
+Tower, the Gate and the Hem); the map on screen 12 is the hearth-valley sample of screen 11.
 
 The Concepts screen already shows a notes panel; the Maps screen gets the same panel in P16
 (`docs/specs/data-model.md` §9.3).
