@@ -2,7 +2,6 @@
 
 use pulldown_cmark::{Event, LinkType, Tag};
 
-use super::Block;
 use super::events::Events;
 use super::malformed::{Malformed, MalformedKind};
 use crate::text::{Span, TextIndex};
@@ -65,22 +64,11 @@ fn valid_fragment(fragment: &str) -> bool {
         && fragment.parse::<u32>().is_ok()
 }
 
-fn block_of(blocks: &[Block], offset: usize) -> usize {
-    blocks
-        .iter()
-        .position(|b| b.span.start <= offset && offset < b.span.end)
-        .unwrap_or(0)
-}
-
 /// Reads the wikilinks of a body: the well-formed ones and a report for each bad target.
-pub(crate) fn scan(
-    index: &TextIndex,
-    events: &Events<'_>,
-    blocks: &[Block],
-) -> (Vec<Link>, Vec<Malformed>) {
+pub(crate) fn scan(index: &TextIndex, events: &Events<'_>) -> (Vec<Link>, Vec<Malformed>) {
     let mut links = Vec::new();
     let mut bad = Vec::new();
-    for (event, span) in &events.items {
+    for ((event, span), &block) in events.items.iter().zip(&events.block_of) {
         let Event::Start(Tag::Link {
             link_type: LinkType::WikiLink { has_pothole },
             dest_url,
@@ -121,7 +109,7 @@ pub(crate) fn scan(
             fragment_span,
             shown,
             shown_span,
-            block: block_of(blocks, span.start),
+            block,
         });
     }
     (links, bad)

@@ -45,7 +45,7 @@ impl Body {
     pub fn parse(index: &TextIndex, span: Span) -> Body {
         let events = Events::new(index.text(), span);
         let blocks = blocks(&events);
-        let (links, mut malformed) = links::scan(index, &events, &blocks);
+        let (links, mut malformed) = links::scan(index, &events);
         malformed.extend(malformed::scan(index, &events));
         malformed.sort_by_key(|m| m.span.start);
         Body {
@@ -82,28 +82,17 @@ impl Body {
 }
 
 fn blocks(events: &Events<'_>) -> Vec<Block> {
-    let mut depth = 0usize;
     let mut blocks = Vec::new();
-    for (event, span) in &events.items {
-        match event {
-            Event::Start(tag) => {
-                if depth == 0 {
-                    let kind = if matches!(tag, Tag::Heading { .. }) {
-                        BlockKind::Heading
-                    } else {
-                        BlockKind::Other
-                    };
-                    blocks.push(Block { span: *span, kind });
-                }
-                depth += 1;
-            }
-            Event::End(_) => depth = depth.saturating_sub(1),
-            _ if depth == 0 => blocks.push(Block {
-                span: *span,
-                kind: BlockKind::Other,
-            }),
-            _ => {}
+    for ((event, span), &owner) in events.items.iter().zip(&events.block_of) {
+        if owner != blocks.len() {
+            continue;
         }
+        let kind = if matches!(event, Event::Start(Tag::Heading { .. })) {
+            BlockKind::Heading
+        } else {
+            BlockKind::Other
+        };
+        blocks.push(Block { span: *span, kind });
     }
     blocks
 }
@@ -235,6 +224,39 @@ mod tests {
             let tail = at(&r, Span::new(cursor, outer.end));
             assert!(tail.trim().is_empty(), "{text:?}: tail {tail:?}");
         }
+    }
+
+    #[test]
+    fn links_know_their_block() {
+        let text = "para [[a]]
+
+# Head [[c]]
+
+- item [[d]]
+
+> quote [[e]]
+
+end [[f]]
+";
+        let r = record(
+            "id: a
+", text,
+        );
+        let blocks = r.body().blocks();
+        assert_eq!(blocks.len(), 5);
+        let got: Vec<_> = r
+            .body()
+            .links()
+            .iter()
+            .map(|l| (l.target.as_str(), l.block))
+            .collect();
+        assert_eq!(got, [("a", 0), ("c", 1), ("d", 2), ("e", 3), ("f", 4)]);
+        for link in r.body().links() {
+            let block = blocks[link.block].span;
+            assert!(block.start <= link.span.start && link.span.end <= block.end);
+        }
+        assert_eq!(blocks[1].kind, BlockKind::Heading);
+        assert_eq!(blocks[r.body().links()[1].block].kind, BlockKind::Heading);
     }
 
     #[test]
