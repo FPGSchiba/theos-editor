@@ -20,7 +20,7 @@ the ledger follow in P04.
 | `finding` | `Finding` and `Severity`: rule id, path, span, line and column, message |
 | `kinds` | `KindRegistry` of `KindSpec`s: declarative `FieldSpec` tables, id rules, `Placement`, body grammar; the generic checker |
 | `parts` | The 20 builtin kinds, one module per kind and one `register` per part; `parts::builtin()` |
-| `check` | `check_record` runs the schema, link and body checks of one record; `rules()` lists them |
+| `check` | `check_record` runs the record, YAML and schema checks of one record, the checks of its kind included; `rules()` lists them. Link and duplicate-id checks run in the index's relink step; body checks come with P04's validators |
 | `walk` | `walk` lists the record files of a project (`ignore` crate); `is_record_path` |
 | `index` | `Index`: the persistent index with sync, update, apply, preview, queries, search, lens and dump |
 
