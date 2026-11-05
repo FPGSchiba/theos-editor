@@ -1,11 +1,13 @@
 //! Bodies: one pulldown-cmark pass, the top-level blocks, wikilinks and malformed constructs.
 
+mod beat;
 mod callout;
 mod design_note;
 mod events;
 mod links;
 mod malformed;
 
+pub use beat::{Attribute, AttributeValue, Beat};
 pub use callout::{Callout, CalloutTitle, Design, Fold, Note, NoteState, Token, Voice};
 pub use design_note::{DesignNote, DesignNoteForm};
 pub use links::Link;
@@ -34,6 +36,10 @@ pub enum BlockKind {
     Callout(usize),
     /// A top-level `Design note:` paragraph: the index into [`Body::design_notes`].
     DesignNote(usize),
+    /// A beat heading: the index into [`Body::beats`].
+    BeatHeading(usize),
+    /// The attribute paragraph of a beat: the index into [`Body::beats`].
+    BeatAttributes(usize),
     /// Anything else.
     Other,
 }
@@ -46,6 +52,7 @@ pub struct Body {
     links: Vec<Link>,
     callouts: Vec<Callout>,
     design_notes: Vec<DesignNote>,
+    beats: Vec<Beat>,
     malformed: Vec<Malformed>,
 }
 
@@ -59,7 +66,9 @@ impl Body {
         let (callouts, bad_titles) = callout::scan(index, &events, &links);
         malformed.extend(bad_titles);
         let design_notes = design_note::scan(&events, &callouts);
-        let blocks = blocks(&events, &callouts, &design_notes);
+        let (beats, bad_beats) = beat::scan(index, &events, &links, span.end);
+        malformed.extend(bad_beats);
+        let blocks = blocks(&events, &callouts, &design_notes, &beats);
         malformed.sort_by_key(|m| m.span.start);
         Body {
             span,
@@ -67,6 +76,7 @@ impl Body {
             links,
             callouts,
             design_notes,
+            beats,
             malformed,
         }
     }
@@ -101,6 +111,12 @@ impl Body {
         &self.design_notes
     }
 
+    /// The beats of a script, in order.
+    #[must_use]
+    pub fn beats(&self) -> &[Beat] {
+        &self.beats
+    }
+
     /// The malformed constructs, in order.
     #[must_use]
     pub fn malformed(&self) -> &[Malformed] {
@@ -108,24 +124,41 @@ impl Body {
     }
 }
 
-fn blocks(events: &Events<'_>, callouts: &[Callout], notes: &[DesignNote]) -> Vec<Block> {
+fn blocks(
+    events: &Events<'_>,
+    callouts: &[Callout],
+    notes: &[DesignNote],
+    beats: &[Beat],
+) -> Vec<Block> {
     let mut blocks = Vec::new();
     for ((event, span), &owner) in events.items.iter().zip(&events.block_of) {
         if owner != blocks.len() {
             continue;
         }
         let kind = match event {
-            Event::Start(Tag::Heading { .. }) => BlockKind::Heading,
+            Event::Start(Tag::Heading { .. }) => beats
+                .iter()
+                .position(|b| b.heading_span.start == span.start)
+                .map_or(BlockKind::Heading, BlockKind::BeatHeading),
             Event::Start(Tag::BlockQuote(_)) => callouts
                 .iter()
                 .position(|c| c.depth == 1 && c.span.start == span.start)
                 .map_or(BlockKind::Other, BlockKind::Callout),
-            Event::Start(Tag::Paragraph) => notes
-                .iter()
-                .position(|n| {
-                    n.span.start == span.start && matches!(n.form, DesignNoteForm::Paragraph { .. })
-                })
-                .map_or(BlockKind::Other, BlockKind::DesignNote),
+            Event::Start(Tag::Paragraph) => match blocks.last() {
+                Some(&Block {
+                    span: heading,
+                    kind: BlockKind::BeatHeading(i),
+                }) if heading.end == span.start && !beats[i].attributes.is_empty() => {
+                    BlockKind::BeatAttributes(i)
+                }
+                _ => notes
+                    .iter()
+                    .position(|n| {
+                        n.span.start == span.start
+                            && matches!(n.form, DesignNoteForm::Paragraph { .. })
+                    })
+                    .map_or(BlockKind::Other, BlockKind::DesignNote),
+            },
             _ => BlockKind::Other,
         };
         blocks.push(Block { span: *span, kind });

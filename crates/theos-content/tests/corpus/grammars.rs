@@ -3,7 +3,7 @@
 use std::error::Error;
 use std::fs;
 
-use theos_content::{CalloutTitle, Note, NoteState, Record};
+use theos_content::{AttributeValue, CalloutTitle, Note, NoteState, Record};
 
 use crate::common::corpus;
 
@@ -90,5 +90,58 @@ fn corpus_note_states_parse() -> Result<(), Box<dyn Error>> {
     let concept = notes_of("records/concepts/synthetic-concept-notes.md")?;
     assert_eq!(concept[3].id.text, "n4");
     assert_eq!(concept[3].state, NoteState::Unknown("closed".to_owned()));
+    Ok(())
+}
+
+fn links_of(value: &AttributeValue) -> Vec<&theos_content::Link> {
+    match value {
+        AttributeValue::Links(links) => links.iter().collect(),
+        _ => Vec::new(),
+    }
+}
+
+// AC: CE-10.1
+#[test]
+fn s004_parses_into_its_beats() -> Result<(), Box<dyn Error>> {
+    let text = fs::read_to_string(corpus().join("records/story/scripts/S-004.md"))?;
+    let record = Record::parse(&text)?;
+    let beats = record.body().beats();
+    assert_eq!(beats.len(), 2);
+    let want = [
+        (
+            1,
+            "Arrival",
+            vec![
+                ("at", vec!["fates-shrine"]),
+                ("with", vec!["mother-ilse"]),
+                ("says", vec!["B-016"]),
+                ("when", vec![]),
+            ],
+        ),
+        (
+            2,
+            "The murmur",
+            vec![
+                ("at", vec!["fates-shrine"]),
+                ("reveals", vec!["C-031"]),
+                ("when", vec![]),
+            ],
+        ),
+    ];
+    for (beat, (number, name, attributes)) in beats.iter().zip(want) {
+        assert_eq!((beat.number, beat.name.as_str()), (number, name));
+        assert_eq!(beat.attributes.len(), attributes.len());
+        for (attribute, (key, targets)) in beat.attributes.iter().zip(attributes) {
+            assert_eq!(attribute.key, key);
+            let links = links_of(&attribute.value);
+            assert_eq!(links.len(), targets.len(), "{key}");
+            for (link, target) in links.iter().zip(targets) {
+                assert_eq!(link.target_span.get(&text), Some(target));
+                assert_eq!(link.target, target);
+            }
+        }
+        let when = beat.attributes.last().map(|a| &a.value);
+        assert!(matches!(when, Some(AttributeValue::Token(t)) if t.text == "T1"));
+    }
     Ok(())
 }
