@@ -6,7 +6,7 @@ use std::fs;
 
 use serde::Deserialize;
 use theos_content::yaml::Value;
-use theos_content::{Record, decode};
+use theos_content::{Order, PatchOp, Record, decode};
 
 use crate::common::{corpus, md_files, project_records};
 
@@ -108,6 +108,31 @@ fn crlf_inputs_read_like_their_lf_twins() -> Result<(), Box<dyn Error>> {
                 twin.input
             );
         }
+    }
+    Ok(())
+}
+
+// AC: CE-09.4
+#[test]
+fn crlf_writes_return_lf() -> Result<(), Box<dyn Error>> {
+    let dir = corpus().join("crlf");
+    let twins: Twins = toml::from_str(&fs::read_to_string(dir.join("twins.toml"))?)?;
+    for twin in twins.twin {
+        let record = parse(&fs::read(dir.join(&twin.input))?)?;
+        let lf = parse(&fs::read(dir.join(&twin.lf))?)?;
+        let front = record.front_matter().map_err(ToString::to_string)?;
+        assert!(!front.fields.is_empty(), "{} has fields", twin.input);
+        let ops: Vec<PatchOp> = front
+            .fields
+            .iter()
+            .map(|field| PatchOp::Set {
+                key: field.key.clone(),
+                value: field.value.to_raw(),
+            })
+            .collect();
+        let written = record.patch(&ops, &Order::default())?;
+        assert!(!written.text().contains('\r'), "{} writes LF", twin.input);
+        assert_eq!(written.text(), lf.text(), "{}", twin.input);
     }
     Ok(())
 }

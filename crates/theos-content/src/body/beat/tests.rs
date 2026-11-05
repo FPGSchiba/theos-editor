@@ -50,10 +50,7 @@ fn attribute_shapes_and_kept_data() {
 
     // A beat ends at the next level-2 heading, ordinary or not.
     assert_eq!(beats[0].span.end, beats[1].heading_span.start);
-    let ordinary = r.text().find(
-        "## Beats
-",
-    );
+    let ordinary = r.text().find("## Beats\n");
     assert_eq!(Some(beats[1].span.end), ordinary);
     let blocks = r.body().blocks();
     assert!(

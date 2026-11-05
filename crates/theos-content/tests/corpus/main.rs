@@ -6,3 +6,4 @@ mod grammars;
 mod malformed;
 mod records;
 mod rejected;
+mod round_trip;
