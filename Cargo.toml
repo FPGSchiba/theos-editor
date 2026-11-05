@@ -61,3 +61,10 @@ toml = "1.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 yaml-rust2 = "0.13"
+
+# Third-party crates are optimised also in the dev profile, which `cargo test`, nextest and the
+# coverage run use: unoptimised SQLite, YAML, Markdown and SHA-2 code made the index tests spend
+# more time in them than in the code under test (CE-12.1). Workspace crates keep the dev profile,
+# so debugging and coverage see their code as written.
+[profile.dev.package."*"]
+opt-level = 1
