@@ -25,6 +25,7 @@
 pub mod body;
 pub mod finding;
 pub mod kinds;
+pub mod parts;
 pub mod project;
 pub mod record;
 pub mod text;
