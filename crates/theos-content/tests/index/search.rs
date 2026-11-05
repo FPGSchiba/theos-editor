@@ -1,9 +1,9 @@
 //! Full-text search over the `search/` fixture project: ranking, matching text, stemming and
 //! plain-text queries.
 
-use theos_content::{Column, Hit, Index, Match, Project, parts};
+use theos_content::{Change, Column, Hit, Index, Match, Project, parts};
 
-use crate::common::{expected, fixture, keys};
+use crate::common::{TempProject, expected, fixture, keys};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -165,6 +165,26 @@ fn a_noncharacter_keeps_the_rank_without_spans() -> TestResult {
 fn a_broken_front_matter_is_found_by_its_body() -> TestResult {
     let hits = indexed()?.search("lantern", 20)?;
     assert!(ids(&hits).contains(&"synthetic-broken"));
+    Ok(())
+}
+
+// AC: CE-13.1
+#[test]
+fn a_record_of_an_unknown_kind_is_found_by_its_id() -> TestResult {
+    let project = TempProject::new()?;
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.apply(&[Change::text(
+        "things/synthetic-orphan.md",
+        "---\n# synthetic fixture (P03), not canon\nid: synthetic-orphan\nkind: kindd\n---\n\
+         Body text only.\n",
+    )])?;
+    let hits = index.search("synthetic-orphan", 20)?;
+    let found = hit(&hits, "synthetic-orphan")?;
+    let id = Column::Field {
+        key: "id".to_owned(),
+        entry: None,
+    };
+    assert!(found.matches.iter().any(|m| m.column == id), "{found:?}");
     Ok(())
 }
 

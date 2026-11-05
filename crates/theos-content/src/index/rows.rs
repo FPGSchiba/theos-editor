@@ -335,8 +335,8 @@ impl<'a> Front<'a> {
             .map(|f| f.ty);
         let typed = Typed {
             ty,
-            // The title has its own column.
-            search: field.key != "title" && is_searched(ty, true),
+            // The title has its own column. The id is searched also when the kind is unknown.
+            search: field.key == "id" || (field.key != "title" && is_searched(ty, true)),
             slot: Slot::Field(field.key.clone()),
         };
         match &field.value {
