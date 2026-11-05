@@ -80,7 +80,10 @@ impl<'a> Input<'a> {
             .or(parse_error)
             .map(|error| input.syntax_error(&error))
             .or_else(|| {
-                // The scanner ends the stream early at a U+0000: the rest would be dropped.
+                // The scanner ends the stream early at a U+0000: the rest would be dropped. The
+                // position is where the stream ended (the start of the line after the cut, as
+                // yaml-rust2 moves its end mark to a new line), not the NUL; `control-character`
+                // reports the NUL at its own position and fires first through `Record::parse`.
                 stream_end
                     .filter(|end| end.offset < input.span.end)
                     .map(|end| {
@@ -167,12 +170,18 @@ mod tests {
     fn a_stream_that_ends_before_the_front_matter_ends_is_a_syntax_error() {
         let r = record("a: x\0y\nb: 2\n", "");
         let input = Input::new(r.index(), r.front_span());
-        let error = input.crate_error.map(|e| (e.rule, e.message));
+        // The NUL is at 2:5, but the position is where the scanner's stream ended: the start of
+        // the line after the cut. `control-character` reports the NUL itself, and fires first.
+        let error = input
+            .crate_error
+            .map(|e| (e.rule, e.message, e.position.line, e.position.column));
         assert_eq!(
             error,
             Some((
                 YamlRule::Syntax,
-                "the front matter ends early here".to_owned()
+                "the front matter ends early here".to_owned(),
+                3,
+                1
             ))
         );
         let whole = record("a: 1\nb: 2\n", "");
