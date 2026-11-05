@@ -281,7 +281,7 @@ fn position(record: &Record, offset: usize) -> Position {
 }
 
 /// Whether two spans share a byte; an empty span counts as the point it sits on.
-fn touches(a: Span, b: Span) -> bool {
+pub(crate) fn touches(a: Span, b: Span) -> bool {
     if a.is_empty() || b.is_empty() {
         a.start <= b.end && b.start <= a.end
     } else {

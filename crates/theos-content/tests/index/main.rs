@@ -3,6 +3,7 @@
 mod changes;
 mod common;
 mod kinds;
+mod lenses;
 mod links;
 mod search;
 mod sync;

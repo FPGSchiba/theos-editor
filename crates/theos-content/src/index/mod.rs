@@ -8,6 +8,7 @@ use crate::walk::WalkError;
 
 mod dump;
 mod identity;
+mod lens;
 mod query;
 mod resolve;
 mod rows;
@@ -17,6 +18,9 @@ mod store;
 mod sync;
 mod write;
 
+pub use lens::{
+    EffectiveLens, HeldBelief, IgnoredEntry, Layer, LensData, LensValue, Origin, Overridden,
+};
 pub use query::{LinkRef, RecordSummary};
 pub use search::{Column, Hit, Match};
 pub use slots::Slot;

@@ -237,7 +237,7 @@ fn link(row: &Row<'_>) -> rusqlite::Result<LinkRef> {
 }
 
 /// A nullable integer column as an offset, line or column.
-fn offset(row: &Row<'_>, column: usize) -> rusqlite::Result<Option<usize>> {
+pub(super) fn offset(row: &Row<'_>, column: usize) -> rusqlite::Result<Option<usize>> {
     let Some(value) = row.get::<_, Option<i64>>(column)? else {
         return Ok(None);
     };
