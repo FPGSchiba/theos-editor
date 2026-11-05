@@ -300,46 +300,27 @@ mod tests {
     // AC: CE-11.3
     #[test]
     fn only_schema_version_is_judged() {
-        let newer = "[project]
-schema_version = 2
-[parts]
-enabled = \"x\"
-";
+        let newer = "[project]\nschema_version = 2\n[parts]\nenabled = \"x\"\n";
         assert!(matches!(
             open_text(newer),
             Err(ProjectError::Newer { found: 2, .. })
         ));
-        let p = open_text(
-            "[project]
-schema_version = 1
-[parts]
-enabled = \"x\"
-",
-        )
-        .expect("opens");
+        let p =
+            open_text("[project]\nschema_version = 1\n[parts]\nenabled = \"x\"\n").expect("opens");
         assert_eq!(p.enabled_parts(), [] as [String; 0]);
         let p = open_text(&BASE.replace("\"codex\", ", "3, \"codex\", ")).expect("opens");
         assert_eq!(p.enabled_parts().len(), 8);
         assert!(matches!(
-            open_text(
-                "project = \"x\"
-"
-            ),
+            open_text("project = \"x\"\n"),
             Err(ProjectError::NoSchemaVersion)
         ));
     }
 
     #[test]
     fn unknown_keys_and_tables_are_ignored() {
-        let text = format!(
-            "{BASE}[other]
-anything = [1, {{ a = 2 }}]
-"
-        )
-        .replace(
+        let text = format!("{BASE}[other]\nanything = [1, {{ a = 2 }}]\n").replace(
             "kind           = \"content\"",
-            "kind           = \"content\"
-extra = 1.5",
+            "kind           = \"content\"\nextra = 1.5",
         );
         assert!(open_text(&text).is_ok());
     }

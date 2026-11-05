@@ -228,10 +228,7 @@ fn facts(
             .iter()
             .map(|(field, value)| format!("{field}={value:?}")),
     );
-    lines.join(
-        "
-",
-    )
+    lines.join("\n")
 }
 
 /// The valid scalar values of the fields some target narrows by, for the fields the kind has.
@@ -595,11 +592,7 @@ mod tests {
     fn a_link_keeps_its_fragment() -> Res {
         let found = build(
             "codex/x.md",
-            &format!(
-                "{}see [[S-004#3]]
-",
-                front("topic", "")
-            ),
+            &format!("{}see [[S-004#3]]\n", front("topic", "")),
         )?;
         assert_eq!(found.links.len(), 1);
         assert_eq!(found.links[0].target, "S-004");

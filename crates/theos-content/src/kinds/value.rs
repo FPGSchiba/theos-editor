@@ -475,21 +475,12 @@ mod tests {
 
     #[test]
     fn a_wrongly_shaped_required_value_gives_one_problem() {
-        let title = run(
-            "title: []
-",
-            field("title", FieldType::Text, true),
-        );
+        let title = run("title: []\n", field("title", FieldType::Text, true));
         assert_eq!(title.len(), 1, "{title:?}");
-        let floors = run(
-            "floors: []
-",
-            field("floors", FieldType::FloorRange, true),
-        );
+        let floors = run("floors: []\n", field("floors", FieldType::FloorRange, true));
         assert_eq!(floors.len(), 1, "{floors:?}");
         let held = run(
-            "held_by: []
-",
+            "held_by: []\n",
             field("held_by", FieldType::Links(TARGETS), true),
         );
         assert_eq!(held.len(), 1, "{held:?}");
