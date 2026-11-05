@@ -166,14 +166,15 @@ fn note_text(input: &TitleInput<'_>) -> String {
     blocks.join("\n\n")
 }
 
-/// Removes up to `depth` `>` markers, each with at most one following space.
+/// Removes up to `depth` `>` markers, each with spaces or tabs before it and at most one space or
+/// tab after it.
 fn strip_quotes(line: &str, depth: usize) -> &str {
     let mut rest = line;
     for _ in 0..depth {
-        let Some(after) = rest.trim_start_matches(' ').strip_prefix('>') else {
+        let Some(after) = rest.trim_start_matches([' ', '\t']).strip_prefix('>') else {
             break;
         };
-        rest = after.strip_prefix(' ').unwrap_or(after);
+        rest = after.strip_prefix([' ', '\t']).unwrap_or(after);
     }
     rest
 }

@@ -3,9 +3,9 @@
 use std::error::Error;
 use std::fs;
 
-use theos_content::{AttributeValue, CalloutTitle, Note, NoteState, Record};
+use theos_content::{AttributeValue, CalloutTitle, Note, NoteState, Record, decode};
 
-use crate::common::corpus;
+use crate::common::{corpus, project_records};
 
 fn voices_of(name: &str) -> Result<Vec<Option<CalloutTitle>>, Box<dyn Error>> {
     let path = corpus().join("records/lore/topics").join(name);
@@ -143,5 +143,17 @@ fn s004_parses_into_its_beats() -> Result<(), Box<dyn Error>> {
         let when = beat.attributes.last().map(|a| &a.value);
         assert!(matches!(when, Some(AttributeValue::Token(t)) if t.text == "T1"));
     }
+    Ok(())
+}
+
+// AC: CE-10.2
+#[test]
+fn corpus_design_note_count_is_unchanged() -> Result<(), Box<dyn Error>> {
+    let mut count = 0;
+    for file in project_records()? {
+        let record = Record::parse(decode(&fs::read(&file)?)?)?;
+        count += record.body().design_notes().len();
+    }
+    assert_eq!(count, 6);
     Ok(())
 }

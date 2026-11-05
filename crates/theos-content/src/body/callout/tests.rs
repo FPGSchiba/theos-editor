@@ -131,6 +131,13 @@ fn other_callouts_keep_their_title() {
     assert_eq!(at(&r, c.title_span), "A tip");
 }
 
+// AC: CE-10.2
+#[test]
+fn a_tab_after_the_quote_marker_leaves_note_text() {
+    let r = body("> [!note] n1 · open\n>\t- a\n>\t- b\n");
+    assert_eq!(note(r.body().callouts()[0].title.as_ref()).text, "- a\n- b");
+}
+
 // AC: CE-10.3
 #[test]
 fn malformed_voice_titles_report_their_line() {
