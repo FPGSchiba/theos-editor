@@ -44,6 +44,7 @@ clap = { version = "4.6", features = ["derive"] }
 git-conventional = "0.12"
 globset = "0.4"
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
+proptest = { version = "1.12", default-features = false, features = ["std"] }
 pulldown-cmark = { version = "0.13", default-features = false }
 quick-xml = "0.41"
 serde = { version = "1.0", features = ["derive"] }
