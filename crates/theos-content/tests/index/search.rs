@@ -1,0 +1,179 @@
+//! Full-text search over the `search/` fixture project: ranking, matching text, stemming and
+//! plain-text queries.
+
+use theos_content::{Column, Hit, Index, Match, Project, parts};
+
+use crate::common::{expected, fixture, keys};
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+fn indexed() -> Result<Index, Box<dyn std::error::Error>> {
+    let project = Project::open(&fixture("search"))?;
+    let mut index = Index::in_memory(&project, &parts::builtin()?)?;
+    index.sync()?;
+    Ok(index)
+}
+
+fn ids(hits: &[Hit]) -> Vec<&str> {
+    hits.iter().map(|h| h.id.as_str()).collect()
+}
+
+fn hit<'a>(hits: &'a [Hit], id: &str) -> Result<&'a Hit, Box<dyn std::error::Error>> {
+    hits.iter()
+        .find(|h| h.id == id)
+        .ok_or_else(|| format!("no hit {id}").into())
+}
+
+fn rank(hits: &[Hit], id: &str) -> Result<usize, Box<dyn std::error::Error>> {
+    ids(hits)
+        .iter()
+        .position(|h| *h == id)
+        .ok_or_else(|| format!("no hit {id}").into())
+}
+
+/// The LF text of a fixture file.
+fn text_of(path: &str) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(std::fs::read_to_string(fixture("search").join(path))?.replace("\r\n", "\n"))
+}
+
+/// Checks a match against the file: its position is the span start, its line text the file line.
+fn check_place(text: &str, m: &Match) {
+    let before = &text[..m.span.start];
+    assert_eq!(m.position.line, before.matches('\n').count() + 1);
+    assert_eq!(
+        m.position.column,
+        before.rsplit('\n').next().map_or(0, |l| l.chars().count()) + 1
+    );
+    assert_eq!(Some(m.line.as_str()), text.lines().nth(m.position.line - 1));
+}
+
+// AC: CE-13.1
+#[test]
+fn hits_are_ranked_with_their_matching_text() -> TestResult {
+    let hits = indexed()?.search("lantern", 20)?;
+    assert!(rank(&hits, "synthetic-lantern")? < rank(&hits, "synthetic-lamp")?);
+    for hit in &hits {
+        let text = text_of(&hit.path)?;
+        for m in &hit.matches {
+            if hit.id != "synthetic-quoted" {
+                assert_eq!(text[m.span.start..m.span.end].to_lowercase(), "lantern");
+            }
+            check_place(&text, m);
+        }
+    }
+    let lantern = hit(&hits, "synthetic-lantern")?;
+    assert!(lantern.matches.iter().any(|m| m.column == Column::Title));
+    let lamp = hit(&hits, "synthetic-lamp")?;
+    assert_eq!(lamp.matches.len(), 1);
+    assert_eq!(lamp.matches[0].column, Column::Body);
+    assert_eq!(lamp.matches[0].line, "Synthetic: the lantern glows.");
+    assert_eq!(lamp.kind.as_deref(), Some("thing"));
+    assert_eq!(lamp.title.as_deref(), Some("Synthetic lamp"));
+    assert!(lamp.score > 0.0);
+    Ok(())
+}
+
+// AC: CE-13.1
+#[test]
+fn more_matches_rank_higher() -> TestResult {
+    let hits = indexed()?.search("lantern", 20)?;
+    assert!(rank(&hits, "synthetic-beacon")? < rank(&hits, "synthetic-lamp")?);
+    assert_eq!(hit(&hits, "synthetic-beacon")?.matches.len(), 3);
+    Ok(())
+}
+
+// AC: CE-13.1
+#[test]
+fn stems_accents_ids_and_phrases() -> TestResult {
+    let index = indexed()?;
+    let glow = index.search("glow", 20)?;
+    assert!(ids(&glow).contains(&"synthetic-lamp"));
+    assert!(ids(&glow).contains(&"synthetic-lantern"));
+    for word in ["cafe", "mere"] {
+        assert!(ids(&index.search(word, 20)?).contains(&"synthetic-cafe"));
+    }
+    let id = index.search("T-951", 20)?;
+    let truth = hit(&id, "T-950")?;
+    assert_eq!(truth.matches.len(), 2);
+    assert!(truth.matches.iter().all(|m| m.column == Column::Body));
+    assert_eq!(
+        ids(&index.search("\"red stone\"", 20)?),
+        ["synthetic-red-stone"]
+    );
+    let both = index.search("red stone", 20)?;
+    assert_eq!(both.len(), 2);
+    assert!(ids(&both).contains(&"synthetic-red-stone"));
+    assert!(ids(&both).contains(&"synthetic-stone-red"));
+    Ok(())
+}
+
+// AC: CE-13.1
+#[test]
+fn query_syntax_is_plain_text() -> TestResult {
+    let index = indexed()?;
+    for query in [
+        "AND",
+        "OR",
+        "NEAR",
+        "lantern*",
+        "-lantern",
+        "title:lantern",
+        "^lantern",
+        "\"lantern",
+        "lantern\"",
+    ] {
+        index.search(query, 20)?;
+    }
+    assert_eq!(
+        ids(&index.search("lantern*", 20)?),
+        ids(&index.search("lantern", 20)?)
+    );
+    for query in ["\"\"", "\"   \"", "-", "nosuchword"] {
+        assert!(index.search(query, 20)?.is_empty(), "{query}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_quoted_value_with_escapes_matches_as_a_whole() -> TestResult {
+    let hits = indexed()?.search("lantern", 20)?;
+    let quoted = hit(&hits, "synthetic-quoted")?;
+    let text = text_of(&quoted.path)?;
+    let value = "\"Synthetic \\\"quoted\\\" lantern\"";
+    let start = text.find(value).ok_or("value not found")?;
+    let title = quoted
+        .matches
+        .iter()
+        .find(|m| m.column == Column::Title)
+        .ok_or("no title match")?;
+    assert_eq!(
+        (title.span.start, title.span.end),
+        (start, start + value.len())
+    );
+    Ok(())
+}
+
+#[test]
+fn a_noncharacter_keeps_the_rank_without_spans() -> TestResult {
+    let hits = indexed()?.search("lantern", 20)?;
+    let record = hit(&hits, "synthetic-noncharacter")?;
+    assert!(record.matches.iter().all(|m| m.column != Column::Body));
+    Ok(())
+}
+
+#[test]
+fn a_broken_front_matter_is_found_by_its_body() -> TestResult {
+    let hits = indexed()?.search("lantern", 20)?;
+    assert!(ids(&hits).contains(&"synthetic-broken"));
+    Ok(())
+}
+
+#[test]
+fn the_search_fixture_has_the_expected_findings() -> TestResult {
+    let index = indexed()?;
+    assert_eq!(
+        keys(&index.findings()?),
+        expected(&fixture("search").join("expected.toml"))?
+    );
+    Ok(())
+}

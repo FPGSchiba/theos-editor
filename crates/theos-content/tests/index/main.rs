@@ -4,4 +4,5 @@ mod changes;
 mod common;
 mod kinds;
 mod links;
+mod search;
 mod sync;

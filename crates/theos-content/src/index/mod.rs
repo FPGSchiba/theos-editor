@@ -11,12 +11,14 @@ mod identity;
 mod query;
 mod resolve;
 mod rows;
+mod search;
 pub mod slots;
 mod store;
 mod sync;
 mod write;
 
 pub use query::{LinkRef, RecordSummary};
+pub use search::{Column, Hit, Match};
 pub use slots::Slot;
 pub use sync::{Change, Update};
 
