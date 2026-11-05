@@ -7,16 +7,20 @@ The glyph and quiet colour that identify a content record's kind; the glyph carr
 | World entity (untyped) | ◇ | `kind-world` |
 | Tower · Band · Floor · Location · People | ▲ ≣ ⊟ ⌂ ∴ | `kind-world` |
 | Faction · NPC · Artifact · Document · Creature | ◧ ◉ ◆ ⌸ ✶ | `kind-world` |
+| Enemy · Spawn | ⍟ ⊛ | `kind-world` |
 | Truth | ■ | `kind-truth` |
 | Belief | □ | `kind-belief` |
 | Clue | ◔ | `kind-clue` |
 | Perspective | ◎ | `kind-perspective` |
 | Chronicle | § | `kind-chronicle` |
 | Script / Beat | ¶ | `kind-beat` |
+| Quest | ↝ | `kind-beat` |
 | Concept / Version | ◫ | `kind-concept` |
+| Map / Version | △ | `kind-concept` |
 | Template | ⊡ | `kind-template` |
+| Style | ◊ | `kind-template` |
 
-**Why these glyphs**: Truth and Belief are a filled and a hollow square, the same fact solid and as held. A clue is a quarter-filled circle, partial knowledge. A perspective is a lens. Chronicle and Script use the two text marks (section and paragraph). A concept is a split square, the two-state pair.
+**Why these glyphs**: Truth and Belief are a filled and a hollow square, the same fact solid and as held. A clue is a quarter-filled circle, partial knowledge. A perspective is a lens. Chronicle and Script use the two text marks (section and paragraph). A concept is a split square, the two-state pair. A quest is a winding arrow, a route through the world; an enemy a circled star; a spawn a circled asterisk, a place where enemies gather; a map the triangle of the Maps rail; a style a cut facet.
 
 **Rules**
 - Kind colours never fill a surface and never stand in for a status. A Belief that is `proposed` shows a Belief glyph *and* an amber `proposed` status.

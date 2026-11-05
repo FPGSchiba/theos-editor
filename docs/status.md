@@ -26,6 +26,17 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P17 | AI drafts and semantic search | theos-editor | todo | | |
 | P18 | Installer, first run, Code preset | theos-editor | todo | | |
 | P19 | Comments | theos-editor | todo | | |
+| P20 | Content layout for world and art kinds | tower-of-theos | todo | | |
+| P21 | World kinds: enemies, spawns, quests | theos-editor | todo | | |
+| P22 | Map pins, cameras and frames | theos-editor | todo | | |
+| P23 | Map outputs for the atlas, blockout generator | tower-of-theos | todo | | |
+| P24 | Quest screen and flow editor | theos-editor | todo | | |
+| P25 | Atlas | theos-editor | todo | | |
+| P26 | Style bible and briefs | theos-editor | todo | | |
+| P27 | Asset pipelines | theos-editor | todo | | |
+| P28 | Workflow catalogue and asset guide | tower-of-theos | todo | | |
+
+Rows P20–P28 come from umbrella version 2, which waits for Jann in its docs PR (#19).
 
 ## Needs Jann
 
@@ -45,7 +56,16 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
   higher: a note line inside a paragraph starts a note that runs to the paragraph's end. The spec
   wording can be aligned in a docs PR.
 
+- Umbrella version 2 (world atlas, quests, art from lore; P20–P28) waits for Jann in #19.
+  It keeps P03's CE-11.1 to the kinds of umbrella version 1, so the P03 spec (#18) needs no change;
+  the new kinds get their schemas in P21 and P26.
+
 ## Needs a private session (Confluence, Jira, plugin)
 
 - CE-16S: write `tower-of-theos/canon/formalism/_source.json` from Shared Formalism before P04.
 - CE-04 / CE-05: lore import and Seal split (umbrella §4).
+- Readable copies in Confluence: the umbrella spec (version 2), the data model and the
+  architecture page need the world and art additions once the docs PR is merged.
+- CE-75: move the style bible (`style.yaml` v2 and its reference crops) from Drive into `art/`
+  style records, after P20.
+- Jira: slices S8 and S9 have no epics yet (create only on Jann's explicit yes).

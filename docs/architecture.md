@@ -1,6 +1,7 @@
 # Architecture — Theos content editor
 
-Status: accepted by Jann on 30 Oct 2026; generators added 31 Oct 2026. Binding.
+Status: accepted by Jann on 30 Oct 2026; generators added 31 Oct 2026; atlas, quests and art
+pipelines added with umbrella spec version 2. Binding.
 Readable copy for people: Confluence TOT › "Architecture: Theos Editor — content-first".
 Engine integration (later) is described on the Confluence pages "Tauri-Based Editor GUI" and
 "Hybrid Editor Architecture & IPC"; nothing here may contradict them.
@@ -32,13 +33,18 @@ synced or streamed drive.
 tower-of-theos/
   theos.toml              manifest (kind, schema version, enabled parts)
   .theos/                 settings.toml (tracked) · sessions/ · cache/ (ignored)
-  world/ people/ things/  world and people trees, things
+  world/ people/ things/  world and people trees (spawns sit under their place), things
+  enemies/                enemy kinds
   lore/                   topics/ truths/ beliefs/ clues/
   story/scripts/          one file per script; beats inside
-  concepts/ maps/         parents and their versions (binaries live in the binaries folder)
-  templates/ dialogue/    compile templates · kept dialogue lines
+  story/quests/           one file per quest; steps inside
+  concepts/ maps/         parents and their versions (binaries live in the binaries folder);
+                          map bodies hold pins and cameras
+  art/                    style records
+  templates/ dialogue/    compile and prompt templates · kept dialogue lines
   canon/formalism/        E1…E18, generated read-only mirror of Shared Formalism
-  tools/                  theos_maps (Python generator), comfy/workflows, import scripts
+  tools/                  theos_maps and theos_blockout (Python generators), comfy/workflows,
+                          comfy/pipelines, guides (for agents), import scripts
 ```
 
 ## 3. Crates
@@ -78,11 +84,19 @@ external change to an open record reloads it if clean, or offers a merge if dirt
 
 ## 6. Editor parts
 
-Codex, Changes, Scripts, Graph, Concepts, Maps, Review, MCP — "extensions" in the UI. In v1 an
-internal registry compiled into the editor: each part registers kinds, rules, commands, MCP tools,
-rail presets and settings. A public trait comes with the engine part. A rail preset replaces the
-whole dock tree. Content build rail: Codex, Graph, Scripts, Concepts, Maps, Review, Changes, Code,
-Settings.
+Codex, Atlas, Changes, Scripts, Graph, Concepts, Maps, Review, MCP — "extensions" in the UI. In v1
+an internal registry compiled into the editor: each part registers kinds, rules, commands, MCP
+tools, rail presets and settings. A public trait comes with the engine part. A rail preset replaces
+the whole dock tree. Content build rail: Codex, Atlas, Graph, Scripts, Concepts, Maps, Review,
+Changes, Code, Settings.
+
+- **Atlas** shows the world on its maps: the Tower view (bands, floors, the main quest across
+  them), and floor, settlement and interior maps with layers for places, NPCs, spawns, quest
+  routes, lore and concepts, filtered by Understanding tier. Clicking a place opens its lore,
+  people, quests, concepts and its own map. Placing a record writes a pin line in the map's body
+  (`docs/specs/data-model.md` §9.6). Maps stays the generator workbench (runs, seeds, picks).
+- **Scripts** also holds quests: a quest is shown as a flow diagram drawn from its steps.
+- **Concepts** also starts a concept from a record: family, pipeline, brief, prompt, camera.
 
 ## 7. Git
 
@@ -107,10 +121,15 @@ made outside the editor cannot commit a guardrail violation.
 
 - stdio only; several clients mean several processes, coordinated by the lock and the registry.
 - Read tools: `project_info`, `codex_search`, `codex_read`, `codex_list`, `codex_graph`,
-  `ledger_check`, `review_list`, `gen_catalogue`, `gen_runs`.
-- Propose tools: `codex_propose`, `script_propose`, `gen_run`, `gen_pick`, `note_add`, `note_resolve`.
+  `ledger_check`, `review_list`, `gen_catalogue`, `gen_runs`, `atlas_read`, `quest_flow`,
+  `brief_compose`, `pipeline_list`.
+- Propose tools: `codex_propose`, `script_propose`, `gen_run`, `gen_pick`, `note_add`,
+  `note_resolve`, `atlas_place`, `quest_propose`, `pipeline_run`.
+- Prompts: the guides in the content project's `tools/guides/*.md` (asset workflow, placing on the
+  atlas, writing a quest) are served as MCP prompts and listed by `project_info`, so the way to
+  work is written down once, next to the content.
 - Never over MCP: approving, pushing, changing settings, editing locked records (canon truths,
-  `never` truths, the formalism mirror).
+  `never` truths, the formalism mirror), locking or unlocking a style.
 
 ## 10. Guardrails
 
@@ -122,7 +141,8 @@ made outside the editor cannot commit a guardrail violation.
 | reveal-order, requires, three-clue | Order and robustness of reveals. | Error or warning |
 
 LLM drafts run through all lore rules before they are shown. Text of `never` truths is withheld
-from every LLM prompt.
+from every LLM prompt and from every brief for a generator. Quest steps are checked like beats, on
+every path through the quest.
 
 ## 11. Generators
 
@@ -130,6 +150,23 @@ from every LLM prompt.
 tower-of-theos as a Python package run through uv with Python 3.12 in `.theos/cache/venv`
 (fastscapelib 0.3.0 ships Windows wheels only for Python 3.10–3.13). Outputs go to the binaries
 folder; versions become records; open notes go into every run request.
+
+The art pipeline, end to end:
+
+```text
+record ─► brief (prompt template + lore + effective style, tier-filtered) ─► prompt (agent, AI draft or human)
+map ─► blockout generator ─► clay / depth / canny per camera
+pipeline stage ─► ComfyUI workflow (slots filled from prompt, picks, style refs, camera renders)
+   ─► concept versions ─► pick ─► next stage … ─► canon pick
+```
+
+- The blockout generator (`tools/theos_blockout`) builds one clay scene of a place, from a
+  settlement or interior map or from a blockout script, so every view of the place shares its
+  shapes.
+- Prepared workflows and pipelines live in `tools/comfy/`; each workflow states its models and
+  peak VRAM, and one stage runs at a time, so the chain fits a 16 GB GPU.
+- Asset families (buildings, landscapes, characters, NPCs in a scene, creatures, items and clothes,
+  in-world maps) are pipelines; a pick of one concept can feed another through `ref.<kind>`.
 
 ## 12. LLM client
 
@@ -148,4 +185,6 @@ secrets in the OS credential store. Project kinds: `content` now, `game` with th
 
 The engine part adds Layout, AI and Assets presets, scene windows, PIE and game projects through
 `theos-editor-api`. The game engine may become a generator (`docs/generators.md`) and reads map
-packages directly. THEOS-138 and THEOS-140 are covered by this editor's shell and Review.
+packages directly. Pins are fractions of a map's frame, so the engine can rebuild a map at another
+size or resolution and place everything where it was designed; the engine part adds tuning fields
+(stats, spawn tables, timers, loot) to enemies and spawns and an export of pins, spawns and quests. THEOS-138 and THEOS-140 are covered by this editor's shell and Review.

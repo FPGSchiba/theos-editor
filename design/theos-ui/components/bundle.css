@@ -283,6 +283,8 @@ body {
 [data-kind="artifact"]  { --k: var(--kind-world); --g: "◆"; }
 [data-kind="document"]  { --k: var(--kind-world); --g: "⌸"; }
 [data-kind="creature"]  { --k: var(--kind-world); --g: "✶"; }
+[data-kind="enemy"]     { --k: var(--kind-world); --g: "⍟"; }
+[data-kind="spawn"]     { --k: var(--kind-world); --g: "⊛"; }
 [data-kind="truth"]       { --k: var(--kind-truth);       --g: "■"; }
 [data-kind="belief"]      { --k: var(--kind-belief);      --g: "□"; }
 [data-kind="clue"]        { --k: var(--kind-clue);        --g: "◔"; }
@@ -291,6 +293,9 @@ body {
 [data-kind="beat"]        { --k: var(--kind-beat);        --g: "¶"; }
 [data-kind="concept"]     { --k: var(--kind-concept);     --g: "◫"; }
 [data-kind="template"]    { --k: var(--kind-template);    --g: "⊡"; }
+[data-kind="quest"]       { --k: var(--kind-beat);        --g: "↝"; }
+[data-kind="map"]         { --k: var(--kind-concept);     --g: "△"; }
+[data-kind="style"]       { --k: var(--kind-template);    --g: "◊"; }
 .tu-kindtag { --k: var(--kind-template); display: inline-flex; align-items: center; gap: 4px; padding: 0 6px 0 3px; height: 18px; box-sizing: border-box;
   font: 500 10px/1 var(--font-mono); color: var(--k); border: 1px solid color-mix(in srgb, var(--k) 35%, transparent); white-space: nowrap; }
 

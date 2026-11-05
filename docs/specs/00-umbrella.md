@@ -1,6 +1,7 @@
 # Theos content editor — umbrella spec
 
-Status: accepted when this file is merged by Jann · version 1 · 31 Oct 2026
+Status: accepted when this file is merged by Jann · version 2 · 5 Nov 2026 (version 1: 31 Oct 2026;
+version 2 adds the world atlas, quests and art from lore: G19, P20–P28, slices S8 and S9)
 Owner of architecture: Jann · Built by: Claude Code with superpowers
 
 This spec defines the whole build as phases. Each phase runs one superpowers cycle:
@@ -20,7 +21,9 @@ sessions cannot reach Confluence; this repo is the source of truth for building.
 A working content editor for Tower of Theos, without the engine: lore, world, people, story,
 concepts and maps as Markdown records in git; checked against canon on every change; edited by
 Jann in a desktop app and by Claude through MCP using the same validated commands; with
-generative workflows (maps, concept art) built in, including notes that feed the next run.
+generative workflows (maps, concept art) built in, including notes that feed the next run; with an
+atlas that ties places, people, enemies, spawns and quests to the maps; and with concept art and 2D
+assets generated from the lore through prepared pipelines that agents can run.
 
 ## 2. Global constraints
 
@@ -58,6 +61,9 @@ generative workflows (maps, concept art) built in, including notes that feed the
   follow `docs/release.md`. One product version for all crates; tags only from the pipeline.
 - **G18** UI references are the HTML files in `docs/ui/screens/` (built only from
   `design/theos-ui/`); the PNG files next to them are previews rendered from that HTML.
+- **G19** Positions on maps are fractions of a map version's frame (x east, y south, origin
+  north-west); metres are derived from the frame. Pins and cameras live in the map record's body,
+  never on the placed record (`docs/specs/data-model.md` §9.6–9.7).
 
 ## 3. Phases
 
@@ -85,13 +91,24 @@ Slices say what Jann can do once their phases are merged; Jira tracks slices.
 | P17 | AI drafts and semantic search | theos-editor | S7 | P04, P15 |
 | P18 | Installer, first run, Code preset | theos-editor | S7 | P14 |
 | P19 | Comments | theos-editor | S5 | P12, P13 |
+| P20 | Content layout for world and art kinds | tower-of-theos | S8 | P01 |
+| P21 | World kinds: enemies, spawns, quests | theos-editor | S8 | P07 |
+| P22 | Map pins, cameras and frames | theos-editor | S8 | P09 |
+| P23 | Map outputs for the atlas, blockout generator | tower-of-theos | S8 | P08 |
+| P24 | Quest screen and flow editor | theos-editor | S8 | P12, P21 |
+| P25 | Atlas | theos-editor | S8 | P16, P22, P24 |
+| P26 | Style bible and briefs | theos-editor | S9 | P17, P21 |
+| P27 | Asset pipelines | theos-editor | S9 | P16, P22, P26 |
+| P28 | Workflow catalogue and asset guide | tower-of-theos | S9 | P20, P23 |
 
 Core track runs in order P00 → P02 → … → P07. P01, P08 and P10 can run in parallel sessions in
-their own worktrees. UI phases start after P06.
+their own worktrees. UI phases start after P06. P20 and P23 can also run in parallel sessions once
+their dependencies are merged. P28 runs in a session linked to Jann's PC, where ComfyUI runs.
 
 Slices: **S1** write lore now (P01, P10) · **S2** canon checks (P00, P02–P05) · **S3** propose and
 review (P06, P07) · **S4** maps (P08, P09) · **S5** core UI (P11–P13, P19) · **S6** complete UI
-(P14, P15) · **S7** pictures and places (P16–P18).
+(P14, P15) · **S7** pictures and places (P16–P18) · **S8** the world on the map (P20–P25) · **S9**
+art from lore (P26–P28).
 
 ---
 
@@ -477,6 +494,207 @@ phase's spec PR (G18).
 - CE-54.5 A review entry shows the threads its proposal resolves; Changes lists comment files
   apart from record changes.
 
+### P20 · Content layout for world and art kinds (tower-of-theos)
+
+The PR waits for Jann (content repo).
+
+**CE-55 Layout and templates for the new kinds**
+- CE-55.1 `enemies/` and `art/` exist with READMEs; quests live in `story/quests/` and spawns under
+  their floor or location; the root README's table lists `enemy`, `spawn`, `quest` and `style`;
+  `theos.toml` enables the part `atlas`.
+- CE-55.2 One template and one VS Code snippet per new kind; a record made from each has valid
+  front matter; the map template has empty `## Pins` and `## Cameras` sections.
+- CE-55.3 `repo_checks` cover the new folders, templates and snippets on Ubuntu and Windows.
+
+**CE-56 Guides for agents**
+- CE-56.1 `tools/guides/place-on-the-atlas.md` and `tools/guides/write-a-quest.md` explain pins,
+  cameras and quest steps as `docs/specs/data-model.md` §9.5–9.7 define them, each with one worked
+  example marked as synthetic.
+
+### P21 · World kinds: enemies, spawns, quests
+
+CE-11.1 (P03) covers the kinds of the data model as they stood in umbrella version 1. Enemy, spawn
+and quest get their schemas here, style in P26.
+
+**CE-57 Enemies and spawns**
+- CE-57.1 `enemy` and `spawn` have schemas registered by their editor parts; every corpus record of
+  these kinds validates or reports exact errors.
+- CE-57.2 A spawn's `of` accepts enemy, faction, people and npc and rejects any other kind; a
+  `threat` outside 1–5 is an error.
+
+**CE-58 Quest steps and flow**
+- CE-58.1 A corpus quest parses into its steps with every attribute of data model §9.5; steps are
+  addressable as `Q-012#2`; the body round-trips byte for byte.
+- CE-58.2 An unreachable step, a path that never reaches `ends::`, a `next::`, `on::` or `after::`
+  naming a missing step, and a loop without `repeat:: true` are each findings with their line.
+- CE-58.3 never-confirm, no-overshoot and reveal-order run on every path of a quest: a fixture
+  whose second branch overshoots a truth fails while its first branch alone would pass.
+- CE-58.4 A step's `at` outside the quest's `where`, a revealed clue whose `where` lacks the step's
+  place, and a dialogue whose speaker is neither in the step's `with` nor the giver are findings.
+- CE-58.5 A step with `on::` outcomes and a `dialogue::` reports every outcome that has no section
+  in that dialogue.
+- CE-58.6 A step with `quest::` completes with that quest; quests that contain each other through
+  `quest::` are a finding.
+
+**CE-59 Quests over MCP**
+- CE-59.1 `quest_flow` returns a quest's steps, arrows, paths and findings over stdio.
+- CE-59.2 `quest_propose` creates a review entry; a proposal with blocking findings returns them
+  and commits nothing.
+- CE-59.3 A dialogue lists the quest steps that use it, a spawn the steps that fight it, and a
+  place the quests that pass through it, all derived.
+
+### P22 · Map pins, cameras and frames
+
+**CE-60 Frames and features**
+- CE-60.1 Keeping a map run writes the manifest's `frame` into the version record; a version
+  without one is shown as unframed and refuses pins with a message.
+- CE-60.2 The `features` output is read as GeoJSON with the `geojson` crate; feature ids, types and
+  positions are available to queries; a missing or malformed layer is a warning, never an error.
+
+**CE-61 Pins and cameras**
+- CE-61.1 `## Pins` and `## Cameras` parse into their lines; every line round-trips byte for byte;
+  a malformed line reports its line and column.
+- CE-61.2 Findings: a location or spawn pinned on a map that is not for its place or a place above
+  it; a record pinned twice on one map; a `feature` missing from the features layer; coordinates
+  outside 0–1; a camera id used twice on one map.
+- CE-61.3 Pins of a child map appear on its parent map at the position its frame gives (fixture: a
+  settlement inside a floor, correct within 0.5 m).
+- CE-61.4 A map whose `placed_on` is not its picked version warns once; re-bind moves feature-bound
+  pins to the nearest feature of the same type, keeps free pins and marks them for checking, in
+  one command with undo.
+- CE-61.5 The index answers "pins of a map", projected pins included, and "maps a record appears
+  on"; 2 000 pins come back in under 100 ms on the CI runners, and changing one map updates only
+  its entries.
+
+**CE-62 Atlas over MCP**
+- CE-62.1 `atlas_read` returns a map's pins, cameras, features and unplaced records, or the maps a
+  record appears on; `atlas_place` proposes placing, moving and removing pins and adding cameras as
+  review entries.
+- CE-62.2 Everything in this phase works with the fake generator's maps, not only theos_maps.
+
+### P23 · Map outputs for the atlas, blockout generator (tower-of-theos)
+
+The PR waits for Jann (content repo).
+
+**CE-63 theos_maps frame and features**
+- CE-63.1 Every run's manifest carries the `frame` and a `features` output as defined in
+  `docs/generators.md` §3; child maps carry their `origin_m` in the parent's frame.
+- CE-63.2 Feature ids and positions are identical for the same recipe and seed on Windows and
+  Linux (an extension of the CE-28.4 determinism fixture).
+
+**CE-64 theos_blockout**
+- CE-64.1 `tools/theos_blockout` is a protocol-1 process generator run with uv and Python 3.12 on
+  Windows and Linux, and on macOS or with the gap documented; `cargo xtask generator-check` passes
+  for it.
+- CE-64.2 From a settlement or interior map package it builds a scene whose plots, lanes and walls
+  match the package's features within one map cell; from the heightfield and water layers it
+  builds terrain with lake surfaces.
+- CE-64.3 From a blockout script it builds the scene the script describes (synthetic fixture).
+- CE-64.4 For each camera of its `cameras` input it writes clay, depth and canny renders at the
+  requested size; the same input gives the same bytes on the same OS.
+- CE-64.5 It runs without a GPU.
+
+### P24 · Quest screen and flow editor
+
+**CE-65 Quest screen** (`docs/ui/screens/14-quest.html`)
+- CE-65.1 A quest shows as on the reference: a flow drawn from its body and laid out
+  automatically, every finding on its step, and the generated paths beside it.
+- CE-65.2 Adding a step, an arrow or an outcome on the diagram writes the body through the command
+  layer with undo; untouched bytes stay identical.
+- CE-65.3 A main-quest step with `quest::` opens that quest's flow as a sub-flow.
+- CE-65.4 The selected step's attributes and prose are edited in the manuscript editor below the
+  diagram.
+
+### P25 · Atlas
+
+Adds Atlas to the rail of every screen (`docs/architecture.md` §6).
+
+**CE-66 Tower view** (`docs/ui/screens/13-atlas-tower.html`)
+- CE-66.1 Bands and floors show as on the reference, with each floor's trial, side quests, counts,
+  map and checks, and the main-quest thread across the floors; clicking a floor opens its map.
+- CE-66.2 The tier filter hides what a player at that tier does not know yet.
+
+**CE-67 Map views** (`docs/ui/screens/12-atlas.html`)
+- CE-67.1 Floor, settlement and interior views show the picked version of the map for that place,
+  with a breadcrumb back up; the layers Places, NPCs, Spawns, Quests, Lore and Concepts switch on
+  and off.
+- CE-67.2 The tier filter hides quests, clues and places not revealed at the chosen tier.
+- CE-67.3 Clicking a place opens its panel with lore, people, quests, nearby spawns, concepts and
+  its own map; "Open map" drills down.
+- CE-67.4 Dragging a record from Unplaced places it and dragging a pin moves it; both are commands
+  with undo.
+- CE-67.5 Clicking a quest highlights its route, branches drawn as forks, and opens its flow in a
+  drawer; hovering a step highlights its pin, and the other way round.
+- CE-67.6 Placements proposed by an agent show as proposed until they are reviewed.
+
+### P26 · Style bible and briefs
+
+**CE-68 Style records**
+- CE-68.1 `style` has a schema; the effective style of a concept resolves through `extends` and
+  shows where each section comes from.
+- CE-68.2 A change to a locked style is a high-significance review entry; no MCP tool locks or
+  unlocks a style.
+- CE-68.3 `refs` are binary references, checked like every other (CE-15.4).
+
+**CE-69 Briefs**
+- CE-69.1 A brief for a record, concept type and tier is built from a `template` with
+  `purpose: prompt` out of the record and its `## Look`, its place chain, the people living there,
+  the effective style and the concept's open notes (data model §9.9).
+- CE-69.2 A brief for T1 holds nothing revealed only after T1 (fixture), and text of a `never`
+  truth is never in a brief (tested; G9).
+- CE-69.3 `brief_compose` returns over MCP the same brief the editor shows.
+- CE-69.4 A prompt drafted by the LLM client is marked AI, stays editable, and is stored in the
+  version's `inputs` when a run starts.
+
+### P27 · Asset pipelines
+
+**CE-70 Pipelines and stages**
+- CE-70.1 Pipelines in `tools/comfy/pipelines/*.toml` are listed with their stages; a stage naming
+  an unknown workflow, slot or slot source is a finding with its line.
+- CE-70.2 Running a stage produces concept versions whose `from` is the previous stage's pick and
+  whose `inputs` name the pipeline and the stage; a stage with `pick = "auto"` runs on without a
+  pick.
+- CE-70.3 The slot sources of `docs/generators.md` §8 resolve; one that does not stops the run
+  before it starts and names the source.
+- CE-70.4 A workflow whose nodes or models ComfyUI lacks shows as not ready, with the missing names,
+  from `/object_info` and `/models` (recorded responses in tests).
+- CE-70.5 A pipeline refuses a concept whose `for` lacks a record it needs, and sets the concept's
+  `type`.
+
+**CE-71 Generating in the editor** (`docs/ui/screens/15-generate.html`)
+- CE-71.1 "Generate concept" on a record or an atlas place opens the screen as on the reference:
+  family, pipeline, brief, prompt, the cameras of the place's maps and the readiness checks.
+- CE-71.2 The Concepts screen shows a concept's pipeline as its stage strip, as on
+  `docs/ui/screens/06-concepts.html`.
+
+**CE-72 Pipelines and guides over MCP**
+- CE-72.1 `pipeline_list` and `pipeline_run` work over stdio; Claude runs a whole pipeline for a
+  place with a pick per stage, and its picks land as review entries.
+- CE-72.2 The guides in `tower-of-theos/tools/guides/*.md` are served as MCP prompts and listed by
+  `project_info`.
+
+### P28 · Workflow catalogue and asset guide (tower-of-theos)
+
+The PR waits for Jann (content repo). The phase runs in a session linked to Jann's PC, where
+ComfyUI runs. The PR carries one proof sheet per asset family (the outputs of one full pipeline
+run, in the binaries folder); Jann's judgement of them is a review item of the PR, not an AC.
+
+**CE-73 Workflow catalogue**
+- CE-73.1 The workflows `klein-compose`, `zimage-cn-compose`, `klein-ref-look`, `krea-finish`,
+  `zimage-4k`, `crop-detail` and `color-match` exist in API format with sidecars as in
+  `docs/generators.md` §7.
+- CE-73.2 Workflows for the families characters, NPCs in a scene, creatures, items and clothes, and
+  in-world maps exist the same way.
+- CE-73.3 Every sidecar slot maps to an input of an existing node, checked against a recorded
+  `/object_info`, and every model is listed with its file name, folder and source.
+- CE-73.4 Every sidecar records the peak VRAM measured at the default size, and none exceeds 16 GB.
+
+**CE-74 Pipelines and the asset guide**
+- CE-74.1 One pipeline per asset family of the asset guide, each valid against
+  `docs/generators.md` §8.
+- CE-74.2 `tools/guides/asset-workflow.md` says which pipeline serves which family, how picks and
+  notes drive the next stage, and what fits in 16 GB.
+
 ---
 
 ## 4. Work outside the build
@@ -491,10 +709,15 @@ work sessions). Each item lands in tower-of-theos or Confluence, not in this rep
 | CE-05 | Split the false Seal into atomic truths with reveal targets; update the plugin's canon rule. |
 | CE-07 | Decision pages in Confluence for the decision log; Workspace Crate Architecture page. |
 | CE-16S | Write `canon/formalism/_source.json` from Shared Formalism (needed by P04). |
-| CE-19, CE-27, CE-31 | theos-design plugin: read through MCP (after P05), propose through MCP (after P07), maps through the generator tools (after P09). |
+| CE-19, CE-27, CE-31 | theos-design plugin: read through MCP (after P05), propose through MCP (after P07), maps through the generator tools (after P09), quests, the atlas and pipelines through their tools and the guides in `tools/guides/` (after P21, P22, P27). |
+| CE-75 | Move the style bible (`style.yaml` v2 and its reference crops) from Drive into `art/` style records (after P20). |
 
 ## 5. Later (not planned)
 
 Dragging a clue to another floor; graph paths between two records; who-wrote-what view; keymap
 editor; Assets, Layout and AI presets (engine part); bulk approve; the game engine as a map
-generator.
+generator. From version 2: tuning fields for enemies and spawns (stats, spawn tables, timers,
+loot) with the engine part; exporting pins, spawns and quests to the engine; NPC schedules and
+NPCs that move; polygon areas on maps; tiled map images beyond 4K; 3D assets (meshes, textures);
+a LoRA per main character if faces drift between images; runtime dialogue built from quest step
+context.
