@@ -9,7 +9,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P00 | Foundation and gate | theos-editor | done | #5, #9, #10 | #7 |
 | P01 | Content layout and templates | tower-of-theos | done | #4 | tower-of-theos#2 |
 | P02 | Records and grammars | theos-editor | done | #16 | #17 |
-| P03 | Kinds, index, search, lenses | theos-editor | spec-pr | #18 | |
+| P03 | Kinds, index, search, lenses | theos-editor | in-progress | #18 | |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | todo | | |
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
 | P06 | Command layer and git | theos-editor | todo | | |
@@ -38,8 +38,6 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
   near", "the operator-plate names a Listener"). P02's fixture copies reword them neutrally until
   Jann, or a session that can read Confluence, confirms they are canon.
 - R5-1, open since #17 merged, is fixed in P03's build (plan Task 1).
-- The P03 spec (#18) waits for Jann's approval. Its rulings are listed in the PR; the plan starts
-  once it is merged.
 - P02 spec §5.11 says a design note is "a paragraph whose text starts with `Design note:`". The
   build follows data model §9.2 instead ("on a line starting with `Design note:`"), which ranks
   higher: a note line inside a paragraph starts a note that runs to the paragraph's end. The spec
