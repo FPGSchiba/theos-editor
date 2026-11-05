@@ -1,35 +1,25 @@
-//! Rule `control-character`: a scalar (key or value, any style) that holds a control character
-//! other than a tab. Position: that character. A scalar another rule already rejects for its
-//! spelling (a line break, an escape) is left to that rule, so a fault is reported once.
-
-use yaml_rust2::Event;
+//! Rule `control-character`: a control character other than a tab anywhere in the front matter
+//! (scalars, comments, blank lines). Position: that character. The check reads the characters of
+//! the span, because `yaml-rust2` treats U+0000 as the end of the stream and drops the rest.
 
 use super::{Rule, error_at};
-use crate::yaml::scalar::{ScalarStyle, is_forbidden_control, spelled_end};
+use crate::yaml::scalar::is_forbidden_control;
 use crate::yaml::{Input, YamlError, YamlRule};
 
 pub(super) struct ControlCharacter;
 
 impl Rule for ControlCharacter {
     fn check(&self, input: &Input<'_>) -> Option<YamlError> {
-        let source = input.index.text();
-        input.events.iter().find_map(|event| {
-            let Event::Scalar(text, style, ..) = &event.value else {
-                return None;
-            };
-            let style = ScalarStyle::from_crate(*style)?;
-            let end = spelled_end(source, event.offset, style, text).ok()?;
-            let spelled = source.get(event.offset..end)?;
-            let (at, _) = spelled
-                .char_indices()
-                .find(|(_, c)| is_forbidden_control(*c))?;
-            error_at(
-                input,
-                YamlRule::ControlCharacter,
-                event.offset + at,
-                "a value cannot hold a control character other than a tab",
-            )
-        })
+        let text = input.span.get(input.index.text())?;
+        let (at, _) = text
+            .char_indices()
+            .find(|&(_, c)| c != '\n' && is_forbidden_control(c))?;
+        error_at(
+            input,
+            YamlRule::ControlCharacter,
+            input.span.start + at,
+            "the front matter cannot hold a control character other than a tab",
+        )
     }
 }
 
@@ -41,7 +31,7 @@ mod tests {
     #[test]
     fn control_characters_are_rejected_at_the_character() {
         for c in [
-            '\u{1}', '\u{7}', '\u{b}', '\u{c}', '\u{1b}', '\u{7f}', '\u{9f}',
+            '\u{0}', '\u{1}', '\u{7}', '\u{b}', '\u{c}', '\u{1b}', '\u{7f}', '\u{9f}',
         ] {
             let want = Some(("control-character", "2:5".to_owned()));
             assert_eq!(front_error(&format!("a: x{c}y\n")), want, "plain {c:?}");
@@ -66,6 +56,15 @@ mod tests {
                 "block item {c:?}"
             );
         }
+    }
+
+    // AC: CE-09.3
+    #[test]
+    fn a_nul_is_rejected_wherever_it_stands() {
+        let want = |p: &str| Some(("control-character", p.to_owned()));
+        assert_eq!(front_error("a: x\0y\nb: 2\n"), want("2:5"));
+        assert_eq!(front_error("a: 1\n# \0\nb: 2\n"), want("3:3"));
+        assert_eq!(front_error("a: 1\n\0\nb: 2\n"), want("3:1"));
     }
 
     #[test]

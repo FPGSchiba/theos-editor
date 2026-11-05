@@ -51,10 +51,14 @@ impl<'a> Input<'a> {
             crate_error: None,
         };
         let mut scan_error = None;
+        let mut stream_end = None;
         let mut scanner = Scanner::new(text.chars());
         loop {
             match scanner.next_token() {
                 Ok(Some(Token(at, token))) => {
+                    if token == TokenType::StreamEnd {
+                        stream_end = Some(input.mark((), at));
+                    }
                     let marked = input.mark(token, at);
                     input.tokens.push(marked);
                 }
@@ -73,7 +77,15 @@ impl<'a> Input<'a> {
         }
         input.crate_error = scan_error
             .or(parse_error)
-            .map(|error| input.syntax_error(&error));
+            .map(|error| input.syntax_error(&error))
+            .or_else(|| {
+                // The scanner ends the stream early at a U+0000: the rest would be dropped.
+                stream_end
+                    .filter(|end| end.offset < input.span.end)
+                    .map(|end| {
+                        input.error(YamlRule::Syntax, &end, "the front matter ends early here")
+                    })
+            });
         input
     }
 
@@ -147,6 +159,24 @@ mod tests {
 
     fn is_kind(event: &Event) -> bool {
         matches!(event, Event::Scalar(value, ..) if value == "kind")
+    }
+
+    // AC: CE-09.3
+    #[test]
+    fn a_stream_that_ends_before_the_front_matter_ends_is_a_syntax_error() {
+        let r = record("a: x\0y\nb: 2\n", "");
+        let input = Input::new(r.index(), r.front_span());
+        let error = input.crate_error.map(|e| (e.rule, e.message));
+        assert_eq!(
+            error,
+            Some((
+                YamlRule::Syntax,
+                "the front matter ends early here".to_owned()
+            ))
+        );
+        let whole = record("a: 1\nb: 2\n", "");
+        let input = Input::new(whole.index(), whole.front_span());
+        assert!(input.crate_error.is_none());
     }
 
     // The unit of `Marker::index()` is characters, not bytes (spec §4.2); offsets never use it.
