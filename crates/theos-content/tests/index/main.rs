@@ -9,4 +9,5 @@ mod lenses;
 mod links;
 mod schema;
 mod search;
+mod speed;
 mod sync;
