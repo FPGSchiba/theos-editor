@@ -25,6 +25,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P16 | Generative screens | theos-editor | todo | | |
 | P17 | AI drafts and semantic search | theos-editor | todo | | |
 | P18 | Installer, first run, Code preset | theos-editor | todo | | |
+| P19 | Comments | theos-editor | todo | | |
 
 ## Needs Jann
 
