@@ -6,9 +6,14 @@ use rusqlite::types::ValueRef;
 use crate::index::{Index, IndexError};
 
 /// The sections of the dump, in order, with the query that reads each one. `files` shows path and
-/// hash only: sizes, times and the racy flag differ between a sync and an apply.
+/// hash only: sizes, times and the racy flag differ between a sync and an apply. `records` leaves
+/// out `search_rowid`, the row id of its search row.
 const SECTIONS: [(&str, &str); 7] = [
-    ("records", "SELECT * FROM records"),
+    (
+        "records",
+        "SELECT path, id, id_fold, kind, title, status, front, body_start, body_line, facts \
+         FROM records",
+    ),
     ("field_values", "SELECT * FROM field_values"),
     ("links", "SELECT * FROM links"),
     ("beats", "SELECT * FROM beats"),

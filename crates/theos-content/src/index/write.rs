@@ -14,9 +14,11 @@ use crate::index::resolve::id_fold;
 use crate::index::rows::{RecordRows, Shape};
 use crate::yaml::ScalarStyle;
 
-/// The deletes of the rows of a record, one per table that holds them, keyed by `path`.
+/// The deletes of the rows of a record, one per table that holds them, keyed by `path`. The
+/// `search` row goes by the rowid that the `records` row holds, so before the `records` row: an
+/// FTS5 table has no index on `path`, and a delete by `path` would read every search row.
 const DELETES: [&str; 6] = [
-    "DELETE FROM search WHERE path = ?1",
+    "DELETE FROM search WHERE rowid = (SELECT search_rowid FROM records WHERE path = ?1)",
     "DELETE FROM findings WHERE path = ?1",
     "DELETE FROM beats WHERE path = ?1",
     "DELETE FROM links WHERE path = ?1",
@@ -47,10 +49,21 @@ fn delete_rows(conn: &Connection, path: &str) -> rusqlite::Result<()> {
 
 /// Inserts `rows` for `path`, which has no rows yet: it has no `files` row.
 pub(crate) fn insert(conn: &Connection, path: &str, rows: &RecordRows) -> rusqlite::Result<()> {
+    // The search row first: the `records` row holds its rowid.
+    let search_rowid = match &rows.search {
+        Some(search) => {
+            let mut stmt = conn.prepare_cached(
+                "INSERT INTO search (path, title, fields, body) VALUES (?1, ?2, ?3, ?4)",
+            )?;
+            Some(stmt.insert(params![path, search.title, search.fields, search.body])?)
+        }
+        None => None,
+    };
     if let Some(row) = &rows.record {
         let mut stmt = conn.prepare_cached(
             "INSERT INTO records (path, id, id_fold, kind, title, status, front, body_start, \
-             body_line, facts) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+             body_line, facts, search_rowid) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         )?;
         stmt.execute(params![
             row.path,
@@ -62,7 +75,8 @@ pub(crate) fn insert(conn: &Connection, path: &str, rows: &RecordRows) -> rusqli
             row.front,
             opt(row.body_start),
             opt(row.body_line),
-            row.facts
+            row.facts,
+            search_rowid
         ])?;
     }
     let mut stmt = conn.prepare_cached(
@@ -122,12 +136,6 @@ pub(crate) fn insert(conn: &Connection, path: &str, rows: &RecordRows) -> rusqli
     }
     for finding in &rows.findings {
         insert_finding(conn, finding, "record")?;
-    }
-    if let Some(search) = &rows.search {
-        let mut stmt = conn.prepare_cached(
-            "INSERT INTO search (path, title, fields, body) VALUES (?1, ?2, ?3, ?4)",
-        )?;
-        stmt.execute(params![path, search.title, search.fields, search.body])?;
     }
     Ok(())
 }

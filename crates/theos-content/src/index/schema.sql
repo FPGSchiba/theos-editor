@@ -1,9 +1,10 @@
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE files (path TEXT PRIMARY KEY, size INTEGER, mtime_ns INTEGER, hash TEXT NOT NULL,
                     racy INTEGER NOT NULL) WITHOUT ROWID;
+-- `search_rowid` is the rowid of the record's `search` row, which FTS5 cannot find by `path`.
 CREATE TABLE records (path TEXT PRIMARY KEY, id TEXT NOT NULL, id_fold TEXT NOT NULL, kind TEXT,
                       title TEXT, status TEXT, front TEXT, body_start INTEGER, body_line INTEGER,
-                      facts TEXT NOT NULL) WITHOUT ROWID;
+                      facts TEXT NOT NULL, search_rowid INTEGER) WITHOUT ROWID;
 CREATE TABLE field_values (path TEXT NOT NULL, field TEXT NOT NULL, entry TEXT, item INTEGER,
                            shape TEXT NOT NULL, text TEXT, style TEXT, span_start INTEGER NOT NULL,
                            span_end INTEGER NOT NULL, line INTEGER NOT NULL, col INTEGER NOT NULL,
