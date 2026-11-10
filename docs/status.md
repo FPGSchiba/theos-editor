@@ -10,7 +10,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P01 | Content layout and templates | tower-of-theos | done | #4 | tower-of-theos#2 |
 | P02 | Records and grammars | theos-editor | done | #16 | #17 |
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
-| P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | todo | | |
+| P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | spec-pr | | |
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
 | P06 | Command layer and git | theos-editor | todo | | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
@@ -70,7 +70,12 @@ Rows P20–P28 come from umbrella version 2 (#19).
 
 ## Needs a private session (Confluence, Jira, plugin)
 
-- CE-16S: write `tower-of-theos/canon/formalism/_source.json` from Shared Formalism before P04.
+- CE-16S: write `tower-of-theos/canon/formalism/_source.json` from Shared Formalism, in the
+  format of the P04 spec §5.14, then run `theos formalism` to generate `E1`…`E18`. P04 proves
+  the mirror with a synthetic source until then.
+- inworld-vocab: if Confluence or the theos-design plugin holds a list of developer words, copy
+  it into `words` of `[validate.inworld-vocab]` in `tower-of-theos/.theos/settings.toml`
+  (P04 spec §5.11, §5.12). Built in are only ids, tier tokens and rule names.
 - CE-04 / CE-05: lore import and Seal split (umbrella §4).
 - Readable copies in Confluence: the umbrella spec (version 2), the data model and the
   architecture page need the world and art additions once the docs PR is merged.
