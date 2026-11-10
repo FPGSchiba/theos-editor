@@ -26,6 +26,17 @@ pub(crate) fn indexed(
     Ok((dir, index))
 }
 
+/// Indexes `files` as [`indexed`] does and runs `f` on a lore context over the store: the one
+/// the lore step builds, which fetches facts by id.
+pub(crate) fn with_context<R>(
+    files: &[(&str, &str)],
+    f: impl FnOnce(&mut crate::lore::Context<'_>) -> R,
+) -> Result<R, Box<dyn std::error::Error>> {
+    let (_dir, index) = indexed(files)?;
+    let mut ctx = index.lore_context();
+    Ok(f(&mut ctx))
+}
+
 /// Parses `---\n{front}---\n{body}`; panics on error (tests only).
 pub(crate) fn record(front: &str, body: &str) -> Record {
     match Record::parse(&format!("---\n{front}---\n{body}")) {

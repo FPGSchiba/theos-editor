@@ -10,6 +10,15 @@
 mod context;
 mod facts;
 
+#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 7"))]
+pub(crate) mod availability;
+#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 7"))]
+pub(crate) mod cycle;
+#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 7"))]
+pub(crate) mod lens;
+#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 7"))]
+pub(crate) mod places;
+
 use std::fmt;
 use std::rc::Rc;
 

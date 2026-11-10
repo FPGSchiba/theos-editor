@@ -32,6 +32,14 @@ const BEATS: &str = "SELECT path, number, when_token FROM beats";
 const NOTES: &str = "SELECT path, id, state, span_start, span_end, line, col FROM notes";
 const INWORLD: &str = "SELECT path, span_start, span_end, line, col, text FROM inworld";
 
+impl crate::index::Index {
+    /// A lore context over the store that fetches facts by id, for tests.
+    #[cfg(test)]
+    pub(crate) fn lore_context(&self) -> crate::lore::Context<'_> {
+        crate::lore::Context::new(Box::new(ById::new(&self.store.conn)), &self.registry)
+    }
+}
+
 /// The facts of the store, fetched by id as rules ask; the context keeps each answer.
 pub(crate) struct ById<'c> {
     conn: &'c Connection,

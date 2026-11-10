@@ -11,7 +11,7 @@ use crate::index::query::offset;
 use crate::index::rows::touches;
 use crate::index::slots::Slot;
 use crate::index::{Index, IndexError};
-use crate::kinds::{FieldType, LENS_ENTRIES, LensEntry};
+use crate::kinds::{FieldType, KindRegistry, LENS_ENTRIES, LensEntry};
 use crate::text::{Position, Span};
 
 /// One record of the chain: the holder or one of its parents.
@@ -105,28 +105,129 @@ pub struct EffectiveLens {
 
 /// The shape of a stored value.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Shape {
+pub(crate) enum Shape {
     Scalar,
     List,
     Map,
 }
 
 /// One `field_values` row of a lens.
-struct Node {
-    entry: Option<String>,
-    item: bool,
-    shape: Shape,
-    text: Option<String>,
-    span: Span,
-    position: Position,
-    valid: bool,
+pub(crate) struct Node {
+    pub(crate) entry: Option<String>,
+    pub(crate) item: bool,
+    pub(crate) shape: Shape,
+    pub(crate) text: Option<String>,
+    pub(crate) span: Span,
+    pub(crate) position: Position,
+    pub(crate) valid: bool,
 }
 
-/// What one layer's lens says.
+/// What one layer's lens says: the entries that count, and the nodes that do not, by entry key
+/// (`lens` when the lens itself is not a map).
 #[derive(Default)]
-struct Written {
-    set: Vec<(&'static str, LensData, Origin)>,
-    ignored: Vec<IgnoredEntry>,
+pub(crate) struct Written {
+    pub(crate) set: Vec<(&'static str, LensData, Origin)>,
+    pub(crate) ignored: Vec<(&'static str, Node)>,
+}
+
+/// Where the chain walk and the reading of a layer get their rows: the SQL store for
+/// [`Index::lens`], recorded reads for the lore context. One implementation of the chain serves
+/// both (spec §5.5).
+pub(crate) trait LensSource {
+    /// How a read fails.
+    type Error;
+
+    /// The first record by path that has `id` and one of `kinds`.
+    fn holder(&mut self, id: &str, kinds: &[String]) -> Result<Option<Layer>, Self::Error>;
+
+    /// The target of the `parent` link of the record at `path`.
+    fn parent(&mut self, path: &str) -> Result<Option<String>, Self::Error>;
+
+    /// The `lens` nodes of the record at `path`, in file order.
+    fn lens_nodes(&mut self, path: &str) -> Result<Vec<Node>, Self::Error>;
+}
+
+/// The kinds whose spec has a lens field.
+pub(crate) fn holder_kinds(registry: &KindRegistry) -> Vec<String> {
+    registry
+        .kinds()
+        .filter(|spec| spec.field("lens").is_some_and(|f| f.ty == FieldType::Lens))
+        .map(|spec| spec.name.to_owned())
+        .collect()
+}
+
+/// The holder and its parents: each step follows the `parent` link to a holder of a kind the
+/// field allows, and ends at a dangling or wrong-kind parent or at a cycle.
+pub(crate) fn chain<S: LensSource>(
+    source: &mut S,
+    registry: &KindRegistry,
+    first: Layer,
+    holders: &[String],
+) -> Result<Vec<Layer>, S::Error> {
+    let mut chain = vec![first];
+    loop {
+        let Some(layer) = chain.last() else {
+            return Ok(chain);
+        };
+        let allowed: Vec<String> = match registry
+            .kind(&layer.kind)
+            .and_then(|spec| spec.field("parent"))
+            .map(|field| field.ty)
+        {
+            Some(FieldType::Link(targets)) => targets
+                .iter()
+                .map(|target| target.kind.to_owned())
+                .filter(|kind| holders.contains(kind))
+                .collect(),
+            _ => return Ok(chain),
+        };
+        let Some(parent) = source.parent(&layer.path)? else {
+            return Ok(chain);
+        };
+        if chain.iter().any(|seen| seen.id == parent) {
+            return Ok(chain);
+        }
+        match source.holder(&parent, &allowed)? {
+            Some(next) => chain.push(next),
+            None => return Ok(chain),
+        }
+    }
+}
+
+/// What the lens of one layer sets and which of its nodes do not count.
+pub(crate) fn written<S: LensSource>(source: &mut S, layer: &Layer) -> Result<Written, S::Error> {
+    let mut nodes = source.lens_nodes(&layer.path)?;
+    let mut written = Written::default();
+    let Some(top) = nodes.iter().position(|n| n.entry.is_none() && !n.item) else {
+        return Ok(written);
+    };
+    let top = nodes.remove(top);
+    if top.shape != Shape::Map {
+        written.ignored.push(("lens", top));
+        return Ok(written);
+    }
+    for entry in LENS_ENTRIES {
+        let key = Some(entry.key);
+        let Some(at) = nodes
+            .iter()
+            .position(|n| n.entry.as_deref() == key && !n.item)
+        else {
+            continue;
+        };
+        let node = nodes.remove(at);
+        let items = nodes
+            .iter()
+            .filter(|n| n.entry.as_deref() == key && n.item)
+            .map(|n| n.text.clone().unwrap_or_default());
+        match data(entry, &node, items) {
+            Some(value) => {
+                let origin = origin(layer, &node);
+                written.set.push((entry.key, value, origin));
+            }
+            None => written.ignored.push((entry.key, node)),
+        }
+    }
+    Ok(written)
 }
 
 impl Index {
@@ -139,20 +240,25 @@ impl Index {
     ///
     /// Fails when SQLite fails.
     pub fn lens(&self, holder: &str) -> Result<Option<EffectiveLens>, IndexError> {
-        let holders = self.holder_kinds();
-        let Some(first) = self.first_of(holder, &holders)? else {
+        let holders = holder_kinds(&self.registry);
+        let mut source = self;
+        let Some(first) = source.holder(holder, &holders)? else {
             return Ok(None);
         };
-        let chain = self.chain(first, &holders)?;
+        let chain = chain(&mut source, &self.registry, first, &holders)?;
         let mut writes = Vec::new();
+        let mut ignored = Vec::new();
         for layer in &chain {
-            writes.push(self.written(layer)?);
+            let mut written = written(&mut source, layer)?;
+            for (field, node) in std::mem::take(&mut written.ignored) {
+                ignored.push(self.ignore(field, layer, &node)?);
+            }
+            writes.push(written);
         }
         let fields = LENS_ENTRIES
             .iter()
             .filter_map(|entry| merge(entry.key, &writes))
             .collect();
-        let ignored = writes.iter().flat_map(|w| w.ignored.clone()).collect();
         let beliefs = self.beliefs(&chain)?;
         Ok(Some(EffectiveLens {
             chain,
@@ -160,15 +266,6 @@ impl Index {
             ignored,
             beliefs,
         }))
-    }
-
-    /// The kinds whose spec has a lens field.
-    fn holder_kinds(&self) -> Vec<String> {
-        self.registry
-            .kinds()
-            .filter(|spec| spec.field("lens").is_some_and(|f| f.ty == FieldType::Lens))
-            .map(|spec| spec.name.to_owned())
-            .collect()
     }
 
     /// The first record by path that has `id` and one of `kinds`.
@@ -193,46 +290,8 @@ impl Index {
         Ok(None)
     }
 
-    /// The holder and its parents: each step follows the `parent` link to a holder of a kind the
-    /// field allows, and ends at a dangling or wrong-kind parent or at a cycle.
-    fn chain(&self, first: Layer, holders: &[String]) -> Result<Vec<Layer>, IndexError> {
-        let mut chain = vec![first];
-        loop {
-            let Some(layer) = chain.last() else {
-                return Ok(chain);
-            };
-            let allowed: Vec<String> = match self
-                .registry
-                .kind(&layer.kind)
-                .and_then(|spec| spec.field("parent"))
-                .map(|field| field.ty)
-            {
-                Some(FieldType::Link(targets)) => targets
-                    .iter()
-                    .map(|target| target.kind.to_owned())
-                    .filter(|kind| holders.contains(kind))
-                    .collect(),
-                _ => return Ok(chain),
-            };
-            let parent = self
-                .links_from(&layer.path)?
-                .into_iter()
-                .find(|link| link.slot == Slot::Field("parent".to_owned()));
-            let Some(parent) = parent else {
-                return Ok(chain);
-            };
-            if chain.iter().any(|seen| seen.id == parent.target) {
-                return Ok(chain);
-            }
-            match self.first_of(&parent.target, &allowed)? {
-                Some(next) => chain.push(next),
-                None => return Ok(chain),
-            }
-        }
-    }
-
     /// The `lens` rows of a record, in file order.
-    fn lens_nodes(&self, path: &str) -> Result<Vec<Node>, IndexError> {
+    fn read_lens_nodes(&self, path: &str) -> Result<Vec<Node>, IndexError> {
         let mut stmt = self.store.conn.prepare_cached(
             "SELECT entry, item, shape, text, span_start, span_end, line, col, valid \
              FROM field_values WHERE path = ?1 AND field = 'lens' ORDER BY rowid",
@@ -261,34 +320,6 @@ impl Index {
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
-    }
-
-    /// What the lens of one layer sets and what it ignores.
-    fn written(&self, layer: &Layer) -> Result<Written, IndexError> {
-        let nodes = self.lens_nodes(&layer.path)?;
-        let mut written = Written::default();
-        let Some(top) = nodes.iter().find(|n| n.entry.is_none() && !n.item) else {
-            return Ok(written);
-        };
-        if top.shape != Shape::Map {
-            written.ignored.push(self.ignore("lens", layer, top)?);
-            return Ok(written);
-        }
-        for entry in LENS_ENTRIES {
-            let key = Some(entry.key);
-            let Some(node) = nodes.iter().find(|n| n.entry.as_deref() == key && !n.item) else {
-                continue;
-            };
-            let items = nodes
-                .iter()
-                .filter(|n| n.entry.as_deref() == key && n.item)
-                .map(|n| n.text.clone().unwrap_or_default());
-            match data(entry, node, items) {
-                Some(value) => written.set.push((entry.key, value, origin(layer, node))),
-                None => written.ignored.push(self.ignore(entry.key, layer, node)?),
-            }
-        }
-        Ok(written)
     }
 
     fn ignore(&self, field: &str, layer: &Layer, node: &Node) -> Result<IgnoredEntry, IndexError> {
@@ -333,7 +364,28 @@ impl Index {
     }
 }
 
-fn origin(layer: &Layer, node: &Node) -> Origin {
+impl LensSource for &Index {
+    type Error = IndexError;
+
+    fn holder(&mut self, id: &str, kinds: &[String]) -> Result<Option<Layer>, IndexError> {
+        self.first_of(id, kinds)
+    }
+
+    fn parent(&mut self, path: &str) -> Result<Option<String>, IndexError> {
+        let parent = Slot::Field("parent".to_owned());
+        Ok(self
+            .links_from(path)?
+            .into_iter()
+            .find(|link| link.slot == parent)
+            .map(|link| link.target))
+    }
+
+    fn lens_nodes(&mut self, path: &str) -> Result<Vec<Node>, IndexError> {
+        self.read_lens_nodes(path)
+    }
+}
+
+pub(crate) fn origin(layer: &Layer, node: &Node) -> Origin {
     Origin {
         layer: layer.clone(),
         span: node.span,
@@ -354,7 +406,7 @@ fn data(entry: &LensEntry, node: &Node, items: impl Iterator<Item = String>) -> 
 }
 
 /// The value of `key` over all layers: the nearest wins, the farther ones are overridden.
-fn merge(key: &str, writes: &[Written]) -> Option<LensValue> {
+pub(crate) fn merge(key: &str, writes: &[Written]) -> Option<LensValue> {
     let mut found = writes
         .iter()
         .filter_map(|w| w.set.iter().find(|(set, ..)| *set == key));
