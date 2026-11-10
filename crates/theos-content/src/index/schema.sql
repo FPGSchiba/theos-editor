@@ -53,3 +53,7 @@ CREATE INDEX deps_key ON deps(key);
 CREATE INDEX deps_subject ON deps(subject);
 CREATE INDEX ledger_path ON ledger(path);
 CREATE INDEX ledger_beats_path ON ledger_beats(path);
+-- The hashes of binary files for `binary_findings`, per machine and folder; not part of `dump()`.
+CREATE TABLE binary_memo (root TEXT NOT NULL, path TEXT NOT NULL, size INTEGER NOT NULL,
+                          mtime_ns INTEGER NOT NULL, hash TEXT NOT NULL,
+                          PRIMARY KEY (root, path)) WITHOUT ROWID;

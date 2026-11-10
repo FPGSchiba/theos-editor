@@ -9,6 +9,7 @@ use crate::walk::WalkError;
 
 pub(crate) use sync::sha256_hex;
 
+pub(crate) mod binaries;
 mod configured;
 mod dump;
 mod identity;
@@ -26,6 +27,7 @@ mod store;
 mod sync;
 mod write;
 
+pub use binaries::BinaryReport;
 pub use ledger::{BeatRef, LedgerEntry, TruthLedger};
 pub use lens::{
     EffectiveLens, HeldBelief, IgnoredEntry, Layer, LensData, LensValue, Origin, Overridden,

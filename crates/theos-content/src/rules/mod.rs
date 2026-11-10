@@ -84,6 +84,7 @@ pub fn all(registry: &KindRegistry) -> Vec<RuleInfo> {
     let mut rules: Vec<RuleInfo> = Vec::new();
     rules.extend(fixed(crate::check::rules()));
     rules.extend(fixed(crate::index::resolve::rule_set()));
+    rules.extend(crate::index::binaries::RULES);
     rules.extend(lore_rules(registry).map(|rule| RuleInfo {
         id: rule.id,
         severity: rule.severity,
