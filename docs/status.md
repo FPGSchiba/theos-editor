@@ -26,7 +26,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P17 | AI drafts and semantic search | theos-editor | todo | | |
 | P18 | Installer, first run, Code preset | theos-editor | todo | | |
 | P19 | Comments | theos-editor | todo | | |
-| P20 | Content layout for world and art kinds | tower-of-theos | spec-pr | | |
+| P20 | Content layout for world and art kinds | tower-of-theos | spec-pr | #22 | |
 | P21 | World kinds: enemies, spawns, quests | theos-editor | todo | | |
 | P22 | Map pins, cameras and frames | theos-editor | todo | | |
 | P23 | Map outputs for the atlas, blockout generator | tower-of-theos | todo | | |
