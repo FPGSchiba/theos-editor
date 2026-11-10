@@ -10,7 +10,7 @@ mod dump;
 mod identity;
 mod lens;
 mod query;
-mod resolve;
+pub(crate) mod resolve;
 mod rows;
 mod search;
 pub mod slots;
