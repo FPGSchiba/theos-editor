@@ -16,6 +16,16 @@ pub enum Tier {
 }
 
 impl Tier {
+    /// The text of the tier: `T1`, `T2` or `T3`.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Tier::T1 => "T1",
+            Tier::T2 => "T2",
+            Tier::T3 => "T3",
+        }
+    }
+
     /// The tier a `gate` or `tier` value names: `T1`, `T2` or `T3`.
     #[must_use]
     pub fn parse(text: &str) -> Option<Tier> {
@@ -40,6 +50,16 @@ pub enum State {
 }
 
 impl State {
+    /// The `moves_to` value of the state.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            State::Hinted => "hinted",
+            State::Suspected => "suspected",
+            State::Confirmed => "confirmed",
+        }
+    }
+
     /// The state a `moves_to` value names: `hinted`, `suspected` or `confirmed`.
     #[must_use]
     pub fn parse(text: &str) -> Option<State> {
@@ -93,6 +113,7 @@ pub fn of_clue(ctx: &mut Context<'_>, clue: &RecordFacts) -> Result<Availability
 /// Whether `a` can be found no later than `b`: its floor and its gate are each at most `b`'s.
 /// `None` when a floor or a gate is unknown.
 #[must_use]
+#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 10"))]
 pub fn no_later(a: &Availability, b: &Availability) -> Option<bool> {
     let (floor_a, floor_b) = (a.floor.as_ref()?, b.floor.as_ref()?);
     let (gate_a, gate_b) = (a.gate?, b.gate?);

@@ -10,6 +10,7 @@ use crate::walk::WalkError;
 mod dump;
 mod identity;
 pub(crate) mod inputs;
+mod ledger;
 pub(crate) mod lens;
 mod lore_source;
 mod lore_step;
@@ -22,6 +23,7 @@ mod store;
 mod sync;
 mod write;
 
+pub use ledger::{BeatRef, LedgerEntry, TruthLedger};
 pub use lens::{
     EffectiveLens, HeldBelief, IgnoredEntry, Layer, LensData, LensValue, Origin, Overridden,
 };

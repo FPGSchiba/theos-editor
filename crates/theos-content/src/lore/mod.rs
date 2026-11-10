@@ -10,12 +10,11 @@
 mod context;
 mod facts;
 
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 8"))]
 pub(crate) mod availability;
 pub(crate) mod cycle;
+pub(crate) mod ledger;
 #[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 11"))]
 pub(crate) mod lens;
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 8"))]
 pub(crate) mod places;
 
 use std::fmt;

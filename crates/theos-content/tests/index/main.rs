@@ -8,6 +8,7 @@ mod corpus;
 mod inputs;
 mod inworld;
 mod kinds;
+mod ledger;
 mod lenses;
 mod links;
 mod lore;

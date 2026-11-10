@@ -12,14 +12,18 @@ use rusqlite::{Connection, OptionalExtension};
 
 use crate::finding::Finding;
 use crate::index::IndexError;
+use crate::index::ledger;
 use crate::index::lore_source::{Bulk, ById};
 use crate::index::rows::RecordRows;
 use crate::index::write;
 use crate::kinds::KindRegistry;
-use crate::lore::{Context, FactSource, LoreRule, ReadKey, Subject};
+use crate::lore::{self, Context, FactSource, LoreRule, ReadKey, Subject};
 
 /// The step name of the findings that [`run`] makes.
 const STEP: &str = "lore";
+
+/// The kind whose subjects also store a ledger (L10).
+const TRUTH: &str = "truth";
 
 /// When more subjects than this have rules to run, the facts are loaded at once (L8).
 const BULK_ABOVE: usize = 32;
@@ -123,8 +127,8 @@ pub(crate) fn run(
     let mut reran = BTreeSet::new();
     for plan in plans {
         let subject = match &plan.record {
-            // A record no rule checks needs no facts.
-            Some(_) if plan.rules.is_empty() => None,
+            // A record no rule checks needs no facts, unless it is a truth: it has a ledger.
+            Some((_, kind)) if plan.rules.is_empty() && kind.as_deref() != Some(TRUTH) => None,
             Some((id, _)) => ctx.subject_record(id, &plan.path)?.map(Subject::Record),
             None => ctx.subject_input(&plan.path)?.map(Subject::Input),
         };
@@ -161,6 +165,7 @@ fn clear(conn: &Connection, path: &str) -> rusqlite::Result<()> {
         .execute([path, STEP])?;
     conn.prepare_cached("DELETE FROM deps WHERE subject = ?1")?
         .execute([path])?;
+    ledger::clear(conn, path)?;
     Ok(())
 }
 
@@ -192,6 +197,12 @@ fn check(
             }
             write::insert_finding(conn, &finding, STEP)?;
         }
+    }
+    if let Subject::Record(record) = subject
+        && record.kind.as_deref() == Some(TRUTH)
+    {
+        let rows = lore::ledger::of_truth(ctx, &record.id)?;
+        ledger::store(conn, &record.path, &rows)?;
     }
     let mut stmt = conn.prepare_cached("INSERT INTO deps (subject, key) VALUES (?1, ?2)")?;
     for key in ctx.take_reads() {

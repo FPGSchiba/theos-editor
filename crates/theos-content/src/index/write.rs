@@ -18,10 +18,12 @@ use crate::yaml::ScalarStyle;
 /// (`subject` in `deps`: the reads of its lore rules). The `search` row goes by the rowid that
 /// the `records` row holds, so before the `records` row: an FTS5 table has no index on `path`,
 /// and a delete by `path` would read every search row.
-const DELETES: [&str; 9] = [
+const DELETES: [&str; 11] = [
     "DELETE FROM search WHERE rowid = (SELECT search_rowid FROM records WHERE path = ?1)",
     "DELETE FROM findings WHERE path = ?1",
     "DELETE FROM deps WHERE subject = ?1",
+    "DELETE FROM ledger_beats WHERE path = ?1",
+    "DELETE FROM ledger WHERE path = ?1",
     "DELETE FROM inworld WHERE path = ?1",
     "DELETE FROM notes WHERE path = ?1",
     "DELETE FROM beats WHERE path = ?1",

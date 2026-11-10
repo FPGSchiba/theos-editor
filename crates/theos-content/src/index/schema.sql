@@ -29,6 +29,12 @@ CREATE TABLE inputs (path TEXT PRIMARY KEY, size INTEGER, mtime_ns INTEGER, racy
                      hash TEXT NOT NULL, text TEXT) WITHOUT ROWID;
 -- The reads of the lore step: `subject` read `key` (`rec:<id>`, `in:<id>` or `file:<path>`).
 CREATE TABLE deps (subject TEXT NOT NULL, key TEXT NOT NULL);
+-- The reveal ledger of a truth (`path`), one row per clue; `ledger_beats` holds the beats that
+-- place the clue.
+CREATE TABLE ledger (path TEXT NOT NULL, clue TEXT NOT NULL, clue_path TEXT NOT NULL,
+                     state TEXT NOT NULL, floor INTEGER, place TEXT, gate TEXT);
+CREATE TABLE ledger_beats (path TEXT NOT NULL, clue_path TEXT NOT NULL, script TEXT NOT NULL,
+                           beat INTEGER NOT NULL);
 CREATE VIRTUAL TABLE search USING fts5(path UNINDEXED, title, fields, body,
                                        tokenize = 'porter unicode61 remove_diacritics 2');
 CREATE INDEX records_id ON records(id);
@@ -43,3 +49,5 @@ CREATE INDEX notes_path ON notes(path);
 CREATE INDEX inworld_path ON inworld(path);
 CREATE INDEX deps_key ON deps(key);
 CREATE INDEX deps_subject ON deps(subject);
+CREATE INDEX ledger_path ON ledger(path);
+CREATE INDEX ledger_beats_path ON ledger_beats(path);

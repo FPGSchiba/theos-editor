@@ -152,7 +152,8 @@ fn write_project(project: &TempProject) -> std::io::Result<()> {
     Ok(())
 }
 
-/// The update of a change; no lore rule is registered, so nothing is revalidated.
+/// The update of a change; no lore rule is registered, so only a truth, which stores a ledger,
+/// is revalidated (see [`with_truth`]).
 fn lists(read: &[&str], reparsed: &[&str], removed: &[&str], relinked: &[&str]) -> Update {
     let own = |list: &[&str]| list.iter().map(|path| (*path).to_owned()).collect();
     Update {
@@ -162,6 +163,12 @@ fn lists(read: &[&str], reparsed: &[&str], removed: &[&str], relinked: &[&str]) 
         relinked: own(relinked),
         revalidated: Vec::new(),
     }
+}
+
+/// `update` with the truth revalidated: it read the links to it, which the change touched.
+fn with_truth(mut update: Update) -> Update {
+    update.revalidated = vec![TRUTH.to_owned()];
+    update
 }
 
 /// The dump of a fresh in-memory index over the same folder.
@@ -198,7 +205,10 @@ fn each_change_updates_its_record_and_its_backlinks() -> TestResult {
     };
 
     project.write(READER, &reader("Also [[T-940]].\n"))?;
-    step(&mut index, lists(&[READER], &[READER], &[], &[]))?;
+    step(
+        &mut index,
+        with_truth(lists(&[READER], &[READER], &[], &[])),
+    )?;
 
     project.write(BELIEF, &belief("B-940", "Synthetic belief A, retitled"))?;
     step(&mut index, lists(&[BELIEF], &[BELIEF], &[], &[]))?;

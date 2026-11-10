@@ -9,7 +9,7 @@ use crate::index::{Index, IndexError};
 /// and hash only: sizes, times and the racy flag differ between a sync and an apply. `records` leaves
 /// out `search_rowid`, the row id of its search row. `deps` is there on purpose: reads that
 /// differ from a cold build's would miss a later change.
-const SECTIONS: [(&str, &str); 11] = [
+const SECTIONS: [(&str, &str); 13] = [
     (
         "records",
         "SELECT path, id, id_fold, kind, title, status, front, body_start, body_line, facts \
@@ -22,6 +22,8 @@ const SECTIONS: [(&str, &str); 11] = [
     ("inworld", "SELECT * FROM inworld"),
     ("findings", "SELECT * FROM findings"),
     ("deps", "SELECT subject, key FROM deps"),
+    ("ledger", "SELECT * FROM ledger"),
+    ("ledger_beats", "SELECT * FROM ledger_beats"),
     ("search", "SELECT path, title, fields, body FROM search"),
     ("files", "SELECT path, hash FROM files"),
     ("inputs", "SELECT path, hash FROM inputs"),

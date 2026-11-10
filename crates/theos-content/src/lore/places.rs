@@ -48,6 +48,7 @@ pub fn floor_of(ctx: &mut Context<'_>, place: &str) -> Result<Option<Floor>, Fac
 /// # Errors
 ///
 /// Fails when the store fails.
+#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 11"))]
 pub fn inside(ctx: &mut Context<'_>, inner: &str, outer: &str) -> Result<bool, FactError> {
     if inner == outer {
         return Ok(true);
