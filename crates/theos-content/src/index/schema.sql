@@ -13,7 +13,14 @@ CREATE TABLE links (path TEXT NOT NULL, source_id TEXT NOT NULL, slot TEXT NOT N
                     target TEXT NOT NULL, fragment TEXT, span_start INTEGER NOT NULL,
                     span_end INTEGER NOT NULL, line INTEGER NOT NULL, col INTEGER NOT NULL);
 CREATE TABLE beats (path TEXT NOT NULL, number INTEGER NOT NULL, name TEXT NOT NULL,
-                    span_start INTEGER NOT NULL, span_end INTEGER NOT NULL, line INTEGER NOT NULL);
+                    span_start INTEGER NOT NULL, span_end INTEGER NOT NULL, line INTEGER NOT NULL,
+                    when_token TEXT);
+CREATE TABLE notes (path TEXT NOT NULL, id TEXT NOT NULL, number INTEGER NOT NULL,
+                    state TEXT NOT NULL, resolved_by TEXT, version TEXT,
+                    span_start INTEGER NOT NULL, span_end INTEGER NOT NULL,
+                    line INTEGER NOT NULL, col INTEGER NOT NULL);
+CREATE TABLE inworld (path TEXT NOT NULL, span_start INTEGER NOT NULL, span_end INTEGER NOT NULL,
+                      line INTEGER NOT NULL, col INTEGER NOT NULL, text TEXT NOT NULL);
 CREATE TABLE findings (path TEXT NOT NULL, id TEXT, rule TEXT NOT NULL, severity TEXT NOT NULL,
                        span_start INTEGER, span_end INTEGER, line INTEGER, col INTEGER,
                        message TEXT NOT NULL, step TEXT NOT NULL);
@@ -27,3 +34,5 @@ CREATE INDEX links_path ON links(path);
 CREATE INDEX links_target ON links(target);
 CREATE INDEX beats_path ON beats(path);
 CREATE INDEX findings_path ON findings(path);
+CREATE INDEX notes_path ON notes(path);
+CREATE INDEX inworld_path ON inworld(path);

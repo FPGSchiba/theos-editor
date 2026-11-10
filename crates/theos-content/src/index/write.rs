@@ -17,9 +17,11 @@ use crate::yaml::ScalarStyle;
 /// The deletes of the rows of a record, one per table that holds them, keyed by `path`. The
 /// `search` row goes by the rowid that the `records` row holds, so before the `records` row: an
 /// FTS5 table has no index on `path`, and a delete by `path` would read every search row.
-const DELETES: [&str; 6] = [
+const DELETES: [&str; 8] = [
     "DELETE FROM search WHERE rowid = (SELECT search_rowid FROM records WHERE path = ?1)",
     "DELETE FROM findings WHERE path = ?1",
+    "DELETE FROM inworld WHERE path = ?1",
+    "DELETE FROM notes WHERE path = ?1",
     "DELETE FROM beats WHERE path = ?1",
     "DELETE FROM links WHERE path = ?1",
     "DELETE FROM field_values WHERE path = ?1",
@@ -120,9 +122,18 @@ pub(crate) fn insert(conn: &Connection, path: &str, rows: &RecordRows) -> rusqli
             int(link.position.column)
         ])?;
     }
+    insert_lore_rows(conn, path, rows)?;
+    for finding in &rows.findings {
+        insert_finding(conn, finding, "record")?;
+    }
+    Ok(())
+}
+
+/// Inserts the beats, notes and in-world segments of `rows` for `path`.
+fn insert_lore_rows(conn: &Connection, path: &str, rows: &RecordRows) -> rusqlite::Result<()> {
     let mut stmt = conn.prepare_cached(
-        "INSERT INTO beats (path, number, name, span_start, span_end, line) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO beats (path, number, name, span_start, span_end, line, when_token) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
     )?;
     for beat in &rows.beats {
         stmt.execute(params![
@@ -131,11 +142,39 @@ pub(crate) fn insert(conn: &Connection, path: &str, rows: &RecordRows) -> rusqli
             beat.name,
             int(beat.span.start),
             int(beat.span.end),
-            int(beat.line)
+            int(beat.line),
+            beat.when
         ])?;
     }
-    for finding in &rows.findings {
-        insert_finding(conn, finding, "record")?;
+    let mut stmt = conn.prepare_cached(
+        "INSERT INTO notes (path, id, number, state, resolved_by, version, span_start, span_end, line, col) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+    )?;
+    for note in &rows.notes {
+        stmt.execute(params![
+            path,
+            note.id,
+            note.number,
+            note.state,
+            note.resolved_by,
+            note.version,
+            int(note.span.start),
+            int(note.span.end),
+            int(note.position.line),
+            int(note.position.column)
+        ])?;
+    }
+    let mut stmt = conn.prepare_cached(
+        "INSERT INTO inworld (path, span_start, span_end, line, col, text) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+    )?;
+    for segment in &rows.inworld {
+        stmt.execute(params![
+            path,
+            int(segment.span.start),
+            int(segment.span.end),
+            int(segment.position.line),
+            int(segment.position.column),
+            segment.text
+        ])?;
     }
     Ok(())
 }

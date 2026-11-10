@@ -10,7 +10,7 @@ use crate::project::SCHEMA_VERSION;
 use crate::rules::RuleInfo;
 
 /// The layout of the cache tables; bump it when `schema.sql` changes.
-pub(crate) const FORMAT: i64 = 2;
+pub(crate) const FORMAT: i64 = 3;
 
 /// The fingerprint of this crate's sources, computed by `build.rs`.
 pub(crate) const SOURCE: &str = env!("THEOS_CONTENT_SOURCE_HASH");

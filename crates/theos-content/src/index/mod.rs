@@ -11,7 +11,7 @@ mod identity;
 mod lens;
 mod query;
 pub(crate) mod resolve;
-mod rows;
+pub(crate) mod rows;
 mod search;
 pub mod slots;
 mod store;

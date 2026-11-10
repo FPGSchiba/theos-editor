@@ -54,6 +54,7 @@ pub mod body;
 pub mod check;
 pub mod finding;
 pub mod index;
+mod inworld;
 pub mod kinds;
 pub mod parts;
 pub mod project;
