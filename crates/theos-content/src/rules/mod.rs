@@ -53,6 +53,13 @@ pub const GUARDRAILS: [&str; 3] = [
     "lore/inworld-vocab",
 ];
 
+/// Whether `id` names a guardrail. This one definition decides it everywhere, whatever class a
+/// rule was registered with and also before its rule is registered.
+#[must_use]
+pub fn is_guardrail(id: &str) -> bool {
+    GUARDRAILS.contains(&id)
+}
+
 /// Wraps `(id, severity)` pairs as fixed rules.
 fn fixed(list: Vec<(&'static str, Severity)>) -> impl Iterator<Item = RuleInfo> {
     list.into_iter().map(|(id, severity)| RuleInfo {
@@ -82,6 +89,12 @@ pub fn all(registry: &KindRegistry) -> Vec<RuleInfo> {
         severity: rule.severity,
         class: rule.class,
     }));
+    for rule in &mut rules {
+        if is_guardrail(rule.id) {
+            rule.class = RuleClass::Guardrail;
+            rule.severity = Severity::Error;
+        }
+    }
     rules.sort_by_key(|rule| rule.id);
     rules.dedup_by_key(|rule| rule.id);
     rules
@@ -93,6 +106,9 @@ pub fn all(registry: &KindRegistry) -> Vec<RuleInfo> {
 /// default.
 #[must_use]
 pub fn effective(info: &RuleInfo, configured: Option<Severity>) -> Severity {
+    if is_guardrail(info.id) {
+        return Severity::Error;
+    }
     match info.class {
         RuleClass::Guardrail => Severity::Error,
         RuleClass::Configurable => configured.unwrap_or(info.severity),
@@ -121,6 +137,47 @@ mod tests {
                 assert_eq!(effective(&rule, given), Severity::Error);
             }
         }
+    }
+
+    // AC: CE-14.1
+    #[test]
+    fn a_guardrail_id_is_an_error_whatever_it_was_registered_with() {
+        for id in GUARDRAILS {
+            for class in [RuleClass::Fixed, RuleClass::Configurable] {
+                let rule = RuleInfo {
+                    id,
+                    severity: Severity::Warning,
+                    class,
+                };
+                for given in [None, Some(Severity::Warning)] {
+                    assert_eq!(effective(&rule, given), Severity::Error, "{id} {class:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_registered_guardrail_id_is_listed_as_a_guardrail() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut registry = crate::parts::builtin()?;
+        registry.register_rule(
+            "codex",
+            crate::lore::LoreRule {
+                id: "lore/inworld-vocab",
+                severity: Severity::Warning,
+                class: RuleClass::Configurable,
+                on: crate::lore::On::Kinds(&["thing"]),
+                run: |_, _| Ok(Vec::new()),
+            },
+        )?;
+        let rules = all(&registry);
+        let rule = rules
+            .iter()
+            .find(|rule| rule.id == "lore/inworld-vocab")
+            .ok_or("not listed")?;
+        assert_eq!(rule.class, RuleClass::Guardrail);
+        assert_eq!(rule.severity, Severity::Error);
+        Ok(())
     }
 
     #[test]

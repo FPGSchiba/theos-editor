@@ -15,7 +15,7 @@ use toml::de::{DeTable, DeValue};
 pub(crate) use rules::RULES;
 
 use crate::finding::Severity;
-use crate::rules::{GUARDRAILS, RuleClass, RuleInfo};
+use crate::rules::{RuleClass, RuleInfo, is_guardrail};
 use crate::text::Span;
 
 /// The project-relative path of the settings file.
@@ -73,7 +73,8 @@ const WORD: &str = "settings/word";
 /// Reads the settings in `text`, which is none when the file is not UTF-8 (L17). `rules` is the
 /// rule table: it tells which rule a `severity` entry may name.
 ///
-/// A fault gives a problem and no setting; a file that is not valid TOML gives empty settings.
+/// A bad entry gives a problem and no setting. A file that is not valid TOML, or a value of the
+/// wrong type, gives empty settings (`settings/toml`).
 #[must_use]
 pub fn parse(text: Option<&str>, rules: &[RuleInfo]) -> Parsed {
     let mut walk = Walk {
@@ -97,6 +98,11 @@ pub fn parse(text: Option<&str>, rules: &[RuleInfo]) -> Parsed {
             }
             Ok(root) => walk.root(root.get_ref()),
         },
+    }
+    // A value of the wrong shape makes `[validate]` empty (spec 5.12); the other problems only
+    // drop their own entry.
+    if walk.out.problems.iter().any(|problem| problem.rule == TOML) {
+        walk.out.settings = ValidationSettings::default();
     }
     // `toml` keeps a table's keys sorted, not in file order.
     walk.out.problems.sort_by_key(|problem| problem.span.start);
@@ -145,20 +151,22 @@ impl Walk<'_> {
         match key.get_ref().as_ref() {
             "severity" => self.severity_table(value),
             "inworld-vocab" => self.vocab_table(value),
-            other => self.unknown_key(key, other, "validate"),
+            other => self.unknown_key(key, other, "[validate]", "severity and inworld-vocab"),
         }
     }
 
-    fn unknown_key(&mut self, key: &Spanned<std::borrow::Cow<'_, str>>, name: &str, table: &str) {
-        let known = match table {
-            "validate" => "severity and inworld-vocab",
-            "inworld-vocab" => "words and allow",
-            _ => "word and reason",
-        };
+    /// `name` is not a key of `owner`, whose keys are `known`.
+    fn unknown_key(
+        &mut self,
+        key: &Spanned<std::borrow::Cow<'_, str>>,
+        name: &str,
+        owner: &str,
+        known: &str,
+    ) {
         self.problem(
             UNKNOWN_KEY,
             span_of(key),
-            format!("`{name}` is not a key of [{table}]; its keys are {known}."),
+            format!("`{name}` is not a key of {owner}; its keys are {known}."),
         );
     }
 
@@ -198,18 +206,21 @@ impl Walk<'_> {
             ),
             None => self.problem(UNKNOWN_RULE, span_of(key), format!("{name} is not a rule.")),
             Some(RuleClass::Configurable) => {
-                match value.get_ref().as_str().and_then(Severity::parse) {
-                    Some(severity) => {
-                        self.out
-                            .settings
-                            .severities
-                            .insert(name.to_owned(), severity);
-                    }
-                    None => self.problem(
+                let Some(text) = value.get_ref().as_str() else {
+                    self.shape(value, &format!("the severity of {name} must be a string."));
+                    return;
+                };
+                if let Some(severity) = Severity::parse(text) {
+                    self.out
+                        .settings
+                        .severities
+                        .insert(name.to_owned(), severity);
+                } else {
+                    self.problem(
                         SEVERITY,
                         span_of(value),
                         format!("the severity of {name} must be \"error\" or \"warning\"."),
-                    ),
+                    );
                 }
             }
         }
@@ -218,7 +229,7 @@ impl Walk<'_> {
     /// The class a `severity` entry for `name` meets: a guardrail by name even when its rule is
     /// not registered, none for a name that is no rule.
     fn class_of(&self, name: &str) -> Option<RuleClass> {
-        if GUARDRAILS.contains(&name) {
+        if is_guardrail(name) {
             return Some(RuleClass::Guardrail);
         }
         self.rules
@@ -237,7 +248,9 @@ impl Walk<'_> {
             match key.get_ref().as_ref() {
                 "words" => self.words(value),
                 "allow" => self.allow(value),
-                other => self.unknown_key(key, other, "inworld-vocab"),
+                other => {
+                    self.unknown_key(key, other, "[validate.inworld-vocab]", "words and allow");
+                }
             }
         }
     }
@@ -290,34 +303,53 @@ impl Walk<'_> {
         };
         let mut word = None;
         let mut reason = None;
+        let mut unknown = false;
         for (key, value) in table {
             match key.get_ref().as_ref() {
                 "word" => word = Some(value),
                 "reason" => reason = Some(value),
-                other => self.unknown_key(key, other, "allow"),
+                other => {
+                    unknown = true;
+                    self.unknown_key(key, other, "an allow entry", "word and reason");
+                }
             }
         }
-        let text = word.and_then(|value| value.get_ref().as_str().map(|text| (text, value)));
-        let word = if let Some((text, value)) = text {
-            self.one_word(text, value)
-        } else {
-            self.problem(
-                WORD,
-                span_of(item),
-                "an allow entry needs a word.".to_owned(),
-            );
-            None
+        let word = match word {
+            None => {
+                self.problem(
+                    WORD,
+                    span_of(item),
+                    "an allow entry needs a word.".to_owned(),
+                );
+                None
+            }
+            Some(value) => {
+                if let Some(text) = value.get_ref().as_str() {
+                    self.one_word(text, value)
+                } else {
+                    self.shape(value, "the word of an allow entry must be a string.");
+                    None
+                }
+            }
         };
-        let reason = reason
-            .and_then(|value| value.get_ref().as_str())
-            .map(str::trim)
-            .filter(|text| !text.is_empty());
+        let reason = match reason.map(|value| (value, value.get_ref().as_str())) {
+            None => None,
+            Some((_, Some(text))) => Some(text.trim()).filter(|text| !text.is_empty()),
+            Some((value, None)) => {
+                // A shape problem: no second finding for the same value.
+                self.shape(value, "the reason of an allow entry must be a string.");
+                return;
+            }
+        };
         if reason.is_none() {
             self.problem(
                 ALLOW_REASON,
                 span_of(item),
                 "an allow entry needs a reason that says why the word is allowed.".to_owned(),
             );
+        }
+        if unknown {
+            return;
         }
         if let (Some(word), Some(reason)) = (word, reason) {
             self.out.settings.allow.push(Allowed {
@@ -345,6 +377,7 @@ fn span_of<T>(item: &Spanned<T>) -> Span {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rules::GUARDRAILS;
 
     fn table() -> Vec<RuleInfo> {
         let rule = |id, severity, class| RuleInfo {
@@ -465,6 +498,47 @@ mod tests {
     }
 
     #[test]
+    fn a_shape_problem_empties_the_settings() {
+        // Each case is next to a valid entry that would otherwise stay.
+        let valid = "[validate.severity]\n\"lore/three-clue\" = \"error\"\n";
+        let cases = [
+            "[validate.inworld-vocab]\nwords = \"a\"\n",
+            "[validate.inworld-vocab]\nwords = [1]\n",
+            "[validate.inworld-vocab]\nallow = 4\n",
+            "[validate.inworld-vocab]\nallow = [2]\n",
+            "[validate.inworld-vocab]\nallow = [{ word = 1, reason = \"r\" }]\n",
+            "[validate.inworld-vocab]\nallow = [{ word = \"a\", reason = 1 }]\n",
+            "[validate.inworld-vocab]\nwords = [\"ok\"]\nallow = [{ word = \"a\", reason = 1 }]\n",
+            "[validate]\ninworld-vocab = 2\n",
+            "[validate.severity]\n\"lore/reveal-order\" = 3\n",
+        ];
+        for case in cases {
+            let parsed = read(&format!("{valid}{case}"));
+            assert_eq!(parsed.settings, ValidationSettings::default(), "{case}");
+            assert!(
+                parsed.problems.iter().any(|p| p.rule == "settings/toml"),
+                "{case}: {:?}",
+                parsed.problems
+            );
+        }
+        for text in [
+            "validate = 3\n",
+            "[validate]\nseverity = 1\n",
+            "[validate\n",
+        ] {
+            let parsed = read(text);
+            assert_eq!(parsed.settings, ValidationSettings::default(), "{text}");
+            assert_eq!(parsed.problems[0].rule, "settings/toml", "{text}");
+        }
+        // The other rows drop only their own entry.
+        let parsed = read(&format!(
+            "{valid}[validate.inworld-vocab]\nwords = [\"ok\", \"a b\"]\n"
+        ));
+        assert_eq!(parsed.settings.severities.len(), 1);
+        assert_eq!(parsed.settings.words, ["ok"]);
+    }
+
+    #[test]
     fn an_unknown_key_is_reported_at_the_key() {
         let text = "[validate]\nfoo = 1\n[validate.inworld_vocab]\nwords = [\"a\"]\n\
                     [validate.inworld-vocab]\nbar = 1\nallow = [{ word = \"a\", reason = \"r\", why = 1 }]\n";
@@ -478,12 +552,14 @@ mod tests {
             ]
         );
         assert_eq!(read(text).settings.words, Vec::<String>::new());
+        // An allow entry with an unknown key is a bad entry: its word is not allowed.
+        assert_eq!(read(text).settings.allow, Vec::new());
     }
 
     #[test]
     fn a_guardrail_is_reported_at_the_key_and_has_no_effect() {
         let text = "[validate.severity]\n\"lore/never-confirm\" = \"warning\"\n\
-                    \"lore/inworld-vocab\" = \"error\"\n";
+                    \"lore/inworld-vocab\" = \"warning\"\n";
         let parsed = read(text);
         // `lore/inworld-vocab` is not in the table, yet a guardrail by name.
         assert_eq!(
@@ -537,22 +613,19 @@ mod tests {
 
     #[test]
     fn a_value_other_than_error_or_warning_is_reported_at_the_value() {
-        let text =
-            "[validate.severity]\n\"lore/three-clue\" = \"off\"\n\"lore/reveal-order\" = 3\n";
+        let text = "[validate.severity]\n\"lore/three-clue\" = \"off\"\n\"lore/reveal-order\" = \"warning\"\n";
+        assert_eq!(at(text), [("settings/severity", "\"off\"".to_owned())]);
+        // The other entry is valid and stays.
         assert_eq!(
-            at(text),
-            [
-                ("settings/severity", "\"off\"".to_owned()),
-                ("settings/severity", "3".to_owned())
-            ]
+            read(text).settings.severities,
+            BTreeMap::from([("lore/reveal-order".to_owned(), Severity::Warning)])
         );
-        assert!(read(text).settings.severities.is_empty());
     }
 
     #[test]
     fn an_allow_entry_without_a_reason_is_reported_at_the_entry() {
         let text = "[validate.inworld-vocab]\nallow = [\n  { word = \"a\" },\n  \
-                    { word = \"b\", reason = \"  \" },\n  { word = \"c\", reason = 5 },\n]\n";
+                    { word = \"b\", reason = \"  \" },\n]\n";
         assert_eq!(
             at(text),
             [
@@ -560,10 +633,6 @@ mod tests {
                 (
                     "settings/allow-reason",
                     "{ word = \"b\", reason = \"  \" }".to_owned()
-                ),
-                (
-                    "settings/allow-reason",
-                    "{ word = \"c\", reason = 5 }".to_owned()
                 ),
             ]
         );
@@ -573,8 +642,7 @@ mod tests {
     #[test]
     fn a_bad_word_is_reported_at_the_item_and_dropped() {
         let text = "[validate.inworld-vocab]\nwords = [\"two words\", \"\", \"ok\"]\n\
-                    allow = [{ word = \"a b\", reason = \"r\" }, { reason = \"r\" }, \
-                    { word = 1, reason = \"r\" }, 7]\n";
+                    allow = [{ word = \"a b\", reason = \"r\" }, { reason = \"r\" }]\n";
         assert_eq!(
             at(text),
             [
@@ -582,8 +650,6 @@ mod tests {
                 ("settings/word", "\"\"".to_owned()),
                 ("settings/word", "\"a b\"".to_owned()),
                 ("settings/word", "{ reason = \"r\" }".to_owned()),
-                ("settings/word", "{ word = 1, reason = \"r\" }".to_owned()),
-                ("settings/toml", "7".to_owned()),
             ]
         );
         let settings = read(text).settings;

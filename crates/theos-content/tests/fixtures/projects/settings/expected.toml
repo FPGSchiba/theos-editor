@@ -1,10 +1,12 @@
 # synthetic fixture (P04), not canon
 # Checked by hand against docs/specs/phases/P04-validation-lore-rules-ledger-formalism-mirror.md
 # section 5.12 and the settings file. The findings as they are read, with the configured
-# severities applied: the guardrail entries on lines 3 and 4 (never-confirm stays an error on
-# C-951), the unknown rule, the fixed rule, the value `off`, the word with a space, the two
-# allow entries without a reason, the misspelt table `inworld_vocab`, and lore/three-clue, which
-# line 8 of the settings raises from its default warning to an error.
+# severities applied: a `warning` entry for each of the three guardrails (lines 3 to 5; the
+# never-confirm finding on C-951 and the no-overshoot finding on C-952 stay errors; the
+# inworld-vocab finding is asserted in Task 13), the unknown rule, the fixed rule, the value
+# `off`, the word with a space, the two allow entries without a reason, the misspelt table
+# `inworld_vocab`, and lore/three-clue on T-950 and T-952, which line 9 of the settings raises
+# from its default warning to an error.
 
 [[finding]]
 path = ".theos/settings.toml"
@@ -22,38 +24,38 @@ column = 1
 
 [[finding]]
 path = ".theos/settings.toml"
+rule = "settings/guardrail"
+severity = "error"
+line = 5
+column = 1
+
+[[finding]]
+path = ".theos/settings.toml"
 rule = "settings/unknown-rule"
 severity = "warning"
-line = 5
+line = 6
 column = 1
 
 [[finding]]
 path = ".theos/settings.toml"
 rule = "settings/fixed"
 severity = "error"
-line = 6
+line = 7
 column = 1
 
 [[finding]]
 path = ".theos/settings.toml"
 rule = "settings/severity"
 severity = "error"
-line = 7
+line = 8
 column = 23
 
 [[finding]]
 path = ".theos/settings.toml"
 rule = "settings/word"
 severity = "error"
-line = 11
+line = 12
 column = 28
-
-[[finding]]
-path = ".theos/settings.toml"
-rule = "settings/allow-reason"
-severity = "error"
-line = 13
-column = 3
 
 [[finding]]
 path = ".theos/settings.toml"
@@ -64,9 +66,16 @@ column = 3
 
 [[finding]]
 path = ".theos/settings.toml"
+rule = "settings/allow-reason"
+severity = "error"
+line = 15
+column = 3
+
+[[finding]]
+path = ".theos/settings.toml"
 rule = "settings/unknown-key"
 severity = "error"
-line = 18
+line = 19
 column = 11
 
 [[finding]]
@@ -77,7 +86,21 @@ line = 7
 column = 10
 
 [[finding]]
+path = "lore/clues/C-952.md"
+rule = "lore/no-overshoot"
+severity = "error"
+line = 8
+column = 11
+
+[[finding]]
 path = "lore/truths/T-950.md"
+rule = "lore/three-clue"
+severity = "error"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-952.md"
 rule = "lore/three-clue"
 severity = "error"
 line = 7

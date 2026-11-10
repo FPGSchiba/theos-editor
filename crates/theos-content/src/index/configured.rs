@@ -54,9 +54,6 @@ pub(super) fn apply(
     mut findings: Vec<Finding>,
 ) -> rusqlite::Result<Vec<Finding>> {
     let configured = load(conn)?;
-    if configured.is_empty() {
-        return Ok(findings);
-    }
     for finding in &mut findings {
         if let Some(info) = table.iter().find(|info| info.id == finding.rule) {
             finding.severity = rules::effective(info, configured.get(&finding.rule).copied());

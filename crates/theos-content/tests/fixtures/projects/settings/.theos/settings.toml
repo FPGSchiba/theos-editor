@@ -1,7 +1,8 @@
 # synthetic fixture (P04), not canon
 [validate.severity]
 "lore/never-confirm" = "warning"
-"lore/no-overshoot" = "error"
+"lore/no-overshoot" = "warning"
+"lore/inworld-vocab" = "warning"
 "lore/nothing-like-it" = "warning"
 "link/dangling" = "warning"
 "lore/reveal-order" = "off"

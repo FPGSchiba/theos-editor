@@ -68,7 +68,7 @@ impl Index {
         self.configured(found)
     }
 
-    /// The findings of one path, in the same order.
+    /// The findings of one path, in the same order, with the configured severities applied.
     ///
     /// # Errors
     ///

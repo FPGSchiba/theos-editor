@@ -2,7 +2,7 @@
 //! `.theos/settings.toml` has a row of the spec's table each, and the configured severities are
 //! applied when findings are read.
 
-use theos_content::{Finding, Index, Severity, parts};
+use theos_content::{Change, Finding, Index, Severity, parts};
 
 use crate::common::{TempProject, expected, fixture, keys};
 
@@ -11,6 +11,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 const SETTINGS: &str = ".theos/settings.toml";
 const THREE_CLUE: &str = "lore/three-clue";
 const NEVER: &str = "lore/never-confirm";
+const OVERSHOOT: &str = "lore/no-overshoot";
 
 fn open(project: &TempProject) -> Result<Index, Box<dyn std::error::Error>> {
     let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
@@ -31,6 +32,14 @@ fn severity_of(index: &Index, rule: &str) -> Result<Severity, Box<dyn std::error
     let found = of_rule(index, rule)?;
     assert_eq!(found.len(), 1, "{found:?}");
     Ok(found[0].severity)
+}
+
+/// The severities of every finding of `rule`.
+fn severities_of(index: &Index, rule: &str) -> Result<Vec<Severity>, Box<dyn std::error::Error>> {
+    Ok(of_rule(index, rule)?
+        .iter()
+        .map(|finding| finding.severity)
+        .collect())
 }
 
 /// The settings file of the fixture without the line that holds `entry`.
@@ -55,11 +64,15 @@ fn a_setting_that_lowers_a_guardrail_is_rejected_with_a_message() -> TestResult 
              guardrail: it always blocks, and no setting lowers it.",
             ".theos/settings.toml:4:1: error settings/guardrail: lore/no-overshoot is a \
              guardrail: it always blocks, and no setting lowers it.",
+            ".theos/settings.toml:5:1: error settings/guardrail: lore/inworld-vocab is a \
+             guardrail: it always blocks, and no setting lowers it.",
         ]
     );
     assert!(found.iter().all(|finding| finding.id.is_none()));
-    // The entry had no effect: the guardrail it named is still an error.
+    // The entries had no effect: the guardrails they named stay errors. The finding of
+    // lore/inworld-vocab stays an error too; Task 13's tests assert it.
     assert_eq!(severity_of(&index, NEVER)?, Severity::Error);
+    assert_eq!(severity_of(&index, OVERSHOOT)?, Severity::Error);
     Ok(())
 }
 
@@ -68,9 +81,20 @@ fn a_setting_that_lowers_a_guardrail_is_rejected_with_a_message() -> TestResult 
 fn an_order_rule_setting_changes_severity_on_read() -> TestResult {
     let project = TempProject::copy_of("settings")?;
     let mut index = open(&project)?;
-    assert_eq!(severity_of(&index, THREE_CLUE)?, Severity::Error);
+    assert_eq!(severities_of(&index, THREE_CLUE)?, [Severity::Error; 2]);
     let path = "lore/truths/T-950.md";
     assert_eq!(index.findings_for(path)?[0].severity, Severity::Error);
+
+    // A preview reads with the configured severities too.
+    let text = std::fs::read_to_string(project.root().join(path))?;
+    let preview = index.preview(&[Change::text(path, text.replace("one clue", "a clue"))])?;
+    let previewed: Vec<Severity> = preview
+        .findings
+        .iter()
+        .filter(|finding| finding.rule == THREE_CLUE)
+        .map(|finding| finding.severity)
+        .collect();
+    assert_eq!(previewed, [Severity::Error]);
 
     // The store keeps the default severity and the configuration beside it.
     let dump = index.dump()?;
@@ -81,11 +105,9 @@ fn an_order_rule_setting_changes_severity_on_read() -> TestResult {
     assert!(dump.contains(&format!("[configured]\n{THREE_CLUE}\terror\n")));
 
     // Removing the entry makes it a warning again, and no record is parsed again.
-    project.write(SETTINGS, &without("\"lore/three-clue\"")?)?;
-    let update = index.sync()?;
-    assert_eq!(update.read, [SETTINGS]);
+    let update = index.apply(&[Change::text(SETTINGS, &without("\"lore/three-clue\"")?)])?;
     assert!(update.reparsed.is_empty(), "{update:?}");
-    assert_eq!(severity_of(&index, THREE_CLUE)?, Severity::Warning);
+    assert_eq!(severities_of(&index, THREE_CLUE)?, [Severity::Warning; 2]);
     assert!(!index.dump()?.contains(&format!("{THREE_CLUE}\terror")));
     Ok(())
 }
@@ -103,14 +125,14 @@ fn an_allowlist_entry_without_a_reason_is_an_error() -> TestResult {
                 SETTINGS.to_owned(),
                 "settings/allow-reason".to_owned(),
                 "error".to_owned(),
-                13,
+                14,
                 3
             ),
             (
                 SETTINGS.to_owned(),
                 "settings/allow-reason".to_owned(),
                 "error".to_owned(),
-                14,
+                15,
                 3
             ),
         ],
@@ -142,7 +164,11 @@ fn a_broken_settings_file_falls_back_to_defaults() -> TestResult {
     let broken = of_rule(&index, "settings/toml")?;
     assert_eq!(broken.len(), 1, "{broken:?}");
     assert_eq!(broken[0].path, SETTINGS);
-    assert!(broken[0].position.is_some());
+    // `[validate.severity` ends at the line break: the parse error sits at 1:19.
+    assert_eq!(
+        broken[0].position.map(|p| (p.line, p.column)),
+        Some((1, 19))
+    );
     // No other settings finding, the configuration is empty, the guardrail is an error.
     assert_eq!(
         index
@@ -152,8 +178,9 @@ fn a_broken_settings_file_falls_back_to_defaults() -> TestResult {
             .count(),
         1
     );
-    assert_eq!(severity_of(&index, THREE_CLUE)?, Severity::Warning);
+    assert_eq!(severities_of(&index, THREE_CLUE)?, [Severity::Warning; 2]);
     assert_eq!(severity_of(&index, NEVER)?, Severity::Error);
+    assert_eq!(severity_of(&index, OVERSHOOT)?, Severity::Error);
     assert!(index.dump()?.contains("[configured]\n[search]"));
 
     // A file that is not text is one finding at 1:1.
@@ -166,7 +193,7 @@ fn a_broken_settings_file_falls_back_to_defaults() -> TestResult {
     // The fixed file restores everything, as a cold build over it would have it.
     project.write(SETTINGS, &good)?;
     index.sync()?;
-    assert_eq!(severity_of(&index, THREE_CLUE)?, Severity::Error);
+    assert_eq!(severities_of(&index, THREE_CLUE)?, [Severity::Error; 2]);
     let wanted = expected(&fixture("settings").join("expected.toml"))?;
     assert_eq!(keys(&index.findings()?), wanted);
     assert_eq!(open(&project)?.dump()?, index.dump()?);
@@ -186,7 +213,7 @@ fn without_a_settings_file_the_defaults_apply() -> TestResult {
                 .all(|finding| !finding.rule.starts_with("settings/")),
             "{all:?}"
         );
-        assert_eq!(severity_of(index, THREE_CLUE)?, Severity::Warning);
+        assert_eq!(severities_of(index, THREE_CLUE)?, [Severity::Warning; 2]);
         assert_eq!(severity_of(index, NEVER)?, Severity::Error);
         assert!(index.dump()?.contains("[configured]\n[search]"));
     }
