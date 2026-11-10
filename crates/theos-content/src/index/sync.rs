@@ -785,7 +785,7 @@ fn now_ns() -> i64 {
 }
 
 /// The SHA-256 of `bytes` as lower-case hex.
-fn sha256_hex(bytes: &[u8]) -> String {
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     let mut hex = String::new();
     for byte in Sha256::digest(bytes) {
         // Writing to a String cannot fail.

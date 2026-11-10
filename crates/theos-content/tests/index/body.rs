@@ -87,7 +87,8 @@ fn a_verbatim_body_is_not_judged() -> TestResult {
         .iter()
         .map(|f| f.rule.as_str())
         .collect();
-    assert_eq!(rules, Vec::<&str>::new());
+    // No body finding: the fixture has no `_source.json`, so the record is stray (R-P4).
+    assert_eq!(rules, ["formalism/stray"]);
     let targets: Vec<_> = index
         .links_from(EQUATION)?
         .into_iter()

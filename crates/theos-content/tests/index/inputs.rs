@@ -107,7 +107,11 @@ fn a_changed_settings_file_is_read_at_the_next_sync() -> TestResult {
 fn an_unchanged_input_is_not_read_again() -> TestResult {
     let project = TempProject::new()?;
     project.write(SETTINGS, "name = \"synthetic-bad\"\n")?;
-    project.write(SOURCE, "{}\n")?;
+    // A valid source without equations: it gives no finding of its own.
+    project.write(
+        SOURCE,
+        "{\"format\": 1, \"page\": \"https://example.invalid/p\", \"equations\": []}\n",
+    )?;
     let mut index = open(&project)?;
     let update = index.sync()?;
     assert_eq!(update.read, paths(&[SETTINGS, SOURCE]));

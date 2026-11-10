@@ -175,6 +175,7 @@ struct Expectation {
 
 #[derive(serde::Deserialize)]
 struct Expectations {
+    #[serde(default)]
     finding: Vec<Expectation>,
 }
 

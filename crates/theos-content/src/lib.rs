@@ -53,6 +53,7 @@
 pub mod body;
 pub mod check;
 pub mod finding;
+pub mod formalism;
 pub mod index;
 mod inworld;
 pub mod kinds;

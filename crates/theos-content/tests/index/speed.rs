@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use theos_content::{Index, parts};
+use theos_content::{Index, formalism, parts};
 
 use crate::common::TempProject;
 
@@ -138,18 +138,11 @@ impl Writer<'_> {
         )
     }
 
-    /// The lore: equation, topic, truth, belief, clue.
+    /// The lore: topic, truth, belief, clue. The equations are generated, see
+    /// `write_formalism`.
     fn lore(&self, i: usize) -> std::io::Result<()> {
         let (n, num) = (i + 1, 930 + i);
         let text = body("");
-        let fields = format!("source: https://example.invalid/e{num}\ngenerated: true\n");
-        self.put(
-            &format!("canon/formalism/E{num}.md"),
-            "equation",
-            &format!("E{num}"),
-            &fields,
-            &text,
-        )?;
         let topic = format!("topic-{n:02}-explaining");
         let fields =
             format!("status: draft\ntrack: explaining\nsource: https://example.invalid/t{n}\n");
@@ -269,8 +262,39 @@ impl Writer<'_> {
     }
 }
 
-/// Writes the 500 records of the speed test into `project`.
-fn write_records(project: &TempProject) -> std::io::Result<()> {
+/// Writes the Shared Formalism source of the 25 equations and their generated records, so that
+/// no equation record is stray, edited or missing. Each text has the size of the other bodies.
+fn write_formalism(project: &TempProject) -> Result<(), Box<dyn std::error::Error>> {
+    let page = "https://example.invalid/speed";
+    let equations: Vec<formalism::Equation> = (0..PER_KIND)
+        .map(|i| {
+            let id = format!("E{}", 930 + i);
+            formalism::Equation {
+                title: format!("Synthetic {id}"),
+                anchor: format!("{page}#{}", id.to_lowercase()),
+                text: body(""),
+                id,
+            }
+        })
+        .collect();
+    let listed: Vec<_> = equations
+        .iter()
+        .map(|e| serde_json::json!({"id": e.id, "title": e.title, "anchor": e.anchor, "text": e.text}))
+        .collect();
+    let source = serde_json::json!({"format": 1, "page": page, "equations": listed});
+    project.write(formalism::SOURCE, &serde_json::to_string_pretty(&source)?)?;
+    let source = formalism::Source {
+        page: page.to_owned(),
+        equations,
+    };
+    for (path, text) in formalism::render(&source)? {
+        project.write(&path, &text)?;
+    }
+    Ok(())
+}
+
+/// Writes the 500 records of the speed test into `project`: 475 written here, 25 generated.
+fn write_records(project: &TempProject) -> Result<(), Box<dyn std::error::Error>> {
     let writer = Writer { project };
     for i in 0..PER_KIND {
         writer.world(i + 1)?;
@@ -278,7 +302,7 @@ fn write_records(project: &TempProject) -> std::io::Result<()> {
         writer.stories(i)?;
         writer.pictures(i + 1)?;
     }
-    Ok(())
+    write_formalism(project)
 }
 
 /// Deletes the cache and times one cold `Index::open`; returns the time and the record count.

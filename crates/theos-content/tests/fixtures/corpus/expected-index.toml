@@ -16,6 +16,15 @@
 # - [[crlf]]: the findings of the CRLF files that have no twin among the records, each with the
 #   name of its `input` file, indexed alone at `things/<input>`.
 
+# formalism/stray (section 5.14, R-P4): the equation record has no _source.json to list it;
+# its id value sits at line 3, column 5.
+[[project]]
+path = "canon/formalism/E901.md"
+rule = "formalism/stray"
+severity = "error"
+line = 3
+column = 5
+
 [[project]]
 path = "concepts/fates-shrine/fates-shrine-v5.md"
 rule = "link/dangling"

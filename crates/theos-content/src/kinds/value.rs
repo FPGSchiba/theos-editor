@@ -243,7 +243,7 @@ fn no_space(text: &str) -> bool {
     !text.chars().any(char::is_whitespace)
 }
 
-fn is_url(text: &str) -> bool {
+pub(crate) fn is_url(text: &str) -> bool {
     ["http://", "https://"]
         .iter()
         .filter_map(|scheme| text.strip_prefix(scheme))

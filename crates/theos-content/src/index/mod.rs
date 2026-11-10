@@ -22,6 +22,7 @@ mod search;
 pub mod slots;
 mod store;
 mod sync;
+pub(crate) use sync::sha256_hex;
 mod write;
 
 pub use ledger::{BeatRef, LedgerEntry, TruthLedger};

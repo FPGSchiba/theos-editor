@@ -19,6 +19,7 @@ pub use types::{
     FieldType, LENS_ENTRIES, LensEntry, Narrow, TIERS, Target, VOICE_BELIEF, VOICE_SPEAKER,
 };
 pub use value::ValueRef;
+pub(crate) use value::is_url;
 
 /// Why a kind could not be registered.
 #[derive(Debug, thiserror::Error)]

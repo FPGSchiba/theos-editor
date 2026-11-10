@@ -1,9 +1,11 @@
 //! The context of the lore step: the only way a lore rule gets data. Every answer adds a key to
 //! the reads of the subject that asked, also when it comes from the memo (spec §5.5, L6).
 
+use std::cell::OnceCell;
 use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
 
+use crate::formalism::{self, Source, SourceError};
 use crate::kinds::KindRegistry;
 use crate::lore::facts::{InLink, InputFacts, RecordFacts};
 use crate::lore::vocab::DeveloperWords;
@@ -62,6 +64,7 @@ pub struct Context<'a> {
     inbound: HashMap<String, Vec<InLink>>,
     inputs: HashMap<String, Option<Rc<InputFacts>>>,
     settings: Option<Rc<Parsed>>,
+    formalism: OnceCell<Option<Rc<Result<Source, SourceError>>>>,
     vocab: Option<Rc<DeveloperWords>>,
 }
 
@@ -76,6 +79,7 @@ impl<'a> Context<'a> {
             inbound: HashMap::new(),
             inputs: HashMap::new(),
             settings: None,
+            formalism: OnceCell::new(),
             vocab: None,
         }
     }
@@ -143,6 +147,31 @@ impl<'a> Context<'a> {
         });
         self.settings = Some(Rc::clone(&parsed));
         Ok(parsed)
+    }
+
+    /// The Shared Formalism source of the project, read from `canon/formalism/_source.json`
+    /// once per run: none when the project has no such file, an error when it is not UTF-8 or
+    /// not valid. Reads `file:canon/formalism/_source.json`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the store fails.
+    pub fn formalism(&mut self) -> Result<Option<Rc<Result<Source, SourceError>>>, FactError> {
+        let input = self.input(formalism::SOURCE)?;
+        Ok(self
+            .formalism
+            .get_or_init(|| {
+                input.map(|input| {
+                    Rc::new(match input.text.as_deref() {
+                        Some(text) => formalism::parse(text),
+                        None => Err(SourceError {
+                            message: "the file is not UTF-8".to_owned(),
+                            position: None,
+                        }),
+                    })
+                })
+            })
+            .clone())
     }
 
     /// The developer words of the project, built from the settings once per run; none only when

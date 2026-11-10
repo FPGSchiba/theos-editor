@@ -1,0 +1,115 @@
+{
+  "note": "synthetic fixture (P04), not canon",
+  "format": 1,
+  "page": "https://example.invalid/synthetic-formalism",
+  "equations": [
+    {
+      "id": "E1",
+      "title": "Synthetic equation 1",
+      "anchor": "https://example.invalid/synthetic-formalism#E1",
+      "text": "$x_{1} = 1$"
+    },
+    {
+      "id": "E2",
+      "title": "Synthetic equation 2",
+      "anchor": "https://example.invalid/synthetic-formalism#E2",
+      "text": "$x_{2} = 2$"
+    },
+    {
+      "id": "E3",
+      "title": "Synthetic equation 3",
+      "anchor": "https://example.invalid/synthetic-formalism#E3",
+      "text": "$\\left[[a, b]\\right]$"
+    },
+    {
+      "id": "E4",
+      "title": "Synthetic equation 4",
+      "anchor": "https://example.invalid/synthetic-formalism#E4",
+      "text": "$x_{4} = 4$"
+    },
+    {
+      "id": "E5",
+      "title": "Synthetic equation 5",
+      "anchor": "https://example.invalid/synthetic-formalism#E5",
+      "text": "Synthetic first line.\nSynthetic second line with $y = 5$."
+    },
+    {
+      "id": "E6",
+      "title": "Synthetic equation 6",
+      "anchor": "https://example.invalid/synthetic-formalism#E6",
+      "text": "$x_{6} = 6$"
+    },
+    {
+      "id": "E7",
+      "title": "Synthetic equation 7",
+      "anchor": "https://example.invalid/synthetic-formalism#E7",
+      "text": "$x_{7} = 7$"
+    },
+    {
+      "id": "E8",
+      "title": "Synthetic equation 8",
+      "anchor": "https://example.invalid/synthetic-formalism#E8",
+      "text": "$x_{8} = 8$"
+    },
+    {
+      "id": "E9",
+      "title": "Synthetic equation 9",
+      "anchor": "https://example.invalid/synthetic-formalism#E9",
+      "text": "$x_{9} = 9$"
+    },
+    {
+      "id": "E10",
+      "title": "Synthetic equation 10",
+      "anchor": "https://example.invalid/synthetic-formalism#E10",
+      "text": "$x_{10} = 10$"
+    },
+    {
+      "id": "E11",
+      "title": "Synthetic equation 11",
+      "anchor": "https://example.invalid/synthetic-formalism#E11",
+      "text": "$x_{11} = 11$"
+    },
+    {
+      "id": "E12",
+      "title": "Synthetic equation 12",
+      "anchor": "https://example.invalid/synthetic-formalism#E12",
+      "text": "$x_{12} = 12$"
+    },
+    {
+      "id": "E13",
+      "title": "Synthetic equation 13",
+      "anchor": "https://example.invalid/synthetic-formalism#E13",
+      "text": "$x_{13} = 13$"
+    },
+    {
+      "id": "E14",
+      "title": "Synthetic equation 14",
+      "anchor": "https://example.invalid/synthetic-formalism#E14",
+      "text": "$x_{14} = 14$"
+    },
+    {
+      "id": "E15",
+      "title": "Synthetic equation 15",
+      "anchor": "https://example.invalid/synthetic-formalism#E15",
+      "text": "$x_{15} = 15$"
+    },
+    {
+      "id": "E16",
+      "title": "Synthetic equation 16",
+      "anchor": "https://example.invalid/synthetic-formalism#E16",
+      "text": "$x_{16} = 16$"
+    },
+    {
+      "id": "E17",
+      "title": "Synthetic equation 17",
+      "anchor": "https://example.invalid/synthetic-formalism#E17",
+      "text": "$x_{17} = 17$"
+    },
+    {
+      "id": "E18",
+      "title": "Synthetic equation 18",
+      "anchor": "https://example.invalid/synthetic-formalism#E18",
+      "text": "$x_{18} = 18$"
+    }
+  ]
+}

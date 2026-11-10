@@ -3,6 +3,22 @@
 # the project: path, rule, severity, line and column. `record/utf8` is added by the test, which
 # applies bytes that are not UTF-8 (a fixture file is text).
 
+# formalism/stray (section 5.14, R-P4): the equation record has no _source.json to list it;
+# its id value sits at line 3, column 5.
+[[finding]]
+path = "canon/formalism/E930.md"
+rule = "formalism/stray"
+severity = "error"
+line = 3
+column = 5
+
+[[finding]]
+path = "canon/formalism/E931.md"
+rule = "formalism/stray"
+severity = "error"
+line = 3
+column = 5
+
 [[finding]]
 path = "canon/formalism/E931.md"
 rule = "schema/value"

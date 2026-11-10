@@ -1,6 +1,16 @@
 # Checked by hand against docs/specs/phases/P04-validation-lore-rules-ledger-formalism-mirror.md
 # section 5.3 and the fixture texts. Every finding of the project: path, rule, severity, line
-# and column. The equation E950, whose body holds a link and an embed, has none (verbatim).
+# and column. The equation E950, whose body holds a link and an embed, has no body finding (verbatim); its
+# only finding is formalism/stray.
+
+# formalism/stray (section 5.14, R-P4): the equation record has no _source.json to list it;
+# its id value sits at line 3, column 5.
+[[finding]]
+path = "canon/formalism/E950.md"
+rule = "formalism/stray"
+severity = "error"
+line = 3
+column = 5
 
 [[finding]]
 path = "concepts/synthetic-board.md"
