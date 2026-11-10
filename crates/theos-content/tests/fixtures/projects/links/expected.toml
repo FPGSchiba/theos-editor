@@ -72,6 +72,20 @@ line = 8
 column = 14
 
 [[finding]]
+path = "lore/truths/T-930.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-931.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
 path = "lore/truths/T-931.md"
 rule = "link/kind"
 severity = "error"

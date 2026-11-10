@@ -13,6 +13,11 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 /// Records per kind; 20 kinds make 500 records.
 const PER_KIND: usize = 25;
 
+/// The truths that can be revealed: each has three clues that confirm it, on rising floors, and
+/// requires the one before; the others have the target `never`, so the three-clue rule leaves them
+/// alone. The 25th clue is a fourth confirming clue of the last revealed truth.
+const REVEALED: usize = 8;
+
 /// The longest a cold index of the project may take.
 const LIMIT: Duration = Duration::from_secs(1);
 
@@ -152,14 +157,14 @@ impl Writer<'_> {
             &fields,
             &text,
         )?;
-        let requires = if i == 0 {
+        let requires = if i == 0 || i >= REVEALED {
             String::new()
         } else {
             format!("requires: [T-{}]\n", num - 1)
         };
-        let fields = format!(
-            "status: draft\ntarget: confirmed\n{requires}topic: {topic}\ncites: [E{num}]\n"
-        );
+        let target = if i < REVEALED { "confirmed" } else { "never" };
+        let fields =
+            format!("status: draft\ntarget: {target}\n{requires}topic: {topic}\ncites: [E{num}]\n");
         self.put(
             &format!("lore/truths/T-{num}.md"),
             "truth",
@@ -177,8 +182,9 @@ impl Writer<'_> {
             &fields,
             &text,
         )?;
+        let truth = 930 + (i / 3).min(REVEALED - 1);
         let fields = format!(
-            "status: draft\nreveals: T-{num}\nmoves_to: hinted\nwhere: [band-{n:02}]\ngate: T1\nvector: synthetic\n"
+            "status: draft\nreveals: T-{truth}\nmoves_to: confirmed\nwhere: [band-{n:02}]\ngate: T1\nvector: synthetic\n"
         );
         self.put(
             &format!("lore/clues/C-{num}.md"),

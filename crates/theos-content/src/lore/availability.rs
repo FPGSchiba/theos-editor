@@ -113,7 +113,6 @@ pub fn of_clue(ctx: &mut Context<'_>, clue: &RecordFacts) -> Result<Availability
 /// Whether `a` can be found no later than `b`: its floor and its gate are each at most `b`'s.
 /// `None` when a floor or a gate is unknown.
 #[must_use]
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 10"))]
 pub fn no_later(a: &Availability, b: &Availability) -> Option<bool> {
     let (floor_a, floor_b) = (a.floor.as_ref()?, b.floor.as_ref()?);
     let (gate_a, gate_b) = (a.gate?, b.gate?);

@@ -8,7 +8,8 @@
 #   schema/unknown-field (fields that a `thing` does not have, in P02's YAML fixtures). The body
 #   rules of P04 add the `body/` findings: the malformed constructs of `malformed/` (each case
 #   of its `expected.toml`), the unknown beat keys (`synthetic::`) and the unknown note state
-#   of `synthetic-concept-notes.md` (CE-15.5);
+#   of `synthetic-concept-notes.md` (CE-15.5), and the three-clue warning of T-901, which no clue
+#   reveals;
 # - [[crlf]]: the findings of the CRLF files that have no twin among the records, each with the
 #   name of its `input` file, indexed alone at `things/<input>`.
 
@@ -466,6 +467,13 @@ rule = "link/dangling"
 severity = "error"
 line = 41
 column = 56
+
+[[project]]
+path = "lore/truths/T-901.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
 
 [[project]]
 path = "lore/truths/T-901.md"

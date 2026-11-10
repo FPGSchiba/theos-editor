@@ -39,5 +39,8 @@ pub fn register(registry: &mut KindRegistry) -> Result<(), RegistryError> {
     registry.register_rule("codex", rules::PARENT_CYCLE)?;
     registry.register_rule("codex", rules::NEVER_CONFIRM)?;
     registry.register_rule("codex", rules::NO_OVERSHOOT)?;
+    registry.register_rule("codex", rules::REVEAL_ORDER)?;
+    registry.register_rule("codex", rules::REQUIRES)?;
+    registry.register_rule("codex", rules::THREE_CLUE)?;
     Ok(())
 }

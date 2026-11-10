@@ -207,7 +207,7 @@ fn a_removed_clue_and_a_removed_truth_leave_no_rows() -> TestResult {
         .collect();
     assert_eq!(
         clues,
-        BTreeSet::from(["C-950".to_owned(), "C-952".to_owned()])
+        BTreeSet::from(["C-950", "C-952", "C-953", "C-954"].map(str::to_owned))
     );
     project.remove(T_950)?;
     index.sync()?;
@@ -314,6 +314,8 @@ fn base() -> Vec<LedgerEntry> {
         entry("hinted", 4, "f04-synthetic", "T1", "C-950", &[2]),
         entry("suspected", 21, "f21-synthetic", "T2", "C-951", &[]),
         entry("confirmed", 57, "f57-synthetic", "T2", "C-952", &[]),
+        entry("confirmed", 57, "f57-synthetic", "T2", "C-953", &[]),
+        entry("confirmed", 57, "f57-synthetic", "T2", "C-954", &[]),
     ]
 }
 
@@ -383,6 +385,8 @@ fn a_moves_to_change_through_apply_moves_the_rows_like_a_cold_build() -> TestRes
         entry("hinted", 4, "f04-synthetic", "T1", "C-950", &[2]),
         entry("confirmed", 21, "f21-synthetic", "T2", "C-951", &[]),
         entry("confirmed", 57, "f57-synthetic", "T2", "C-952", &[]),
+        entry("confirmed", 57, "f57-synthetic", "T2", "C-953", &[]),
+        entry("confirmed", 57, "f57-synthetic", "T2", "C-954", &[]),
     ];
     check(&project, &index, &update, &want)
 }

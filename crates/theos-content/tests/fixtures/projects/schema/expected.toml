@@ -144,6 +144,20 @@ line = 3
 column = 5
 
 [[finding]]
+path = "lore/truths/T-12.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-930.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
 path = "lore/truths/T-931.md"
 rule = "schema/required"
 severity = "error"

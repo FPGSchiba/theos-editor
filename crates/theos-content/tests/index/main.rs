@@ -13,6 +13,7 @@ mod ledger;
 mod lenses;
 mod links;
 mod lore;
+mod order;
 mod schema;
 mod search;
 mod speed;
