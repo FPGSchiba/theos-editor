@@ -26,7 +26,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P17 | AI drafts and semantic search | theos-editor | todo | | |
 | P18 | Installer, first run, Code preset | theos-editor | todo | | |
 | P19 | Comments | theos-editor | todo | | |
-| P20 | Content layout for world and art kinds | tower-of-theos | spec-pr | #22 | |
+| P20 | Content layout for world and art kinds | tower-of-theos | pr-open | #22 | tower-of-theos#3 |
 | P21 | World kinds: enemies, spawns, quests | theos-editor | todo | | |
 | P22 | Map pins, cameras and frames | theos-editor | todo | | |
 | P23 | Map recipes and blockout generator | tower-of-theos | todo | | |
@@ -51,7 +51,6 @@ from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#2
   `gate/clippy.toml`. P08's spec lists its contents.
 - The Maps screen reference (`docs/ui/screens/11-maps.html`) still says "theos_maps 0.3.0 ·
   Python 3.12 (uv)" and describes a Python venv. P16's spec PR updates it (G18).
-
 - P00's macOS `platforms` evidence is still open: the run on #7 got no GitHub runner (macOS
   capacity). The weekly Monday run, or a re-run, gives it.
 - Comments on text sections (decision 0002, #15, phase P19): before P19 starts, Jann settles the
@@ -87,6 +86,10 @@ from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#2
 - Data model §14 contradicted itself, found by the P20 spec: its pins example placed pins on
   `f04-terrain-v1`, whose example had no `frame`. The decision 0003 docs PR gives that example a
   `frame` (and `base` and `features` outputs); the entry can go once it is merged.
+- The P20 build PR tower-of-theos#3 waits for Jann (content repo). Its final review loop ended
+  clean in round 3. Its description lists four manual checks in Obsidian and VS Code. It locks
+  `markdown-it-py` 4.3.0, which was released the day it was locked. Pinning an older 4.x is a
+  one-line follow-up if Jann prefers a cool-down.
 
 ## Needs a private session (Confluence, Jira, plugin)
 
@@ -104,8 +107,8 @@ from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#2
   0003; and Confluence Decision 221741058 (the engine package format), which `docs/map-package.md`
   replaces (Jann confirmed on 10 Nov 2026 that it fixes nothing different).
 - The `theos_maps` skill in Jann's other Claude account: once P09 is merged, point it at the
-  editor's map generator (`gen_run` over MCP) or retire it; its recipes move into the content
-  project in P23.
+  editor's map generator (`theos gen run` in a shell, or `gen_run` over MCP) or retire it; its
+  recipes move into the content project in P23.
 - CE-75: move the style bible (`style.yaml` v2 and its reference crops) from Drive into `art/`
   style records, after P20.
 - Jira: slices S8 and S9 have no epics yet (create only on Jann's explicit yes).
