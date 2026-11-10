@@ -67,14 +67,18 @@ pub(crate) fn moves_to(clue: &RecordFacts) -> Option<State> {
         .and_then(State::parse)
 }
 
-/// How a clue's `moves_to` reads in a message: "hints at", "raises suspicion of", "confirms".
-pub(crate) fn verb(clue: &RecordFacts) -> &'static str {
-    match moves_to(clue) {
-        Some(State::Hinted) => "hints at",
-        Some(State::Suspected) => "raises suspicion of",
-        Some(State::Confirmed) => "confirms",
-        None => "reveals",
+/// How a state reads in a message: "hints at", "raises suspicion of", "confirms".
+pub(crate) fn state_verb(state: State) -> &'static str {
+    match state {
+        State::Hinted => "hints at",
+        State::Suspected => "raises suspicion of",
+        State::Confirmed => "confirms",
     }
+}
+
+/// How a clue's `moves_to` reads in a message; "reveals" when it has no valid one.
+pub(crate) fn verb(clue: &RecordFacts) -> &'static str {
+    moves_to(clue).map_or("reveals", state_verb)
 }
 
 /// Judges one clue against one truth.

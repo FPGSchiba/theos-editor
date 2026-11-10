@@ -1,7 +1,7 @@
 # synthetic fixture (P04), not canon
 # Checked by hand against docs/specs/phases/P04-validation-lore-rules-ledger-formalism-mirror.md
 # section 5.8 and the fixture texts. Every finding of the project: path, rule, severity, line and
-# column: the guardrails, the duplicated T-954 and T-955, the order rules (reveal-order on C-960,
+# column: the guardrails, the duplicated T-954 and T-955, the order rules (reveal-order on C-960, C-994,
 # C-962, C-963 and C-982; requires on T-959 to T-962) and the three-clue warnings of the truths
 # with fewer than three clues that reach their target (T-951, T-953, T-958, T-959 to T-963, T-965,
 # T-966 and the second copies of T-954 and T-955).
@@ -68,6 +68,13 @@ rule = "lore/reveal-order"
 severity = "error"
 line = 8
 column = 11
+
+[[finding]]
+path = "lore/clues/C-994.md"
+rule = "lore/reveal-order"
+severity = "error"
+line = 11
+column = 9
 
 [[finding]]
 path = "lore/truths/T-951.md"

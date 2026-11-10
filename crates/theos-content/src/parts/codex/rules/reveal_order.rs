@@ -5,9 +5,9 @@ use std::rc::Rc;
 
 use crate::finding::{Finding, Severity};
 use crate::index::Slot;
-use crate::lore::availability::{Availability, State, no_later, of_clue};
+use crate::lore::availability::{no_later, of_clue};
 use crate::lore::cycle::cycle_through;
-use crate::lore::reveals::{clues_of, moves_to, truths_of, verb};
+use crate::lore::reveals::{clues_of, moves_to, state_verb, truths_of, verb};
 use crate::lore::{Context, FactError, LoreRule, On, RecordFacts, Subject};
 use crate::rules::RuleClass;
 
@@ -28,16 +28,6 @@ fn check(ctx: &mut Context<'_>, subject: &Subject) -> Result<Vec<Finding>, FactE
     let mut findings = after_findings(ctx, subject, clue)?;
     findings.extend(state_finding(ctx, subject, clue)?);
     Ok(findings)
-}
-
-/// How a clue's availability reads in a message.
-fn describe(availability: &Availability) -> String {
-    let floor = availability
-        .floor
-        .as_ref()
-        .map_or_else(|| "?".to_owned(), |floor| floor.number.to_string());
-    let gate = availability.gate.map_or("?", |tier| tier.as_str());
-    format!("floor {floor}, gate {gate}")
 }
 
 /// (a) each `after` clue that cannot be found no later than this clue, and (c) the `after` item
@@ -63,9 +53,9 @@ fn after_findings(
                     earlier.id,
                     clue.id,
                     earlier.id,
-                    describe(&theirs),
+                    theirs.describe(),
                     clue.id,
-                    describe(&mine)
+                    mine.describe()
                 );
                 findings.push(subject.finding(&REVEAL_ORDER, link.span, link.position, message));
                 break;
@@ -76,7 +66,7 @@ fn after_findings(
         && let Some(link) = clue.links_in(&slot).nth(index)
     {
         let message = format!(
-            "{} is on a cycle of `after`: it would come after itself, through {}.",
+            "{} is on a cycle of `after`: it would come after itself, through {}. Remove one `after` link of the cycle.",
             clue.id, link.target
         );
         findings.push(subject.finding(&REVEAL_ORDER, link.span, link.position, message));
@@ -122,18 +112,14 @@ fn state_finding(
     if unknown {
         return Ok(None);
     }
-    let lower_verb = match lower {
-        State::Hinted => "hints at",
-        State::Suspected => "raises suspicion of",
-        State::Confirmed => "confirms",
-    };
+    let lower_verb = state_verb(lower);
     let message = format!(
         "{} {} {}, but no clue that {lower_verb} it can be found no later than {} ({}). Move a clue of that state earlier or {} later.",
         clue.id,
         verb(clue),
         truth.id,
         clue.id,
-        describe(&mine),
+        mine.describe(),
         clue.id
     );
     Ok(Some(subject.finding(

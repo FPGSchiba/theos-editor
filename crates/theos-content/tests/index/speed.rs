@@ -14,8 +14,9 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 const PER_KIND: usize = 25;
 
 /// The truths that can be revealed: each has three clues that confirm it, on rising floors, and
-/// requires the one before; the others have the target `never`, so the three-clue rule leaves them
-/// alone. The 25th clue is a fourth confirming clue of the last revealed truth.
+/// requires the one before. The others have the target `never` (the three-clue rule leaves them
+/// alone) and require the last revealed one. The 25th clue is a fourth confirming clue of the
+/// last revealed truth.
 const REVEALED: usize = 8;
 
 /// The longest a cold index of the project may take.
@@ -157,10 +158,11 @@ impl Writer<'_> {
             &fields,
             &text,
         )?;
-        let requires = if i == 0 || i >= REVEALED {
-            String::new()
-        } else {
-            format!("requires: [T-{}]\n", num - 1)
+        // The revealed truths require the one before; the others require the last revealed one.
+        let requires = match i {
+            0 => String::new(),
+            i if i >= REVEALED => format!("requires: [T-{}]\n", 930 + REVEALED - 1),
+            _ => format!("requires: [T-{}]\n", num - 1),
         };
         let target = if i < REVEALED { "confirmed" } else { "never" };
         let fields =

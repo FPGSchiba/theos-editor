@@ -82,6 +82,19 @@ pub struct Availability {
     pub gate: Option<Tier>,
 }
 
+impl Availability {
+    /// The availability as a message reads it: "floor 21, gate T2", `?` for an unknown part.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        let floor = self
+            .floor
+            .as_ref()
+            .map_or_else(|| "?".to_owned(), |floor| floor.number.to_string());
+        let gate = self.gate.map_or("?", Tier::as_str);
+        format!("floor {floor}, gate {gate}")
+    }
+}
+
 /// The availability of `clue`. Among equal floors the first `where` item counts.
 ///
 /// # Errors
