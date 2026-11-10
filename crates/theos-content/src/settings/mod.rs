@@ -15,6 +15,7 @@ use toml::de::{DeTable, DeValue};
 pub(crate) use rules::RULES;
 
 use crate::finding::Severity;
+use crate::lore::vocab::{self, DeveloperWords};
 use crate::rules::{RuleClass, RuleInfo, is_guardrail};
 use crate::text::Span;
 
@@ -77,8 +78,14 @@ const WORD: &str = "settings/word";
 /// wrong type, gives empty settings (`settings/toml`).
 #[must_use]
 pub fn parse(text: Option<&str>, rules: &[RuleInfo]) -> Parsed {
+    parse_with(text, rules, vocab::SIZE_LIMIT)
+}
+
+/// [`parse`] with the size limit of the compiled word list, which a test can lower.
+fn parse_with(text: Option<&str>, rules: &[RuleInfo], word_limit: usize) -> Parsed {
     let mut walk = Walk {
         rules,
+        word_limit,
         out: Parsed::default(),
     };
     match text {
@@ -112,6 +119,7 @@ pub fn parse(text: Option<&str>, rules: &[RuleInfo]) -> Parsed {
 /// The state of one walk over the parsed file.
 struct Walk<'r> {
     rules: &'r [RuleInfo],
+    word_limit: usize,
     out: Parsed,
 }
 
@@ -270,13 +278,41 @@ impl Walk<'_> {
                 }
             }
         }
+        self.check_word_list(value);
+    }
+
+    /// The words must compile into one pattern; a list too large for it is a `settings/word`
+    /// problem at the list. The words stay: the lore step falls back to the built-in words.
+    fn check_word_list(&mut self, at: &Spanned<DeValue<'_>>) {
+        let only_words = ValidationSettings {
+            words: self.out.settings.words.clone(),
+            ..ValidationSettings::default()
+        };
+        if let Err(error) = DeveloperWords::with_size_limit(&only_words, self.word_limit) {
+            tracing::error!(%error, "the project's word list does not compile");
+            self.problem(
+                WORD,
+                span_of(at),
+                "the word list is too large to match; split or shorten it. Until then only the built-in words are checked."
+                    .to_owned(),
+            );
+        }
     }
 
     /// `text` trimmed when it is one word, else a `settings/word` problem at `at`.
     fn one_word(&mut self, text: &str, at: &Spanned<DeValue<'_>>) -> Option<String> {
         let mut parts = text.split_whitespace();
         if let (Some(word), None) = (parts.next(), parts.next()) {
-            return Some(word.to_owned());
+            let edge = |c: char| c.is_alphanumeric();
+            if word.chars().next().is_some_and(edge) && word.chars().next_back().is_some_and(edge) {
+                return Some(word.to_owned());
+            }
+            self.problem(
+                WORD,
+                span_of(at),
+                format!("\"{word}\" cannot be matched as a whole word: a word starts and ends with a letter or a digit."),
+            );
+            return None;
         }
         self.problem(
             WORD,
@@ -536,6 +572,45 @@ mod tests {
         ));
         assert_eq!(parsed.settings.severities.len(), 1);
         assert_eq!(parsed.settings.words, ["ok"]);
+    }
+
+    #[test]
+    fn a_word_must_start_and_end_with_a_letter_or_a_digit() {
+        let text = "[validate.inworld-vocab]
+words = [\"c++\", \"-x\", \"ok-1\", \"ünï\"]
+                    allow = [{ word = \"x-\", reason = \"r\" }, { word = \"T1\", reason = \"r\" }]
+";
+        assert_eq!(
+            at(text),
+            [
+                ("settings/word", "\"c++\"".to_owned()),
+                ("settings/word", "\"-x\"".to_owned()),
+                ("settings/word", "\"x-\"".to_owned()),
+            ]
+        );
+        let parsed = read(text);
+        assert_eq!(parsed.settings.words, ["ok-1", "ünï"]);
+        assert_eq!(parsed.settings.allow.len(), 1);
+    }
+
+    #[test]
+    fn a_word_list_too_large_to_match_is_a_problem_at_the_list() {
+        let text = "[validate.inworld-vocab]
+words = [\"alpha\", \"beta\"]
+";
+        let parsed = parse_with(Some(text), &table(), 10);
+        assert_eq!(parsed.problems.len(), 1, "{:?}", parsed.problems);
+        assert_eq!(parsed.problems[0].rule, "settings/word");
+        assert!(parsed.problems[0].message.contains("too large"));
+        let at = &text[parsed.problems[0].span.start..parsed.problems[0].span.end];
+        assert!(at.starts_with('[') && at.ends_with(']'));
+        // A small list is fine.
+        let small = read(
+            "[validate.inworld-vocab]
+words = [\"a\"]
+",
+        );
+        assert_eq!(small.problems, vec![]);
     }
 
     #[test]

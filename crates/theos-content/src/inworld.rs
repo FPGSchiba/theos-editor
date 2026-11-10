@@ -5,7 +5,7 @@
 //! count (design notes, voice titles, headings of a dialogue, link markup) is left out by cutting
 //! the span in two, never by editing the text.
 
-use crate::body::{BlockKind, CalloutTitle, Link};
+use crate::body::{BlockKind, Link};
 use crate::index::rows::{SegmentRow, ValueRow};
 use crate::kinds::KindSpec;
 use crate::record::Record;
@@ -43,7 +43,9 @@ pub(crate) fn segments(
 
     let mut holes: Vec<Span> = body.design_notes().iter().map(|note| note.span).collect();
     for callout in body.callouts() {
-        if callout.name == "voice" && matches!(callout.title, Some(CalloutTitle::Voice(_))) {
+        // A voice title is never in-world text, also a malformed one: its fault has its own
+        // finding (`body/callout-title`).
+        if callout.name == "voice" {
             holes.push(Span::new(callout.span.start, callout.content_span.start));
         }
     }
@@ -196,6 +198,26 @@ mod tests {
         assert_eq!(got.len(), 1);
         assert!(got[0].contains("Spoken words.") && got[0].contains("caption"));
         assert!(!got[0].contains("[!voice]") && !got[0].contains("plain prose"));
+        Ok(())
+    }
+
+    #[test]
+    fn a_malformed_voice_title_is_cut_like_a_good_one() -> Res {
+        let got = texts(
+            "story/scripts/x.md",
+            "script",
+            "title: t
+",
+            "> [!voice] T1
+> Spoken words.
+
+> [!voice] [[synthetic-speaker]] | T2 x y
+> More words.
+",
+        )?;
+        let joined = got.join("|");
+        assert!(joined.contains("Spoken words.") && joined.contains("More words."));
+        assert!(!joined.contains("T1") && !joined.contains("T2") && !joined.contains("[!voice]"));
         Ok(())
     }
 

@@ -6,13 +6,16 @@
 use std::collections::HashSet;
 use std::ops::Range;
 
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 
 use crate::settings::ValidationSettings;
 
 /// The built-in developer words (spec §5.11, Jann's ruling §4.1): ids of the numbered kinds with
 /// three or more digits, `E` with a number, floor ids, the tiers and the rule names.
 pub(crate) const BUILTIN: &str = r"\b(?:[TBCSQ]-[0-9]{3,}|E[0-9]+|T[1-3]|f[0-9]{2}(?:-[a-z0-9]+)*|never-confirm|no-overshoot|inworld-vocab|reveal-order|three-clue)\b";
+
+/// The size limit of the compiled word list: the default of `regex`, 10 MiB.
+pub(crate) const SIZE_LIMIT: usize = 10 * (1 << 20);
 
 /// The developer words of a project, ready to match text.
 #[derive(Debug)]
@@ -31,6 +34,17 @@ impl DeveloperWords {
     /// [`regex::Error`] when the patterns do not compile, which only a very large word list
     /// causes.
     pub(crate) fn new(settings: &ValidationSettings) -> Result<DeveloperWords, regex::Error> {
+        DeveloperWords::with_size_limit(settings, SIZE_LIMIT)
+    }
+
+    /// As [`DeveloperWords::new`], with the size limit in bytes of the compiled word list.
+    ///
+    /// # Errors
+    /// [`regex::Error`] when the patterns do not compile or the word list exceeds `limit`.
+    pub(crate) fn with_size_limit(
+        settings: &ValidationSettings,
+        limit: usize,
+    ) -> Result<DeveloperWords, regex::Error> {
         let words: Vec<String> = settings
             .words
             .iter()
@@ -40,7 +54,8 @@ impl DeveloperWords {
         let project = if words.is_empty() {
             None
         } else {
-            Some(Regex::new(&format!(r"(?i)\b(?:{})\b", words.join("|")))?)
+            let pattern = format!(r"(?i)\b(?:{})\b", words.join("|"));
+            Some(RegexBuilder::new(&pattern).size_limit(limit).build()?)
         };
         Ok(DeveloperWords {
             builtin: Regex::new(BUILTIN)?,
@@ -154,6 +169,26 @@ mod tests {
         // A built-in match needs its exact text in the allowlist.
         let lower = settings(&[], &["t2"]);
         assert_eq!(words(&lower, "T2"), ["T2"]);
+    }
+
+    /// A new `lore/` rule must be a developer word, too, unless it is an ordinary English word
+    /// (`requires`, spec §5.11): this fails until it is added to [`BUILTIN`] or ruled out here.
+    #[test]
+    fn every_lore_rule_name_is_a_built_in_word() -> Result<(), Box<dyn std::error::Error>> {
+        let registry = crate::parts::builtin()?;
+        let names: Vec<&str> = crate::rules::all(&registry)
+            .iter()
+            .filter_map(|rule| rule.id.strip_prefix("lore/"))
+            .filter(|name| *name != "requires")
+            .collect();
+        assert!(names.len() >= 5, "{names:?}");
+        let words = DeveloperWords::new(&ValidationSettings::default())?;
+        for name in names {
+            let found = words.find(name);
+            assert_eq!(found.len(), 1, "`{name}` is not a built-in developer word");
+            assert_eq!(found[0].0, 0..name.len());
+        }
+        Ok(())
     }
 
     #[test]
