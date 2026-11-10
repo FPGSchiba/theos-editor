@@ -30,6 +30,21 @@
 //!   with SQLite FTS5; `lens` gives the effective lens of a holder with its layers; `dump`
 //!   writes the whole state as text.
 //!
+//! After P04 it also validates:
+//!
+//! - [`rules`]: the rule table; every rule has an id, a default severity and a
+//!   [`RuleClass`](rules::RuleClass) (guardrail, configurable or fixed);
+//! - body rules: the index checks each body with the grammar of its kind, in-world text included;
+//! - [`lore`]: lore rules across records, run by the index after it has resolved the links. A
+//!   rule reads only through a [`lore::Context`], which stores every read, so a change re-runs
+//!   exactly the subjects that read something it touched; a cold build is the same code with
+//!   the facts loaded at once;
+//! - the reveal ledger of every truth ([`Index::ledger`], [`TruthLedger`]);
+//! - [`settings`]: the `[validate]` table of `.theos/settings.toml`;
+//! - binary checks ([`Index::binary_findings`], [`BinaryReport`]);
+//! - [`formalism`]: the Shared Formalism source, its rendered equation records and the
+//!   regeneration.
+//!
 //! The cache is valid for one identity: the layout format, the crate version, the project
 //! `schema_version`, the registry, the rule set and a fingerprint of the crate sources. When any
 //! of them differs, the cache is rebuilt; when nothing changed, nothing is parsed again. Every
@@ -38,17 +53,16 @@
 //! Every span is a byte range into the LF text of the whole record; a CRLF record is read as its
 //! LF text and a write returns LF.
 //!
-//! Later phases use it so: P03 (index, registry) the record model, field and entry spans, the
-//! order injection of the patcher and the body links; P04 (validators) the malformed items,
-//! design notes, voice spans and note states, and from P03 the findings, the rule list, the
-//! relink step and the same store for the ledger; P05 the positions of errors, `Project::open`,
-//! `findings`, `preview`, `search`, `lens` and [`KindSpec`]; P06 (editing) the patcher,
+//! Later phases use it so: P05 the positions of errors, `Project::open`, `findings` with
+//! configured severities, `binary_findings`, `ledger_of`, [`rules::all`], `preview`, `search`,
+//! `lens` and [`KindSpec`]; P06 (editing) the patcher,
 //! [`TextEdit`], [`apply_edits`], link target spans and [`Record::was_normalized`], and `preview`
 //! before and `update` after each write, backlink spans and [`Placement`]; P07 one index per
-//! agent worktree; P09 (notes) the note id, version, state span and text; P11 and P12 (UI) the
-//! body model, the UTF-16 conversion of [`TextIndex`], `search`, backlinks and slot targets; P15
-//! `lens` and the links for the graph; P17 `preview` for drafts and the same store for
-//! embeddings; P19 the same store for comment lists.
+//! agent worktree and the `generated` and `target` locks; P09 (notes) the note id, version, state span and text; P11 and P12 (UI) the
+//! body model, the UTF-16 conversion of [`TextIndex`], `search`, backlinks and slot targets; P14
+//! `rules::all` and the settings; P15 `lens`, `ledger_of` and the links for the graph; P17 `preview` for drafts and the same store for
+//! embeddings; P19 the same store for comment lists; P21 and P26 the rules that parts register
+//! and the cycle walk.
 
 pub mod body;
 pub mod check;
