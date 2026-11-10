@@ -7,6 +7,7 @@ use crate::lore::FactError;
 use crate::project::Project;
 use crate::walk::WalkError;
 
+mod configured;
 mod dump;
 mod identity;
 pub(crate) mod inputs;

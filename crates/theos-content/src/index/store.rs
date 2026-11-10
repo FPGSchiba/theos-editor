@@ -10,8 +10,9 @@ use crate::index::IndexError;
 use crate::index::identity::Identity;
 
 /// The tables `schema.sql` creates, the virtual `search` first so it is dropped first.
-const TABLES: [&str; 14] = [
+const TABLES: [&str; 15] = [
     "search",
+    "configured",
     "ledger_beats",
     "ledger",
     "inputs",

@@ -235,7 +235,7 @@ impl Index {
             .collect();
         let (update, findings) = self.transact(
             |work| apply_changes(work, changes),
-            |conn, update| {
+            |conn, registry, update| {
                 let mut paths: BTreeSet<&String> = update
                     .reparsed
                     .iter()
@@ -245,7 +245,7 @@ impl Index {
                 paths.extend(&given);
                 let mut findings = Vec::new();
                 for path in paths {
-                    findings.extend(query::findings_in(conn, path)?);
+                    findings.extend(query::findings_in(conn, registry, path)?);
                 }
                 Ok(findings)
             },
@@ -259,7 +259,7 @@ impl Index {
         &mut self,
         work: impl FnOnce(&mut Syncer<'_>) -> Result<(), IndexError>,
     ) -> Result<Update, IndexError> {
-        self.transact(work, |_, _| Ok(()), true)
+        self.transact(work, |_, _, _| Ok(()), true)
             .map(|(update, ())| update)
     }
 
@@ -276,7 +276,7 @@ impl Index {
     fn transact<T>(
         &mut self,
         work: impl FnOnce(&mut Syncer<'_>) -> Result<(), IndexError>,
-        read: impl FnOnce(&Connection, &Update) -> Result<T, IndexError>,
+        read: impl FnOnce(&Connection, &KindRegistry, &Update) -> Result<T, IndexError>,
         commit: bool,
     ) -> Result<(Update, T), IndexError> {
         let path = self.store.path.clone();
@@ -312,7 +312,7 @@ impl Index {
             work(&mut syncer)?;
             syncer.finish()?;
             let update = syncer.update.sorted();
-            let read = read(&tx, &update)?;
+            let read = read(&tx, &self.registry, &update)?;
             if commit {
                 tx.commit()?;
             } else {

@@ -35,6 +35,8 @@ CREATE TABLE ledger (path TEXT NOT NULL, clue TEXT NOT NULL, clue_path TEXT NOT 
                      state TEXT NOT NULL, floor INTEGER, place TEXT, gate TEXT);
 CREATE TABLE ledger_beats (path TEXT NOT NULL, clue_path TEXT NOT NULL, script TEXT NOT NULL,
                            beat INTEGER NOT NULL);
+-- The severities that `.theos/settings.toml` configures, per rule; findings keep their default.
+CREATE TABLE configured (rule TEXT PRIMARY KEY, severity TEXT NOT NULL) WITHOUT ROWID;
 CREATE VIRTUAL TABLE search USING fts5(path UNINDEXED, title, fields, body,
                                        tokenize = 'porter unicode61 remove_diacritics 2');
 CREATE INDEX records_id ON records(id);

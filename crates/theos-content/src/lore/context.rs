@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use crate::kinds::KindRegistry;
 use crate::lore::facts::{InLink, InputFacts, RecordFacts};
+use crate::settings::{self, Parsed};
 
 /// Why a fact could not be read: the store failed. Rules never fail on content (L5).
 #[derive(Debug, thiserror::Error)]
@@ -59,6 +60,7 @@ pub struct Context<'a> {
     records: HashMap<String, Vec<Rc<RecordFacts>>>,
     inbound: HashMap<String, Vec<InLink>>,
     inputs: HashMap<String, Option<Rc<InputFacts>>>,
+    settings: Option<Rc<Parsed>>,
 }
 
 impl<'a> Context<'a> {
@@ -71,6 +73,7 @@ impl<'a> Context<'a> {
             records: HashMap::new(),
             inbound: HashMap::new(),
             inputs: HashMap::new(),
+            settings: None,
         }
     }
 
@@ -115,6 +118,28 @@ impl<'a> Context<'a> {
     pub fn input(&mut self, path: &str) -> Result<Option<Rc<InputFacts>>, FactError> {
         self.reads.insert(ReadKey::File(path.to_owned()));
         self.load_input(path)
+    }
+
+    /// The project's validation settings, read from `.theos/settings.toml` once per run:
+    /// empty and without a problem when the project has no such file. Reads
+    /// `file:.theos/settings.toml`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the store fails.
+    pub fn settings(&mut self) -> Result<Rc<Parsed>, FactError> {
+        let input = self.input(settings::SETTINGS)?;
+        if let Some(parsed) = &self.settings {
+            return Ok(Rc::clone(parsed));
+        }
+        let parsed = Rc::new(match input {
+            None => Parsed::default(),
+            Some(input) => {
+                settings::parse(input.text.as_deref(), &crate::rules::all(self.registry))
+            }
+        });
+        self.settings = Some(Rc::clone(&parsed));
+        Ok(parsed)
     }
 
     /// The facts of the record subject with `id` at `path`, without a read: a subject's own

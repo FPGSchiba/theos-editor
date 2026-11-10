@@ -2,6 +2,7 @@
 
 use crate::finding::Severity;
 use crate::kinds::KindRegistry;
+use crate::lore::LoreRule;
 
 /// How a project may change a rule.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -61,6 +62,12 @@ fn fixed(list: Vec<(&'static str, Severity)>) -> impl Iterator<Item = RuleInfo> 
     })
 }
 
+/// Every lore rule the index runs: those the parts of `registry` registered, then the
+/// `settings/*` rules, which belong to no part.
+pub(crate) fn lore_rules(registry: &KindRegistry) -> impl Iterator<Item = &LoreRule> {
+    registry.lore_rules().chain(crate::settings::RULES)
+}
+
 /// Every rule, sorted by id, one entry per id: P02's and P03's, and the lore rules the parts of
 /// `registry` registered.
 ///
@@ -70,7 +77,7 @@ pub fn all(registry: &KindRegistry) -> Vec<RuleInfo> {
     let mut rules: Vec<RuleInfo> = Vec::new();
     rules.extend(fixed(crate::check::rules()));
     rules.extend(fixed(crate::index::resolve::rule_set()));
-    rules.extend(registry.lore_rules().map(|rule| RuleInfo {
+    rules.extend(lore_rules(registry).map(|rule| RuleInfo {
         id: rule.id,
         severity: rule.severity,
         class: rule.class,
@@ -148,6 +155,24 @@ mod tests {
         assert_eq!(unknown.class, RuleClass::Fixed);
         assert_eq!(unknown.severity, Severity::Warning);
         assert!(rules.windows(2).all(|pair| pair[0].id < pair[1].id));
+        Ok(())
+    }
+
+    #[test]
+    fn settings_rules_are_listed_once_and_fixed() -> Result<(), Box<dyn std::error::Error>> {
+        let rules = all(&crate::parts::builtin()?);
+        let settings: Vec<&RuleInfo> = rules
+            .iter()
+            .filter(|rule| rule.group() == "settings")
+            .collect();
+        assert_eq!(settings.len(), 8);
+        assert!(settings.iter().all(|rule| rule.class == RuleClass::Fixed));
+        let warning: Vec<&str> = settings
+            .iter()
+            .filter(|rule| rule.severity == Severity::Warning)
+            .map(|rule| rule.id)
+            .collect();
+        assert_eq!(warning, ["settings/unknown-rule"]);
         Ok(())
     }
 

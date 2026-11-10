@@ -11,13 +11,15 @@ use std::collections::BTreeSet;
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::finding::Finding;
-use crate::index::IndexError;
 use crate::index::ledger;
 use crate::index::lore_source::{Bulk, ById};
 use crate::index::rows::RecordRows;
 use crate::index::write;
+use crate::index::{IndexError, configured};
 use crate::kinds::KindRegistry;
 use crate::lore::{self, Context, FactSource, LoreRule, ReadKey, Subject};
+use crate::rules;
+use crate::settings::SETTINGS;
 
 /// The step name of the findings that [`run`] makes.
 const STEP: &str = "lore";
@@ -104,8 +106,7 @@ pub(crate) fn run(
     for path in dirty(conn, work)? {
         clear(conn, &path)?;
         let record = record_at(conn, &path)?;
-        let rules = registry
-            .lore_rules()
+        let rules = rules::lore_rules(registry)
             .filter(|rule| match &record {
                 Some((_, kind)) => rule.on.takes_record(kind.as_deref()),
                 None => rule.on.takes_input(&path),
@@ -166,6 +167,9 @@ fn clear(conn: &Connection, path: &str) -> rusqlite::Result<()> {
     conn.prepare_cached("DELETE FROM deps WHERE subject = ?1")?
         .execute([path])?;
     ledger::clear(conn, path)?;
+    if path == SETTINGS {
+        configured::clear(conn)?;
+    }
     Ok(())
 }
 
@@ -203,6 +207,9 @@ fn check(
     {
         let rows = lore::ledger::of_truth(ctx, &record.id)?;
         ledger::store(conn, &record.path, &rows)?;
+    }
+    if subject.path() == SETTINGS && matches!(subject, Subject::Input(_)) {
+        configured::store(conn, &ctx.settings()?.settings.severities)?;
     }
     let mut stmt = conn.prepare_cached("INSERT INTO deps (subject, key) VALUES (?1, ?2)")?;
     for key in ctx.take_reads() {

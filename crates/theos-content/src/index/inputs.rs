@@ -75,6 +75,9 @@ pub(super) fn delete(conn: &Connection, path: &str) -> rusqlite::Result<()> {
     ] {
         conn.prepare_cached(sql)?.execute([path])?;
     }
+    if path == crate::settings::SETTINGS {
+        super::configured::clear(conn)?;
+    }
     Ok(())
 }
 

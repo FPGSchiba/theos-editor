@@ -16,6 +16,7 @@ mod lore;
 mod order;
 mod schema;
 mod search;
+mod settings;
 mod speed;
 mod story;
 mod sync;

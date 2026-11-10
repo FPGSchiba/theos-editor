@@ -61,6 +61,7 @@ pub mod parts;
 pub mod project;
 pub mod record;
 pub mod rules;
+pub mod settings;
 pub mod text;
 pub mod walk;
 pub mod yaml;

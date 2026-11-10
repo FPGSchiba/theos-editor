@@ -181,7 +181,14 @@ fn a_non_utf8_input_is_stored_without_text() -> TestResult {
     let mut index = open(&project)?;
     let update = index.sync()?;
     assert_eq!(update.read, paths(&[SETTINGS]));
-    assert_eq!(said(&index)?, [format!("{SETTINGS} test/settings no text")]);
+    // The test rule and the built-in `settings/toml` rule each report the file once.
+    assert_eq!(
+        said(&index)?,
+        [
+            format!("{SETTINGS} settings/toml the file is not valid UTF-8 text."),
+            format!("{SETTINGS} test/settings no text"),
+        ]
+    );
     assert!(index.dump()?.contains("[inputs]\n.theos/settings.toml\t"));
     Ok(())
 }
