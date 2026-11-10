@@ -16,6 +16,7 @@ pub(crate) mod ledger;
 #[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 11"))]
 pub(crate) mod lens;
 pub(crate) mod places;
+pub(crate) mod reveals;
 
 use std::fmt;
 use std::rc::Rc;

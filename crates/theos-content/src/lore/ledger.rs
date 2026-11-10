@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 use crate::index::Slot;
 use crate::lore::availability::{Availability, State, of_clue};
+use crate::lore::reveals::{clues_of, moves_to};
 use crate::lore::{Context, FactError};
 
 /// One clue of a truth.
@@ -38,25 +39,12 @@ pub struct Ledger {
 ///
 /// Fails when the store fails.
 pub fn of_truth(ctx: &mut Context<'_>, truth_id: &str) -> Result<Ledger, FactError> {
-    let reveals = Slot::Field("reveals".to_owned());
-    let mut seen = BTreeSet::new();
     let mut rows = Vec::new();
-    for link in ctx.linking_to(truth_id)? {
-        if link.slot != reveals || !seen.insert(link.source_path.clone()) {
-            continue;
-        }
-        let found = ctx.records(&link.source_id)?;
-        let Some(clue) = found.iter().find(|record| record.path == link.source_path) else {
+    for clue in clues_of(ctx, truth_id)? {
+        let Some(state) = moves_to(&clue) else {
             continue;
         };
-        let state = clue
-            .text("moves_to")
-            .and_then(|value| value.text.as_deref())
-            .and_then(State::parse);
-        let (true, Some(state)) = (clue.kind.as_deref() == Some("clue"), state) else {
-            continue;
-        };
-        let availability = of_clue(ctx, clue)?;
+        let availability = of_clue(ctx, &clue)?;
         let beat = Slot::Beat("reveals".to_owned());
         let placed_by: BTreeSet<(String, u32)> = ctx
             .linking_to(&clue.id)?

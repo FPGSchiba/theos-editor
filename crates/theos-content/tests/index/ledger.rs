@@ -213,7 +213,10 @@ fn a_removed_clue_and_a_removed_truth_leave_no_rows() -> TestResult {
     index.sync()?;
     assert_eq!(index.ledger_of("T-950")?.len(), 0);
     let dump = index.dump()?;
-    let lines = ledger_lines(&dump);
+    let lines: Vec<&str> = ledger_lines(&dump)
+        .into_iter()
+        .filter(|line| line.starts_with(T_950))
+        .collect();
     assert!(
         lines.is_empty(),
         "ledger rows of a removed truth remain: {lines:?}"

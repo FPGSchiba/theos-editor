@@ -37,5 +37,7 @@ pub fn register(registry: &mut KindRegistry) -> Result<(), RegistryError> {
     registry.register("codex", equation::spec())?;
     registry.register_rule("codex", rules::FLOOR_NUMBER)?;
     registry.register_rule("codex", rules::PARENT_CYCLE)?;
+    registry.register_rule("codex", rules::NEVER_CONFIRM)?;
+    registry.register_rule("codex", rules::NO_OVERSHOOT)?;
     Ok(())
 }

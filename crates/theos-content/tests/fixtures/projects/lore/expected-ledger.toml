@@ -39,3 +39,63 @@ id = "T-951"
 path = "lore/truths/T-951.md"
 title = "Synthetic truth without clues"
 target = "hinted"
+
+[[truth]]
+id = "T-952"
+path = "lore/truths/T-952.md"
+title = "Synthetic truth that is never revealed"
+target = "never"
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-955"
+clue_path = "lore/clues/C-955.md"
+placed_by = [{ script = "S-951", beat = 2 }]
+
+[[truth]]
+id = "T-953"
+path = "lore/truths/T-953.md"
+title = "Synthetic truth with a low target"
+target = "hinted"
+
+[[truth.entry]]
+state = "suspected"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-956"
+clue_path = "lore/clues/C-956.md"
+placed_by = [{ script = "S-951", beat = 3 }]
+
+[[truth]]
+id = "T-954"
+path = "lore/truths/T-954.md"
+title = "Synthetic duplicated truth"
+target = "never"
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-957"
+clue_path = "lore/clues/C-957.md"
+placed_by = []
+
+[[truth]]
+id = "T-954"
+path = "lore/truths/synthetic-copy/T-954.md"
+title = "Synthetic duplicated truth, second copy"
+target = "confirmed"
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-957"
+clue_path = "lore/clues/C-957.md"
+placed_by = []
