@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>12 · Atlas — floor map, layers, place panel — Theos Editor reference</title>
+<!--
+  Reference screen 12 of the Theos content editor, exported from the design canvas on 2026-11-05.
+  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
+-->
+<link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
+<link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<style>
+body{margin:0;background:#060810}
+a{color:#3ef0ff}a:hover{color:#e4ecff}
+.tu-shell.cs{height:900px}
+:where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
+:where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
+@media (max-width:1000px){
+.tu-shell.cs{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:var(--h-titlebar) auto auto minmax(0,1fr) var(--h-statusbar)}
+.cs .tu-rail{flex-direction:row;width:auto;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}
+.cs .tu-rail .tu-rail__item{width:60px;flex-shrink:0}
+.cs .tu-rail__spacer{display:none}
+.cs .tu-toolbar{height:auto;flex-wrap:wrap;padding:6px 10px}
+.cs .tu-shell__work{flex-wrap:wrap}
+.cs .tu-shell__work > *{flex:1 1 100% !important;min-height:320px}
+}
+</style>
+</head>
+<body>
+<div class="tu-shell cs" style="--tu-font-i: var(--font-ui)">
+
+  <header class="tu-titlebar">
+    <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <span class="tu-titlebar__sep">▸</span><span>tower-of-theos</span>
+    <span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall · maps/hearth-valley</span>
+    <span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Atlas</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>hearth-valley-v1 picked · pins placed on v1</span>
+    <span class="tu-statuspip"><span class="tu-pip is-warn"></span>3 unplaced</span>
+  </header>
+
+  <div class="tu-toolbar">
+    <span class="tu-row" style="gap: 2px;">
+      <button class="tu-btn tu-btn--ghost tu-btn--sm" type="button"><span class="tu-kind" data-kind="tower"></span>Tower</button>
+      <span class="tu-mono tu-dim">▸</span>
+      <button class="tu-btn tu-btn--ghost tu-btn--sm" type="button"><span class="tu-kind" data-kind="band"></span>Hearth</button>
+      <span class="tu-mono tu-dim">▸</span>
+      <button class="tu-btn tu-btn--secondary tu-btn--sm" type="button"><span class="tu-kind" data-kind="floor"></span>F04 The Choir-hall</button>
+    </span>
+    <span class="tu-divider"></span>
+    <span class="tu-seg" aria-label="Map render"><button class="tu-seg__opt" type="button">In-world</button><button class="tu-seg__opt is-active" type="button">Truth</button></span>
+    <span class="tu-divider"></span>
+    <span class="tu-label tu-label--xs">Seen as</span>
+    <span class="tu-tier tu-tier--sm" aria-label="Tier filter"><button class="tu-tier__opt is-active" type="button"><span class="tu-tier__n">T1</span></button><button class="tu-tier__opt" type="button"><span class="tu-tier__n">T2</span></button><button class="tu-tier__opt" type="button"><span class="tu-tier__n">T3</span></button></span>
+    <span class="tu-divider"></span>
+    <span class="tu-row" style="gap: 4px; flex-wrap: wrap;" aria-label="Layers">
+      <span class="tu-filter" style="--c: var(--kind-world);">⌂ Places</span>
+      <span class="tu-filter" style="--c: var(--kind-world);">◉ NPCs</span>
+      <span class="tu-filter" style="--c: var(--sig-reject);">⊛ Spawns</span>
+      <span class="tu-filter" style="--c: var(--sig-script);">↝ Quests</span>
+      <span class="tu-filter" style="--c: var(--kind-clue);">◔ Lore</span>
+      <span class="tu-filter is-off" style="--c: var(--kind-concept);">◫ Concepts</span>
+    </span>
+    <span class="tu-spacer"></span>
+    <button class="tu-btn tu-btn--secondary" type="button">Open in Maps</button>
+  </div>
+
+  <nav class="tu-rail" aria-label="Layout presets">
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◈</span><span class="tu-rail__label">Codex</span></button>
+    <button class="tu-rail__item is-active" type="button" aria-current="true"><span class="tu-rail__glyph">⌾</span><span class="tu-rail__label">Atlas</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⋈</span><span class="tu-rail__label">Graph</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">¶</span><span class="tu-rail__label">Scripts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◫</span><span class="tu-rail__label">Concepts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">△</span><span class="tu-rail__label">Maps</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◴</span><span class="tu-rail__label">Review</span><span class="tu-rail__badge">3</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">±</span><span class="tu-rail__label">Changes</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">&lt;/&gt;</span><span class="tu-rail__label">Code</span></button>
+    <div class="tu-rail__spacer"></div>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⚙</span><span class="tu-rail__label">Settings</span></button>
+  </nav>
+
+  <div class="tu-shell__work">
+
+    <!-- Floor contents and unplaced records -->
+    <section class="tu-window" style="flex: 0 0 236px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button">On F04</button><button class="tu-tab" type="button">Unplaced 3</button></div></div>
+      <div class="tu-window__body">
+        <div class="tu-section__head"><span class="tu-label tu-label--sm tu-label--strong">Unplaced</span><span class="tu-section__more">drag onto the map</span></div>
+        <div class="tu-tree">
+          <div class="tu-tree__row"><span class="tu-mono tu-dim">∷</span><span class="tu-kind" data-kind="npc"></span><span class="tu-tree__name">Brother Aldo</span><span class="tu-tree__tag">npc</span></div>
+          <div class="tu-tree__row"><span class="tu-mono tu-dim">∷</span><span class="tu-kind" data-kind="spawn"></span><span class="tu-tree__name">fen-wisps</span><span class="tu-tree__tag">spawn</span></div>
+          <div class="tu-tree__row"><span class="tu-mono tu-dim">∷</span><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Song-stair</span><span class="tu-tree__tag">location</span></div>
+        </div>
+
+        <div class="tu-section__head" style="border-top: 1px solid var(--border); margin-top: 6px;"><span class="tu-label tu-label--sm tu-label--strong">On this map</span><span class="tu-section__more">31 pins</span></div>
+        <div class="tu-tree">
+          <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Places</span><span class="tu-tree__tag">6 · 9 features</span></div>
+          <div class="tu-tree__row is-entity is-selected" style="--depth: 1;"><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Thornstead</span><span class="tu-tree__tag">city-1</span></div>
+          <div class="tu-tree__row" style="--depth: 1;"><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Fates' shrine</span><span class="tu-tree__tag">shrine-1</span></div>
+          <div class="tu-tree__row" style="--depth: 1;"><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Choir-hall nave</span><span class="tu-tree__tag">ruin-1</span></div>
+          <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="npc"></span><span class="tu-tree__name">NPCs</span><span class="tu-tree__tag">4 · 1 projected</span></div>
+          <div class="tu-tree__row" style="--depth: 1;"><span class="tu-kind" data-kind="npc"></span><span class="tu-tree__name">Mother Ilse</span><span class="tu-tree__tag">shrine</span></div>
+          <div class="tu-tree__row" style="--depth: 1;"><span class="tu-kind" data-kind="npc"></span><span class="tu-tree__name">Elder Vass</span><span class="tu-tree__tag">↑ thornstead</span></div>
+          <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="spawn"></span><span class="tu-tree__name">Spawns</span><span class="tu-tree__tag">3</span></div>
+          <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="quest"></span><span class="tu-tree__name">Quests</span><span class="tu-tree__tag">3 routes</span></div>
+          <div class="tu-tree__row" style="--depth: 1;"><span class="tu-mono" style="color: var(--sig-attention);">━</span><span class="tu-tree__name">Q-001 main · steps 5–6</span></div>
+          <div class="tu-tree__row" style="--depth: 1;"><span class="tu-mono" style="color: var(--sig-info);">━</span><span class="tu-tree__name">Q-104 trial of F04</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-mono" style="color: var(--sig-script);">┅</span><span class="tu-tree__name">Q-012 The binders' price</span></div>
+        </div>
+        <div style="margin-top: auto; padding: 8px 10px; border-top: 1px solid var(--border); font: 400 10px/14px var(--font-mono); color: var(--textDim);">pins live in the map record, one line each; Elder Vass is pinned on the Thornstead map and shows here through its frame</div>
+      </div>
+    </section>
+
+    <!-- The map -->
+    <section class="tu-window" style="flex: 1 1 600px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button"><span class="tu-kind" data-kind="floor"></span>F04 · hearth-valley-v1</button></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
+      <div class="tu-window__bar" style="flex-wrap: wrap; font: 400 10px/14px var(--font-mono); color: var(--textDim);">
+        <span style="color: var(--text);">24 × 24 km · frame 24 000 m</span>
+        <span class="tu-spacer"></span>
+        <span style="color: var(--sig-attention);">━ main</span>
+        <span style="color: var(--sig-info);">━ trial</span>
+        <span style="color: var(--sig-script);">┅ side</span>
+        <span style="color: var(--sig-reject);">◌ spawn · threat</span>
+      </div>
+      <div class="tu-window__body" style="padding: 10px; gap: 10px;">
+        <div style="display: flex; gap: 8px; justify-content: center; align-items: flex-start;">
+          <div style="position: relative; width: 560px; height: 560px; flex-shrink: 0; border: 1px solid var(--border); background: var(--bg); overflow: hidden;">
+            <img src="../assets/hearth-valley_s1_truth.webp" alt="F04 terrain, truth render with settlements, roads, lake and ruins" style="position: absolute; left: 0; top: 0; width: 560px; height: 560px; display: block;">
+
+            <svg width="560" height="560" viewBox="0 0 560 560" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 560px; height: 560px; fill: none; stroke: #ff8b2e; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.45"><polyline points="212,381 234,342 300,341 322,250 368,209 425,188 462,120 498,36"></polyline></svg>
+            <svg width="560" height="560" viewBox="0 0 560 560" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 560px; height: 560px; fill: none; stroke: #3ef0ff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.45"><polyline points="212,381 292,344 366,354 430,372 476,381 500,300 507,182 498,36"></polyline></svg>
+            <svg width="560" height="560" viewBox="0 0 560 560" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 560px; height: 560px; fill: none; stroke: #7a6cff; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 7 5"><polyline points="425,188 368,209 300,232 237,240 175,250 142,254"></polyline><polyline points="425,188 446,262 470,330 476,381"></polyline></svg>
+
+            <div style="position: absolute; left: 124px; top: 236px; width: 36px; height: 36px; box-sizing: border-box; border-radius: 50%; border: 1px dashed #ff516f; background: rgba(255, 81, 111, 0.18);"></div>
+            <div style="position: absolute; left: 516px; top: 270px; width: 28px; height: 28px; box-sizing: border-box; border-radius: 50%; border: 1px dashed #ff516f; background: rgba(255, 81, 111, 0.18);"></div>
+            <div style="position: absolute; left: 495px; top: 170px; width: 24px; height: 24px; box-sizing: border-box; border-radius: 50%; border: 1px dashed #ff516f; background: rgba(255, 81, 111, 0.22);"></div>
+            <div style="position: absolute; left: 112px; top: 276px; padding: 1px 4px; white-space: nowrap; font: 700 9.5px/12px var(--font-mono); color: #ffffff; background: rgba(140, 20, 45, 0.92);">⊛ marsh-lurker · 2</div>
+            <div style="position: absolute; left: 470px; top: 300px; padding: 1px 4px; white-space: nowrap; font: 700 9.5px/12px var(--font-mono); color: #ffffff; background: rgba(140, 20, 45, 0.92);">⊛ raiders · 2</div>
+
+            <div style="position: absolute; left: 412px; top: 175px; width: 26px; height: 26px; box-sizing: border-box; border-radius: 50%; border: 2px solid #ff8b2e; box-shadow: 0 0 10px rgba(255, 139, 46, 0.6);"></div>
+            <div style="position: absolute; left: 336px; top: 148px; padding: 2px 5px; white-space: nowrap; font: 600 10px/13px var(--font-mono); color: #e4ecff; background: rgba(6, 8, 16, 0.86); border: 1px solid #2b3a63;">⌂ Choir-hall nave · ◔ 2</div>
+            <div style="position: absolute; left: 380px; top: 398px; padding: 2px 5px; white-space: nowrap; font: 600 10px/13px var(--font-mono); color: #e4ecff; background: rgba(6, 8, 16, 0.86); border: 1px solid #2b3a63;">⌂ Fates' shrine · ◔ 1</div>
+            <div style="position: absolute; left: 140px; top: 392px; padding: 2px 5px; white-space: nowrap; font: 600 10px/13px var(--font-mono); color: #3ef0ff; background: rgba(6, 8, 16, 0.86); border: 1px solid #2b3a63;">◇ portal from F03</div>
+            <div style="position: absolute; left: 392px; top: 48px; padding: 2px 5px; white-space: nowrap; font: 600 10px/13px var(--font-mono); color: #3ef0ff; background: rgba(6, 8, 16, 0.86); border: 1px solid #2b3a63;">◇ portal to F05</div>
+
+            <div style="position: absolute; left: 482px; top: 392px; width: 8px; height: 8px; border-radius: 50%; background: #a2caa6; border: 1px solid #060810;"></div>
+            <div style="position: absolute; left: 432px; top: 194px; width: 8px; height: 8px; box-sizing: border-box; border-radius: 50%; border: 2px solid #a2caa6; background: transparent;"></div>
+
+            <div style="position: absolute; left: 160px; top: 228px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: #060810; background: #3ef0ff; box-shadow: 0 0 10px rgba(62, 240, 255, 0.8);">1</div>
+            <div style="position: absolute; left: 392px; top: 172px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: #060810; background: #7a6cff;">2</div>
+            <div style="position: absolute; left: 488px; top: 360px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: #060810; background: #7a6cff;">3</div>
+            <div style="position: absolute; left: 452px; top: 290px; padding: 0 3px; font: 600 9.5px/12px var(--font-mono); color: #c9c3ff; background: rgba(6, 8, 16, 0.8);">pay</div>
+
+            <div style="position: absolute; left: 236px; top: 452px; padding: 4px 7px; display: flex; gap: 6px; align-items: center; font: 600 10px/13px var(--font-mono); color: #e4ecff; background: rgba(11, 17, 32, 0.92); border: 1px dashed #ff8b2e;"><span>∷ ◉ Brother Aldo</span><span style="color: #7d8bb1;">drop to place</span></div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <button class="tu-iconbtn" type="button" aria-label="Zoom in">+</button>
+            <button class="tu-iconbtn" type="button" aria-label="Zoom out">−</button>
+            <button class="tu-iconbtn" type="button" aria-label="Fit map">□</button>
+            <button class="tu-iconbtn is-active" type="button" aria-label="Place mode">⌾</button>
+          </div>
+        </div>
+
+        <div style="border: 1px solid var(--border); background: var(--panel2); display: flex; flex-direction: column;">
+          <div class="tu-row" style="padding: 6px 8px; border-bottom: 1px solid var(--border); font: 400 10px/14px var(--font-mono); color: var(--textDim);">
+            <span class="tu-kind" data-kind="quest"></span>
+            <span style="color: var(--text); font-weight: 700;">Q-012 The binders' price</span>
+            <span>side · giver Elder Vass · 4 steps</span>
+            <span class="tu-spacer"></span>
+            <span>hover a step to find it on the map</span>
+            <button class="tu-btn tu-btn--ghost tu-btn--sm" type="button">Open flow ▸</button>
+          </div>
+          <div style="padding: 8px; display: flex; align-items: center; gap: 6px; overflow-x: auto;">
+            <div style="flex: 0 0 auto; padding: 6px 8px; border: 1px solid #3ef0ff; background: var(--panel); box-shadow: 0 0 8px rgba(62, 240, 255, 0.35); display: flex; flex-direction: column; gap: 2px;"><span class="tu-mono" style="font-size: 10px; color: var(--text); font-weight: 700;">1 · Find the lost choir-boy</span><span class="tu-mono tu-dim" style="font-size: 9.5px;">⌂ reed marsh · fights ⊛ marsh-lurker</span></div>
+            <span class="tu-mono tu-dim">→</span>
+            <div style="flex: 0 0 auto; padding: 6px 8px; border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; gap: 2px;"><span class="tu-mono" style="font-size: 10px; color: var(--text); font-weight: 700;">2 · Bring him home</span><span class="tu-mono tu-dim" style="font-size: 9.5px;">⌂ Thornstead · ◉ Elder Vass</span></div>
+            <span class="tu-mono tu-dim">→</span>
+            <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px;">
+              <div style="padding: 4px 8px; border: 1px solid var(--border); background: var(--panel); display: flex; gap: 8px; align-items: center;"><span class="tu-mono" style="font-size: 9.5px; color: #c9c3ff;">pay</span><span class="tu-mono" style="font-size: 10px; color: var(--text); font-weight: 700;">3 · The naming-song</span><span class="tu-chip is-approve" style="--c: var(--sig-approve);">ends success</span></div>
+              <div style="padding: 4px 8px; border: 1px solid var(--border); background: var(--panel); display: flex; gap: 8px; align-items: center;"><span class="tu-mono" style="font-size: 9.5px; color: #c9c3ff;">refuse</span><span class="tu-mono" style="font-size: 10px; color: var(--text); font-weight: 700;">4 · Turned away</span><span class="tu-chip" style="--c: var(--sig-reject);">ends failure</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Place panel -->
+    <section class="tu-window" style="flex: 0 0 330px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button"><span class="tu-kind" data-kind="location"></span>Thornstead</button><button class="tu-tab" type="button">Pin</button></div></div>
+      <div class="tu-window__body">
+        <div class="tu-entity">
+          <div class="tu-entity__name"><span class="tu-kind" data-kind="location"></span>Thornstead</div>
+          <div class="tu-entity__meta"><span>location · settlement</span><span>F04</span><span>feature city-1</span><span>0.759, 0.334</span></div>
+          <p style="margin: 0; font: 400 12.5px/19px var(--font-ui); color: var(--textProse);">The valley's market town, where the fen road meets the river. The binders come down to trade here once a season.</p>
+          <button class="tu-btn tu-btn--ghost tu-btn--sm" type="button" style="align-self: flex-start;">Open in Codex ▸</button>
+        </div>
+
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Lore here</span><span class="tu-section__more">at T1</span></div>
+          <div style="padding: 6px 10px 8px; display: flex; flex-wrap: wrap; gap: 6px;">
+            <span class="tu-link" data-kind="belief"><span class="tu-kind" data-kind="belief"></span><span class="tu-link__id">B-016</span></span>
+            <span class="tu-link" data-kind="belief"><span class="tu-kind" data-kind="belief"></span><span class="tu-link__id">B-020</span></span>
+            <span class="tu-mono tu-dim" style="font-size: 10px;">no clues here · 1 hidden until T2</span>
+          </div>
+        </div>
+
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">People</span><span class="tu-section__more">2</span></div>
+          <div class="tu-prop"><span class="tu-kind" data-kind="npc"></span><span class="tu-prop__val">Elder Vass</span><span class="tu-prop__type">home · pinned on its map</span></div>
+          <div class="tu-prop"><span class="tu-kind" data-kind="faction"></span><span class="tu-prop__val">The binders</span><span class="tu-prop__type">trade here</span></div>
+        </div>
+
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Quests through here</span><span class="tu-section__more">2</span></div>
+          <div class="tu-prop"><span class="tu-mono" style="color: var(--sig-script);">┅</span><span class="tu-prop__val">Q-012 step 2 · giver</span><span class="tu-prop__type">side</span></div>
+          <div class="tu-prop"><span class="tu-mono" style="color: var(--sig-attention);">━</span><span class="tu-prop__val">Q-001 step 6</span><span class="tu-prop__type">main</span></div>
+        </div>
+
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Nearby</span></div>
+          <div class="tu-prop"><span class="tu-kind" data-kind="spawn"></span><span class="tu-prop__val">raiders · threat 2</span><span class="tu-prop__type">3.1 km E</span></div>
+        </div>
+
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Its map and concepts</span></div>
+          <div style="padding: 6px 10px 8px; display: flex; flex-direction: column; gap: 6px;">
+            <div class="tu-row" style="font: 400 10.5px/14px var(--font-mono); color: var(--text);"><span class="tu-mono">△</span>thornstead · settlement · v2 picked<span class="tu-spacer"></span><button class="tu-btn tu-btn--secondary tu-btn--sm" type="button">Open map ▸</button></div>
+            <div style="border: 1px dashed var(--border); padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+              <span class="tu-mono tu-dim" style="font-size: 16px;">◫</span>
+              <span class="tu-mono tu-dim" style="font-size: 10px;">no concept yet · 2 cameras on its map</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding: 10px; margin-top: auto; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border);">
+          <button class="tu-btn tu-btn--primary tu-btn--block" type="button">Generate concept</button>
+          <span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">builds the brief from Thornstead, its people and the Hearth style, then opens the place pipeline with its cameras</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="tu-statusbar">
+    <span class="tu-statusbar__brand">THEOS//EDITOR</span>
+    <span>v0.6.0 · atlas layout</span>
+    <span class="tu-statuspip"><span class="tu-pip is-info"></span>seen as T1 · 1 place and 1 clue hidden</span>
+    <span>31 pins · 4 from the Thornstead map</span>
+    <span class="tu-spacer"></span>
+    <span>git main · clean</span>
+  </footer>
+</div>
+</body>
+</html>

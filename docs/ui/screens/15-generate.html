@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>15 · Concepts — generate from lore — Theos Editor reference</title>
+<!--
+  Reference screen 15 of the Theos content editor, exported from the design canvas on 2026-11-05.
+  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
+-->
+<link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
+<link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<style>
+body{margin:0;background:#060810}
+a{color:#3ef0ff}a:hover{color:#e4ecff}
+.tu-shell.cs{height:900px}
+:where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
+:where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
+@media (max-width:1000px){
+.tu-shell.cs{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:var(--h-titlebar) auto auto minmax(0,1fr) var(--h-statusbar)}
+.cs .tu-rail{flex-direction:row;width:auto;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}
+.cs .tu-rail .tu-rail__item{width:60px;flex-shrink:0}
+.cs .tu-rail__spacer{display:none}
+.cs .tu-toolbar{height:auto;flex-wrap:wrap;padding:6px 10px}
+.cs .tu-shell__work{flex-wrap:wrap}
+.cs .tu-shell__work > *{flex:1 1 100% !important;min-height:320px}
+}
+</style>
+</head>
+<body>
+<div class="tu-shell cs" style="--tu-font-i: var(--font-ui)">
+
+  <header class="tu-titlebar">
+    <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <span class="tu-titlebar__sep">▸</span><span>tower-of-theos</span>
+    <span class="tu-titlebar__sep">▸</span><span>concepts/the-gate</span>
+    <span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Concepts</span>
+    <span class="tu-spacer"></span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>comfyui · RTX 5080 · idle</span>
+    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>git main · clean</span>
+  </header>
+
+  <div class="tu-toolbar">
+    <label class="tu-input" style="width: 240px;"><span class="tu-input__icon">~</span><input type="text" aria-label="Find concept" placeholder="find concept or version"></label>
+    <span class="tu-divider"></span>
+    <span class="tu-label tu-label--xs">Style</span>
+    <span class="tu-select" style="width: 190px;">tower · v2 · locked</span>
+    <span class="tu-divider"></span>
+    <span class="tu-seg"><button class="tu-seg__opt" type="button">Grid</button><button class="tu-seg__opt" type="button">Lineage</button><button class="tu-seg__opt" type="button">Compare</button><button class="tu-seg__opt is-active" type="button">New</button></span>
+    <span class="tu-spacer"></span>
+    <button class="tu-btn tu-btn--ghost" type="button">Cancel</button>
+  </div>
+
+  <nav class="tu-rail" aria-label="Layout presets">
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◈</span><span class="tu-rail__label">Codex</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⌾</span><span class="tu-rail__label">Atlas</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⋈</span><span class="tu-rail__label">Graph</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">¶</span><span class="tu-rail__label">Scripts</span></button>
+    <button class="tu-rail__item is-active" type="button" aria-current="true"><span class="tu-rail__glyph">◫</span><span class="tu-rail__label">Concepts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">△</span><span class="tu-rail__label">Maps</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◴</span><span class="tu-rail__label">Review</span><span class="tu-rail__badge">3</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">±</span><span class="tu-rail__label">Changes</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">&lt;/&gt;</span><span class="tu-rail__label">Code</span></button>
+    <div class="tu-rail__spacer"></div>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⚙</span><span class="tu-rail__label">Settings</span></button>
+  </nav>
+
+  <div class="tu-shell__work">
+
+    <!-- What, family, pipeline -->
+    <section class="tu-window" style="flex: 0 0 256px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__title">New concept</div></div>
+      <div class="tu-window__body">
+        <div class="tu-section__head"><span class="tu-label tu-label--sm tu-label--strong">For</span></div>
+        <div style="padding: 4px 10px 8px; display: flex; flex-direction: column; gap: 6px;">
+          <span class="tu-link" data-kind="location"><span class="tu-kind" data-kind="location"></span><span class="tu-link__title">The Gate</span></span>
+          <span class="tu-mono tu-dim" style="font-size: 10px;">location · F00 The Hem</span>
+          <button class="tu-btn tu-btn--dashed tu-btn--sm" type="button" style="align-self: flex-start;">+ add a record</button>
+        </div>
+
+        <div class="tu-section__head" style="border-top: 1px solid var(--border);"><span class="tu-label tu-label--sm tu-label--strong">Family</span></div>
+        <div class="tu-tree">
+          <div class="tu-tree__row is-selected"><span class="tu-mono" style="color: var(--sig-attention);">●</span><span class="tu-tree__name">Buildings and settlements</span><span class="tu-tree__tag" style="color: var(--sig-approve);">proven</span></div>
+          <div class="tu-tree__row"><span class="tu-mono tu-dim">○</span><span class="tu-tree__name">Landscapes</span><span class="tu-tree__tag">to prove</span></div>
+          <div class="tu-tree__row"><span class="tu-mono tu-dim">○</span><span class="tu-tree__name">Characters</span><span class="tu-tree__tag">to prove</span></div>
+          <div class="tu-tree__row"><span class="tu-mono tu-dim">○</span><span class="tu-tree__name">NPC in a scene</span><span class="tu-tree__tag">needs an npc</span></div>
+          <div class="tu-tree__row"><span class="tu-mono tu-dim">○</span><span class="tu-tree__name">Creatures</span><span class="tu-tree__tag">to prove</span></div>
+          <div class="tu-tree__row"><span class="tu-mono tu-dim">○</span><span class="tu-tree__name">Items and clothes</span><span class="tu-tree__tag">to prove</span></div>
+          <div class="tu-tree__row"><span class="tu-mono tu-dim">○</span><span class="tu-tree__name">In-world map</span><span class="tu-tree__tag">to prove</span></div>
+        </div>
+
+        <div class="tu-section__head" style="border-top: 1px solid var(--border); margin-top: 6px;"><span class="tu-label tu-label--sm tu-label--strong">Pipeline</span><span class="tu-section__more">place-key-art</span></div>
+        <div class="tu-tree">
+          <div class="tu-tree__row is-entity"><span class="tu-tree__idx">1</span><span class="tu-tree__name">compose · Z-Image + ControlNet</span><span class="tu-tree__tag">you pick</span></div>
+          <div class="tu-tree__row"><span class="tu-tree__idx">2</span><span class="tu-tree__name">look · Klein references</span><span class="tu-tree__tag">you pick</span></div>
+          <div class="tu-tree__row"><span class="tu-tree__idx">3</span><span class="tu-tree__name">finish · Krea darkbrush</span><span class="tu-tree__tag">you pick</span></div>
+          <div class="tu-tree__row"><span class="tu-tree__idx">4</span><span class="tu-tree__name">upscale · Z-Image to 4K</span><span class="tu-tree__tag">auto</span></div>
+          <div class="tu-tree__row"><span class="tu-tree__idx">5</span><span class="tu-tree__name">grade · colour match</span><span class="tu-tree__tag">auto</span></div>
+        </div>
+        <div style="margin-top: auto; padding: 8px 10px; border-top: 1px solid var(--border); font: 400 10px/14px var(--font-mono); color: var(--textDim);">tools/comfy/pipelines/place-key-art.toml · one stage runs at a time, so it fits in 16 GB</div>
+      </div>
+    </section>
+
+    <!-- Brief and prompt -->
+    <section class="tu-window" style="flex: 1 1 560px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button"><span class="tu-kind" data-kind="concept"></span>the-gate · new</button></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
+      <div class="tu-window__body">
+        <header class="tu-rechead tu-manuscript" style="padding: 14px 20px 10px;">
+          <div class="tu-rechead__top">
+            <span class="tu-kind tu-rechead__glyph" data-kind="concept"></span>
+            <span class="tu-rechead__id">the-gate</span>
+            <span class="tu-rechead__kind">concept · key-art · for The Gate</span>
+            <span class="tu-rechead__right"><span class="tu-status" data-status="draft">New</span></span>
+          </div>
+          <h1 class="tu-rechead__title" style="font-size: 22px; line-height: 28px;">The Gate, with the Tower behind it</h1>
+        </header>
+
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Brief · built from lore</span><span class="tu-spacer"></span><span class="tu-label tu-label--xs">Seen as</span><span class="tu-tier tu-tier--sm" aria-label="Brief tier"><button class="tu-tier__opt is-active" type="button"><span class="tu-tier__n">T1</span></button><button class="tu-tier__opt" type="button"><span class="tu-tier__n">T3</span></button></span></div>
+          <div class="tu-fm" style="border: 0;">
+            <div class="tu-fm__row"><span class="tu-fm__key">look</span><span class="tu-fm__val">An arched portal set into the marble ring, organ pipes above its bay, a stair down to a plaza with two fountains and market stalls. <span class="tu-dim">· the-gate · ## Look</span></span></div>
+            <div class="tu-fm__row"><span class="tu-fm__key">place</span><span class="tu-fm__val">F00 The Hem ▸ the Tower <span class="tu-dim">· parent chain</span></span></div>
+            <div class="tu-fm__row"><span class="tu-fm__key">people</span><span class="tu-fm__val tu-dim">none linked yet</span></div>
+            <div class="tu-fm__row"><span class="tu-fm__key">style</span><span class="tu-fm__val">tower v2 · Prompt, Negative, Palette, Light · refs buildings, sky</span></div>
+            <div class="tu-fm__row"><span class="tu-fm__key">notes</span><span class="tu-fm__val">n1 · open · Keep the Tower visible behind the Gate. <span class="tu-dim">— Jann</span></span></div>
+            <div class="tu-fm__row"><span class="tu-fm__key">held back</span><span class="tu-fm__val tu-dim">2 truths revealed after T1 · never-truths are never in a brief</span></div>
+          </div>
+        </div>
+
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▾</span><span class="tu-label tu-label--sm tu-label--strong">Prompt</span><span class="tu-ai">AI</span><span class="tu-section__more">draft by claude · edit freely</span></div>
+          <div style="padding: 8px 10px;">
+            <div style="padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--sig-ai) 45%, transparent); background: var(--panel2); font: 400 12.5px/19px var(--font-ui); color: var(--textProse);">Painterly golden-hour view of an ornate arched stone gate set into a marble ring wall, a bank of organ pipes rising above its bay, a wide stair descending to a sunlit plaza with two round fountains, market stalls and small crowds; behind it the great organ-pipe tower rises out of frame, splayed brass pipes catching the light; warm, lived-in, ancient and sacred.</div>
+          </div>
+        </div>
+
+        <div class="tu-section">
+          <div class="tu-section__head"><span class="tu-section__caret">▸</span><span class="tu-label tu-label--sm tu-label--strong">Negative</span><span class="tu-section__more">from the style · 14 terms</span></div>
+        </div>
+
+        <div style="padding: 10px 12px; display: flex; align-items: stretch; gap: 0; border-top: 1px solid var(--border); background: var(--panel2); overflow-x: auto; margin-top: auto;">
+          <div style="flex: 1 0 120px; padding: 6px 10px; border: 1px solid var(--sig-attention); background: var(--panel); display: flex; flex-direction: column; gap: 3px;">
+            <span class="tu-label tu-label--xs">1 · Compose</span>
+            <span class="tu-mono" style="font-size: 10px; color: var(--text);">canny of gate-a6</span>
+            <span class="tu-mono tu-dim" style="font-size: 9.5px;">4 seeds · next</span>
+          </div>
+          <span class="tu-mono tu-dim" style="align-self: center; padding: 0 6px;">→</span>
+          <div style="flex: 1 0 120px; padding: 6px 10px; border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; gap: 3px;">
+            <span class="tu-label tu-label--xs">2 · Look</span>
+            <span class="tu-mono" style="font-size: 10px; color: var(--text);">pick + 2 style refs</span>
+            <span class="tu-mono tu-dim" style="font-size: 9.5px;">waits for a pick</span>
+          </div>
+          <span class="tu-mono tu-dim" style="align-self: center; padding: 0 6px;">→</span>
+          <div style="flex: 1 0 120px; padding: 6px 10px; border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; gap: 3px;">
+            <span class="tu-label tu-label--xs">3 · Finish</span>
+            <span class="tu-mono" style="font-size: 10px; color: var(--text);">denoise 0.10</span>
+            <span class="tu-mono tu-dim" style="font-size: 9.5px;">waits for a pick</span>
+          </div>
+          <span class="tu-mono tu-dim" style="align-self: center; padding: 0 6px;">→</span>
+          <div style="flex: 1 0 110px; padding: 6px 10px; border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; gap: 3px;">
+            <span class="tu-label tu-label--xs">4 · Upscale · 5 · Grade</span>
+            <span class="tu-mono" style="font-size: 10px; color: var(--text);">4K, then colour match</span>
+            <span class="tu-mono tu-dim" style="font-size: 9.5px;">run on their own</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Camera, control, readiness -->
+    <section class="tu-window" style="flex: 0 0 340px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs"><button class="tu-tab is-active" type="button">Camera</button><button class="tu-tab" type="button">Inputs</button></div></div>
+      <div class="tu-window__body">
+        <div class="tu-section__head"><span class="tu-label tu-label--sm tu-label--strong">From the Hem map's cameras</span><span class="tu-section__more">3</span></div>
+        <div style="padding: 4px 10px 8px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;">
+          <div style="border: 1px solid var(--sig-attention); background: var(--panel2); display: flex; flex-direction: column;">
+            <img src="../assets/cam-gate-a6-clay.webp" alt="Clay render of the Gate from camera gate-a6" style="width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block;">
+            <div style="padding: 3px 5px; font: 400 9.5px/13px var(--font-mono); color: var(--sig-attention);"><span style="font-weight: 700;">gate-a6</span> · chosen</div>
+          </div>
+          <div style="border: 1px solid var(--border); background: var(--panel2); display: flex; flex-direction: column;">
+            <img src="../assets/cam-hem-a-clay.webp" alt="Clay render of the Hem from camera hem-a" style="width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block;">
+            <div style="padding: 3px 5px; font: 400 9.5px/13px var(--font-mono); color: var(--textDim);"><span style="color: var(--text); font-weight: 700;">hem-a</span></div>
+          </div>
+          <div style="border: 1px solid var(--border); background: var(--panel2); display: flex; flex-direction: column;">
+            <img src="../assets/cam-tower-master-clay.webp" alt="Clay render of the Tower from camera tower-master" style="width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: 50% 30%; display: block;">
+            <div style="padding: 3px 5px; font: 400 9.5px/13px var(--font-mono); color: var(--textDim);"><span style="color: var(--text); font-weight: 700;">tower-master</span></div>
+          </div>
+          <div style="grid-column: 1 / 4; font: 400 10px/14px var(--font-mono); color: var(--textDim);">gate-a6 · h 62 m · look h 115 m · fov 66 · wide</div>
+        </div>
+
+        <div class="tu-section__head" style="border-top: 1px solid var(--border);"><span class="tu-label tu-label--sm tu-label--strong">Control image</span><span class="tu-section__more">canny · strength 0.8</span></div>
+        <div style="padding: 4px 10px 8px;">
+          <img src="../assets/cam-gate-a6-canny.webp" alt="Canny edges of the gate-a6 clay render, used as the shape control" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; border: 1px solid var(--border);">
+        </div>
+
+        <div class="tu-section__head" style="border-top: 1px solid var(--border);"><span class="tu-label tu-label--sm tu-label--strong">Ready</span></div>
+        <div class="tu-val" data-sev="pass" style="border-top: 0;"><span class="tu-val__sev"></span><span class="tu-val__msg">ComfyUI answers; all nodes of the 5 workflows exist.</span></div>
+        <div class="tu-val" data-sev="pass"><span class="tu-val__sev"></span><span class="tu-val__msg">9 of 9 models found, the darkbrush LoRA included.</span></div>
+
+        <div style="padding: 10px; margin-top: auto; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border);">
+          <div class="tu-row"><span class="tu-label tu-label--xs">Seeds</span><label class="tu-input" style="width: 70px;"><input type="text" aria-label="Seeds" value="4"></label><span class="tu-spacer"></span><span class="tu-mono tu-dim" style="font-size: 10px;">≈ 40 s per seed</span></div>
+          <button class="tu-btn tu-btn--accent tu-btn--block" type="button"><span class="tu-btn__icon">▶</span>Run compose · 4 seeds Ctrl+R</button>
+          <button class="tu-btn tu-btn--secondary tu-btn--block" type="button">Hand the pipeline to Claude</button>
+          <span class="tu-mono tu-dim" style="font-size: 10px; line-height: 14px;">each stage lands as concept versions; a pick starts the next stage</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="tu-statusbar">
+    <span class="tu-statusbar__brand">THEOS//EDITOR</span>
+    <span>v0.6.0 · concepts layout</span>
+    <span class="tu-statuspip"><span class="tu-pip is-neutral"></span>comfyui queue empty</span>
+    <span class="tu-spacer"></span>
+    <span>images in the binaries folder · records in git</span>
+  </footer>
+</div>
+</body>
+</html>
