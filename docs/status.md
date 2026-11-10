@@ -39,13 +39,13 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P30 | Indoor floors with stacked levels | theos-editor | todo | | |
 
 Rows P20–P28 come from umbrella version 2 (#19). Rows P29 and P30, and the new P08 and P23, come
-from umbrella version 3 (decision 0003), which waits for Jann in its docs PR.
+from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#24).
 
 ## Needs Jann
 
 - Decision 0003, the map generator in Rust (umbrella version 3, `docs/map-package.md`), waits for
-  Jann in its docs PR. The gate PR #23 merges first: it moves one assertion of an xtask test from
-  P08 to P20, so the docs PR's CI stays green. P08's spec starts once both are merged.
+  Jann in its docs PR #24. The gate PR #23 merges first: it moves one assertion of an xtask test
+  from P08 to P20, so the docs PR's CI stays green. P08's spec starts once both are merged.
 - Before P08's build, one more gate PR (decision 0003 §12) adds `theos-map-format` and
   `theos-maps` to the workspace test and `gate/thresholds.toml`, and bans the std float methods in
   `gate/clippy.toml`. P08's spec lists its contents.
