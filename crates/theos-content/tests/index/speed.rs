@@ -76,7 +76,7 @@ impl Writer<'_> {
             "",
             &text,
         )?;
-        let fields = format!("parent: tower-{n:02}\nfloors: [1, 1]\n");
+        let fields = format!("parent: tower-{n:02}\nfloors: [{n}, {n}]\n");
         self.put(&format!("world/{band}.md"), "band", &band, &fields, &text)?;
         let fields = format!("status: draft\nparent: {band}\nnumber: {n}\n");
         self.put(

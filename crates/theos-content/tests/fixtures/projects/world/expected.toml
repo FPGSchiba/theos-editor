@@ -1,0 +1,75 @@
+# Checked by hand against docs/specs/phases/P04-validation-lore-rules-ledger-formalism-mirror.md
+# section 5.10 and the fixture texts. Every finding of the project: path, rule, severity, line
+# and column. The index/placement warnings are the cycles' own: a cycle has no right folder.
+# link/kind on the faction: a faction's parent is a people, not an npc. The location that only
+# leads into a cycle has no finding.
+
+[[finding]]
+path = "people/synthetic-agent/synthetic-clan.md"
+rule = "index/placement"
+severity = "warning"
+line = 6
+column = 9
+
+[[finding]]
+path = "people/synthetic-agent/synthetic-clan.md"
+rule = "link/kind"
+severity = "error"
+line = 6
+column = 9
+
+[[finding]]
+path = "people/synthetic-agent/synthetic-clan.md"
+rule = "link/parent-cycle"
+severity = "error"
+line = 6
+column = 9
+
+[[finding]]
+path = "people/synthetic-clan/synthetic-agent.md"
+rule = "index/placement"
+severity = "warning"
+line = 6
+column = 9
+
+[[finding]]
+path = "people/synthetic-clan/synthetic-agent.md"
+rule = "link/parent-cycle"
+severity = "error"
+line = 6
+column = 9
+
+[[finding]]
+path = "world/synthetic-low/f04-synthetic/synthetic-loop-a/synthetic-loop-b.md"
+rule = "index/placement"
+severity = "warning"
+line = 6
+column = 9
+
+[[finding]]
+path = "world/synthetic-low/f04-synthetic/synthetic-loop-a/synthetic-loop-b.md"
+rule = "link/parent-cycle"
+severity = "error"
+line = 6
+column = 9
+
+[[finding]]
+path = "world/synthetic-low/f04-synthetic/synthetic-loop-b/synthetic-loop-a.md"
+rule = "index/placement"
+severity = "warning"
+line = 6
+column = 9
+
+[[finding]]
+path = "world/synthetic-low/f04-synthetic/synthetic-loop-b/synthetic-loop-a.md"
+rule = "link/parent-cycle"
+severity = "error"
+line = 6
+column = 9
+
+[[finding]]
+path = "world/synthetic-low/f25-synthetic.md"
+rule = "world/floor-number"
+severity = "error"
+line = 8
+column = 9

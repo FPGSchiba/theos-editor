@@ -18,6 +18,20 @@ line = 7
 column = 12
 
 [[finding]]
+path = "concepts/synthetic-concept/synthetic-concept-v1.md"
+rule = "version/addresses"
+severity = "error"
+line = 16
+column = 13
+
+[[finding]]
+path = "concepts/synthetic-concept/synthetic-concept-v1.md"
+rule = "version/addresses"
+severity = "error"
+line = 16
+column = 17
+
+[[finding]]
 path = "concepts/synthetic-concept/synthetic-concept-v3.md"
 rule = "schema/value"
 severity = "error"
@@ -58,6 +72,13 @@ rule = "schema/value"
 severity = "error"
 line = 14
 column = 8
+
+[[finding]]
+path = "concepts/synthetic-concept/synthetic-concept-v3.md"
+rule = "version/addresses"
+severity = "error"
+line = 12
+column = 13
 
 [[finding]]
 path = "concepts/synthetic-concept/synthetic-concept-v4.md"
