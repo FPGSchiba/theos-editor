@@ -84,9 +84,7 @@ fn broken_settings() -> Result<Vec<Finding>, Box<dyn std::error::Error>> {
     findings_in(project.root())
 }
 
-/// The findings of every fixture project that holds P04's findings: the P04 projects, the input
-/// file cases above, and P02's corpus, whose `malformed/` records hold the malformed link and
-/// beat forms.
+/// The findings of every P04 fixture project, with the input file cases above.
 fn every_finding() -> Result<Vec<Finding>, Box<dyn std::error::Error>> {
     let mut found = Vec::new();
     for name in ["body", "lore", "world", "story", "versions", "settings"] {
@@ -95,7 +93,6 @@ fn every_finding() -> Result<Vec<Finding>, Box<dyn std::error::Error>> {
     found.extend(binaries()?);
     found.extend(formalism_mirror()?);
     found.extend(broken_settings()?);
-    found.extend(findings_in(TempProject::corpus()?.root())?);
     Ok(found)
 }
 

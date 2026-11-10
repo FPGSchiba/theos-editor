@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use proptest::prelude::*;
 use theos_content::{Change, Index, KindRegistry, Update, formalism, parts};
 
-use crate::common::TempProject;
+use crate::common::{TempProject, same_dump};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -485,6 +485,14 @@ enum Edit {
     /// Adds `dialogue/` to the root `.gitignore`, or takes it out again. It always reaches the
     /// index through a sync: `update` and `apply` take records, not ignore files.
     Ignore,
+    /// An edit of what the lore step reads.
+    Lore(LoreEdit),
+}
+
+/// An edit of what the lore step reads (P04 spec §5.17): one file, picked like the files of
+/// [`Edit`] or by its id.
+#[derive(Clone, Debug)]
+enum LoreEdit {
     /// Sets the `moves_to` of a clue to the next of [`STATES`].
     MovesTo(usize),
     /// Sets the `target` of a truth to the next of [`TARGET_STATES`].
@@ -507,14 +515,17 @@ enum Edit {
     FloorParent,
     /// Closes the parent cycle of `f02-synthetic` and `synthetic-room`, or opens it again.
     ParentCycle,
+    /// Removes the note n2, which the version addresses, from the concept `synthetic-sketch`,
+    /// or puts it back.
+    Note,
     /// Adds the developer word `text`, which the in-world topic holds, to the settings, or
     /// removes it; writes [`SETTINGS_TEXT`] when the project has no settings.
     Word,
     /// Changes the title of E1 in the formalism source, or changes it back; writes
     /// [`SOURCE_TEXT`] when the project has no source.
     Equation,
-    /// Adds a space to the end of an equation record, or takes it away: a hand edit.
-    ByHand,
+    /// Adds a space to the end of an equation record, or takes it away.
+    HandEdit,
 }
 
 /// How the edit of a step reaches the index.
@@ -688,6 +699,20 @@ fn toggle_reveal(text: &str, clue: &str) -> String {
     }
 }
 
+/// The note n2 of `synthetic-sketch`, with the blank line before it.
+const NOTE_2: &str = "\n> [!note] n2 · open\n> Synthetic note B.\n";
+
+/// `text` without [`NOTE_2`], or with it added at the end.
+fn toggle_note(text: &str) -> String {
+    if text.contains(NOTE_2) {
+        text.replacen(NOTE_2, "", 1)
+    } else if text.is_empty() || text.ends_with('\n') {
+        format!("{text}{NOTE_2}")
+    } else {
+        format!("{text}\n{NOTE_2}")
+    }
+}
+
 /// `text` with a space before its final line break, or without the one it has.
 fn hand_edited(text: &str) -> String {
     if let Some(rest) = text.strip_suffix(" \n") {
@@ -806,27 +831,14 @@ fn plan(files: &BTreeMap<String, String>, edit: &Edit) -> Plan {
             vec![(path, None), (new_path, Some(text))]
         }),
         Edit::Ignore => None,
-        Edit::MovesTo(_)
-        | Edit::Target(_)
-        | Edit::Truth(_)
-        | Edit::Where(_)
-        | Edit::After(_)
-        | Edit::Requires(_)
-        | Edit::Reveals(_)
-        | Edit::Floors
-        | Edit::Number
-        | Edit::FloorParent
-        | Edit::ParentCycle
-        | Edit::Word
-        | Edit::Equation
-        | Edit::ByHand => lore_edit(files, edit).map(|(path, text)| write(path, text)),
+        Edit::Lore(ref lore) => lore_edit(files, lore).map(|(path, text)| write(path, text)),
     };
     without_case_twins(files, planned.unwrap_or_default())
 }
 
-/// The path and new text of an edit of the lore step over `files` (spec §5.17); none when the
-/// file it edits is gone, or for another edit.
-fn lore_edit(files: &BTreeMap<String, String>, edit: &Edit) -> Option<(String, String)> {
+/// The path and new text of `edit` over `files` (spec §5.17); none when the file it edits is
+/// gone.
+fn lore_edit(files: &BTreeMap<String, String>, edit: &LoreEdit) -> Option<(String, String)> {
     let pick = |n: usize, kind: &str| -> Option<(String, String)> {
         let line = format!("\nkind: {kind}\n");
         let found: Vec<(&String, &String)> = files
@@ -845,54 +857,55 @@ fn lore_edit(files: &BTreeMap<String, String>, edit: &Edit) -> Option<(String, S
         found.map(|(path, text)| (path, edit(&text)))
     };
     match *edit {
-        Edit::MovesTo(n) => edited(pick(n, "clue"), &|text| {
+        LoreEdit::MovesTo(n) => edited(pick(n, "clue"), &|text| {
             with_line(text, "moves_to: ", |value| next_of(&STATES, value))
         }),
-        Edit::Target(n) => edited(pick(n, "truth"), &|text| {
+        LoreEdit::Target(n) => edited(pick(n, "truth"), &|text| {
             with_line(text, "target: ", |value| next_of(&TARGET_STATES, value))
         }),
-        Edit::Truth(n) => edited(pick(n, "clue"), &|text| {
+        LoreEdit::Truth(n) => edited(pick(n, "clue"), &|text| {
             with_line(text, "reveals: ", |value| next_of(&TRUTHS, value))
         }),
-        Edit::Where(n) => edited(pick(n, "clue"), &|text| {
+        LoreEdit::Where(n) => edited(pick(n, "clue"), &|text| {
             with_line(text, "where: ", |value| next_of(&PLACES, value))
         }),
-        Edit::After(n) => edited(pick(n, "clue"), &|text| {
+        LoreEdit::After(n) => edited(pick(n, "clue"), &|text| {
             toggle_field(
                 text,
                 "after",
                 &format!("[{}]", CLUES[(n + 1) % CLUES.len()]),
             )
         }),
-        Edit::Requires(n) => edited(pick(n, "truth"), &|text| {
+        LoreEdit::Requires(n) => edited(pick(n, "truth"), &|text| {
             toggle_field(
                 text,
                 "requires",
                 &format!("[{}]", TRUTHS[(n + 1) % TRUTHS.len()]),
             )
         }),
-        Edit::Reveals(n) => edited(pick(n, "script"), &|text| {
+        LoreEdit::Reveals(n) => edited(pick(n, "script"), &|text| {
             toggle_reveal(text, CLUES[n % CLUES.len()])
         }),
-        Edit::Floors => edited(by_id("synthetic-upper"), &|text| {
+        LoreEdit::Floors => edited(by_id("synthetic-upper"), &|text| {
             with_line(text, "floors: ", |value| {
                 switched(value, "[2, 3]", "[3, 3]")
             })
         }),
-        Edit::Number => edited(by_id("f02-synthetic"), &|text| {
+        LoreEdit::Number => edited(by_id("f02-synthetic"), &|text| {
             with_line(text, "number: ", |value| switched(value, "2", "3"))
         }),
-        Edit::FloorParent => edited(by_id("f03-synthetic"), &|text| {
+        LoreEdit::FloorParent => edited(by_id("f03-synthetic"), &|text| {
             with_line(text, "parent: ", |value| {
                 switched(value, "synthetic-upper", "synthetic-band")
             })
         }),
-        Edit::ParentCycle => edited(by_id("f02-synthetic"), &|text| {
+        LoreEdit::ParentCycle => edited(by_id("f02-synthetic"), &|text| {
             with_line(text, "parent: ", |value| {
                 switched(value, "synthetic-upper", "synthetic-room")
             })
         }),
-        Edit::Word => Some(match files.get(SETTINGS) {
+        LoreEdit::Note => edited(by_id("synthetic-sketch"), &toggle_note),
+        LoreEdit::Word => Some(match files.get(SETTINGS) {
             Some(text) => (
                 SETTINGS.to_owned(),
                 with_line(text, "words = ", |value| {
@@ -901,7 +914,7 @@ fn lore_edit(files: &BTreeMap<String, String>, edit: &Edit) -> Option<(String, S
             ),
             None => (SETTINGS.to_owned(), SETTINGS_TEXT.to_owned()),
         }),
-        Edit::Equation => Some(match files.get(SOURCE) {
+        LoreEdit::Equation => Some(match files.get(SOURCE) {
             Some(text) => {
                 let (one, other) = ("\"Synthetic equation 1\"", "\"Synthetic equation one\"");
                 let text = if text.contains(one) {
@@ -913,8 +926,7 @@ fn lore_edit(files: &BTreeMap<String, String>, edit: &Edit) -> Option<(String, S
             }
             None => (SOURCE.to_owned(), SOURCE_TEXT.to_owned()),
         }),
-        Edit::ByHand => edited(pick(0, "equation"), &hand_edited),
-        _ => None,
+        LoreEdit::HandEdit => edited(pick(0, "equation"), &hand_edited),
     }
 }
 
@@ -943,40 +955,6 @@ fn without_case_twins(files: &BTreeMap<String, String>, plan: Plan) -> Plan {
         out.push((path, text));
     }
     out
-}
-
-/// The lines of a dump, each with its section, that are in `left` and not in `right`.
-fn only_in(left: &str, right: &str) -> Vec<String> {
-    let lines = |dump: &str| -> BTreeSet<String> {
-        let mut section = "";
-        let mut lines = BTreeSet::new();
-        for line in dump.lines() {
-            if line.starts_with('[') {
-                section = line;
-            } else {
-                lines.insert(format!("{section} {line}"));
-            }
-        }
-        lines
-    };
-    let right = lines(right);
-    lines(left)
-        .into_iter()
-        .filter(|line| !right.contains(line))
-        .collect()
-}
-
-/// Fails with the lines that differ when the dump `got` is not `want`.
-pub fn same_dump(what: &str, got: &str, want: &str) -> TestResult {
-    if got == want {
-        return Ok(());
-    }
-    Err(format!(
-        "{what}\nonly in the index:\n{}\nonly in the fresh build:\n{}",
-        only_in(got, want).join("\n"),
-        only_in(want, got).join("\n")
-    )
-    .into())
 }
 
 /// Runs the steps of a history on a project with a file cache and `registry`, and compares the
@@ -1091,37 +1069,51 @@ fn previewed(index: &mut Index, plan: &Plan, given: &[Change]) -> TestResult {
     Ok(())
 }
 
+/// The number an edit picks with: above the number of files, so that every file can be picked.
+fn n() -> std::ops::Range<usize> {
+    0..64
+}
+
 fn edit() -> impl Strategy<Value = Edit> {
-    // Above the number of files, so that every file can be picked.
-    let n = || 0..64usize;
+    // Each lore edit weighs as much as each other edit.
     prop_oneof![
-        n().prop_map(Edit::Title),
-        (n(), 0..TARGETS.len()).prop_map(|(n, m)| Edit::Link(n, m)),
-        n().prop_map(Edit::Rename),
-        (n(), 0..FOLDERS.len()).prop_map(|(n, m)| Edit::Move(n, m)),
-        (n(), 0..KINDS.len()).prop_map(|(n, m)| Edit::Kind(n, m)),
-        n().prop_map(Edit::Beat),
-        n().prop_map(Edit::Track),
-        n().prop_map(Edit::Delete),
-        (0..5usize).prop_map(Edit::Add),
-        n().prop_map(Edit::ReAdd),
-        n().prop_map(Edit::AddRemove),
-        n().prop_map(Edit::Recase),
-        Just(Edit::Ignore),
-        n().prop_map(Edit::MovesTo),
-        n().prop_map(Edit::Target),
-        n().prop_map(Edit::Truth),
-        n().prop_map(Edit::Where),
-        n().prop_map(Edit::After),
-        n().prop_map(Edit::Requires),
-        n().prop_map(Edit::Reveals),
-        Just(Edit::Floors),
-        Just(Edit::Number),
-        Just(Edit::FloorParent),
-        Just(Edit::ParentCycle),
-        Just(Edit::Word),
-        Just(Edit::Equation),
-        Just(Edit::ByHand),
+        1 => n().prop_map(Edit::Title),
+        1 => (n(), 0..TARGETS.len()).prop_map(|(n, m)| Edit::Link(n, m)),
+        1 => n().prop_map(Edit::Rename),
+        1 => (n(), 0..FOLDERS.len()).prop_map(|(n, m)| Edit::Move(n, m)),
+        1 => (n(), 0..KINDS.len()).prop_map(|(n, m)| Edit::Kind(n, m)),
+        1 => n().prop_map(Edit::Beat),
+        1 => n().prop_map(Edit::Track),
+        1 => n().prop_map(Edit::Delete),
+        1 => (0..5usize).prop_map(Edit::Add),
+        1 => n().prop_map(Edit::ReAdd),
+        1 => n().prop_map(Edit::AddRemove),
+        1 => n().prop_map(Edit::Recase),
+        1 => Just(Edit::Ignore),
+        LORE_EDITS => lore_edit_strategy().prop_map(Edit::Lore),
+    ]
+}
+
+/// The number of [`LoreEdit`] variants.
+const LORE_EDITS: u32 = 15;
+
+fn lore_edit_strategy() -> impl Strategy<Value = LoreEdit> {
+    prop_oneof![
+        n().prop_map(LoreEdit::MovesTo),
+        n().prop_map(LoreEdit::Target),
+        n().prop_map(LoreEdit::Truth),
+        n().prop_map(LoreEdit::Where),
+        n().prop_map(LoreEdit::After),
+        n().prop_map(LoreEdit::Requires),
+        n().prop_map(LoreEdit::Reveals),
+        Just(LoreEdit::Floors),
+        Just(LoreEdit::Number),
+        Just(LoreEdit::FloorParent),
+        Just(LoreEdit::ParentCycle),
+        Just(LoreEdit::Note),
+        Just(LoreEdit::Word),
+        Just(LoreEdit::Equation),
+        Just(LoreEdit::HandEdit),
     ]
 }
 

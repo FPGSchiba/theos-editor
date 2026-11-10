@@ -61,6 +61,16 @@ severity = "error"
 line = 23
 column = 12
 
+# body/link-unclosed (section 5.3, every kind): `[[a here.` never closes; the finding sits at the
+# `[[` after "Synthetic text with an unclosed ". The attribute line that a blank line separates
+# from `## Beat 2` above it means nothing in a topic, which has no beats: no misplaced-attributes.
+[[finding]]
+path = "lore/topics/synthetic-board-explaining.md"
+rule = "body/link-unclosed"
+severity = "error"
+line = 30
+column = 33
+
 [[finding]]
 path = "story/scripts/S-950.md"
 rule = "body/attribute-count"
@@ -108,4 +118,13 @@ path = "story/scripts/S-950.md"
 rule = "body/beat-attribute"
 severity = "error"
 line = 28
+column = 1
+
+# body/misplaced-attributes (section 5.3, kinds with beats): a blank line separates the
+# attribute line of Beat 5 from its heading, so it is not read; the finding sits at that line.
+[[finding]]
+path = "story/scripts/S-950.md"
+rule = "body/misplaced-attributes"
+severity = "error"
+line = 32
 column = 1

@@ -11,8 +11,7 @@ use std::path::Path;
 
 use theos_content::{Change, Finding, Index, Update, parts};
 
-use crate::changes::same_dump;
-use crate::common::{TempProject, fixture};
+use crate::common::{TempProject, fixture, same_dump};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 

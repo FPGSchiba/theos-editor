@@ -22,3 +22,9 @@ at:: [[synthetic-place]]
 
 > [!voice] synthetic-speaker
 > Synthetic words.
+
+## Beat 2 — Detached, no beat here
+
+at:: [[synthetic-place]]
+
+Synthetic text with an unclosed [[a here.
