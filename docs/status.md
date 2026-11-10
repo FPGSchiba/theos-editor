@@ -44,8 +44,8 @@ from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#2
 ## Needs Jann
 
 - Decision 0003, the map generator in Rust (umbrella version 3, `docs/map-package.md`), waits for
-  Jann in its docs PR #24. The gate PR #23 merges first: it moves one assertion of an xtask test
-  from P08 to P20, so the docs PR's CI stays green. P08's spec starts once both are merged.
+  Jann in its docs PR #24. The gate PR #23, which moved one assertion of an xtask test from P08
+  to P20 for it, is merged. P08's spec starts once #24 is merged.
 - Before P08's build, one more gate PR (decision 0003 §12) adds `theos-map-format` and
   `theos-maps` to the workspace test and `gate/thresholds.toml`, and bans the std float methods in
   `gate/clippy.toml`. P08's spec lists its contents.
