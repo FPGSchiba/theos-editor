@@ -7,6 +7,8 @@ use crate::lore::FactError;
 use crate::project::Project;
 use crate::walk::WalkError;
 
+pub(crate) use sync::sha256_hex;
+
 mod configured;
 mod dump;
 mod identity;
@@ -22,7 +24,6 @@ mod search;
 pub mod slots;
 mod store;
 mod sync;
-pub(crate) use sync::sha256_hex;
 mod write;
 
 pub use ledger::{BeatRef, LedgerEntry, TruthLedger};

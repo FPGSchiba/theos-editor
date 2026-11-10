@@ -273,3 +273,44 @@ fn a_source_change_re_runs_the_checks_of_the_records() -> TestResult {
     assert_eq!(hits[0].path, E7);
     Ok(())
 }
+
+#[test]
+fn a_source_that_cannot_be_rendered_is_refused_by_the_check_and_by_regenerate() -> TestResult {
+    let project = generated()?;
+    let text = std::fs::read_to_string(fixture("formalism").join(SOURCE))?;
+    project.write(
+        SOURCE,
+        &text.replace("Synthetic equation 7", "Synthetic \\u0001 seven"),
+    )?;
+    let found = findings(&project)?;
+    let hits = of_rule(&found, "formalism/source");
+    assert_eq!(hits.len(), 1, "{found:?}");
+    assert_eq!(hits[0].position.map(|p| (p.line, p.column)), Some((1, 1)));
+    assert!(hits[0].message.contains("`E7`"), "{}", hits[0].message);
+    let refused = formalism::regenerate(project.root());
+    let Err(FormalismError::Source(error)) = refused else {
+        return Err(format!("regenerate did not refuse: {refused:?}").into());
+    };
+    assert_eq!(error.message, hits[0].message);
+    Ok(())
+}
+
+#[test]
+fn only_an_equation_record_at_its_place_hides_a_missing_equation() -> TestResult {
+    let project = generated()?;
+    project.remove("canon/formalism/E2.md")?;
+    // Another kind with the id, and an equation record of the id elsewhere.
+    project.write(
+        "things/E2.md",
+        "---\nid: E2\nkind: thing\ntitle: Synthetic thing\ntype: synthetic\n---\nSynthetic text.\n",
+    )?;
+    let found = findings(&project)?;
+    let missing = of_rule(&found, "formalism/missing");
+    assert_eq!(missing.len(), 1, "{found:?}");
+    assert!(missing[0].message.contains("E2"));
+    project.remove("things/E2.md")?;
+    project.write("canon/E2.md", &E7_TEXT.replace("E7", "E2"))?;
+    let found = findings(&project)?;
+    assert_eq!(of_rule(&found, "formalism/missing").len(), 1, "{found:?}");
+    Ok(())
+}

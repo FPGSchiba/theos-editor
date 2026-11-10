@@ -174,6 +174,7 @@ struct Expectation {
 }
 
 #[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Expectations {
     #[serde(default)]
     finding: Vec<Expectation>,

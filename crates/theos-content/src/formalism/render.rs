@@ -87,6 +87,16 @@ mod tests {
     }
 
     #[test]
+    fn a_quoted_title_and_a_cr_give_the_whole_record() -> Result<(), SourceError> {
+        let text = render_equation(&equation("E12", "Energy: mass", "$a$\r\nb\rc"))?;
+        assert_eq!(
+            text,
+            "---\n# generated from canon/formalism/_source.json by theos; a hand edit fails the check\nid: E12\nkind: equation\ntitle: \"Energy: mass\"\nsource: https://example.invalid/p#a\ngenerated: true\n---\n$a$\nb\nc\n"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn the_text_is_verbatim() -> Result<(), SourceError> {
         let text = render_equation(&equation("E3", "T", "$\\left[[a, b]\\right]$"))?;
         assert!(text.ends_with("---\n$\\left[[a, b]\\right]$\n"));

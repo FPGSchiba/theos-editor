@@ -15,7 +15,7 @@ pub(crate) const FORMALISM_MISSING: LoreRule = LoreRule {
     run: check,
 };
 
-/// One finding per listed equation that no record has the id of, at 1:1 of the source.
+/// One finding per listed equation that has no equation record at `canon/formalism/<id>.md`, at 1:1 of the source.
 fn check(ctx: &mut Context<'_>, subject: &Subject) -> Result<Vec<Finding>, FactError> {
     let Some(source) = ctx.formalism()? else {
         return Ok(Vec::new());
@@ -25,7 +25,14 @@ fn check(ctx: &mut Context<'_>, subject: &Subject) -> Result<Vec<Finding>, FactE
     };
     let mut findings = Vec::new();
     for equation in &source.equations {
-        if ctx.records(&equation.id)?.is_empty() {
+        let path = format!("{FOLDER}/{}.md", equation.id);
+        // Only the equation record at its place counts: another kind with the id, or a record
+        // elsewhere, does not hide a missing equation.
+        let present = ctx
+            .records(&equation.id)?
+            .iter()
+            .any(|record| record.kind.as_deref() == Some("equation") && record.path == path);
+        if !present {
             findings.push(subject.finding(
                 &FORMALISM_MISSING,
                 Span::default(),

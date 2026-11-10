@@ -34,6 +34,7 @@ fn check(ctx: &mut Context<'_>, subject: &Subject) -> Result<Vec<Finding>, FactE
     let Some(equation) = source.equations.iter().find(|e| e.id == record.id) else {
         return Ok(Vec::new());
     };
+    // `parse` renders every equation, so a source that parsed renders: this cannot fail.
     let Ok(rendered) = render_equation(equation) else {
         return Ok(Vec::new());
     };

@@ -2,6 +2,7 @@
 
 use serde::Deserialize;
 
+use super::render_equation;
 use crate::kinds::is_url;
 use crate::text::Position;
 
@@ -104,12 +105,15 @@ pub fn parse(text: &str) -> Result<Source, SourceError> {
                 equation.id
             )));
         }
-        equations.push(Equation {
+        let equation = Equation {
             id: equation.id,
             title: equation.title,
             anchor: equation.anchor,
             text: equation.text,
-        });
+        };
+        // What cannot be rendered is not valid: the checks and `regenerate` agree.
+        render_equation(&equation)?;
+        equations.push(equation);
     }
     Ok(Source {
         page: raw.page,
@@ -235,6 +239,28 @@ mod tests {
             let text = source(&equation("E1", title, "https://example.invalid/p#a", "x"));
             assert!(message(&text)?.contains("title"), "{title:?}");
         }
+        Ok(())
+    }
+
+    #[test]
+    fn a_title_or_anchor_that_cannot_be_written_is_refused()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let title = source(&equation(
+            "E1",
+            "a\\u0001b",
+            "https://example.invalid/p#a",
+            "x",
+        ));
+        let said = message(&title)?;
+        assert!(said.contains("`E1`") && said.contains("title"), "{said}");
+        let anchor = source(&equation(
+            "E2",
+            "T",
+            "https://example.invalid/a\\u0001b",
+            "x",
+        ));
+        let said = message(&anchor)?;
+        assert!(said.contains("`E2`") && said.contains("anchor"), "{said}");
         Ok(())
     }
 
