@@ -13,7 +13,6 @@ mod facts;
 pub(crate) mod availability;
 pub(crate) mod cycle;
 pub(crate) mod ledger;
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 11"))]
 pub(crate) mod lens;
 pub(crate) mod places;
 pub(crate) mod reveals;

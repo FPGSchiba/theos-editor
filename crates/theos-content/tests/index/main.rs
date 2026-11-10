@@ -17,6 +17,7 @@ mod order;
 mod schema;
 mod search;
 mod speed;
+mod story;
 mod sync;
 mod versions;
 mod world;
