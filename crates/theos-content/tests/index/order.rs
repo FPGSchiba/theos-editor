@@ -273,7 +273,8 @@ fn reveal_order_passes_when_some_clue_of_the_nearest_state_is_early_enough() -> 
 
 #[test]
 fn requires_passes_when_some_confirming_clue_is_early_enough() -> TestResult {
-    // T-957, which T-950 requires, is confirmed at (F04, T3) and at (F30, T1).
+    // T-957, which T-950 requires, is confirmed at (F04, T3) and at (F30, T1). Each case below
+    // moves the clue C-952 that confirms T-950.
     let project = TempProject::copy_of("lore")?;
     add_floor(&project, 30)?;
     edit(&project, "lore/clues/C-970.md", "gate: T1", "gate: T3")?;
@@ -286,8 +287,8 @@ fn requires_passes_when_some_confirming_clue_is_early_enough() -> TestResult {
     project.remove("lore/clues/C-972.md")?;
     project.remove("lore/clues/C-953.md")?;
     project.remove("lore/clues/C-954.md")?;
-    // T-950 is confirmed at (F21, T2): the floor of the first clue is early enough but its gate
-    // is not, the second clue's gate is but its floor is not.
+    // Case 1, at (F21, T2): the first clue's floor is early enough but its gate is not, the
+    // second clue's gate is but its floor is not: none is no later, one finding.
     edit(
         &project,
         "lore/clues/C-952.md",
@@ -301,16 +302,53 @@ fn requires_passes_when_some_confirming_clue_is_early_enough() -> TestResult {
         on_t950[0].contains("than C-952 (floor 21, gate T2)"),
         "{on_t950:?}"
     );
-    // At (F57, T3) the first clue is early enough.
+    // Case 2, at (F21, T3): only the first clue is no later (floor 4 <= 21, gate T3 <= T3); the
+    // second is not. One early clue is enough: no finding.
+    edit(&project, "lore/clues/C-952.md", "gate: T2", "gate: T3")?;
+    let findings = found(&project, REQUIRES)?;
+    assert_eq!(messages(&findings, "lore/truths/T-950.md").len(), 0);
+    // Case 3, at (F57, T3): both clues are no later: no finding.
     edit(
         &project,
         "lore/clues/C-952.md",
         "f21-synthetic",
         "f57-synthetic",
     )?;
-    edit(&project, "lore/clues/C-952.md", "gate: T2", "gate: T3")?;
     let findings = found(&project, REQUIRES)?;
     assert_eq!(messages(&findings, "lore/truths/T-950.md").len(), 0);
+    Ok(())
+}
+
+#[test]
+fn requires_names_the_first_failing_clue_not_the_first_clue() -> TestResult {
+    // T-966, which T-960 requires, is confirmed at (F21, T2) by a new clue and at (F57, T2). The
+    // lowest clue that confirms T-960, C-990 at (F21, T2), has a confirming clue no later than it
+    // and passes; C-999 at (F30, T1) has none and fails.
+    let project = TempProject::copy_of("lore")?;
+    add_floor(&project, 30)?;
+    add_clue(
+        &project,
+        "C-998",
+        "T-966",
+        "confirmed",
+        "f21-synthetic",
+        "T2",
+    )?;
+    add_clue(
+        &project,
+        "C-999",
+        "T-960",
+        "confirmed",
+        "f30-synthetic",
+        "T1",
+    )?;
+    let findings = found(&project, REQUIRES)?;
+    let on_t960 = messages(&findings, "lore/truths/T-960.md");
+    assert_eq!(on_t960.len(), 1, "{on_t960:?}");
+    assert!(
+        on_t960[0].contains("than C-999 (floor 30, gate T1)"),
+        "{on_t960:?}"
+    );
     Ok(())
 }
 
