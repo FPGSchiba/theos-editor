@@ -445,6 +445,9 @@ fn is_searched(ty: Option<FieldType>, field: bool) -> bool {
 
 /// The links of the body in document order, each with its slot.
 fn body_links(record: &Record, spec: Option<&KindSpec>) -> Vec<LinkRow> {
+    if spec.is_some_and(|spec| spec.body.verbatim) {
+        return Vec::new();
+    }
     let body = record.body();
     let mut slots: HashMap<Span, (Slot, Option<u32>)> = HashMap::new();
     if let Some(attributes) = spec.and_then(|spec| spec.body.beats) {

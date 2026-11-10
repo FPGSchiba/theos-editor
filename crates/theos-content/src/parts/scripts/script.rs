@@ -43,7 +43,9 @@ pub(crate) fn spec() -> KindSpec {
         ),
         body: BodyGrammar {
             beats: Some(BEATS),
+            beat_tokens: &["when"],
             notes: None,
+            verbatim: false,
         },
         checks: Vec::new(),
     }

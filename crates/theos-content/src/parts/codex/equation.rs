@@ -20,7 +20,7 @@ pub(crate) fn spec() -> KindSpec {
                 field("generated", FieldType::True, true),
             ],
         ),
-        body: BodyGrammar::PROSE,
+        body: BodyGrammar::VERBATIM,
         checks: Vec::new(),
     }
 }
