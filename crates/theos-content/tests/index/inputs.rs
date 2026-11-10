@@ -219,6 +219,35 @@ fn a_racy_input_is_read_again() -> TestResult {
 }
 
 #[test]
+fn an_input_spelled_unlike_the_file_on_disk_is_absent() -> TestResult {
+    // `.theos/Settings.toml` is no input, also where the file system ignores case: like a record
+    // (P03), an input is the file of exactly its name, so a sync and an update see what an apply
+    // of the same rename sees.
+    let recased = ".theos/Settings.toml";
+    for via_update in [false, true] {
+        let project = TempProject::new()?;
+        project.write(SETTINGS, "name = \"synthetic-bad\"\n")?;
+        let mut index = open(&project)?;
+        index.sync()?;
+        assert_eq!(said(&index)?.len(), 1);
+
+        project.remove(SETTINGS)?;
+        project.write(recased, "name = \"synthetic-bad\"\n")?;
+        if via_update {
+            index.update(&[SETTINGS, recased])?;
+        } else {
+            index.sync()?;
+        }
+        assert_eq!(said(&index)?, Vec::<String>::new(), "update: {via_update}");
+        assert!(!index.dump()?.contains(".theos/settings.toml"));
+        let mut cold = open(&project)?;
+        cold.sync()?;
+        assert_eq!(index.dump()?, cold.dump()?);
+    }
+    Ok(())
+}
+
+#[test]
 fn an_unreadable_input_counts_as_absent_like_in_a_cold_build() -> TestResult {
     let project = TempProject::new()?;
     project.write(SETTINGS, "name = \"synthetic-bad\"\n")?;

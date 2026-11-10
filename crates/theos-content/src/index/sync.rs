@@ -552,10 +552,11 @@ impl<'a> Syncer<'a> {
 
     /// Steps 1 to 3 for an input file on disk: read it unless its size and time say it is
     /// unchanged. A file that is gone is removed; one that cannot be read counts as absent, with a
-    /// warning.
+    /// warning. As for a record, only a file listed under exactly the input's name counts: one
+    /// spelled in another case, where the file system ignores case, or a symbolic link is absent.
     fn input_from_disk(&mut self, path: &str) -> Result<(), IndexError> {
         let meta = match std::fs::metadata(self.root.join(path)) {
-            Ok(meta) if meta.is_file() => meta,
+            Ok(meta) if meta.is_file() && is_listed(self.root, path) => meta,
             Ok(_) => return self.settle_input(path, None, None),
             Err(error) if error.kind() == ErrorKind::NotFound => {
                 return self.settle_input(path, None, None);

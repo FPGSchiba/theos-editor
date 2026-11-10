@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use proptest::prelude::*;
-use theos_content::{Change, Index, KindRegistry, Update, parts};
+use theos_content::{Change, Index, KindRegistry, Update, formalism, parts};
 
 use crate::common::TempProject;
 
@@ -91,9 +91,9 @@ fn clue() -> String {
 
 /// The files of the project: a band and its floor, a people, faction and npc chain, a topic pair,
 /// a truth, a belief the npc holds, a script with two beats, and a reader that links a beat, the
-/// belief and the clue [`CLUE`], which does not exist yet.
-fn project_files() -> [(&'static str, String); 13] {
-    [
+/// belief and the clue [`CLUE`], which does not exist yet; and the files of [`lore_files`].
+fn project_files() -> Vec<(&'static str, String)> {
+    let mut files = vec![
         (
             "world/synthetic-band.md",
             format!(
@@ -142,7 +142,141 @@ fn project_files() -> [(&'static str, String); 13] {
                 "---\n{MARK}id: synthetic-other\nkind: thing\ntitle: Synthetic other\ntype: synthetic\n---\nSynthetic text.\n"
             ),
         ),
+    ];
+    files.extend(lore_files());
+    files
+}
+
+const MARK_P04: &str = "# synthetic fixture (P04), not canon\n";
+
+const SETTINGS: &str = ".theos/settings.toml";
+const SOURCE: &str = "canon/formalism/_source.json";
+const E1: &str = "canon/formalism/E1.md";
+
+/// The settings of the project: one developer word, which no in-world text holds.
+const SETTINGS_TEXT: &str =
+    "# synthetic fixture (P04), not canon\n[validate.inworld-vocab]\nwords = [\"lamp\"]\n";
+
+/// The Shared Formalism source of the project, with the equation E1 only.
+const SOURCE_TEXT: &str = "{\n  \"note\": \"synthetic fixture (P04), not canon\",\n  \"format\": 1,\n  \"page\": \"https://example.invalid/synthetic-formalism\",\n  \"equations\": [\n    {\n      \"id\": \"E1\",\n      \"title\": \"Synthetic equation 1\",\n      \"anchor\": \"https://example.invalid/synthetic-formalism#E1\",\n      \"text\": \"$x_{1} = 1$\"\n    }\n  ]\n}\n";
+
+/// The record E1 as [`SOURCE_TEXT`] renders it.
+const E1_TEXT: &str = "---\n# generated from canon/formalism/_source.json by theos; a hand edit fails the check\nid: E1\nkind: equation\ntitle: Synthetic equation 1\nsource: https://example.invalid/synthetic-formalism#E1\ngenerated: true\n---\n$x_{1} = 1$\n";
+
+/// A P04 record with these front-matter lines and this body.
+fn lore_record(fields: &str, body: &str) -> String {
+    format!("---\n{MARK_P04}{fields}---\n{body}")
+}
+
+fn lore_clue(id: &str, truth: &str, state: &str, place: &str, gate: &str, after: &str) -> String {
+    lore_record(
+        &format!(
+            "id: {id}\nkind: clue\ntitle: Synthetic clue {id}\nstatus: draft\nreveals: {truth}\nmoves_to: {state}\nwhere: [{place}]\ngate: {gate}\n{after}vector: synthetic\n"
+        ),
+        "Synthetic clue text.\n",
+    )
+}
+
+/// The files of the lore step (spec §5.17): a band with two floors and a location on the first;
+/// two truths and three clues, one of them ordered after another; a script whose beats reveal two
+/// of them; a concept with two notes and a version that addresses both; the settings with one
+/// word; and the formalism source with E1 and its record. None of them reads what the CE-12.2
+/// tests above change.
+fn lore_files() -> Vec<(&'static str, String)> {
+    vec![
+        (
+            "world/synthetic-upper.md",
+            lore_record(
+                "id: synthetic-upper\nkind: band\ntitle: Synthetic upper band\nparent: tower\nfloors: [2, 3]\n",
+                "Synthetic text of the band.\n",
+            ),
+        ),
+        (
+            "world/synthetic-upper/f02-synthetic.md",
+            lore_record(
+                "id: f02-synthetic\nkind: floor\ntitle: Synthetic floor two\nstatus: draft\nparent: synthetic-upper\nnumber: 2\n",
+                "Synthetic text of the floor.\n",
+            ),
+        ),
+        (
+            "world/synthetic-upper/f03-synthetic.md",
+            lore_record(
+                "id: f03-synthetic\nkind: floor\ntitle: Synthetic floor three\nstatus: draft\nparent: synthetic-upper\nnumber: 3\n",
+                "Synthetic text of the floor.\n",
+            ),
+        ),
+        (
+            "world/synthetic-upper/f02-synthetic/synthetic-room.md",
+            lore_record(
+                "id: synthetic-room\nkind: location\ntitle: Synthetic room\nparent: f02-synthetic\n",
+                "Synthetic text of the room.\n",
+            ),
+        ),
+        (
+            "lore/truths/T-950.md",
+            lore_record(
+                "id: T-950\nkind: truth\ntitle: Synthetic truth B\nstatus: draft\ntarget: confirmed\n",
+                "Synthetic statement B.\n",
+            ),
+        ),
+        (
+            "lore/truths/T-951.md",
+            lore_record(
+                "id: T-951\nkind: truth\ntitle: Synthetic truth C\nstatus: draft\ntarget: confirmed\n",
+                "Synthetic statement C.\n",
+            ),
+        ),
+        (
+            "lore/clues/C-950.md",
+            lore_clue("C-950", "T-950", "hinted", "synthetic-room", "T1", ""),
+        ),
+        (
+            "lore/clues/C-951.md",
+            lore_clue("C-951", "T-950", "confirmed", "f03-synthetic", "T2", ""),
+        ),
+        (
+            "lore/clues/C-952.md",
+            lore_clue(
+                "C-952",
+                "T-951",
+                "confirmed",
+                "f02-synthetic",
+                "T2",
+                "after: [C-950]\n",
+            ),
+        ),
+        (
+            "story/scripts/S-950.md",
+            lore_record(
+                "id: S-950\nkind: script\ntitle: Synthetic script B\nstatus: draft\nwhere: [synthetic-upper]\n",
+                "Synthetic opening text.\n\n## Beat 1 — Room\nat:: [[synthetic-room]]\nwhen:: T1\nreveals:: [[C-950]]\n\n## Beat 2 — Floor\nat:: [[f03-synthetic]]\nwhen:: T2\nreveals:: [[C-951]]\n",
+            ),
+        ),
+        (
+            "concepts/synthetic-sketch.md",
+            lore_record(
+                "id: synthetic-sketch\nkind: concept\ntitle: Synthetic sketch\nfor: [synthetic-upper]\n",
+                "Synthetic brief.\n\n## Notes\n\n> [!note] n1 · open\n> Synthetic note A.\n\n> [!note] n2 · open\n> Synthetic note B.\n",
+            ),
+        ),
+        (
+            "concepts/synthetic-sketch/synthetic-sketch-v1.md",
+            lore_record(
+                "id: synthetic-sketch-v1\nkind: concept-version\ntitle: synthetic-sketch-v1\nconcept: synthetic-sketch\ngenerator: synthetic@1.0\nrecipe: synthetic-recipe\noutputs:\n  image: concepts/synthetic-sketch/synthetic-sketch-v1.png@sha256:0000000000000000000000000000000000000000000000000000000000000000\nrating: unrated\naddresses: [n1, n2]\n",
+                "Synthetic version.\n",
+            ),
+        ),
+        (SETTINGS, SETTINGS_TEXT.to_owned()),
+        (SOURCE, SOURCE_TEXT.to_owned()),
+        (E1, E1_TEXT.to_owned()),
     ]
+}
+
+#[test]
+fn the_history_project_holds_e1_as_its_source_renders_it() -> TestResult {
+    let rendered = formalism::render(&formalism::parse(SOURCE_TEXT)?)?;
+    assert_eq!(rendered, [(E1.to_owned(), E1_TEXT.to_owned())]);
+    Ok(())
 }
 
 fn write_project(project: &TempProject) -> std::io::Result<()> {
@@ -351,6 +485,36 @@ enum Edit {
     /// Adds `dialogue/` to the root `.gitignore`, or takes it out again. It always reaches the
     /// index through a sync: `update` and `apply` take records, not ignore files.
     Ignore,
+    /// Sets the `moves_to` of a clue to the next of [`STATES`].
+    MovesTo(usize),
+    /// Sets the `target` of a truth to the next of [`TARGET_STATES`].
+    Target(usize),
+    /// Sets the truth a clue `reveals` to the next of [`TRUTHS`].
+    Truth(usize),
+    /// Sets the `where` of a clue to the next of [`PLACES`].
+    Where(usize),
+    /// Gives a clue `after` one of [`CLUES`], or takes its `after` away.
+    After(usize),
+    /// Gives a truth `requires` one of [`TRUTHS`], or takes its `requires` away.
+    Requires(usize),
+    /// Adds a `reveals::` of one of [`CLUES`] to the last beat of a script, or removes it.
+    Reveals(usize),
+    /// Switches the `floors` of `synthetic-upper` between `[2, 3]` and `[3, 3]`.
+    Floors,
+    /// Switches the `number` of `f02-synthetic` between 2 and 3.
+    Number,
+    /// Moves `f03-synthetic` between the bands `synthetic-upper` and `synthetic-band`.
+    FloorParent,
+    /// Closes the parent cycle of `f02-synthetic` and `synthetic-room`, or opens it again.
+    ParentCycle,
+    /// Adds the developer word `text`, which the in-world topic holds, to the settings, or
+    /// removes it; writes [`SETTINGS_TEXT`] when the project has no settings.
+    Word,
+    /// Changes the title of E1 in the formalism source, or changes it back; writes
+    /// [`SOURCE_TEXT`] when the project has no source.
+    Equation,
+    /// Adds a space to the end of an equation record, or takes it away: a hand edit.
+    ByHand,
 }
 
 /// How the edit of a step reaches the index.
@@ -375,9 +539,11 @@ const FOLDERS: [&str; 5] = [
     "lore/beliefs",
 ];
 
-const KINDS: [&str; 5] = ["thing", "npc", "faction", "belief", "topic"];
+const KINDS: [&str; 7] = [
+    "thing", "npc", "faction", "belief", "topic", "clue", "truth",
+];
 
-const TARGETS: [&str; 8] = [
+const TARGETS: [&str; 10] = [
     "S-940#2",
     "B-940",
     "C-940",
@@ -386,6 +552,24 @@ const TARGETS: [&str; 8] = [
     "synthetic-subject-in-world",
     "synthetic-nowhere",
     "Synthetic-Other",
+    "C-950",
+    "E1",
+];
+
+const STATES: [&str; 3] = ["hinted", "suspected", "confirmed"];
+
+const TARGET_STATES: [&str; 4] = ["hinted", "suspected", "confirmed", "never"];
+
+const TRUTHS: [&str; 3] = ["T-950", "T-951", "T-940"];
+
+const CLUES: [&str; 3] = ["C-950", "C-951", "C-952"];
+
+const PLACES: [&str; 5] = [
+    "[synthetic-room]",
+    "[f02-synthetic]",
+    "[f03-synthetic]",
+    "[synthetic-upper]",
+    "[f01-synthetic]",
 ];
 
 /// The files an [`Edit::Add`] adds: a twin of the truth's id, the clue the reader already links,
@@ -453,6 +637,71 @@ fn toggle_beat(text: &str) -> String {
         Some(at) => text[..at].to_owned(),
         None => format!("{text}{BEAT_2}"),
     }
+}
+
+/// The item after `current` in `list`, round; the first when `current` is not in it.
+fn next_of(list: &[&str], current: &str) -> String {
+    let at = list
+        .iter()
+        .position(|item| *item == current)
+        .map_or(0, |at| (at + 1) % list.len());
+    list[at].to_owned()
+}
+
+/// `text` without its line `key: …`, or, when it has none, with `key: value` added as the last
+/// line of its front matter; unchanged without a front matter.
+fn toggle_field(text: &str, key: &str, value: &str) -> String {
+    let prefix = format!("{key}: ");
+    let lines: Vec<&str> = text.split_inclusive('\n').collect();
+    if let Some(at) = lines.iter().position(|line| line.starts_with(&prefix)) {
+        return lines
+            .iter()
+            .enumerate()
+            .filter(|(number, _)| *number != at)
+            .map(|(_, line)| *line)
+            .collect();
+    }
+    let fence = lines
+        .iter()
+        .enumerate()
+        .skip(1)
+        .find(|(_, line)| line.trim_end() == "---");
+    match fence {
+        Some((at, _)) => format!(
+            "{}{prefix}{value}\n{}",
+            lines[..at].concat(),
+            lines[at..].concat()
+        ),
+        None => text.to_owned(),
+    }
+}
+
+/// `text` without the beat attribute `reveals:: [[clue]]`, or with it added at the end.
+fn toggle_reveal(text: &str, clue: &str) -> String {
+    let line = format!("reveals:: [[{clue}]]\n");
+    if text.contains(&line) {
+        text.replacen(&line, "", 1)
+    } else if text.is_empty() || text.ends_with('\n') {
+        format!("{text}{line}")
+    } else {
+        format!("{text}\n{line}")
+    }
+}
+
+/// `text` with a space before its final line break, or without the one it has.
+fn hand_edited(text: &str) -> String {
+    if let Some(rest) = text.strip_suffix(" \n") {
+        return format!("{rest}\n");
+    }
+    match text.strip_suffix('\n') {
+        Some(rest) => format!("{rest} \n"),
+        None => format!("{text} "),
+    }
+}
+
+/// One of two values: `b` when `value` is `a`, else `a`.
+fn switched(value: &str, a: &str, b: &str) -> String {
+    if value == a { b } else { a }.to_owned()
 }
 
 /// The id after `stem`: `T-940` gives `T-941`, a slug gets `-r`.
@@ -557,8 +806,116 @@ fn plan(files: &BTreeMap<String, String>, edit: &Edit) -> Plan {
             vec![(path, None), (new_path, Some(text))]
         }),
         Edit::Ignore => None,
+        Edit::MovesTo(_)
+        | Edit::Target(_)
+        | Edit::Truth(_)
+        | Edit::Where(_)
+        | Edit::After(_)
+        | Edit::Requires(_)
+        | Edit::Reveals(_)
+        | Edit::Floors
+        | Edit::Number
+        | Edit::FloorParent
+        | Edit::ParentCycle
+        | Edit::Word
+        | Edit::Equation
+        | Edit::ByHand => lore_edit(files, edit).map(|(path, text)| write(path, text)),
     };
     without_case_twins(files, planned.unwrap_or_default())
+}
+
+/// The path and new text of an edit of the lore step over `files` (spec §5.17); none when the
+/// file it edits is gone, or for another edit.
+fn lore_edit(files: &BTreeMap<String, String>, edit: &Edit) -> Option<(String, String)> {
+    let pick = |n: usize, kind: &str| -> Option<(String, String)> {
+        let line = format!("\nkind: {kind}\n");
+        let found: Vec<(&String, &String)> = files
+            .iter()
+            .filter(|(_, text)| text.contains(&line))
+            .collect();
+        let (path, text) = found.get(n % found.len().max(1))?;
+        Some(((*path).clone(), (*text).clone()))
+    };
+    let by_id = |id: &str| -> Option<(String, String)> {
+        let line = format!("\nid: {id}\n");
+        let (path, text) = files.iter().find(|(_, text)| text.contains(&line))?;
+        Some((path.clone(), text.clone()))
+    };
+    let edited = |found: Option<(String, String)>, edit: &dyn Fn(&str) -> String| {
+        found.map(|(path, text)| (path, edit(&text)))
+    };
+    match *edit {
+        Edit::MovesTo(n) => edited(pick(n, "clue"), &|text| {
+            with_line(text, "moves_to: ", |value| next_of(&STATES, value))
+        }),
+        Edit::Target(n) => edited(pick(n, "truth"), &|text| {
+            with_line(text, "target: ", |value| next_of(&TARGET_STATES, value))
+        }),
+        Edit::Truth(n) => edited(pick(n, "clue"), &|text| {
+            with_line(text, "reveals: ", |value| next_of(&TRUTHS, value))
+        }),
+        Edit::Where(n) => edited(pick(n, "clue"), &|text| {
+            with_line(text, "where: ", |value| next_of(&PLACES, value))
+        }),
+        Edit::After(n) => edited(pick(n, "clue"), &|text| {
+            toggle_field(
+                text,
+                "after",
+                &format!("[{}]", CLUES[(n + 1) % CLUES.len()]),
+            )
+        }),
+        Edit::Requires(n) => edited(pick(n, "truth"), &|text| {
+            toggle_field(
+                text,
+                "requires",
+                &format!("[{}]", TRUTHS[(n + 1) % TRUTHS.len()]),
+            )
+        }),
+        Edit::Reveals(n) => edited(pick(n, "script"), &|text| {
+            toggle_reveal(text, CLUES[n % CLUES.len()])
+        }),
+        Edit::Floors => edited(by_id("synthetic-upper"), &|text| {
+            with_line(text, "floors: ", |value| {
+                switched(value, "[2, 3]", "[3, 3]")
+            })
+        }),
+        Edit::Number => edited(by_id("f02-synthetic"), &|text| {
+            with_line(text, "number: ", |value| switched(value, "2", "3"))
+        }),
+        Edit::FloorParent => edited(by_id("f03-synthetic"), &|text| {
+            with_line(text, "parent: ", |value| {
+                switched(value, "synthetic-upper", "synthetic-band")
+            })
+        }),
+        Edit::ParentCycle => edited(by_id("f02-synthetic"), &|text| {
+            with_line(text, "parent: ", |value| {
+                switched(value, "synthetic-upper", "synthetic-room")
+            })
+        }),
+        Edit::Word => Some(match files.get(SETTINGS) {
+            Some(text) => (
+                SETTINGS.to_owned(),
+                with_line(text, "words = ", |value| {
+                    switched(value, "[\"lamp\"]", "[\"lamp\", \"text\"]")
+                }),
+            ),
+            None => (SETTINGS.to_owned(), SETTINGS_TEXT.to_owned()),
+        }),
+        Edit::Equation => Some(match files.get(SOURCE) {
+            Some(text) => {
+                let (one, other) = ("\"Synthetic equation 1\"", "\"Synthetic equation one\"");
+                let text = if text.contains(one) {
+                    text.replacen(one, other, 1)
+                } else {
+                    text.replacen(other, one, 1)
+                };
+                (SOURCE.to_owned(), text)
+            }
+            None => (SOURCE.to_owned(), SOURCE_TEXT.to_owned()),
+        }),
+        Edit::ByHand => edited(pick(0, "equation"), &hand_edited),
+        _ => None,
+    }
 }
 
 /// `plan` with a removal of every file whose path differs only in case from a path the plan
@@ -610,7 +967,7 @@ fn only_in(left: &str, right: &str) -> Vec<String> {
 }
 
 /// Fails with the lines that differ when the dump `got` is not `want`.
-fn same_dump(what: &str, got: &str, want: &str) -> TestResult {
+pub fn same_dump(what: &str, got: &str, want: &str) -> TestResult {
     if got == want {
         return Ok(());
     }
@@ -735,7 +1092,8 @@ fn previewed(index: &mut Index, plan: &Plan, given: &[Change]) -> TestResult {
 }
 
 fn edit() -> impl Strategy<Value = Edit> {
-    let n = || 0..16usize;
+    // Above the number of files, so that every file can be picked.
+    let n = || 0..64usize;
     prop_oneof![
         n().prop_map(Edit::Title),
         (n(), 0..TARGETS.len()).prop_map(|(n, m)| Edit::Link(n, m)),
@@ -750,6 +1108,20 @@ fn edit() -> impl Strategy<Value = Edit> {
         n().prop_map(Edit::AddRemove),
         n().prop_map(Edit::Recase),
         Just(Edit::Ignore),
+        n().prop_map(Edit::MovesTo),
+        n().prop_map(Edit::Target),
+        n().prop_map(Edit::Truth),
+        n().prop_map(Edit::Where),
+        n().prop_map(Edit::After),
+        n().prop_map(Edit::Requires),
+        n().prop_map(Edit::Reveals),
+        Just(Edit::Floors),
+        Just(Edit::Number),
+        Just(Edit::FloorParent),
+        Just(Edit::ParentCycle),
+        Just(Edit::Word),
+        Just(Edit::Equation),
+        Just(Edit::ByHand),
     ]
 }
 
@@ -767,7 +1139,9 @@ fn via() -> impl Strategy<Value = Via> {
 // every generated history of edits, through sync, update, apply and preview, must leave the
 // dump of a fresh build of the folder after each step. The second test runs the same histories
 // with a lore rule that reads across records (P04 spec §5.5): a read the lore step fails to redo
-// leaves findings or `deps` rows that differ from the fresh build's.
+// leaves findings or `deps` rows that differ from the fresh build's. The project holds the
+// records and input files of the lore step, and the edits change what the lore rules read (P04
+// spec §5.17), so both runs also judge every P04 rule, ledger and settings read.
 proptest! {
     #![proptest_config(ProptestConfig {
         cases: 32,
