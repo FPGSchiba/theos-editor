@@ -183,9 +183,9 @@ fn right_kinds_are_clean(findings: &[Finding]) -> TestResult {
     ] {
         let place = pos(path, context, link)?;
         assert!(
-            !findings
-                .iter()
-                .any(|f| f.path == path && f.position.is_some_and(|p| (p.line, p.column) == place)),
+            !findings.iter().any(|f| f.rule.starts_with("link/")
+                && f.path == path
+                && f.position.is_some_and(|p| (p.line, p.column) == place)),
             "{path} {context}"
         );
     }

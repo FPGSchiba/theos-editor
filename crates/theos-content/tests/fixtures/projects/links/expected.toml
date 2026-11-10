@@ -136,6 +136,13 @@ column = 9
 
 [[finding]]
 path = "story/scripts/S-930.md"
+rule = "story/says-rejected"
+severity = "error"
+line = 13
+column = 8
+
+[[finding]]
+path = "story/scripts/S-930.md"
 rule = "link/kind"
 severity = "error"
 line = 20
