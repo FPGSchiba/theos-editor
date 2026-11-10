@@ -921,6 +921,37 @@ mod tests {
     }
 
     #[test]
+    fn a_note_without_a_version_link_has_no_version() -> Res {
+        let body = "> [!note] n2 · open
+> text
+
+> [!note] n4 · resolved by [[x-v5]]
+> y
+";
+        let concept = build("concepts/x.md", &format!("{}{body}", front("concept", "")))?;
+        let shown: Vec<_> = concept
+            .notes
+            .iter()
+            .map(|n| {
+                (
+                    n.id.as_str(),
+                    n.state.as_str(),
+                    n.resolved_by.as_deref(),
+                    n.version.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("n2", "open", None, None),
+                ("n4", "resolved", Some("x-v5"), None)
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
     fn a_beat_keeps_its_when_token() -> Res {
         let text = "---\nid: S-930\nkind: script\ntitle: t\n---\n\
             ## Beat 1 — A\nwhen:: T2\n\n## Beat 2 — B\nat:: [[a]]\n";

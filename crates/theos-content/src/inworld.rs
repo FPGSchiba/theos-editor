@@ -12,15 +12,17 @@ use crate::record::Record;
 use crate::text::Span;
 
 /// The in-world segments of `record`, sorted, merged and non-empty. `values` are the front-matter
-/// rows of the record. A record of an unknown kind or of a verbatim grammar has none.
+/// rows of the record. A record of an unknown kind is judged as prose, so its voice blocks count; a
+/// verbatim grammar has none.
 pub(crate) fn segments(
     record: &Record,
     spec: Option<&KindSpec>,
     values: &[ValueRow],
 ) -> Vec<SegmentRow> {
-    let Some(spec) = spec.filter(|spec| !spec.body.verbatim) else {
+    if spec.is_some_and(|spec| spec.body.verbatim) {
         return Vec::new();
-    };
+    }
+    let kind = spec.map_or("", |spec| spec.name);
     let body = record.body();
     let mut included: Vec<Span> = body
         .callouts()
@@ -28,7 +30,7 @@ pub(crate) fn segments(
         .filter(|callout| callout.name == "voice")
         .map(|callout| callout.content_span)
         .collect();
-    match spec.name {
+    match kind {
         "dialogue" => included.push(record.body_span()),
         "topic" if is_in_world_track(values) => included.push(record.body_span()),
         "belief" => {
@@ -45,7 +47,7 @@ pub(crate) fn segments(
             holes.push(Span::new(callout.span.start, callout.content_span.start));
         }
     }
-    if spec.name == "dialogue" {
+    if kind == "dialogue" {
         holes.extend(
             body.blocks()
                 .iter()
@@ -270,6 +272,37 @@ mod tests {
             "See [[synthetic-a|the shown]] and [[synthetic-b]] now.\n",
         )?;
         assert_eq!(got.concat(), "See the shown and synthetic-b now.\n");
+        Ok(())
+    }
+
+    #[test]
+    fn an_unknown_kind_keeps_its_voice_segments() -> Res {
+        let body = "> [!voice] [[synthetic-speaker]] · T1
+> Spoken words.
+>
+> Design note: hidden.
+
+plain
+";
+        let got = texts(
+            "codex/x.md",
+            "nonsense",
+            "title: t
+",
+            body,
+        )?;
+        assert_eq!(got.len(), 1);
+        assert!(got[0].contains("Spoken words.") && !got[0].contains("hidden"));
+        assert!(!got[0].contains("[!voice]") && !got[0].contains("plain"));
+        let broken = texts(
+            "codex/x.md",
+            "npc",
+            "title: &a b
+",
+            body,
+        )?;
+        assert_eq!(broken.len(), 1);
+        assert!(broken[0].contains("Spoken words."));
         Ok(())
     }
 
