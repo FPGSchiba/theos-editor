@@ -558,3 +558,136 @@ fn a_symbolic_link_is_not_read() -> TestResult {
     assert_eq!(index.dump()?, before);
     Ok(())
 }
+
+/// The paths of the records the index holds, sorted.
+fn stored(index: &Index) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    Ok(index.records()?.into_iter().map(|r| r.path).collect())
+}
+
+// AC: CE-12.2
+/// The folders the spec names hold no records, at any depth and on every OS: the walk skips
+/// them, and `update`, `apply` and `preview` ignore them.
+#[test]
+fn named_folders_are_never_records() -> TestResult {
+    let project = TempProject::new()?;
+    three(&project)?;
+    let named = [
+        ".theos/x.md",
+        ".git/x.md",
+        ".obsidian/x.md",
+        ".vscode/x.md",
+        ".github/x.md",
+        ".worktrees/w/things/x.md",
+        ".trash/x.md",
+        "things/.trash/x.md",
+        "lore/deep/.obsidian/x.md",
+    ];
+    for path in named {
+        project.write(path, &thing("x", "synthetic named"))?;
+    }
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    let all = paths(&["things/a.md", "things/b.md", "things/c.md"]);
+    assert_eq!(stored(&index)?, all);
+    let before = index.dump()?;
+    assert_eq!(index.update(&named)?, Update::default());
+    let given: Vec<Change> = named
+        .iter()
+        .map(|path| Change::text(*path, thing("x", "synthetic named, edited")))
+        .collect();
+    assert_eq!(index.preview(&given)?.update, Update::default());
+    assert_eq!(index.apply(&given)?, Update::default());
+    assert_eq!(index.dump()?, before);
+    Ok(())
+}
+
+// AC: CE-12.2
+/// On Unix a name that starts with `.` hides a file or folder: the walk skips `.drafts/a.md` and
+/// `lore/.hidden.md`, and `update`, `apply` and `preview` ignore them.
+#[cfg(unix)]
+#[test]
+fn a_dot_name_hides_on_unix() -> TestResult {
+    let project = TempProject::new()?;
+    three(&project)?;
+    let hidden = [".drafts/a.md", "lore/.hidden.md"];
+    for path in hidden {
+        project.write(path, &thing("synthetic-hidden", "synthetic hidden"))?;
+    }
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    let all = paths(&["things/a.md", "things/b.md", "things/c.md"]);
+    assert_eq!(stored(&index)?, all);
+    let before = index.dump()?;
+    assert_eq!(index.update(&hidden)?, Update::default());
+    let given: Vec<Change> = hidden
+        .iter()
+        .map(|path| Change::text(*path, thing("synthetic-hidden", "synthetic, edited")))
+        .collect();
+    assert_eq!(index.preview(&given)?.update, Update::default());
+    assert_eq!(index.apply(&given)?, Update::default());
+    assert_eq!(index.dump()?, before);
+    Ok(())
+}
+
+// AC: CE-12.2
+/// On Windows the hidden attribute of a file, or of a folder above it, hides it: the walk skips
+/// it, and `update`, `apply` and `preview` agree with the walk.
+#[cfg(windows)]
+#[test]
+fn the_hidden_attribute_hides_on_windows() -> TestResult {
+    let project = TempProject::new()?;
+    three(&project)?;
+    project.write("secret/e.md", &thing("e", "synthetic secret"))?;
+    project.hide("things/b.md")?;
+    project.hide("secret")?;
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    assert_eq!(stored(&index)?, paths(&["things/a.md", "things/c.md"]));
+    let before = index.dump()?;
+    assert_eq!(
+        index.update(&["things/b.md", "secret/e.md"])?,
+        Update::default()
+    );
+    let given: Vec<Change> = ["things/b.md", "secret/e.md", "secret/new.md"]
+        .iter()
+        .map(|path| Change::text(*path, thing("synthetic-given", "synthetic given")))
+        .collect();
+    assert_eq!(index.preview(&given)?.update, Update::default());
+    assert_eq!(index.apply(&given)?, Update::default());
+    assert_eq!(index.dump()?, before);
+
+    // A record that gets the attribute is no record any more: a change of it removes what the
+    // index holds, as the next sync would.
+    project.hide("things/c.md")?;
+    let update = index.update(&["things/c.md"])?;
+    assert_eq!(update.removed, paths(&["things/c.md"]));
+    assert_eq!(index.dump()?, fresh_dump(&project)?);
+    Ok(())
+}
+
+// AC: CE-12.2
+/// On Windows a name that starts with `.` hides nothing: the walk lists `.drafts/d.md`, and
+/// `update` and `apply` take it like any record.
+#[cfg(windows)]
+#[test]
+fn a_dot_name_does_not_hide_on_windows() -> TestResult {
+    let project = TempProject::new()?;
+    three(&project)?;
+    project.write(".drafts/d.md", &thing("d", "synthetic draft"))?;
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    let all = paths(&[".drafts/d.md", "things/a.md", "things/b.md", "things/c.md"]);
+    assert_eq!(stored(&index)?, all);
+
+    project.write(".drafts/d.md", &thing("d", "synthetic draft, edited"))?;
+    assert_eq!(
+        index.update(&[".drafts/d.md"])?.reparsed,
+        paths(&[".drafts/d.md"])
+    );
+    let text = thing("f", "synthetic given");
+    let given = Change::text(".drafts/f.md", text.clone());
+    assert_eq!(index.apply(&[given])?.reparsed, paths(&[".drafts/f.md"]));
+    project.write(".drafts/f.md", &text)?;
+    assert_eq!(index.dump()?, fresh_dump(&project)?);
+    Ok(())
+}

@@ -1,9 +1,20 @@
 //! Which files of a content project are records.
 //!
-//! The index walks the project with `ignore`: hidden folders are skipped, `.gitignore` files
-//! inside the project are honoured (never those of parent folders or the user's global one), and
-//! P01's not-records (`README.md`, `templates/records/`, `tools/`, `attachments/`) are left out.
+//! The index walks the project with `ignore`:
+//! - hidden files and folders are skipped the native way of the OS (Jann's ruling of
+//!   2026-11-10): on Unix (Linux and macOS) a name that starts with `.` hides, on Windows the
+//!   hidden attribute does, whatever the name;
+//! - the folders the spec names (`.theos`, `.git`, `.obsidian`, `.vscode`, `.github`,
+//!   `.worktrees`, `.trash`) are skipped by name, at any depth and on every OS;
+//! - `.gitignore` files inside the project are honoured (never those of parent folders or the
+//!   user's global one);
+//! - P01's not-records (`README.md`, `templates/records/`, `tools/`, `attachments/`) are left
+//!   out.
+//!
+//! The change boundary of `update`, `apply` and `preview` uses the same predicates, so a path
+//! they take is one the walk lists.
 
+use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -48,31 +59,99 @@ pub struct WalkError {
     source: ignore::Error,
 }
 
-/// Whether a project-relative path (with `/`) is a record: a plain relative path (not empty, not
-/// starting with `/`, no `\` or `:`, no empty, `.` or `..` component, no component starting
-/// with `.`, which the walk skips as hidden) that ends in `.md`, is not a `README.md`, and is
-/// not under `templates/records/`, `tools/` or `attachments/`.
+/// The folders that hold no records, by name, at any depth and on every OS (spec §5.7, P01 §5):
+/// the cache, git, the editors' settings, the agent worktrees and Obsidian's trash.
+const NAMED_FOLDERS: [&str; 7] = [
+    ".theos",
+    ".git",
+    ".obsidian",
+    ".vscode",
+    ".github",
+    ".worktrees",
+    ".trash",
+];
+
+/// Whether `name` is one of the folders that hold no records.
+fn is_named_folder(name: &str) -> bool {
+    NAMED_FOLDERS.contains(&name)
+}
+
+/// Whether a project-relative path (with `/`) is a record by its spelling, the same on every OS:
+/// a plain relative path (not empty, not starting with `/`, no `\` or `:`, no empty, `.` or `..`
+/// component) that is under none of the folders `.theos`, `.git`, `.obsidian`, `.vscode`,
+/// `.github`, `.worktrees` and `.trash` (at any depth), whose file name ends in `.md` after at
+/// least one more character and is not `README.md`, and that is not under `templates/records/`,
+/// `tools/` or `attachments/`.
+///
+/// Whether a path is hidden depends on the OS and, on Windows, on the disk, so this check leaves
+/// it out: [`walk`] skips a hidden entry on top of it, on Unix one whose name starts with `.`
+/// and on Windows one with the hidden attribute.
 #[must_use]
 pub fn is_record_path(path: &str) -> bool {
     let plain = !path.contains(['\\', ':'])
         && path
             .split('/')
-            .all(|part| !part.is_empty() && !part.starts_with('.'));
-    let name = path.rsplit('/').next().unwrap_or(path);
+            .all(|part| !part.is_empty() && part != "." && part != "..");
+    let mut parts = path.split('/');
+    let name = parts.next_back().unwrap_or(path);
+    let folders_hold_records = parts.all(|folder| !is_named_folder(folder));
     plain
-        && path.strip_suffix(".md").is_some()
+        && folders_hold_records
+        && name
+            .strip_suffix(".md")
+            .is_some_and(|stem| !stem.is_empty())
         && name != "README.md"
         && !["templates/records/", "tools/", "attachments/"]
             .iter()
             .any(|prefix| path.starts_with(prefix))
 }
 
-/// Whether the `.gitignore` files inside the project at `root` hide the record path `path`
+/// Whether the record path `path` (project-relative, with `/`) below `root` is hidden, so that
+/// [`walk`] does not list it: a folder of it or its file is hidden on this OS (see
+/// [`is_hidden_entry`]). On Windows only what exists on disk can carry the attribute, so a path
+/// that is not on disk is hidden only when a folder of it that exists is.
+pub(crate) fn is_hidden(root: &Path, path: &str) -> bool {
+    let mut entry = root.to_path_buf();
+    path.split('/').any(|part| {
+        entry.push(part);
+        is_hidden_entry(&entry)
+    })
+}
+
+/// Whether the walk skips the entry at `path` and, for a folder, everything below it: it is
+/// hidden on this OS, or it is one of the folders that hold no records.
+fn is_skipped_entry(path: &Path) -> bool {
+    path.file_name()
+        .and_then(OsStr::to_str)
+        .is_some_and(is_named_folder)
+        || is_hidden_entry(path)
+}
+
+/// Whether the file or folder at `path` is hidden on Unix: its name starts with `.`. Nothing is
+/// read from disk.
+#[cfg(unix)]
+fn is_hidden_entry(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|name| name.as_encoded_bytes().starts_with(b"."))
+}
+
+/// Whether the file or folder at `path` is hidden on Windows: it exists and carries the hidden
+/// attribute (`FILE_ATTRIBUTE_HIDDEN`), whatever its name. A symbolic link is judged by its own
+/// attributes, as the walk sees it.
+#[cfg(windows)]
+fn is_hidden_entry(path: &Path) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    /// `FILE_ATTRIBUTE_HIDDEN` of the Windows API.
+    const HIDDEN: u32 = 0x2;
+    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_attributes() & HIDDEN != 0)
+}
+
+/// Whether the `.gitignore` files inside the project at `root` keep the record path `path`
 /// (project-relative, with `/`) from [`walk`]. As in the walk, each folder of the path and then
 /// the file are matched against the `.gitignore` of every folder above them, the deepest first,
-/// and the first file that has a rule for them decides; a hidden folder hides everything below
-/// it, also a file that a `!` line names. Lines that do not parse are skipped, as the walk skips
-/// them.
+/// and the first file that has a rule for them decides; an ignored folder keeps everything below
+/// it out, also a file that a `!` line names. Lines that do not parse are skipped, as the walk
+/// skips them.
 pub(crate) fn is_ignored(root: &Path, path: &str) -> bool {
     let parts: Vec<&str> = path.split('/').collect();
     let mut matchers: Vec<Gitignore> = Vec::new();
@@ -168,8 +247,12 @@ pub(crate) fn relative(root: &Path, path: &Path) -> Option<WalkedPath> {
     })
 }
 
-/// Walks `root` and returns its record files sorted by path. A file or folder that vanishes
-/// during the walk is left out, as if the walk had come after its removal.
+/// Walks `root` and returns its record files sorted by path (see [`is_record_path`]). It does not
+/// enter a hidden folder or list a hidden file, the native way of the OS: on Unix (Linux and
+/// macOS) a name that starts with `.` hides, on Windows the hidden attribute does, whatever the
+/// name. On every OS it does not enter the folders `.theos`, `.git`, `.obsidian`, `.vscode`,
+/// `.github`, `.worktrees` and `.trash`, at any depth. A file or folder that vanishes during the
+/// walk is left out, as if the walk had come after its removal.
 ///
 /// # Errors
 ///
@@ -178,10 +261,11 @@ pub fn walk(root: &Path) -> Result<Vec<Walked>, WalkError> {
     collect(root, walker(root))
 }
 
-/// The walker of spec §5.7 over `root`.
+/// The walker of spec §5.7 over `root`. `ignore`'s own hidden rule is off: on Windows it hides a
+/// name that starts with `.` too, and the change boundary must decide the same way as the walk.
 fn walker(root: &Path) -> ignore::Walk {
     WalkBuilder::new(root)
-        .hidden(true)
+        .hidden(false)
         .parents(false)
         .ignore(false)
         .git_ignore(true)
@@ -189,6 +273,7 @@ fn walker(root: &Path) -> ignore::Walk {
         .git_exclude(false)
         .require_git(false)
         .follow_links(false)
+        .filter_entry(|entry| !is_skipped_entry(entry.path()))
         .build()
 }
 
@@ -253,6 +338,20 @@ mod tests {
         fs::write(path, text).expect("write");
     }
 
+    /// Gives the file or folder `rel` below `root` the hidden attribute, as `attrib +h` does.
+    #[cfg(windows)]
+    fn hide(root: &Path, rel: &str) {
+        let path = rel
+            .split('/')
+            .fold(root.to_path_buf(), |path, part| path.join(part));
+        let status = std::process::Command::new("attrib")
+            .arg("+h")
+            .arg(&path)
+            .status()
+            .expect("run attrib");
+        assert!(status.success(), "attrib +h {}", path.display());
+    }
+
     #[test]
     fn records_and_not_records() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -270,7 +369,12 @@ mod tests {
             "x.txt",
             ".obsidian/x.md",
             ".theos/cache/x.md",
-            "lore/.hidden.md",
+            ".git/x.md",
+            ".vscode/x.md",
+            ".github/x.md",
+            ".worktrees/w/z.md",
+            "world/.trash/y.md",
+            "world/deep/.obsidian/x.md",
             "drafts/a.md",
             "sub/b.md",
         ] {
@@ -287,8 +391,10 @@ mod tests {
         assert_eq!(paths, want);
     }
 
+    /// The change boundary of `update`, `apply` and `preview` (`is_record_path`, `is_hidden`,
+    /// `is_ignored`) keeps exactly the files that the walk lists.
     #[test]
-    fn is_ignored_agrees_with_the_walk() {
+    fn the_change_boundary_agrees_with_the_walk() {
         let dir = tempfile::tempdir().expect("tempdir");
         let root = dir.path();
         let files = [
@@ -304,6 +410,16 @@ mod tests {
             "w/z.md",
             "kept/ignored-name.md",
             "kept/again.md",
+            // Hidden on Unix by their names; on Windows only with the attribute.
+            ".drafts/a.md",
+            "lore/.hidden.md",
+            // Hidden on Windows below (the file, and the folder), never on Unix.
+            "things/b.md",
+            "secret/s.md",
+            // Never records, on every OS.
+            ".obsidian/x.md",
+            "lore/.trash/y.md",
+            ".worktrees/w/z.md",
         ];
         for rel in files {
             put(root, rel, "x\n");
@@ -319,27 +435,75 @@ mod tests {
         put(root, "drafts/.gitignore", "!keep.md\n");
         put(root, "sub/.gitignore", "!c.md\nb.md\ndeep/x.md\n");
         put(root, "kept/.gitignore", "!ignored-name.md\nagain.md\n");
+        #[cfg(unix)]
+        let native = ["secret/s.md", "things/b.md"];
+        #[cfg(windows)]
+        let native = {
+            hide(root, "things/b.md");
+            hide(root, "secret");
+            [".drafts/a.md", "lore/.hidden.md"]
+        };
         let walked: Vec<String> = walk(root)
             .expect("walk")
             .into_iter()
             .map(|w| w.path.as_str().to_owned())
             .collect();
-        assert_eq!(
-            walked,
-            [
-                "a.md",
-                "kept/ignored-name.md",
-                "sub/c.md",
-                "sub/deep/y.md",
-                "w/y.md"
-            ]
-        );
+        let mut want = vec![
+            "a.md",
+            "kept/ignored-name.md",
+            "sub/c.md",
+            "sub/deep/y.md",
+            "w/y.md",
+        ];
+        want.extend(native);
+        want.sort_unstable();
+        assert_eq!(walked, want);
         for rel in files {
-            assert_eq!(
-                is_ignored(root, rel),
-                !walked.iter().any(|w| w == rel),
-                "{rel}"
-            );
+            let kept = is_record_path(rel) && !is_hidden(root, rel) && !is_ignored(root, rel);
+            assert_eq!(kept, walked.iter().any(|w| w == rel), "{rel}");
+        }
+    }
+
+    /// On Unix a name that starts with `.` hides a file or folder, whether or not it exists.
+    #[cfg(unix)]
+    #[test]
+    fn a_dot_name_hides_on_unix() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        put(root, ".drafts/a.md", "x\n");
+        put(root, "lore/.hidden.md", "x\n");
+        put(root, "things/b.md", "x\n");
+        for rel in [
+            ".drafts/a.md",
+            "lore/.hidden.md",
+            ".new/x.md",
+            "lore/.new.md",
+        ] {
+            assert!(is_hidden(root, rel), "{rel}");
+        }
+        for rel in ["things/b.md", "things/new.md"] {
+            assert!(!is_hidden(root, rel), "{rel}");
+        }
+    }
+
+    /// On Windows the hidden attribute of a file or of one of its folders hides it; a name that
+    /// starts with `.` does not, and a path that is not on disk is not hidden unless a folder of
+    /// it that exists is.
+    #[cfg(windows)]
+    #[test]
+    fn the_hidden_attribute_hides_on_windows() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        for rel in [".drafts/a.md", "things/b.md", "things/c.md", "secret/s.md"] {
+            put(root, rel, "x\n");
+        }
+        hide(root, "things/b.md");
+        hide(root, "secret");
+        for rel in ["things/b.md", "secret/s.md", "secret/new.md"] {
+            assert!(is_hidden(root, rel), "{rel}");
+        }
+        for rel in [".drafts/a.md", "things/c.md", "things/new.md", ".new/x.md"] {
+            assert!(!is_hidden(root, rel), "{rel}");
         }
     }
 
@@ -400,9 +564,22 @@ mod tests {
             ("a\\b.md", false),
             ("a//b.md", false),
             ("./a.md", false),
-            (".obsidian/x.md", false),
-            ("lore/.hidden.md", false),
+            ("a/.md", false),
             ("lore/", false),
+            // Hidden or not is the OS's and the disk's matter, not the spelling's.
+            ("lore/.hidden.md", true),
+            (".drafts/a.md", true),
+            ("lore/.trash.md", true),
+            // The folders the spec names are never records, at any depth.
+            (".theos/cache/x.md", false),
+            (".git/x.md", false),
+            (".obsidian/x.md", false),
+            (".vscode/x.md", false),
+            (".github/x.md", false),
+            (".worktrees/w/z.md", false),
+            (".trash/x.md", false),
+            ("lore/.trash/y.md", false),
+            ("world/deep/.obsidian/x.md", false),
         ];
         for (path, want) in table {
             assert_eq!(is_record_path(path), want, "{path}");

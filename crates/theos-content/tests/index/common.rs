@@ -92,6 +92,23 @@ impl TempProject {
     pub fn time(&self, rel: &str) -> std::io::Result<SystemTime> {
         std::fs::metadata(self.path(rel))?.modified()
     }
+
+    /// Gives a file or folder the hidden attribute of Windows, as `attrib +h` does. Write the
+    /// file first: Windows refuses to create a file over a hidden one.
+    #[cfg(windows)]
+    pub fn hide(&self, rel: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let path = rel
+            .split('/')
+            .fold(self.root().to_path_buf(), |path, part| path.join(part));
+        let status = std::process::Command::new("attrib")
+            .arg("+h")
+            .arg(&path)
+            .status()?;
+        if !status.success() {
+            return Err(format!("attrib +h {} failed: {status}", path.display()).into());
+        }
+        Ok(())
+    }
 }
 
 /// Copies the folder `from` into the existing folder `to`, recursively; a folder that both have

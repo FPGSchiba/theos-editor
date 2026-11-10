@@ -16,7 +16,9 @@ use crate::index::identity::Identity;
 use crate::index::store::{self, map_error};
 use crate::index::{Index, IndexError, query, resolve, rows, write};
 use crate::kinds::KindRegistry;
-use crate::walk::{Walked, WalkedPath, is_ignored, is_listed, is_record_path, mtime_ns, walk};
+use crate::walk::{
+    Walked, WalkedPath, is_hidden, is_ignored, is_listed, is_record_path, mtime_ns, walk,
+};
 
 /// A file whose time lies within this many nanoseconds before it was hashed is racy.
 const RACY_WINDOW_NS: i64 = 2_000_000_000;
@@ -157,10 +159,13 @@ impl Index {
     }
 
     /// Does what [`Index::sync`] does for the given project-relative paths only. A path that is
-    /// not a record is ignored; one that no longer exists is removed. So is one that the walk
-    /// would not list: a path that a `.gitignore` hides, or one spelled unlike the file on disk
-    /// (another case, a symbolic link). A `\` in a path is read as `/`, so paths joined on
-    /// Windows work.
+    /// not a record by its spelling ([`is_record_path`]: also one under
+    /// `.theos`, `.git`, `.obsidian`, `.vscode`, `.github`, `.worktrees` or `.trash`) is
+    /// ignored; one that no longer exists is removed. So is one that the walk would not list: a
+    /// hidden path (on Unix a folder or file of it has a name that starts with `.`, on Windows
+    /// one carries the hidden attribute), a path that a `.gitignore` keeps out, or one spelled
+    /// unlike the file on disk (another case, a symbolic link). A `\` in a path is read as `/`,
+    /// so paths joined on Windows work.
     ///
     /// A cache file that another theos build keeps rebuilding is rebuilt at most three times per
     /// call; then the call fails with [`IndexError::Contended`].
@@ -179,9 +184,12 @@ impl Index {
 
     /// Commits the given changes. A content whose bytes equal the stored ones changes nothing;
     /// otherwise the record is parsed again, with no file times, so the next sync reads the file.
-    /// A path that is not a record is ignored; one that a `.gitignore` hides is no record either,
-    /// and what the index holds for it is removed. A `\` in a path is read as `/`, so paths
-    /// joined on Windows work; the index stores the path with `/`.
+    /// A path that is not a record by its spelling is ignored, as in [`Index::update`]. One that
+    /// is hidden or that a `.gitignore` keeps out is no record either, and what the index holds
+    /// for it is removed. Hidden is decided the way of the OS, as in [`Index::update`]; on
+    /// Windows a path that is not on disk is hidden only when a folder of it that exists carries
+    /// the attribute. A `\` in a path is read as `/`, so paths joined on Windows work; the index
+    /// stores the path with `/`.
     ///
     /// A cache file that another theos build keeps rebuilding is rebuilt at most three times per
     /// call; then the call fails with [`IndexError::Contended`].
@@ -197,8 +205,9 @@ impl Index {
     /// and of every record given as content, and rolls everything back: the cache is not
     /// changed. The findings are those [`Index::apply`] would leave, ordered like
     /// [`Index::findings`]; a content equal to the stored bytes is not parsed again, and its
-    /// stored findings are the ones it would leave. A `\` in a path is read as `/`, as in
-    /// [`Index::apply`].
+    /// stored findings are the ones it would leave. Paths are taken as in [`Index::apply`]: one
+    /// that is not a record by its spelling, is hidden the way of the OS, or that a `.gitignore`
+    /// keeps out gives no findings, and a `\` is read as `/`.
     ///
     /// A cache file that another theos build keeps rebuilding is rebuilt at most three times per
     /// call; then the call fails with [`IndexError::Contended`].
@@ -432,9 +441,10 @@ impl<'a> Syncer<'a> {
     }
 
     /// One change of `update` or `apply`, at `path` with `\` read as `/`. A path that is no
-    /// record by its name is ignored. One that the walk would not list, since a `.gitignore`
-    /// hides it or, for a path read from disk, no file of that spelling is listed, is no record
-    /// of the project either: the index holds nothing for it, so whatever it held is removed.
+    /// record by its spelling is ignored. One that the walk would not list, since it is hidden,
+    /// a `.gitignore` keeps it out or, for a path read from disk, no file of that spelling is
+    /// listed, is no record of the project either: the index holds nothing for it, so whatever it
+    /// held is removed.
     fn change(&mut self, path: &str, source: Source) -> Result<(), IndexError> {
         let path = slashed(path);
         let path = path.as_str();
@@ -443,7 +453,7 @@ impl<'a> Syncer<'a> {
         }
         match source {
             Source::Gone => self.remove(path),
-            _ if is_ignored(self.root, path) => self.remove(path),
+            _ if is_hidden(self.root, path) || is_ignored(self.root, path) => self.remove(path),
             Source::Given(bytes) => {
                 let known = self.file_row(path)?;
                 self.settle(path, &bytes, None, known.as_ref())

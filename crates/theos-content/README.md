@@ -21,7 +21,7 @@ the ledger follow in P04.
 | `kinds` | `KindRegistry` of `KindSpec`s: declarative `FieldSpec` tables, id rules, `Placement`, body grammar; the generic checker |
 | `parts` | The 20 builtin kinds, one module per kind and one `register` per part; `parts::builtin()` |
 | `check` | `check_record` runs the record, YAML and schema checks of one record, the checks of its kind included; `rules()` lists them. Link and duplicate-id checks run in the index's relink step; body checks come with P04's validators |
-| `walk` | `walk` lists the record files of a project (`ignore` crate); `is_record_path` |
+| `walk` | `walk` lists the record files of a project (`ignore` crate), as the next section says; `is_record_path` |
 | `index` | `Index`: the persistent index with sync, update, apply, preview, queries, search, lens and dump |
 
 The patcher changes only the lines of the field it is asked to change: every edit is a span edit
@@ -53,6 +53,22 @@ P12:
 Every file says it is synthetic. The integration tests in `tests/corpus/` read the corpus: records
 parse, bodies and records round-trip byte for byte through the patcher and through span edits
 built from the model, and a field edit changes only that field's lines.
+
+## Which files are records
+
+The walk lists every file below the project root whose name ends in `.md`, except:
+
+- hidden files and folders, the native way of each OS: on Linux and macOS a name that starts with
+  `.`, on Windows the hidden attribute, whatever the name. A `.drafts/` folder is hidden on Linux
+  and macOS, and on Windows only when it carries the attribute;
+- the folders `.theos`, `.git`, `.obsidian`, `.vscode`, `.github`, `.worktrees` and `.trash`, by
+  name, at any depth and on every OS;
+- what a `.gitignore` inside the project keeps out (never one above the root, the global excludes
+  or `.git/info/exclude`), and symbolic links, which are not followed;
+- every `README.md`, and everything under `templates/records/`, `tools/` and `attachments/`.
+
+`update`, `apply` and `preview` take a path by the same rules, so a path they index is one the
+next sync keeps.
 
 ## The index and its cache
 
