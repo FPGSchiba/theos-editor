@@ -159,7 +159,7 @@ mod tests {
     #[test]
     fn a_registered_guardrail_id_is_listed_as_a_guardrail() -> Result<(), Box<dyn std::error::Error>>
     {
-        let mut registry = crate::parts::builtin()?;
+        let mut registry = crate::kinds::KindRegistry::new();
         registry.register_rule(
             "codex",
             crate::lore::LoreRule {

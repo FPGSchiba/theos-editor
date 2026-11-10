@@ -6,7 +6,8 @@ use std::rc::Rc;
 
 use crate::kinds::KindRegistry;
 use crate::lore::facts::{InLink, InputFacts, RecordFacts};
-use crate::settings::{self, Parsed};
+use crate::lore::vocab::DeveloperWords;
+use crate::settings::{self, Parsed, ValidationSettings};
 
 /// Why a fact could not be read: the store failed. Rules never fail on content (L5).
 #[derive(Debug, thiserror::Error)]
@@ -61,6 +62,7 @@ pub struct Context<'a> {
     inbound: HashMap<String, Vec<InLink>>,
     inputs: HashMap<String, Option<Rc<InputFacts>>>,
     settings: Option<Rc<Parsed>>,
+    vocab: Option<Rc<DeveloperWords>>,
 }
 
 impl<'a> Context<'a> {
@@ -74,6 +76,7 @@ impl<'a> Context<'a> {
             inbound: HashMap::new(),
             inputs: HashMap::new(),
             settings: None,
+            vocab: None,
         }
     }
 
@@ -140,6 +143,24 @@ impl<'a> Context<'a> {
         });
         self.settings = Some(Rc::clone(&parsed));
         Ok(parsed)
+    }
+
+    /// The developer words of the project, built from the settings once per run; none only when
+    /// not even the built-in patterns compile. Reads `file:.theos/settings.toml`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the store fails.
+    pub(crate) fn developer_words(&mut self) -> Result<Option<Rc<DeveloperWords>>, FactError> {
+        let parsed = self.settings()?;
+        if self.vocab.is_none() {
+            // A word list too large to compile leaves the built-in words.
+            self.vocab = DeveloperWords::new(&parsed.settings)
+                .or_else(|_| DeveloperWords::new(&ValidationSettings::default()))
+                .ok()
+                .map(Rc::new);
+        }
+        Ok(self.vocab.clone())
     }
 
     /// The facts of the record subject with `id` at `path`, without a read: a subject's own

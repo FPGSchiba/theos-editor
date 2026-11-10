@@ -69,10 +69,13 @@ fn a_setting_that_lowers_a_guardrail_is_rejected_with_a_message() -> TestResult 
         ]
     );
     assert!(found.iter().all(|finding| finding.id.is_none()));
-    // The entries had no effect: the guardrails they named stay errors. The finding of
-    // lore/inworld-vocab stays an error too; Task 13's tests assert it.
+    // The entries had no effect: the guardrails they named stay errors.
     assert_eq!(severity_of(&index, NEVER)?, Severity::Error);
     assert_eq!(severity_of(&index, OVERSHOOT)?, Severity::Error);
+    assert_eq!(
+        severities_of(&index, "lore/inworld-vocab")?,
+        [Severity::Error; 2]
+    );
     Ok(())
 }
 

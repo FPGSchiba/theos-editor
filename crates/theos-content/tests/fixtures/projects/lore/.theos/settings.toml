@@ -1,0 +1,6 @@
+# synthetic fixture (P04), not canon
+[validate.inworld-vocab]
+words = ["ledger"]
+allow = [
+  { word = "T1", reason = "synthetic: the tier is a sign the speakers know" },
+]

@@ -42,5 +42,6 @@ pub fn register(registry: &mut KindRegistry) -> Result<(), RegistryError> {
     registry.register_rule("codex", rules::REVEAL_ORDER)?;
     registry.register_rule("codex", rules::REQUIRES)?;
     registry.register_rule("codex", rules::THREE_CLUE)?;
+    registry.register_rule("codex", rules::INWORLD_VOCAB)?;
     Ok(())
 }

@@ -60,8 +60,10 @@ impl Writer<'_> {
         fields: &str,
         text: &str,
     ) -> std::io::Result<()> {
+        // The title spells the id with spaces: an id in a belief title is a developer word.
+        let title = id.replace('-', " ");
         let record = format!(
-            "---\n# synthetic fixture (P03), not canon\nid: {id}\nkind: {kind}\ntitle: Synthetic {id}\n{fields}---\n{text}"
+            "---\n# synthetic fixture (P03), not canon\nid: {id}\nkind: {kind}\ntitle: Synthetic {title}\n{fields}---\n{text}"
         );
         self.project.write(path, &record)
     }

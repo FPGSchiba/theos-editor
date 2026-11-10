@@ -9,7 +9,10 @@
 #   rules of P04 add the `body/` findings: the malformed constructs of `malformed/` (each case
 #   of its `expected.toml`), the unknown beat keys (`synthetic::`) and the unknown note state
 #   of `synthetic-concept-notes.md` (CE-15.5), and the three-clue warning of T-901, which no clue
-#   reveals;
+#   reveals; and lore/inworld-vocab (section 5.11): `B-902` as a belief title, `S-004` as a bare
+#   link in a voice block, and the tier tokens and ids in the malformed voice titles of
+#   `synthetic-malformed-voices-in-world.md`, which stay in-world text since a malformed title is
+#   no voice title;
 # - [[crlf]]: the findings of the CRLF files that have no twin among the records, each with the
 #   name of its `input` file, indexed alone at `things/<input>`.
 
@@ -89,6 +92,13 @@ rule = "link/dangling"
 severity = "error"
 line = 17
 column = 1
+
+[[project]]
+path = "lore/beliefs/B-902.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 5
+column = 8
 
 [[project]]
 path = "lore/beliefs/B-902.md"
@@ -211,6 +221,13 @@ column = 29
 
 [[project]]
 path = "lore/topics/synthetic-callouts-in-world.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 54
+column = 31
+
+[[project]]
+path = "lore/topics/synthetic-callouts-in-world.md"
 rule = "link/dangling"
 severity = "error"
 line = 58
@@ -309,10 +326,24 @@ column = 12
 
 [[project]]
 path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 11
+column = 12
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
 rule = "link/dangling"
 severity = "error"
 line = 14
 column = 12
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 14
+column = 30
 
 [[project]]
 path = "lore/topics/synthetic-malformed-voices-in-world.md"
@@ -327,6 +358,13 @@ rule = "link/dangling"
 severity = "error"
 line = 14
 column = 35
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 14
+column = 37
 
 [[project]]
 path = "lore/topics/synthetic-malformed-voices-in-world.md"
@@ -341,6 +379,13 @@ rule = "body/callout-title"
 severity = "error"
 line = 17
 column = 30
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 17
+column = 33
 
 [[project]]
 path = "lore/topics/synthetic-malformed-voices-in-world.md"
@@ -365,6 +410,13 @@ column = 28
 
 [[project]]
 path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 20
+column = 30
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
 rule = "body/callout-title"
 severity = "error"
 line = 23
@@ -386,6 +438,13 @@ column = 30
 
 [[project]]
 path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 23
+column = 32
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
 rule = "body/callout-title"
 severity = "error"
 line = 26
@@ -397,6 +456,13 @@ rule = "link/dangling"
 severity = "error"
 line = 26
 column = 12
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 26
+column = 30
 
 [[project]]
 path = "lore/topics/synthetic-malformed-voices-in-world.md"

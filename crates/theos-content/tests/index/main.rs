@@ -21,4 +21,5 @@ mod speed;
 mod story;
 mod sync;
 mod versions;
+mod vocab;
 mod world;

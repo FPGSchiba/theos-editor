@@ -16,6 +16,7 @@ pub(crate) mod ledger;
 pub(crate) mod lens;
 pub(crate) mod places;
 pub(crate) mod reveals;
+pub(crate) mod vocab;
 
 use std::fmt;
 use std::rc::Rc;
