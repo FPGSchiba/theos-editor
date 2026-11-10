@@ -34,7 +34,9 @@ use store::Store;
 ///
 /// Another build (another registry or `theos-content` source) may open the same cache file and
 /// rebuild it for itself. Every write of this index first checks the cache's identity and, when
-/// it is another build's, rebuilds the cache for this one before it does its own work.
+/// it is another build's, rebuilds the cache for this one before it does its own work. A cache
+/// file that another build keeps rebuilding is rebuilt at most three times per write; then the
+/// write fails with [`IndexError::Contended`].
 pub struct Index {
     root: PathBuf,
     registry: KindRegistry,
@@ -110,7 +112,8 @@ pub enum IndexError {
     },
     /// Another theos build kept rebuilding the cache while this write tried to own it.
     #[error(
-        "the index cache {} keeps being rebuilt by another theos build: close one of the theos          processes",
+        "the index cache {} keeps being rebuilt by another theos build: close one of the theos \
+         processes",
         path.display()
     )]
     Contended {

@@ -696,7 +696,11 @@ mod tests {
             path: "x/cache.db".into(),
         }
         .to_string();
-        assert!(message.contains("x/cache.db") && message.contains("close one of the theos"));
+        assert_eq!(
+            message,
+            "the index cache x/cache.db keeps being rebuilt by another theos build: close one of \
+             the theos processes"
+        );
     }
 
     #[test]
