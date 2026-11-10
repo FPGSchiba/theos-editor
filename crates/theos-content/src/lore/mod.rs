@@ -44,6 +44,17 @@ impl On {
         }
     }
 
+    /// Whether a rule on `self` and one on `other` check a common subject: a kind in both
+    /// lists, `AnyRecord` next to any record rule, or the same input path.
+    pub(crate) fn overlaps(self, other: On) -> bool {
+        match (self, other) {
+            (On::Kinds(a), On::Kinds(b)) => a.iter().any(|kind| b.contains(kind)),
+            (On::AnyRecord, On::AnyRecord | On::Kinds(_)) | (On::Kinds(_), On::AnyRecord) => true,
+            (On::Input(a), On::Input(b)) => a == b,
+            _ => false,
+        }
+    }
+
     /// Whether a rule on `self` checks the input file at `path`.
     pub(crate) fn takes_input(self, path: &str) -> bool {
         matches!(self, On::Input(input) if input == path)

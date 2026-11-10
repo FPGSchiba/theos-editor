@@ -10,6 +10,7 @@ use std::collections::BTreeSet;
 
 use rusqlite::{Connection, OptionalExtension};
 
+use crate::finding::Finding;
 use crate::index::IndexError;
 use crate::index::lore_source::{Bulk, ById};
 use crate::index::rows::RecordRows;
@@ -179,6 +180,11 @@ fn check(
 ) -> Result<(), IndexError> {
     for rule in rules {
         for finding in (rule.run)(ctx, subject)? {
+            if !sits_on(&finding, subject) {
+                debug_assert!(false, "{}", off_subject(rule, &finding, subject));
+                tracing::error!("{}", off_subject(rule, &finding, subject));
+                continue;
+            }
             write::insert_finding(conn, &finding, STEP)?;
         }
     }
@@ -187,4 +193,25 @@ fn check(
         stmt.execute([subject.path(), key.as_db().as_str()])?;
     }
     Ok(())
+}
+
+/// Whether `finding` sits on `subject`: its path is the subject's and its id is the subject's
+/// record id, none for an input file (L9).
+fn sits_on(finding: &Finding, subject: &Subject) -> bool {
+    let id = match subject {
+        Subject::Record(record) => Some(record.id.as_str()),
+        Subject::Input(_) => None,
+    };
+    finding.path == subject.path() && finding.id.as_deref() == id
+}
+
+/// The message of a rule that returned a finding on another subject.
+fn off_subject(rule: &LoreRule, finding: &Finding, subject: &Subject) -> String {
+    format!(
+        "lore rule `{}` returned a finding on `{}` (id {:?}) while checking `{}`: a rule reports on its own subject only",
+        rule.id,
+        finding.path,
+        finding.id,
+        subject.path()
+    )
 }

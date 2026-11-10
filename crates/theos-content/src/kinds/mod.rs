@@ -55,6 +55,20 @@ pub enum RegistryError {
         /// The part that tried again.
         second: &'static str,
     },
+    /// Two registrations of one lore rule id check the same subjects: a kind in both lists,
+    /// `AnyRecord` next to any record rule, or one input path twice. The rule would run twice on
+    /// one subject and report every finding twice.
+    #[error(
+        "rule `{rule}` is registered by part `{first}` and again by part `{second}` for          subjects that overlap"
+    )]
+    OverlappingRule {
+        /// The rule id.
+        rule: String,
+        /// The part that registered it first.
+        first: &'static str,
+        /// The part that tried again.
+        second: &'static str,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -107,11 +121,13 @@ impl KindRegistry {
     }
 
     /// Registers the lore rule `rule` for `part` (spec §5.2). One rule id may be registered by
-    /// several parts, each for its own kinds, when severity and class agree.
+    /// several parts, each for its own kinds, when severity and class agree and the subjects do
+    /// not overlap.
     ///
     /// # Errors
     /// [`RegistryError::DuplicateRule`] when the id is registered already with another severity
-    /// or class.
+    /// or class, and [`RegistryError::OverlappingRule`] when it is registered already for a
+    /// subject that `rule` checks too.
     pub fn register_rule(
         &mut self,
         part: &'static str,
@@ -122,6 +138,15 @@ impl KindRegistry {
                 && (registered.rule.severity, registered.rule.class) != (rule.severity, rule.class)
         }) {
             return Err(RegistryError::DuplicateRule {
+                rule: rule.id.to_owned(),
+                first: existing.part,
+                second: part,
+            });
+        }
+        if let Some(existing) = self.rules.iter().find(|registered| {
+            registered.rule.id == rule.id && registered.rule.on.overlaps(rule.on)
+        }) {
+            return Err(RegistryError::OverlappingRule {
                 rule: rule.id.to_owned(),
                 first: existing.part,
                 second: part,
@@ -364,6 +389,43 @@ mod tests {
             );
         }
         assert_eq!(registry.lore_rules().count(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn a_rule_id_twice_for_overlapping_subjects_is_refused()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::finding::Severity::Error;
+        use crate::lore::On;
+        use crate::rules::RuleClass::Fixed;
+        let on = |on| LoreRule {
+            on,
+            ..lore_rule(Error, Fixed, &[])
+        };
+        let mut registry = KindRegistry::new();
+        registry.register_rule("a", on(On::Kinds(&["concept", "map"])))?;
+        registry.register_rule("a", on(On::Input(".theos/settings.toml")))?;
+        for again in [
+            On::Kinds(&["thing", "map"]),
+            On::AnyRecord,
+            On::Input(".theos/settings.toml"),
+        ] {
+            let err = registry.register_rule("b", on(again));
+            assert!(
+                matches!(
+                    &err,
+                    Err(RegistryError::OverlappingRule { second: "b", .. })
+                ),
+                "{again:?}: {err:?}"
+            );
+        }
+        registry.register_rule("b", on(On::Kinds(&["thing"])))?;
+        registry.register_rule("b", on(On::Input("canon/formalism/_source.json")))?;
+        assert_eq!(registry.lore_rules().count(), 4);
+        let mut registry = KindRegistry::new();
+        registry.register_rule("a", on(On::AnyRecord))?;
+        let err = registry.register_rule("b", on(On::Kinds(&["thing"])));
+        assert!(matches!(err, Err(RegistryError::OverlappingRule { .. })));
         Ok(())
     }
 

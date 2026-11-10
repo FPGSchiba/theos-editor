@@ -14,6 +14,7 @@ use sha2::{Digest, Sha256};
 use crate::check::check_record;
 use crate::finding::{Finding, Severity};
 use crate::index::identity::Identity;
+use crate::index::inputs::{self, INPUTS, is_input};
 use crate::index::lore_step::{self, LoreWork};
 use crate::index::store::{self, map_error};
 use crate::index::{Index, IndexError, query, resolve, rows, write};
@@ -229,7 +230,9 @@ impl Index {
             Change::Content { path, .. } => Some(slashed(path)),
             Change::Removed { .. } => None,
         });
-        let given: BTreeSet<String> = given.filter(|path| is_record_path(path)).collect();
+        let given: BTreeSet<String> = given
+            .filter(|path| is_record_path(path) || is_input(path))
+            .collect();
         let (update, findings) = self.transact(
             |work| apply_changes(work, changes),
             |conn, update| {
@@ -473,6 +476,9 @@ impl<'a> Syncer<'a> {
         for path in known.iter().filter(|path| !seen.contains(*path)) {
             self.remove(path)?;
         }
+        for path in INPUTS {
+            self.input_from_disk(path)?;
+        }
         Ok(())
     }
 
@@ -484,6 +490,13 @@ impl<'a> Syncer<'a> {
     fn change(&mut self, path: &str, source: Source) -> Result<(), IndexError> {
         let path = slashed(path);
         let path = path.as_str();
+        if is_input(path) {
+            return match source {
+                Source::Disk => self.input_from_disk(path),
+                Source::Given(bytes) => self.settle_input(path, Some(&bytes), None),
+                Source::Gone => self.settle_input(path, None, None),
+            };
+        }
         if !is_record_path(path) {
             return Ok(());
         }
@@ -535,6 +548,85 @@ impl<'a> Syncer<'a> {
             Err(error) if error.kind() == ErrorKind::NotFound => self.remove(path),
             Err(error) => self.unreadable(path, stamp, &error),
         }
+    }
+
+    /// Steps 1 to 3 for an input file on disk: read it unless its size and time say it is
+    /// unchanged. A file that is gone is removed; one that cannot be read is left as it was, with
+    /// a warning.
+    fn input_from_disk(&mut self, path: &str) -> Result<(), IndexError> {
+        let meta = match std::fs::metadata(self.root.join(path)) {
+            Ok(meta) if meta.is_file() => meta,
+            Ok(_) => return self.settle_input(path, None, None),
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                return self.settle_input(path, None, None);
+            }
+            Err(error) => {
+                input_unreadable(path, &error);
+                return Ok(());
+            }
+        };
+        let stamp = Stamp {
+            size: meta.len(),
+            mtime_ns: mtime_ns(&meta),
+        };
+        if let Some(row) = inputs::row(self.conn, path)?
+            && !row.racy
+            && row.size == i64::try_from(stamp.size).ok()
+            && row.mtime_ns == Some(stamp.mtime_ns)
+        {
+            return Ok(());
+        }
+        match std::fs::read(self.root.join(path)) {
+            Ok(bytes) => {
+                self.update.read.push(path.to_owned());
+                self.settle_input(path, Some(&bytes), Some(stamp))
+            }
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                self.settle_input(path, None, None)
+            }
+            Err(error) => {
+                input_unreadable(path, &error);
+                Ok(())
+            }
+        }
+    }
+
+    /// Step 3 for an input file whose `bytes` are known, or none when it is gone. A new hash
+    /// replaces the row and makes the input a subject of the lore step; the key `file:<path>`
+    /// changed, so whatever read the file runs again. `stamp` is none for given bytes (racy).
+    fn settle_input(
+        &mut self,
+        path: &str,
+        bytes: Option<&[u8]>,
+        stamp: Option<Stamp>,
+    ) -> Result<(), IndexError> {
+        let known = inputs::row(self.conn, path)?;
+        let key = crate::lore::ReadKey::File(path.to_owned()).as_db();
+        let Some(bytes) = bytes else {
+            if known.is_some() {
+                inputs::delete(self.conn, path)?;
+                self.lore.changed.insert(key);
+                self.lore.remove_subject(path);
+            }
+            return Ok(());
+        };
+        let hash = sha256_hex(bytes);
+        let racy = stamp.is_none_or(|stamp| is_racy(stamp.mtime_ns, now_ns()));
+        let times = (
+            stamp.and_then(|stamp| i64::try_from(stamp.size).ok()),
+            stamp.map(|stamp| stamp.mtime_ns),
+        );
+        if known.is_some_and(|row| row.hash == hash) {
+            if stamp.is_some() {
+                inputs::restamp(self.conn, path, times, racy)?;
+            }
+            return Ok(());
+        }
+        let text = std::str::from_utf8(bytes).ok();
+        inputs::put(self.conn, path, times, &hash, text, racy)?;
+        self.lore.changed.insert(key);
+        self.lore.add_subject(path);
+        Ok(())
     }
 
     /// Step 3 for one record whose `bytes` are known. `stamp` is the file's size and time, or
@@ -669,6 +761,11 @@ impl<'a> Syncer<'a> {
         ])?;
         Ok(())
     }
+}
+
+/// An input file that exists but cannot be read keeps the row it had.
+fn input_unreadable(path: &str, error: &std::io::Error) {
+    tracing::warn!(path, %error, "the input file cannot be read; its row is left as it was");
 }
 
 /// A given project-relative path with every `\` replaced by `/`, so that a path joined by

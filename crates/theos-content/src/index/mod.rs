@@ -9,6 +9,7 @@ use crate::walk::WalkError;
 
 mod dump;
 mod identity;
+pub(crate) mod inputs;
 mod lens;
 mod lore_source;
 mod lore_step;

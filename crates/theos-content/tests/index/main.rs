@@ -5,6 +5,7 @@ mod cache;
 mod changes;
 mod common;
 mod corpus;
+mod inputs;
 mod inworld;
 mod kinds;
 mod lenses;

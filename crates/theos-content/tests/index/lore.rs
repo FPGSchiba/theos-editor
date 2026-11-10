@@ -433,3 +433,41 @@ fn many_dirty_subjects_read_the_same_facts_in_bulk() -> TestResult {
     assert_eq!(index.dump()?, fresh(&project)?);
     Ok(())
 }
+
+/// `test/stray`: reports a finding on another path than its subject's.
+const STRAY: LoreRule = LoreRule {
+    id: "test/stray",
+    severity: Severity::Warning,
+    class: RuleClass::Fixed,
+    on: On::Kinds(&["thing"]),
+    run: stray,
+};
+
+fn stray(ctx: &mut Context<'_>, subject: &Subject) -> Result<Vec<Finding>, FactError> {
+    ctx.records("synthetic-nowhere")?;
+    let mut finding = subject.finding(
+        &STRAY,
+        Span::default(),
+        Position { line: 1, column: 1 },
+        "on another subject".to_owned(),
+    );
+    "things/synthetic-other.md".clone_into(&mut finding.path);
+    Ok(vec![finding])
+}
+
+/// A rule's finding on another subject is a bug in the rule: a debug build panics.
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "a rule reports on its own subject only")]
+fn a_finding_on_another_subject_panics_in_a_debug_build() {
+    let run = || -> TestResult {
+        let project = TempProject::new()?;
+        project.write(A, &a())?;
+        let mut registry = parts::builtin()?;
+        registry.register_rule("test", STRAY)?;
+        let mut index = Index::in_memory(&project.project()?, &registry)?;
+        index.sync()?;
+        Ok(())
+    };
+    let _ = run();
+}

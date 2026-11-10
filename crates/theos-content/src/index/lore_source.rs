@@ -3,14 +3,14 @@
 //! rows of one path keep the order they were written in (their rowid), records come by path, and
 //! links that name an id by source path.
 //!
-//! The store holds no input files yet, so both answer every input as absent; the `inputs` table
-//! comes with the input files of spec §5.4.
+//! Input files come from the `inputs` table (spec §5.4).
 
 use std::collections::HashMap;
 
 use rusqlite::types::Type;
 use rusqlite::{Connection, Row};
 
+use crate::index::inputs;
 use crate::index::query::offset;
 use crate::index::slots::Slot;
 use crate::lore::{
@@ -94,8 +94,8 @@ impl FactSource for ById<'_> {
         Ok(found)
     }
 
-    fn input(&mut self, _path: &str) -> Result<Option<InputFacts>, FactError> {
-        Ok(None)
+    fn input(&mut self, path: &str) -> Result<Option<InputFacts>, FactError> {
+        Ok(inputs::facts(self.conn, path)?)
     }
 }
 
@@ -105,6 +105,8 @@ pub(crate) struct Bulk {
     records: HashMap<String, Vec<RecordFacts>>,
     /// The links by the id they name, ordered by source path.
     inbound: HashMap<String, Vec<InLink>>,
+    /// The input files by path.
+    inputs: HashMap<String, InputFacts>,
 }
 
 impl Bulk {
@@ -160,7 +162,15 @@ impl Bulk {
         for list in records.values_mut() {
             list.sort_by(|a, b| a.path.cmp(&b.path));
         }
-        Ok(Bulk { records, inbound })
+        let inputs = inputs::all_facts(conn)?
+            .into_iter()
+            .map(|input| (input.path.clone(), input))
+            .collect();
+        Ok(Bulk {
+            records,
+            inbound,
+            inputs,
+        })
     }
 }
 
@@ -173,8 +183,8 @@ impl FactSource for Bulk {
         Ok(self.inbound.get(id).cloned().unwrap_or_default())
     }
 
-    fn input(&mut self, _path: &str) -> Result<Option<InputFacts>, FactError> {
-        Ok(None)
+    fn input(&mut self, path: &str) -> Result<Option<InputFacts>, FactError> {
+        Ok(self.inputs.get(path).cloned())
     }
 }
 
@@ -389,6 +399,19 @@ mod tests {
         }
         assert_eq!(bulk.input(".theos/settings.toml")?, None);
         assert_eq!(by_id.input(".theos/settings.toml")?, None);
+        conn.execute(
+            "INSERT INTO inputs (path, racy, hash, text) VALUES ('.theos/settings.toml', 0, 'h', 't')",
+            [],
+        )?;
+        let mut bulk = Bulk::load(conn)?;
+        let mut by_id = ById::new(conn);
+        let stored = Some(InputFacts {
+            path: ".theos/settings.toml".to_owned(),
+            hash: "h".to_owned(),
+            text: Some("t".to_owned()),
+        });
+        assert_eq!(bulk.input(".theos/settings.toml")?, stored);
+        assert_eq!(by_id.input(".theos/settings.toml")?, stored);
         Ok(())
     }
 

@@ -24,6 +24,9 @@ CREATE TABLE inworld (path TEXT NOT NULL, span_start INTEGER NOT NULL, span_end 
 CREATE TABLE findings (path TEXT NOT NULL, id TEXT, rule TEXT NOT NULL, severity TEXT NOT NULL,
                        span_start INTEGER, span_end INTEGER, line INTEGER, col INTEGER,
                        message TEXT NOT NULL, step TEXT NOT NULL);
+-- The input files that are not records: `text` is NULL when the file is not UTF-8.
+CREATE TABLE inputs (path TEXT PRIMARY KEY, size INTEGER, mtime_ns INTEGER, racy INTEGER NOT NULL,
+                     hash TEXT NOT NULL, text TEXT) WITHOUT ROWID;
 -- The reads of the lore step: `subject` read `key` (`rec:<id>`, `in:<id>` or `file:<path>`).
 CREATE TABLE deps (subject TEXT NOT NULL, key TEXT NOT NULL);
 CREATE VIRTUAL TABLE search USING fts5(path UNINDEXED, title, fields, body,
