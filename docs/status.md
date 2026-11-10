@@ -26,7 +26,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P17 | AI drafts and semantic search | theos-editor | todo | | |
 | P18 | Installer, first run, Code preset | theos-editor | todo | | |
 | P19 | Comments | theos-editor | todo | | |
-| P20 | Content layout for world and art kinds | tower-of-theos | todo | | |
+| P20 | Content layout for world and art kinds | tower-of-theos | spec-pr | #22 | |
 | P21 | World kinds: enemies, spawns, quests | theos-editor | todo | | |
 | P22 | Map pins, cameras and frames | theos-editor | todo | | |
 | P23 | Map outputs for the atlas, blockout generator | tower-of-theos | todo | | |
@@ -67,6 +67,14 @@ Rows P20–P28 come from umbrella version 2 (#19).
   build follows data model §9.2 instead ("on a line starting with `Design note:`"), which ranks
   higher: a note line inside a paragraph starts a note that runs to the paragraph's end. The spec
   wording can be aligned in a docs PR.
+- `CLAUDE.md` ("Work there only in the phases that name it (P01, P08)") and the theos-phase skill
+  ("Phases in tower-of-theos (P01, P08)") predate umbrella version 2, which adds P20, P23 and P28
+  in tower-of-theos. P20 follows the umbrella, which ranks higher. Both files are protected paths
+  and can be aligned in a docs PR.
+- Data model §14 contradicts itself, found by the P20 spec. Its pins example places pins on
+  `f04-terrain-v1`, but that version's own example has no `frame`, and §8 says "A version without
+  a `frame` takes no pins". Giving the example version a `frame` would align it. P20's tests do not
+  run the pin checker on that fragment, and P22 will meet the same example.
 
 ## Needs a private session (Confluence, Jira, plugin)
 
