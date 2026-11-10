@@ -1,0 +1,73 @@
+T-950  Synthetic truth  (target confirmed)
+  hinted     F04 · T1 · C-950
+  suspected  F21 · T2 · C-951
+  confirmed  F57 · T2 · C-952
+  confirmed  F57 · T2 · C-953
+  confirmed  F57 · T2 · C-954
+  placed by  S-950#2
+
+T-951  Synthetic truth without clues  (target hinted)
+  no clue
+
+T-952  Synthetic truth that is never revealed  (target never)
+  hinted     F04 · T1 · C-955
+  placed by  S-951#2
+
+T-953  Synthetic truth with a low target  (target hinted)
+  suspected  F04 · T1 · C-956
+  placed by  S-951#3
+
+T-954  Synthetic duplicated truth  (target never)
+  hinted     F04 · T1 · C-957
+
+T-954  Synthetic duplicated truth, second copy  (target confirmed)
+  hinted     F04 · T1 · C-957
+
+T-955  Synthetic duplicated truth, never and hinted  (target never)
+  suspected  F04 · T1 · C-958
+
+T-955  Synthetic duplicated truth, second copy, hinted  (target hinted)
+  suspected  F04 · T1 · C-958
+
+T-956  Synthetic truth with clues in order  (target hinted)
+  hinted     F04 · T1 · C-960
+  hinted     F04 · T1 · C-969
+  hinted     F04 · T3 · C-993
+  hinted     F04 · T1 · C-994
+  hinted     F21 · T2 · C-961
+
+T-957  Synthetic truth confirmed early  (target confirmed)
+  confirmed  F04 · T1 · C-970
+  confirmed  F04 · T1 · C-971
+  confirmed  F04 · T1 · C-972
+
+T-958  Synthetic truth with states out of order  (target confirmed)
+  hinted     F04 · T1 · C-980
+  suspected  F50 · T2 · C-981
+  confirmed  F21 · T2 · C-982
+
+T-959  Synthetic truth requiring a hinted truth  (target confirmed)
+  no clue
+
+T-960  Synthetic truth confirmed before its requirement  (target confirmed)
+  confirmed  F21 · T2 · C-990
+
+T-961  Synthetic truth in a requires cycle  (target confirmed)
+  no clue
+
+T-962  Synthetic truth in a requires cycle, second  (target confirmed)
+  no clue
+
+T-963  Synthetic truth with one clue  (target confirmed)
+  confirmed  F04 · T1 · C-992
+
+T-964  Synthetic truth with clues in a cycle  (target hinted)
+  hinted     F04 · T1 · C-962
+  hinted     F04 · T1 · C-963
+  hinted     F04 · T1 · C-968
+
+T-965  Synthetic truth that only hints  (target hinted)
+  no clue
+
+T-966  Synthetic truth confirmed late  (target confirmed)
+  confirmed  F57 · T2 · C-991
