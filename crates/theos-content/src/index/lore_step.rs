@@ -180,9 +180,14 @@ fn check(
 ) -> Result<(), IndexError> {
     for rule in rules {
         for finding in (rule.run)(ctx, subject)? {
-            if !sits_on(&finding, subject) {
-                debug_assert!(false, "{}", off_subject(rule, &finding, subject));
-                tracing::error!("{}", off_subject(rule, &finding, subject));
+            let ok = accept(rule, &finding, subject);
+            debug_assert!(
+                ok,
+                "lore rule `{}` returned a finding on another subject than `{}`: a rule reports on its own subject only",
+                rule.id,
+                subject.path()
+            );
+            if !ok {
                 continue;
             }
             write::insert_finding(conn, &finding, STEP)?;
@@ -195,23 +200,92 @@ fn check(
     Ok(())
 }
 
-/// Whether `finding` sits on `subject`: its path is the subject's and its id is the subject's
-/// record id, none for an input file (L9).
-fn sits_on(finding: &Finding, subject: &Subject) -> bool {
+/// Whether the finding of `rule` sits on `subject`: its path is the subject's and its id is the
+/// subject's record id, none for an input file (L9). A finding elsewhere is a bug in the rule: it
+/// is logged and refused.
+fn accept(rule: &LoreRule, finding: &Finding, subject: &Subject) -> bool {
     let id = match subject {
         Subject::Record(record) => Some(record.id.as_str()),
         Subject::Input(_) => None,
     };
-    finding.path == subject.path() && finding.id.as_deref() == id
+    let ok = finding.path == subject.path() && finding.id.as_deref() == id;
+    if !ok {
+        tracing::error!(
+            rule = rule.id,
+            finding_path = %finding.path,
+            finding_id = ?finding.id,
+            subject = %subject.path(),
+            "a lore rule returned a finding on another subject; it is not stored"
+        );
+    }
+    ok
 }
 
-/// The message of a rule that returned a finding on another subject.
-fn off_subject(rule: &LoreRule, finding: &Finding, subject: &Subject) -> String {
-    format!(
-        "lore rule `{}` returned a finding on `{}` (id {:?}) while checking `{}`: a rule reports on its own subject only",
-        rule.id,
-        finding.path,
-        finding.id,
-        subject.path()
-    )
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use super::*;
+    use crate::finding::Severity;
+    use crate::lore::{InputFacts, On, RecordFacts};
+    use crate::rules::RuleClass;
+    use crate::text::{Position, Span};
+
+    const RULE: LoreRule = LoreRule {
+        id: "test/rule",
+        severity: Severity::Warning,
+        class: RuleClass::Fixed,
+        on: On::AnyRecord,
+        run: |_, _| Ok(Vec::new()),
+    };
+
+    fn record() -> Subject {
+        Subject::Record(Rc::new(RecordFacts {
+            path: "things/a.md".to_owned(),
+            id: "a".to_owned(),
+            kind: None,
+            hash: String::new(),
+            values: Vec::new(),
+            links: Vec::new(),
+            beats: Vec::new(),
+            notes: Vec::new(),
+            inworld: Vec::new(),
+        }))
+    }
+
+    fn input() -> Subject {
+        Subject::Input(Rc::new(InputFacts {
+            path: ".theos/settings.toml".to_owned(),
+            hash: String::new(),
+            text: None,
+        }))
+    }
+
+    fn at(subject: &Subject) -> Finding {
+        subject.finding(
+            &RULE,
+            Span::default(),
+            Position { line: 1, column: 1 },
+            String::new(),
+        )
+    }
+
+    #[test]
+    fn a_finding_is_accepted_on_its_own_subject_only() {
+        for subject in [record(), input()] {
+            assert!(accept(&RULE, &at(&subject), &subject));
+        }
+        let (record, input) = (record(), input());
+        assert!(!accept(&RULE, &at(&input), &record));
+        assert!(!accept(&RULE, &at(&record), &input));
+        let mut other_path = at(&record);
+        "things/b.md".clone_into(&mut other_path.path);
+        assert!(!accept(&RULE, &other_path, &record));
+        let mut other_id = at(&record);
+        other_id.id = Some("b".to_owned());
+        assert!(!accept(&RULE, &other_id, &record));
+        let mut with_id = at(&input);
+        with_id.id = Some("a".to_owned());
+        assert!(!accept(&RULE, &with_id, &input));
+    }
 }

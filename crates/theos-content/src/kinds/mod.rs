@@ -59,7 +59,7 @@ pub enum RegistryError {
     /// `AnyRecord` next to any record rule, or one input path twice. The rule would run twice on
     /// one subject and report every finding twice.
     #[error(
-        "rule `{rule}` is registered by part `{first}` and again by part `{second}` for          subjects that overlap"
+        "rule `{rule}` is registered by part `{first}` and again by part `{second}` for subjects that overlap"
     )]
     OverlappingRule {
         /// The rule id.
@@ -404,6 +404,14 @@ mod tests {
         };
         let mut registry = KindRegistry::new();
         registry.register_rule("a", on(On::Kinds(&["concept", "map"])))?;
+        let message = registry
+            .register_rule("b", on(On::AnyRecord))
+            .map_err(|e| e.to_string());
+        assert_eq!(
+            message,
+            Err("rule `test/rule` is registered by part `a` and again by part `b` for subjects that overlap"
+                .to_owned())
+        );
         registry.register_rule("a", on(On::Input(".theos/settings.toml")))?;
         for again in [
             On::Kinds(&["thing", "map"]),

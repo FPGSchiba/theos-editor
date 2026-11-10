@@ -551,8 +551,8 @@ impl<'a> Syncer<'a> {
     }
 
     /// Steps 1 to 3 for an input file on disk: read it unless its size and time say it is
-    /// unchanged. A file that is gone is removed; one that cannot be read is left as it was, with
-    /// a warning.
+    /// unchanged. A file that is gone is removed; one that cannot be read counts as absent, with a
+    /// warning.
     fn input_from_disk(&mut self, path: &str) -> Result<(), IndexError> {
         let meta = match std::fs::metadata(self.root.join(path)) {
             Ok(meta) if meta.is_file() => meta,
@@ -560,10 +560,7 @@ impl<'a> Syncer<'a> {
             Err(error) if error.kind() == ErrorKind::NotFound => {
                 return self.settle_input(path, None, None);
             }
-            Err(error) => {
-                input_unreadable(path, &error);
-                return Ok(());
-            }
+            Err(error) => return self.input_unreadable(path, &error),
         };
         let stamp = Stamp {
             size: meta.len(),
@@ -584,11 +581,15 @@ impl<'a> Syncer<'a> {
             Err(error) if error.kind() == ErrorKind::NotFound => {
                 self.settle_input(path, None, None)
             }
-            Err(error) => {
-                input_unreadable(path, &error);
-                Ok(())
-            }
+            Err(error) => self.input_unreadable(path, &error),
         }
+    }
+
+    /// An input file that exists but cannot be read counts as absent, as it does for a cold
+    /// build: its row, findings and reads go.
+    fn input_unreadable(&mut self, path: &str, error: &std::io::Error) -> Result<(), IndexError> {
+        tracing::warn!(path, %error, "the input file cannot be read; it counts as absent");
+        self.settle_input(path, None, None)
     }
 
     /// Step 3 for an input file whose `bytes` are known, or none when it is gone. A new hash
@@ -761,11 +762,6 @@ impl<'a> Syncer<'a> {
         ])?;
         Ok(())
     }
-}
-
-/// An input file that exists but cannot be read keeps the row it had.
-fn input_unreadable(path: &str, error: &std::io::Error) {
-    tracing::warn!(path, %error, "the input file cannot be read; its row is left as it was");
 }
 
 /// A given project-relative path with every `\` replaced by `/`, so that a path joined by

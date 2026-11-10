@@ -206,3 +206,23 @@ fn a_racy_input_is_read_again() -> TestResult {
     assert_eq!(index.sync()?, Update::default());
     Ok(())
 }
+
+#[test]
+fn an_unreadable_input_counts_as_absent_like_in_a_cold_build() -> TestResult {
+    let project = TempProject::new()?;
+    project.write(SETTINGS, "name = \"synthetic-bad\"\n")?;
+    let mut index = open(&project)?;
+    index.sync()?;
+    assert_eq!(said(&index)?.len(), 1);
+
+    // A folder at the path: `fs::read` refuses it on every OS.
+    project.remove(SETTINGS)?;
+    std::fs::create_dir(project.root().join(SETTINGS))?;
+    index.sync()?;
+    assert_eq!(said(&index)?, Vec::<String>::new());
+    let mut cold = open(&project)?;
+    cold.sync()?;
+    assert_eq!(index.dump()?, cold.dump()?);
+    assert!(!index.dump()?.contains(".theos/settings.toml"));
+    Ok(())
+}

@@ -455,11 +455,10 @@ fn stray(ctx: &mut Context<'_>, subject: &Subject) -> Result<Vec<Finding>, FactE
     Ok(vec![finding])
 }
 
-/// A rule's finding on another subject is a bug in the rule: a debug build panics.
-#[cfg(debug_assertions)]
+/// A rule's finding on another subject is a bug in the rule: the debug profile panics.
 #[test]
 #[should_panic(expected = "a rule reports on its own subject only")]
-fn a_finding_on_another_subject_panics_in_a_debug_build() {
+fn a_finding_on_another_subject_panics_under_the_debug_profile() {
     let run = || -> TestResult {
         let project = TempProject::new()?;
         project.write(A, &a())?;
