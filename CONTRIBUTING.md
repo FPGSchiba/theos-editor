@@ -102,14 +102,16 @@ branch history. On `main`, the squashed pull request is the unit.
   features or breaking changes, a patch bump for fixes. Release candidates are `-rc.N`.
 - **Milestones.** 0.1.0 when slice S2 is done (CLI and MCP read usable), 0.2.0 after S3, 0.3.0
   after S4, 0.4.0 after S5, 0.5.0 after S6, 0.6.0 after S7, 0.7.0 after S8, 1.0.0 when S9 is done
-  and Jann accepts the editor. Releases in between whenever useful.
+  and Jann accepts the editor, 1.1.0 after S10. Releases in between whenever useful.
 - **Tags** are `vMAJOR.MINOR.PATCH[-rc.N]`, annotated, on `main`, and created only by the release
   pipeline. Nobody creates, moves or deletes a tag by hand. A bad release is fixed by a new
   patch release, never by moving a tag.
 - **Separate version numbers** that are not the product version: `schema_version` of the data
   model (`docs/specs/data-model.md`), `protocol` of the generator protocol (`docs/generators.md`),
-  and the version of the `theos_maps` package in tower-of-theos (tagged there as
-  `theos-maps-vX.Y.Z`). Raising one of them is a breaking change of the product.
+  and the major of `format_version` of the map package (`docs/map-package.md`). Raising one of
+  them is a breaking change of the product. The map generator also reports a version of its own
+  in `describe` (`theos-maps@X.Y.Z`), raised whenever its outputs change (`docs/generators.md`
+  §6); that is not a breaking change.
 
 ## 6. Documentation
 

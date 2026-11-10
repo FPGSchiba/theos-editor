@@ -70,7 +70,7 @@ on) and read the output. Every phase AC must show at least one passing test in
 4. When it is merged, set the phase to `done` in a follow-up commit on the next branch, and
    start over at step 0 if Jann asked for more than one phase.
 
-## Phases in tower-of-theos (P01, P08)
+## Phases in tower-of-theos (repo column `tower-of-theos`: P01, P20, P23, P28)
 
 Same steps, but the implementation branch and PR are in `../tower-of-theos`, which has no
 auto-merge: every PR there waits for Jann. Track the state in this repo's `docs/status.md`.

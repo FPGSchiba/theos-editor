@@ -1,7 +1,9 @@
 # Theos content editor — umbrella spec
 
-Status: accepted when this file is merged by Jann · version 2 · 5 Nov 2026 (version 1: 31 Oct 2026;
-version 2 adds the world atlas, quests and art from lore: G19, P20–P28, slices S8 and S9)
+Status: accepted when this file is merged by Jann · version 3 · 10 Nov 2026 (version 1: 31 Oct 2026;
+version 2, 5 Nov 2026, adds the world atlas, quests and art from lore: G19, P20–P28, slices S8 and
+S9; version 3 moves the map generator to Rust in this repo, decision 0003: G1, G4, G11, G20, P08
+rewritten, P09, P22 and P23 adjusted, P29, P30 and slice S10)
 Owner of architecture: Jann · Built by: Claude Code with superpowers
 
 This spec defines the whole build as phases. Each phase runs one superpowers cycle:
@@ -27,16 +29,17 @@ assets generated from the lore through prepared pipelines that agents can run.
 
 ## 2. Global constraints
 
-- **G1** Repositories: `theos-editor` (this repo) holds the editor. `tower-of-theos` holds the
-  content project and the map toolset. `Theos-Engine` is never a dependency, except behind the
-  cargo feature `engine`, which no phase here builds.
+- **G1** Repositories: `theos-editor` (this repo) holds the editor and the map generator
+  (`theos-map-format`, `theos-maps`). `tower-of-theos` holds the content project, its map recipes
+  and the blockout generator. `Theos-Engine` is never a dependency, except behind the cargo
+  feature `engine`, which no phase here builds; the engine may depend on the map crates.
 - **G2** Platforms: Windows 11 x64 (primary), Linux x64, and macOS 13 or later on Apple silicon
   and Intel (universal builds). Every PR is checked on Linux; Windows and macOS are tested
   weekly, on demand (a label on the PR) and before every release (`docs/gate.md` §1).
 - **G3** Rust: stable toolchain pinned in `rust-toolchain.toml`, edition 2024, `unsafe_code`
   forbidden, `Cargo.lock` committed, all builds `--locked`.
-- **G4** Crates: `theos-content`, `theos-vcs`, `theos-studio` (libs); `theos`, `theos-mcp`,
-  `theos-editor` (bins); `xtask`. Paths `crates/<name>`, `xtask/`. UI in `editor-ui/`
+- **G4** Crates: `theos-content`, `theos-vcs`, `theos-studio`, `theos-map-format`, `theos-maps`
+  (libs); `theos`, `theos-mcp`, `theos-editor` (bins); `xtask`. Paths `crates/<name>`, `xtask/`. UI in `editor-ui/`
   (Svelte 5, TypeScript, pnpm).
 - **G5** Content files follow `docs/specs/data-model.md`; the restricted YAML parser is ours;
   any edit leaves untouched bytes identical.
@@ -47,8 +50,8 @@ assets generated from the lore through prepared pipelines that agents can run.
 - **G9** Text of a truth with target `never` never appears in an LLM prompt.
 - **G10** Binaries never enter git; references are `path@sha256:<hex>` relative to the binaries
   folder.
-- **G11** Generators only through `docs/generators.md`; no generator-specific field in the data
-  model; the UI works for any generator that produces a kind.
+- **G11** Generators only through `docs/generators.md`, the built-in map generator included; no
+  generator-specific field in the data model; the UI works for any generator that produces a kind.
 - **G12** Network only to ComfyUI and the configured LLM endpoint, both opt-in; no telemetry.
 - **G13** UI uses `design/theos-ui/` and follows `docs/ui/`; shortcuts use Ctrl on Windows and
   Linux and Cmd on macOS, from one keymap.
@@ -64,6 +67,9 @@ assets generated from the lore through prepared pipelines that agents can run.
 - **G19** Positions on maps are fractions of a map version's frame (x east, y south, origin
   north-west); metres are derived from the frame. Pins and cameras live in the map record's body,
   never on the placed record (`docs/specs/data-model.md` §9.6–9.7).
+- **G20** Map generation is deterministic: the same generator version, recipe, seed and inputs
+  give the same package bytes and layers on every platform of G2. Canon maps are baked into
+  packages (`docs/map-package.md`) and shipped, never regenerated in the game (decision 0003).
 
 ## 3. Phases
 
@@ -79,7 +85,7 @@ Slices say what Jann can do once their phases are merged; Jira tracks slices.
 | P05 | CLI, hook, releases, MCP read | theos-editor | S2 | P04 |
 | P06 | Command layer and git | theos-editor | S3 | P04 |
 | P07 | Agent sessions, review, MCP propose | theos-editor | S3 | P05, P06 |
-| P08 | Map toolset as a generator | tower-of-theos | S4 | P01 |
+| P08 | Map format and terrain generator | theos-editor | S4 | P00 |
 | P09 | Generator layer and generator tools | theos-editor | S4 | P07, P08 |
 | P10 | Prose editor research | theos-editor | S1 | – |
 | P11 | Editor shell and Codex | theos-editor | S5 | P06 |
@@ -94,21 +100,23 @@ Slices say what Jann can do once their phases are merged; Jira tracks slices.
 | P20 | Content layout for world and art kinds | tower-of-theos | S8 | P01 |
 | P21 | World kinds: enemies, spawns, quests | theos-editor | S8 | P07 |
 | P22 | Map pins, cameras and frames | theos-editor | S8 | P09 |
-| P23 | Map outputs for the atlas, blockout generator | tower-of-theos | S8 | P08 |
+| P23 | Map recipes and blockout generator | tower-of-theos | S8 | P08, P29 |
 | P24 | Quest screen and flow editor | theos-editor | S8 | P12, P21 |
 | P25 | Atlas | theos-editor | S8 | P16, P22, P24 |
 | P26 | Style bible and briefs | theos-editor | S9 | P17, P21 |
 | P27 | Asset pipelines | theos-editor | S9 | P16, P22, P26 |
 | P28 | Workflow catalogue and asset guide | tower-of-theos | S9 | P20, P23 |
+| P29 | Settlements, interiors and child maps | theos-editor | S8 | P08 |
+| P30 | Indoor floors with stacked levels | theos-editor | S10 | P25, P29 |
 
 Core track runs in order P00 → P02 → … → P07. P01, P08 and P10 can run in parallel sessions in
-their own worktrees. UI phases start after P06. P20 and P23 can also run in parallel sessions once
-their dependencies are merged. P28 runs in a session linked to Jann's PC, where ComfyUI runs.
+their own worktrees. UI phases start after P06. P20, P23 and P29 can also run in parallel sessions
+once their dependencies are merged. P28 runs in a session linked to Jann's PC, where ComfyUI runs.
 
 Slices: **S1** write lore now (P01, P10) · **S2** canon checks (P00, P02–P05) · **S3** propose and
 review (P06, P07) · **S4** maps (P08, P09) · **S5** core UI (P11–P13, P19) · **S6** complete UI
-(P14, P15) · **S7** pictures and places (P16–P18) · **S8** the world on the map (P20–P25) · **S9**
-art from lore (P26–P28).
+(P14, P15) · **S7** pictures and places (P16–P18) · **S8** the world on the map (P20–P25, P29) ·
+**S9** art from lore (P26–P28) · **S10** indoor floors (P30).
 
 ---
 
@@ -285,37 +293,72 @@ real records are added once the lore import exists.
 - CE-26.2 A proposal touching a locked record fails with the reason.
 - CE-26.3 A proposal with blocking findings returns them and commits nothing.
 
-### P08 · Map toolset as a generator (tower-of-theos)
+### P08 · Map format and terrain generator
 
-The PR waits for Jann (content repo).
+The first part of the Rust map generator of decision 0003: the package format and the terrain
+kind of `theos_maps` 0.3.0, which this generator replaces. Before the build, a gate PR adds the two
+crates to the gate's crate lists and bans the std float methods (decision 0003 §12).
 
-**CE-28 theos_maps as a protocol-1 generator**
-- CE-28.1 `tools/theos_maps` is a package (pyproject) runnable with `uv` and Python 3.12 on
-  Windows and Linux.
-- CE-28.2 `python -m theos_maps.gen describe` prints a valid protocol-1 description.
-- CE-28.3 `run` emits a progress event per stage and a manifest with outputs (renders,
-  heightfield, engine package) and results (constraint values, pass).
-- CE-28.4 A determinism fixture gives identical output hashes on Windows and Linux, or the
-  difference is documented with a tolerance.
-- CE-28.5 The old entry point `python -m theos_maps.run` keeps working.
-- CE-28.6 The toolset installs and runs on macOS (Apple silicon and Intel), or the gap is
-  documented with a workaround. (fastscapelib 0.3.0 has conda-forge builds for macOS; whether
-  PyPI wheels exist is checked in this phase.)
+**CE-76 Map package format** (`theos-map-format`, `docs/map-package.md`)
+- CE-76.1 A package written by `theos-map-format` and read back gives the same manifest, layers
+  and features, and its bytes follow `docs/map-package.md` §1–§5 (checked against a fixture
+  package).
+- CE-76.2 A package whose `format_version` has an unknown major is refused with a message naming
+  both versions; fields, entries, layers and feature kinds the reader does not know are ignored.
+- CE-76.3 A synthetic package with two stacked levels round-trips with every layer and feature on
+  its level; on a map with levels, a layer or feature without a level, or with a level the frame
+  does not list, is rejected.
+- CE-76.4 `theos-map-format` depends on no other crate of this workspace.
+
+**CE-28 theos-maps terrain generator**
+- CE-28.1 `describe` gives the name `theos-maps`, the generator's own version, `produces: ["map"]`
+  and the recipes with their inputs: the built-in terrain recipes converted from `theos_maps`
+  0.3.0 (`hearth-valley`, `hearth-valley-omega`, `fixture-small`) and the recipes of a given
+  folder, where a recipe of the folder wins over a built-in one with the same id.
+- CE-28.2 `run` reports a progress event per stage and ends with a manifest carrying the frame,
+  the outputs `base`, `truth`, `inworld`, `geology`, `resources`, `features` and `package` (plus
+  the extra renders a recipe asks for), and results with each constraint under the keys of
+  `docs/generators.md` §3 and `pass`.
+- CE-28.3 A recipe whose stage order leaves a stage without an input fails before the first stage
+  runs, with a message naming the stage and the missing layer; an unknown stage or recipe input
+  fails the same way.
+- CE-28.4 Cancelling a run stops it at its next cancel point, within one second at 384², and
+  leaves no files behind; a stage that panics ends the run as failed with the panic's message.
+- CE-28.5 For each built-in recipe over seeds 1–8, the constraints pass at least as often as with
+  `theos_maps` 0.3.0, and the medians of relief, lake share, river share, vegetation cover and
+  median precipitation stay within the tolerances the phase spec sets around the 0.3.0 reference,
+  recorded as fixtures.
+- CE-28.6 Every feature has an `id`, `properties.kind` and `properties.type` as in
+  `docs/map-package.md` §5; lakes carry `surface_m`, and rivers are lines with width, discharge
+  and bed height; the `base` render lies exactly on the frame (a feature at a known position lands
+  on the expected pixel).
+- CE-28.7 The omega detuning stage of 0.3.0 is a stage of the generator; `hearth-valley-omega`
+  writes the `omega` layer.
+
+**CE-77 Determinism** (G20)
+- CE-77.1 For fixed recipes and seeds, the hashes of every layer after every stage, of the
+  `features` output and of the package bytes equal the golden hashes on Linux x64, Windows x64,
+  and macOS on Apple silicon and Intel.
+- CE-77.2 Golden hashes are kept per generator version: outputs that differ from the golden hashes
+  of the current version fail a test, and the tool that records golden hashes refuses to overwrite
+  those of an existing version.
 
 ### P09 · Generator layer and generator tools
 
 **CE-29 Generator layer**
-- CE-29.1 Generators registered in `.theos/settings.toml` are described and listed with their recipes.
+- CE-29.1 Generators registered in the settings (a part's default, the user's settings or
+  `.theos/settings.toml`) are described and listed with their recipes.
 - CE-29.2 A run over N seeds produces N candidate runs; keeping one writes a version record with
   outputs copied to the binaries folder and hashed.
-- CE-29.3 Cancel stops the whole process tree on Windows, Linux and macOS; partial outputs are
-  discarded.
-- CE-29.4 First use of the maps generator creates the uv venv with Python 3.12 and leaves the
-  system Python untouched.
-- CE-29.5 `cargo xtask generator-check` passes for theos_maps and names the violation for a
-  generator that breaks the protocol.
+- CE-29.3 Cancel stops a process generator's whole process tree on Windows, Linux and macOS, and a
+  built-in generator's run at its next cancel point; partial outputs are discarded.
+- CE-29.4 The built-in map generator runs in-process, each seed on a worker thread of its own,
+  without Python, uv or network; a run that panics ends as a failed run and the editor keeps
+  running.
+- CE-29.5 `cargo xtask generator-check` passes for a conforming process generator and names the
+  violation for one that breaks the protocol (both test fixtures).
 - CE-29.6 Open notes of the parent are in the run request when the generator accepts notes.
-- CE-29.7 Everything works with a fake generator used in tests, not only theos_maps.
+- CE-29.7 Everything works with a fake generator used in tests, not only theos-maps.
 
 **CE-30 Generator and note tools over MCP**
 - CE-30.1 `gen_catalogue` and `gen_runs` read; `gen_run`, `gen_pick`, `note_add`, `note_resolve`
@@ -556,7 +599,8 @@ and quest get their schemas here, style in P26.
   a malformed line reports its line and column.
 - CE-61.2 Findings: a location or spawn pinned on a map that is not for its place or a place above
   it; a record pinned twice on one map; a `feature` missing from the features layer; coordinates
-  outside 0–1; a camera id used twice on one map.
+  outside 0–1; a camera id used twice on one map; on a map whose frame lists levels, a pin without
+  a `level` or with a level the frame does not list.
 - CE-61.3 Pins of a child map appear on its parent map at the position its frame gives (fixture: a
   settlement inside a floor, correct within 0.5 m).
 - CE-61.4 A map whose `placed_on` is not its picked version warns once; re-bind moves feature-bound
@@ -570,25 +614,25 @@ and quest get their schemas here, style in P26.
 - CE-62.1 `atlas_read` returns a map's pins, cameras, features and unplaced records, or the maps a
   record appears on; `atlas_place` proposes placing, moving and removing pins and adding cameras as
   review entries.
-- CE-62.2 Everything in this phase works with the fake generator's maps, not only theos_maps.
+- CE-62.2 Everything in this phase works with the fake generator's maps, not only theos-maps.
 
-### P23 · Map outputs for the atlas, blockout generator (tower-of-theos)
+### P23 · Map recipes and blockout generator (tower-of-theos)
 
-The PR waits for Jann (content repo).
+The PR waits for Jann (content repo). The frame and features of map runs, which this phase built
+in umbrella version 2, are built by the map generator in P08 and P29 (decision 0003).
 
-**CE-63 theos_maps frame and features**
-- CE-63.1 Every run's manifest carries the `frame` and a `features` output as defined in
-  `docs/generators.md` §3; child maps carry their `origin_m` in the parent's frame.
-- CE-63.2 Feature ids and positions are identical for the same recipe and seed on Windows and
-  Linux (an extension of the CE-28.4 determinism fixture).
+**CE-63 Map recipes in the content project**
+- CE-63.1 `tools/maps/recipes/` holds the project's map recipes as TOML, with a README;
+  `tools/README.md` names the built-in map generator and this folder instead of `theos_maps`.
+- CE-63.2 `repo_checks` fail for a recipe file that is not valid TOML, on Ubuntu and Windows.
 
 **CE-64 theos_blockout**
 - CE-64.1 `tools/theos_blockout` is a protocol-1 process generator run with uv and Python 3.12 on
   Windows and Linux, and on macOS or with the gap documented; `cargo xtask generator-check` passes
   for it.
-- CE-64.2 From a settlement or interior map package it builds a scene whose plots, lanes and walls
-  match the package's features within one map cell; from the heightfield and water layers it
-  builds terrain with lake surfaces.
+- CE-64.2 From a settlement or interior map package (`.theosmap`, `docs/map-package.md`) it builds
+  a scene whose buildings, streets and walls match the package's features within one map cell;
+  from the `height` and `water` layers and the lake shapes it builds terrain with lake surfaces.
 - CE-64.3 From a blockout script it builds the scene the script describes (synthetic fixture).
 - CE-64.4 For each camera of its `cameras` input it writes clay, depth and canny renders at the
   requested size; the same input gives the same bytes on the same OS.
@@ -695,6 +739,40 @@ run, in the binaries folder); Jann's judgement of them is a review item of the P
 - CE-74.2 `tools/guides/asset-workflow.md` says which pipeline serves which family, how picks and
   notes drive the next stage, and what fits in 16 GB.
 
+### P29 · Settlements, interiors and child maps
+
+The rest of the port of `theos_maps` 0.3.0 into `theos-maps` (decision 0003): settlement and
+interior maps, one level each, and child maps made inside a parent map.
+
+**CE-78 theos-maps settlements, interiors and child maps**
+- CE-78.1 The settlement and interior kinds of 0.3.0 run from built-in recipes (`choir-hall-ruin`
+  and a settlement recipe), with the renders `base`, `plan`, `blueprint` and `graph`, and packages
+  whose layers and features follow `docs/map-package.md` §4.4 and §5 (buildings, streets, walls,
+  gates, landmarks; rooms as polygons, doors, connections, the critical route).
+- CE-78.2 A child map runs from a parent package (`from`) and one of its features (an input of
+  type `feature`: a settlement or a ruin); its frame carries `origin_m` in the parent's frame and
+  `parent` with the parent package's hash and the feature id; the same parent, feature, seed and
+  inputs give the same child.
+- CE-78.3 For seeds 1–8 of each built-in interior recipe, every interior passes the playability
+  analysis of 0.3.0 (every room carved and reachable, lock and key solvable with one-way drops);
+  settlement summaries stay within the tolerances the phase spec sets around the 0.3.0 reference.
+- CE-78.4 The golden hashes of CE-77.1 cover a settlement, an interior and a child map.
+
+### P30 · Indoor floors with stacked levels
+
+Floors that are indoors, with storeys on top of each other (decision 0003 §7). The UI reference
+for the level switcher is added in this phase's spec PR (G18).
+
+**CE-79 Indoor floors**
+- CE-79.1 An indoor-floor recipe builds an interior up to 2 km across with at least two stacked
+  levels: the frame lists the levels, every layer and feature carries its level, and stairs,
+  ladders, lifts and drops connect levels.
+- CE-79.2 The playability analysis covers paths across levels: every room is reachable from the
+  start, lock and key are solvable, and drops go one way only.
+- CE-79.3 The Atlas shows a map with levels one level at a time, with a level switcher; a pin
+  shows on its own level only.
+- CE-79.4 The golden hashes of CE-77.1 cover an indoor floor with levels.
+
 ---
 
 ## 4. Work outside the build
@@ -717,7 +795,9 @@ work sessions). Each item lands in tower-of-theos or Confluence, not in this rep
 Dragging a clue to another floor; graph paths between two records; who-wrote-what view; keymap
 editor; Assets, Layout and AI presets (engine part); bulk approve; the game engine as a map
 generator. From version 2: tuning fields for enemies and spawns (stats, spawn tables, timers,
-loot) with the engine part; exporting pins, spawns and quests to the engine; NPC schedules and
-NPCs that move; polygon areas on maps; tiled map images beyond 4K; 3D assets (meshes, textures);
-a LoRA per main character if faces drift between images; runtime dialogue built from quest step
-context.
+loot) with the engine part; exporting pins, spawns and quests to the engine (as GeoJSON beside
+the map package, `docs/map-package.md` §9); NPC schedules and NPCs that move; polygon areas on
+maps; tiled map images beyond 4K; 3D assets (meshes, textures); a LoRA per main character if faces
+drift between images; runtime dialogue built from quest step context. From version 3: refining
+baked maps at a finer scale in the engine; generating dungeons or detail from a seed in the game;
+a `theos gen` subcommand that runs generators without the editor; the blockout generator in Rust.

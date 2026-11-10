@@ -238,20 +238,25 @@ A map's body may hold `## Pins` (§9.6) and `## Cameras` (§9.7) next to the bri
 | `seed` | integer | no | When the generator uses one. |
 | `inputs` | map | no | Open: whatever the recipe takes (model, steps, strength, prompt pieces, …). |
 | `from` | id → version of the same kind | no | Source version (image-to-image, refinement, re-run). |
-| `outputs` | map: role → binary ref | yes | Open roles, e.g. `image`, `truth`, `inworld`, `heightfield`, `package`. |
+| `outputs` | map: role → binary ref | yes | Open roles, e.g. `image`, `base`, `truth`, `inworld`, `features`, `package`. |
 | `results` | map | no | Numbers and flags the generator reports (constraint values, pass). |
 | `addresses` | list of note ids | no | Notes of the parent this version answers. |
 | `rating` | `unrated` \| `keep` \| `kill` \| `mix` | yes | |
 | `state` | T1 \| T3 | no | Concept versions of two-state concepts. |
-| `frame` | map | no | Map versions only. The map's frame, written by the editor from the run's manifest (`docs/generators.md` §3): `size_m` (two numbers, width and height in metres); for a child map also `parent` (id → the map-version it sits in) and `origin_m` (two numbers, its north-west corner in the parent's frame). |
+| `frame` | map | no | Map versions only. The map's frame, written by the editor from the run's manifest (`docs/generators.md` §3): `size_m` (two numbers, width and height in metres); for a child map also `parent` (id → the map-version it sits in) and `origin_m` (two numbers, its north-west corner in the parent's frame); for a map with storeys on top of each other `levels` (a one-line list of level ids, bottom to top; their elevations are in the package). |
 
 Runs of a pipeline record `pipeline` and `stage` in `inputs` (`docs/generators.md` §8).
 
-The editor interprets one output role and no other: `features` of a map version, GeoJSON in the
-map's frame (x east, y south, metres, origin north-west; `docs/generators.md` §3). It reads it to
-show generated features on the atlas and to bind pins to them. Every other output, among them a
-map's `package` (the engine's input; theos-map package, Confluence Decision 221741058), belongs to
-the generator and the engine, not to this schema.
+The editor interprets two output roles of a map version and no other:
+
+- `features`, GeoJSON in the map's frame (x east, y south, metres, origin north-west;
+  `docs/generators.md` §3). It reads it to show generated features on the atlas and to bind pins
+  to them.
+- `base`, an image that lies exactly on the frame (on a map with levels, `base-<level id>` per
+  level). The atlas shows it under the pins.
+
+Every other output, among them a map's `package` (the engine's input, format `theos-map`,
+`docs/map-package.md`), belongs to the generator and the engine, not to this schema.
 
 A version without a `frame` takes no pins.
 
@@ -362,14 +367,18 @@ placed_on:: [[f04-terrain-v1]]
 - `placed_on::` names the map version the pins were placed on.
 - Each line: a link to a location, npc, spawn or thing; `x, y` as fractions of the frame (x east,
   y south, origin north-west, each from 0 to 1); optionally `feature <id>` (a feature of that
-  version's `features` output) and `r <n> m` (the pin is an area with that radius).
+  version's `features` output), `r <n> m` (the pin is an area with that radius) and
+  `level <id>` (a level of that version's `frame.levels`), in that order. On a map whose frame
+  lists levels every pin names its level, for example
+  `- [[choir-loft]] · 0.410, 0.220 · feature room-7 · level gallery`.
 - A record appears at most once on a map. A location or spawn must belong to the map's `for`
   place or to a place below it.
 - Pin once, on the most detailed map. Pins of a map whose picked version has a `frame.parent`
   also show on the parent's map, at the position the frame gives; that projection is derived.
 - When `placed_on` is not the picked version, the map has one warning. Re-binding moves pins with a
-  `feature` to the nearest feature of the same type in the picked version, keeps the others and
-  marks them for checking, and sets `placed_on`, in one command.
+  `feature` to the nearest feature of the same type in the picked version (on the pin's level, on
+  a map with levels), keeps the others and marks them for checking, and sets `placed_on`, in one
+  command.
 
 ### 9.7 Cameras on maps
 
@@ -549,18 +558,22 @@ id: f04-terrain-v1
 kind: map-version
 title: Choir-Hall terrain, seed 1
 map: f04-terrain
-generator: theos_maps@0.3.0
+generator: theos-maps@1.0.0
 recipe: hearth-valley
 seed: 1
 outputs:
+  base: maps/f04/s1-base.png@sha256:…
   truth: maps/f04/s1-truth.png@sha256:…
   inworld: maps/f04/s1-inworld.png@sha256:…
-  package: maps/f04/s1_engine.zip@sha256:…
+  features: maps/f04/s1-features.geojson@sha256:…
+  package: maps/f04/s1.theosmap@sha256:…
 results:
   relief_m: 1234
   lakes_pct: 2.99
   pass: true
 rating: keep
+frame:
+  size_m: [24000, 24000]
 ---
 ```
 

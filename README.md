@@ -13,6 +13,7 @@ comes later as an optional part.
 | `docs/architecture.md` | Crates, command layer, git, sessions, review, MCP, settings |
 | `docs/specs/data-model.md` | The content data model (schema v1) |
 | `docs/generators.md` | How maps, concept art and future generators plug in |
+| `docs/map-package.md` | The map package the editor bakes and the game reads |
 | `docs/gate.md` | What a change must pass to reach `main` |
 | `CONTRIBUTING.md` | Branches, commits, pull requests, versions and tags |
 | `docs/release.md` | The release pipeline |
@@ -22,7 +23,9 @@ comes later as an optional part.
 | `design/theos-ui/` | The Theos UI design system |
 | `CLAUDE.md` | How Claude works in this repo |
 
-Related repos: `tower-of-theos` (content project and map toolset), `Theos-Engine` (engine).
+Related repos: `tower-of-theos` (content project, map recipes, blockout generator), `Theos-Engine`
+(engine). The map generator lives here, in `crates/theos-map-format` and `crates/theos-maps`
+(decision 0003).
 
 ## Building and the gate
 
