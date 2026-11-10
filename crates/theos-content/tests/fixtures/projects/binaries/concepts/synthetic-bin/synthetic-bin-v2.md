@@ -12,6 +12,7 @@ outputs:
   drive: C:/x.bin@sha256:3c8f0984df894e8a2dc0cfa8868a57bf68e3e4fc06b8756797e2d1a0c80cd2a8
   unc: '\\server\x.bin@sha256:3c8f0984df894e8a2dc0cfa8868a57bf68e3e4fc06b8756797e2d1a0c80cd2a8'
   deep: a/../../x.bin@sha256:3c8f0984df894e8a2dc0cfa8868a57bf68e3e4fc06b8756797e2d1a0c80cd2a8
+  colon: a/C:x.bin@sha256:3c8f0984df894e8a2dc0cfa8868a57bf68e3e4fc06b8756797e2d1a0c80cd2a8
 rating: unrated
 ---
 Synthetic version.

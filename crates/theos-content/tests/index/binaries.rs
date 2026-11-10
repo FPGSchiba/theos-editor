@@ -126,7 +126,7 @@ fn paths_that_leave_the_folder_are_never_opened() -> TestResult {
         .iter()
         .map(|f| f.position.map_or(0, |p| p.line))
         .collect();
-    assert_eq!(lines, [10, 11, 12, 13, 14]);
+    assert_eq!(lines, [10, 11, 12, 13, 14, 15]);
     for finding in &in_v2 {
         assert_eq!(finding.rule, "binary/missing");
         assert_eq!(finding.severity.as_str(), "warning");
@@ -193,5 +193,82 @@ fn the_memo_is_not_part_of_the_dump_and_survives_a_reopen() -> TestResult {
     let (mut reopened, _) = open(&project)?;
     let again = reopened.binary_findings(&binaries.root())?;
     assert_eq!(again.hashed, Vec::<String>::new());
+    Ok(())
+}
+
+/// The fixture project with one more version whose only output is `reference`.
+fn with_version(reference: &str) -> Result<TempProject, Box<dyn std::error::Error>> {
+    let project = TempProject::copy_of("binaries")?;
+    project.write(
+        "concepts/synthetic-bin/synthetic-bin-v3.md",
+        &format!(
+            "---\n# synthetic fixture (P04), not canon\nid: synthetic-bin-v3\nkind: concept-version\n\
+             title: synthetic-bin-v3\nconcept: synthetic-bin\ngenerator: synthetic@1.0\n\
+             recipe: synthetic-recipe\noutputs:\n  out: {reference}@sha256:{}\n\
+             rating: unrated\n---\nSynthetic version.\n",
+            "0".repeat(64)
+        ),
+    )?;
+    Ok(project)
+}
+
+fn messages_of_v3(
+    project: &TempProject,
+    binaries: &Binaries,
+) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+    let (mut index, _) = open(project)?;
+    let report = index.binary_findings(&binaries.root())?;
+    Ok(report
+        .findings
+        .into_iter()
+        .filter(|f| f.path.ends_with("v3.md"))
+        .map(|f| (f.rule, f.message))
+        .collect())
+}
+
+// AC: CE-15.4
+#[test]
+fn a_colon_in_any_segment_leaves_the_folder() -> TestResult {
+    let binaries = Binaries::new()?;
+    let project = with_version("boards/C:ok.bin")?;
+    let found = messages_of_v3(&project, &binaries)?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].0, "binary/missing");
+    assert!(found[0].1.contains("leaves the binaries folder"));
+    Ok(())
+}
+
+#[test]
+fn a_folder_at_the_path_is_not_a_file() -> TestResult {
+    let binaries = Binaries::new()?;
+    let project = with_version("boards")?;
+    let found = messages_of_v3(&project, &binaries)?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].0, "binary/missing");
+    assert!(
+        found[0].1.contains("is a folder, not a file"),
+        "{}",
+        found[0].1
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn a_link_that_points_out_of_the_folder_is_not_read() -> TestResult {
+    let binaries = Binaries::new()?;
+    std::os::unix::fs::symlink(
+        binaries.dir.path().join("outside.bin"),
+        binaries.root().join("boards").join("link.bin"),
+    )?;
+    let project = with_version("boards/link.bin")?;
+    let found = messages_of_v3(&project, &binaries)?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].0, "binary/missing");
+    assert!(found[0].1.contains("leaves the binaries folder"));
+    let (mut index, cache) = open(&project)?;
+    let report = index.binary_findings(&binaries.root())?;
+    assert!(!report.hashed.contains(&"boards/link.bin".to_owned()));
+    assert!(!memo_rows(&cache)?.contains(&"boards/link.bin".to_owned()));
     Ok(())
 }
