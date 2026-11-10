@@ -55,7 +55,8 @@ rule takes its severity from the project settings; a *fixed* rule keeps its defa
 
 **Body rules.** The index checks the body of each record with the grammar of its kind: malformed
 constructs, voice and design blocks, beats and notes, and in-world text (developer words, ids and
-tiers in prose that a player reads). They run in the parse step of a record and never read
+tiers in prose that a player reads; voice titles are never in-world text, malformed titles
+included). They run in the parse step of a record and never read
 another record.
 
 **The lore step.** After the links are resolved, in the same transaction, each subject (a record
@@ -74,12 +75,23 @@ more rules with `KindRegistry::register_rule`. `dump()` shows the reads.
 
 **Validation settings.** `settings::parse` reads the `[validate]` table of
 `.theos/settings.toml`: severities of configurable rules and the project's developer words with
-allowlist entries. A fault in the file is a finding with a span and has no effect on the
-settings; guardrails have no setting.
+allowlist entries. Two kinds of fault differ. A file that is not valid TOML, or a value of the
+wrong TOML type (a shape problem), gives `settings/toml` and empty settings: `[validate]` counts
+as empty. A bad single entry (a guardrail, a fixed or an unknown rule named, a bad severity
+string, an allow entry without a reason or with an unknown key, a bad word) gives a finding with
+a span and has no effect, while the rest of the settings stays. The guardrails are
+`lore/never-confirm`, `lore/no-overshoot` and `lore/inworld-vocab`: they are guardrails by name,
+always errors on read, and no setting names them. The settings file and
+`canon/formalism/_source.json` are inputs of the index; like records, they count only when the
+file on disk is spelled exactly so.
 
 **Binary checks.** `Index::binary_findings(root)` checks the files that records name (images,
-outputs of versions): they exist inside the folder, and their digest matches `@sha256:`. Hashes
-are memoised by size and modification time; the result is a `BinaryReport`.
+outputs of versions): they exist inside the folder, and their digest matches `@sha256:`. A
+reference leaves the binaries folder, and is reported as `binary/missing` and never opened, when
+it is empty, starts with a separator, has a `..` segment or a `:` in any segment, or when the
+file it resolves to (links followed) lies outside the folder. Hashes are memoised by size and
+modification time and are computed without the index's write lock; the result is a
+`BinaryReport`.
 
 **The formalism mirror.** `canon/formalism/_source.json` is parsed by `formalism::parse`
 into a `Source` of `Equation`s; `formalism::render` makes the generated equation records and
@@ -100,12 +112,6 @@ into a `Source` of `Equation`s; `formalism::render` makes the generated equation
 | P17 | `preview` of a draft runs every lore rule |
 | P21 | Rules registered by parts; `BodyGrammar` with step attributes; quest steps as reveal sites; the cycle walk |
 | P26 | `BinaryRefs` checks for style `refs`; the cycle walk for `extends` |
-
-## Speed (CE-12.1)
-
-A cold index of 500 records, lore step included, takes about 200 ms in a debug build on a
-Windows development machine (P03, before the lore step: about 155 ms); a one-file change through
-`update` takes about 4 ms. `tests/index/speed.rs` asserts the limit of one second.
 
 ## The fixture corpus
 
@@ -160,7 +166,9 @@ layout format, the crate version, the `schema_version` of the project, the finge
 registry, the fingerprint of the rule set and the fingerprint of the crate sources. If any one
 differs, the cache is dropped and rebuilt. Every write is one `BEGIN IMMEDIATE` transaction with
 a busy timeout of 5 s. A cold index of 500 records takes under a second (CE-12.1, timed by
-`tests/index/speed.rs`).
+`tests/index/speed.rs`): about 200 ms in a debug build on a Windows development machine, lore
+step included (P03, before it: about 155 ms), and a one-file change through `update` takes about
+4 ms.
 
 ## The fixture projects
 
@@ -168,8 +176,8 @@ a busy timeout of 5 s. A cold index of 500 records takes under a second (CE-12.1
 `schema/` (one record per rule and field type, valid and invalid), `links/` (links, parents,
 backlinks and dangling targets), `lenses/` (layers of lenses and beliefs) and `search/` (ranking
 and matches) from P03; from P04 `body/`, `world/`, `lore/`, `story/`, `versions/`, `settings/`,
-`binaries/` and `formalism/` (one per group of rules). Every record is marked synthetic. The tests in `tests/index/` index them in place
-with `Index::in_memory`, so the repository never gets a `.theos/cache`; a test that needs the file
+`binaries/` and `formalism/` (one per group of rules). Every record is marked synthetic. The
+tests in `tests/index/` index them in place with `Index::in_memory`, so the repository never gets a `.theos/cache`; a test that needs the file
 cache copies a project into a temporary folder first.
 
 ## Who uses what

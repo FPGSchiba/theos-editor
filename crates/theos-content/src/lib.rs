@@ -58,9 +58,10 @@
 //! `lens` and [`KindSpec`]; P06 (editing) the patcher,
 //! [`TextEdit`], [`apply_edits`], link target spans and [`Record::was_normalized`], and `preview`
 //! before and `update` after each write, backlink spans and [`Placement`]; P07 one index per
-//! agent worktree and the `generated` and `target` locks; P09 (notes) the note id, version, state span and text; P11 and P12 (UI) the
-//! body model, the UTF-16 conversion of [`TextIndex`], `search`, backlinks and slot targets; P14
-//! `rules::all` and the settings; P15 `lens`, `ledger_of` and the links for the graph; P17 `preview` for drafts and the same store for
+//! agent worktree and the `generated` and `target` locks; P09 (notes) the note id, version, state
+//! span and text; P11 and P12 (UI) the body model, the UTF-16 conversion of [`TextIndex`],
+//! `search`, backlinks and slot targets; P14 `rules::all` and the settings; P15 `lens`, `ledger_of`
+//! and the links for the graph; P17 `preview` for drafts and the same store for
 //! embeddings; P19 the same store for comment lists; P21 and P26 the rules that parts register
 //! and the cycle walk.
 
