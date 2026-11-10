@@ -322,8 +322,8 @@ mod tests {
 
         let p01 = umbrella.phase(phase("P01")?).ok_or("no P01")?;
         assert_eq!(p01.repo, "tower-of-theos");
-        let p08 = umbrella.phase(phase("P08")?).ok_or("no P08")?;
-        assert_eq!(p08.repo, "tower-of-theos");
+        let p20 = umbrella.phase(phase("P20")?).ok_or("no P20")?;
+        assert_eq!(p20.repo, "tower-of-theos");
 
         // The ids of the work outside the build (§4) are not criteria.
         assert!(!umbrella.all_ids().contains("CE-02"));
