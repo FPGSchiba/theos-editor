@@ -26,7 +26,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P17 | AI drafts and semantic search | theos-editor | todo | | |
 | P18 | Installer, first run, Code preset | theos-editor | todo | | |
 | P19 | Comments | theos-editor | todo | | |
-| P20 | Content layout for world and art kinds | tower-of-theos | pr-open | #22 | tower-of-theos#3 |
+| P20 | Content layout for world and art kinds | tower-of-theos | done | #22 | tower-of-theos#3 |
 | P21 | World kinds: enemies, spawns, quests | theos-editor | todo | | |
 | P22 | Map pins, cameras and frames | theos-editor | todo | | |
 | P23 | Map recipes and blockout generator | tower-of-theos | todo | | |
@@ -78,18 +78,9 @@ from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#2
   build follows data model §9.2 instead ("on a line starting with `Design note:`"), which ranks
   higher: a note line inside a paragraph starts a note that runs to the paragraph's end. The spec
   wording can be aligned in a docs PR.
-- `CLAUDE.md` ("Work there only in the phases that name it (P01, P08)") and the theos-phase skill
-  ("Phases in tower-of-theos (P01, P08)") predate umbrella versions 2 and 3: version 2 adds P20,
-  P23 and P28 in tower-of-theos, and version 3 (decision 0003) moves P08 to theos-editor. The
-  decision 0003 docs PR aligns both with the umbrella's repo column; the entry can go once it is
-  merged.
-- Data model §14 contradicted itself, found by the P20 spec: its pins example placed pins on
-  `f04-terrain-v1`, whose example had no `frame`. The decision 0003 docs PR gives that example a
-  `frame` (and `base` and `features` outputs); the entry can go once it is merged.
-- The P20 build PR tower-of-theos#3 waits for Jann (content repo). Its final review loop ended
-  clean in round 3. Its description lists four manual checks in Obsidian and VS Code. It locks
-  `markdown-it-py` 4.3.0, which was released the day it was locked. Pinning an older 4.x is a
-  one-line follow-up if Jann prefers a cool-down.
+- tower-of-theos#3 (P20, merged) locks `markdown-it-py` 4.3.0 in `tools/repo_checks`, which was
+  released the day it was locked. Pinning an older 4.x is a one-line follow-up if Jann prefers a
+  cool-down.
 
 ## Needs a private session (Confluence, Jira, plugin)
 
