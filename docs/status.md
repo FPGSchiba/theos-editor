@@ -36,7 +36,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P27 | Asset pipelines | theos-editor | todo | | |
 | P28 | Workflow catalogue and asset guide | tower-of-theos | todo | | |
 
-Rows P20–P28 come from umbrella version 2, which waits for Jann in its docs PR (#19).
+Rows P20–P28 come from umbrella version 2 (#19).
 
 ## Needs Jann
 
@@ -50,11 +50,20 @@ Rows P20–P28 come from umbrella version 2, which waits for Jann in its docs PR
   Jann, or a session that can read Confluence, confirms they are canon.
 - R5-1, open since #17 merged, is fixed in the P03 build PR #20 (Task 1, `82bcc36`). The entry
   goes when that PR merges.
-- The P03 build PR #20 is a draft labelled `needs-jann`: its final review loop reached the cap of 5
-  rounds with two Minor findings open, listed in the PR. R5-F1 is a run of spaces in the
-  `Contended` error message. R5-F2 asks how spec §5.7's "hidden entries" reads on Windows: only
-  names that start with a dot (the walk is then made OS-independent), or also files that Windows
-  marks hidden (a spec change).
+- The P03 build PR #20 is a draft labelled `needs-jann`. Its final review loop reached the cap of
+  5 rounds with two Minor findings open. At Jann's request a sixth round fixed both, and the PR
+  now waits for his review and merge.
+- P03 spec §5.7 (a protected path) says only that hidden entries are skipped. Jann ruled on
+  2026-11-10 that hiding is native, and the build follows that:
+  - on Windows, a file or folder is hidden when it has the hidden attribute;
+  - on Linux and macOS, a name that starts with a dot is hidden;
+  - on every OS, `.theos`, `.git`, `.obsidian`, `.vscode`, `.github`, `.worktrees` and `.trash`
+    are never records.
+
+  Two consequences follow. A file hidden by its attribute on Windows is a record on Linux. On
+  Windows, a dot folder outside that list and without the attribute (`.claude/`, `.idea/`) is
+  walked unless `.gitignore` ignores it; in tower-of-theos today that changes nothing. The spec
+  text can be aligned in a docs PR.
 - P03 spec §7's risk row for two builds sharing one cache (a protected path) says each open
   rebuilds. Since the final review, every write rechecks the cache identity: a build rebuilds the
   cache whenever another build has written since, and after three rebuilds in one write it fails
@@ -63,10 +72,6 @@ Rows P20–P28 come from umbrella version 2, which waits for Jann in its docs PR
   build follows data model §9.2 instead ("on a line starting with `Design note:`"), which ranks
   higher: a note line inside a paragraph starts a note that runs to the paragraph's end. The spec
   wording can be aligned in a docs PR.
-
-- Umbrella version 2 (world atlas, quests, art from lore; P20–P28) waits for Jann in #19.
-  It keeps P03's CE-11.1 to the kinds of umbrella version 1, so the P03 spec (#18) needs no change;
-  the new kinds get their schemas in P21 and P26.
 
 ## Needs a private session (Confluence, Jira, plugin)
 
