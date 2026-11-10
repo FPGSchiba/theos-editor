@@ -167,9 +167,13 @@ fn stored_meta(conn: &Connection) -> Result<Option<BTreeMap<String, String>>, ru
 }
 
 fn has_every_table(conn: &Connection) -> Result<bool, rusqlite::Error> {
+    let names = TABLES
+        .iter()
+        .map(|table| format!("'{table}'"))
+        .collect::<Vec<_>>()
+        .join(", ");
     let present: i64 = conn.query_row(
-        "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN \
-         ('meta', 'files', 'records', 'field_values', 'links', 'beats', 'findings', 'search', 'notes', 'inworld', 'deps', 'inputs', 'ledger', 'ledger_beats')",
+        &format!("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ({names})"),
         [],
         |row| row.get(0),
     )?;
