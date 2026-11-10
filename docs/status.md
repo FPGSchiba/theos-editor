@@ -9,8 +9,8 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P00 | Foundation and gate | theos-editor | done | #5, #9, #10 | #7 |
 | P01 | Content layout and templates | tower-of-theos | done | #4 | tower-of-theos#2 |
 | P02 | Records and grammars | theos-editor | done | #16 | #17 |
-| P03 | Kinds, index, search, lenses | theos-editor | pr-open | #18 | #20 |
-| P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | todo | | |
+| P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
+| P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | spec-pr | #21 | |
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
 | P06 | Command layer and git | theos-editor | todo | | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
@@ -48,11 +48,6 @@ Rows P20–P28 come from umbrella version 2 (#19).
 - Three sentences of the P10 corpus read like lore claims (B-901's link text, "the Cutter is
   near", "the operator-plate names a Listener"). P02's fixture copies reword them neutrally until
   Jann, or a session that can read Confluence, confirms they are canon.
-- R5-1, open since #17 merged, is fixed in the P03 build PR #20 (Task 1, `82bcc36`). The entry
-  goes when that PR merges.
-- The P03 build PR #20 is a draft labelled `needs-jann`. Its final review loop reached the cap of
-  5 rounds with two Minor findings open. At Jann's request a sixth round fixed both, and the PR
-  now waits for his review and merge.
 - P03 spec §5.7 (a protected path) says only that hidden entries are skipped. Jann ruled on
   2026-11-10 that hiding is native, and the build follows that:
   - on Windows, a file or folder is hidden when it has the hidden attribute;
@@ -83,7 +78,12 @@ Rows P20–P28 come from umbrella version 2 (#19).
 
 ## Needs a private session (Confluence, Jira, plugin)
 
-- CE-16S: write `tower-of-theos/canon/formalism/_source.json` from Shared Formalism before P04.
+- CE-16S: write `tower-of-theos/canon/formalism/_source.json` from Shared Formalism, in the
+  format of the P04 spec §5.14, then run `theos formalism` to generate `E1`…`E18`. P04 proves
+  the mirror with a synthetic source until then.
+- inworld-vocab: if Confluence or the theos-design plugin holds a list of developer words, copy
+  it into `words` of `[validate.inworld-vocab]` in `tower-of-theos/.theos/settings.toml`
+  (P04 spec §5.11, §5.12). Built in are only ids, tier tokens and rule names.
 - CE-04 / CE-05: lore import and Seal split (umbrella §4).
 - Readable copies in Confluence: the umbrella spec (version 2), the data model and the
   architecture page need the world and art additions once the docs PR is merged.
