@@ -249,25 +249,25 @@ impl Files<'_> {
             }
             full.push(segment);
         }
-        let meta = match std::fs::metadata(&full) {
+        // Resolve links first and use only the resolved path from here on, so a link swapped in
+        // later is never followed: the containment check, the stat and the read all see `real`.
+        let real = match std::fs::canonicalize(&full) {
+            Ok(real) => real,
+            Err(error) => return Ok(Err(io_message(file, &error))),
+        };
+        if !self
+            .canonical_root
+            .as_ref()
+            .is_some_and(|root| real.starts_with(root))
+        {
+            return Ok(Err(leaves(file)));
+        }
+        let meta = match std::fs::metadata(&real) {
             Ok(meta) => meta,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(Err(format!(
-                    "there is no file `{file}` in the binaries folder"
-                )));
-            }
-            Err(error) => return Ok(Err(format!("`{file}` cannot be read: {error}"))),
+            Err(error) => return Ok(Err(io_message(file, &error))),
         };
         if !meta.is_file() {
             return Ok(Err(format!("`{file}` is a folder, not a file")));
-        }
-        // A link inside the folder may point out of it: judge the file that would be read.
-        let inside_root = match (&self.canonical_root, std::fs::canonicalize(&full)) {
-            (Some(root), Ok(real)) => real.starts_with(root),
-            _ => false,
-        };
-        if !inside_root {
-            return Ok(Err(leaves(file)));
         }
         let size = i64::try_from(meta.len()).unwrap_or(i64::MAX);
         let time = mtime_ns(&meta);
@@ -284,7 +284,7 @@ impl Files<'_> {
         {
             return Ok(Ok(hash));
         }
-        let hash = match hash_file(&full) {
+        let hash = match hash_file(&real) {
             Ok(hash) => hash,
             Err(error) => return Ok(Err(format!("`{file}` cannot be read: {error}"))),
         };
@@ -296,6 +296,15 @@ impl Files<'_> {
         });
         self.hashed.push(file.to_owned());
         Ok(Ok(hash))
+    }
+}
+
+/// The message of the `binary/missing` finding for a file that cannot be reached.
+fn io_message(file: &str, error: &std::io::Error) -> String {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        format!("there is no file `{file}` in the binaries folder")
+    } else {
+        format!("`{file}` cannot be read: {error}")
     }
 }
 
@@ -386,6 +395,18 @@ mod tests {
         }
         assert_eq!(inside("boards/ok.bin"), Some(vec!["boards", "ok.bin"]));
         assert_eq!(inside("a\\b/c.bin"), Some(vec!["a", "b", "c.bin"]));
+    }
+
+    #[test]
+    fn an_io_failure_is_not_reported_as_leaving_or_missing() {
+        let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        let message = io_message("a.bin", &denied);
+        assert!(message.starts_with("`a.bin` cannot be read: "), "{message}");
+        let gone = std::io::Error::from(std::io::ErrorKind::NotFound);
+        assert_eq!(
+            io_message("a.bin", &gone),
+            "there is no file `a.bin` in the binaries folder"
+        );
     }
 
     #[test]
