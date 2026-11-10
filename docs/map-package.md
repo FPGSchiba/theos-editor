@@ -174,6 +174,10 @@ ignore layers they do not know.
 | Kind | Layer | dtype | Meaning |
 |---|---|---|---|
 | terrain | `height` | f32 | Height, m |
+| terrain | `water_surface` | f32 | The lake level where there is a lake, else the ground height, m |
+| terrain | `flow_dir` | u8 | The D8 code of the steepest downhill neighbour on the depression-filled surface, so every cell points along its path to an outlet; 0 for cells that drain off the map and for the lowest cell of a terminal lake (legend) |
+| terrain | `drainage_area` | f32 | Upstream area draining through the cell over multiple flow directions, m², not weighted by runoff |
+| terrain | `erosion`, `deposition` | f32 | Thickness removed and thickness added by all processes over the whole run, each cumulative and non-negative, m |
 | terrain | `discharge` | f32 | River discharge, m3/s |
 | terrain | `precipitation` | f32 | Annual precipitation, mm/yr |
 | terrain | `temperature` | f32 | Mean annual temperature, degC |
@@ -190,6 +194,14 @@ ignore layers they do not know.
 | interior | `walkable` | u8 | Mask of walkable floor |
 | interior | `rooms` | u16 | Room number + 1 per cell, 0 for none; the room features carry the number |
 | interior | `corridors`, `cover` | u8 | Masks |
+
+### 4.5 Snapshot layers
+
+A run may ask the generator to keep the layers a stage wrote, for debugging or as training data.
+Such a layer is named `<layer>@<stage>`, its file is `layers/snapshots/<stage>/<layer>.<dtype>`,
+its dtype is f32 or u8, and the manifest's `summary.snapshots` lists them. A package with
+snapshot layers is a debugging or training artefact, never a canon output. Readers that do not
+ask for snapshots ignore them.
 
 ## 5. Features
 
@@ -209,11 +221,11 @@ longitude and latitude: an alternative coordinate reference by prior arrangement
 |---|---|---|---|
 | `settlement` | `city`, `town`, `village`, `hamlet` | Point | `name` (generated, not canon) |
 | `poi` | `ruin`, `extraction`, `portal-in`, `portal-out` | Point | |
-| `site` | `mill`, `mine`, `quarry`, `lumber-camp`, `shrine`, `watchtower`, `inn`, `cave`, `camp`, `bridge`, `ford` | Point | links to related features by id (`road`, `serves`, `deposit`) |
+| `site` | `mill`, `mine`, `quarry`, `lumber-camp`, `shrine`, `watchtower`, `inn`, `market`, `cave`, `camp`, `bridge`, `ford` | Point | links to related features by id (`road`, `serves`, `deposit`); bridges also `span_m` and `deck_m` (the deck's height above the base level, m) |
 | `resource` | one type per resource (`iron-ore`, `timber`, …) | Point | `richness`, `tier`, `element`, `harvest`, `radius_m` |
-| `road` | `trail`, `track`, `road`, `main` | LineString | `from`, `to` (feature ids), `length_m` |
-| `water` | `river` | LineString (x, y, bed height) | `width_m`, `discharge_m3s` per vertex |
-| `water` | `lake` | Polygon | `surface_m` (water level), `terminal` (no outflow) |
+| `road` | `trail`, `track`, `road`, `main` | LineString | `from`, `to` (feature ids), `length_m`, `width_m`, `grade_max` |
+| `water` | `river` | LineString (x, y, bed height) | `width_m`, `depth_m`, `discharge_m3s` per vertex; `order` (Strahler) |
+| `water` | `lake` | Polygon | `surface_m` (water level), `terminal` (no outflow), `outlet` (a point in metres; absent for a terminal lake), `depth_max_m` |
 | `street` | `lane`, `street`, `main-street` | LineString | |
 | `building` | `building` | Polygon | `use`, `storeys` |
 | `landmark` | free text | Point | `name` |
