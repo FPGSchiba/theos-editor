@@ -420,6 +420,7 @@ fn a_path_removed_and_given_again_in_one_list_is_reparsed() -> TestResult {
         reparsed: paths(&[LINKED]),
         removed: Vec::new(),
         relinked: paths(&[FIRST, SECOND]),
+        revalidated: Vec::new(),
     };
     let before = index.dump()?;
     let preview = index.preview(&changes)?;
@@ -452,6 +453,7 @@ fn a_path_given_and_removed_in_one_list_is_removed() -> TestResult {
         reparsed: Vec::new(),
         removed: paths(&[LINKED]),
         relinked: paths(&[FIRST, SECOND]),
+        revalidated: Vec::new(),
     };
     assert_eq!(index.preview(&changes)?.update, expected);
     assert_eq!(index.apply(&changes)?, expected);

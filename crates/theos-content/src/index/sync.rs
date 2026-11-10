@@ -1,5 +1,6 @@
 //! Bringing the index in line with the folder or with given changes (spec §5.9, steps 1 to 3
-//! and 5): compare, read what changed, parse and check it, replace its rows, commit.
+//! and 5): compare, read what changed, parse and check it, replace its rows, resolve the links,
+//! run the lore step, commit.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
@@ -13,6 +14,7 @@ use sha2::{Digest, Sha256};
 use crate::check::check_record;
 use crate::finding::{Finding, Severity};
 use crate::index::identity::Identity;
+use crate::index::lore_step::{self, LoreWork};
 use crate::index::store::{self, map_error};
 use crate::index::{Index, IndexError, query, resolve, rows, write};
 use crate::kinds::KindRegistry;
@@ -75,6 +77,9 @@ pub struct Update {
     pub removed: Vec<String>,
     /// The records whose links were recomputed without being re-parsed.
     pub relinked: Vec<String>,
+    /// The subjects whose lore rules ran again without being re-parsed or relinked, because
+    /// they read something the change touched: the neighbours it affects (CE-14.3).
+    pub revalidated: Vec<String>,
 }
 
 impl Update {
@@ -84,6 +89,7 @@ impl Update {
             &mut self.reparsed,
             &mut self.removed,
             &mut self.relinked,
+            &mut self.revalidated,
         ] {
             list.sort();
             list.dedup();
@@ -93,13 +99,14 @@ impl Update {
 }
 
 /// What [`Index::preview`] found: the update the changes would make and the findings it would
-/// leave on every re-parsed or relinked record and on every record given as content.
+/// leave on every re-parsed, relinked or revalidated record and on every record given as
+/// content.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Preview {
     /// What an apply of the changes would do.
     pub update: Update,
-    /// The findings of every re-parsed or relinked record and of every record given as content,
-    /// also one whose bytes equal the stored ones, ordered like [`Index::findings`].
+    /// The findings of every re-parsed, relinked or revalidated record and of every record given
+    /// as content, also one whose bytes equal the stored ones, ordered like [`Index::findings`].
     pub findings: Vec<Finding>,
 }
 
@@ -140,6 +147,8 @@ struct Syncer<'a> {
     /// the rows deletes the record's duplicate-id findings, so they are recomputed even when the
     /// link facts stayed.
     rechecked: BTreeSet<String>,
+    /// The changed keys and the subjects of the lore step (spec §5.5).
+    lore: LoreWork,
 }
 
 impl Index {
@@ -201,9 +210,9 @@ impl Index {
         self.run(|work| apply_changes(work, changes))
     }
 
-    /// Does what [`Index::apply`] does, reads the findings of every re-parsed or relinked record
-    /// and of every record given as content, and rolls everything back: the cache is not
-    /// changed. The findings are those [`Index::apply`] would leave, ordered like
+    /// Does what [`Index::apply`] does, reads the findings of every re-parsed, relinked or
+    /// revalidated record and of every record given as content, and rolls everything back: the
+    /// cache is not changed. The findings are those [`Index::apply`] would leave, ordered like
     /// [`Index::findings`]; a content equal to the stored bytes is not parsed again, and its
     /// stored findings are the ones it would leave. Paths are taken as in [`Index::apply`]: one
     /// that is not a record by its spelling, is hidden the way of the OS, or that a `.gitignore`
@@ -224,8 +233,12 @@ impl Index {
         let (update, findings) = self.transact(
             |work| apply_changes(work, changes),
             |conn, update| {
-                let mut paths: BTreeSet<&String> =
-                    update.reparsed.iter().chain(&update.relinked).collect();
+                let mut paths: BTreeSet<&String> = update
+                    .reparsed
+                    .iter()
+                    .chain(&update.relinked)
+                    .chain(&update.revalidated)
+                    .collect();
                 paths.extend(&given);
                 let mut findings = Vec::new();
                 for path in paths {
@@ -294,7 +307,7 @@ impl Index {
             }
             let mut syncer = Syncer::new(&tx, &self.registry, &self.root);
             work(&mut syncer)?;
-            syncer.resolve()?;
+            syncer.finish()?;
             let update = syncer.update.sorted();
             let read = read(&tx, &update)?;
             if commit {
@@ -328,7 +341,7 @@ fn rebuild(
     let walked = walk(root)?;
     let mut syncer = Syncer::new(tx, registry, root);
     syncer.sync(&walked)?;
-    syncer.resolve()
+    syncer.finish()
 }
 
 /// Step 3 for each given change.
@@ -352,7 +365,26 @@ impl<'a> Syncer<'a> {
             update: Update::default(),
             affected: BTreeSet::new(),
             rechecked: BTreeSet::new(),
+            lore: LoreWork::default(),
         }
+    }
+
+    /// Steps 4 and 4b: resolve the links, then run the lore step. `revalidated` lists the
+    /// subjects it re-ran that were neither re-parsed nor relinked.
+    fn finish(&mut self) -> Result<(), IndexError> {
+        self.resolve()?;
+        let reran = lore_step::run(self.conn, self.registry, &self.lore)?;
+        let touched: BTreeSet<&String> = self
+            .update
+            .reparsed
+            .iter()
+            .chain(&self.update.relinked)
+            .collect();
+        self.update.revalidated = reran
+            .into_iter()
+            .filter(|path| !touched.contains(path))
+            .collect();
+        Ok(())
     }
 
     /// Step 4: relink the re-parsed records and the records that link to an affected id
@@ -385,13 +417,17 @@ impl<'a> Syncer<'a> {
         Ok(())
     }
 
-    /// The id and link facts that the rows of `path` hold, none when it has no record row.
-    fn old_facts(&self, path: &str) -> Result<Option<(String, String)>, IndexError> {
-        Ok(self
+    /// The id and link facts that the rows of `path` hold, none when it has no record row. Runs
+    /// before the rows change, and notes for the lore step the keys they answer.
+    fn old_facts(&mut self, path: &str) -> Result<Option<(String, String)>, IndexError> {
+        let old: Option<(String, String)> = self
             .conn
             .prepare_cached("SELECT id, facts FROM records WHERE path = ?1")?
             .query_row([path], |row| Ok((row.get(0)?, row.get(1)?)))
-            .optional()?)
+            .optional()?;
+        self.lore
+            .old_rows(self.conn, path, old.as_ref().map(|(id, _)| id.as_str()))?;
+        Ok(old)
     }
 
     /// Step 2 of the affected set: before the rows of a path are replaced or deleted, note the
@@ -536,6 +572,7 @@ impl<'a> Syncer<'a> {
             self.touch(None, facts);
             write::insert(self.conn, path, &new)?;
         }
+        self.lore.new_rows(&new);
         self.put_file(path, stamp, &hash, racy)?;
         self.reparsed(path);
         Ok(())
@@ -584,15 +621,17 @@ impl<'a> Syncer<'a> {
             write::delete_all(self.conn, path)?;
             self.update.reparsed.retain(|other| other != path);
             self.update.removed.push(path.to_owned());
+            self.lore.remove_subject(path);
         }
         Ok(())
     }
 
     /// Notes that the rows of `path` were replaced. A removal of it earlier in the same call no
-    /// longer counts: the path exists again, and step 4 must relink it.
+    /// longer counts: the path exists again, and steps 4 and 4b must relink and check it.
     fn reparsed(&mut self, path: &str) {
         self.update.removed.retain(|other| other != path);
         self.update.reparsed.push(path.to_owned());
+        self.lore.add_subject(path);
     }
 
     fn file_row(&self, path: &str) -> Result<Option<FileRow>, IndexError> {

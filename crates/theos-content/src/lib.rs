@@ -56,6 +56,7 @@ pub mod finding;
 pub mod index;
 mod inworld;
 pub mod kinds;
+pub mod lore;
 pub mod parts;
 pub mod project;
 pub mod record;

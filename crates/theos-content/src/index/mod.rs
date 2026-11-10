@@ -3,12 +3,15 @@
 use std::path::PathBuf;
 
 use crate::kinds::KindRegistry;
+use crate::lore::FactError;
 use crate::project::Project;
 use crate::walk::WalkError;
 
 mod dump;
 mod identity;
 mod lens;
+mod lore_source;
+mod lore_step;
 mod query;
 pub(crate) mod resolve;
 pub(crate) mod rows;
@@ -143,4 +146,28 @@ pub enum IndexError {
     /// The walk of the project failed.
     #[error(transparent)]
     Walk(#[from] WalkError),
+}
+
+impl From<FactError> for IndexError {
+    /// A lore rule failed because the store failed: the SQLite error, so that a damaged cache is
+    /// still recognised as damaged.
+    fn from(error: FactError) -> IndexError {
+        match error {
+            FactError::Sqlite(error) => IndexError::Sqlite(error),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_read_of_a_rule_is_a_failure_of_the_cache() {
+        let error = IndexError::from(FactError::Sqlite(rusqlite::Error::QueryReturnedNoRows));
+        assert!(matches!(
+            error,
+            IndexError::Sqlite(rusqlite::Error::QueryReturnedNoRows)
+        ));
+    }
 }

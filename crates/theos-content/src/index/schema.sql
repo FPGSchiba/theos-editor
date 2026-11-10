@@ -24,6 +24,8 @@ CREATE TABLE inworld (path TEXT NOT NULL, span_start INTEGER NOT NULL, span_end 
 CREATE TABLE findings (path TEXT NOT NULL, id TEXT, rule TEXT NOT NULL, severity TEXT NOT NULL,
                        span_start INTEGER, span_end INTEGER, line INTEGER, col INTEGER,
                        message TEXT NOT NULL, step TEXT NOT NULL);
+-- The reads of the lore step: `subject` read `key` (`rec:<id>`, `in:<id>` or `file:<path>`).
+CREATE TABLE deps (subject TEXT NOT NULL, key TEXT NOT NULL);
 CREATE VIRTUAL TABLE search USING fts5(path UNINDEXED, title, fields, body,
                                        tokenize = 'porter unicode61 remove_diacritics 2');
 CREATE INDEX records_id ON records(id);
@@ -36,3 +38,5 @@ CREATE INDEX beats_path ON beats(path);
 CREATE INDEX findings_path ON findings(path);
 CREATE INDEX notes_path ON notes(path);
 CREATE INDEX inworld_path ON inworld(path);
+CREATE INDEX deps_key ON deps(key);
+CREATE INDEX deps_subject ON deps(subject);

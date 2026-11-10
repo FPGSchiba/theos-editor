@@ -9,6 +9,7 @@ mod inworld;
 mod kinds;
 mod lenses;
 mod links;
+mod lore;
 mod schema;
 mod search;
 mod speed;

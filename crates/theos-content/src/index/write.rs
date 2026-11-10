@@ -14,12 +14,14 @@ use crate::index::resolve::id_fold;
 use crate::index::rows::{RecordRows, Shape};
 use crate::yaml::ScalarStyle;
 
-/// The deletes of the rows of a record, one per table that holds them, keyed by `path`. The
-/// `search` row goes by the rowid that the `records` row holds, so before the `records` row: an
-/// FTS5 table has no index on `path`, and a delete by `path` would read every search row.
-const DELETES: [&str; 8] = [
+/// The deletes of the rows of a record, one per table that holds them, keyed by its path
+/// (`subject` in `deps`: the reads of its lore rules). The `search` row goes by the rowid that
+/// the `records` row holds, so before the `records` row: an FTS5 table has no index on `path`,
+/// and a delete by `path` would read every search row.
+const DELETES: [&str; 9] = [
     "DELETE FROM search WHERE rowid = (SELECT search_rowid FROM records WHERE path = ?1)",
     "DELETE FROM findings WHERE path = ?1",
+    "DELETE FROM deps WHERE subject = ?1",
     "DELETE FROM inworld WHERE path = ?1",
     "DELETE FROM notes WHERE path = ?1",
     "DELETE FROM beats WHERE path = ?1",
@@ -179,7 +181,7 @@ fn insert_lore_rows(conn: &Connection, path: &str, rows: &RecordRows) -> rusqlit
     Ok(())
 }
 
-/// Inserts one finding, made by the check `step` (`record`, `links` or `ids`).
+/// Inserts one finding, made by the check `step` (`record`, `links`, `ids` or `lore`).
 pub(crate) fn insert_finding(
     conn: &Connection,
     finding: &Finding,

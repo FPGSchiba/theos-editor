@@ -152,6 +152,7 @@ fn write_project(project: &TempProject) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The update of a change; no lore rule is registered, so nothing is revalidated.
 fn lists(read: &[&str], reparsed: &[&str], removed: &[&str], relinked: &[&str]) -> Update {
     let own = |list: &[&str]| list.iter().map(|path| (*path).to_owned()).collect();
     Update {
@@ -159,6 +160,7 @@ fn lists(read: &[&str], reparsed: &[&str], removed: &[&str], relinked: &[&str]) 
         reparsed: own(reparsed),
         removed: own(removed),
         relinked: own(relinked),
+        revalidated: Vec::new(),
     }
 }
 
@@ -610,21 +612,20 @@ fn same_dump(what: &str, got: &str, want: &str) -> TestResult {
     .into())
 }
 
-/// Runs the steps of a history on a project with a file cache and compares the cache with a
-/// fresh build of the folder after every step.
-fn history(steps: &[(Edit, Via)]) -> TestResult {
+/// Runs the steps of a history on a project with a file cache and `registry`, and compares the
+/// cache with a fresh build of the folder after every step.
+fn history(steps: &[(Edit, Via)], registry: &KindRegistry) -> TestResult {
     let project = TempProject::new()?;
-    let registry = parts::builtin()?;
     write_project(&project)?;
     let mut files: BTreeMap<String, String> = project_files()
         .into_iter()
         .map(|(path, text)| (path.to_owned(), text))
         .collect();
-    let (mut index, _) = Index::open(&project.project()?, &registry)?;
+    let (mut index, _) = Index::open(&project.project()?, registry)?;
     same_dump(
         "after the open",
         &index.dump()?,
-        &fresh_dump_with(&project, &registry)?,
+        &fresh_dump_with(&project, registry)?,
     )?;
     let mut ignored = false;
     for (number, (edit, via)) in steps.iter().enumerate() {
@@ -652,7 +653,7 @@ fn history(steps: &[(Edit, Via)]) -> TestResult {
         same_dump(
             &format!("after step {number}, {edit:?} via {via:?}"),
             &index.dump()?,
-            &fresh_dump_with(&project, &registry)?,
+            &fresh_dump_with(&project, registry)?,
         )?;
     }
     Ok(())
@@ -698,7 +699,12 @@ fn previewed(index: &mut Index, plan: &Plan, given: &[Change]) -> TestResult {
     if preview.update != update {
         return Err(format!("preview {:?}, apply {update:?}", preview.update).into());
     }
-    let mut paths: BTreeSet<&String> = update.reparsed.iter().chain(&update.relinked).collect();
+    let mut paths: BTreeSet<&String> = update
+        .reparsed
+        .iter()
+        .chain(&update.relinked)
+        .chain(&update.revalidated)
+        .collect();
     paths.extend(
         plan.iter()
             .filter(|(_, text)| text.is_some())
@@ -749,7 +755,9 @@ fn via() -> impl Strategy<Value = Via> {
 // Guards the class "an incremental history after which the cache differs from a fresh build of
 // the same files" (spec §3, anti-goal "the cache becomes a source of truth"; final review R3-G):
 // every generated history of edits, through sync, update, apply and preview, must leave the
-// dump of a fresh build of the folder after each step.
+// dump of a fresh build of the folder after each step. The second test runs the same histories
+// with a lore rule that reads across records (P04 spec §5.5): a read the lore step fails to redo
+// leaves findings or `deps` rows that differ from the fresh build's.
 proptest! {
     #![proptest_config(ProptestConfig {
         cases: 32,
@@ -761,6 +769,16 @@ proptest! {
     fn every_history_leaves_the_index_of_a_fresh_build(
         steps in proptest::collection::vec((edit(), via()), 1..=8),
     ) {
-        history(&steps).map_err(|error| TestCaseError::fail(error.to_string()))?;
+        let registry = parts::builtin().map_err(|error| TestCaseError::fail(error.to_string()))?;
+        history(&steps, &registry).map_err(|error| TestCaseError::fail(error.to_string()))?;
+    }
+
+    #[test]
+    fn every_history_with_reads_across_records_leaves_the_index_of_a_fresh_build(
+        steps in proptest::collection::vec((edit(), via()), 1..=8),
+    ) {
+        let registry = crate::lore::echo_registry()
+            .map_err(|error| TestCaseError::fail(error.to_string()))?;
+        history(&steps, &registry).map_err(|error| TestCaseError::fail(error.to_string()))?;
     }
 }

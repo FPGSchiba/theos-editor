@@ -61,14 +61,20 @@ fn fixed(list: Vec<(&'static str, Severity)>) -> impl Iterator<Item = RuleInfo> 
     })
 }
 
-/// Every rule, sorted by id, one entry per id.
+/// Every rule, sorted by id, one entry per id: P02's and P03's, and the lore rules the parts of
+/// `registry` registered.
 ///
 /// Adding a rule list is one more `extend` line below.
 #[must_use]
-pub fn all(_registry: &KindRegistry) -> Vec<RuleInfo> {
+pub fn all(registry: &KindRegistry) -> Vec<RuleInfo> {
     let mut rules: Vec<RuleInfo> = Vec::new();
     rules.extend(fixed(crate::check::rules()));
     rules.extend(fixed(crate::index::resolve::rule_set()));
+    rules.extend(registry.lore_rules().map(|rule| RuleInfo {
+        id: rule.id,
+        severity: rule.severity,
+        class: rule.class,
+    }));
     rules.sort_by_key(|rule| rule.id);
     rules.dedup_by_key(|rule| rule.id);
     rules
@@ -142,6 +148,40 @@ mod tests {
         assert_eq!(unknown.class, RuleClass::Fixed);
         assert_eq!(unknown.severity, Severity::Warning);
         assert!(rules.windows(2).all(|pair| pair[0].id < pair[1].id));
+        Ok(())
+    }
+
+    #[test]
+    fn registered_lore_rules_are_listed_once() -> Result<(), Box<dyn std::error::Error>> {
+        let mut registry = crate::parts::builtin()?;
+        let before = all(&registry).len();
+        for (part, kinds) in [("concepts", &["concept"]), ("maps", &["map"])] {
+            registry.register_rule(
+                part,
+                crate::lore::LoreRule {
+                    id: "test/order",
+                    severity: Severity::Warning,
+                    class: RuleClass::Configurable,
+                    on: crate::lore::On::Kinds(kinds),
+                    run: |_, _| Ok(Vec::new()),
+                },
+            )?;
+        }
+        let rules = all(&registry);
+        assert_eq!(rules.len(), before + 1);
+        let found: Vec<RuleInfo> = rules
+            .iter()
+            .filter(|r| r.id == "test/order")
+            .copied()
+            .collect();
+        assert_eq!(
+            found,
+            [RuleInfo {
+                id: "test/order",
+                severity: Severity::Warning,
+                class: RuleClass::Configurable,
+            }]
+        );
         Ok(())
     }
 }

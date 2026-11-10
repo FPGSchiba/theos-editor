@@ -1,4 +1,4 @@
-//! The kind registry: kinds are registered by parts, never listed in one place.
+//! The kind registry: kinds and lore rules are registered by parts, never listed in one place.
 
 mod fingerprint;
 mod spec;
@@ -8,6 +8,8 @@ mod value;
 use std::collections::BTreeSet;
 
 use regex::Regex;
+
+use crate::lore::LoreRule;
 
 pub use spec::{
     BeatAttribute, BodyGrammar, CheckInput, FieldSpec, IdRule, KindCheck, KindSpec, Placement,
@@ -40,6 +42,19 @@ pub enum RegistryError {
         #[source]
         source: regex::Error,
     },
+    /// Two parts registered one lore rule id with another severity or class.
+    #[error(
+        "rule `{rule}` is registered by part `{first}` and again by part `{second}` with another \
+         severity or class"
+    )]
+    DuplicateRule {
+        /// The rule id.
+        rule: String,
+        /// The part that registered it first.
+        first: &'static str,
+        /// The part that tried again.
+        second: &'static str,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -49,10 +64,18 @@ struct Registered {
     id: Regex,
 }
 
-/// All registered kinds.
+/// A lore rule and the part that registered it.
+#[derive(Clone, Debug)]
+struct RegisteredRule {
+    part: &'static str,
+    rule: LoreRule,
+}
+
+/// All registered kinds and lore rules.
 #[derive(Clone, Debug, Default)]
 pub struct KindRegistry {
     kinds: Vec<Registered>,
+    rules: Vec<RegisteredRule>,
 }
 
 impl KindRegistry {
@@ -81,6 +104,37 @@ impl KindRegistry {
         })?;
         self.kinds.push(Registered { part, spec, id });
         Ok(())
+    }
+
+    /// Registers the lore rule `rule` for `part` (spec §5.2). One rule id may be registered by
+    /// several parts, each for its own kinds, when severity and class agree.
+    ///
+    /// # Errors
+    /// [`RegistryError::DuplicateRule`] when the id is registered already with another severity
+    /// or class.
+    pub fn register_rule(
+        &mut self,
+        part: &'static str,
+        rule: LoreRule,
+    ) -> Result<(), RegistryError> {
+        if let Some(existing) = self.rules.iter().find(|registered| {
+            registered.rule.id == rule.id
+                && (registered.rule.severity, registered.rule.class) != (rule.severity, rule.class)
+        }) {
+            return Err(RegistryError::DuplicateRule {
+                rule: rule.id.to_owned(),
+                first: existing.part,
+                second: part,
+            });
+        }
+        self.rules.push(RegisteredRule { part, rule });
+        Ok(())
+    }
+
+    /// Every registered lore rule, in registration order; an id registered by several parts
+    /// comes once per registration.
+    pub fn lore_rules(&self) -> impl Iterator<Item = &LoreRule> {
+        self.rules.iter().map(|registered| &registered.rule)
     }
 
     fn find(&self, name: &str) -> Option<&Registered> {
@@ -139,16 +193,23 @@ impl KindRegistry {
         fields
     }
 
-    /// A 64-digit lower-case hex fingerprint of every kind and its part, independent of the
-    /// registration order.
+    /// A 64-digit lower-case hex fingerprint of every kind and every lore rule with its part,
+    /// independent of the registration order.
     #[must_use]
     pub fn fingerprint(&self) -> String {
         let mut sorted: Vec<&Registered> = self.kinds.iter().collect();
         sorted.sort_by_key(|r| r.spec.name);
+        let mut rules: Vec<(&'static str, String)> = self
+            .rules
+            .iter()
+            .map(|r| (r.part, format!("{:?}", r.rule)))
+            .collect();
+        rules.sort();
         fingerprint::digest(
             sorted
                 .into_iter()
-                .map(|r| (r.part, format!("{:?}", r.spec))),
+                .map(|r| (r.part, format!("{:?}", r.spec)))
+                .chain(rules),
         )
     }
 }
@@ -264,6 +325,91 @@ mod tests {
         assert_eq!(base, build("band", "npc", true, "x/y")?);
         assert_ne!(base, build("npc", "band", false, "x/y")?);
         assert_ne!(base, build("npc", "band", true, "x/z")?);
+        Ok(())
+    }
+
+    fn lore_rule(
+        severity: crate::finding::Severity,
+        class: crate::rules::RuleClass,
+        kinds: &'static [&'static str],
+    ) -> LoreRule {
+        LoreRule {
+            id: "test/rule",
+            severity,
+            class,
+            on: crate::lore::On::Kinds(kinds),
+            run: |_, _| Ok(Vec::new()),
+        }
+    }
+
+    #[test]
+    fn a_rule_id_twice_with_another_class_is_refused() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::finding::Severity::{Error, Warning};
+        use crate::rules::RuleClass::{Configurable, Fixed};
+        let mut registry = KindRegistry::new();
+        registry.register_rule("concepts", lore_rule(Error, Fixed, &["concept"]))?;
+        for (severity, class) in [(Error, Configurable), (Warning, Fixed)] {
+            let err = registry.register_rule("maps", lore_rule(severity, class, &["map"]));
+            assert!(matches!(
+                &err,
+                Err(RegistryError::DuplicateRule { rule, first: "concepts", second: "maps" })
+                    if rule == "test/rule"
+            ));
+            assert_eq!(
+                err.map_err(|e| e.to_string()).err().as_deref(),
+                Some(
+                    "rule `test/rule` is registered by part `concepts` and again by part `maps` \
+                     with another severity or class"
+                )
+            );
+        }
+        assert_eq!(registry.lore_rules().count(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn one_rule_id_may_come_from_several_parts() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::finding::Severity::Error;
+        use crate::rules::RuleClass::Fixed;
+        let mut registry = KindRegistry::new();
+        registry.register_rule("concepts", lore_rule(Error, Fixed, &["concept"]))?;
+        registry.register_rule("maps", lore_rule(Error, Fixed, &["map"]))?;
+        let on: Vec<crate::lore::On> = registry.lore_rules().map(|rule| rule.on).collect();
+        assert_eq!(
+            on,
+            [
+                crate::lore::On::Kinds(&["concept"]),
+                crate::lore::On::Kinds(&["map"])
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn the_fingerprint_follows_the_rules() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::finding::Severity::{Error, Warning};
+        use crate::rules::RuleClass::Fixed;
+        let build = |rules: &[(&'static str, LoreRule)]| {
+            let mut registry = KindRegistry::new();
+            for (part, rule) in rules {
+                registry.register_rule(part, *rule)?;
+            }
+            Ok::<_, RegistryError>(registry.fingerprint())
+        };
+        let concept = lore_rule(Error, Fixed, &["concept"]);
+        let map = lore_rule(Error, Fixed, &["map"]);
+        let base = build(&[("concepts", concept), ("maps", map)])?;
+        assert_eq!(base, build(&[("maps", map), ("concepts", concept)])?);
+        assert_ne!(base, build(&[("concepts", concept)])?);
+        assert_ne!(base, KindRegistry::new().fingerprint());
+        assert_ne!(
+            build(&[("concepts", concept)])?,
+            build(&[("concepts", lore_rule(Warning, Fixed, &["concept"]))])?
+        );
+        assert_ne!(
+            build(&[("concepts", concept)])?,
+            build(&[("maps", concept)])?
+        );
         Ok(())
     }
 
