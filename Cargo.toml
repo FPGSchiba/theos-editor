@@ -43,9 +43,12 @@ cargo_metadata = "0.23"
 clap = { version = "4.6", features = ["derive"] }
 git-conventional = "0.12"
 globset = "0.4"
+ignore = "0.4"
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 proptest = { version = "1.12", default-features = false, features = ["std"] }
 pulldown-cmark = { version = "0.13", default-features = false }
+regex = "1.13"
+rusqlite = { version = "0.41", features = ["bundled"] }
 quick-xml = "0.41"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -58,3 +61,10 @@ toml = "1.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 yaml-rust2 = "0.13"
+
+# Third-party crates are optimised also in the dev profile, which `cargo test`, nextest and the
+# coverage run use: unoptimised SQLite, YAML, Markdown and SHA-2 code made the index tests spend
+# more time in them than in the code under test (CE-12.1). Workspace crates keep the dev profile,
+# so debugging and coverage see their code as written.
+[profile.dev.package."*"]
+opt-level = 1

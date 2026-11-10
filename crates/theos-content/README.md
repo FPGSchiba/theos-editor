@@ -4,8 +4,9 @@ Library. Record model, front-matter patcher, body grammars (beats, voice, notes)
 index, search, effective lenses, validators, lore rules and ledger. Pure filesystem; no async; no
 UI.
 
-After phase P02 the crate provides the first half of that list: records and grammars. The rest
-follows in P03 and P04.
+After phase P02 the crate provided records and grammars. After P03 it also provides the project,
+the kind registry, the persistent index, search and effective lenses. Validators, lore rules and
+the ledger follow in P04.
 
 ## What it provides
 
@@ -15,6 +16,13 @@ follows in P03 and P04.
 | `record` | `Record`: reads a record (`read_record`, `decode`, `Record::parse`), splits it into front matter and body, `was_normalized()` |
 | `yaml` | The restricted YAML of the data model: one rule per forbidden form, the front-matter model with spans (`FrontMatter`, `Field`, `Scalar`) and the patcher (`Record::patch`, `set`, `remove`, `set_entry`, `remove_entry`, `Order`) |
 | `body` | One pass over the body: blocks, wikilinks, callouts (`[!voice]`, `[!design]`, `[!note]`), design notes, beats of a script, and the malformed constructs with their line and column |
+| `project` | `Project::open` reads `theos.toml` (name, kind, enabled parts); `SCHEMA_VERSION` |
+| `finding` | `Finding` and `Severity`: rule id, path, span, line and column, message |
+| `kinds` | `KindRegistry` of `KindSpec`s: declarative `FieldSpec` tables, id rules, `Placement`, body grammar; the generic checker |
+| `parts` | The 20 builtin kinds, one module per kind and one `register` per part; `parts::builtin()` |
+| `check` | `check_record` runs the record, YAML and schema checks of one record, the checks of its kind included; `rules()` lists them. Link and duplicate-id checks run in the index's relink step; body checks come with P04's validators |
+| `walk` | `walk` lists the record files of a project (`ignore` crate), as the next section says; `is_record_path` |
+| `index` | `Index`: the persistent index with sync, update, apply, preview, queries, search, lens and dump |
 
 The patcher changes only the lines of the field it is asked to change: every edit is a span edit
 on the text, the result is parsed again and checked, and nothing is returned when the check fails.
@@ -45,3 +53,66 @@ P12:
 Every file says it is synthetic. The integration tests in `tests/corpus/` read the corpus: records
 parse, bodies and records round-trip byte for byte through the patcher and through span edits
 built from the model, and a field edit changes only that field's lines.
+
+## Which files are records
+
+The walk lists every file below the project root whose name ends in `.md`, except:
+
+- hidden files and folders, the native way of each OS: on Linux and macOS a name that starts with
+  `.`, on Windows the hidden attribute, whatever the name. A `.drafts/` folder is hidden on Linux
+  and macOS, and on Windows only when it carries the attribute;
+- the folders `.theos`, `.git`, `.obsidian`, `.vscode`, `.github`, `.worktrees` and `.trash`, by
+  name, at any depth and on every OS;
+- what a `.gitignore` inside the project keeps out (never one above the root, the global excludes
+  or `.git/info/exclude`), and symbolic links, which are not followed;
+- every `README.md`, and everything under `templates/records/`, `tools/` and `attachments/`.
+
+`update`, `apply` and `preview` take a path by the same rules, so a path they index is one the
+next sync keeps.
+
+## The index and its cache
+
+`Index::open(&project, &registry)` opens `.theos/cache/index.sqlite` and brings it up to date. It
+returns the index and an `Update` that says what was read again. `Index::in_memory` is the same
+without a file. A cache that matches the files is not parsed again: only files whose size or
+modification time changed are read, and their content hash decides whether anything changed.
+
+- `sync()` compares the folder with the cache; `update(&[paths])` re-reads the named files;
+  `apply(&[Change])` takes staged texts and bytes as if they were on disk; `preview(&[Change])`
+  returns the findings and changes those texts would cause and leaves the index as it was.
+- Queries: `findings`, `findings_for`, `records`, `record`, `records_of_kind`, `backlinks`,
+  `children`, `links_from`.
+- `search(query, limit)` ranks records with SQLite FTS5. The crate quotes the words of the user;
+  the query language is never exposed.
+- `lens(holder)` gives the effective lens of a people, faction or npc with the layer each value
+  comes from, and the beliefs the holder holds.
+- `dump()` writes the whole state as text, for tests and for finding differences.
+
+The cache is a derived copy and can be deleted at any time. It is valid for one identity: the
+layout format, the crate version, the `schema_version` of the project, the fingerprint of the kind
+registry, the fingerprint of the rule set and the fingerprint of the crate sources. If any one
+differs, the cache is dropped and rebuilt. Every write is one `BEGIN IMMEDIATE` transaction with
+a busy timeout of 5 s. A cold index of 500 records takes under a second (CE-12.1, timed by
+`tests/index/speed.rs`).
+
+## The fixture projects
+
+`tests/fixtures/projects/` holds four small content projects, each with an `expected.toml`:
+`schema/` (one record per rule and field type, valid and invalid), `links/` (links, parents,
+backlinks and dangling targets), `lenses/` (layers of lenses and beliefs) and `search/` (ranking
+and matches). Every record is marked synthetic. The tests in `tests/index/` index them in place
+with `Index::in_memory`, so the repository never gets a `.theos/cache`; a test that needs the file
+cache copies a project into a temporary folder first.
+
+## Who uses what
+
+| Phase | Uses |
+|---|---|
+| P04 | `Finding`, `Severity`, the rule list and the relink step for lore rules; `values`, `links` and `beats` as inputs; its own tables in the same store; `BodyGrammar` |
+| P05 | `Project::open`, `SCHEMA_VERSION`, `findings`, `preview` for the hook, `KindSpec`, `Placement` and `order()`, `search`, records, links, backlinks and `lens` for the MCP read tools |
+| P06 | `preview` before every write and `update` after it; `KindSpec::order()`; backlinks with spans for renaming an id; `Placement` |
+| P07 | One project and one `.theos/cache` per agent worktree; `preview` for proposals |
+| P11, P12 | `search`, backlinks, slot targets for `[[` suggestions, `link/dangling` findings |
+| P15 | `lens` and its beliefs; links for the graph |
+| P17 | `preview` for drafts; `unaware_of` of the effective lens; embeddings in the same store |
+| P19 | Comment lists may be cached in the same store |

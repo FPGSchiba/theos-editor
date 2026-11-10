@@ -1,0 +1,17 @@
+# Checked by hand against the fixture texts. Every finding of the project: path, rule, severity,
+# line and column. T-950 links to T-951, which does not exist; the anchor of synthetic-broken is
+# the one yaml/anchor fault.
+
+[[finding]]
+path = "lore/truths/T-950.md"
+rule = "link/dangling"
+severity = "error"
+line = 11
+column = 17
+
+[[finding]]
+path = "things/synthetic-broken.md"
+rule = "yaml/anchor"
+severity = "error"
+line = 5
+column = 8

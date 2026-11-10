@@ -1,0 +1,37 @@
+# Checked by hand against docs/specs/phases/P03-kinds-index-search-lenses.md section 5.12 and
+# the fixture texts. Every finding of the project: path, rule, severity, line and column.
+
+[[finding]]
+path = "people/synthetic-folk/synthetic-flat.md"
+rule = "schema/value"
+severity = "error"
+line = 7
+column = 7
+
+[[finding]]
+path = "people/synthetic-folk/synthetic-guild/synthetic-odd.md"
+rule = "schema/value"
+severity = "error"
+line = 8
+column = 9
+
+[[finding]]
+path = "people/synthetic-folk/synthetic-guild/synthetic-odd.md"
+rule = "schema/value"
+severity = "error"
+line = 9
+column = 15
+
+[[finding]]
+path = "people/synthetic-folk/synthetic-guild/synthetic-odd.md"
+rule = "schema/unknown-entry"
+severity = "warning"
+line = 10
+column = 3
+
+[[finding]]
+path = "people/synthetic-stray.md"
+rule = "link/dangling"
+severity = "error"
+line = 6
+column = 9

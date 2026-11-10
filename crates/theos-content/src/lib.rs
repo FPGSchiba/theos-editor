@@ -12,19 +12,54 @@
 //! - [`body`]: blocks, wikilinks, callouts (voice, design, note), design notes, beats and
 //!   malformed constructs.
 //!
+//! After P03 it also provides:
+//!
+//! - [`project`]: [`Project`] reads `theos.toml`; [`SCHEMA_VERSION`];
+//! - [`finding`]: [`Finding`] and [`Severity`], the one shape of every problem found;
+//! - [`kinds`]: the [`KindRegistry`] of [`KindSpec`]s (declarative field tables, id rules,
+//!   [`Placement`], body grammars) and the generic checker behind [`FieldSpec`];
+//! - [`parts`]: the 20 builtin kinds, one module per kind and one `register` per part (codex,
+//!   scripts, concepts, maps); [`parts::builtin`] returns the registry;
+//! - [`check`]: the checks of one record ([`check::check_record`]) and their list
+//!   ([`check::rules`]);
+//! - [`walk`]: the walk of a project's record files ([`walk::walk`], [`is_record_path`]);
+//! - [`index`]: the persistent index. [`Index::open`] opens or builds the cache at
+//!   `.theos/cache/index.sqlite` and syncs it with the files. `sync`, `update(paths)`,
+//!   `apply(changes)` and `preview(changes)` keep it current, from disk or from staged texts.
+//!   Queries give findings, records, links, backlinks and children; `search` ranks matches
+//!   with SQLite FTS5; `lens` gives the effective lens of a holder with its layers; `dump`
+//!   writes the whole state as text.
+//!
+//! The cache is valid for one identity: the layout format, the crate version, the project
+//! `schema_version`, the registry, the rule set and a fingerprint of the crate sources. When any
+//! of them differs, the cache is rebuilt; when nothing changed, nothing is parsed again. Every
+//! write is one immediate transaction.
+//!
 //! Every span is a byte range into the LF text of the whole record; a CRLF record is read as its
 //! LF text and a write returns LF.
 //!
 //! Later phases use it so: P03 (index, registry) the record model, field and entry spans, the
 //! order injection of the patcher and the body links; P04 (validators) the malformed items,
-//! design notes, voice spans and note states; P05 the positions of errors; P06 (editing) the
-//! patcher, [`TextEdit`], [`apply_edits`], link target spans and [`Record::was_normalized`]; P09
-//! (notes) the note id, version, state span and text; P12 (UI) the body model and the UTF-16
-//! conversion of [`TextIndex`].
+//! design notes, voice spans and note states, and from P03 the findings, the rule list, the
+//! relink step and the same store for the ledger; P05 the positions of errors, `Project::open`,
+//! `findings`, `preview`, `search`, `lens` and [`KindSpec`]; P06 (editing) the patcher,
+//! [`TextEdit`], [`apply_edits`], link target spans and [`Record::was_normalized`], and `preview`
+//! before and `update` after each write, backlink spans and [`Placement`]; P07 one index per
+//! agent worktree; P09 (notes) the note id, version, state span and text; P11 and P12 (UI) the
+//! body model, the UTF-16 conversion of [`TextIndex`], `search`, backlinks and slot targets; P15
+//! `lens` and the links for the graph; P17 `preview` for drafts and the same store for
+//! embeddings; P19 the same store for comment lists.
 
 pub mod body;
+pub mod check;
+pub mod finding;
+pub mod index;
+pub mod kinds;
+pub mod parts;
+pub mod project;
 pub mod record;
 pub mod text;
+pub mod walk;
 pub mod yaml;
 
 #[cfg(test)]
@@ -35,6 +70,16 @@ pub use body::{
     DesignNote, DesignNoteForm, Fold, Link, Malformed, MalformedKind, Note, NoteState, Token,
     Voice,
 };
+pub use finding::{Finding, Severity};
+pub use index::{
+    Change, Column, EffectiveLens, HeldBelief, Hit, IgnoredEntry, Index, IndexError, Layer,
+    LensData, LensValue, LinkRef, Match, Origin, Overridden, Preview, RecordSummary, Slot, Update,
+};
+pub use kinds::{
+    BodyGrammar, FieldSpec, FieldType, KindRegistry, KindSpec, Placement, RegistryError, Target,
+};
+pub use project::{Project, ProjectError, SCHEMA_VERSION};
 pub use record::{ReadError, Record, RecordEditError, RecordError, decode, read_record};
 pub use text::{Position, Span, TextEdit, TextIndex, apply_edits};
+pub use walk::is_record_path;
 pub use yaml::{MapProblem, Order, PatchError, PatchOp, YamlError, YamlRule};

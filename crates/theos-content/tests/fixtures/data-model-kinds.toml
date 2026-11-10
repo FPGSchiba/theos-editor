@@ -1,0 +1,289 @@
+# Transcribed from docs/specs/data-model.md §5–§8 (P03, CE-11.1). Not canon.
+
+[[kind]]
+name = "tower"
+part = "codex"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+]
+
+[[kind]]
+name = "band"
+part = "codex"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+  "parent: link → tower, required",
+  "floors: floor range, required",
+  "mode: text",
+  "mood: text",
+  "belief_stage: text",
+  "tier: one of T1|T2|T3",
+]
+
+[[kind]]
+name = "floor"
+part = "codex"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon, required",
+  "tags: text list",
+  "parent: link → band, required",
+  "number: integer 1..=100, required",
+]
+
+[[kind]]
+name = "location"
+part = "codex"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+  "parent: link → floor|location, required",
+  "type: text",
+]
+
+[[kind]]
+name = "people"
+part = "codex"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+  "lives_in: links → band|floor",
+  "lens: lens",
+]
+
+[[kind]]
+name = "faction"
+part = "codex"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+  "parent: link → people, required",
+  "lens: lens",
+]
+
+[[kind]]
+name = "npc"
+part = "codex"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+  "parent: link → faction|people, required",
+  "home: link → location|floor",
+  "role: text",
+  "lens: lens",
+]
+
+[[kind]]
+name = "thing"
+part = "codex"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+  "type: text, required",
+  "where: links → band|floor|location",
+]
+
+[[kind]]
+name = "topic"
+part = "codex"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon, required",
+  "tags: text list",
+  "track: one of explaining|in-world, required",
+  "counterpart: link → topic(track=explaining)",
+  "source: url",
+]
+
+[[kind]]
+name = "truth"
+part = "codex"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon, required",
+  "tags: text list",
+  "target: one of hinted|suspected|confirmed|never, required",
+  "requires: links → truth",
+  "topic: link → topic(track=explaining)",
+  "cites: links → equation",
+]
+
+[[kind]]
+name = "belief"
+part = "codex"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon, required",
+  "tags: text list",
+  "held_by: links → people|faction|npc, required",
+  "distorts: link → truth",
+  "accuracy: one of false|partial|close",
+  "topic: link → topic(track=in-world)",
+]
+
+[[kind]]
+name = "clue"
+part = "codex"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon, required",
+  "tags: text list",
+  "reveals: link → truth, required",
+  "moves_to: one of hinted|suspected|confirmed, required",
+  "where: links → band|floor|location, required",
+  "gate: one of T1|T2|T3, required",
+  "after: links → clue",
+  "vector: text, required",
+]
+
+[[kind]]
+name = "equation"
+part = "codex"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+  "source: url, required",
+  "generated: true, required",
+]
+
+[[kind]]
+name = "script"
+part = "scripts"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon, required",
+  "tags: text list",
+  "where: links → band|floor|location",
+]
+
+[[kind]]
+name = "dialogue"
+part = "scripts"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+  "speaker: link → npc|faction|people, required",
+]
+
+[[kind]]
+name = "template"
+part = "scripts"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+  "purpose: one of dialogue|description, required",
+]
+
+[[kind]]
+name = "concept"
+part = "concepts"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+  "for: links → tower|band|floor|location|people|faction|npc|thing, required",
+  "picked: links → concept-version",
+]
+
+[[kind]]
+name = "concept-version"
+part = "concepts"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+  "concept: link → concept, required",
+  "generator: name@version, required",
+  "recipe: text, required",
+  "seed: integer",
+  "inputs: map",
+  "from: link → concept-version",
+  "outputs: binary refs, required",
+  "results: map",
+  "addresses: note ids",
+  "rating: one of unrated|keep|kill|mix, required",
+  "state: one of T1|T3",
+]
+
+[[kind]]
+name = "map"
+part = "maps"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+  "for: links → band|floor|location, required",
+  "type: text",
+  "picked: links → map-version",
+]
+
+[[kind]]
+name = "map-version"
+part = "maps"
+fields = [
+  "id: id, required",
+  "kind: kind, required",
+  "title: text, required",
+  "status: one of draft|canon",
+  "tags: text list",
+  "map: link → map, required",
+  "generator: name@version, required",
+  "recipe: text, required",
+  "seed: integer",
+  "inputs: map",
+  "from: link → map-version",
+  "outputs: binary refs, required",
+  "results: map",
+  "addresses: note ids",
+  "rating: one of unrated|keep|kill|mix, required",
+]

@@ -9,7 +9,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P00 | Foundation and gate | theos-editor | done | #5, #9, #10 | #7 |
 | P01 | Content layout and templates | tower-of-theos | done | #4 | tower-of-theos#2 |
 | P02 | Records and grammars | theos-editor | done | #16 | #17 |
-| P03 | Kinds, index, search, lenses | theos-editor | spec-pr | #18 | |
+| P03 | Kinds, index, search, lenses | theos-editor | pr-open | #18 | #20 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | todo | | |
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
 | P06 | Command layer and git | theos-editor | todo | | |
@@ -36,7 +36,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P27 | Asset pipelines | theos-editor | todo | | |
 | P28 | Workflow catalogue and asset guide | tower-of-theos | todo | | |
 
-Rows P20–P28 come from umbrella version 2, which waits for Jann in its docs PR (#19).
+Rows P20–P28 come from umbrella version 2 (#19).
 
 ## Needs Jann
 
@@ -48,17 +48,30 @@ Rows P20–P28 come from umbrella version 2, which waits for Jann in its docs PR
 - Three sentences of the P10 corpus read like lore claims (B-901's link text, "the Cutter is
   near", "the operator-plate names a Listener"). P02's fixture copies reword them neutrally until
   Jann, or a session that can read Confluence, confirms they are canon.
-- R5-1, open since #17 merged, is fixed in P03's build (plan Task 1).
-- The P03 spec (#18) waits for Jann's approval. Its rulings are listed in the PR; the plan starts
-  once it is merged.
+- R5-1, open since #17 merged, is fixed in the P03 build PR #20 (Task 1, `82bcc36`). The entry
+  goes when that PR merges.
+- The P03 build PR #20 is a draft labelled `needs-jann`. Its final review loop reached the cap of
+  5 rounds with two Minor findings open. At Jann's request a sixth round fixed both, and the PR
+  now waits for his review and merge.
+- P03 spec §5.7 (a protected path) says only that hidden entries are skipped. Jann ruled on
+  2026-11-10 that hiding is native, and the build follows that:
+  - on Windows, a file or folder is hidden when it has the hidden attribute;
+  - on Linux and macOS, a name that starts with a dot is hidden;
+  - on every OS, `.theos`, `.git`, `.obsidian`, `.vscode`, `.github`, `.worktrees` and `.trash`
+    are never records.
+
+  Two consequences follow. A file hidden by its attribute on Windows is a record on Linux. On
+  Windows, a dot folder outside that list and without the attribute (`.claude/`, `.idea/`) is
+  walked unless `.gitignore` ignores it; in tower-of-theos today that changes nothing. The spec
+  text can be aligned in a docs PR.
+- P03 spec §7's risk row for two builds sharing one cache (a protected path) says each open
+  rebuilds. Since the final review, every write rechecks the cache identity: a build rebuilds the
+  cache whenever another build has written since, and after three rebuilds in one write it fails
+  with `IndexError::Contended`. The row can be aligned in a docs PR.
 - P02 spec §5.11 says a design note is "a paragraph whose text starts with `Design note:`". The
   build follows data model §9.2 instead ("on a line starting with `Design note:`"), which ranks
   higher: a note line inside a paragraph starts a note that runs to the paragraph's end. The spec
   wording can be aligned in a docs PR.
-
-- Umbrella version 2 (world atlas, quests, art from lore; P20–P28) waits for Jann in #19.
-  It keeps P03's CE-11.1 to the kinds of umbrella version 1, so the P03 spec (#18) needs no change;
-  the new kinds get their schemas in P21 and P26.
 
 ## Needs a private session (Confluence, Jira, plugin)
 
