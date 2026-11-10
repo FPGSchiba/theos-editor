@@ -16,8 +16,8 @@ Higher beats lower. This session has no access to Confluence or Jira; never ask 
 guess what a Confluence page says. If something can only be answered there, add it to
 "Needs a private session" in `docs/status.md` and continue with what the repo defines.
 
-The content project is the sibling clone `../tower-of-theos`. Work there only in the phases that
-name it (P01, P08) and for reading fixtures.
+The content project is the sibling clone `../tower-of-theos`. Work there only in the phases whose
+repo column in the umbrella's phase table names it, and for reading fixtures.
 
 ## How work is done
 
