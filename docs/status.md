@@ -26,7 +26,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P17 | AI drafts and semantic search | theos-editor | todo | | |
 | P18 | Installer, first run, Code preset | theos-editor | todo | | |
 | P19 | Comments | theos-editor | todo | | |
-| P20 | Content layout for world and art kinds | tower-of-theos | spec-pr | #22 | |
+| P20 | Content layout for world and art kinds | tower-of-theos | pr-open | #22 | tower-of-theos#3 |
 | P21 | World kinds: enemies, spawns, quests | theos-editor | todo | | |
 | P22 | Map pins, cameras and frames | theos-editor | todo | | |
 | P23 | Map outputs for the atlas, blockout generator | tower-of-theos | todo | | |
@@ -75,6 +75,10 @@ Rows P20–P28 come from umbrella version 2 (#19).
   `f04-terrain-v1`, but that version's own example has no `frame`, and §8 says "A version without
   a `frame` takes no pins". Giving the example version a `frame` would align it. P20's tests do not
   run the pin checker on that fragment, and P22 will meet the same example.
+- The P20 build PR tower-of-theos#3 waits for Jann (content repo). Its final review loop ended
+  clean in round 3. Its description lists four manual checks in Obsidian and VS Code. It locks
+  `markdown-it-py` 4.3.0, which was released the day it was locked. Pinning an older 4.x is a
+  one-line follow-up if Jann prefers a cool-down.
 
 ## Needs a private session (Confluence, Jira, plugin)
 
