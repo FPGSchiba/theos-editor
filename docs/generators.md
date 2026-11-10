@@ -31,6 +31,10 @@ Inside the editor this is the `Generator` trait in `theos-studio` with three ada
   theos_blockout first; any other program, including the game engine, can implement it);
 - **comfyui** — the ComfyUI HTTP API; workflow templates with named slots are its recipes (§7).
 
+The CLI runs generators through the same layer: `theos gen list | describe | run` (CE-30.4).
+`run` writes each seed's outputs and results and a contact sheet to a folder it is given, and never
+writes records or the binaries folder; keeping a run stays in the editor and `gen_pick`.
+
 Pipelines (§8) chain recipes into stages with a pick between them. They live in the editor, not in
 the protocol: a generator never sees a pipeline, only single runs.
 

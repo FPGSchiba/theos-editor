@@ -57,7 +57,7 @@ tower-of-theos/
 | `theos-studio` | lib | Projects, layered settings, editor-part registry, command layer, agent sessions, review queue, generators (`docs/generators.md`), LLM client, binaries folder. |
 | `theos-map-format` | lib | The map package (`docs/map-package.md`): types, reader and writer. Depends on no other crate of this workspace, so the engine can depend on it alone. |
 | `theos-maps` | lib | The map generator (decision 0003): recipes, the stage pipeline, terrain, settlement and interior maps, renders, packages; deterministic on every platform (G20). `theos-studio` runs it in-process. |
-| `theos` | bin | CLI: `check`, `ledger`, `new`, `schema`, `review …`, `hook install`. |
+| `theos` | bin | CLI: `check`, `ledger`, `new`, `schema`, `review …`, `gen …` (runs generators into a folder, never writes records), `hook install`. |
 | `theos-mcp` | bin | MCP server over stdio. |
 | `theos-editor` | bin (Tauri 2) | Authoring shell; Tauri commands wrap the command layer; typed IPC bindings generated for the UI. Feature `engine` (off) pulls engine crates from Theos-Engine as git dependencies. |
 | `xtask` | bin | Gate tooling (`docs/gate.md`) and generator conformance checks. |

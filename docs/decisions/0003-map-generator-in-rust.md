@@ -33,6 +33,9 @@ Jann's words (2026-11-10):
 - Floors: "It should stay the same" for every player, every time they enter it.
 - Indoor floors: "Probably yes, so we will need stacked levels."
 - "Lets leave the phase splitted. I think its better to have focused phases."
+- On running generators from the existing CLI, as `theos check` runs the lore checks: "Lets move it
+  to P09. I think its a good addition to already see some things in action and test it end to
+  end."
 
 **Non-goals:** reproducing maps made with `theos_maps` 0.3.0 bit for bit; generating canon floors
 while the game runs; erosion on the GPU; exporting pins, spawns and quests to the engine now
@@ -51,6 +54,7 @@ while the game runs; erosion on the GPU; exporting pins, spawns and quests to th
 |---|---|---|
 | Who makes maps | A Rust library, `theos-maps`, in this workspace; the Python toolset retires | 1 |
 | How the editor runs it | In-process, on worker threads, through a third adapter `builtin` behind the existing `Generator` trait; no binary | 1, 9 |
+| From the shell | `theos gen list \| describe \| run` in the existing CLI (P09, CE-30.4): runs into a folder with a contact sheet, never writes records | 9 |
 | Bake or generate in the game | Bake. Every floor is one canon terrain, the same for every player; the game ships the package of the picked version. Runtime generation stays an option only for what varies inside a fixed floor | 2 |
 | Determinism | The same recipe and seed give the same bytes on Windows, Linux and macOS (x64 and arm64), new global constraint G20 | 3 |
 | Erosion | Implemented from the papers; fastscapelib is GPL-3.0 and is neither linked nor translated | 4 |
@@ -76,9 +80,9 @@ while the game runs; erosion on the GPU; exporting pins, spawns and quests to th
 
 Jann chose (C), against my first proposal (B): the library already is the generator, so a binary
 would only add a second program to ship. The process adapter stays for other generators (the
-blockout generator of P23, perhaps the engine), and a `theos gen` subcommand can later give other
-tools the same runs without the editor. Running maps no longer needs uv or Python; the blockout
-generator still does.
+blockout generator of P23, perhaps the engine). Skills and scripts get the same runs from the shell
+through a `theos gen` subcommand of the existing CLI (P09, CE-30.4; §9). Running maps no longer
+needs uv or Python; the blockout generator still does.
 
 ## 2. Bake once, or generate while the game runs
 
@@ -315,8 +319,21 @@ needed. A larger indoor floor would need a new major format version.
 - **Extensions.** The drop-in `.py` stages of 0.3.0 become stages compiled into the library: one
   module plus one registration line each (engineering directive 1). The `omega_detuning` extension
   becomes a normal stage.
-- **CLI and MCP** run maps through the same layer (`gen_run`, CE-30), so Claude in a private
-  session generates maps the same way.
+- **MCP** runs maps through the same layer (`gen_run`, `gen_pick`, CE-30.1–30.3); agents' picks
+  land as review entries.
+- **CLI** (P09, CE-30.4): `theos gen list`, `theos gen describe <generator>` and
+  `theos gen run <generator> <recipe> --seeds … --out <dir> [--recipe-file <path>]`, over the same
+  generator layer. It brings back 0.3.0's loop for working on recipes: change a recipe, run four
+  seeds, look at the contact sheet, read the results. A skill calls it like `theos check`, and
+  scripts and CI use it for batch runs and hash checks.
+  - `run` writes each seed's outputs and results and a contact sheet to the folder it is given, and
+    never writes records or the binaries folder. G7 binds MCP, but an agent in a shell that calls
+    `theos` is not covered by it, so the CLI changes no content. Keeping a run stays in the editor
+    (people) and `gen_pick` (agents, as a review entry).
+  - `--recipe-file` runs a recipe that is not saved in the project yet.
+  - Until P09, P08 runs its recipes for the parity tests and the contact sheet through a
+    developer example inside the crate (`cargo run -p theos-maps --example …`), which ships
+    nothing and adds no crate.
 
 ## 10. Phases and documents
 
@@ -325,7 +342,7 @@ needed. A larger indoor floor would need a new major format version.
 | Phase | Repo | Slice | Depends on | Scope |
 |---|---|---|---|---|
 | **P08** Map format and terrain generator (rewritten) | theos-editor | S4 | P00 | `theos-map-format` (format 1.0, levels included); `theos-maps` (stage core, determinism, every terrain stage of 0.3.0 including omega, terrain renders and `base`, frame and features, the library API with progress and cancel, built-in terrain recipes) |
-| **P09** Generator layer and generator tools (adjusted) | theos-editor | S4 | P07, P08 | adds the `builtin` adapter; CE-29.4 now covers it; CE-29.5 is tested with a fixture process generator |
+| **P09** Generator layer and generator tools (adjusted) | theos-editor | S4 | P07, P08 | adds the `builtin` adapter; CE-29.4 now covers it; CE-29.5 is tested with a fixture process generator; `theos gen` in the CLI (CE-30.4) |
 | **P22** Map pins, cameras and frames (adjusted) | theos-editor | S8 | P09 | pins with `level`; CE-61.2 gains the level finding |
 | **P23** Map recipes and blockout generator (renamed) | tower-of-theos | S8 | P08, P29 | CE-63 now puts the project's map recipes into `tools/maps/recipes/`; the old CE-63 (frame and features) moved into P08 and P29; the blockout reads `.theosmap` 1.0 |
 | **P29** Settlements, interiors and child maps (new) | theos-editor | S8 | P08 | the rest of the 0.3.0 port, one level |
@@ -339,7 +356,7 @@ stacked levels but nothing earlier needs them.
 
 | Document | Change |
 |---|---|
-| `docs/specs/00-umbrella.md` | Version 3: G1, G4, G11, new G20; the phase table; P08 rewritten (CE-28, CE-76, CE-77); CE-29.3, CE-29.4, CE-29.5 and CE-29.7; CE-61.2 and CE-62.2; P23 renamed, CE-63 replaced, CE-64.2; P29 (CE-78) and P30 (CE-79); slices S8 and S10; the order of phases |
+| `docs/specs/00-umbrella.md` | Version 3: G1, G4, G11, new G20; the phase table; P08 rewritten (CE-28, CE-76, CE-77); CE-29.1, CE-29.3, CE-29.4, CE-29.5 and CE-29.7; new CE-30.4; CE-61.2 and CE-62.2; P23 renamed, CE-63 replaced, CE-64.2; P29 (CE-78) and P30 (CE-79); slices S8 and S10; the order of phases |
 | `docs/map-package.md` | New: format 1.0 |
 | `docs/architecture.md` | Repos, tree, crates, §11 generators, §14 path to the engine |
 | `docs/generators.md` | The `builtin` adapter, registration, the examples, `levels` in the frame, `base`, inputs of type `feature`, the keys of constraint results, conformance and versions |
@@ -365,7 +382,8 @@ This PR writes them into `docs/specs/00-umbrella.md`. Where each one comes from:
 | CE-76.1 to CE-76.4 Map package format | P08 | §6, `docs/map-package.md` |
 | CE-28.1 to CE-28.7 theos-maps terrain generator | P08 | §1, §4, §9 |
 | CE-77.1, CE-77.2 Determinism | P08 | §3, §8 |
-| CE-29.3, CE-29.4, CE-29.5, CE-29.7 (changed) | P09 | §1, §9 |
+| CE-29.1, CE-29.3, CE-29.4, CE-29.5, CE-29.7 (changed) | P09 | §1, §9 |
+| CE-30.4 `theos gen` (new) | P09 | §9 |
 | CE-61.2, CE-62.2 (changed) | P22 | §7 |
 | CE-63.1, CE-63.2 (replaced), CE-64.2 (changed) | P23 | §9, §6 |
 | CE-78.1 to CE-78.4 Settlements, interiors and child maps | P29 | §6, §10 |

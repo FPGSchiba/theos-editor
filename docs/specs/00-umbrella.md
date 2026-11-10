@@ -3,7 +3,7 @@
 Status: accepted when this file is merged by Jann · version 3 · 10 Nov 2026 (version 1: 31 Oct 2026;
 version 2, 5 Nov 2026, adds the world atlas, quests and art from lore: G19, P20–P28, slices S8 and
 S9; version 3 moves the map generator to Rust in this repo, decision 0003: G1, G4, G11, G20, P08
-rewritten, P09, P22 and P23 adjusted, P29, P30 and slice S10)
+rewritten, P09 (with `theos gen`), P22 and P23 adjusted, P29, P30 and slice S10)
 Owner of architecture: Jann · Built by: Claude Code with superpowers
 
 This spec defines the whole build as phases. Each phase runs one superpowers cycle:
@@ -360,11 +360,15 @@ crates to the gate's crate lists and bans the std float methods (decision 0003 �
 - CE-29.6 Open notes of the parent are in the run request when the generator accepts notes.
 - CE-29.7 Everything works with a fake generator used in tests, not only theos-maps.
 
-**CE-30 Generator and note tools over MCP**
+**CE-30 Generator and note tools over MCP and the CLI**
 - CE-30.1 `gen_catalogue` and `gen_runs` read; `gen_run`, `gen_pick`, `note_add`, `note_resolve`
   propose.
 - CE-30.2 Claude runs four seeds of a recipe and reads the results per seed.
 - CE-30.3 Picks and notes from agents land as review entries.
+- CE-30.4 `theos gen list`, `theos gen describe <generator>` and
+  `theos gen run <generator> <recipe> --seeds … --out <dir> [--recipe-file <path>]` use the same
+  generator layer as the editor and MCP; `run` writes each seed's outputs and results and a contact
+  sheet of all seeds to the folder, and never writes records or the binaries folder.
 
 ### P10 · Prose editor research
 
@@ -800,4 +804,4 @@ the map package, `docs/map-package.md` §9); NPC schedules and NPCs that move; p
 maps; tiled map images beyond 4K; 3D assets (meshes, textures); a LoRA per main character if faces
 drift between images; runtime dialogue built from quest step context. From version 3: refining
 baked maps at a finer scale in the engine; generating dungeons or detail from a seed in the game;
-a `theos gen` subcommand that runs generators without the editor; the blockout generator in Rust.
+the blockout generator in Rust.
