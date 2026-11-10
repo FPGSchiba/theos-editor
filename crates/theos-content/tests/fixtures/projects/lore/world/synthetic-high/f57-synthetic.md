@@ -3,6 +3,7 @@
 id: f57-synthetic
 kind: floor
 title: Synthetic floor fifty-seven
+status: draft
 parent: synthetic-high
 number: 57
 ---

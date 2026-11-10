@@ -221,6 +221,14 @@ fn a_removed_clue_and_a_removed_truth_leave_no_rows() -> TestResult {
         lines.is_empty(),
         "ledger rows of a removed truth remain: {lines:?}"
     );
+    let pointing: Vec<&str> = ledger_lines(&dump)
+        .into_iter()
+        .filter(|line| line.contains(SUSPECTED))
+        .collect();
+    assert!(
+        pointing.is_empty(),
+        "ledger rows of the removed clue remain: {pointing:?}"
+    );
     Ok(())
 }
 

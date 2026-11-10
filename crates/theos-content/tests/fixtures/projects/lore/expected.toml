@@ -1,8 +1,7 @@
 # synthetic fixture (P04), not canon
 # Checked by hand against docs/specs/phases/P04-validation-lore-rules-ledger-formalism-mirror.md
 # section 5.8 and the fixture texts. Every finding of the project: path, rule, severity, line and
-# column. The three floors lack `status` (a P03 finding); the rest are the guardrails and the
-# duplicated T-954.
+# column: the guardrails, and the duplicated T-954 and T-955.
 
 [[finding]]
 path = "lore/clues/C-955.md"
@@ -26,7 +25,28 @@ line = 7
 column = 10
 
 [[finding]]
+path = "lore/clues/C-958.md"
+rule = "lore/never-confirm"
+severity = "error"
+line = 7
+column = 10
+
+[[finding]]
+path = "lore/clues/C-958.md"
+rule = "lore/no-overshoot"
+severity = "error"
+line = 8
+column = 11
+
+[[finding]]
 path = "lore/truths/T-954.md"
+rule = "index/duplicate-id"
+severity = "error"
+line = 3
+column = 5
+
+[[finding]]
+path = "lore/truths/T-955.md"
 rule = "index/duplicate-id"
 severity = "error"
 line = 3
@@ -47,6 +67,20 @@ line = 4
 column = 7
 
 [[finding]]
+path = "lore/truths/synthetic-copy/T-955.md"
+rule = "index/duplicate-id"
+severity = "error"
+line = 3
+column = 5
+
+[[finding]]
+path = "lore/truths/synthetic-copy/T-955.md"
+rule = "index/placement"
+severity = "warning"
+line = 4
+column = 7
+
+[[finding]]
 path = "story/scripts/S-951.md"
 rule = "lore/never-confirm"
 severity = "error"
@@ -59,24 +93,3 @@ rule = "lore/no-overshoot"
 severity = "error"
 line = 17
 column = 11
-
-[[finding]]
-path = "world/synthetic-high/f21-synthetic.md"
-rule = "schema/required"
-severity = "error"
-line = 4
-column = 7
-
-[[finding]]
-path = "world/synthetic-high/f57-synthetic.md"
-rule = "schema/required"
-severity = "error"
-line = 4
-column = 7
-
-[[finding]]
-path = "world/synthetic-low/f04-synthetic.md"
-rule = "schema/required"
-severity = "error"
-line = 4
-column = 7

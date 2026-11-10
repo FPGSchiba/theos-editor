@@ -99,3 +99,33 @@ gate = "T1"
 clue = "C-957"
 clue_path = "lore/clues/C-957.md"
 placed_by = []
+
+[[truth]]
+id = "T-955"
+path = "lore/truths/T-955.md"
+title = "Synthetic duplicated truth, never and hinted"
+target = "never"
+
+[[truth.entry]]
+state = "suspected"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-958"
+clue_path = "lore/clues/C-958.md"
+placed_by = []
+
+[[truth]]
+id = "T-955"
+path = "lore/truths/synthetic-copy/T-955.md"
+title = "Synthetic duplicated truth, second copy, hinted"
+target = "hinted"
+
+[[truth.entry]]
+state = "suspected"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-958"
+clue_path = "lore/clues/C-958.md"
+placed_by = []

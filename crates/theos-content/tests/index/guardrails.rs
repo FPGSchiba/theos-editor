@@ -70,7 +70,7 @@ fn never_confirm_passes_and_fails() -> TestResult {
         "C-955 hints at T-952, whose target is `never`: nothing may reveal it. Let a belief voice it instead."
     );
     assert_eq!(
-        messages[2],
+        messages[3],
         "Beat 2 places C-955, which hints at T-952, whose target is `never`: nothing may reveal it. Let a belief voice it instead."
     );
     Ok(())
@@ -89,6 +89,7 @@ fn no_overshoot_passes_and_fails() -> TestResult {
         messages,
         [
             "C-956 moves T-953 to suspected, past its target hinted.",
+            "C-958 moves T-955 to suspected, past its target hinted.",
             "Beat 3 places C-956, which moves T-953 to suspected, past its target hinted."
         ]
     );
@@ -98,21 +99,70 @@ fn no_overshoot_passes_and_fails() -> TestResult {
 #[test]
 fn a_duplicated_truth_id_fires_if_any_breaks_it() -> TestResult {
     let project = TempProject::copy_of("lore")?;
-    let on_clue = |findings: &[Finding]| findings.iter().any(|f| f.path == "lore/clues/C-957.md");
-    assert!(on_clue(&found(&project, NEVER)?), "one copy is `never`");
+    let on = |findings: &[Finding], path: &str| findings.iter().any(|f| f.path == path);
+    // T-954: one copy is `never`, the other `confirmed`.
+    assert!(on(&found(&project, NEVER)?, "lore/clues/C-957.md"));
     project.remove("lore/truths/T-954.md")?;
     assert!(
-        !on_clue(&found(&project, NEVER)?),
+        !on(&found(&project, NEVER)?, "lore/clues/C-957.md"),
         "the remaining copy is `confirmed`"
     );
-    // Confirming a `confirmed` truth is no overshoot.
-    edit(
-        &project,
-        "lore/clues/C-957.md",
-        "moves_to: hinted",
-        "moves_to: confirmed",
-    )?;
-    assert!(!on_clue(&found(&project, OVERSHOOT)?));
+    Ok(())
+}
+
+// AC: CE-15.1
+#[test]
+fn both_guardrails_fire_on_a_clue_whose_truth_id_is_duplicated() -> TestResult {
+    // T-955: one copy is `never`, the other `hinted`; C-958 moves it to `suspected`.
+    let project = TempProject::copy_of("lore")?;
+    let at = |rule: &str| -> Result<Vec<(usize, usize)>, Box<dyn std::error::Error>> {
+        let findings = found(&project, rule)?;
+        Ok(findings
+            .iter()
+            .filter(|f| f.path == "lore/clues/C-958.md")
+            .filter_map(|f| f.position.map(|p| (p.line, p.column)))
+            .collect())
+    };
+    assert_eq!(at(NEVER)?, [(7, 10)], "never-confirm sits at `reveals`");
+    assert_eq!(at(OVERSHOOT)?, [(8, 11)], "no-overshoot sits at `moves_to`");
+    // The `never` copy sorts second by path.
+    let first = "lore/truths/T-955.md";
+    let second = "lore/truths/synthetic-copy/T-955.md";
+    edit(&project, first, "target: never", "target: hinted")?;
+    edit(&project, second, "target: hinted", "target: never")?;
+    assert_eq!(at(NEVER)?, [(7, 10)]);
+    assert_eq!(at(OVERSHOOT)?, [(8, 11)]);
+    Ok(())
+}
+
+// AC: CE-15.1
+#[test]
+fn never_confirm_fires_whatever_the_moves_to() -> TestResult {
+    for (from, to) in [
+        (
+            "moves_to: hinted
+",
+            "moves_to: bogus
+",
+        ),
+        (
+            "moves_to: hinted
+",
+            "",
+        ),
+    ] {
+        let project = TempProject::copy_of("lore")?;
+        edit(&project, "lore/clues/C-955.md", from, to)?;
+        let findings = found(&project, NEVER)?;
+        let clue = findings
+            .iter()
+            .find(|f| f.path == "lore/clues/C-955.md")
+            .ok_or("no finding on C-955")?;
+        assert_eq!(
+            clue.message,
+            "C-955 reveals T-952, whose target is `never`: nothing may reveal it. Let a belief voice it instead."
+        );
+    }
     Ok(())
 }
 
@@ -138,7 +188,11 @@ fn a_clue_that_reveals_nothing_checkable_is_left_to_the_other_findings() -> Test
         "target: soon",
     )?;
     let findings = found(&project, OVERSHOOT)?;
-    assert_eq!(findings.len(), 0, "{findings:?}");
+    let on_c956: Vec<_> = findings
+        .iter()
+        .filter(|f| f.path == "lore/clues/C-956.md" || f.path == "story/scripts/S-951.md")
+        .collect();
+    assert_eq!(on_c956.len(), 0, "{on_c956:?}");
     Ok(())
 }
 
@@ -152,7 +206,19 @@ fn guardrail_findings_are_errors() -> TestResult {
         .into_iter()
         .filter(|f| f.rule == NEVER || f.rule == OVERSHOOT)
         .collect();
-    assert_eq!(guardrails.len(), 5);
+    assert_eq!(guardrails.len(), 7);
     assert!(guardrails.iter().all(|f| f.severity == Severity::Error));
+    Ok(())
+}
+
+#[test]
+fn the_project_has_exactly_the_expected_findings() -> TestResult {
+    let project = Project::open(&fixture("lore"))?;
+    let mut index = Index::in_memory(&project, &parts::builtin()?)?;
+    index.sync()?;
+    assert_eq!(
+        keys(&index.findings()?),
+        expected(&fixture("lore").join("expected.toml"))?
+    );
     Ok(())
 }
