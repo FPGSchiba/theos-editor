@@ -271,7 +271,6 @@ fn folds_case(project: &TempProject) -> bool {
     project.root().join("CANON").exists()
 }
 
-// AC: CE-16.4
 #[test]
 fn a_source_spelled_unlike_the_file_on_disk_is_no_source() -> TestResult {
     // Only `canon/formalism/_Source.json` is on disk. The index sees no source, so every

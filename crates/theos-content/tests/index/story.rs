@@ -31,7 +31,6 @@ fn story_findings_equal_the_expectation() -> TestResult {
     Ok(())
 }
 
-// AC: CE-14.2
 #[test]
 fn a_belief_rejected_by_one_of_two_holders_passes() -> TestResult {
     let findings = story_findings(&Project::open(&fixture("story"))?)?;
@@ -44,7 +43,6 @@ fn a_belief_rejected_by_one_of_two_holders_passes() -> TestResult {
     Ok(())
 }
 
-// AC: CE-14.2
 #[test]
 fn beats_without_at_or_when_skip_those_checks() -> TestResult {
     let findings = story_findings(&Project::open(&fixture("story"))?)?;
@@ -98,7 +96,6 @@ fn beats_that_share_a_number_are_left_to_body_beat_number() -> TestResult {
     Ok(())
 }
 
-// AC: CE-14.2
 #[test]
 fn a_clue_with_two_records_fails_when_any_breaks_the_rule() -> TestResult {
     let project = TempProject::copy_of("story")?;
