@@ -53,11 +53,14 @@ rule takes its severity from the project settings; a *fixed* rule keeps its defa
 `rules::all(&registry)` lists every rule, kind-registered ones included. `Index::findings` and
 `findings_for` report with the configured severities.
 
-**Body rules.** The index checks the body of each record with the grammar of its kind: malformed
-constructs, voice and design blocks, beats and notes, and in-world text (developer words, ids and
-tiers in prose that a player reads; voice titles are never in-world text, malformed titles
-included). They run in the parse step of a record and never read
-another record.
+**Body rules.** The index checks the body of each record with the grammar of its kind: P02's
+malformed constructs, voice tiers, and the beats and notes of the kinds that have them (`when::`
+tiers, `at::` links, repeated and unknown keys, beat numbers, note ids and states). A construct
+that its kind gives no meaning, such as a beat heading in a topic, gives no finding. Body rules
+run in the parse step of a record and never read another record. The parse step also stores the
+record's in-world text: voice blocks, in-world topics, belief titles and dialogue bodies, never
+voice titles (malformed ones included), design notes or a dialogue's level-2 headings. Developer
+words in that text are a lore rule (`lore/inworld-vocab`, below).
 
 **The lore step.** After the links are resolved, in the same transaction, each subject (a record
 or an input file) runs the lore rules that match it (`LoreRule` with `On::Kinds`, `On::AnyRecord`
@@ -66,8 +69,9 @@ the table `deps`. A subject is dirty when it was parsed again or when it read a 
 transaction changed, so a change re-runs exactly the subjects that read something it touched. A
 cold build and an incremental run are the same code; when more than 32 subjects with a matching
 rule are dirty the facts are loaded at once, otherwise by id. The rules cover places, truths,
-clues, their order and gates, `requires` cycles, reveal sites, beliefs and lenses. Parts register
-more rules with `KindRegistry::register_rule`. `dump()` shows the reads.
+clues, their order and gates, `requires` cycles, reveal sites, beliefs and lenses, developer words
+in in-world text (with the words of `.theos/settings.toml`) and the formalism mirror. Parts
+register more rules with `KindRegistry::register_rule`. `dump()` shows the reads.
 
 **The ledger.** For every truth the index stores where it is hinted, suspected and confirmed
 (reveal sites with their floor, gate and order). `Index::ledger()` and `ledger_of(id)` return
@@ -79,9 +83,11 @@ allowlist entries. Two kinds of fault differ. A file that is not valid TOML, or 
 wrong TOML type (a shape problem), gives `settings/toml` and empty settings: `[validate]` counts
 as empty. A bad single entry (a guardrail, a fixed or an unknown rule named, a bad severity
 string, an allow entry without a reason or with an unknown key, a bad word) gives a finding with
-a span and has no effect, while the rest of the settings stays. The guardrails are
-`lore/never-confirm`, `lore/no-overshoot` and `lore/inworld-vocab`: they are guardrails by name,
-always errors on read, and no setting names them. The settings file and
+a span and has no effect, while the rest of the settings stays. One word fault reaches further:
+a word list too large to match gives `settings/word` at the list, and the lore step then checks
+only the built-in words and drops the allowlist, the safe side for the guardrail. The guardrails
+are `lore/never-confirm`, `lore/no-overshoot` and `lore/inworld-vocab`: they are guardrails by
+name, always errors on read, and no setting names them. The settings file and
 `canon/formalism/_source.json` are inputs of the index; like records, they count only when the
 file on disk is spelled exactly so.
 
@@ -95,7 +101,9 @@ modification time and are computed without the index's write lock; the result is
 
 **The formalism mirror.** `canon/formalism/_source.json` is parsed by `formalism::parse`
 into a `Source` of `Equation`s; `formalism::render` makes the generated equation records and
-`regenerate` writes them. The rules report an equation record that is stray, edited or missing.
+`regenerate` writes those whose bytes differ. It never deletes, and it never writes through a
+symbolic link or outside the project. The rules report an equation record that is stray, edited
+or missing.
 `theos formalism` runs the regeneration.
 
 ## What later phases use from P04

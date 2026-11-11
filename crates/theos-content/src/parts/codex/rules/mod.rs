@@ -1,4 +1,5 @@
-//! The lore rules of the codex part: value checks across places (spec §5.10).
+//! The lore rules of the codex part: places and parent chains (spec §5.10), truths and clues
+//! (§5.8), developer words in in-world text (§5.11) and the formalism mirror (§5.14).
 
 mod floor_number;
 mod formalism_edited;
