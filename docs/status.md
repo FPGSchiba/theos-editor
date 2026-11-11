@@ -10,7 +10,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P01 | Content layout and templates | tower-of-theos | done | #4 | tower-of-theos#2 |
 | P02 | Records and grammars | theos-editor | done | #16 | #17 |
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
-| P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | pr-open | #21 | |
+| P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | pr-open | #21 | #28 |
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
 | P06 | Command layer and git | theos-editor | todo | | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
@@ -78,11 +78,11 @@ from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#2
   build follows data model §9.2 instead ("on a line starting with `Design note:`"), which ranks
   higher: a note line inside a paragraph starts a note that runs to the paragraph's end. The spec
   wording can be aligned in a docs PR.
-- P04's build PR is a draft labelled `needs-jann`: its final review loop reached the cap of five
-  rounds (7, 1, 3, 1, then 2 findings; the one Important was fixed in round 1). Two Minors stay
-  open, listed in the PR: `formalism/source` keeps serde_json's line and column (a byte column)
-  on a span at 1:1 (R5-1), and `Finding`'s docs still say only `record/path` findings have no id
-  (R5-2). Jann decides whether one more fix round runs before merge.
+- P04's build PR #28 is a draft labelled `needs-jann`: its final review loop reached the cap of
+  five rounds (7, 1, 3, 1, then 2 findings; the one Important was fixed in round 1). Two Minors
+  stay open, listed in the PR: `formalism/source` keeps serde_json's line and column (a byte
+  column) on a span at 1:1 (R5-1), and `Finding`'s docs still say only `record/path` findings
+  have no id (R5-2). Jann decides whether one more fix round runs before merge.
 - P04 spec §5.17 says the CE-12.1 project "stays as P03 built it". The build adjusted its
   generated data so it stays valid under P04's rules (its test asserts no findings): same 500
   records, 25 per kind, bodies and links, same 1 s limit (ruling in the PR). The spec text can be
