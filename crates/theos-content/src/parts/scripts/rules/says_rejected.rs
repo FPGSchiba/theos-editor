@@ -6,7 +6,7 @@ use crate::lore::lens::rejects;
 use crate::lore::{Context, FactError, LoreRule, On, Subject};
 use crate::rules::RuleClass;
 
-use super::beat_links;
+use super::{beat_links, single_beats};
 
 /// The rule: a `says::` belief that the effective `rejects` of every `with::` holder of the beat
 /// contains. A beat without a `with::` holder is not checked; one holder that does not reject the
@@ -24,7 +24,7 @@ fn check(ctx: &mut Context<'_>, subject: &Subject) -> Result<Vec<Finding>, FactE
         return Ok(Vec::new());
     };
     let mut findings = Vec::new();
-    for beat in &script.beats {
+    for beat in single_beats(script) {
         let holders: Vec<&str> = beat_links(script, beat.number, "with")
             .map(|link| link.target.as_str())
             .collect();

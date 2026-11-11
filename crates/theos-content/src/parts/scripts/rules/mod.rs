@@ -1,5 +1,6 @@
 //! The lore rules of the scripts part: what a beat's attributes say against places, lenses and
-//! clues (spec §5.9). A beat without `at::` or `when::` skips the checks that need it.
+//! clues (spec §5.9). A beat without `at::` or `when::` skips the checks that need it, and beats
+//! that share a number are not judged (see [`single_beats`]).
 
 mod beat_at;
 mod reveal_gate;
@@ -9,12 +10,26 @@ mod says_rejected;
 use std::rc::Rc;
 
 use crate::index::Slot;
-use crate::lore::{Context, FactError, FactLink, RecordFacts};
+use crate::lore::{Context, FactBeat, FactError, FactLink, RecordFacts};
 
 pub(super) use beat_at::BEAT_AT;
 pub(super) use reveal_gate::REVEAL_GATE;
 pub(super) use reveal_where::REVEAL_WHERE;
 pub(super) use says_rejected::SAYS_REJECTED;
+
+/// The beats of `script` whose number no other beat has, in order. A link knows its beat only
+/// by number, so the attributes of beats that share one cannot be told apart; such beats are
+/// left to their `body/beat-number` finding (one fault, one finding).
+fn single_beats(script: &RecordFacts) -> impl Iterator<Item = &FactBeat> {
+    script.beats.iter().filter(|beat| {
+        script
+            .beats
+            .iter()
+            .filter(|other| other.number == beat.number)
+            .count()
+            == 1
+    })
+}
 
 /// The links of the beat attribute `key` in beat `number` of `script`, in file order.
 fn beat_links<'a>(

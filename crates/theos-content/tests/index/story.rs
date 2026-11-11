@@ -67,6 +67,37 @@ fn beats_without_at_or_when_skip_those_checks() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn beats_that_share_a_number_are_left_to_body_beat_number() -> TestResult {
+    let project = TempProject::copy_of("story")?;
+    // Two beats 2: links are told apart only by beat number, so neither beat's `at::`,
+    // `when::` or `reveals::` can be paired with the other's. Beat 1 is judged as usual.
+    let path = "story/scripts/S-956.md";
+    project.write(
+        path,
+        "---\n# synthetic fixture (P04), not canon\nid: S-956\nkind: script\n\
+         title: Synthetic script S-956\nstatus: draft\nwhere: [f04-synthetic]\n---\n\
+         Synthetic opening text.\n\n\
+         ## Beat 1 — Below the gate\nreveals:: [[C-950]]\nwhen:: T1\n\n\
+         ## Beat 2 — Gate T3\nat:: [[synthetic-hall]]\nreveals:: [[C-952]]\nwhen:: T3\n\n\
+         ## Beat 2 — Gate T1\nat:: [[synthetic-yard]]\nreveals:: [[C-951]]\nwhen:: T1\n",
+    )?;
+    let findings = story_findings(&project.project()?)?;
+    let story: Vec<&str> = findings
+        .iter()
+        .filter(|finding| finding.path == path && finding.rule.starts_with("story/"))
+        .map(|finding| finding.message.as_str())
+        .collect();
+    assert_eq!(
+        story,
+        [
+            "Beat 1 reveals C-950 at T1, but the gate of C-950 is T2. Raise `when::` of the beat to T2 or lower the gate of C-950."
+        ]
+    );
+    assert_eq!(messages(&findings, path, "body/beat-number").len(), 1);
+    Ok(())
+}
+
 // AC: CE-14.2
 #[test]
 fn a_clue_with_two_records_fails_when_any_breaks_the_rule() -> TestResult {

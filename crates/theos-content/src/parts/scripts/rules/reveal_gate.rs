@@ -6,7 +6,7 @@ use crate::lore::availability::Tier;
 use crate::lore::{Context, FactError, LoreRule, On, Subject};
 use crate::rules::RuleClass;
 
-use super::{beat_links, clue_records};
+use super::{beat_links, clue_records, single_beats};
 
 /// The rule: the `when::` tier of a beat is below the valid `gate` of a clue that the beat
 /// reveals. A beat without a valid `when::` and a clue without a valid gate are skipped.
@@ -23,7 +23,7 @@ fn check(ctx: &mut Context<'_>, subject: &Subject) -> Result<Vec<Finding>, FactE
         return Ok(Vec::new());
     };
     let mut findings = Vec::new();
-    for beat in &script.beats {
+    for beat in single_beats(script) {
         let Some(when) = beat.when.as_deref().and_then(Tier::parse) else {
             continue;
         };
