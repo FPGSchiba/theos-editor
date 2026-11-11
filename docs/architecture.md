@@ -157,6 +157,13 @@ same bytes on every platform (G20). The blockout generator is a Python process g
 through uv with Python 3.12 in `.theos/cache/venv`. Outputs go to the binaries folder; versions
 become records; open notes go into every run request.
 
+**Stages.** Every step of the map generator, now and in every later phase, is a `Stage` (P08 spec
+§5.3). A stage declares the layers it reads and writes, takes typed parameters from the recipe,
+reaches the world only through its context, and is checked after it runs. A broken contract, a
+failed invariant or a diverging golden hash names the stage it comes from. Per-step processes
+inside an evolution loop are stages too. Shared mathematics are pure functions with their own
+tests. A new capability is a new stage module plus one registry line.
+
 The art pipeline, end to end:
 
 ```text

@@ -14,7 +14,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
 | P06 | Command layer and git | theos-editor | todo | | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
-| P08 | Map format and terrain generator | theos-editor | todo | | |
+| P08 | Map format and terrain generator | theos-editor | spec-pr | #27 | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
 | P10 | Prose editor research | theos-editor | done | #3 | #11 |
 | P11 | Editor shell and Codex | theos-editor | todo | | |
