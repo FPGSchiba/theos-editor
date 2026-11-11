@@ -274,6 +274,34 @@ fn a_colon_in_any_segment_leaves_the_folder() -> TestResult {
     Ok(())
 }
 
+// AC: CE-15.4
+#[test]
+fn a_reference_spelled_unlike_its_file_is_missing_on_every_os() -> TestResult {
+    // Only `boards/ok.bin` is on disk. A case-insensitive file system (Windows, macOS) opens it
+    // for `Boards/OK.bin`; the reference still counts only when spelled exactly so, as on Linux.
+    let binaries = Binaries::new()?;
+    let folds_case = binaries.root().join("BOARDS").join("OK.BIN").exists();
+    let project = with_version("Boards/OK.bin")?;
+    let found = messages_of_v3(&project, &binaries)?;
+    let expected = if folds_case {
+        "there is no file `Boards/OK.bin` in the binaries folder; it is spelled `boards/ok.bin` \
+         there"
+    } else {
+        "there is no file `Boards/OK.bin` in the binaries folder"
+    };
+    assert_eq!(
+        found,
+        [("binary/missing".to_owned(), expected.to_owned())],
+        "folds case: {folds_case}"
+    );
+    // The file was never hashed for that reference.
+    let (mut index, cache) = open(&project)?;
+    let report = index.binary_findings(&binaries.root())?;
+    assert!(!report.hashed.contains(&"Boards/OK.bin".to_owned()));
+    assert!(!memo_rows(&cache)?.contains(&"Boards/OK.bin".to_owned()));
+    Ok(())
+}
+
 #[test]
 fn a_folder_at_the_path_is_not_a_file() -> TestResult {
     let binaries = Binaries::new()?;

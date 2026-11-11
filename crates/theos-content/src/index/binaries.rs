@@ -18,6 +18,7 @@ use crate::index::store::map_error;
 use crate::index::{Index, IndexError};
 use crate::kinds::FieldType;
 use crate::rules::{RuleClass, RuleInfo};
+use crate::spelling::{self, Spelling};
 use crate::text::{Position, Span};
 use crate::walk::mtime_ns;
 
@@ -68,8 +69,11 @@ impl Index {
     ///
     /// A file is stat-ed and hashed, streaming, only when its size or time differ from the memo
     /// kept in the cache for this folder; a path that leaves the folder, also through a link, is
-    /// never read. Findings are `binary/missing` and `binary/hash`, both warnings, at the
-    /// reference value. They are not stored with the other findings.
+    /// never read. A reference counts only when the folder spells it exactly so: a file that a
+    /// case-insensitive file system (Windows, macOS) finds under another spelling is
+    /// `binary/missing`, as on Linux, and is not read. Findings are `binary/missing` and
+    /// `binary/hash`, both warnings, at the reference value. They are not stored with the other
+    /// findings.
     ///
     /// The hashing holds no transaction: the new memo rows are written afterwards in one short
     /// one.
@@ -233,8 +237,9 @@ impl Files<'_> {
         })
     }
 
-    /// The hash of the file at `segments` under the folder, from the memo when its size and
-    /// time are unchanged; `Err` is the message of the `binary/missing` finding.
+    /// The hash of the file at `segments` under the folder, spelled exactly so, from the memo
+    /// when its size and time are unchanged; `Err` is the message of the `binary/missing`
+    /// finding.
     fn hash_of(
         &mut self,
         conn: &Connection,
@@ -248,6 +253,19 @@ impl Files<'_> {
                 return Ok(Err(leaves(file)));
             }
             full.push(segment);
+        }
+        // Only the file of exactly this spelling counts, also where the file system would open
+        // another one for it (another case on Windows and macOS), as for records. A link inside
+        // the folder is an entry of its own name, and the containment check below judges it.
+        match spelling::of(self.root, segments) {
+            Spelling::Exact(_) => {}
+            Spelling::Other(on_disk) => {
+                return Ok(Err(format!(
+                    "there is no file `{file}` in the binaries folder; it is spelled `{on_disk}` \
+                     there"
+                )));
+            }
+            Spelling::Absent(error) => return Ok(Err(io_message(file, &error))),
         }
         // Resolve links first and use only the resolved path from here on, so a link swapped in
         // later is never followed: the containment check, the stat and the read all see `real`.

@@ -95,8 +95,10 @@ file on disk is spelled exactly so.
 outputs of versions): they exist inside the folder, and their digest matches `@sha256:`. A
 reference leaves the binaries folder, and is reported as `binary/missing` and never opened, when
 it is empty, starts with a separator, has a `..` segment or a `:` in any segment, or when the
-file it resolves to (links followed) lies outside the folder. Hashes are memoised by size and
-modification time and are computed without the index's write lock; the result is a
+file it resolves to (links followed) lies outside the folder. Like records, a reference counts
+only when the folder spells it exactly so: a file that Windows or macOS finds under another case
+is `binary/missing` there too, with the spelling on disk in the message. Hashes are memoised by
+size and modification time and are computed without the index's write lock; the result is a
 `BinaryReport`.
 
 **The formalism mirror.** `canon/formalism/_source.json` is parsed by `formalism::parse`

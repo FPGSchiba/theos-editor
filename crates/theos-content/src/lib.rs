@@ -78,6 +78,7 @@ pub mod project;
 pub mod record;
 pub mod rules;
 pub mod settings;
+mod spelling;
 pub mod text;
 pub mod walk;
 pub mod yaml;

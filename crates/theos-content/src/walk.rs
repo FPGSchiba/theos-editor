@@ -15,11 +15,13 @@
 //! they take is one the walk lists.
 
 use std::ffi::OsStr;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path};
 use std::time::UNIX_EPOCH;
 
 use ignore::WalkBuilder;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
+
+use crate::spelling;
 
 /// A project-relative record path, with `/` on every OS.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -183,32 +185,12 @@ fn gitignore(dir: &Path) -> Gitignore {
 
 /// Whether [`walk`] would list the record path `path` (project-relative, with `/`) below `root`:
 /// each folder of it is an entry of its parent folder that is a folder, and its file an entry
-/// that is a file, each spelled exactly as given. A name in another case, a path through a file
-/// and a symbolic link, which the walk does not follow, are not listed.
+/// that is a file, each spelled exactly as given ([`spelling::of`], which binary references and
+/// the formalism mirror share). A name in another case, a path through a file and a symbolic
+/// link, which the walk does not follow, are not listed.
 pub(crate) fn is_listed(root: &Path, path: &str) -> bool {
     let parts: Vec<&str> = path.split('/').collect();
-    let mut dir: PathBuf = root.to_path_buf();
-    for (depth, part) in parts.iter().enumerate() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            return false;
-        };
-        let is_dir = depth + 1 < parts.len();
-        let listed = entries.filter_map(Result::ok).any(|entry| {
-            entry.file_name() == **part
-                && entry.file_type().is_ok_and(|kind| {
-                    if is_dir {
-                        kind.is_dir()
-                    } else {
-                        kind.is_file()
-                    }
-                })
-        });
-        if !listed {
-            return false;
-        }
-        dir.push(part);
-    }
-    true
+    spelling::of(root, &parts).is_plain_file()
 }
 
 /// The modification time of a file in nanoseconds since the UNIX epoch, negative before it.
