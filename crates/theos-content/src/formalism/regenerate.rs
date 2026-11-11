@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use super::{FOLDER, SOURCE, SourceError, parse, render};
+use crate::spelling::{self, Spelling};
 
 /// What a regeneration did, as project-relative paths with `/`, in id order.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -16,7 +17,8 @@ pub struct Regenerated {
 /// Why a regeneration failed.
 #[derive(Debug, thiserror::Error)]
 pub enum FormalismError {
-    /// The project has no `canon/formalism/_source.json`.
+    /// The project has no file `canon/formalism/_source.json`: none of exactly that name, or a
+    /// folder or symbolic link, which the index does not take for the source either.
     #[error("the project has no {SOURCE}")]
     Missing,
     /// The source is not valid or cannot be rendered.
@@ -39,6 +41,19 @@ pub enum FormalismError {
         /// The file or folder.
         path: PathBuf,
     },
+    /// The file system finds the source or a record only under another spelling, as a
+    /// case-insensitive one (Windows, macOS) does. Only the file of exactly that name counts, so
+    /// the other file is neither read nor written, and nothing is written.
+    #[error(
+        "the file system takes {on_disk} for {path}, which counts only when spelled exactly so; \
+         nothing is written until {on_disk} is renamed or moved"
+    )]
+    Spelling {
+        /// The project-relative path, with `/`.
+        path: String,
+        /// The file that the file system finds for it, project-relative with `/`.
+        on_disk: String,
+    },
 }
 
 /// Writes each equation record of `<root>/canon/formalism/_source.json` whose bytes differ from
@@ -47,24 +62,24 @@ pub enum FormalismError {
 /// symbolic link: when `canon`, `canon/formalism` or a record it would write is one, or resolves
 /// outside the project, it writes nothing.
 ///
+/// Like the index, it takes the source and the records only under exactly their names. A source
+/// that is a link or a folder is no source. Where the file system finds the source or a record
+/// only under another spelling, as a case-insensitive one (Windows, macOS) does, it reads and
+/// writes nothing and names both spellings; elsewhere a record of another spelling is another
+/// file.
+///
 /// # Errors
 ///
 /// [`FormalismError`] when there is no source, it is not valid, a folder or record is a link
-/// or lies outside the project, or a file cannot be read or written.
+/// or lies outside the project, the source or a record is spelled otherwise on disk, or a file
+/// cannot be read or written.
 pub fn regenerate(root: &Path) -> Result<Regenerated, FormalismError> {
     let mut folder = root.to_path_buf();
     for part in FOLDER.split('/') {
         folder.push(part);
         refuse_link(&folder)?;
     }
-    let source_path = root.join(SOURCE);
-    let bytes = match std::fs::read(&source_path) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Err(FormalismError::Missing);
-        }
-        Err(error) => return Err(io(source_path, error)),
-    };
+    let bytes = read_source(root)?;
     let text = String::from_utf8(bytes)
         .map_err(|_| SourceError::format("the file is not UTF-8".to_owned()))?;
     let files = render(&parse(&text)?)?;
@@ -75,6 +90,7 @@ pub fn regenerate(root: &Path) -> Result<Regenerated, FormalismError> {
     let mut done = Regenerated::default();
     let mut writes = Vec::new();
     for (path, text) in files {
+        refuse_other_spelling(root, &path)?;
         let file = root.join(&path);
         refuse_link(&file)?;
         if file.exists() {
@@ -91,6 +107,46 @@ pub fn regenerate(root: &Path) -> Result<Regenerated, FormalismError> {
         done.written.push(path);
     }
     Ok(done)
+}
+
+/// The bytes of the source, read only when it is the file of exactly its name, as the index
+/// takes it ([`Spelling::is_plain_file`]).
+fn read_source(root: &Path) -> Result<Vec<u8>, FormalismError> {
+    let path = root.join(SOURCE);
+    let segments: Vec<&str> = SOURCE.split('/').collect();
+    match spelling::of(root, &segments) {
+        found if found.is_plain_file() => std::fs::read(&path).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                FormalismError::Missing
+            } else {
+                io(path, error)
+            }
+        }),
+        Spelling::Other(on_disk) => Err(FormalismError::Spelling {
+            path: SOURCE.to_owned(),
+            on_disk,
+        }),
+        Spelling::Absent(error) if error.kind() != std::io::ErrorKind::NotFound => {
+            Err(io(path, error))
+        }
+        // None, or a folder or link of that name: the index sees no source either.
+        Spelling::Exact(_) | Spelling::Absent(_) => Err(FormalismError::Missing),
+    }
+}
+
+/// Refuses the project-relative `path` when the file system finds it only under another
+/// spelling: writing it would write into that other file.
+fn refuse_other_spelling(root: &Path, path: &str) -> Result<(), FormalismError> {
+    let segments: Vec<&str> = path.split('/').collect();
+    match spelling::of(root, &segments) {
+        Spelling::Other(on_disk) => Err(FormalismError::Spelling {
+            path: path.to_owned(),
+            on_disk,
+        }),
+        // A record that is not there is written new; one that cannot be looked up fails at its
+        // read or write.
+        Spelling::Exact(_) | Spelling::Absent(_) => Ok(()),
+    }
 }
 
 /// Refuses `path` when it is a symbolic link; a path that does not exist is fine.

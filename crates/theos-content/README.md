@@ -104,8 +104,10 @@ size and modification time and are computed without the index's write lock; the 
 **The formalism mirror.** `canon/formalism/_source.json` is parsed by `formalism::parse`
 into a `Source` of `Equation`s; `formalism::render` makes the generated equation records and
 `regenerate` writes those whose bytes differ. It never deletes, and it never writes through a
-symbolic link or outside the project. The rules report an equation record that is stray, edited
-or missing.
+symbolic link or outside the project. Like the index, it takes the source and the records only
+under exactly their names: where the file system finds one only under another spelling, as
+Windows and macOS do for another case, it writes nothing and names both spellings. The rules
+report an equation record that is stray, edited or missing.
 `theos formalism` runs the regeneration.
 
 ## What later phases use from P04

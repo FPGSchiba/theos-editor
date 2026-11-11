@@ -261,6 +261,83 @@ fn every_equation_record_is_stray_without_a_source() -> TestResult {
     Ok(())
 }
 
+/// Renames the file `from` of `project` to `to`, also when the two differ only in case.
+fn rename(project: &TempProject, from: &str, to: &str) -> std::io::Result<()> {
+    std::fs::rename(project.root().join(from), project.root().join(to))
+}
+
+/// Whether the file system of `project` ignores case: it finds `CANON` for `canon`.
+fn folds_case(project: &TempProject) -> bool {
+    project.root().join("CANON").exists()
+}
+
+// AC: CE-16.4
+#[test]
+fn a_source_spelled_unlike_the_file_on_disk_is_no_source() -> TestResult {
+    // Only `canon/formalism/_Source.json` is on disk. The index sees no source, so every
+    // equation record is stray; `regenerate` reads nothing either, also where the file system
+    // ignores case and would open the file.
+    let project = generated()?;
+    let recased = "canon/formalism/_Source.json";
+    rename(&project, SOURCE, recased)?;
+    let found = findings(&project)?;
+    assert_eq!(of_rule(&found, "formalism/stray").len(), 18, "{found:?}");
+    project.remove(E7)?;
+    let refused = formalism::regenerate(project.root());
+    if folds_case(&project) {
+        assert!(
+            matches!(
+                &refused,
+                Err(FormalismError::Spelling { path, on_disk }) if path == SOURCE && on_disk == recased
+            ),
+            "{refused:?}"
+        );
+    } else {
+        assert!(
+            matches!(refused, Err(FormalismError::Missing)),
+            "{refused:?}"
+        );
+    }
+    assert!(!project.root().join(E7).exists(), "nothing is written");
+    Ok(())
+}
+
+// AC: CE-16.1
+#[test]
+fn a_record_spelled_unlike_its_equation_is_never_written_into() -> TestResult {
+    // `canon/formalism/e7.md` stands where `E7.md` belongs, and `E2.md` is missing. Where the
+    // file system ignores case, writing `E7.md` would write into `e7.md`: `regenerate` refuses,
+    // naming both spellings, and writes nothing. Elsewhere the two are different files.
+    let project = generated()?;
+    let recased = "canon/formalism/e7.md";
+    rename(&project, E7, recased)?;
+    project.remove("canon/formalism/E2.md")?;
+    let result = formalism::regenerate(project.root());
+    if folds_case(&project) {
+        assert!(
+            matches!(
+                &result,
+                Err(FormalismError::Spelling { path, on_disk }) if path == E7 && on_disk == recased
+            ),
+            "{result:?}"
+        );
+        assert!(
+            !project.root().join("canon/formalism/E2.md").exists(),
+            "a refused record leaves every record unwritten"
+        );
+    } else {
+        let done = result?;
+        assert_eq!(done.written, ["canon/formalism/E2.md", E7]);
+        assert_eq!(read(&project, E7)?, E7_TEXT);
+    }
+    assert_eq!(
+        read(&project, recased)?,
+        E7_TEXT,
+        "the other file stays as it was"
+    );
+    Ok(())
+}
+
 #[test]
 fn a_broken_source_is_a_finding_with_its_position() -> TestResult {
     let project = generated()?;
