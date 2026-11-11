@@ -4,7 +4,7 @@ use crate::finding::{Finding, Severity};
 use crate::lore::{Context, FactError, LoreRule, On, Subject};
 use crate::rules::RuleClass;
 
-use super::{beat_at_place, inside_any, places_in, single_beats};
+use super::{beat_at_link, inside_any, places_in, single_beats};
 
 /// The rule: the `at::` place of a beat lies inside none of the script's `where` places. A script
 /// without a valid `where`, and a beat without `at::`, are not checked.
@@ -26,15 +26,13 @@ fn check(ctx: &mut Context<'_>, subject: &Subject) -> Result<Vec<Finding>, FactE
     }
     let mut findings = Vec::new();
     for beat in single_beats(script) {
-        let Some(at) = beat_at_place(ctx, script, beat.number)? else {
+        let Some(link) = beat_at_link(ctx, script, beat.number)? else {
             continue;
         };
-        if inside_any(ctx, &at, &wanted)? {
+        let at = &link.target;
+        if inside_any(ctx, at, &wanted)? {
             continue;
         }
-        let Some(link) = super::beat_links(script, beat.number, "at").next() else {
-            continue;
-        };
         let message = format!(
             "Beat {} is at {at}, which lies inside none of the places in `where` of {} ({}). Move the beat to one of them or add a place that holds {at} to `where`.",
             beat.number,

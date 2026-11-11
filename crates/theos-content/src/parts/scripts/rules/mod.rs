@@ -42,16 +42,16 @@ fn beat_links<'a>(
     })
 }
 
-/// The first `at::` target of beat `number` that names a place; a dangling or wrong-kind link
-/// has a finding of its own and is skipped.
-fn beat_at_place(
+/// The first `at::` link of beat `number` whose target names a place; a dangling or wrong-kind
+/// link has a finding of its own and is skipped. Rules judge, and report on, this link.
+fn beat_at_link<'a>(
     ctx: &mut Context<'_>,
-    script: &RecordFacts,
+    script: &'a RecordFacts,
     number: u32,
-) -> Result<Option<String>, FactError> {
+) -> Result<Option<&'a FactLink>, FactError> {
     for link in beat_links(script, number, "at") {
         if is_place(ctx, &link.target)? {
-            return Ok(Some(link.target.clone()));
+            return Ok(Some(link));
         }
     }
     Ok(None)
