@@ -53,13 +53,7 @@ pub(crate) fn segments(
         holes.extend(
             body.blocks()
                 .iter()
-                .filter(|block| block.kind == BlockKind::Heading)
-                .filter(|block| {
-                    block
-                        .span
-                        .get(record.text())
-                        .is_some_and(is_level_two_heading)
-                })
+                .filter(|block| block.kind == BlockKind::Heading(2))
                 .map(|block| block.span),
         );
     }
@@ -108,22 +102,6 @@ fn top_value<'a>(values: &'a [ValueRow], field: &str) -> Option<&'a ValueRow> {
 /// Whether the `track` of the record is a valid `in-world`.
 fn is_in_world_track(values: &[ValueRow]) -> bool {
     top_value(values, "track").is_some_and(|v| v.valid && v.text.as_deref() == Some("in-world"))
-}
-
-/// Whether a heading block is level 2: ATX `## `, or setext with a `-` underline.
-fn is_level_two_heading(text: &str) -> bool {
-    let first = text
-        .lines()
-        .next()
-        .unwrap_or_default()
-        .trim_start_matches(' ');
-    if let Some(rest) = first.strip_prefix("##") {
-        return rest.is_empty() || rest.starts_with([' ', '\t']);
-    }
-    text.lines()
-        .nth(1)
-        .map(str::trim)
-        .is_some_and(|line| !line.is_empty() && line.chars().all(|c| c == '-'))
 }
 
 /// The spans sorted, empty ones dropped, overlapping and adjacent ones joined.
@@ -274,14 +252,18 @@ mod tests {
             "story/dialogues/x.md",
             "dialogue",
             "title: t\n",
-            "Opening.\n\n## Atx heading\n\nMiddle.\n\nSetext heading\n---\n\n### Level three\n\nEnd.\n",
+            "Opening.\n\n## Atx heading\n\nMiddle.\n\nSetext heading\n---\n\nOutcome of\nthe talk\n---\n\nTitle\n===\n\n### Level three\n\nEnd.\n",
         )?;
         let joined = got.join("|");
         assert!(
             joined.contains("Opening.") && joined.contains("Middle.") && joined.contains("End.")
         );
         assert!(!joined.contains("Atx heading") && !joined.contains("Setext heading"));
-        assert!(joined.contains("Level three"));
+        assert!(
+            !joined.contains("Outcome of") && !joined.contains("the talk"),
+            "a setext heading over two lines is one level-2 heading: {joined:?}"
+        );
+        assert!(joined.contains("Title") && joined.contains("Level three"));
         Ok(())
     }
 
