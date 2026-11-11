@@ -14,7 +14,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
 | P06 | Command layer and git | theos-editor | todo | | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
-| P08 | Map toolset as a generator | tower-of-theos | todo | | |
+| P08 | Map format and terrain generator | theos-editor | spec-pr | #27 | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
 | P10 | Prose editor research | theos-editor | done | #3 | #11 |
 | P11 | Editor shell and Codex | theos-editor | todo | | |
@@ -26,20 +26,31 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P17 | AI drafts and semantic search | theos-editor | todo | | |
 | P18 | Installer, first run, Code preset | theos-editor | todo | | |
 | P19 | Comments | theos-editor | todo | | |
-| P20 | Content layout for world and art kinds | tower-of-theos | todo | | |
+| P20 | Content layout for world and art kinds | tower-of-theos | done | #22 | tower-of-theos#3 |
 | P21 | World kinds: enemies, spawns, quests | theos-editor | todo | | |
 | P22 | Map pins, cameras and frames | theos-editor | todo | | |
-| P23 | Map outputs for the atlas, blockout generator | tower-of-theos | todo | | |
+| P23 | Map recipes and blockout generator | tower-of-theos | todo | | |
 | P24 | Quest screen and flow editor | theos-editor | todo | | |
 | P25 | Atlas | theos-editor | todo | | |
 | P26 | Style bible and briefs | theos-editor | todo | | |
 | P27 | Asset pipelines | theos-editor | todo | | |
 | P28 | Workflow catalogue and asset guide | tower-of-theos | todo | | |
+| P29 | Settlements, interiors and child maps | theos-editor | todo | | |
+| P30 | Indoor floors with stacked levels | theos-editor | todo | | |
 
-Rows P20–P28 come from umbrella version 2 (#19).
+Rows P20–P28 come from umbrella version 2 (#19). Rows P29 and P30, and the new P08 and P23, come
+from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#24).
 
 ## Needs Jann
 
+- Decision 0003, the map generator in Rust (umbrella version 3, `docs/map-package.md`), waits for
+  Jann in its docs PR #24. The gate PR #23, which moved one assertion of an xtask test from P08
+  to P20 for it, is merged. P08's spec starts once #24 is merged.
+- Before P08's build, one more gate PR (decision 0003 §12) adds `theos-map-format` and
+  `theos-maps` to the workspace test and `gate/thresholds.toml`, and bans the std float methods in
+  `gate/clippy.toml`. P08's spec lists its contents.
+- The Maps screen reference (`docs/ui/screens/11-maps.html`) still says "theos_maps 0.3.0 ·
+  Python 3.12 (uv)" and describes a Python venv. P16's spec PR updates it (G18).
 - P00's macOS `platforms` evidence is still open: the run on #7 got no GitHub runner (macOS
   capacity). The weekly Monday run, or a re-run, gives it.
 - Comments on text sections (decision 0002, #15, phase P19): before P19 starts, Jann settles the
@@ -67,6 +78,9 @@ Rows P20–P28 come from umbrella version 2 (#19).
   build follows data model §9.2 instead ("on a line starting with `Design note:`"), which ranks
   higher: a note line inside a paragraph starts a note that runs to the paragraph's end. The spec
   wording can be aligned in a docs PR.
+- tower-of-theos#3 (P20, merged) locks `markdown-it-py` 4.3.0 in `tools/repo_checks`, which was
+  released the day it was locked. Pinning an older 4.x is a one-line follow-up if Jann prefers a
+  cool-down.
 
 ## Needs a private session (Confluence, Jira, plugin)
 
@@ -79,6 +93,13 @@ Rows P20–P28 come from umbrella version 2 (#19).
 - CE-04 / CE-05: lore import and Seal split (umbrella §4).
 - Readable copies in Confluence: the umbrella spec (version 2), the data model and the
   architecture page need the world and art additions once the docs PR is merged.
+- Decision 0003 (map generator in Rust), once merged: the readable copies of the umbrella spec
+  (version 3), the architecture, the data model and the generator protocol; a decision page for
+  0003; and Confluence Decision 221741058 (the engine package format), which `docs/map-package.md`
+  replaces (Jann confirmed on 10 Nov 2026 that it fixes nothing different).
+- The `theos_maps` skill in Jann's other Claude account: once P09 is merged, point it at the
+  editor's map generator (`theos gen run` in a shell, or `gen_run` over MCP) or retire it; its
+  recipes move into the content project in P23.
 - CE-75: move the style bible (`style.yaml` v2 and its reference crops) from Drive into `art/`
   style records, after P20.
 - Jira: slices S8 and S9 have no epics yet (create only on Jann's explicit yes).

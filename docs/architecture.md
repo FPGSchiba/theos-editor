@@ -1,7 +1,8 @@
 # Architecture — Theos content editor
 
 Status: accepted by Jann on 30 Oct 2026; generators added 31 Oct 2026; atlas, quests and art
-pipelines added with umbrella spec version 2. Binding.
+pipelines added with umbrella spec version 2; the map generator in Rust added with umbrella spec
+version 3 (decision 0003). Binding.
 Readable copy for people: Confluence TOT › "Architecture: Theos Editor — content-first".
 Engine integration (later) is described on the Confluence pages "Tauri-Based Editor GUI" and
 "Hybrid Editor Architecture & IPC"; nothing here may contradict them.
@@ -23,8 +24,8 @@ Engine integration (later) is described on the Confluence pages "Tauri-Based Edi
 | Repo | Holds | Built by |
 |---|---|---|
 | Theos-Engine | The engine as a library, including `theos-editor-api` (engine side of the editor IPC). | Jann |
-| theos-editor (this repo) | Content crates, `theos` CLI, `theos-mcp`, the Tauri app, `editor-ui/`, gate tooling. | Claude |
-| tower-of-theos | The content project now, the game binary later; the map toolset in `tools/theos_maps`. | Jann (content with Claude through MCP) |
+| theos-editor (this repo) | Content crates, the map generator (`theos-map-format`, `theos-maps`), `theos` CLI, `theos-mcp`, the Tauri app, `editor-ui/`, gate tooling. | Claude |
+| tower-of-theos | The content project now, the game binary later; map recipes and the blockout generator in `tools/`. | Jann (content with Claude through MCP) |
 
 A content project is any folder with a `theos.toml`. It must live on a local disk, not on a
 synced or streamed drive.
@@ -43,7 +44,7 @@ tower-of-theos/
   art/                    style records
   templates/ dialogue/    compile and prompt templates · kept dialogue lines
   canon/formalism/        E1…E18, generated read-only mirror of Shared Formalism
-  tools/                  theos_maps and theos_blockout (Python generators), comfy/workflows,
+  tools/                  maps/recipes, theos_blockout (Python generator), comfy/workflows,
                           comfy/pipelines, guides (for agents), import scripts
 ```
 
@@ -54,13 +55,16 @@ tower-of-theos/
 | `theos-content` | lib | Record model, front-matter patcher, body grammars (beats, voice, notes), kind registry, index, search, effective lenses, validators, lore rules, ledger. Pure filesystem; no async; no UI. |
 | `theos-vcs` | lib | Wrapper over the git command line: status, word diff, history with `--follow`, commit with trailers, worktrees, merge, pull, push. |
 | `theos-studio` | lib | Projects, layered settings, editor-part registry, command layer, agent sessions, review queue, generators (`docs/generators.md`), LLM client, binaries folder. |
-| `theos` | bin | CLI: `check`, `ledger`, `new`, `schema`, `review …`, `hook install`. |
+| `theos-map-format` | lib | The map package (`docs/map-package.md`): types, reader and writer. Depends on no other crate of this workspace, so the engine can depend on it alone. |
+| `theos-maps` | lib | The map generator (decision 0003): recipes, the stage pipeline, terrain, settlement and interior maps, renders, packages; deterministic on every platform (G20). `theos-studio` runs it in-process. |
+| `theos` | bin | CLI: `check`, `ledger`, `new`, `schema`, `review …`, `gen …` (runs generators into a folder, never writes records), `hook install`. |
 | `theos-mcp` | bin | MCP server over stdio. |
 | `theos-editor` | bin (Tauri 2) | Authoring shell; Tauri commands wrap the command layer; typed IPC bindings generated for the UI. Feature `engine` (off) pulls engine crates from Theos-Engine as git dependencies. |
 | `xtask` | bin | Gate tooling (`docs/gate.md`) and generator conformance checks. |
 | `editor-ui/` | Svelte 5 + TS | Shell, presets and windows built from `design/theos-ui/`. |
 
 Dependency rule: without the `engine` feature, no crate depends on an engine crate. CI checks it.
+The reverse direction is allowed: the engine may depend on `theos-map-format` and `theos-maps`.
 
 ## 4. Content model
 
@@ -146,10 +150,19 @@ every path through the quest.
 
 ## 11. Generators
 
-`docs/generators.md`. Two adapters in v1 (process, ComfyUI). The map toolset lives in
-tower-of-theos as a Python package run through uv with Python 3.12 in `.theos/cache/venv`
-(fastscapelib 0.3.0 ships Windows wheels only for Python 3.10–3.13). Outputs go to the binaries
-folder; versions become records; open notes go into every run request.
+`docs/generators.md`. Three adapters in v1 (built-in, process, ComfyUI). The map generator is the
+crate `theos-maps`, run in-process on worker threads through the built-in adapter (decision 0003):
+no Python is needed for maps. It bakes each picked map into a package (`docs/map-package.md`), the
+same bytes on every platform (G20). The blockout generator is a Python process generator run
+through uv with Python 3.12 in `.theos/cache/venv`. Outputs go to the binaries folder; versions
+become records; open notes go into every run request.
+
+**Stages.** Every step of the map generator, now and in every later phase, is a `Stage` (P08 spec
+§5.3). A stage declares the layers it reads and writes, takes typed parameters from the recipe,
+reaches the world only through its context, and is checked after it runs. A broken contract, a
+failed invariant or a diverging golden hash names the stage it comes from. Per-step processes
+inside an evolution loop are stages too. Shared mathematics are pure functions with their own
+tests. A new capability is a new stage module plus one registry line.
 
 The art pipeline, end to end:
 
@@ -184,7 +197,9 @@ secrets in the OS credential store. Project kinds: `content` now, `game` with th
 ## 14. Path to the engine
 
 The engine part adds Layout, AI and Assets presets, scene windows, PIE and game projects through
-`theos-editor-api`. The game engine may become a generator (`docs/generators.md`) and reads map
-packages directly. Pins are fractions of a map's frame, so the engine can rebuild a map at another
-size or resolution and place everything where it was designed; the engine part adds tuning fields
+`theos-editor-api`. The game engine may become a generator (`docs/generators.md`). It reads map
+packages with `theos-map-format` and ships the baked package of each canon map; it never
+regenerates a canon map (G20). Pins are fractions of a map's frame, so the engine can refine a
+baked map at another size or resolution and place everything where it was designed; the engine
+part adds tuning fields
 (stats, spawn tables, timers, loot) to enemies and spawns and an export of pins, spawns and quests. THEOS-138 and THEOS-140 are covered by this editor's shell and Review.
