@@ -11,8 +11,9 @@
 //! - P01's not-records (`README.md`, `templates/records/`, `tools/`, `attachments/`) are left
 //!   out.
 //!
-//! The change boundary of `update`, `apply` and `preview` uses the same predicates, so a path
-//! they take is one the walk lists.
+//! The change boundary of `update`, `apply` and `preview` uses the same predicates, so a record
+//! path they take is one the walk lists. They also take the two input files of the index,
+//! `.theos/settings.toml` and `canon/formalism/_source.json`, which are no records.
 
 use std::ffi::OsStr;
 use std::path::{Component, Path};

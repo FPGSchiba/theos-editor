@@ -89,7 +89,8 @@ only the built-in words and drops the allowlist, the safe side for the guardrail
 are `lore/never-confirm`, `lore/no-overshoot` and `lore/inworld-vocab`: they are guardrails by
 name, always errors on read, and no setting names them. The settings file and
 `canon/formalism/_source.json` are inputs of the index; like records, they count only when the
-file on disk is spelled exactly so.
+file on disk is spelled exactly so. `update`, `apply` and `preview` take them as changes too,
+though they are no records, so a preview of a settings change gives the findings it would cause.
 
 **Binary checks.** `Index::binary_findings(root)` checks the files that records name (images,
 outputs of versions): they exist inside the folder, and their digest matches `@sha256:`. A

@@ -26,17 +26,18 @@ use crate::walk::{
 /// A file whose time lies within this many nanoseconds before it was hashed is racy.
 const RACY_WINDOW_NS: i64 = 2_000_000_000;
 
-/// One change to apply to the index.
+/// One change to apply to the index: to a record, or to one of the two input files of the lore
+/// step, `.theos/settings.toml` and `canon/formalism/_source.json` (spec §5.4).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Change {
-    /// A record with the given bytes.
+    /// A record or an input file with the given bytes.
     Content {
         /// The project-relative path; a `\` is read as `/`.
         path: String,
         /// The bytes of the file.
         bytes: Vec<u8>,
     },
-    /// A record that is gone.
+    /// A record or an input file that is gone.
     Removed {
         /// The project-relative path; a `\` is read as `/`.
         path: String,
@@ -44,7 +45,7 @@ pub enum Change {
 }
 
 impl Change {
-    /// A record with the given text.
+    /// A record or an input file with the given text.
     #[must_use]
     pub fn text(path: impl Into<String>, text: impl Into<String>) -> Change {
         Change::Content {
@@ -100,14 +101,15 @@ impl Update {
 }
 
 /// What [`Index::preview`] found: the update the changes would make and the findings it would
-/// leave on every re-parsed, relinked or revalidated record and on every record given as
-/// content.
+/// leave on every re-parsed, relinked or revalidated record or input file and on every record or
+/// input file given as content.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Preview {
     /// What an apply of the changes would do.
     pub update: Update,
-    /// The findings of every re-parsed, relinked or revalidated record and of every record given
-    /// as content, also one whose bytes equal the stored ones, ordered like [`Index::findings`].
+    /// The findings of every re-parsed, relinked or revalidated record or input file and of every
+    /// record or input file given as content, also one whose bytes equal the stored ones, ordered
+    /// like [`Index::findings`].
     pub findings: Vec<Finding>,
 }
 
@@ -168,14 +170,17 @@ impl Index {
         self.run(|work| work.sync(&walked))
     }
 
-    /// Does what [`Index::sync`] does for the given project-relative paths only. A path that is
-    /// not a record by its spelling ([`is_record_path`]: also one under
-    /// `.theos`, `.git`, `.obsidian`, `.vscode`, `.github`, `.worktrees` or `.trash`) is
-    /// ignored; one that no longer exists is removed. So is one that the walk would not list: a
-    /// hidden path (on Unix a folder or file of it has a name that starts with `.`, on Windows
-    /// one carries the hidden attribute), a path that a `.gitignore` keeps out, or one spelled
-    /// unlike the file on disk (another case, a symbolic link). A `\` in a path is read as `/`,
-    /// so paths joined on Windows work.
+    /// Does what [`Index::sync`] does for the given project-relative paths only. The two input
+    /// files of the lore step, `.theos/settings.toml` and `canon/formalism/_source.json` (spec
+    /// §5.4), are taken as changes, as a sync takes them: what reads one whose bytes changed runs
+    /// again, and its own findings change with it. Any other path that is not a record by its
+    /// spelling ([`is_record_path`]: also one under `.theos`, `.git`, `.obsidian`, `.vscode`,
+    /// `.github`, `.worktrees` or `.trash`) is ignored; one that no longer exists is removed. So
+    /// is one that the walk would not list: a hidden path (on Unix a folder or file of it has a
+    /// name that starts with `.`, on Windows one carries the hidden attribute), a path that a
+    /// `.gitignore` keeps out, or one spelled unlike the file on disk (another case, a symbolic
+    /// link); an input file spelled so counts as absent. A `\` in a path is read as `/`, so paths
+    /// joined on Windows work.
     ///
     /// A cache file that another theos build keeps rebuilding is rebuilt at most three times per
     /// call; then the call fails with [`IndexError::Contended`].
@@ -194,7 +199,8 @@ impl Index {
 
     /// Commits the given changes. A content whose bytes equal the stored ones changes nothing;
     /// otherwise the record is parsed again, with no file times, so the next sync reads the file.
-    /// A path that is not a record by its spelling is ignored, as in [`Index::update`]. One that
+    /// The two input files are taken as changes, with the given bytes or as removed, as in
+    /// [`Index::update`]; any other path that is not a record by its spelling is ignored. One that
     /// is hidden or that a `.gitignore` keeps out is no record either, and what the index holds
     /// for it is removed. Hidden is decided the way of the OS, as in [`Index::update`]; on
     /// Windows a path that is not on disk is hidden only when a folder of it that exists carries
@@ -212,12 +218,14 @@ impl Index {
     }
 
     /// Does what [`Index::apply`] does, reads the findings of every re-parsed, relinked or
-    /// revalidated record and of every record given as content, and rolls everything back: the
-    /// cache is not changed. The findings are those [`Index::apply`] would leave, ordered like
-    /// [`Index::findings`]; a content equal to the stored bytes is not parsed again, and its
-    /// stored findings are the ones it would leave. Paths are taken as in [`Index::apply`]: one
-    /// that is not a record by its spelling, is hidden the way of the OS, or that a `.gitignore`
-    /// keeps out gives no findings, and a `\` is read as `/`.
+    /// revalidated record or input file and of every record or input file given as content, and
+    /// rolls everything back: the cache is not changed. The findings are those [`Index::apply`]
+    /// would leave, ordered like [`Index::findings`]; a content equal to the stored bytes is not
+    /// parsed again, and its stored findings are the ones it would leave. Paths are taken as in
+    /// [`Index::apply`]: the two input files are changes and give their own findings, so a
+    /// settings change can be previewed; any other path that is not a record by its spelling, is
+    /// hidden the way of the OS, or that a `.gitignore` keeps out gives no findings, and a `\` is
+    /// read as `/`.
     ///
     /// A cache file that another theos build keeps rebuilding is rebuilt at most three times per
     /// call; then the call fails with [`IndexError::Contended`].
@@ -482,11 +490,11 @@ impl<'a> Syncer<'a> {
         Ok(())
     }
 
-    /// One change of `update` or `apply`, at `path` with `\` read as `/`. A path that is no
-    /// record by its spelling is ignored. One that the walk would not list, since it is hidden,
-    /// a `.gitignore` keeps it out or, for a path read from disk, no file of that spelling is
-    /// listed, is no record of the project either: the index holds nothing for it, so whatever it
-    /// held is removed.
+    /// One change of `update` or `apply`, at `path` with `\` read as `/`. An input file is taken
+    /// first; any other path that is no record by its spelling is ignored. One that the walk would
+    /// not list, since it is hidden, a `.gitignore` keeps it out or, for a path read from disk, no
+    /// file of that spelling is listed, is no record of the project either: the index holds
+    /// nothing for it, so whatever it held is removed.
     fn change(&mut self, path: &str, source: Source) -> Result<(), IndexError> {
         let path = slashed(path);
         let path = path.as_str();
