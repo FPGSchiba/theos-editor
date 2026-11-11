@@ -20,7 +20,8 @@ fn check(ctx: &mut Context<'_>, subject: &Subject) -> Result<Vec<Finding>, FactE
 }
 
 /// Judges the targets `hinted` and `suspected` only: `confirmed` cannot be passed and `never` is
-/// the other rule's. A clue or truth without a valid state is skipped.
+/// the other rule's. A clue or truth without a valid state is skipped. The message says what to
+/// change (spec §5.8), naming the clue, so that it reads the same on the clue and on a beat.
 fn breach(clue: &RecordFacts, truth: &RecordFacts) -> Option<Breach> {
     let state = moves_to(clue)?;
     let target = State::parse(truth.text("target")?.text.as_deref()?)?;
@@ -30,10 +31,12 @@ fn breach(clue: &RecordFacts, truth: &RecordFacts) -> Option<Breach> {
     Some(Breach {
         field: "moves_to",
         predicate: format!(
-            "moves {} to {}, past its target {}.",
-            truth.id,
-            state.as_str(),
-            target.as_str()
+            "moves {truth} to {state}, past its target {target}. Lower the `moves_to` of {clue} \
+             to {target} or raise the target of {truth}.",
+            truth = truth.id,
+            clue = clue.id,
+            state = state.as_str(),
+            target = target.as_str()
         ),
     })
 }

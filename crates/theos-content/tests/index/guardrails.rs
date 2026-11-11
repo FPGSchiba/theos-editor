@@ -88,9 +88,9 @@ fn no_overshoot_passes_and_fails() -> TestResult {
     assert_eq!(
         messages,
         [
-            "C-956 moves T-953 to suspected, past its target hinted.",
-            "C-958 moves T-955 to suspected, past its target hinted.",
-            "Beat 3 places C-956, which moves T-953 to suspected, past its target hinted."
+            "C-956 moves T-953 to suspected, past its target hinted. Lower the `moves_to` of C-956 to hinted or raise the target of T-953.",
+            "C-958 moves T-955 to suspected, past its target hinted. Lower the `moves_to` of C-958 to hinted or raise the target of T-955.",
+            "Beat 3 places C-956, which moves T-953 to suspected, past its target hinted. Lower the `moves_to` of C-956 to hinted or raise the target of T-953."
         ]
     );
     Ok(())
@@ -175,7 +175,9 @@ fn a_beat_is_judged_against_every_clue_record_of_its_id() -> TestResult {
     );
     assert_eq!(
         on_script(OVERSHOOT)?,
-        ["Beat 3 places C-956, which moves T-953 to suspected, past its target hinted."]
+        [
+            "Beat 3 places C-956, which moves T-953 to suspected, past its target hinted. Lower the `moves_to` of C-956 to hinted or raise the target of T-953."
+        ]
     );
     Ok(())
 }
