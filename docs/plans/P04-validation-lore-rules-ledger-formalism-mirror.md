@@ -58,17 +58,18 @@ addition to spec §4.2:
 Umbrella global constraints, verbatim. `CLAUDE.md` asks for G1–G16; G17 to G19 were added to the
 umbrella later and are copied too, as in the P02 and P03 plans.
 
-- **G1** Repositories: `theos-editor` (this repo) holds the editor. `tower-of-theos` holds the
-  content project and the map toolset. `Theos-Engine` is never a dependency, except behind the
-  cargo feature `engine`, which no phase here builds.
+- **G1** Repositories: `theos-editor` (this repo) holds the editor and the map generator
+  (`theos-map-format`, `theos-maps`). `tower-of-theos` holds the content project, its map recipes
+  and the blockout generator. `Theos-Engine` is never a dependency, except behind the cargo
+  feature `engine`, which no phase here builds; the engine may depend on the map crates.
 - **G2** Platforms: Windows 11 x64 (primary), Linux x64, and macOS 13 or later on Apple silicon
   and Intel (universal builds). Every PR is checked on Linux; Windows and macOS are tested
   weekly, on demand (a label on the PR) and before every release (`docs/gate.md` §1).
 - **G3** Rust: stable toolchain pinned in `rust-toolchain.toml`, edition 2024, `unsafe_code`
   forbidden, `Cargo.lock` committed, all builds `--locked`.
-- **G4** Crates: `theos-content`, `theos-vcs`, `theos-studio` (libs); `theos`, `theos-mcp`,
-  `theos-editor` (bins); `xtask`. Paths `crates/<name>`, `xtask/`. UI in `editor-ui/`
-  (Svelte 5, TypeScript, pnpm).
+- **G4** Crates: `theos-content`, `theos-vcs`, `theos-studio`, `theos-map-format`, `theos-maps`
+  (libs); `theos`, `theos-mcp`, `theos-editor` (bins); `xtask`. Paths `crates/<name>`, `xtask/`.
+  UI in `editor-ui/` (Svelte 5, TypeScript, pnpm).
 - **G5** Content files follow `docs/specs/data-model.md`; the restricted YAML parser is ours;
   any edit leaves untouched bytes identical.
 - **G6** Git only through the `git` command line; credentials only through the user's
@@ -78,8 +79,8 @@ umbrella later and are copied too, as in the P02 and P03 plans.
 - **G9** Text of a truth with target `never` never appears in an LLM prompt.
 - **G10** Binaries never enter git; references are `path@sha256:<hex>` relative to the binaries
   folder.
-- **G11** Generators only through `docs/generators.md`; no generator-specific field in the data
-  model; the UI works for any generator that produces a kind.
+- **G11** Generators only through `docs/generators.md`, the built-in map generator included; no
+  generator-specific field in the data model; the UI works for any generator that produces a kind.
 - **G12** Network only to ComfyUI and the configured LLM endpoint, both opt-in; no telemetry.
 - **G13** UI uses `design/theos-ui/` and follows `docs/ui/`; shortcuts use Ctrl on Windows and
   Linux and Cmd on macOS, from one keymap.
@@ -95,6 +96,12 @@ umbrella later and are copied too, as in the P02 and P03 plans.
 - **G19** Positions on maps are fractions of a map version's frame (x east, y south, origin
   north-west); metres are derived from the frame. Pins and cameras live in the map record's body,
   never on the placed record (`docs/specs/data-model.md` §9.6–9.7).
+- **G20** Map generation is deterministic: the same generator version, recipe, seed and inputs
+  give the same package bytes and layers on every platform of G2. Canon maps are baked into
+  packages (`docs/map-package.md`) and shipped, never regenerated in the game (decision 0003).
+
+(G1, G4 and G11 were updated and G20 added on `main` while P04 was being built — umbrella changes
+for P08; none of them changes what P04 builds.)
 
 Phase ACs, verbatim:
 
