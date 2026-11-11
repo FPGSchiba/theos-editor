@@ -135,6 +135,51 @@ fn both_guardrails_fire_on_a_clue_whose_truth_id_is_duplicated() -> TestResult {
     Ok(())
 }
 
+/// A clue record `id` that reveals `truth` up to `moves_to`.
+fn clue_twin(id: &str, truth: &str, moves_to: &str) -> String {
+    format!(
+        "---\n# synthetic fixture (P04), not canon\nid: {id}\nkind: clue\ntitle: Synthetic twin\n\
+         status: draft\nreveals: {truth}\nmoves_to: {moves_to}\nwhere: [synthetic-hall]\n\
+         gate: T1\nvector: synthetic\n---\nSynthetic text.\n"
+    )
+}
+
+// AC: CE-15.1
+#[test]
+fn a_beat_is_judged_against_every_clue_record_of_its_id() -> TestResult {
+    // Twins of C-955 and C-956 that sort first by path and reveal T-950, whose target is
+    // `confirmed`: the beats that place C-955 and C-956 still break the guardrails.
+    let project = TempProject::copy_of("lore")?;
+    let twins = "lore/clue-twins";
+    assert!(*twins < *"lore/clues", "the twins sort before the clues");
+    project.write(
+        &format!("{twins}/C-955.md"),
+        &clue_twin("C-955", "T-950", "hinted"),
+    )?;
+    project.write(
+        &format!("{twins}/C-956.md"),
+        &clue_twin("C-956", "T-950", "suspected"),
+    )?;
+    let on_script = |rule: &str| -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        Ok(found(&project, rule)?
+            .into_iter()
+            .filter(|finding| finding.path == "story/scripts/S-951.md")
+            .map(|finding| finding.message)
+            .collect())
+    };
+    assert_eq!(
+        on_script(NEVER)?,
+        [
+            "Beat 2 places C-955, which hints at T-952, whose target is `never`: nothing may reveal it. Let a belief voice it instead."
+        ]
+    );
+    assert_eq!(
+        on_script(OVERSHOOT)?,
+        ["Beat 3 places C-956, which moves T-953 to suspected, past its target hinted."]
+    );
+    Ok(())
+}
+
 // AC: CE-15.1
 #[test]
 fn never_confirm_fires_whatever_the_moves_to() -> TestResult {

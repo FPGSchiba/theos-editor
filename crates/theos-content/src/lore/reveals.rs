@@ -85,8 +85,9 @@ pub(crate) fn verb(clue: &RecordFacts) -> &'static str {
 pub(crate) type Judge = fn(&RecordFacts, &RecordFacts) -> Option<Breach>;
 
 /// Runs a guardrail on its subject: a clue is judged against the truth its `reveals` names, a
-/// script on each beat's `reveals::` link to a clue. A duplicated truth id breaks the guardrail
-/// when any record with it does.
+/// script on each beat's `reveals::` link to a clue. A duplicated truth or clue id breaks the
+/// guardrail when any record with it does; a beat's link gets one finding, from the first clue
+/// record by path that breaks it.
 pub(crate) fn judge(
     ctx: &mut Context<'_>,
     subject: &Subject,
@@ -110,14 +111,20 @@ pub(crate) fn judge(
             let beat = Slot::Beat("reveals".to_owned());
             for link in record.links_in(&beat) {
                 let Some(number) = link.beat else { continue };
-                let found = ctx.records(&link.target)?;
-                let Some(clue) = found.iter().find(|c| c.kind.as_deref() == Some("clue")) else {
-                    continue;
-                };
-                if let Some(breach) = breach_of(ctx, clue, breach)? {
+                let mut broken = None;
+                for clue in ctx.records(&link.target)? {
+                    if clue.kind.as_deref() != Some("clue") {
+                        continue;
+                    }
+                    broken = breach_of(ctx, &clue, breach)?;
+                    if broken.is_some() {
+                        break;
+                    }
+                }
+                if let Some(breach) = broken {
                     let message = format!(
                         "Beat {number} places {}, which {}",
-                        clue.id, breach.predicate
+                        link.target, breach.predicate
                     );
                     findings.push(subject.finding(rule, link.span, link.position, message));
                 }
