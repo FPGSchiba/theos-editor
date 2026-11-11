@@ -144,6 +144,42 @@ fn paths_that_leave_the_folder_are_never_opened() -> TestResult {
 }
 
 #[test]
+fn a_binaries_folder_that_does_not_exist_gives_missing_for_every_reference() -> TestResult {
+    let project = TempProject::copy_of("binaries")?;
+    let dir = tempfile::tempdir()?;
+    let gone = dir.path().join("binaries");
+    assert!(!gone.exists());
+    let (mut index, cache) = open(&project)?;
+    let report = index.binary_findings(&gone)?;
+    // The three references of v1 and the six of v2, each at its value.
+    let found: Vec<_> = report.findings.iter().map(key).collect();
+    assert_eq!(
+        found,
+        [
+            (V1, "binary/missing", "warning", 10, 7),
+            (V1, "binary/missing", "warning", 11, 12),
+            (V1, "binary/missing", "warning", 12, 12),
+            (V2, "binary/missing", "warning", 10, 11),
+            (V2, "binary/missing", "warning", 11, 11),
+            (V2, "binary/missing", "warning", 12, 10),
+            (V2, "binary/missing", "warning", 13, 8),
+            (V2, "binary/missing", "warning", 14, 9),
+            (V2, "binary/missing", "warning", 15, 10),
+        ]
+    );
+    for finding in report.findings.iter().filter(|f| f.path == V1) {
+        assert!(
+            finding.message.starts_with("there is no file `boards/"),
+            "{}",
+            finding.message
+        );
+    }
+    assert_eq!(report.hashed, Vec::<String>::new());
+    assert_eq!(memo_rows(&cache)?, Vec::<String>::new());
+    Ok(())
+}
+
+#[test]
 fn a_changed_file_is_hashed_again() -> TestResult {
     let project = TempProject::copy_of("binaries")?;
     let binaries = Binaries::new()?;

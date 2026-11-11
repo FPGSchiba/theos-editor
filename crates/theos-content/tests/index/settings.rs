@@ -154,6 +154,31 @@ fn settings_findings_equal_the_expectation() -> TestResult {
 }
 
 #[test]
+fn a_crlf_settings_file_gives_the_same_findings_and_positions() -> TestResult {
+    // A Windows checkout without `.gitattributes` writes the file with CRLF.
+    let project = TempProject::copy_of("settings")?;
+    let text = std::fs::read_to_string(project.root().join(SETTINGS))?;
+    assert!(!text.contains('\r'), "the fixture is LF");
+    project.write(SETTINGS, &text.replace('\n', "\r\n"))?;
+    let index = open(&project)?;
+    // Every settings finding at its line and column, and the entries that work (the order
+    // rule's severity, the project's word) still have their effect.
+    let wanted = expected(&fixture("settings").join("expected.toml"))?;
+    assert_eq!(keys(&index.findings()?), wanted);
+    let messages: Vec<String> = of_rule(&index, "settings/guardrail")?
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(
+        messages[0],
+        ".theos/settings.toml:3:1: error settings/guardrail: lore/never-confirm is a guardrail: \
+         it always blocks, and no setting lowers it."
+    );
+    assert_eq!(severities_of(&index, THREE_CLUE)?, [Severity::Error; 2]);
+    Ok(())
+}
+
+#[test]
 fn a_broken_settings_file_falls_back_to_defaults() -> TestResult {
     let project = TempProject::copy_of("settings")?;
     let mut index = open(&project)?;

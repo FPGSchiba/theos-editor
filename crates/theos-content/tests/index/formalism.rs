@@ -179,6 +179,44 @@ fn regenerating_is_idempotent() -> TestResult {
     Ok(())
 }
 
+// AC: CE-16.4
+#[test]
+fn an_equation_text_with_a_dashes_line_is_verbatim() -> TestResult {
+    // A text that starts with `---` puts that line right after the closing fence.
+    let project = TempProject::copy_of("formalism")?;
+    let source = read(&project, SOURCE)?;
+    let from = "\"text\": \"$x_{7} = 7$\"";
+    assert!(source.contains(from), "the fixture has E7's text");
+    project.write(
+        SOURCE,
+        &source.replace(
+            from,
+            "\"text\": \"---\\n$x_{7} = 7$\\n---\\nSynthetic line after a rule.\"",
+        ),
+    )?;
+    let done = formalism::regenerate(project.root())?;
+    assert_eq!(done.written.len(), 18);
+    let e7 = read(&project, E7)?;
+    assert!(
+        e7.ends_with("generated: true\n---\n---\n$x_{7} = 7$\n---\nSynthetic line after a rule.\n"),
+        "{e7}"
+    );
+    // The record reads back as E7 with that body: no `formalism/edited`, no finding at all.
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    assert_eq!(index.records_of_kind("equation")?.len(), 18);
+    assert_eq!(
+        keys(&index.findings()?),
+        expected(&fixture("formalism").join("expected.toml"))?
+    );
+    // Regenerating again writes nothing and leaves the bytes.
+    let again = formalism::regenerate(project.root())?;
+    assert_eq!(again.written, Vec::<String>::new());
+    assert_eq!(again.unchanged.len(), 18);
+    assert_eq!(read(&project, E7)?, e7);
+    Ok(())
+}
+
 #[test]
 fn a_stray_equation_and_a_missing_one_are_findings() -> TestResult {
     let project = generated()?;
