@@ -28,3 +28,20 @@ at:: [[synthetic-place]]
 at:: [[synthetic-place]]
 
 Synthetic text with an unclosed [[a here.
+
+## Beat 3 — Twice, no beat here
+at:: [[synthetic-place]], [[synthetic-place-b]]
+when:: T4
+synthetic:: x
+
+## Beat 3 — Twice again, no beat here
+at:: synthetic-place
+
+> [!note] n2 · open
+> Synthetic note E.
+
+> [!note] n2 · open
+> Synthetic note F.
+
+> [!note] n3
+> Synthetic note G.

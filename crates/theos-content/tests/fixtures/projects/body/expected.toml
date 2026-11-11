@@ -2,6 +2,11 @@
 # section 5.3 and the fixture texts. Every finding of the project: path, rule, severity, line
 # and column. The equation E950, whose body holds a link and an embed, has no body finding (verbatim); its
 # only finding is formalism/stray.
+# Constructs without meaning in their kind give no finding: in the topic (no beats, no notes) the
+# beat headings and attributes of lines 11-15, 26-28 and 32-38 (a key twice, a bad heading, a
+# detached attribute line, two `at::` links, `when:: T4`, an unknown key, beat 3 twice, `at:: x`)
+# and the notes of lines 17 and 40-47 (an unknown state, n2 twice, the title `n3`); in the script
+# (no notes) the notes of lines 34-41 (an unknown state, n1 twice, the title `n3`).
 
 # formalism/stray (section 5.14, R-P4): the equation record has no _source.json to list it;
 # its id value sits at line 3, column 5.
