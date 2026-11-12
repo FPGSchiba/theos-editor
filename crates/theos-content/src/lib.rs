@@ -64,6 +64,10 @@
 //! and the links for the graph; P17 `preview` for drafts and the same store for
 //! embeddings; P19 the same store for comment lists; P21 and P26 the rules that parts register
 //! and the cycle walk.
+//!
+//! After P06: [`rename::edits`] gives the span edits that rename ids in one record (its `id`
+//! field, front-matter links in their own quoting and body link targets), the part of the
+//! rename command that needs the record's spans.
 
 pub mod body;
 pub mod check;
@@ -76,6 +80,7 @@ pub mod lore;
 pub mod parts;
 pub mod project;
 pub mod record;
+pub mod rename;
 pub mod rules;
 pub mod settings;
 mod spelling;
