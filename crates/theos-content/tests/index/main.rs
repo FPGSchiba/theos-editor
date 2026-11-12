@@ -21,6 +21,7 @@ mod rules;
 mod schema;
 mod search;
 mod settings;
+mod snapshot;
 mod speed;
 mod story;
 mod sync;
