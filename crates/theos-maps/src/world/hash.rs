@@ -5,27 +5,34 @@ use theos_map_format::{json, sha256_hex};
 use super::layer::Layer;
 use crate::kernels::num;
 
-/// A float layer holds a NaN or an infinity, which has no canonical bytes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[error("cell {cell} is not finite")]
-pub struct NonFinite {
-    /// The flat index of the first offending cell.
-    pub cell: usize,
+/// Why a layer has no canonical bytes.
+#[derive(Debug, thiserror::Error)]
+pub enum LayerBytesError {
+    /// A float layer holds a NaN or an infinity.
+    #[error("cell {cell} is not finite")]
+    NonFinite {
+        /// The flat index of the first offending cell.
+        cell: usize,
+    },
+    /// The JSON of a value layer could not be written.
+    #[error("the value's canonical JSON could not be written")]
+    Json(#[from] theos_map_format::FormatError),
 }
 
 /// The canonical bytes of `layer`: floats as little-endian with `-0.0` turned into `+0.0`, bytes
 /// raw, masks as 0/1, `u32` as little-endian, values as canonical JSON.
 ///
 /// # Errors
-/// [`NonFinite`] with the first non-finite cell of a float layer. A value whose JSON cannot be
-/// written (which `serde_json::Value` never is) reports cell 0.
-pub fn canonical_bytes(layer: &Layer) -> Result<Vec<u8>, NonFinite> {
+/// [`LayerBytesError::NonFinite`] with the first non-finite cell of a float layer;
+/// [`LayerBytesError::Json`] when a value's JSON cannot be written, which cannot occur for a
+/// `serde_json::Value` today.
+pub fn canonical_bytes(layer: &Layer) -> Result<Vec<u8>, LayerBytesError> {
     match layer {
         Layer::F64(grid) => {
             let mut out = Vec::with_capacity(grid.len() * 8);
             for (cell, &x) in grid.as_slice().iter().enumerate() {
                 if !x.is_finite() {
-                    return Err(NonFinite { cell });
+                    return Err(LayerBytesError::NonFinite { cell });
                 }
                 out.extend_from_slice(&num::canonical(x).to_le_bytes());
             }
@@ -38,9 +45,7 @@ pub fn canonical_bytes(layer: &Layer) -> Result<Vec<u8>, NonFinite> {
             .iter()
             .flat_map(|v| v.to_le_bytes())
             .collect()),
-        Layer::Value(value) => {
-            json::to_canonical_vec(&value.canonical_json()).map_err(|_| NonFinite { cell: 0 })
-        }
+        Layer::Value(value) => Ok(json::to_canonical_vec(&value.canonical_json())?),
     }
 }
 
@@ -48,7 +53,7 @@ pub fn canonical_bytes(layer: &Layer) -> Result<Vec<u8>, NonFinite> {
 ///
 /// # Errors
 /// As [`canonical_bytes`].
-pub fn layer_sha256(layer: &Layer) -> Result<String, NonFinite> {
+pub fn layer_sha256(layer: &Layer) -> Result<String, LayerBytesError> {
     canonical_bytes(layer).map(|bytes| sha256_hex(&bytes))
 }
 
@@ -71,14 +76,18 @@ mod tests {
 
     #[test]
     fn a_non_finite_cell_is_reported() {
-        assert_eq!(
+        assert!(matches!(
             canonical_bytes(&f64_layer(vec![1.0, f64::INFINITY])),
-            Err(NonFinite { cell: 1 })
-        );
-        assert_eq!(
+            Err(LayerBytesError::NonFinite { cell: 1 })
+        ));
+        assert!(matches!(
             layer_sha256(&f64_layer(vec![f64::NAN])),
-            Err(NonFinite { cell: 0 })
-        );
+            Err(LayerBytesError::NonFinite { cell: 0 })
+        ));
+        let message = layer_sha256(&f64_layer(vec![f64::NAN]))
+            .unwrap_err()
+            .to_string();
+        assert_eq!(message, "cell 0 is not finite");
     }
 
     #[test]
@@ -112,14 +121,20 @@ mod tests {
 
     #[test]
     fn values_hash_by_their_canonical_json() {
-        let unsorted: serde_json::Value =
-            serde_json::from_str(r#"{"b": 1, "a": {"d": 2, "c": 3}}"#).unwrap();
-        let sorted: serde_json::Value =
-            serde_json::from_str(r#"{"a": {"c": 3, "d": 2}, "b": 1}"#).unwrap();
-        let a = layer_sha256(&Layer::Value(Box::new(Json(unsorted)))).unwrap();
-        let b = layer_sha256(&Layer::Value(Box::new(Json(sorted.clone())))).unwrap();
-        assert_eq!(a, b);
-        let bytes = theos_map_format::json::to_canonical_vec(&sorted).unwrap();
-        assert_eq!(a, theos_map_format::sha256_hex(&bytes));
+        let value = serde_json::json!({"b": 1, "a": [2, 1]});
+        let layer = Layer::Value(Box::new(Json(value)));
+        let text = "{
+  \"a\": [
+    2,
+    1
+  ],
+  \"b\": 1
+}
+";
+        assert_eq!(canonical_bytes(&layer).unwrap(), text.as_bytes());
+        assert_eq!(
+            layer_sha256(&layer).unwrap(),
+            theos_map_format::sha256_hex(text.as_bytes())
+        );
     }
 }

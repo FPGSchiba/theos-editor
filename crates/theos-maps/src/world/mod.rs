@@ -9,7 +9,7 @@ mod value;
 
 use std::collections::BTreeMap;
 
-pub use hash::{NonFinite, canonical_bytes, layer_sha256};
+pub use hash::{LayerBytesError, canonical_bytes, layer_sha256};
 pub use layer::{Layer, LayerKind, bytes_per_cell};
 pub use value::{ValueType, WorldValue};
 
