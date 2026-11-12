@@ -11,6 +11,10 @@ pub mod introduced;
 pub mod lock;
 pub mod workspace;
 
+pub use command::{
+    Base, Command, CommandError, Create, Delete, Edit, FileChange, Patch, Plan, PlanContext, Reads,
+    Write,
+};
 pub use error::StudioError;
 pub use introduced::{FindingCounts, introduced};
 pub use workspace::{Workspace, find_root};
