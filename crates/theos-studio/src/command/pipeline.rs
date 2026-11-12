@@ -156,6 +156,8 @@ fn steps(
     let root = workspace.project().root().to_path_buf();
     check_bases(&root, &plan, replayed.is_some())?;
     let (preview, before) = preview(workspace, &plan)?;
+    // Step 5, the verdict: no moved record leaves the index, and no error is new.
+    verdict::keep_records(&plan.moved, &preview.update)?;
     let allowance = replayed.as_ref().map(|replayed| &replayed.allowance);
     let verdict = verdict::judge(&before, &plan.moved, allowance, &preview.findings);
     if !verdict.blocking.is_empty() {

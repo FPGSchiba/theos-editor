@@ -43,6 +43,8 @@ impl Workspace {
     ///
     /// Before the write, an error leaves the files, the index cache and the journal as they were:
     /// [`CommandError::Rejected`] when the command would introduce errors,
+    /// [`CommandError::NotARecord`] when a record it moves would not be read as a record at its
+    /// new path,
     /// [`CommandError::Stale`] when a file changed on disk since the caller or the plan read it,
     /// [`CommandError::Lock`] when the repo lock cannot be taken,
     /// [`CommandError::ReadOnly`] when a file the command would replace or remove is read-only,

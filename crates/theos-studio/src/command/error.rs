@@ -63,6 +63,15 @@ pub enum CommandError {
         /// The new id.
         to: String,
     },
+    /// A record the command moves would not be read as a record at its new path: the path is
+    /// hidden, a `.gitignore` keeps it out, or its name is no record name (such as `README.md`).
+    /// The verdict refuses it before anything is written, so a command never takes a record out
+    /// of the index (ruling R16).
+    #[error("`{path}` would not be read as a record: hidden, ignored by git, or not a record name")]
+    NotARecord {
+        /// The new path.
+        path: String,
+    },
     /// A path that breaks a rule of the project.
     #[error("the path `{path}` {reason}")]
     Path {

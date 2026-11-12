@@ -510,6 +510,75 @@ fn a_taken_id_is_refused() -> TestResult {
     Ok(())
 }
 
+/// The nook of `commands/`, a record that nothing links.
+const NOOK: &str = "world/synthetic-band/f04-synthetic/synthetic-hall/synthetic-nook.md";
+
+/// The path of the nook renamed to `to`.
+fn nook_renamed(to: &str) -> String {
+    NOOK.replace("synthetic-nook", to)
+}
+
+/// Renames the nook to `to` in `project`, which must be refused with `NotARecord` for the new
+/// path (ruling R16): files, index and journal stay as they were, and the nook is still a record.
+fn loses_the_nook(project: &TempProject, to: &str) -> TestResult {
+    let mut workspace = Workspace::open(project.root())?;
+    let error = refused(project, &mut workspace, &rename("synthetic-nook", to))?;
+    let new = nook_renamed(to);
+    assert!(
+        matches!(&error, CommandError::NotARecord { path } if *path == new),
+        "{to}: {error:?}"
+    );
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "`{new}` would not be read as a record: hidden, ignored by git, or not a record name"
+        )
+    );
+    assert_eq!(workspace.index().record("synthetic-nook")?.len(), 1, "{to}");
+    Ok(())
+}
+
+// AC: CE-20.3
+/// Ruling R16: a rename never takes a record out of the index. `README.md` is no record name.
+#[test]
+fn a_rename_to_a_name_that_is_no_record_is_refused() -> TestResult {
+    loses_the_nook(&TempProject::copy_of_studio("commands")?, "README")
+}
+
+/// Ruling R16: on Unix a name that starts with `.` hides the file, so it is no record.
+#[cfg(unix)]
+#[test]
+fn a_rename_to_a_hidden_name_is_refused() -> TestResult {
+    loses_the_nook(&TempProject::copy_of_studio("commands")?, ".nook")
+}
+
+// AC: CE-20.3
+/// Ruling R16: a new path that a `.gitignore` keeps out is no record.
+#[test]
+fn a_rename_to_an_ignored_path_is_refused() -> TestResult {
+    let project = TempProject::copy_of_studio("commands")?;
+    std::fs::write(project.root().join(".gitignore"), "synthetic-den.md\n")?;
+    loses_the_nook(&project, "synthetic-den")
+}
+
+// AC: CE-20.3
+/// The other side of ruling R16: the same rename without the `.gitignore` is applied, and the
+/// nook is a record under its new path.
+#[test]
+fn a_rename_to_a_record_path_is_applied() -> TestResult {
+    let (_project, mut workspace) = open("commands")?;
+    let outcome = workspace.run(&rename("synthetic-nook", "synthetic-den"))?;
+    let new = nook_renamed("synthetic-den");
+    assert_eq!(outcome.changed, [NOOK.to_owned(), new.clone()]);
+    let records = workspace.index().record("synthetic-den")?;
+    assert_eq!(
+        records.iter().map(|r| r.path.as_str()).collect::<Vec<_>>(),
+        [new.as_str()]
+    );
+    assert_eq!(workspace.index().record("synthetic-nook")?, Vec::new());
+    Ok(())
+}
+
 /// Review focus 4: a file the index does not see (ignored by git) still takes its path.
 #[test]
 fn an_id_taken_by_an_ignored_file_is_refused() -> TestResult {
