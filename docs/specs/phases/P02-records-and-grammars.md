@@ -498,9 +498,10 @@ LF, because the model's text is.
 
 Two forms, both exposed with their spans, because P04's word check skips them:
 - `> [!design]` callouts (§5.9), at any depth;
-- a paragraph whose text starts with `Design note:`, at the top level or inside a callout. The
-  note runs to the end of its paragraph, soft-wrapped lines included. Its "title token" (CE-10.2)
-  is the `Design note:` marker.
+- a line starting with `Design note:` (data model §9.2), at the top level or inside a callout:
+  the first line of a paragraph or any later line of it. The note runs from that line to the end
+  of its paragraph, soft-wrapped lines included. Its "title token" (CE-10.2) is the
+  `Design note:` marker.
 
 P02 also exposes the voice blocks' content spans. P04 builds the in-world text from them
 (data model §9.4, last paragraph).
@@ -579,7 +580,7 @@ a tag inside `proptest!` has no owner and fails `ac-trace`.
 | CE-09.3 | Every file in `rejected/` fails with its expected rule, line and column. One test per construct the AC names (anchors, aliases, tags, multi-line scalars, flow maps, deeper nesting), plus the other rows. A case with non-ASCII text before the error proves that columns count Unicode scalar values. |
 | CE-09.4 | Each CRLF fixture (its `\r\n` asserted) parses to the same model, lines and columns as its LF twin; every write returns text without a CR; mixed and lone-CR inputs too; `was_normalized()` is true. |
 | CE-10.1 | `S-004` (the data model example) parses into Beat 1 (at `fates-shrine`, with `mother-ilse`, says `B-016`, when `T1`) and Beat 2 (at `fates-shrine`, reveals `C-031`, when `T1`). Each link's `target_span` slices to its id. |
-| CE-10.2 | Voice blocks (speaker, beliefs, tier, caption, all title forms of the corpus), `[!design]` callouts and `Design note:` paragraphs, and notes with `n<k>`, a version link and the three states, each state recognised. An unknown state is kept as `Unknown`. |
+| CE-10.2 | Voice blocks (speaker, beliefs, tier, caption, all title forms of the corpus), `[!design]` callouts and `Design note:` lines, and notes with `n<k>`, a version link and the three states, each state recognised. An unknown state is kept as `Unknown`. |
 | CE-10.3 | Every file in `malformed/` reports each construct with its line (and column): malformed beat attributes, callout titles of every registered type, beat headings, and every malformed link form of §5.8. |
 | CE-10.4 | For every body in `records/` and `malformed/`: blocks and gaps tile it exactly; for every link target, fragment and shown text, note state, beat attribute value and callout title token, a span edit that writes back its own text leaves the bytes identical, which proves the spans exact. |
 
@@ -710,7 +711,7 @@ are Claude's calls inside them.
 - Ruling: captions are recognised on voice and note callouts, and a note's text excludes its
   caption — the data model's note example ends with `— Jann`, a signature, not feedback for a
   generator — cost if wrong: generators miss who wrote a note.
-- Ruling: `[!design]` takes optional free text as its title; a `Design note:` paragraph runs to
+- Ruling: `[!design]` takes optional free text as its title; a `Design note:` line runs to
   the end of its paragraph — data model §9.2 defines neither; the word check needs a span; a
   hard-wrapped note continues on the next line — cost if wrong: P04's skipped span is a paragraph
   instead of a line.

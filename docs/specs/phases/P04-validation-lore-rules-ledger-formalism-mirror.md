@@ -618,7 +618,12 @@ matter, and neutral texts ("Synthetic statement A"), never lore.
   (P03 §5.13), so it gains the findings P04's rules make there: the `malformed/` records'
   `body/` findings among them. P03's other expectation files gain theirs the same way. No P03
   expectation is dropped.
-- **The CE-12.1 project** stays as P03 built it. The lore step runs on its 500 records.
+- **The CE-12.1 project** keeps P03's size, shape and limit: 500 records, 25 per kind, bodies of
+  about 1 KB, the same links, under one second. Its generated data is kept valid under the rules
+  of the current build, so its test still asserts no findings; P04 adds a synthetic
+  `_source.json` with the equations rendered from it, gives each band the floor range of its
+  floor, takes ids out of belief titles, and gives the truths and clues a valid reveal order.
+  The lore step runs on its 500 records.
 - **The history test** (`tests/index/changes.rs`, proptest) gains truths, clues, bands, floors,
   locations, scripts with `reveals::`, concepts and versions with notes, `.theos/settings.toml`
   and `_source.json`. Its edits:
@@ -684,7 +689,7 @@ and links their runs. `cargo xtask gate` runs on Windows before the phase is cla
 | Risk | Effect | Mitigation |
 |---|---|---|
 | A rule reads something not through the context | The cache differs from a cold build after some change | Rules get no connection; `deps` is in `dump()`; the history test compares after every step |
-| The lore step slows the cold open | CE-12.1 fails on the CI runners (coverage and Windows ran about 3× slower than local in P03) | Bulk loading for a cold build; the plan measures and records the lore step; the 500-record test is unchanged |
+| The lore step slows the cold open | CE-12.1 fails on the CI runners (coverage and Windows ran about 3× slower than local in P03) | Bulk loading for a cold build; the plan measures and records the lore step; the 500-record test keeps its size, shape, limit and "no findings" assertion |
 | Coarse reads re-run many subjects | A prose edit of a band re-runs every truth with a clue below it | Correct; the counts are small; narrowing is allowed only with the history test equal (§5.5) |
 | The rule readings differ from what Jann or the lore pages mean | Findings that are wrong for the canon | Every reading is a ruling in §9; the private session can compare them with the lore pages |
 | Developer words flag ordinary words | Noise in in-world text | Built in are only ids, tiers and rule names; words come from the project; allowlist entries need reasons |

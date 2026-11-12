@@ -59,25 +59,13 @@ from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#2
 - Three sentences of the P10 corpus read like lore claims (B-901's link text, "the Cutter is
   near", "the operator-plate names a Listener"). P02's fixture copies reword them neutrally until
   Jann, or a session that can read Confluence, confirms they are canon.
-- P03 spec §5.7 (a protected path) says only that hidden entries are skipped. Jann ruled on
-  2026-11-10 that hiding is native, and the build follows that:
-  - on Windows, a file or folder is hidden when it has the hidden attribute;
-  - on Linux and macOS, a name that starts with a dot is hidden;
-  - on every OS, `.theos`, `.git`, `.obsidian`, `.vscode`, `.github`, `.worktrees` and `.trash`
-    are never records.
-
-  Two consequences follow. A file hidden by its attribute on Windows is a record on Linux. On
-  Windows, a dot folder outside that list and without the attribute (`.claude/`, `.idea/`) is
-  walked unless `.gitignore` ignores it; in tower-of-theos today that changes nothing. The spec
-  text can be aligned in a docs PR.
-- P03 spec §7's risk row for two builds sharing one cache (a protected path) says each open
-  rebuilds. Since the final review, every write rechecks the cache identity: a build rebuilds the
-  cache whenever another build has written since, and after three rebuilds in one write it fails
-  with `IndexError::Contended`. The row can be aligned in a docs PR.
-- P02 spec §5.11 says a design note is "a paragraph whose text starts with `Design note:`". The
-  build follows data model §9.2 instead ("on a line starting with `Design note:`"), which ranks
-  higher: a note line inside a paragraph starts a note that runs to the paragraph's end. The spec
-  wording can be aligned in a docs PR.
+- The docs PR `docs(spec): align the P02, P03 and P04 specs with the build (docs)` waits for
+  Jann. It aligns four approved specs with what was built:
+  - P02 §5.11: a design note starts on any line with `Design note:` (data model §9.2);
+  - P03 §5.7: hiding is native per OS (Jann's ruling of 10 Nov 2026);
+  - P03 §7: two builds sharing one cache recheck its identity on every write;
+  - P04 §5.17 and §7: the CE-12.1 project keeps P03's size, shape and limit, with its data kept
+    valid under the current rules.
 - tower-of-theos#3 (P20, merged) locks `markdown-it-py` 4.3.0 in `tools/repo_checks`, which was
   released the day it was locked. Pinning an older 4.x is a one-line follow-up if Jann prefers a
   cool-down.
