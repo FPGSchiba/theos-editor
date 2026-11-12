@@ -104,6 +104,21 @@ fn collect(root: &Path, dir: &Path, found: &mut BTreeMap<String, Vec<u8>>) -> st
     Ok(())
 }
 
+/// The dump of the index of a fresh `Workspace::open` of a copy of the files of `root`: what a
+/// cache that matches the disk must dump.
+pub fn cold_dump(root: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let copy = tempfile::tempdir()?;
+    for (path, bytes) in files(root)? {
+        let target = copy.path().join(&path);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(target, bytes)?;
+    }
+    let cold = theos_studio::Workspace::open(copy.path())?;
+    Ok(cold.index().dump()?)
+}
+
 /// The helper process; it is killed and waited for when this is dropped, so a failing test
 /// never leaves it running with the lock or the project folder.
 pub struct HelperProcess {

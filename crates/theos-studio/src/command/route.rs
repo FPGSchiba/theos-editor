@@ -5,6 +5,8 @@
 //! [`HumanRoute`] holds the lock and adds a journal entry; P07's agent route commits on its
 //! session branch instead, with no change to the pipeline or the commands.
 
+use std::collections::BTreeMap;
+
 use super::journal::EntryId;
 use super::{CommandError, FileChange};
 use crate::Workspace;
@@ -17,6 +19,8 @@ pub struct Applied {
     pub label: String,
     /// Every file it changed, with its exact bytes before and after, in plan order.
     pub changes: Vec<FileChange>,
+    /// Old path to new path, for the files the command moved.
+    pub moved: BTreeMap<String, String>,
     /// The findings of the affected paths before the command, counted under the paths they had
     /// then (not mapped through the files the command moved).
     pub counts_before: FindingCounts,

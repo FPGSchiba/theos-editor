@@ -20,6 +20,7 @@ mod run;
 pub(crate) mod state;
 #[cfg(test)]
 mod test_support;
+mod undo;
 mod verdict;
 mod write;
 
@@ -33,7 +34,7 @@ pub use create::Create;
 pub use delete::Delete;
 pub use edit::Edit;
 pub use error::CommandError;
-pub use journal::{EntryId, EntrySummary};
+pub use journal::{EntryId, EntrySummary, Scope};
 pub use patch::Patch;
 pub use pipeline::Outcome;
 pub use route::{Applied, HumanRoute, Route};

@@ -58,13 +58,6 @@ pub(crate) enum Work<'a> {
     /// A command, planned on the workspace as it is now.
     Command(&'a dyn Command),
     /// A journal entry played back by undo or redo.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "undo and redo of P06 replay entries; remove this then"
-        )
-    )]
     Replay {
         /// The label of the undo or redo.
         label: String,
@@ -189,6 +182,7 @@ fn steps(
         let applied = Applied {
             label,
             changes,
+            moved: plan.moved,
             counts_before: FindingCounts::of(&before, &BTreeMap::new()),
             counts_after: FindingCounts::of(&preview.findings, &BTreeMap::new()),
         };
