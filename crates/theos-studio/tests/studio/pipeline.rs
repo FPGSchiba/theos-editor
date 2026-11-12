@@ -278,7 +278,7 @@ impl Drop for ReadOnly {
 /// remove it is refused at once with `ReadOnly`, and nothing is written.
 #[test]
 fn a_read_only_target_is_refused() -> TestResult {
-    // No record links the second truth, so deleting it would be applied.
+    // No other record links the second truth, so deleting it would be applied.
     let unlinked = "lore/truths/T-961.md";
     let (project, mut workspace) = open("commands")?;
     let patch = set(&workspace, TRUTH, "title", "Synthetic truth, retitled")?;

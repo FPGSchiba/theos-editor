@@ -127,13 +127,7 @@ fn undo_gives_back_the_exact_bytes() -> TestResult {
     for path in [CRLF, BARE] {
         let command = set(&workspace, path, "title", "Synthetic belief, retitled")?;
         undo_restores(&project, &mut workspace, &command)?;
-        let command = append(
-            &workspace,
-            path,
-            "
-Synthetic appended line.
-",
-        )?;
+        let command = append(&workspace, path, "\nSynthetic appended line.\n")?;
         undo_restores(&project, &mut workspace, &command)?;
     }
     assert_eq!(
