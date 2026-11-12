@@ -157,10 +157,19 @@ mod tests {
     #[test]
     // AC: CE-20.1
     fn a_moved_file_keeps_its_findings() {
-        let before = [error("old.md", RULE, "No clue moves T-981")];
+        let before = [
+            error("old.md", RULE, "No clue moves T-981"),
+            error("keep.md", RULE, "No clue moves T-982"),
+        ];
         let moved = BTreeMap::from([("old.md".to_owned(), "new.md".to_owned())]);
         let allowed = FindingCounts::of(&before, &moved);
-        let after = [error("new.md", RULE, "No clue moves T-981")];
+        assert_eq!(allowed.count("new.md", RULE), 1);
+        assert_eq!(allowed.count("old.md", RULE), 0);
+        assert_eq!(allowed.count("keep.md", RULE), 1);
+        let after = [
+            error("new.md", RULE, "No clue moves T-981"),
+            error("keep.md", RULE, "No clue moves T-982"),
+        ];
         assert_eq!(introduced(&allowed, &after), Vec::<Finding>::new());
     }
 
@@ -181,10 +190,53 @@ mod tests {
 
     #[test]
     // AC: CE-20.1
+    fn max_keeps_the_keys_of_both_sides() {
+        let a = FindingCounts::of(&[error("a.md", RULE, "x")], &BTreeMap::new());
+        let b = FindingCounts::of(&[error("b.md", RULE, "y")], &BTreeMap::new());
+        let max = a.max(&b);
+        assert_eq!(max.count("a.md", RULE), 1);
+        assert_eq!(max.count("b.md", RULE), 1);
+        assert!(max.has_seen(&error("a.md", RULE, "x")));
+        assert!(max.has_seen(&error("b.md", RULE, "y")));
+    }
+
+    #[test]
+    // AC: CE-20.1
     fn unseen_messages_come_first() {
         let allowed = FindingCounts::of(&[error("a.md", RULE, "seen")], &BTreeMap::new());
         let after = [error("a.md", RULE, "seen"), error("a.md", RULE, "unseen")];
         assert_eq!(introduced(&allowed, &after), [after[1].clone()]);
+    }
+
+    #[test]
+    // AC: CE-20.1
+    fn unseen_messages_win_over_a_seen_one_that_comes_first() {
+        let allowed = FindingCounts::of(&[error("a.md", RULE, "seen")], &BTreeMap::new());
+        let after = [
+            error("a.md", RULE, "seen"),
+            error("a.md", RULE, "new 1"),
+            error("a.md", RULE, "new 2"),
+        ];
+        assert_eq!(
+            introduced(&allowed, &after),
+            [after[1].clone(), after[2].clone()]
+        );
+    }
+
+    #[test]
+    // AC: CE-20.1
+    fn a_surplus_beyond_the_unseen_takes_seen_ones_and_keeps_after_order() {
+        let allowed = FindingCounts::of(&[error("a.md", RULE, "seen")], &BTreeMap::new());
+        let after = [
+            error("a.md", RULE, "seen"),
+            error("a.md", RULE, "seen"),
+            error("a.md", RULE, "new"),
+        ];
+        // Surplus 2: the unseen one first, then the first seen one; returned in `after` order.
+        assert_eq!(
+            introduced(&allowed, &after),
+            [after[0].clone(), after[2].clone()]
+        );
     }
 
     #[test]
