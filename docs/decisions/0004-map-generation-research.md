@@ -46,7 +46,7 @@ neither.
 | D14 | Giant trees last | "Yes they may come last. Its not as important." | Research track, last |
 | D15 | Order | P31 → P32 → P33 after P08 and P09; the rest when adopted | Umbrella §3 |
 | Scope | `route_potential` | "Move it out of P08 I think P31 or P32 are better homes for it." | Out of P08 with the site type `market`; research track until P31's or P32's placement work |
-| Scope | Extra metrics and snapshot export | Accepted with the scope table | Moved to P33 (CE-83.3, CE-83.4) |
+| Scope | Extra metrics and snapshot export | Claude's call in the scope pass ("Move to P33"); Jann answered only its open question (`route_potential`) and did not object | Moved to P33 (CE-83.3, CE-83.4); Jann rules on it when he merges this PR |
 
 ## Where Claude disagreed with the research or found more
 
