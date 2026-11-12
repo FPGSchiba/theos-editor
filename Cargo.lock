@@ -984,6 +984,7 @@ version = "0.0.0"
 name = "theos-map-format"
 version = "0.0.0"
 dependencies = [
+ "cargo_metadata",
  "flate2",
  "geojson",
  "serde",

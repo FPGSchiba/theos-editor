@@ -11,16 +11,16 @@ use crate::package::label;
 use crate::{DType, FormatError, LayerKey, Manifest, Package, json, sha256_hex};
 
 /// Name of the manifest entry.
-const MANIFEST_FILE: &str = "manifest.json";
+pub(crate) const MANIFEST_FILE: &str = "manifest.json";
 /// Name of the feature entry.
-const FEATURES_FILE: &str = "features.geojson";
+pub(crate) const FEATURES_FILE: &str = "features.geojson";
 
 /// True when an entry of `len` bytes needs ZIP64 fields (above 4 GiB, `docs/map-package.md` §8).
 pub(crate) fn needs_zip64(len: u64) -> bool {
     len > u64::from(u32::MAX)
 }
 
-fn extension(dtype: DType) -> &'static str {
+pub(crate) fn extension(dtype: DType) -> &'static str {
     match dtype {
         DType::F32 => "f32",
         DType::U8 => "u8",
@@ -28,7 +28,7 @@ fn extension(dtype: DType) -> &'static str {
     }
 }
 
-fn layer_path(key: &LayerKey, dtype: DType) -> String {
+pub(crate) fn layer_path(key: &LayerKey, dtype: DType) -> String {
     let ext = extension(dtype);
     match &key.level {
         Some(level) => format!("layers/{level}/{}.{ext}", key.name),

@@ -14,10 +14,10 @@ use crate::zip_bytes;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-const DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/package");
+pub const DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/package");
 
 /// Reads a fixture JSON file without its `note` key.
-fn read_json(file: &str) -> Result<Value, Box<dyn std::error::Error>> {
+pub fn read_json(file: &str) -> Result<Value, Box<dyn std::error::Error>> {
     let text = std::fs::read_to_string(format!("{DIR}/{file}"))?;
     let mut value: Value = serde_json::from_str(&text)?;
     value.as_object_mut().ok_or("not an object")?.remove("note");
@@ -32,7 +32,7 @@ fn key(name: &str) -> LayerKey {
 }
 
 /// The synthetic fixture package: grid 3 x 4, layers `height` (f32) and `water` (u8).
-fn fixture() -> Result<Package, Box<dyn std::error::Error>> {
+pub fn fixture() -> Result<Package, Box<dyn std::error::Error>> {
     let manifest: Manifest = serde_json::from_value(read_json("manifest.json")?)?;
     let features: geojson::FeatureCollection =
         serde_json::from_value(read_json("features.geojson")?)?;

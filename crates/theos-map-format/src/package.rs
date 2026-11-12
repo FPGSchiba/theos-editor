@@ -29,6 +29,18 @@ pub(crate) fn label(key: &LayerKey) -> String {
     }
 }
 
+/// Refuses a layer name or level id that could leave `layers/` once it is part of an entry path:
+/// empty, `.`, `..`, or containing `/`, `\` or NUL.
+pub(crate) fn check_name(kind: &'static str, name: &str) -> Result<(), FormatError> {
+    if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\', '\0']) {
+        return Err(FormatError::InvalidName {
+            kind,
+            name: name.to_owned(),
+        });
+    }
+    Ok(())
+}
+
 /// Checks that `level` is listed in `ids`, or absent when the frame has no levels.
 fn check_level(
     owner: &str,
@@ -89,13 +101,23 @@ impl Package {
     ///
     /// # Errors
     ///
-    /// A [`FormatError`] that names the first problem: a non-finite frame number, a duplicate
+    /// A [`FormatError`] that names the first problem: a non-finite frame number, a layer name or
+    /// level id that cannot be part of an entry path, a duplicate
     /// layer, an entry without data or data without an entry, a layer that is not rows ×
     /// columns long or holds NaN or infinities, or a level that is missing, unlisted or not
     /// allowed on a layer or feature.
     pub fn validate(&self) -> Result<(), FormatError> {
         let frame = &self.manifest.frame;
         check_frame_numbers(frame)?;
+        for level in frame.levels.iter().flatten() {
+            check_name("level", &level.id)?;
+        }
+        for entry in &self.manifest.layers {
+            check_name("layer", &entry.name)?;
+            if let Some(level) = &entry.level {
+                check_name("level", level)?;
+            }
+        }
         let ids: Option<BTreeSet<&str>> = frame
             .levels
             .as_ref()
