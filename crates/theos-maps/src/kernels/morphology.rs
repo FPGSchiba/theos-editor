@@ -11,7 +11,9 @@ pub enum Structure {
     /// The cell and its four edge neighbours.
     Cross,
     /// Every offset `(dr, dc)` with `dr^2 + dc^2 <= (radius_m / cell_m)^2`. A negative or NaN
-    /// radius leaves the centre only.
+    /// radius leaves the centre only, and so does a ratio that is infinite or too large for an
+    /// `isize` (a zero `cell_m`, an infinite `radius_m`); callers pass finite radii from validated
+    /// recipes.
     Disk {
         /// Radius in metres.
         radius_m: f64,
@@ -110,6 +112,19 @@ mod tests {
         assert_eq!(bits(&erode(&g, DISK, 2.0, 1)), BLOB_ERO_DISK);
         assert_eq!(bits(&open(&g, DISK, 2.0)), BLOB_OPEN_DISK);
         assert_eq!(bits(&erode(&g, Structure::Cross, 2.0, 2)), BLOB_ERO_CROSS_2);
+    }
+
+    #[test]
+    fn a_two_cell_disk_has_the_right_shape() {
+        let mut centre = Grid::filled(7, 7, false);
+        centre.set(3, 3, true);
+        let out = dilate(&centre, Structure::Disk { radius_m: 4.0 }, 2.0, 1);
+        assert!(out.get(3 + 2, 3), "(2, 0) is in");
+        assert!(out.get(3, 3 - 2), "(0, -2) is in");
+        assert!(out.get(3 + 1, 3 + 1), "(1, 1) is in");
+        assert!(!out.get(3 + 2, 3 + 1), "(2, 1) is out");
+        assert!(!out.get(3 + 2, 3 + 2), "(2, 2) is out");
+        assert_eq!(out.as_slice().iter().filter(|&&b| b).count(), 13);
     }
 
     #[test]

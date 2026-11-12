@@ -1,6 +1,16 @@
 //! Connected-component labels with `scipy.ndimage.label` numbering.
+//!
+//! Components are found by an explicit-stack flood fill, not union-find. The cells are visited in
+//! row-major order and a new label is given to every unlabelled `true` cell met, then the fill
+//! labels its whole component. So a component is numbered when its first cell in scan order is
+//! reached, which is exactly scipy's numbering, and the result does not depend on the order in
+//! which the fill walks the neighbours.
 
 use crate::grid::{D8, Grid};
+
+/// The four edge neighbours (N, E, S, W), listed here so 4-connectivity does not depend on the
+/// order of [`D8`].
+const CARDINAL: [(isize, isize); 4] = [(-1, 0), (0, 1), (1, 0), (0, -1)];
 
 /// Which cells touch: the four edge neighbours, or all eight.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,12 +23,13 @@ pub enum Connectivity {
 
 /// Labels the connected components of `mask`: `0` is background and the components are numbered
 /// `1..=n` by the row-major position of their first cell, like `scipy.ndimage.label`. Returns the
-/// labels and `n`.
+/// labels and `n`. The components come from a flood fill with an explicit stack (see the module
+/// documentation for why that numbers them like scipy and union-find would).
 #[must_use]
 pub fn labels(mask: &Grid<bool>, c: Connectivity) -> (Grid<u32>, u32) {
-    let step = match c {
-        Connectivity::Four => 2,
-        Connectivity::Eight => 1,
+    let neighbours: &[(isize, isize)] = match c {
+        Connectivity::Four => &CARDINAL,
+        Connectivity::Eight => &D8,
     };
     let mut out = Grid::filled(mask.rows(), mask.cols(), 0_u32);
     let mut count = 0_u32;
@@ -31,7 +42,7 @@ pub fn labels(mask: &Grid<bool>, c: Connectivity) -> (Grid<u32>, u32) {
         out.as_mut_slice()[start] = count;
         stack.push(start);
         while let Some(i) = stack.pop() {
-            for &d in D8.iter().step_by(step) {
+            for &d in neighbours {
                 if let Some(j) = mask.neighbour(i, d)
                     && mask.as_slice()[j]
                     && out.as_slice()[j] == 0
