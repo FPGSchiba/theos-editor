@@ -1115,7 +1115,11 @@ renamed the place types, added `requires` and dropped the size note of §4.3.
    - `steepest` vs `slope_adaptive` routing;
    - a depression that fills exactly to its spill level;
    - sediment exceeding a depression's volume;
-   - very large time steps.
+   - very large time steps;
+   - no cell uplifting (the tolerance falls back to 10⁻⁶ m);
+   - G/p̂ above 1, where convergence is not proven, up to the 50-iteration limit;
+   - `slope_adaptive` erosion on a plain, where channel discharge follows the single steepest
+     receiver: river lines, fords and lake outlets must still agree.
 3. **Lakes:**
    - a lake covering most of the map;
    - a lake touching a drained edge;
