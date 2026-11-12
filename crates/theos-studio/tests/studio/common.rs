@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
+use std::process::{Child, Command, ExitStatus};
 use std::time::{Duration, Instant};
 
 use crate::helper::HelperTask;
@@ -92,23 +92,63 @@ fn collect(root: &Path, dir: &Path, found: &mut BTreeMap<String, Vec<u8>>) -> st
     Ok(())
 }
 
-/// Starts the helper process: this test binary, running only `helper::helper`, with the task in
-/// the environment variable `THEOS_STUDIO_HELPER`.
-pub fn spawn_helper(task: &HelperTask) -> Result<Child, Box<dyn std::error::Error>> {
-    Ok(Command::new(std::env::current_exe()?)
-        .args(["helper::helper", "--exact"])
-        .env("THEOS_STUDIO_HELPER", serde_json::to_string(task)?)
-        .spawn()?)
+/// The helper process; it is killed and waited for when this is dropped, so a failing test
+/// never leaves it running with the lock or the project folder.
+pub struct HelperProcess {
+    child: Child,
 }
 
-/// Waits up to 30 s for the file `path` to exist.
-pub fn wait_for(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let start = Instant::now();
-    while !path.exists() {
-        if start.elapsed() > Duration::from_secs(30) {
-            return Err(format!("timed out waiting for {}", path.display()).into());
-        }
-        std::thread::sleep(Duration::from_millis(10));
+impl HelperProcess {
+    /// The process id of the helper.
+    pub fn id(&self) -> u32 {
+        self.child.id()
     }
-    Ok(())
+
+    /// Kills the helper.
+    pub fn kill(&mut self) -> std::io::Result<()> {
+        self.child.kill()
+    }
+
+    /// Waits for the helper to exit.
+    pub fn wait(&mut self) -> std::io::Result<ExitStatus> {
+        self.child.wait()
+    }
+
+    /// Waits up to 30 s for the file `path` to exist; fails at once, naming the exit status, when
+    /// the helper has exited before.
+    pub fn wait_for(&mut self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        let start = Instant::now();
+        while !path.exists() {
+            if let Some(status) = self.child.try_wait()? {
+                return Err(format!(
+                    "the helper exited with {status} before {} existed",
+                    path.display()
+                )
+                .into());
+            }
+            if start.elapsed() > Duration::from_secs(30) {
+                return Err(format!("timed out waiting for {}", path.display()).into());
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        Ok(())
+    }
+}
+
+impl Drop for HelperProcess {
+    fn drop(&mut self) {
+        // The helper may have exited already; then there is nothing to stop.
+        drop(self.child.kill());
+        drop(self.child.wait());
+    }
+}
+
+/// Starts the helper process: this test binary, running only `helper::helper`, with the task in
+/// the environment variable `THEOS_STUDIO_HELPER`.
+pub fn spawn_helper(task: &HelperTask) -> Result<HelperProcess, Box<dyn std::error::Error>> {
+    let child = Command::new(std::env::current_exe()?)
+        .args(["helper::helper", "--exact"])
+        .env("THEOS_STUDIO_HELPER", serde_json::to_string(task)?)
+        .spawn()?;
+    Ok(HelperProcess { child })
 }

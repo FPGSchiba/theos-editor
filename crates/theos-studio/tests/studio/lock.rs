@@ -1,24 +1,26 @@
 //! The repo lock across processes.
 
 use std::path::Path;
-use std::process::Child;
 use std::time::Duration;
 
 use theos_studio::lock::{self, LockError, Owner};
 
-use crate::common::{TempProject, files, spawn_helper, wait_for};
+use crate::common::{HelperProcess, TempProject, files, spawn_helper};
 use crate::helper::HelperTask;
 
 /// Starts a helper that holds the lock of `project` and waits until it has it.
-fn hold(project: &TempProject, scratch: &Path) -> Result<Child, Box<dyn std::error::Error>> {
+fn hold(
+    project: &TempProject,
+    scratch: &Path,
+) -> Result<HelperProcess, Box<dyn std::error::Error>> {
     let task = HelperTask::Hold {
         root: project.root().to_path_buf(),
         purpose: "synthetic hold".to_owned(),
         ready: scratch.join("ready"),
         release: scratch.join("release"),
     };
-    let child = spawn_helper(&task)?;
-    wait_for(&scratch.join("ready"))?;
+    let mut child = spawn_helper(&task)?;
+    child.wait_for(&scratch.join("ready"))?;
     Ok(child)
 }
 
