@@ -10,12 +10,16 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+dirs.workspace = true
+serde.workspace = true
 theos-content = { path = "../theos-content" }
 theos-vcs = { path = "../theos-vcs" }
 thiserror.workspace = true
+toml.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
 ignore.workspace = true
 rusqlite.workspace = true
+serde_json.workspace = true
 tempfile.workspace = true

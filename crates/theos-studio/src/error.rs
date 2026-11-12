@@ -41,4 +41,12 @@ pub enum StudioError {
         /// The folder.
         folder: PathBuf,
     },
+    /// The user settings file is not valid.
+    #[error("{}: {message}", path.display())]
+    UserSettings {
+        /// The settings file.
+        path: PathBuf,
+        /// What is wrong with it.
+        message: String,
+    },
 }
