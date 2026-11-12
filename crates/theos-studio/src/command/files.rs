@@ -33,10 +33,12 @@ pub(crate) fn write_plan(root: &Path, plan: &Plan) -> Result<(), CommandError> {
     let removals = changes.iter().filter(|change| change.after.is_none());
     let mut done: Vec<&FileChange> = Vec::new();
     for change in writes.chain(removals) {
-        if let Err(source) = apply(root, change) {
-            return Err(roll_back(root, &done, change, source));
+        match apply(root, change) {
+            Ok(true) => done.push(change),
+            // A removal that found no file did nothing; a rollback must not create it.
+            Ok(false) => {}
+            Err(source) => return Err(roll_back(root, &done, change, source)),
         }
-        done.push(change);
     }
     for change in done.iter().filter(|change| change.after.is_none()) {
         remove_emptied_folders(root, &change.path);
@@ -44,15 +46,17 @@ pub(crate) fn write_plan(root: &Path, plan: &Plan) -> Result<(), CommandError> {
     Ok(())
 }
 
-/// Does one change.
-fn apply(root: &Path, change: &FileChange) -> io::Result<()> {
+/// Does one change; `false` when a removal found no file to remove.
+fn apply(root: &Path, change: &FileChange) -> io::Result<bool> {
     let target = root.join(&change.path);
-    match (&change.before, &change.after) {
-        (_, Some(after)) => write_file(&target, after, change.before.is_some()),
-        (_, None) => match with_retries(&target, || fs::remove_file(&target)) {
-            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-            other => other,
-        },
+    if let Some(after) = &change.after {
+        write_file(&target, after, change.before.is_some())?;
+        return Ok(true);
+    }
+    match with_retries(&target, || fs::remove_file(&target)) {
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
     }
 }
 
@@ -167,7 +171,6 @@ fn remove_emptied_folders(root: &Path, path: &str) {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
     use std::path::Path;
 
     use super::*;
@@ -312,6 +315,133 @@ mod tests {
             fs::read_to_string(dir.path().join("locked/second.md"))?,
             "second-old"
         );
+        assert_eq!(temp_files(dir.path()), "");
+        Ok(())
+    }
+
+    /// Holds `dir/file` so that it cannot be replaced or removed: an open handle without delete
+    /// sharing on Windows, a read-only folder on Unix.
+    #[cfg(windows)]
+    fn lock_down(dir: &Path, file: &str) -> io::Result<fs::File> {
+        use std::os::windows::fs::OpenOptionsExt;
+        fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1 | 2)
+            .open(dir.join(file))
+    }
+
+    #[cfg(unix)]
+    struct Held(std::path::PathBuf);
+
+    #[cfg(unix)]
+    impl Drop for Held {
+        fn drop(&mut self) {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&self.0, fs::Permissions::from_mode(0o755));
+        }
+    }
+
+    #[cfg(unix)]
+    fn lock_down(dir: &Path, _file: &str) -> io::Result<Held> {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(dir, fs::Permissions::from_mode(0o555))?;
+        Ok(Held(dir.to_path_buf()))
+    }
+
+    #[test]
+    fn a_failed_removal_rolls_back_the_writes_and_keeps_the_file() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        fs::create_dir_all(dir.path().join("b"))?;
+        fs::write(dir.path().join("first.md"), "first-old")?;
+        fs::write(dir.path().join("b/second.md"), "second-old")?;
+        let held = lock_down(&dir.path().join("b"), "second.md")?;
+        let result = write_plan(
+            dir.path(),
+            &plan(vec![
+                change("first.md", Some("first-old"), Some("first-new")),
+                change("b/second.md", Some("second-old"), None),
+            ]),
+        );
+        drop(held);
+        assert!(
+            matches!(result, Err(CommandError::Write { ref path, .. }) if path == "b/second.md")
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("first.md"))?,
+            "first-old"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("b/second.md"))?,
+            "second-old"
+        );
+        assert_eq!(temp_files(dir.path()), "");
+        Ok(())
+    }
+
+    #[test]
+    fn a_removal_of_a_missing_file_is_not_rolled_back_into_existence() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        fs::create_dir_all(dir.path().join("b"))?;
+        fs::write(dir.path().join("b/second.md"), "second-old")?;
+        let held = lock_down(&dir.path().join("b"), "second.md")?;
+        let result = write_plan(
+            dir.path(),
+            &plan(vec![
+                change("gone.md", Some("was here"), None),
+                change("b/second.md", Some("second-old"), None),
+            ]),
+        );
+        drop(held);
+        assert!(
+            matches!(result, Err(CommandError::Write { ref path, .. }) if path == "b/second.md")
+        );
+        assert!(!dir.path().join("gone.md").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn a_restore_that_fails_too_is_reported_as_partial() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        let (a, b) = (dir.path().join("a"), dir.path().join("b"));
+        fs::create_dir_all(&a)?;
+        fs::create_dir_all(&b)?;
+        fs::write(a.join("first.md"), "first-old")?;
+        fs::write(b.join("second.md"), "second-old")?;
+        let held_second = lock_down(&b, "second.md")?;
+        // Once the first file has its new bytes, hold it too, so that putting it back fails.
+        // The refused second write is tried again for about half a second, which is the window.
+        let watcher = {
+            let a = a.clone();
+            std::thread::spawn(move || {
+                for _ in 0..1000 {
+                    if fs::read(a.join("first.md")).is_ok_and(|bytes| bytes == b"first-new") {
+                        return lock_down(&a, "first.md").map_err(|error| error.to_string());
+                    }
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                Err("the first file never got its new bytes".to_owned())
+            })
+        };
+        let result = write_plan(
+            dir.path(),
+            &plan(vec![
+                change("a/first.md", Some("first-old"), Some("first-new")),
+                change("b/second.md", Some("second-old"), Some("second-new")),
+            ]),
+        );
+        let held_first = watcher.join().map_err(|_| "the watcher panicked")?;
+        drop(held_first);
+        drop(held_second);
+        match result {
+            Err(CommandError::Partial {
+                path, unrestored, ..
+            }) => {
+                assert_eq!(path, "b/second.md");
+                assert_eq!(unrestored, ["a/first.md"]);
+            }
+            other => return Err(format!("expected Partial, got {other:?}").into()),
+        }
+        assert_eq!(fs::read_to_string(b.join("second.md"))?, "second-old");
         assert_eq!(temp_files(dir.path()), "");
         Ok(())
     }
