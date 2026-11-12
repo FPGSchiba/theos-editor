@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::io::{self, ErrorKind, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::{CommandError, FileChange, Plan};
@@ -13,16 +13,25 @@ pub(crate) const RETRIES: u32 = 5;
 pub(crate) const RETRY_PAUSE: Duration = Duration::from_millis(100);
 
 /// Writes `plan` under `root`: content first in plan order, removals last, then the folders those
-/// removals emptied. On a failure it puts back what it wrote from each change's `before` and fails
-/// with `Write`, or with `Partial` when that fails too.
+/// removals emptied. On a failure it puts back what it wrote from each change's `before`, removes
+/// the folders it created that are empty again, and fails with `Write`, or with `Partial` when a
+/// file cannot be put back.
 pub(crate) fn write_plan(root: &Path, plan: &Plan) -> Result<(), CommandError> {
     write_plan_with(root, plan, &mut DiskOps)
 }
 
 /// The two operations a plan is made of. The seam lets the tests fail a chosen call.
 pub(crate) trait FileOps {
-    /// Writes `bytes` to `target` whole; `replace` says the target exists and is swapped.
-    fn write(&mut self, target: &Path, bytes: &[u8], replace: bool) -> io::Result<()>;
+    /// Writes `bytes` to `target` whole; `replace` says the target exists and is swapped. Each
+    /// folder it creates for `target` goes into `created`, the outermost first, also when the
+    /// write then fails.
+    fn write(
+        &mut self,
+        target: &Path,
+        bytes: &[u8],
+        replace: bool,
+        created: &mut Vec<PathBuf>,
+    ) -> io::Result<()>;
     /// Removes `target`; `false` when there was no file.
     fn remove(&mut self, target: &Path) -> io::Result<bool>;
 }
@@ -31,8 +40,14 @@ pub(crate) trait FileOps {
 pub(crate) struct DiskOps;
 
 impl FileOps for DiskOps {
-    fn write(&mut self, target: &Path, bytes: &[u8], replace: bool) -> io::Result<()> {
-        write_file(target, bytes, replace)
+    fn write(
+        &mut self,
+        target: &Path,
+        bytes: &[u8],
+        replace: bool,
+        created: &mut Vec<PathBuf>,
+    ) -> io::Result<()> {
+        write_file(target, bytes, replace, created)
     }
 
     fn remove(&mut self, target: &Path) -> io::Result<bool> {
@@ -57,45 +72,61 @@ pub(crate) fn write_plan_with(
         .collect();
     let writes = changes.iter().filter(|change| change.after.is_some());
     let removals = changes.iter().filter(|change| change.after.is_none());
-    let mut done: Vec<&FileChange> = Vec::new();
+    let mut done = Done::default();
     for change in writes.chain(removals) {
-        match apply(root, change, ops) {
-            Ok(true) => done.push(change),
+        match apply(root, change, ops, &mut done.folders) {
+            Ok(true) => done.changes.push(change),
             // A removal that found no file did nothing; a rollback must not create it.
             Ok(false) => {}
-            Err(source) => return Err(roll_back(root, &done, change, source, ops)),
+            Err(source) => return Err(roll_back(root, done, change, source, ops)),
         }
     }
-    for change in done.iter().filter(|change| change.after.is_none()) {
+    for change in done.changes.iter().filter(|change| change.after.is_none()) {
         remove_emptied_folders(root, &change.path);
     }
     Ok(())
 }
 
-/// Does one change; `false` when a removal found no file to remove.
-fn apply(root: &Path, change: &FileChange, ops: &mut dyn FileOps) -> io::Result<bool> {
+/// What the writing of a plan has done so far.
+#[derive(Default)]
+struct Done<'p> {
+    /// The changes applied, in the order they were applied.
+    changes: Vec<&'p FileChange>,
+    /// The folders created for them, each one after the folders above it.
+    folders: Vec<PathBuf>,
+}
+
+/// Does one change; `false` when a removal found no file to remove. The folders it creates go into
+/// `created`.
+fn apply(
+    root: &Path,
+    change: &FileChange,
+    ops: &mut dyn FileOps,
+    created: &mut Vec<PathBuf>,
+) -> io::Result<bool> {
     let target = root.join(&change.path);
     if let Some(after) = &change.after {
-        ops.write(&target, after, change.before.is_some())?;
+        ops.write(&target, after, change.before.is_some(), created)?;
         return Ok(true);
     }
     ops.remove(&target)
 }
 
-/// Puts back what `done` wrote, then builds the error for the failed `change`.
+/// Puts back what `done` wrote, removes the folders it created that are empty again, then builds
+/// the error for the failed `change`. A folder that was there before the plan stays, empty or not.
 fn roll_back(
     root: &Path,
-    done: &[&FileChange],
+    mut done: Done<'_>,
     failed: &FileChange,
     source: io::Error,
     ops: &mut dyn FileOps,
 ) -> CommandError {
     let mut unrestored = Vec::new();
-    for change in done.iter().rev() {
+    for change in done.changes.iter().rev() {
         let target = root.join(&change.path);
         tracing::warn!(path = %change.path, "rolling back");
         let restored = match &change.before {
-            Some(before) => ops.write(&target, before, change.after.is_some()),
+            Some(before) => ops.write(&target, before, change.after.is_some(), &mut done.folders),
             None => ops.remove(&target).map(drop),
         };
         if let Err(error) = restored {
@@ -103,6 +134,7 @@ fn roll_back(
             unrestored.push(change.path.clone());
         }
     }
+    remove_created_folders(&done.folders);
     let path = failed.path.clone();
     if unrestored.is_empty() {
         CommandError::Write { path, source }
@@ -117,10 +149,16 @@ fn roll_back(
 }
 
 /// Writes `bytes` to `target` whole: a replacement keeps the target's permissions and swaps in
-/// atomically, a new file never replaces one that appeared meanwhile.
-fn write_file(target: &Path, bytes: &[u8], replace: bool) -> io::Result<()> {
+/// atomically, a new file never replaces one that appeared meanwhile. The folders it creates for
+/// `target` go into `created`.
+fn write_file(
+    target: &Path,
+    bytes: &[u8],
+    replace: bool,
+    created: &mut Vec<PathBuf>,
+) -> io::Result<()> {
     let parent = target.parent().unwrap_or_else(|| Path::new("."));
-    fs::create_dir_all(parent)?;
+    create_folders(parent, created)?;
     let mut builder = tempfile::Builder::new();
     builder.prefix(".theos-").suffix(".tmp");
     #[cfg(unix)]
@@ -153,6 +191,51 @@ fn write_file(target: &Path, bytes: &[u8], replace: bool) -> io::Result<()> {
                     temp = error.file;
                 }
                 Err(error) => return Err(error.error),
+            }
+        }
+    }
+}
+
+/// Creates `folder` with every missing folder above it, as [`fs::create_dir_all`] does, and adds
+/// each folder it creates to `created`, the outermost first. `create_dir_all` does not say which
+/// folders it made, and a rollback removes exactly those: so this walks up to the first folder
+/// that exists, then creates the missing ones one by one. A folder that another program creates
+/// meanwhile is not counted.
+fn create_folders(folder: &Path, created: &mut Vec<PathBuf>) -> io::Result<()> {
+    let mut missing = Vec::new();
+    let mut next = Some(folder);
+    while let Some(folder) = next {
+        // A folder that cannot be looked at counts as there: creating it would fail anyway.
+        if folder.as_os_str().is_empty() || !matches!(folder.try_exists(), Ok(false)) {
+            break;
+        }
+        missing.push(folder);
+        next = folder.parent();
+    }
+    for folder in missing.into_iter().rev() {
+        match fs::create_dir(folder) {
+            Ok(()) => created.push(folder.to_path_buf()),
+            Err(error) if error.kind() == ErrorKind::AlreadyExists && folder.is_dir() => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(())
+}
+
+/// Removes each folder of `created` that is empty, the deepest first: `created` lists each folder
+/// after the folders above it. A folder that holds anything stays.
+fn remove_created_folders(created: &[PathBuf]) {
+    for folder in created.iter().rev() {
+        // `remove_dir` removes an empty folder only.
+        match fs::remove_dir(folder) {
+            Ok(()) => {}
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    ErrorKind::DirectoryNotEmpty | ErrorKind::NotFound
+                ) => {}
+            Err(error) => {
+                tracing::warn!(folder = %folder.display(), %error, "cannot remove a folder the command created");
             }
         }
     }
@@ -198,6 +281,7 @@ mod tests {
 
     use super::*;
     use crate::command::FileChange;
+    use crate::command::failing_ops::{Fail, FailingOps, Op};
     use crate::command::test_support::TestResult;
 
     fn change(path: &str, before: Option<&str>, after: Option<&str>) -> FileChange {
@@ -422,62 +506,6 @@ mod tests {
         Ok(())
     }
 
-    #[derive(PartialEq)]
-    enum Op {
-        Write,
-        Remove,
-    }
-
-    /// One injected failure: the `nth` call of `op` on a path that ends with `path`.
-    struct Fail {
-        op: Op,
-        path: &'static str,
-        nth: usize,
-        seen: usize,
-    }
-
-    impl Fail {
-        fn new(op: Op, path: &'static str, nth: usize) -> Fail {
-            Fail {
-                op,
-                path,
-                nth,
-                seen: 0,
-            }
-        }
-    }
-
-    /// The disk operations, except for the calls chosen to fail.
-    struct FailingOps {
-        fails: Vec<Fail>,
-    }
-
-    impl FailingOps {
-        fn hit(&mut self, op: &Op, target: &Path) -> io::Result<()> {
-            for fail in &mut self.fails {
-                if fail.op == *op && target.ends_with(fail.path) {
-                    fail.seen += 1;
-                    if fail.seen == fail.nth {
-                        return Err(io::Error::new(ErrorKind::PermissionDenied, "injected"));
-                    }
-                }
-            }
-            Ok(())
-        }
-    }
-
-    impl FileOps for FailingOps {
-        fn write(&mut self, target: &Path, bytes: &[u8], replace: bool) -> io::Result<()> {
-            self.hit(&Op::Write, target)?;
-            DiskOps.write(target, bytes, replace)
-        }
-
-        fn remove(&mut self, target: &Path) -> io::Result<bool> {
-            self.hit(&Op::Remove, target)?;
-            DiskOps.remove(target)
-        }
-    }
-
     #[test]
     fn a_restore_that_fails_too_is_reported_as_partial() -> TestResult {
         let dir = tempfile::tempdir()?;
@@ -485,12 +513,10 @@ mod tests {
         fs::create_dir_all(dir.path().join("b"))?;
         fs::write(dir.path().join("a/first.md"), "first-old")?;
         fs::write(dir.path().join("b/second.md"), "second-old")?;
-        let mut ops = FailingOps {
-            fails: vec![
-                Fail::new(Op::Write, "b/second.md", 1),
-                Fail::new(Op::Write, "a/first.md", 2),
-            ],
-        };
+        let mut ops = FailingOps::new(vec![
+            Fail::new(Op::Write, "b/second.md", 1),
+            Fail::new(Op::Write, "a/first.md", 2),
+        ]);
         let result = write_plan_with(
             dir.path(),
             &plan(vec![
@@ -527,9 +553,7 @@ mod tests {
             before: Some(before.to_vec()),
             after: None,
         };
-        let mut ops = FailingOps {
-            fails: vec![Fail::new(Op::Remove, "r/two.md", 1)],
-        };
+        let mut ops = FailingOps::new(vec![Fail::new(Op::Remove, "r/two.md", 1)]);
         let result = write_plan_with(
             dir.path(),
             &plan(vec![
@@ -542,6 +566,61 @@ mod tests {
         assert_eq!(fs::read(dir.path().join("r/one.md"))?, bytes);
         assert_eq!(fs::read_to_string(dir.path().join("r/two.md"))?, "two");
         assert_eq!(temp_files(dir.path()), "");
+        Ok(())
+    }
+
+    /// Every folder under `dir`, as paths relative to it with `/`.
+    fn folders(dir: &Path) -> Vec<String> {
+        let mut found = Vec::new();
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(folder) = stack.pop() {
+            for entry in fs::read_dir(&folder).into_iter().flatten().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let relative = path.strip_prefix(dir).unwrap_or(&path);
+                    found.push(relative.to_string_lossy().replace('\\', "/"));
+                    stack.push(path);
+                }
+            }
+        }
+        found.sort();
+        found
+    }
+
+    #[test]
+    fn a_rollback_removes_the_folders_the_plan_created() -> TestResult {
+        for failing in [
+            Fail::new(Op::Write, "c/third.md", 1),
+            Fail::new(Op::Remove, "old.md", 1),
+        ] {
+            let dir = tempfile::tempdir()?;
+            fs::create_dir_all(dir.path().join("kept/empty"))?;
+            fs::create_dir_all(dir.path().join("c"))?;
+            fs::write(dir.path().join("old.md"), "old")?;
+            fs::write(dir.path().join("c/third.md"), "third-old")?;
+            let mut ops = FailingOps::new(vec![failing]);
+            let result = write_plan_with(
+                dir.path(),
+                &plan(vec![
+                    change("old.md", Some("old"), None),
+                    change("kept/new/deep/first.md", None, Some("first")),
+                    change("fresh/second.md", None, Some("second")),
+                    change("c/third.md", Some("third-old"), Some("third-new")),
+                ]),
+                &mut ops,
+            );
+            assert!(
+                matches!(result, Err(CommandError::Write { .. })),
+                "{result:?}"
+            );
+            // The folders the plan created are gone; the empty folder that was there stays.
+            assert_eq!(folders(dir.path()), ["c", "kept", "kept/empty"]);
+            assert_eq!(fs::read_to_string(dir.path().join("old.md"))?, "old");
+            assert_eq!(
+                fs::read_to_string(dir.path().join("c/third.md"))?,
+                "third-old"
+            );
+        }
         Ok(())
     }
 

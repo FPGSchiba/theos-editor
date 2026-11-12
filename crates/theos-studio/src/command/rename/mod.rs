@@ -173,6 +173,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
+    use crate::command::failing_ops::{Fail, FailingOps, Op};
+    use crate::command::files::write_plan_with;
     use crate::command::test_support::{Fixture, TRUTH, TestResult};
 
     const PATH: &str = "lore/truths/T-960.md";
@@ -226,6 +228,28 @@ mod tests {
                 if id == "T-976" && path == "lore/truths/T-976"),
             "{result:?}"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn a_rename_whose_write_failed_plans_again() -> TestResult {
+        let fixture = Fixture::new(&[
+            (PATH, TRUTH.as_bytes()),
+            ("lore/truths/T-960/notes.txt", b"synthetic notes\n"),
+        ])?;
+        let command = rename("T-960", "T-970");
+        let plan = command.plan(&fixture.ctx())?;
+        // The new folder `T-970` is written before the removal that fails.
+        let mut ops = FailingOps::new(vec![Fail::new(Op::Remove, "T-960/notes.txt", 1)]);
+        let result = write_plan_with(fixture.root(), &plan, &mut ops);
+        assert!(
+            matches!(&result, Err(CommandError::Write { path, .. })
+                if path == "lore/truths/T-960/notes.txt"),
+            "{result:?}"
+        );
+        let again = command.plan(&fixture.ctx());
+        assert!(matches!(&again, Ok(again) if *again == plan), "{again:?}");
+        assert!(!fixture.root().join("lore/truths/T-970").exists());
         Ok(())
     }
 

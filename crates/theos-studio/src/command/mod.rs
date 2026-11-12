@@ -10,6 +10,8 @@ mod create;
 mod delete;
 mod edit;
 mod error;
+#[cfg(test)]
+mod failing_ops;
 mod files;
 mod journal;
 mod patch;
