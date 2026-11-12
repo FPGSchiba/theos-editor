@@ -474,8 +474,8 @@ fn renaming_a_belief_keeps_a_single_quoted_lens_entry_single_quoted() -> TestRes
     Ok(())
 }
 
-/// Review focus: a record that links to itself takes the new id in its link too.
 // AC: CE-20.3
+/// Review focus: a record that links to itself takes the new id in its link too.
 #[test]
 fn renaming_a_record_that_links_to_itself() -> TestResult {
     let old = "lore/truths/T-961.md";
