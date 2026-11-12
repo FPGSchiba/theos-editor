@@ -1,8 +1,6 @@
 //! The git runner: starts the `git` program without a shell and returns its stdout.
 
-use std::ffi::OsStr;
-#[cfg(test)]
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -59,14 +57,11 @@ impl Git {
     ///
     /// # Errors
     ///
-    /// [`GitError::NotFound`] when no `git` program is on the `PATH`.
+    /// [`GitError::NotFound`] when no `git` program is on the `PATH`, and [`GitError::Io`]
+    /// when the current folder cannot be read.
     pub fn find() -> Result<Git, GitError> {
-        which::which("git")
-            .map(|program| Git {
-                program,
-                env: Vec::new(),
-            })
-            .map_err(|_| GitError::NotFound)
+        let cwd = std::env::current_dir().map_err(|source| GitError::Io { source })?;
+        find_in(std::env::var_os("PATH"), &cwd)
     }
 
     /// Adds variables to the environment of every command this runner starts.
@@ -141,8 +136,8 @@ impl Git {
     }
 }
 
-/// Finds `git` in the given search path (`None` is the process's `PATH`), relative to `cwd`.
-#[cfg(test)]
+/// Finds `git` in the search path `path`, a list separated as `PATH` is, with relative entries
+/// resolved from `cwd`. With `None` there is nothing to search and the answer is `NotFound`.
 fn find_in(path: Option<OsString>, cwd: &Path) -> Result<Git, GitError> {
     which::which_in("git", path, cwd)
         .map(|program| Git {
