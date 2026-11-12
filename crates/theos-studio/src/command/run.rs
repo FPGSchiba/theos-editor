@@ -37,25 +37,30 @@ impl Workspace {
 
     /// Runs `command` through the pipeline on `route`. Once the files are written, the route
     /// always finishes; a failed reindex after the write is no error, the outcome says it with
-    /// [`Outcome::reindexed`] `false`.
+    /// [`Outcome::reindexed`] `false` (ruling R5).
     ///
     /// # Errors
     ///
-    /// Before the write, an error leaves the files, the index cache and the journal as they were:
-    /// [`CommandError::Rejected`] when the command would introduce errors,
-    /// [`CommandError::NotARecord`] when a record it moves would not be read as a record at its
-    /// new path,
-    /// [`CommandError::Stale`] when a file changed on disk since the caller or the plan read it,
+    /// Before the write, an error leaves the files and the journal as they were, and the index
+    /// cache too, except where the pipeline, before it plans, brought the cache in line with files
+    /// changed outside the workspace:
     /// [`CommandError::Lock`] when the repo lock cannot be taken,
-    /// [`CommandError::ReadOnly`] when a file the command would replace or remove is read-only,
+    /// [`CommandError::Path`] when a path breaks the rules,
+    /// [`CommandError::Stale`] when a file changed on disk since the caller or the plan read it,
+    /// [`CommandError::NotARecord`] when a record it moves would not be read as a record at its
+    /// new path (ruling R16),
+    /// [`CommandError::Rejected`] when the command would introduce errors,
+    /// [`CommandError::ReadOnly`] when a file the command would replace or remove is read-only
+    /// (ruling R9; nothing is written),
     /// or the error of the command's plan or of the index.
     ///
     /// A failed write is [`CommandError::Write`], with every file put back, or
-    /// [`CommandError::Partial`], which names the files that keep the new bytes; the journal is
-    /// unchanged.
+    /// [`CommandError::Partial`], which names the files that keep the new bytes. The pipeline
+    /// still brings the index cache in line with the files (a failure of that is logged), and the
+    /// journal is unchanged.
     ///
-    /// After the write, the files are written: an error of the route's
-    /// [`Route::finish`] is returned with the files changed.
+    /// After the write, the files are written: an error of the route's [`Route::finish`] is
+    /// returned with the files changed.
     pub fn run_with(
         &mut self,
         command: &dyn Command,

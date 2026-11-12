@@ -34,8 +34,9 @@ pub struct Outcome {
     pub entry: Option<EntryId>,
     /// Whether the reindex after the write brought the index cache in line with the files; `true`
     /// also when nothing was written. `false` when it failed, for example because another process
-    /// held the cache: the files are written and the route has finished (the journal entry is
-    /// there), and the next sync or update of these paths brings the cache in line.
+    /// held the cache: the files are written and the route has finished (the journal entry, when
+    /// the route keeps one, is there), and the next sync or update of these paths brings the
+    /// cache in line.
     pub reindexed: bool,
 }
 
@@ -169,7 +170,8 @@ fn steps(
         });
     }
     let written = write_plan(&root, &plan);
-    // From here the files are written: the route finishes whatever the reindex does.
+    // A failed write returns its error after the reindex. Once the files are written, the route
+    // finishes whatever the reindex does (ruling R5).
     let (update, reindexed) = match reindex(workspace, &label, &plan, written)? {
         Some(update) => (update, true),
         None => (preview.update, false),

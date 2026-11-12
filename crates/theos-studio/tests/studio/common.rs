@@ -191,8 +191,8 @@ pub fn new_truth(id: &str) -> Create {
 /// Runs `command`, which must fail, and checks that it changed nothing: every file keeps its
 /// bytes, the journal keeps its entries, and the index cache holds what the files hold (a cold
 /// build of them dumps the same). That is the dump from before the command, unless the files
-/// changed behind the workspace and the command's first step brought the cache in line with
-/// them. Returns the error.
+/// changed behind the workspace and the pipeline, before it planned, brought the cache in line
+/// with them. Returns the error.
 pub fn refused(
     project: &TempProject,
     workspace: &mut Workspace,

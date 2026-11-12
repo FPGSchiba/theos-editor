@@ -41,8 +41,8 @@ pub trait Route {
     /// # Errors
     ///
     /// A [`CommandError`] when the route cannot finish. The files are written then, and the
-    /// command returns this error with the files changed. Errors before the write leave the
-    /// files, the index cache and the journal as they were, and never reach `finish`.
+    /// command returns this error with the files changed. An error before the write, and a
+    /// failed write, never reach `finish`; [`Workspace::run_with`] says what they leave behind.
     fn finish(
         &mut self,
         workspace: &mut Workspace,

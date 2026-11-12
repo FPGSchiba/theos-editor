@@ -7,9 +7,13 @@ use super::files::was_retried;
 use crate::StudioError;
 use crate::lock::LockError;
 
-/// Why a command did not run. A command that fails changes nothing, except [`Partial`].
+/// Why a command did not run. A command that fails changes nothing, except [`Partial`] and an
+/// error of [`Route::finish`], which comes after the write; [`Workspace::run_with`] says what
+/// each error leaves behind.
 ///
 /// [`Partial`]: CommandError::Partial
+/// [`Route::finish`]: super::Route::finish
+/// [`Workspace::run_with`]: crate::Workspace::run_with
 #[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum CommandError {
@@ -144,7 +148,7 @@ pub enum CommandError {
         /// The file.
         path: String,
     },
-    /// A file cannot be written.
+    /// A file cannot be written. Every file the command wrote before it is put back.
     #[error("cannot write `{path}`: {source}{}", retried_hint(.source))]
     Write {
         /// The file.
