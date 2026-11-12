@@ -32,6 +32,17 @@ impl TempProject {
         )
     }
 
+    /// A project in a temporary folder with the files of the P06 fixture project `name` of
+    /// `theos-studio` (`tests/fixtures/<name>`).
+    pub fn copy_of_studio(name: &str) -> Result<TempProject, Error> {
+        TempProject::copied(
+            &Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests")
+                .join("fixtures")
+                .join(name),
+        )
+    }
+
     /// A project in a temporary folder with the files under `from`, `.theos/cache` left out.
     fn copied(from: &Path) -> Result<TempProject, Error> {
         let dir = tempfile::tempdir()?;

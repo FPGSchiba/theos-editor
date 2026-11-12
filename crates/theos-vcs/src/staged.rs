@@ -69,7 +69,10 @@ impl Tracked {
     }
 }
 
-fn regular_mode(mode: u32) -> bool {
+/// Whether a file mode is that of a regular file (`100644` or `100755`), not a link, a submodule
+/// or a folder.
+#[must_use]
+pub fn regular_mode(mode: u32) -> bool {
     matches!(mode, 0o100_644 | 0o100_755)
 }
 
