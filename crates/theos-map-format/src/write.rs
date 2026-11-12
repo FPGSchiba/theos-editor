@@ -7,6 +7,7 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, DateTime, System, ZipWriter};
 
 use crate::manifest::{FORMAT, FORMAT_VERSION};
+use crate::package::label;
 use crate::{DType, FormatError, LayerKey, Manifest, Package, json, sha256_hex};
 
 /// Name of the manifest entry.
@@ -57,9 +58,7 @@ fn complete(package: &Package) -> Result<(Manifest, Vec<PackageFile>), FormatErr
         let data = package
             .layers
             .get(&key)
-            .ok_or_else(|| FormatError::MissingData {
-                layer: entry.name.clone(),
-            })?;
+            .ok_or_else(|| FormatError::MissingData { layer: label(&key) })?;
         let bytes = data.to_bytes()?;
         entry.dtype = data.dtype();
         entry.file = layer_path(&key, entry.dtype);
@@ -73,13 +72,12 @@ fn complete(package: &Package) -> Result<(Manifest, Vec<PackageFile>), FormatErr
     Ok((manifest, files))
 }
 
-/// The manifest as [`write`] stores it: `format`, `format_version`, `features` and `requires`
+/// The manifest as [`fn@write`] stores it: `format`, `format_version`, `features` and `requires`
 /// set, and every layer entry completed with its file, dtype, shape, hash and range.
 ///
 /// # Errors
 ///
-/// The errors of [`Package::validate`], and [`FormatError::NonFinite`] for a float layer that
-/// holds NaN or infinities.
+/// The errors of [`Package::validate`].
 pub fn written_manifest(package: &Package) -> Result<Manifest, FormatError> {
     complete(package).map(|(manifest, _)| manifest)
 }
@@ -94,11 +92,11 @@ pub fn write<W: Write + Seek>(package: &Package, out: W) -> Result<W, FormatErro
     write_cancellable(package, out, &|| false)
 }
 
-/// Like [`write`], and asks `cancelled` before each entry.
+/// Like [`fn@write`], and asks `cancelled` before each entry.
 ///
 /// # Errors
 ///
-/// [`FormatError::Cancelled`] when `cancelled` returns true, and the errors of [`write`].
+/// [`FormatError::Cancelled`] when `cancelled` returns true, and the errors of [`fn@write`].
 pub fn write_cancellable<W: Write + Seek>(
     package: &Package,
     out: W,

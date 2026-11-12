@@ -84,8 +84,34 @@ fn written_bytes_follow_the_container_rules() -> TestResult {
         assert_eq!(e.version_made_by >> 8, 3); // Unix
         assert_eq!(e.external_attrs >> 16, 0o100_644);
         assert!(!e.name.ends_with('/'));
+        assert_eq!((e.disk_start, e.internal_attrs), (0, 0));
+        // The local header agrees with the central directory.
+        let l = &e.local;
+        assert_eq!(l.name, e.name);
+        assert_eq!(
+            (l.method, l.mod_time, l.mod_date),
+            (e.method, e.mod_time, e.mod_date)
+        );
+        assert_eq!((l.flags, l.version_needed), (e.flags, e.version_needed));
+        assert_eq!(l.crc32, e.crc32);
+        assert_eq!(l.compressed_size, e.compressed_size);
+        assert_eq!(l.uncompressed_size, e.uncompressed_size);
+        // Flags are 0 (as the zip crate writes them for ASCII names at level 6): bit 0 (encryption)
+        // and bit 3 (data descriptor, so sizes and CRC sit in the headers) are off, bits 1-2
+        // (deflate "normal" level) are 0, and bit 11 (UTF-8 names) is off because every name is
+        // ASCII. Version needed is 20 (2.0, deflate).
+        assert_eq!((e.flags, e.version_needed), (0, 20));
+        let data = zip.entry(&e.name)?;
+        let mut crc = flate2::Crc::new();
+        crc.update(&data);
+        assert_eq!(e.crc32, crc.sum());
+        assert_eq!(usize::try_from(e.uncompressed_size)?, data.len());
     }
-    assert_eq!(zip.eocd_comment_len, 0);
+    let eocd = &zip.eocd;
+    assert_eq!((eocd.disk, eocd.central_dir_disk), (0, 0));
+    assert_eq!(usize::from(eocd.entries_on_disk), zip.entries().len());
+    assert_eq!(usize::from(eocd.entries_total), zip.entries().len());
+    assert_eq!(eocd.comment_len, 0);
     let written = written_manifest(&package)?;
     assert_eq!(
         zip.entry("manifest.json")?,

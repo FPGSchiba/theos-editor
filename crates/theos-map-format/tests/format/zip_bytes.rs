@@ -11,6 +11,14 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub struct Entry {
     pub name: String,
     pub version_made_by: u16,
+    pub version_needed: u16,
+    pub flags: u16,
+    pub crc32: u32,
+    pub compressed_size: u32,
+    pub uncompressed_size: u32,
+    pub disk_start: u16,
+    pub internal_attrs: u16,
+    pub local: Local,
     pub method: u16,
     pub mod_time: u16,
     pub mod_date: u16,
@@ -21,11 +29,35 @@ pub struct Entry {
     data: Vec<u8>,
 }
 
+/// The fields of a local file header.
+#[derive(Debug)]
+pub struct Local {
+    pub version_needed: u16,
+    pub flags: u16,
+    pub method: u16,
+    pub mod_time: u16,
+    pub mod_date: u16,
+    pub crc32: u32,
+    pub compressed_size: u32,
+    pub uncompressed_size: u32,
+    pub name: String,
+}
+
+/// The end-of-central-directory record.
+#[derive(Debug)]
+pub struct Eocd {
+    pub disk: u16,
+    pub central_dir_disk: u16,
+    pub entries_on_disk: u16,
+    pub entries_total: u16,
+    pub comment_len: u16,
+}
+
 /// A parsed archive.
 #[derive(Debug)]
 pub struct Zip {
     entries: Vec<Entry>,
-    pub eocd_comment_len: u16,
+    pub eocd: Eocd,
 }
 
 fn u16_at(bytes: &[u8], at: usize) -> Result<u16> {
@@ -66,6 +98,20 @@ pub fn parse(bytes: &[u8]) -> Result<Zip> {
             return Err("bad local header signature".into());
         }
         let local_name_len = usize::from(u16_at(bytes, local + 26)?);
+        let local_name_bytes = bytes
+            .get(local + 30..local + 30 + local_name_len)
+            .ok_or("name")?;
+        let local_fields = Local {
+            version_needed: u16_at(bytes, local + 4)?,
+            flags: u16_at(bytes, local + 6)?,
+            method: u16_at(bytes, local + 8)?,
+            mod_time: u16_at(bytes, local + 10)?,
+            mod_date: u16_at(bytes, local + 12)?,
+            crc32: u32_at(bytes, local + 14)?,
+            compressed_size: u32_at(bytes, local + 18)?,
+            uncompressed_size: u32_at(bytes, local + 22)?,
+            name: String::from_utf8(local_name_bytes.to_vec())?,
+        };
         let local_extra_len = u16_at(bytes, local + 28)?;
         let start = local + 30 + local_name_len + usize::from(local_extra_len);
         let raw = bytes.get(start..start + compressed).ok_or("data")?;
@@ -82,6 +128,14 @@ pub fn parse(bytes: &[u8]) -> Result<Zip> {
         entries.push(Entry {
             name,
             version_made_by: u16_at(bytes, at + 4)?,
+            version_needed: u16_at(bytes, at + 6)?,
+            flags: u16_at(bytes, at + 8)?,
+            crc32: u32_at(bytes, at + 16)?,
+            compressed_size: u32_at(bytes, at + 20)?,
+            uncompressed_size: u32_at(bytes, at + 24)?,
+            disk_start: u16_at(bytes, at + 34)?,
+            internal_attrs: u16_at(bytes, at + 36)?,
+            local: local_fields,
             method,
             mod_time: u16_at(bytes, at + 12)?,
             mod_date: u16_at(bytes, at + 14)?,
@@ -95,7 +149,13 @@ pub fn parse(bytes: &[u8]) -> Result<Zip> {
     }
     Ok(Zip {
         entries,
-        eocd_comment_len: u16_at(bytes, eocd + 20)?,
+        eocd: Eocd {
+            disk: u16_at(bytes, eocd + 4)?,
+            central_dir_disk: u16_at(bytes, eocd + 6)?,
+            entries_on_disk: u16_at(bytes, eocd + 8)?,
+            entries_total: u16_at(bytes, eocd + 10)?,
+            comment_len: u16_at(bytes, eocd + 20)?,
+        },
     })
 }
 

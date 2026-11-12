@@ -2,7 +2,7 @@
 //!
 //! This crate holds the manifest types of `docs/map-package.md` §3 ([`manifest`]), the canonical
 //! JSON writer ([`json`]) and the crate error ([`FormatError`]). Layer data ([`layer`]), package validation ([`package`]) and the
-//! ZIP writer ([`write`]) follow; the reader comes in a later task of phase P08.
+//! ZIP writer ([`mod@write`]) follow; the reader comes in a later task of phase P08.
 
 pub mod error;
 pub mod json;

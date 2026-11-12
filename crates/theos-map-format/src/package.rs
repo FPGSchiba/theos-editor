@@ -22,7 +22,7 @@ pub struct Package {
 }
 
 /// `name`, or `level/name` on a map with levels.
-fn label(key: &LayerKey) -> String {
+pub(crate) fn label(key: &LayerKey) -> String {
     match &key.level {
         Some(level) => format!("{level}/{}", key.name),
         None => key.name.clone(),
