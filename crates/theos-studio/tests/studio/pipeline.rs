@@ -80,6 +80,7 @@ fn an_applied_command_updates_the_index_and_returns_its_outcome() -> TestResult 
     let outcome = workspace.run(&command)?;
 
     assert_eq!(outcome.changed, [TRUTH]);
+    assert!(outcome.reindexed);
     let text = std::fs::read_to_string(project.root().join(TRUTH))?;
     assert!(
         text.contains("title: Synthetic truth, retitled\n"),

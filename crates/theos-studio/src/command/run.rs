@@ -35,15 +35,24 @@ impl Workspace {
         self.run_with(command, &mut HumanRoute)
     }
 
-    /// Runs `command` through the pipeline on `route`.
+    /// Runs `command` through the pipeline on `route`. Once the files are written, the route
+    /// always finishes; a failed reindex after the write is no error, the outcome says it with
+    /// [`Outcome::reindexed`] `false`.
     ///
     /// # Errors
     ///
+    /// Before the write, an error leaves the files, the index cache and the journal as they were:
     /// [`CommandError::Rejected`] when the command would introduce errors,
     /// [`CommandError::Stale`] when a file changed on disk since the caller or the plan read it,
-    /// [`CommandError::Lock`] when the repo lock cannot be taken, the error of the command's plan,
-    /// of the write or of the index. Nothing is written then, except as
-    /// [`CommandError::Partial`] says.
+    /// [`CommandError::Lock`] when the repo lock cannot be taken, or the error of the command's
+    /// plan or of the index.
+    ///
+    /// A failed write is [`CommandError::Write`], with every file put back, or
+    /// [`CommandError::Partial`], which names the files that keep the new bytes; the journal is
+    /// unchanged.
+    ///
+    /// After the write, the files are written: an error of the route's
+    /// [`Route::finish`] is returned with the files changed.
     pub fn run_with(
         &mut self,
         command: &dyn Command,

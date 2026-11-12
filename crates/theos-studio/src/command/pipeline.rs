@@ -21,7 +21,8 @@ use crate::{StudioError, Workspace};
 pub struct Outcome {
     /// The paths written, in plan order.
     pub changed: Vec<String>,
-    /// What the reindex did.
+    /// What the reindex did. When the reindex failed (`reindexed` is `false`), the preview's
+    /// update: the change as previewed.
     pub update: Update,
     /// Every finding on the affected paths after the command, warnings and standing errors
     /// included.
@@ -31,6 +32,11 @@ pub struct Outcome {
     pub introduced: Vec<Finding>,
     /// The journal entry, when the route keeps one.
     pub entry: Option<EntryId>,
+    /// Whether the reindex after the write brought the index cache in line with the files; `true`
+    /// also when nothing was written. `false` when it failed, for example because another process
+    /// held the cache: the files are written and the route has finished (the journal entry is
+    /// there), and the next sync or update of these paths brings the cache in line.
+    pub reindexed: bool,
 }
 
 impl Outcome {
@@ -42,6 +48,7 @@ impl Outcome {
             findings: Vec::new(),
             introduced: Vec::new(),
             entry: None,
+            reindexed: true,
         }
     }
 }
@@ -163,7 +170,11 @@ fn steps(
         });
     }
     let written = write_plan(&root, &plan);
-    let update = reindex(workspace, &plan, written)?;
+    // From here the files are written: the route finishes whatever the reindex does.
+    let (update, reindexed) = match reindex(workspace, &label, &plan, written)? {
+        Some(update) => (update, true),
+        None => (preview.update, false),
+    };
     let changes: Vec<FileChange> = plan
         .changes
         .into_iter()
@@ -189,6 +200,7 @@ fn steps(
         findings: preview.findings,
         introduced: verdict.introduced,
         entry,
+        reindexed,
     })
 }
 
@@ -320,20 +332,27 @@ fn to_change(change: &FileChange) -> Change {
 }
 
 /// Step 7: brings the index in line with the disk on every path of the plan, also after a
-/// failed write, so the cache matches the disk; then the write's error, if any, comes first.
+/// failed write, so the cache matches the disk. A failed write's error comes first. After a
+/// successful write a reindex failure is no error: it is logged, and `None` says the cache is
+/// behind the files until the next sync or update.
 fn reindex(
     workspace: &mut Workspace,
+    label: &str,
     plan: &Plan,
     written: Result<(), CommandError>,
-) -> Result<Update, CommandError> {
+) -> Result<Option<Update>, CommandError> {
     let paths = plan.paths();
     let paths: Vec<&str> = paths.iter().map(String::as_str).collect();
-    let update = on_index(workspace, |index| index.update(&paths));
+    let update = update_paths(workspace, &paths);
     let update = match (written, update) {
-        (Ok(()), update) => update?,
+        (Ok(()), Ok(update)) => update,
+        (Ok(()), Err(error)) => {
+            tracing::warn!(%label, %error, "cannot reindex after the write; the next sync catches up");
+            return Ok(None);
+        }
         (Err(error), Ok(_)) => return Err(error),
         (Err(error), Err(reindex)) => {
-            tracing::warn!(%reindex, "cannot reindex after the failed write");
+            tracing::warn!(%label, %reindex, "cannot reindex after the failed write");
             return Err(error);
         }
     };
@@ -345,7 +364,19 @@ fn reindex(
         revalidated = ?update.revalidated,
         "reindexed"
     );
-    Ok(update)
+    Ok(Some(update))
+}
+
+/// `index.update` on `paths`. Under test, [`CommandState`]'s `fail_reindex` makes it fail as a
+/// busy cache does.
+fn update_paths(workspace: &mut Workspace, paths: &[&str]) -> Result<Update, CommandError> {
+    #[cfg(test)]
+    if workspace.commands.fail_reindex {
+        return Err(CommandError::Index(IndexError::Busy {
+            path: std::path::PathBuf::from("index.sqlite"),
+        }));
+    }
+    on_index(workspace, |index| index.update(paths))
 }
 
 /// Runs `f` on the index through [`Workspace::write`]; an index failure stays
@@ -366,7 +397,7 @@ mod tests {
 
     use super::*;
     use crate::command::HumanRoute;
-    use crate::command::test_support::{Fixture, TestResult};
+    use crate::command::test_support::{Fixture, TRUTH, TestResult};
 
     #[test]
     fn reentry_is_refused() -> TestResult {
@@ -429,6 +460,46 @@ mod tests {
             "{result:?}"
         );
         assert_eq!(std::fs::read(fixture.root().join("notes.txt"))?, b"later\n");
+        Ok(())
+    }
+
+    #[test]
+    fn a_failed_reindex_after_the_write_keeps_the_entry() -> TestResult {
+        let path = "lore/truths/T-960.md";
+        let mut fixture = Fixture::new(&[(path, TRUTH.as_bytes())])?;
+        let root = fixture.root().to_path_buf();
+        let after = TRUTH.replace("title: Old", "title: New");
+        let command = crate::Write {
+            path: path.to_owned(),
+            base: crate::Base::of(TRUTH.as_bytes()),
+            text: after.clone(),
+        };
+        let workspace = fixture.workspace_mut();
+        workspace.commands.fail_reindex = true;
+        let outcome = workspace.run(&command)?;
+
+        assert!(!outcome.reindexed);
+        assert_eq!(outcome.changed, [path]);
+        // The update is the preview's: the change as previewed.
+        assert_eq!(outcome.update.reparsed, [path]);
+        let entry = outcome.entry.ok_or("no journal entry")?;
+        let ids: Vec<EntryId> = workspace.undo_entries().iter().map(|e| e.id).collect();
+        assert_eq!(ids, [entry]);
+        assert_eq!(std::fs::read(root.join(path))?, after.as_bytes());
+
+        // The cache keeps the old record until the next update brings it in line.
+        let title = |workspace: &Workspace| -> Result<Option<String>, IndexError> {
+            Ok(workspace
+                .index()
+                .record("T-960")?
+                .pop()
+                .and_then(|r| r.title))
+        };
+        assert_eq!(title(workspace)?.as_deref(), Some("Old"));
+        workspace.commands.fail_reindex = false;
+        workspace.write(|index| index.update(&[path]))?;
+        assert_eq!(title(workspace)?.as_deref(), Some("New"));
+        assert!(!workspace.commands.locked);
         Ok(())
     }
 

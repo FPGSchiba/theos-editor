@@ -4,7 +4,7 @@
 //! P06 adds the command layer: the repo lock ([`lock`]), which lets one process at a time change
 //! a project; the [`Workspace`] (a project with its registry and index); the commands, which
 //! [`Workspace::run`] takes through one pipeline of preview, verdict, write and reindex on a
-//! [`Route`]; the undo journal; and [`introduced`], the count of errors a command introduces.
+//! [`Route`]; the undo journal; and [`introduced()`], the count of errors a command introduces.
 //! The rest arrives in P06 and P07.
 
 mod command;

@@ -30,11 +30,15 @@ pub trait Route {
     fn holds_lock(&self) -> bool;
 
     /// After the write and the reindex: does what the route does with an applied command, and
-    /// returns the journal entry it added, if it keeps a journal.
+    /// returns the journal entry it added, if it keeps a journal. It runs after every successful
+    /// write, also when the reindex failed; the outcome reports that with
+    /// [`Outcome::reindexed`](super::Outcome::reindexed) `false`, never as an error.
     ///
     /// # Errors
     ///
-    /// A [`CommandError`] when the route cannot finish; the files are written then.
+    /// A [`CommandError`] when the route cannot finish. The files are written then, and the
+    /// command returns this error with the files changed. Errors before the write leave the
+    /// files, the index cache and the journal as they were, and never reach `finish`.
     fn finish(
         &mut self,
         workspace: &mut Workspace,

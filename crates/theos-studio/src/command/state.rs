@@ -14,6 +14,9 @@ pub(crate) struct CommandState {
     pub(crate) locked: bool,
     /// How long a command waits for the repo lock.
     pub(crate) lock_wait: Duration,
+    /// Tests only: the reindex after a write fails, as when another process holds the cache.
+    #[cfg(test)]
+    pub(crate) fail_reindex: bool,
 }
 
 impl Default for CommandState {
@@ -22,6 +25,8 @@ impl Default for CommandState {
             journal: Journal::default(),
             locked: false,
             lock_wait: COMMAND_WAIT,
+            #[cfg(test)]
+            fail_reindex: false,
         }
     }
 }
