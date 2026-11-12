@@ -24,6 +24,40 @@ pub(crate) const RETRY_PAUSE: Duration = Duration::from_millis(100);
 /// removals emptied. On a failure it puts back what it wrote from each change's `before` and fails
 /// with `Write`, or with `Partial` when that fails too.
 pub(crate) fn write_plan(root: &Path, plan: &Plan) -> Result<(), CommandError> {
+    write_plan_with(root, plan, &mut DiskOps)
+}
+
+/// The two operations a plan is made of. The seam lets the tests fail a chosen call.
+pub(crate) trait FileOps {
+    /// Writes `bytes` to `target` whole; `replace` says the target exists and is swapped.
+    fn write(&mut self, target: &Path, bytes: &[u8], replace: bool) -> io::Result<()>;
+    /// Removes `target`; `false` when there was no file.
+    fn remove(&mut self, target: &Path) -> io::Result<bool>;
+}
+
+/// The operations on the real disk.
+pub(crate) struct DiskOps;
+
+impl FileOps for DiskOps {
+    fn write(&mut self, target: &Path, bytes: &[u8], replace: bool) -> io::Result<()> {
+        write_file(target, bytes, replace)
+    }
+
+    fn remove(&mut self, target: &Path) -> io::Result<bool> {
+        match with_retries(target, || fs::remove_file(target)) {
+            Ok(()) => Ok(true),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(error),
+        }
+    }
+}
+
+/// [`write_plan`] over the given operations, for the forward pass and the rollback alike.
+pub(crate) fn write_plan_with(
+    root: &Path,
+    plan: &Plan,
+    ops: &mut dyn FileOps,
+) -> Result<(), CommandError> {
     let changes: Vec<&FileChange> = plan
         .changes
         .iter()
@@ -33,11 +67,11 @@ pub(crate) fn write_plan(root: &Path, plan: &Plan) -> Result<(), CommandError> {
     let removals = changes.iter().filter(|change| change.after.is_none());
     let mut done: Vec<&FileChange> = Vec::new();
     for change in writes.chain(removals) {
-        match apply(root, change) {
+        match apply(root, change, ops) {
             Ok(true) => done.push(change),
             // A removal that found no file did nothing; a rollback must not create it.
             Ok(false) => {}
-            Err(source) => return Err(roll_back(root, &done, change, source)),
+            Err(source) => return Err(roll_back(root, &done, change, source, ops)),
         }
     }
     for change in done.iter().filter(|change| change.after.is_none()) {
@@ -47,17 +81,13 @@ pub(crate) fn write_plan(root: &Path, plan: &Plan) -> Result<(), CommandError> {
 }
 
 /// Does one change; `false` when a removal found no file to remove.
-fn apply(root: &Path, change: &FileChange) -> io::Result<bool> {
+fn apply(root: &Path, change: &FileChange, ops: &mut dyn FileOps) -> io::Result<bool> {
     let target = root.join(&change.path);
     if let Some(after) = &change.after {
-        write_file(&target, after, change.before.is_some())?;
+        ops.write(&target, after, change.before.is_some())?;
         return Ok(true);
     }
-    match with_retries(&target, || fs::remove_file(&target)) {
-        Ok(()) => Ok(true),
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error),
-    }
+    ops.remove(&target)
 }
 
 /// Puts back what `done` wrote, then builds the error for the failed `change`.
@@ -66,14 +96,15 @@ fn roll_back(
     done: &[&FileChange],
     failed: &FileChange,
     source: io::Error,
+    ops: &mut dyn FileOps,
 ) -> CommandError {
     let mut unrestored = Vec::new();
     for change in done.iter().rev() {
         let target = root.join(&change.path);
         tracing::warn!(path = %change.path, "rolling back");
         let restored = match &change.before {
-            Some(before) => write_file(&target, before, change.after.is_some()),
-            None => with_retries(&target, || fs::remove_file(&target)),
+            Some(before) => ops.write(&target, before, change.after.is_some()),
+            None => ops.remove(&target).map(drop),
         };
         if let Err(error) = restored {
             tracing::warn!(path = %change.path, %error, "cannot put the file back");
@@ -399,39 +430,83 @@ mod tests {
         Ok(())
     }
 
+    #[derive(PartialEq)]
+    enum Op {
+        Write,
+        Remove,
+    }
+
+    /// One injected failure: the `nth` call of `op` on a path that ends with `path`.
+    struct Fail {
+        op: Op,
+        path: &'static str,
+        nth: usize,
+        seen: usize,
+    }
+
+    impl Fail {
+        fn new(op: Op, path: &'static str, nth: usize) -> Fail {
+            Fail {
+                op,
+                path,
+                nth,
+                seen: 0,
+            }
+        }
+    }
+
+    /// The disk operations, except for the calls chosen to fail.
+    struct FailingOps {
+        fails: Vec<Fail>,
+    }
+
+    impl FailingOps {
+        fn hit(&mut self, op: &Op, target: &Path) -> io::Result<()> {
+            for fail in &mut self.fails {
+                if fail.op == *op && target.ends_with(fail.path) {
+                    fail.seen += 1;
+                    if fail.seen == fail.nth {
+                        return Err(io::Error::new(ErrorKind::PermissionDenied, "injected"));
+                    }
+                }
+            }
+            Ok(())
+        }
+    }
+
+    impl FileOps for FailingOps {
+        fn write(&mut self, target: &Path, bytes: &[u8], replace: bool) -> io::Result<()> {
+            self.hit(&Op::Write, target)?;
+            DiskOps.write(target, bytes, replace)
+        }
+
+        fn remove(&mut self, target: &Path) -> io::Result<bool> {
+            self.hit(&Op::Remove, target)?;
+            DiskOps.remove(target)
+        }
+    }
+
     #[test]
     fn a_restore_that_fails_too_is_reported_as_partial() -> TestResult {
         let dir = tempfile::tempdir()?;
-        let (a, b) = (dir.path().join("a"), dir.path().join("b"));
-        fs::create_dir_all(&a)?;
-        fs::create_dir_all(&b)?;
-        fs::write(a.join("first.md"), "first-old")?;
-        fs::write(b.join("second.md"), "second-old")?;
-        let held_second = lock_down(&b, "second.md")?;
-        // Once the first file has its new bytes, hold it too, so that putting it back fails.
-        // The refused second write is tried again for about half a second, which is the window.
-        let watcher = {
-            let a = a.clone();
-            std::thread::spawn(move || {
-                for _ in 0..1000 {
-                    if fs::read(a.join("first.md")).is_ok_and(|bytes| bytes == b"first-new") {
-                        return lock_down(&a, "first.md").map_err(|error| error.to_string());
-                    }
-                    std::thread::sleep(Duration::from_millis(1));
-                }
-                Err("the first file never got its new bytes".to_owned())
-            })
+        fs::create_dir_all(dir.path().join("a"))?;
+        fs::create_dir_all(dir.path().join("b"))?;
+        fs::write(dir.path().join("a/first.md"), "first-old")?;
+        fs::write(dir.path().join("b/second.md"), "second-old")?;
+        let mut ops = FailingOps {
+            fails: vec![
+                Fail::new(Op::Write, "b/second.md", 1),
+                Fail::new(Op::Write, "a/first.md", 2),
+            ],
         };
-        let result = write_plan(
+        let result = write_plan_with(
             dir.path(),
             &plan(vec![
                 change("a/first.md", Some("first-old"), Some("first-new")),
                 change("b/second.md", Some("second-old"), Some("second-new")),
             ]),
+            &mut ops,
         );
-        let held_first = watcher.join().map_err(|_| "the watcher panicked")?;
-        drop(held_first);
-        drop(held_second);
         match result {
             Err(CommandError::Partial {
                 path, unrestored, ..
@@ -441,7 +516,39 @@ mod tests {
             }
             other => return Err(format!("expected Partial, got {other:?}").into()),
         }
-        assert_eq!(fs::read_to_string(b.join("second.md"))?, "second-old");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("a/first.md"))?,
+            "first-new"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_removed_file_is_restored_from_its_before_bytes() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        let bytes: &[u8] = b"one\r\ntwo\n\xff";
+        fs::create_dir_all(dir.path().join("r"))?;
+        fs::write(dir.path().join("r/one.md"), bytes)?;
+        fs::write(dir.path().join("r/two.md"), "two")?;
+        let removal = |path: &str, before: &[u8]| FileChange {
+            path: path.to_owned(),
+            before: Some(before.to_vec()),
+            after: None,
+        };
+        let mut ops = FailingOps {
+            fails: vec![Fail::new(Op::Remove, "r/two.md", 1)],
+        };
+        let result = write_plan_with(
+            dir.path(),
+            &plan(vec![
+                removal("r/one.md", bytes),
+                removal("r/two.md", b"two"),
+            ]),
+            &mut ops,
+        );
+        assert!(matches!(result, Err(CommandError::Write { ref path, .. }) if path == "r/two.md"));
+        assert_eq!(fs::read(dir.path().join("r/one.md"))?, bytes);
+        assert_eq!(fs::read_to_string(dir.path().join("r/two.md"))?, "two");
         assert_eq!(temp_files(dir.path()), "");
         Ok(())
     }
