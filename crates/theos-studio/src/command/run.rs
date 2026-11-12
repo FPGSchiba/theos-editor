@@ -44,8 +44,9 @@ impl Workspace {
     /// Before the write, an error leaves the files, the index cache and the journal as they were:
     /// [`CommandError::Rejected`] when the command would introduce errors,
     /// [`CommandError::Stale`] when a file changed on disk since the caller or the plan read it,
-    /// [`CommandError::Lock`] when the repo lock cannot be taken, or the error of the command's
-    /// plan or of the index.
+    /// [`CommandError::Lock`] when the repo lock cannot be taken,
+    /// [`CommandError::ReadOnly`] when a file the command would replace or remove is read-only,
+    /// or the error of the command's plan or of the index.
     ///
     /// A failed write is [`CommandError::Write`], with every file put back, or
     /// [`CommandError::Partial`], which names the files that keep the new bytes; the journal is

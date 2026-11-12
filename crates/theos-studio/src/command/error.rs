@@ -127,6 +127,13 @@ pub enum CommandError {
         /// The cause.
         source: RenameError,
     },
+    /// A file the command would replace or remove has no write permission. It is refused before
+    /// anything is written (ruling R9).
+    #[error("`{path}` is read-only; make it writable first")]
+    ReadOnly {
+        /// The file.
+        path: String,
+    },
     /// A file cannot be written.
     #[error("cannot write `{path}`: {source}; another program may have it open")]
     Write {

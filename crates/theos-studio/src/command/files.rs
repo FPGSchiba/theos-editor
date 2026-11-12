@@ -13,7 +13,8 @@ pub(crate) const RETRIES: u32 = 5;
 pub(crate) const RETRY_PAUSE: Duration = Duration::from_millis(100);
 
 /// Writes `plan` under `root`: content first in plan order, removals last, then the folders those
-/// removals emptied. On a failure it puts back what it wrote from each change's `before`, removes
+/// removals emptied. A read-only file the plan would replace or remove fails it with `ReadOnly`
+/// before anything is written. On a failure it puts back what it wrote from each change's `before`, removes
 /// the folders it created that are empty again, and fails with `Write`, or with `Partial` when a
 /// file cannot be put back.
 pub(crate) fn write_plan(root: &Path, plan: &Plan) -> Result<(), CommandError> {
@@ -66,6 +67,7 @@ pub(crate) fn write_plan_with(
     ops: &mut dyn FileOps,
 ) -> Result<(), CommandError> {
     let changes: Vec<&FileChange> = plan.real_changes().collect();
+    refuse_read_only(root, &changes)?;
     let writes = changes.iter().filter(|change| change.after.is_some());
     let removals = changes.iter().filter(|change| change.after.is_none());
     let mut done = Done::default();
@@ -79,6 +81,24 @@ pub(crate) fn write_plan_with(
     }
     for change in done.changes.iter().filter(|change| change.after.is_none()) {
         remove_emptied_folders(root, &change.path);
+    }
+    Ok(())
+}
+
+/// [`CommandError::ReadOnly`] for the first change whose target exists and has no write
+/// permission: the change would replace or remove it. Checked before any change is applied, so
+/// nothing needs rolling back, and on every OS alike (ruling R9): Windows would refuse to replace
+/// such a file only after every retry, and std removes it on Windows and Unix, as Unix replaces
+/// it, without a word.
+fn refuse_read_only(root: &Path, changes: &[&FileChange]) -> Result<(), CommandError> {
+    for change in changes.iter().filter(|change| change.before.is_some()) {
+        let target = root.join(&change.path);
+        // The file itself, not what a symbolic link points to: the link is what is replaced.
+        if fs::symlink_metadata(&target).is_ok_and(|metadata| metadata.permissions().readonly()) {
+            return Err(CommandError::ReadOnly {
+                path: change.path.clone(),
+            });
+        }
     }
     Ok(())
 }
@@ -478,6 +498,64 @@ mod tests {
             "second-old"
         );
         assert_eq!(temp_files(dir.path()), "");
+        Ok(())
+    }
+
+    /// Makes a file read-only until it is dropped, then gives it back its permissions.
+    struct ReadOnly {
+        path: std::path::PathBuf,
+        permissions: fs::Permissions,
+    }
+
+    impl ReadOnly {
+        fn set(path: std::path::PathBuf) -> io::Result<ReadOnly> {
+            let permissions = fs::metadata(&path)?.permissions();
+            let mut read_only = permissions.clone();
+            read_only.set_readonly(true);
+            fs::set_permissions(&path, read_only)?;
+            Ok(ReadOnly { path, permissions })
+        }
+    }
+
+    impl Drop for ReadOnly {
+        fn drop(&mut self) {
+            let _ = fs::set_permissions(&self.path, self.permissions.clone());
+        }
+    }
+
+    /// Ruling R9, on every OS: a read-only file that a plan would replace or remove is refused
+    /// before anything is written.
+    #[test]
+    fn a_read_only_target_is_refused_before_anything_is_written() -> TestResult {
+        for after in [Some("ro-new"), None] {
+            let dir = tempfile::tempdir()?;
+            fs::write(dir.path().join("first.md"), "first-old")?;
+            fs::write(dir.path().join("ro.md"), "ro-old")?;
+            let _read_only = ReadOnly::set(dir.path().join("ro.md"))?;
+            let result = write_plan(
+                dir.path(),
+                &plan(vec![
+                    change("first.md", Some("first-old"), Some("first-new")),
+                    change("fresh/new.md", None, Some("new")),
+                    change("ro.md", Some("ro-old"), after),
+                ]),
+            );
+            assert!(
+                matches!(&result, Err(CommandError::ReadOnly { path }) if path == "ro.md"),
+                "{after:?}: {result:?}"
+            );
+            assert_eq!(
+                result.err().map(|error| error.to_string()),
+                Some("`ro.md` is read-only; make it writable first".to_owned())
+            );
+            assert_eq!(fs::read_to_string(dir.path().join("ro.md"))?, "ro-old");
+            assert_eq!(
+                fs::read_to_string(dir.path().join("first.md"))?,
+                "first-old"
+            );
+            assert!(!dir.path().join("fresh").exists());
+            assert_eq!(temp_files(dir.path()), "");
+        }
         Ok(())
     }
 

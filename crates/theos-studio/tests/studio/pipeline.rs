@@ -7,8 +7,8 @@ use std::time::Duration;
 use theos_content::{Finding, Severity};
 use theos_studio::lock::{self, COMMAND_WAIT, LockError};
 use theos_studio::{
-    Applied, Base, Command, CommandError, Create, Edit, EntryId, EntrySummary, FileChange, Plan,
-    PlanContext, Reads, Route, Workspace, Write,
+    Applied, Base, Command, CommandError, Create, Delete, Edit, EntryId, EntrySummary, FileChange,
+    Plan, PlanContext, Reads, Route, Workspace, Write,
 };
 
 use crate::common::{TempProject, base_of, cold_dump, files, open, set};
@@ -248,6 +248,58 @@ fn a_patch_or_an_edit_that_changes_nothing_writes_nothing() -> TestResult {
             assert_eq!(std::fs::read(project.root().join(TRUTH))?, bytes.as_bytes());
             assert_eq!(workspace.undo_entries(), Vec::<EntrySummary>::new());
         }
+    }
+    Ok(())
+}
+
+/// Makes a file read-only until it is dropped, then gives it back its permissions.
+struct ReadOnly {
+    path: std::path::PathBuf,
+    permissions: std::fs::Permissions,
+}
+
+impl ReadOnly {
+    fn set(path: std::path::PathBuf) -> std::io::Result<ReadOnly> {
+        let permissions = std::fs::metadata(&path)?.permissions();
+        let mut read_only = permissions.clone();
+        read_only.set_readonly(true);
+        std::fs::set_permissions(&path, read_only)?;
+        Ok(ReadOnly { path, permissions })
+    }
+}
+
+impl Drop for ReadOnly {
+    fn drop(&mut self) {
+        let _ = std::fs::set_permissions(&self.path, self.permissions.clone());
+    }
+}
+
+/// Review focus: a read-only target file. Ruling R9, on every OS: a command that would replace or
+/// remove it is refused at once with `ReadOnly`, and nothing is written.
+#[test]
+fn a_read_only_target_is_refused() -> TestResult {
+    // No record links the second truth, so deleting it would be applied.
+    let unlinked = "lore/truths/T-961.md";
+    let (project, mut workspace) = open("commands")?;
+    let patch = set(&workspace, TRUTH, "title", "Synthetic truth, retitled")?;
+    let delete = Delete {
+        path: unlinked.to_owned(),
+        base: base_of(&workspace, unlinked)?,
+    };
+    let before = files(project.root())?;
+    let dump = workspace.index().dump()?;
+    let _read_only = ReadOnly::set(project.root().join(TRUTH))?;
+    let _unlinked_read_only = ReadOnly::set(project.root().join(unlinked))?;
+    for (command, target) in [(&patch as &dyn Command, TRUTH), (&delete, unlinked)] {
+        let result = workspace.run(command);
+        assert!(
+            matches!(&result, Err(CommandError::ReadOnly { path }) if path == target),
+            "{}: {result:?}",
+            command.label()
+        );
+        assert_eq!(files(project.root())?, before);
+        assert_eq!(workspace.index().dump()?, dump);
+        assert_eq!(workspace.undo_entries(), Vec::<EntrySummary>::new());
     }
     Ok(())
 }
