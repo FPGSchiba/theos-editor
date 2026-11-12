@@ -345,3 +345,24 @@ fn a_panicking_process_fails_the_run_as_a_stage_panic() {
         other => panic!("{:?}", other.map(|_| ())),
     }
 }
+
+/// The 384 x 384 budget fixture (Task 27) plans with the builtin registry; it only plans.
+#[test]
+fn evolution_384_plans() {
+    let text = include_str!("../../../tests/fixtures/recipes/evolution-384.toml");
+    let loaded = parse(text, RecipeOrigin::Builtin).unwrap();
+    let planned = plan(&loaded, &Registry::builtin(), &serde_json::Map::new()).unwrap();
+    assert_eq!(planned.frame.rows, 384);
+    assert_eq!(planned.frame.cols, 384);
+    let ids: Vec<&str> = planned.stages.iter().map(|s| s.id).collect();
+    assert_eq!(
+        ids,
+        [
+            "grid",
+            "tectonics",
+            "geology",
+            "climate_model",
+            "landscape_evolution"
+        ]
+    );
+}

@@ -257,10 +257,6 @@ mod tests {
                 worst = max(worst, (after.get(r, c) - want).abs());
             }
         }
-        eprintln!(
-            "heat-kernel worst error {worst:.5} m = {:.4} % of the peak {peak:.4} m",
-            100.0 * worst / peak
-        );
         assert!(worst < 0.01 * peak, "worst error {worst} vs 1 % of {peak}");
     }
 

@@ -282,10 +282,6 @@ mod tests {
         assert!(worst_excess(&w) > 0.5, "the terrain starts steep");
         let before = sum(&w, "height");
         let report = evolve(&mut w, &slope_limit(), 1, 1e4, 1).unwrap();
-        eprintln!(
-            "slope_limit passes: {}",
-            report.values["slope_limit_passes"]
-        );
         assert!(report.findings.is_empty(), "{report:?}");
         assert!(worst_excess(&w) <= 1e-6, "excess {}", worst_excess(&w));
         let removed = report.values["slope_limit_removed_m3"];
