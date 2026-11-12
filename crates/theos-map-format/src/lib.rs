@@ -6,7 +6,9 @@
 
 pub mod error;
 pub mod json;
+pub mod layer;
 pub mod manifest;
 
 pub use error::FormatError;
+pub use layer::{LayerData, LayerKey, sha256_hex};
 pub use manifest::{DType, FORMAT, FORMAT_VERSION, Frame, LayerEntry, Level, Manifest, Parent};
