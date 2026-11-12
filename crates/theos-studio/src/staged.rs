@@ -2,11 +2,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use theos_content::{Change, Finding, Severity};
+use theos_content::{Change, Finding};
 use theos_vcs::staged::{self, regular_mode};
 use theos_vcs::{Git, GitError, repo};
 
 use crate::StudioError;
+use crate::check::counts;
 use crate::workspace::Workspace;
 
 /// The verdict on a staged snapshot.
@@ -29,20 +30,13 @@ impl StagedCheck {
     /// The number of findings that are errors.
     #[must_use]
     pub fn errors(&self) -> usize {
-        self.count(Severity::Error)
+        counts(&self.findings).0
     }
 
     /// The number of findings that are warnings.
     #[must_use]
     pub fn warnings(&self) -> usize {
-        self.count(Severity::Warning)
-    }
-
-    fn count(&self, severity: Severity) -> usize {
-        self.findings
-            .iter()
-            .filter(|finding| finding.severity == severity)
-            .count()
+        counts(&self.findings).1
     }
 }
 

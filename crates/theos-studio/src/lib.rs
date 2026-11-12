@@ -6,8 +6,8 @@
 //! the studio, [`report()`], which writes an error with each cause once, [`introduced()`], the count
 //! of errors a change introduces, [`check_staged`], which judges git's staged snapshot,
 //! [`check()`], which adds the binaries-folder warnings, [`user_settings`], which reads where that
-//! folder is, and the JSON [`views`] of findings. Later tasks of P05 extend this crate; the rest arrives in
-//! P06, P07 and later phases.
+//! folder is, and the JSON [`views`] of findings. Later tasks of P05 extend this crate; the rest
+//! arrives in P06, P07 and later phases.
 
 pub mod check;
 pub mod error;
