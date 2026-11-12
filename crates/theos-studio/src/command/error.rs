@@ -3,7 +3,7 @@
 use theos_content::rename::RenameError;
 use theos_content::{Finding, IndexError, PatchError, ReadError, RecordEditError, RecordError};
 
-use super::files::retryable;
+use super::files::was_retried;
 use crate::StudioError;
 use crate::lock::LockError;
 
@@ -171,7 +171,7 @@ pub enum CommandError {
 /// The hint for a write error whose kind the writer retried (spec §5.6): the retries are used up,
 /// so another program probably holds the file. Other errors get no hint.
 fn retried_hint(source: &std::io::Error) -> &'static str {
-    if retryable(source) {
+    if was_retried(source) {
         "; another program may have it open"
     } else {
         ""

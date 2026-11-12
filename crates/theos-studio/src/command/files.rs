@@ -206,6 +206,7 @@ fn write_file(
                     std::thread::sleep(RETRY_PAUSE);
                     temp = error.file;
                 }
+                Err(error) if retryable(&error.error) => return Err(exhausted(error.error)),
                 Err(error) => return Err(error.error),
             }
         }
@@ -267,13 +268,38 @@ fn with_retries(target: &Path, mut op: impl FnMut() -> io::Result<()>) -> io::Re
                 tracing::warn!(path = %target.display(), %error, attempt, "write refused, trying again");
                 std::thread::sleep(RETRY_PAUSE);
             }
+            Err(error) if retryable(&error) => return Err(exhausted(error)),
             other => return other,
         }
     }
 }
 
+/// Marks an error that stayed after every retry; it shows the same message and kind.
+#[derive(Debug)]
+struct Exhausted(io::Error);
+
+impl std::fmt::Display for Exhausted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::error::Error for Exhausted {}
+
+/// `error` marked as out of retries.
+fn exhausted(error: io::Error) -> io::Error {
+    io::Error::new(error.kind(), Exhausted(error))
+}
+
+/// Whether `error` came out of a retry loop that used up its tries.
+pub(super) fn was_retried(error: &io::Error) -> bool {
+    error
+        .get_ref()
+        .is_some_and(<dyn std::error::Error + Send + Sync>::is::<Exhausted>)
+}
+
 /// Whether another program may be holding the file only for now.
-pub(super) fn retryable(error: &io::Error) -> bool {
+fn retryable(error: &io::Error) -> bool {
     if error.kind() == ErrorKind::PermissionDenied {
         return true;
     }
@@ -344,6 +370,37 @@ mod tests {
             .map(|(path, _)| path.display().to_string())
             .collect();
         temp.join(", ")
+    }
+
+    #[test]
+    fn an_error_that_was_not_retried_has_no_hint() {
+        let error = CommandError::Write {
+            path: "a.md".into(),
+            source: io::Error::from(ErrorKind::PermissionDenied),
+        };
+        assert!(!error.to_string().contains("another program"), "{error}");
+    }
+
+    #[test]
+    fn an_error_out_of_the_retries_has_the_hint() {
+        let mut tries = 0;
+        let source = with_retries(Path::new("a.md"), || {
+            tries += 1;
+            Err(io::Error::from(ErrorKind::PermissionDenied))
+        })
+        .expect_err("the operation always fails");
+        assert_eq!(tries, RETRIES + 1);
+        assert_eq!(source.kind(), ErrorKind::PermissionDenied);
+        let error = CommandError::Write {
+            path: "a.md".into(),
+            source,
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("another program may have it open"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -446,8 +503,11 @@ mod tests {
         };
         let message = error.to_string();
         assert!(message.contains("locked/second.md"), "{message}");
-        assert!(
+        // Windows retries the refused swap, so its error carries the hint; on Unix the folder
+        // refuses the temp file at once, so nothing was retried and there is no hint.
+        assert_eq!(
             message.contains("another program may have it open"),
+            cfg!(windows),
             "{message}"
         );
         assert!(matches!(error, CommandError::Write { .. }), "{error:?}");
