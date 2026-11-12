@@ -37,9 +37,14 @@ fn broken_rule(path: &str) -> Option<&'static str> {
     if parts.clone().any(|part| part.is_empty() || part == ".") {
         return Some("has an empty or `.` component");
     }
-    if parts
-        .next()
-        .is_some_and(|first| first.eq_ignore_ascii_case(".git"))
+    if parts.clone().any(|part| part.ends_with(['.', ' '])) {
+        return Some("ends in a dot or a space");
+    }
+    // `git~1` is the short name of `.git` on Windows.
+    if parts.clone().any(|part| part.eq_ignore_ascii_case("git~1"))
+        || parts
+            .next()
+            .is_some_and(|first| first.eq_ignore_ascii_case(".git"))
     {
         return Some("is inside .git");
     }
@@ -100,5 +105,24 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn the_windows_spellings_of_git_are_refused() {
+        for bad in [
+            ".git./config",
+            ".git /config",
+            "GIT~1/config",
+            "git~1/config",
+            "lore/T-960.md.",
+            "lore /T-960.md",
+        ] {
+            assert!(
+                matches!(project_path(bad), Err(CommandError::Path { .. })),
+                "{bad:?} must be refused"
+            );
+        }
+        assert!(project_path(".gitignore").is_ok());
+        assert!(project_path("lore/.gitkeep").is_ok());
     }
 }
