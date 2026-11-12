@@ -8,3 +8,4 @@ mod rename;
 mod undo;
 mod verdict;
 mod workspace;
+mod writers;

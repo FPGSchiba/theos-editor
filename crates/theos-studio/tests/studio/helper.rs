@@ -4,7 +4,8 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use theos_studio::lock;
+use theos_content::{Record, Span, TextEdit};
+use theos_studio::{CommandError, Edit, Workspace, lock};
 
 /// What the helper process does.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -21,6 +22,54 @@ pub enum HelperTask {
         /// The helper lets go when this file exists.
         release: PathBuf,
     },
+    /// Opens a workspace, writes the file `ready`, then appends `count` lines `<tag> <n>` to the
+    /// record `path`, each as one edit.
+    Append {
+        /// The project folder.
+        root: PathBuf,
+        /// Project-relative path of the record.
+        path: String,
+        /// The first word of every appended line.
+        tag: String,
+        /// How many lines to append.
+        count: usize,
+        /// Written once the workspace is open.
+        ready: PathBuf,
+    },
+}
+
+/// Appends the lines `<tag> 1` to `<tag> <count>` to the record `path`, one edit each; a stale
+/// base is read again and retried.
+pub fn append_lines(
+    workspace: &mut Workspace,
+    path: &str,
+    tag: &str,
+    count: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for n in 1..=count {
+        loop {
+            let (bytes, base) = workspace.read(path)?.ok_or("the record is missing")?;
+            let record = Record::parse(&String::from_utf8(bytes)?)?;
+            let end = record.text().len();
+            let edit = Edit {
+                path: path.to_owned(),
+                base,
+                edits: vec![TextEdit {
+                    span: Span { start: end, end },
+                    replacement: format!(
+                        "{tag} {n}
+"
+                    ),
+                }],
+            };
+            match workspace.run(&edit) {
+                Ok(_) => break,
+                Err(CommandError::Stale { .. }) => {}
+                Err(other) => return Err(other.into()),
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Runs the task of `THEOS_STUDIO_HELPER`; returns at once when it is unset.
@@ -46,6 +95,18 @@ fn helper() -> Result<(), Box<dyn std::error::Error>> {
                 std::thread::sleep(Duration::from_millis(10));
             }
             drop(guard);
+        }
+        HelperTask::Append {
+            root,
+            path,
+            tag,
+            count,
+            ready,
+        } => {
+            let mut workspace = Workspace::open(&root)?;
+            workspace.set_lock_wait(Duration::from_secs(10));
+            std::fs::write(&ready, "ready")?;
+            append_lines(&mut workspace, &path, &tag, count)?;
         }
     }
     Ok(())
