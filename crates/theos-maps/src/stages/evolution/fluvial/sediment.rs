@@ -11,13 +11,16 @@ use crate::stages::evolution::flow::{FlowWeights, cell_index};
 /// cells without an edge: the drained-edge outlets, or the closed map's sink.
 ///
 /// `arriving[i]` becomes the volume that reaches cell `i` from upstream, its own excluded (the
-/// cells of Yuan et al.'s `ups(i)`), plus what a depression lets go into it.
+/// cells of Yuan et al.'s `ups(i)`), plus what a depression lets go at it.
 ///
 /// While depression `n` is open, every share that would reach one of its cells goes into the
 /// depression's inflow instead. When the walk reaches the depression's spill cell, `close(n,
-/// inflow)` returns the volume the depression lets go, and it leaves over the spill cell's flow
-/// edges (with steepest routing, to `SpillPoint.to`). From then on the depression is closed:
-/// what reaches it later flows through its cells like over any other cell. Every volume either
+/// inflow)` returns the volume the depression lets go. It counts as arriving at the spill cell,
+/// so it leaves with the spill cell's own flux over its flow edges (with steepest routing, to
+/// `SpillPoint.to`), as spec §5.9's "passes on from the spill node" says. A spill cell outside
+/// its depression (the higher cell of the pass) thus sees the release in its deposition term;
+/// one inside it is held and only passes it on. From then on the depression is closed: what
+/// reaches it later flows through its cells like over any other cell. Every volume either
 /// leaves the map, stays in a depression, or is in `arriving`, so the walk loses nothing.
 pub(super) fn route(
     stack: &[u32],
@@ -33,11 +36,11 @@ pub(super) fn route(
     let mut out = 0.0;
     for &cell in stack.iter().rev() {
         let i = cell_index(cell);
-        let mut leaving = arriving[i] + volume[i];
         if let Some(n) = traps.spilling_at(i) {
             open[n] = false;
-            leaving += close(n, inflow[n]);
+            arriving[i] += close(n, inflow[n]);
         }
+        let leaving = arriving[i] + volume[i];
         let edges = weights.edges(i);
         if edges.is_empty() {
             out += leaving;
@@ -150,9 +153,30 @@ mod tests {
         });
         // Cell 4 passes 24: 6 into cell 3 and 18 into cell 2, both kept.
         assert_eq!(calls, [(0, 24.0)]);
-        // Cell 2 lets go 4 into cell 1, which adds its own 1.
-        assert_eq!(arriving, [5.0, 4.0, 0.0, 0.0, 16.0, 0.0]);
+        // Cell 2, the spill cell, receives the 4 it lets go and passes it to cell 1, which adds
+        // its own 1.
+        assert_eq!(arriving, [5.0, 4.0, 4.0, 0.0, 16.0, 0.0]);
         assert_eq!(out.to_bits(), 5.0_f64.to_bits());
+    }
+
+    #[test]
+    fn a_spill_cell_outside_its_depression_receives_the_release() {
+        // Depression 1 holds cell 3 alone and spills from cell 2, the higher cell of the pass,
+        // which lies outside it. What the depression lets go reaches cell 2 like sediment from
+        // upstream, so cell 2's deposition term sees it.
+        let traps = traps(vec![0, 0, 0, 1, 0, 0], &[(2, 1)]);
+        let mut arriving = vec![0.0; 6];
+        let volume = [0.0, 0.0, 1.0, 0.0, 8.0, 16.0];
+        let mut calls = Vec::new();
+        let out = route(&STACK, &strip(), &traps, &volume, &mut arriving, |n, v| {
+            calls.push((n, v));
+            v - 2.0
+        });
+        // Cell 4 passes 24: 6 into the depression, 18 to cell 2. The depression keeps 2 and lets
+        // go 4 at cell 2, which then passes 18 + 4 + its own 1.
+        assert_eq!(calls, [(0, 6.0)]);
+        assert_eq!(arriving, [23.0, 23.0, 22.0, 0.0, 16.0, 0.0]);
+        assert_eq!(out.to_bits(), 23.0_f64.to_bits());
     }
 
     #[test]
@@ -185,10 +209,11 @@ mod tests {
             calls.push((n, v));
             v / 2.0
         });
-        // Depression 2 keeps 8 of 16 and lets go 8: 2 to cell 3, 6 into depression 1. Cell 3
-        // passes 2 + 1 into depression 1, which holds 9 and lets go 4.5.
+        // Depression 2 keeps 8 of 16 and lets go 8 at its spill cell 4: 2 to cell 3, 6 into
+        // depression 1. Cell 3 passes 2 + 1 into depression 1, which holds 9 and lets go 4.5 at
+        // its spill cell 2.
         assert_eq!(calls, [(1, 16.0), (0, 9.0)]);
-        assert_eq!(arriving, [4.5, 4.5, 0.0, 2.0, 0.0, 0.0]);
+        assert_eq!(arriving, [4.5, 4.5, 4.5, 2.0, 8.0, 0.0]);
         assert_eq!(out.to_bits(), 4.5_f64.to_bits());
     }
 }

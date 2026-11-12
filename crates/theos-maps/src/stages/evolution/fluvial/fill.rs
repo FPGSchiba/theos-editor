@@ -39,8 +39,8 @@ pub(super) struct Traps {
     label: Vec<u32>,
     /// Per cell, the depression (from 1) whose spill cell it is, 0 for none.
     spill_of: Vec<u32>,
-    /// The depressions, `n − 1` for depression `n`.
-    each: Vec<Trap>,
+    /// Each depression as a trap, at `n − 1` for depression `n`.
+    depressions: Vec<Trap>,
     /// The area of one cell, m².
     cell_area: f64,
 }
@@ -58,7 +58,10 @@ impl Traps {
         let label = depressions.label.as_slice().to_vec();
         let mut members: Vec<Vec<usize>> = vec![Vec::new(); depressions.spill.len()];
         for (cell, &n) in label.iter().enumerate() {
-            if let Some(list) = members.get_mut(cell_index(n).wrapping_sub(1)) {
+            if let Some(list) = cell_index(n)
+                .checked_sub(1)
+                .and_then(|k| members.get_mut(k))
+            {
                 list.push(cell);
             }
         }
@@ -97,14 +100,14 @@ impl Traps {
         Self {
             label,
             spill_of,
-            each: traps,
+            depressions: traps,
             cell_area,
         }
     }
 
     /// The number of depressions.
     pub(super) fn len(&self) -> usize {
-        self.each.len()
+        self.depressions.len()
     }
 
     /// The depression (from 0) holding `cell`, if one does.
@@ -127,7 +130,7 @@ impl Traps {
     /// The part of `volume` (m³) that depression `n` keeps on the heights it was built from: all
     /// of it up to its capacity, nothing of a volume that is not positive.
     pub(super) fn kept(&self, n: usize, volume: f64) -> f64 {
-        let capacity = self.each.get(n).map_or(0.0, |t| t.capacity);
+        let capacity = self.depressions.get(n).map_or(0.0, |t| t.capacity);
         if volume > 0.0 {
             min(volume, capacity)
         } else {
@@ -139,7 +142,7 @@ impl Traps {
     /// every cell below the fill level rises to its place on the ε slope. Nothing is filled
     /// from a volume that is not positive.
     pub(super) fn fill(&self, n: usize, volume: f64, height: &mut [f64]) -> f64 {
-        let Some(trap) = self.each.get(n).filter(|_| volume > 0.0) else {
+        let Some(trap) = self.depressions.get(n).filter(|_| volume > 0.0) else {
             return 0.0;
         };
         let level = if volume >= trap.capacity {
@@ -229,7 +232,7 @@ mod tests {
             (4, 2.0 * EPSILON),
             (3, 3.0 * EPSILON),
         ];
-        let got: Vec<(usize, f64)> = traps.each[0].places.clone();
+        let got: Vec<(usize, f64)> = traps.depressions[0].places.clone();
         assert_eq!(got.len(), want.len());
         for ((c, lift), (wc, wl)) in got.iter().zip(want) {
             assert_eq!(*c, wc);
@@ -237,7 +240,7 @@ mod tests {
         }
         // Capacity: (10 − 8) + (10 + ε − 4) + (10 + 2ε − 9) + (10 + 3ε − 6).
         let capacity = 2.0 + 6.0 + 1.0 + 4.0 + 6.0 * EPSILON;
-        assert!(close(traps.each[0].capacity, capacity));
+        assert!(close(traps.depressions[0].capacity, capacity));
         assert_eq!(traps.holding(3), Some(0));
         assert_eq!(traps.holding(0), None);
         assert_eq!(traps.holding(99), None);
@@ -251,7 +254,7 @@ mod tests {
         let (mut dep, routing, height) = strip();
         dep.label = Grid::from_vec(1, 6, vec![0, 0, 1, 1, 1, 0]).unwrap();
         let traps = Traps::new(&dep, &routing, &height, 1.0);
-        let places = &traps.each[0].places;
+        let places = &traps.depressions[0].places;
         assert_eq!(places.iter().map(|p| p.0).collect::<Vec<_>>(), [2, 4, 3]);
         assert!(
             close(places[0].1, EPSILON),
@@ -285,7 +288,7 @@ mod tests {
     fn a_large_volume_fills_to_the_spill_level_and_leaves_the_rest() {
         let (dep, routing, height) = strip();
         let traps = Traps::new(&dep, &routing, &height, 1.0);
-        let capacity = traps.each[0].capacity;
+        let capacity = traps.depressions[0].capacity;
         for volume in [capacity, capacity + 5.0] {
             let mut h = height.clone();
             let taken = traps.fill(0, volume, &mut h);

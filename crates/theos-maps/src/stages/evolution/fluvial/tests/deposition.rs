@@ -12,7 +12,7 @@ use crate::kernels::num::{max, min, to_f64};
 use crate::stage::{Finding, StageReport};
 use crate::stages::evolution::flow::{FlowWeights, cell_index};
 use crate::stages::evolution::fluvial::fill::EPSILON;
-use crate::stages::evolution::resolve_sinks::Depressions;
+use crate::stages::evolution::resolve_sinks::{Depressions, SpillPoint};
 use crate::stages::evolution::test_support::{evolve, processes};
 use crate::stages::terrain::grid::GridStage;
 use crate::stages::terrain::support::{run_stage, world};
@@ -113,6 +113,92 @@ fn a_receiver_below_the_deposit_takes_its_share() {
         "{} vs {without_incision}",
         h[1]
     );
+}
+
+/// A 1 x 4 strip of 100 m cells (synthetic), each draining to its western neighbour:
+/// - cell 0, the fixed outlet at 0 m;
+/// - cell 1 at 50 m, the higher cell of the pass, so the spill cell lies outside the lake;
+/// - cell 2, a lake at 45 m (depression 1, spilling from cell 1 to cell 0 at 50 m);
+/// - cell 3, a slope at 100 m draining into the lake.
+fn pass_strip() -> World {
+    let mut w = world(1, 4);
+    let grid = |v: Vec<f64>| Layer::F64(Grid::from_vec(1, 4, v).unwrap());
+    let u32s = |v: Vec<u32>| Layer::U32(Grid::from_vec(1, 4, v).unwrap());
+    let fixed = Grid::from_vec(1, 4, vec![true, false, false, false]).unwrap();
+    let weights = FlowWeights {
+        start: vec![0, 0, 1, 2, 3],
+        to: vec![0, 1, 2],
+        weight: vec![1.0; 3],
+        dist: vec![100.0; 3],
+    };
+    let depressions = Depressions {
+        label: Grid::from_vec(1, 4, vec![0, 0, 1, 0]).unwrap(),
+        spill: vec![SpillPoint {
+            cell: 1,
+            to: 0,
+            level: 50.0,
+        }],
+    };
+    let layers = [
+        ("height", grid(vec![0.0, 50.0, 45.0, 100.0])),
+        (
+            "routing_surface",
+            grid(vec![0.0, 50.0, 50.0 + EPSILON, 100.0]),
+        ),
+        ("erodibility", grid(vec![K; 4])),
+        ("erosion", grid(vec![0.0; 4])),
+        ("deposition", grid(vec![0.0; 4])),
+        ("fixed", Layer::Mask(fixed)),
+        ("receivers", u32s(vec![0, 0, 1, 2])),
+        ("stack", u32s(vec![0, 1, 2, 3])),
+        ("weights", Layer::Value(Box::new(weights))),
+        ("depressions", Layer::Value(Box::new(depressions))),
+        ("climate", Layer::Value(Box::new(no_fields()))),
+    ];
+    for (name, layer) in layers {
+        w.insert(name, layer).unwrap();
+    }
+    w
+}
+
+/// Spec §5.9: the excess of a depression "passes on from the spill node", whose `Qs` is the
+/// flux leaving it. When the spill cell lies outside the lake (the higher cell of the pass on
+/// the basin's side), what the lake lets go counts in that cell's own deposition term, as it
+/// would at `SpillPoint.to` were the spill cell inside the lake.
+#[test]
+fn a_lake_spilling_from_its_pass_cell_feeds_that_cells_deposit() {
+    const G: f64 = 1.0;
+    let mut w = pass_strip();
+    let report = evolve(&mut w, &processes(&fluvial_only("g = 1.0")), 1, 1e5, 1).unwrap();
+    assert!(report.findings.is_empty(), "{:?}", report.findings);
+    // Cell 3 drains one cell (c = G, F = K·√area·Δt/d = 1) into the lake, held at 45 m.
+    let h3 = (100.0 * (1.0 + G) + 45.0) / (2.0 + G);
+    // The lake keeps what fills it to its place one ε above the spill level.
+    let kept = (50.0 + EPSILON - 45.0) * CELL_AREA;
+    let released = (100.0 - h3) * CELL_AREA - kept;
+    assert!(released > 1e5, "{released}");
+    // Cell 1 drains three cells: c = G/3, F = K·√(3·area)·Δt/d; the release reaches it.
+    let (q1, c1) = (3.0 * CELL_AREA, G / 3.0);
+    let f10 = K * libm::pow(q1, 0.5) * 1e5 / 100.0;
+    let h1 = (50.0 * (1.0 + c1) + G * released / q1) / (1.0 + c1 + f10);
+    let blind = 50.0 * (1.0 + c1) / (1.0 + c1 + f10);
+    let h = layer(&w, "height");
+    assert!((h[3] - h3).abs() < 1e-6, "{} vs {h3}", h[3]);
+    assert!((h[1] - h1).abs() < 1e-6, "{} vs {h1}", h[1]);
+    assert!(
+        h[1] > blind + 1.0,
+        "{} vs {blind} without the release",
+        h[1]
+    );
+    assert!(
+        (h[2] - (50.0 + EPSILON)).abs() < 1e-9,
+        "the lake is full: {}",
+        h[2]
+    );
+    // What left is the release plus cell 1's own net erosion.
+    let out = released + (50.0 - h[1]) * CELL_AREA;
+    let reported = value(&report, "sediment_out_m3");
+    assert!((reported - out).abs() <= 1e-9 * out, "{reported} vs {out}");
 }
 
 /// The Chebyshev distance from `(r, c)` to the bowl's centre (32, 32).
@@ -533,13 +619,25 @@ fn law(area: f64) -> f64 {
 ///   channel cell must keep its area.
 /// - **`slope_adaptive`:** the partition exponent `p = 0.5 + 0.6·S` depends on the slope, so
 ///   doubling the slopes changes the weights, and two runs cannot share a network. The G = 1
-///   steady state is compared with the G = 0 law on its own weights: each channel cell's
-///   flow-weighted slope with `(1 + G)·(U/K)·Q^(−m)`, and the relief with the relief of the
-///   heights the G = 0 law gives on those weights.
+///   state is compared with the G = 0 law on its own weights: each channel cell's flow-weighted
+///   slope with `(1 + G)·(U/K)·Q^(−m)`, and the relief with the relief of the heights the G = 0
+///   law gives on those weights.
+///
+///   With G > 0 this partition shows a slow divide oscillation: ridge cells of small drainage
+///   area swing by several metres per step, whatever the tolerance or the time step (seed 1:
+///   up to 9.5 m per step at Δt = 2.5e5 and 0.47 m at 2.5e4, on cells of 1 to about 20 cells of
+///   area). The landscape therefore never reaches a full steady state, and this leg runs a
+///   fixed 1 500 steps, about twice the time its channels take to settle. It still demands a
+///   steady state where the law applies: over the last 50 steps no channel cell (drainage area
+///   above 10 cells) changes by Yuan's tolerance `10⁻³·U·Δt` or more in a step. The steepest
+///   leg requires a full steady state.
 #[test]
 fn deposition_steepens_steady_state_by_one_plus_g() {
     const G: f64 = 1.0;
     const DT: f64 = 2.5e5;
+    // The slope_adaptive leg: its fixed run, and the steps at its end whose channels are checked.
+    const RUN: u32 = 1500;
+    const TRACKED: u32 = 50;
     let deposits = |exponent: &str| recipe(exponent, &format!("g = {G}\nm = 0.5"));
     let mut w = landscape(ALL_EDGES, 1);
     run_to_steady_state(&mut w, &recipe("steepest", "g = 0.0\nm = 0.5"), DT, 2000);
@@ -574,7 +672,22 @@ fn deposition_steepens_steady_state_by_one_plus_g() {
     within_two_percent(raised, (1.0 + G) * relief, "steepest relief");
 
     let mut w = landscape(ALL_EDGES, 1);
-    let steps = run_to_steady_state(&mut w, &deposits("slope_adaptive"), DT, 4000);
+    let procs = processes(&deposits("slope_adaptive"));
+    evolve(&mut w, &procs, RUN - TRACKED, DT, 1).unwrap();
+    let tolerance = 1e-3 * UPLIFT * DT;
+    let mut wobble = 0.0;
+    for _ in 0..TRACKED {
+        let before = layer(&w, "height");
+        evolve(&mut w, &procs, 1, DT, 1).unwrap();
+        let h = layer(&w, "height");
+        wobble = channel_cells(&w)
+            .iter()
+            .fold(wobble, |most, &i| max(most, (h[i] - before[i]).abs()));
+    }
+    assert!(
+        wobble < tolerance,
+        "slope_adaptive: a channel cell still changes by {wobble} m per step (tolerance {tolerance} m)"
+    );
     let (cells, slopes, area) = (
         channel_cells(&w),
         flow_slopes(&w),
@@ -582,7 +695,7 @@ fn deposition_steepens_steady_state_by_one_plus_g() {
     );
     assert!(cells.len() > 100, "{} channel cells", cells.len());
     for &i in &cells {
-        let what = format!("slope_adaptive after {steps} steps: cell {i}");
+        let what = format!("slope_adaptive after {RUN} steps: cell {i}");
         within_two_percent(slopes[i], (1.0 + G) * law(area[i]), &what);
     }
     let predicted = (1.0 + G) * spread(&law_heights(&w));

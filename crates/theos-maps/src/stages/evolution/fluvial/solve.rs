@@ -68,7 +68,7 @@ pub(super) fn incise(step: &Incision<'_>, start: &Grid<f64>) -> Grid<f64> {
     height
 }
 
-/// One implicit sweep from `start` (`h*`) into `h`, in stack order, with the `deposit` terms if
+/// One implicit sweep from `start` (`h*`) into `h`, in stack order, with the deposition `terms` if
 /// any.
 ///
 /// A cell keeps its height when it is held, has no edge (an outlet or the closed map's sink), or
@@ -79,7 +79,7 @@ pub(super) fn incise(step: &Incision<'_>, start: &Grid<f64>) -> Grid<f64> {
 /// when it ends above it. It happens over a pass link that climbs, inside a routed depression
 /// (whose routing surface stands above the height), and where a receiver's deposit lifts it
 /// above its donor. Without deposition that height is `h*_i`.
-fn sweep(step: &Incision<'_>, start: &[f64], deposit: Option<&Deposit<'_>>, h: &mut [f64]) {
+fn sweep(step: &Incision<'_>, start: &[f64], terms: Option<&Deposit<'_>>, h: &mut [f64]) {
     h.copy_from_slice(start);
     for &cell in step.stack {
         let i = cell_index(cell);
@@ -87,7 +87,7 @@ fn sweep(step: &Incision<'_>, start: &[f64], deposit: Option<&Deposit<'_>>, h: &
         if step.held[i] || edges.is_empty() || step.discharge[i] <= 0.0 {
             continue;
         }
-        let (mut top, mut bottom, base) = match deposit {
+        let (mut top, mut bottom, base) = match terms {
             None => (start[i], 1.0, start[i]),
             Some(d) => {
                 let diagonal = 1.0 + d.own[i];
@@ -173,7 +173,7 @@ pub(super) fn deposit(step: &Incision<'_>, dep: &Deposition<'_>, start: &Grid<f6
             dep.traps,
             &volume,
             &mut arriving,
-            |n, inflow| inflow - dep.traps.kept(n, inflow),
+            |n, reached| reached - dep.traps.kept(n, reached),
         );
         for ((x, &q), &a) in inflow.iter_mut().zip(step.discharge).zip(&arriving) {
             *x = share(q, a);
