@@ -26,6 +26,8 @@ enum Act {
     Fail,
     Cancel,
     Nothing,
+    ReportError,
+    Update,
 }
 
 /// One scripted stage per id; `layer` is the f64 layer it writes (none for `Nothing`).
@@ -34,15 +36,19 @@ struct Script {
     layer: Option<&'static str>,
     act: Act,
     finding: Option<Finding>,
+    check_panics: bool,
+    metrics_panic: bool,
     runs: Arc<AtomicUsize>,
 }
 
-fn script(_id: &'static str, layer: Option<&'static str>, act: Act) -> Script {
+fn script(layer: Option<&'static str>, act: Act) -> Script {
     Script {
         reads: None,
         layer,
         act,
         finding: None,
+        check_panics: false,
+        metrics_panic: false,
         runs: Arc::new(AtomicUsize::new(0)),
     }
 }
@@ -70,9 +76,11 @@ macro_rules! scripted {
                 run_script(&self.0, ctx)
             }
             fn checks(&self, _: &World, _: &Knob, _: &StageReport) -> Vec<Finding> {
+                assert!(!self.0.check_panics, "checks blew up");
                 self.0.finding.clone().into_iter().collect()
             }
             fn metrics(&self, world: &World, _: &Knob, _: &StageReport) -> Metrics {
+                assert!(!self.0.metrics_panic, "metrics blew up");
                 let cells = u32::try_from(world.frame().cells()).unwrap_or(0);
                 Metrics(BTreeMap::from([("cells".to_owned(), f64::from(cells))]))
             }
@@ -92,6 +100,7 @@ scripted!(Bad, "bad");
 scripted!(Warn, "warn");
 scripted!(Nan, "nan");
 scripted!(Count, "count");
+scripted!(Upd, "upd");
 
 fn run_script(s: &Script, ctx: &mut StageContext<'_>) -> Result<StageReport, StageError> {
     s.runs.fetch_add(1, Ordering::SeqCst);
@@ -108,6 +117,18 @@ fn run_script(s: &Script, ctx: &mut StageContext<'_>) -> Result<StageReport, Sta
         Act::Fail => Err(ctx.fail("it broke")),
         Act::Cancel => Err(StageError::Cancelled),
         Act::Nothing => Ok(StageReport::default()),
+        Act::ReportError => Ok(StageReport {
+            findings: vec![Finding::error("found while running")],
+            ..StageReport::default()
+        }),
+        Act::Update => {
+            if let Some(name) = s.layer {
+                let mut grid = ctx.take_f64(name)?;
+                grid.as_mut_slice().iter_mut().for_each(|v| *v += 1.0);
+                ctx.write(name, Layer::F64(grid))?;
+            }
+            Ok(StageReport::default())
+        }
     }
 }
 
@@ -153,11 +174,10 @@ fn go(
 }
 
 fn simple() -> (Registry, Plan) {
-    let mut a = script("first", Some("x"), Act::Write(1.0));
-    a.finding = None;
-    let mut b = script("second", Some("y"), Act::Write(2.0));
+    let a = script(Some("x"), Act::Write(1.0));
+    let mut b = script(Some("y"), Act::Write(2.0));
     b.reads = Some("x");
-    let c = script("third", None, Act::Nothing);
+    let c = script(None, Act::Nothing);
     let reg = registry(vec![
         Box::new(First(a)),
         Box::new(Second(b)),
@@ -211,7 +231,7 @@ fn cancel_between_stages_returns_cancelled() {
 
 #[test]
 fn a_stage_cancelling_itself_is_cancelled() {
-    let reg = registry(vec![Box::new(First(script("first", None, Act::Cancel)))]);
+    let reg = registry(vec![Box::new(First(script(None, Act::Cancel)))]);
     let plan = planned(&reg, 8, &["first"]);
     let (result, _) = go(&plan, &reg, &RunOptions::default(), &CancelToken::new());
     assert!(matches!(result, Err(RunError::Cancelled)));
@@ -219,7 +239,7 @@ fn a_stage_cancelling_itself_is_cancelled() {
 
 #[test]
 fn a_failing_stage_names_itself() {
-    let reg = registry(vec![Box::new(First(script("first", None, Act::Fail)))]);
+    let reg = registry(vec![Box::new(First(script(None, Act::Fail)))]);
     let plan = planned(&reg, 8, &["first"]);
     let (result, _) = go(&plan, &reg, &RunOptions::default(), &CancelToken::new());
     match result {
@@ -233,11 +253,7 @@ fn a_failing_stage_names_itself() {
 
 #[test]
 fn a_stage_that_misses_its_write_is_a_failure() {
-    let reg = registry(vec![Box::new(First(script(
-        "first",
-        Some("x"),
-        Act::Nothing,
-    )))]);
+    let reg = registry(vec![Box::new(First(script(Some("x"), Act::Nothing)))]);
     let plan = planned(&reg, 8, &["first"]);
     let (result, _) = go(&plan, &reg, &RunOptions::default(), &CancelToken::new());
     assert!(matches!(
@@ -251,7 +267,7 @@ fn a_stage_that_misses_its_write_is_a_failure() {
 
 #[test]
 fn a_panicking_stage_fails_the_run_with_its_message() {
-    let reg = registry(vec![Box::new(Boom(script("boom", None, Act::Panic)))]);
+    let reg = registry(vec![Box::new(Boom(script(None, Act::Panic)))]);
     let plan = planned(&reg, 8, &["boom"]);
     let (result, _) = go(&plan, &reg, &RunOptions::default(), &CancelToken::new());
     match result {
@@ -265,7 +281,7 @@ fn a_panicking_stage_fails_the_run_with_its_message() {
 
 #[test]
 fn a_string_panic_payload_is_read_too() {
-    let reg = registry(vec![Box::new(Boom(script("boom", None, Act::PanicString)))]);
+    let reg = registry(vec![Box::new(Boom(script(None, Act::PanicString)))]);
     let plan = planned(&reg, 8, &["boom"]);
     let (result, _) = go(&plan, &reg, &RunOptions::default(), &CancelToken::new());
     assert!(matches!(
@@ -281,7 +297,7 @@ fn an_other_panic_payload_gets_a_fixed_text() {
 
 #[test]
 fn an_error_finding_fails_naming_the_stage() {
-    let mut bad = script("bad", None, Act::Nothing);
+    let mut bad = script(None, Act::Nothing);
     bad.finding = Some(Finding::error("the coast is missing"));
     let reg = registry(vec![Box::new(Bad(bad))]);
     let plan = planned(&reg, 8, &["bad"]);
@@ -297,7 +313,7 @@ fn an_error_finding_fails_naming_the_stage() {
 
 #[test]
 fn warnings_go_into_findings() {
-    let mut warn = script("warn", None, Act::Nothing);
+    let mut warn = script(None, Act::Nothing);
     warn.finding = Some(Finding::warning("a lake is small"));
     let reg = registry(vec![Box::new(Warn(warn))]);
     let plan = planned(&reg, 8, &["warn"]);
@@ -314,11 +330,7 @@ fn warnings_go_into_findings() {
 
 #[test]
 fn a_nan_in_a_written_layer_names_stage_layer_and_cell() {
-    let reg = registry(vec![Box::new(Nan(script(
-        "nan",
-        Some("h"),
-        Act::Write(f64::NAN),
-    )))]);
+    let reg = registry(vec![Box::new(Nan(script(Some("h"), Act::Write(f64::NAN))))]);
     let plan = planned(&reg, 8, &["nan"]);
     let (result, _) = go(&plan, &reg, &RunOptions::default(), &CancelToken::new());
     match result {
@@ -331,7 +343,7 @@ fn a_nan_in_a_written_layer_names_stage_layer_and_cell() {
 
 #[test]
 fn the_memory_budget_refuses_before_any_stage_runs() {
-    let counter = script("count", Some("big"), Act::Write(0.0));
+    let counter = script(Some("big"), Act::Write(0.0));
     let runs = counter.runs.clone();
     let reg = registry(vec![Box::new(Count(counter))]);
     let plan = planned(&reg, 64, &["count"]);
@@ -356,10 +368,10 @@ fn the_memory_budget_refuses_before_any_stage_runs() {
 
 #[test]
 fn estimate_counts_each_layer_once() {
-    let a = script("first", Some("x"), Act::Write(1.0));
-    let mut b = script("second", Some("y"), Act::Write(2.0));
+    let a = script(Some("x"), Act::Write(1.0));
+    let mut b = script(Some("y"), Act::Write(2.0));
     b.reads = Some("x");
-    let c = script("third", Some("x"), Act::Write(3.0));
+    let c = script(Some("x"), Act::Write(3.0));
     let reg = registry(vec![
         Box::new(First(a)),
         Box::new(Second(b)),
@@ -376,8 +388,8 @@ fn estimate_counts_each_layer_once() {
 
 #[test]
 fn the_largest_layers_are_three_by_size_then_name() {
-    let a = script("first", Some("b"), Act::Write(1.0));
-    let mut b = script("second", Some("a"), Act::Write(1.0));
+    let a = script(Some("b"), Act::Write(1.0));
+    let mut b = script(Some("a"), Act::Write(1.0));
     b.reads = Some("b");
     let reg = registry(vec![Box::new(First(a)), Box::new(Second(b))]);
     let plan = planned(&reg, 8, &["first", "second"]);
@@ -387,8 +399,8 @@ fn the_largest_layers_are_three_by_size_then_name() {
 
 #[test]
 fn an_estimate_exactly_at_the_budget_runs() {
-    let a = script("first", Some("x"), Act::Write(1.0));
-    let mut b = script("second", Some("y"), Act::Write(2.0));
+    let a = script(Some("x"), Act::Write(1.0));
+    let mut b = script(Some("y"), Act::Write(2.0));
     b.reads = Some("x");
     let reg = registry(vec![Box::new(First(a)), Box::new(Second(b))]);
     let plan = planned(&reg, 64, &["first", "second"]);
@@ -429,7 +441,7 @@ fn layer_hashes_are_recorded_per_stage_in_pipeline_order() {
 
 #[test]
 fn metrics_reports_and_timings_are_keyed_by_the_stage_key() {
-    let a = script("first", Some("x"), Act::Write(1.0));
+    let a = script(Some("x"), Act::Write(1.0));
     let reg = registry(vec![Box::new(First(a))]);
     let plan = planned(&reg, 8, &["first", "first"]);
     let (result, _) = go(&plan, &reg, &RunOptions::default(), &CancelToken::new());
@@ -464,9 +476,59 @@ fn run_options_are_serde_and_default_to_no_budget() {
 
 #[test]
 fn an_unregistered_stage_fails_cleanly() {
-    let (reg, plan) = simple();
+    let (_, plan) = simple();
     let empty = Registry::empty();
-    let _ = reg;
     let (result, _) = go(&plan, &empty, &RunOptions::default(), &CancelToken::new());
     assert!(matches!(result, Err(RunError::StageFailed { .. })));
+}
+
+#[test]
+fn an_error_in_the_stages_own_report_fails_naming_the_stage() {
+    let reg = registry(vec![Box::new(Bad(script(None, Act::ReportError)))]);
+    let plan = planned(&reg, 8, &["bad"]);
+    let (result, _) = go(&plan, &reg, &RunOptions::default(), &CancelToken::new());
+    match result {
+        Err(RunError::FindingFailed { stage, message }) => {
+            assert_eq!(
+                (stage.as_str(), message.as_str()),
+                ("bad", "found while running")
+            );
+        }
+        other => panic!("{:?}", other.map(|_| ())),
+    }
+}
+
+#[test]
+fn a_panic_in_checks_or_metrics_fails_the_run_naming_the_stage() {
+    for (in_checks, text) in [(true, "checks blew up"), (false, "metrics blew up")] {
+        let mut s = script(None, Act::Nothing);
+        s.check_panics = in_checks;
+        s.metrics_panic = !in_checks;
+        let reg = registry(vec![Box::new(Boom(s))]);
+        let plan = planned(&reg, 8, &["boom"]);
+        let (result, _) = go(&plan, &reg, &RunOptions::default(), &CancelToken::new());
+        match result {
+            Err(RunError::StagePanicked { stage, message }) => {
+                assert_eq!(stage, "boom");
+                assert!(message.contains(text), "{message}");
+            }
+            other => panic!("{:?}", other.map(|_| ())),
+        }
+    }
+}
+
+#[test]
+fn a_layer_updated_in_place_is_hashed_for_the_updating_stage() {
+    let first = script(Some("x"), Act::Write(1.0));
+    let mut upd = script(Some("x"), Act::Update);
+    upd.reads = Some("x");
+    let reg = registry(vec![Box::new(First(first)), Box::new(Upd(upd))]);
+    let plan = planned(&reg, 8, &["first", "upd"]);
+    let (result, _) = go(&plan, &reg, &RunOptions::default(), &CancelToken::new());
+    let run = result.unwrap();
+    let written = &run.golden.stages[0].layers["x"];
+    let updated = &run.golden.stages[1].layers["x"];
+    assert_ne!(written, updated);
+    let cell = run.world.f64("x").map_or(0.0, |g| g.as_slice()[0]);
+    assert!((cell - 2.0).abs() < 1e-12);
 }

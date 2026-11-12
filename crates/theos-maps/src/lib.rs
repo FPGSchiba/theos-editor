@@ -14,7 +14,10 @@ pub mod kernels;
 pub mod progress;
 pub mod recipe;
 pub mod rng;
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 11"))]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "wired into the public `run` by Task 41")
+)]
 pub mod runner;
 pub mod stage;
 pub mod stages;

@@ -199,11 +199,17 @@ fn record(
     out: &mut Execution,
 ) -> Result<(), RunError> {
     let params = planned.params.as_ref();
-    let found = report
-        .findings
-        .iter()
-        .cloned()
-        .chain(stage.checks(world, params, &report));
+    let (checked, metrics) = catch_unwind(AssertUnwindSafe(|| {
+        (
+            stage.checks(world, params, &report),
+            stage.metrics(world, params, &report),
+        )
+    }))
+    .map_err(|payload| RunError::StagePanicked {
+        stage: planned.id.to_owned(),
+        message: panic_message(&*payload),
+    })?;
+    let found = report.findings.iter().cloned().chain(checked);
     for finding in found {
         match finding.severity {
             Severity::Error => {
@@ -218,8 +224,7 @@ fn record(
             }),
         }
     }
-    out.stage_metrics
-        .push((label.to_owned(), stage.metrics(world, params, &report)));
+    out.stage_metrics.push((label.to_owned(), metrics));
     out.golden.stages.push(GoldenStage {
         key: planned.key.clone(),
         layers: hash_writes(world, planned)?,
@@ -228,7 +233,8 @@ fn record(
     Ok(())
 }
 
-/// The SHA-256 of every layer the stage declared as a write and holds.
+/// The SHA-256 of every layer the stage declared as a write. A layer the stage was bound to write
+/// (not optional) and the world does not hold is a contract violation.
 fn hash_writes(
     world: &World,
     planned: &PlannedStage,
@@ -236,7 +242,16 @@ fn hash_writes(
     let mut layers = BTreeMap::new();
     for spec in &planned.writes {
         let Some(layer) = world.get(spec.name) else {
-            continue;
+            if spec.optional {
+                continue;
+            }
+            return Err(RunError::StageFailed {
+                stage: planned.id.to_owned(),
+                source: StageError::NotWritten {
+                    stage: planned.id.to_owned(),
+                    layer: spec.name.to_owned(),
+                },
+            });
         };
         let hash = layer_sha256(layer).map_err(|error| match error {
             LayerBytesError::NonFinite { cell } => RunError::NonFinite {
