@@ -1,13 +1,27 @@
 //! Numeric kernels shared by the generator stages.
 
 pub mod complex;
+pub mod diff;
 pub mod fft;
+pub mod filters;
 pub mod noise;
 pub mod num;
+pub mod reflect;
+pub mod stats;
+
+#[cfg(test)]
+#[expect(
+    clippy::unreadable_literal,
+    reason = "reference values are pasted verbatim from numpy and scipy"
+)]
+mod test_data;
 
 /// Errors of the numeric kernels.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum KernelError {
+    /// A statistic of no values.
+    #[error("no values to summarise")]
+    Empty,
     /// An FFT length that is not a power of two.
     #[error("FFT length {len} is not a power of two")]
     NotPowerOfTwo {
