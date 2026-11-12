@@ -70,8 +70,13 @@ pub enum CommandError {
         /// The rule it breaks.
         reason: &'static str,
     },
-    /// A file changed between the plan and the write.
-    #[error("`{path}` changed on disk while the command ran; try again")]
+    /// Undo or redo found a file of its journal entry changed after the command, or after its
+    /// undo: the file no longer holds the bytes the entry left there, so playing the entry back
+    /// would overwrite that later change.
+    #[error(
+        "`{path}` changed after that command; undoing or redoing it would overwrite the later \
+         change"
+    )]
     Changed {
         /// The file.
         path: String,

@@ -163,9 +163,43 @@ fn an_undo_after_a_later_change_fails_with_changed() -> TestResult {
         matches!(&error, CommandError::Changed { path } if path == TRUTH),
         "{error:?}"
     );
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "`{TRUTH}` changed after that command; undoing or redoing it would overwrite the \
+             later change"
+        )
+    );
     assert_eq!(std::fs::read(&path)?, later);
     assert_eq!(workspace.undo_entries().len(), 1);
     assert_eq!(workspace.redo_entries(), Vec::<EntrySummary>::new());
+    Ok(())
+}
+
+#[test]
+fn a_redo_after_a_later_change_fails_with_changed() -> TestResult {
+    let (project, mut workspace) = open("commands")?;
+    let command = set(&workspace, TRUTH, "title", "Synthetic truth, retitled")?;
+    workspace.run(&command)?;
+    workspace.undo(Scope::Newest)?;
+    let path = project.root().join(TRUTH);
+    let mut later = std::fs::read(&path)?;
+    later.extend_from_slice(b"Synthetic text from another program.\n");
+    std::fs::write(&path, &later)?;
+
+    let error = workspace.redo(Scope::Newest).err().ok_or("redo applied")?;
+    assert!(
+        matches!(&error, CommandError::Changed { path } if path == TRUTH),
+        "{error:?}"
+    );
+    assert!(
+        error
+            .to_string()
+            .ends_with("undoing or redoing it would overwrite the later change"),
+        "{error}"
+    );
+    assert_eq!(std::fs::read(&path)?, later);
+    assert_eq!(workspace.redo_entries().len(), 1);
     Ok(())
 }
 
