@@ -2,7 +2,8 @@
 //!
 //! Starting from the seeds, the lowest queued cell is popped and each unvisited neighbour gets
 //! `max(own height, popped + epsilon)`. Every non-seed cell then has a neighbour at least
-//! `epsilon` lower, so water drains to a seed. Ties pop by cell index.
+//! `epsilon` lower, so water drains to a seed. Ties pop by cell index. [`priority_flood_where`]
+//! is the same flood in place, over the part of a surface its caller lets it enter.
 
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -26,30 +27,47 @@ pub struct Flooded {
 pub fn priority_flood(height: &Grid<f64>, seeds: &[usize], epsilon: f64) -> Flooded {
     let mut surface = height.clone();
     let mut visited = vec![false; height.len()];
+    let order = priority_flood_where(&mut surface, &mut visited, seeds, epsilon, |_, _| true);
+    Flooded { surface, order }
+}
+
+/// [`priority_flood`] in place over part of `surface`: the flood enters an unvisited neighbour
+/// `j` of a cell popped at `level` only when `enter(j, level)` holds, so the caller decides how
+/// far it spreads. Seeds start at their value in `surface`; seeds off the grid or already
+/// visited are ignored. `visited` holds one flag per cell; the flood marks the seeds and every
+/// cell it enters, so floods over disjoint parts can share it. Returns the cells in the order
+/// they were popped.
+pub fn priority_flood_where(
+    surface: &mut Grid<f64>,
+    visited: &mut [bool],
+    seeds: &[usize],
+    epsilon: f64,
+    mut enter: impl FnMut(usize, f64) -> bool,
+) -> Vec<u32> {
     let mut heap: BinaryHeap<Reverse<(OrdF64, usize)>> = BinaryHeap::new();
-    for &s in seeds.iter().filter(|&&s| s < height.len()) {
+    for &s in seeds.iter().filter(|&&s| s < surface.len()) {
         if !visited[s] {
             visited[s] = true;
-            heap.push(Reverse((OrdF64(key(height.as_slice()[s])), s)));
+            heap.push(Reverse((OrdF64(key(surface.as_slice()[s])), s)));
         }
     }
     let mut order = Vec::with_capacity(heap.len());
     while let Some(Reverse((OrdF64(level), i))) = heap.pop() {
         order.push(u32::try_from(i).unwrap_or(u32::MAX));
         for &offset in &D8 {
-            let Some(j) = height.neighbour(i, offset) else {
+            let Some(j) = surface.neighbour(i, offset) else {
                 continue;
             };
-            if visited[j] {
+            if visited[j] || !enter(j, level) {
                 continue;
             }
             visited[j] = true;
-            let raised = max(height.as_slice()[j], level + epsilon);
+            let raised = max(surface.as_slice()[j], level + epsilon);
             surface.as_mut_slice()[j] = raised;
             heap.push(Reverse((OrdF64(key(raised)), j)));
         }
     }
-    Flooded { surface, order }
+    order
 }
 
 #[cfg(test)]
@@ -123,6 +141,43 @@ mod tests {
         let flooded = priority_flood(&height, &[0, 4], 0.5);
         assert!((flooded.surface.get(0, 2) - 5.5).abs() < 1e-12);
         assert_eq!(flooded.order, vec![0, 4, 1, 3, 2]);
+    }
+
+    #[test]
+    fn a_flood_where_enters_only_the_cells_it_is_allowed_to() {
+        // Seeded at cell 0 raised to 4; a cell is entered only when the flood would raise it,
+        // so the wall at cell 4 and the low cell 5 behind it stay out.
+        let height = Grid::from_vec(1, 6, vec![0.0, 2.0, 1.0, 3.0, 9.0, 0.5]).unwrap();
+        let mut surface = height.clone();
+        surface.as_mut_slice()[0] = 4.0;
+        let mut visited = vec![false; 6];
+        let order = priority_flood_where(&mut surface, &mut visited, &[0], 0.5, |j, level| {
+            height.as_slice()[j] < level + 0.5
+        });
+        assert_eq!(order, vec![0, 1, 2, 3]);
+        let lifted: Vec<f64> = surface.as_slice().to_vec();
+        let expected: [f64; 6] = [4.0, 4.5, 5.0, 5.5, 9.0, 0.5];
+        for (got, want) in lifted.iter().zip(expected) {
+            assert_eq!(got.to_bits(), want.to_bits(), "{lifted:?}");
+        }
+        assert_eq!(visited, [true, true, true, true, false, false]);
+        // A second flood shares `visited`: it never enters a cell the first one took.
+        let again = priority_flood_where(&mut surface, &mut visited, &[5, 3], 0.5, |_, _| true);
+        assert_eq!(again, vec![5, 4]);
+        assert_eq!(surface.as_slice()[4].to_bits(), 9.0_f64.to_bits());
+        assert!(visited.iter().all(|&v| v));
+    }
+
+    #[test]
+    fn priority_flood_is_the_flood_where_every_cell_may_be_entered() {
+        let height = random_surface(16, 16, "flood-where");
+        let seeds = edge_cells(16, 16);
+        let flooded = priority_flood(&height, &seeds, 1e-3);
+        let mut surface = height.clone();
+        let mut visited = vec![false; height.len()];
+        let order = priority_flood_where(&mut surface, &mut visited, &seeds, 1e-3, |_, _| true);
+        assert_eq!(order, flooded.order);
+        assert_eq!(surface, flooded.surface);
     }
 
     #[test]

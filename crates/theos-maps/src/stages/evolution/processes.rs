@@ -4,6 +4,8 @@
 use std::collections::BTreeMap;
 
 use super::Evolution;
+use super::resolve_sinks::ResolveSinks;
+use super::route_steepest::RouteSteepest;
 use super::uplift::Uplift;
 use crate::stage::{ParamError, Registry, Stage, StageParams, TypedStage};
 
@@ -11,7 +13,11 @@ use crate::stage::{ParamError, Registry, Stage, StageParams, TypedStage};
 pub(crate) type Constructor = fn() -> Box<dyn Stage>;
 
 /// Every per-step process, one line each. A new process is one module plus one line here.
-pub(crate) const PROCESSES: &[Constructor] = &[|| Box::new(Uplift)];
+pub(crate) const PROCESSES: &[Constructor] = &[
+    || Box::new(Uplift),
+    || Box::new(RouteSteepest),
+    || Box::new(ResolveSinks),
+];
 
 /// One per-step process of a recipe, with its parsed parameters.
 #[derive(Debug)]

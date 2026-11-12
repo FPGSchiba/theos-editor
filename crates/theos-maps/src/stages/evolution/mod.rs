@@ -15,8 +15,11 @@
 //! A new process is one module here plus one line in `PROCESSES` (`processes.rs`).
 
 mod declaration;
+mod flow;
 mod initial;
 mod processes;
+mod resolve_sinks;
+mod route_steepest;
 mod steps;
 #[cfg(test)]
 pub(crate) mod test_support;

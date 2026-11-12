@@ -160,6 +160,13 @@ impl<T: Copy> Grid<T> {
     #[must_use]
     pub fn neighbour(&self, i: usize, d: (isize, isize)) -> Option<usize> {
         let (r, c) = self.cell(i);
+        self.neighbour_at(r, c, d)
+    }
+
+    /// The flat index of the cell at offset `d` from row `r`, column `c`, or `None` off the
+    /// grid: [`Grid::neighbour`] for loops that already know the row and column.
+    #[must_use]
+    pub fn neighbour_at(&self, r: usize, c: usize, d: (isize, isize)) -> Option<usize> {
         let r = r.checked_add_signed(d.0).filter(|&r| r < self.rows)?;
         let c = c.checked_add_signed(d.1).filter(|&c| c < self.cols)?;
         Some(self.index(r, c))
@@ -208,6 +215,9 @@ mod tests {
         assert_eq!(grid.neighbour(0, (-1, 0)), None);
         assert_eq!(grid.neighbour(8, (0, 1)), None);
         assert_eq!(grid.neighbour(0, (1, 1)), Some(4));
+        assert_eq!(grid.neighbour_at(1, 1, (1, -1)), Some(6));
+        assert_eq!(grid.neighbour_at(2, 0, (0, -1)), None);
+        assert_eq!(grid.neighbour_at(2, 2, (1, 0)), None);
     }
 
     #[test]
