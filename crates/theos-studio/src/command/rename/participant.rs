@@ -1,5 +1,6 @@
 //! The participants of a rename (spec §5.8 step 6): each one extends what the rename covers.
-//! A new participant is one module and one line in [`PARTICIPANTS`].
+//! A new participant is one module (its `mod` line in the parent) and one line in
+//! [`PARTICIPANTS`], which names it by its path.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::Metadata;
@@ -8,10 +9,6 @@ use std::path::{Path, PathBuf};
 use theos_content::RecordSummary;
 use theos_content::rename::IdMap;
 
-use super::children::Children;
-use super::ids::Ids;
-use super::links::Links;
-use super::versions::Versions;
 use crate::command::{CommandError, PlanContext};
 
 /// One part of a rename.
@@ -32,7 +29,12 @@ pub(crate) struct RenameSet {
 }
 
 /// The participants, in the order they run: each one sees what the ones before it added.
-pub(crate) const PARTICIPANTS: &[&dyn Participant] = &[&Versions, &Children, &Ids, &Links];
+pub(crate) const PARTICIPANTS: &[&dyn Participant] = &[
+    &super::versions::Versions,
+    &super::children::Children,
+    &super::ids::Ids,
+    &super::links::Links,
+];
 
 /// The one record with the id `id`.
 ///

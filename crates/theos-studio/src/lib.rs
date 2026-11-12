@@ -15,10 +15,7 @@ pub mod introduced;
 pub mod lock;
 pub mod workspace;
 
-pub use command::{
-    Applied, Base, Command, CommandError, Create, Delete, Edit, EntryId, EntrySummary, FileChange,
-    HumanRoute, Outcome, Patch, Plan, PlanContext, Reads, Rename, Route, Scope, Write,
-};
+pub use command::*;
 pub use error::StudioError;
 pub use introduced::{FindingCounts, introduced};
 pub use workspace::{Workspace, find_root};

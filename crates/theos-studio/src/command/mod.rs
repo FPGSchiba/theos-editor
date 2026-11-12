@@ -3,7 +3,7 @@
 //! A [`Command`] builds a [`Plan`]: the files it changes, as the bytes before and after.
 //! [`Workspace::run`](crate::Workspace::run) takes it through the pipeline: the repo lock, the
 //! preview, the verdict, the write, the reindex and the [`Route`]'s finish. A new command is one
-//! module and one `pub use`.
+//! module: its `mod` line and one `pub use` here; the crate root re-exports this module whole.
 
 mod base;
 mod create;
