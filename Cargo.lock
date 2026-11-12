@@ -878,6 +878,11 @@ version = "0.0.0"
 [[package]]
 name = "theos-map-format"
 version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
 
 [[package]]
 name = "theos-maps"
