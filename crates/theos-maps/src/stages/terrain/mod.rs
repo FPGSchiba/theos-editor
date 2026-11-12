@@ -1,6 +1,8 @@
 //! The terrain stages of the outdoor floors, one module per stage.
 
+pub mod geology;
 pub mod grid;
+pub mod rocks;
 pub mod tectonics;
 
 #[cfg(test)]
