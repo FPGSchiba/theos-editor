@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use theos_content::Finding;
 use theos_studio::{CommandError, EntrySummary, Outcome, Rename, Scope, Workspace};
 
-use crate::common::{TempProject, cold_dump, files};
+use crate::common::{TempProject, cold_dump, files, open};
 
 type Error = Box<dyn std::error::Error>;
 type TestResult = Result<(), Error>;
@@ -22,13 +22,6 @@ const CONCEPT: &str = "concepts/synthetic-shrine.md";
 const FLOOR: &str = "world/synthetic-band/f04-synthetic.md";
 const FLOOR_FOLDER: &str = "world/synthetic-band/f04-synthetic";
 const RENAMED_FLOOR_FOLDER: &str = "world/synthetic-band/f04-renamed";
-
-/// A copy of the P06 fixture `name` and a workspace on it.
-fn open(name: &str) -> Result<(TempProject, Workspace), Error> {
-    let project = TempProject::copy_of_studio(name)?;
-    let workspace = Workspace::open(project.root())?;
-    Ok((project, workspace))
-}
 
 fn rename(id: &str, to: &str) -> Rename {
     Rename {

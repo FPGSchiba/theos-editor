@@ -3,14 +3,12 @@
 
 use proptest::prelude::*;
 use proptest::test_runner::TestCaseError;
-use theos_content::yaml::RawValue;
-use theos_content::{PatchOp, Span, TextEdit};
+use theos_content::{Span, TextEdit};
 use theos_studio::{
-    Command, CommandError, Create, Delete, Edit, EntrySummary, Outcome, Patch, Scope, Workspace,
-    Write,
+    Command, CommandError, Create, Delete, Edit, EntrySummary, Outcome, Scope, Workspace, Write,
 };
 
-use crate::common::{TempProject, cold_dump, files};
+use crate::common::{TempProject, cold_dump, files, open, set};
 
 type Error = Box<dyn std::error::Error>;
 type TestResult = Result<(), Error>;
@@ -39,26 +37,6 @@ fn write_line_end_records(project: &TempProject) -> TestResult {
     std::fs::write(project.root().join(CRLF), CRLF_TEXT)?;
     std::fs::write(project.root().join(BARE), BARE_TEXT)?;
     Ok(())
-}
-
-/// A copy of the P06 fixture `name` and a workspace on it.
-fn open(name: &str) -> Result<(TempProject, Workspace), Error> {
-    let project = TempProject::copy_of_studio(name)?;
-    let workspace = Workspace::open(project.root())?;
-    Ok((project, workspace))
-}
-
-/// A patch that sets the field `key` of the record `path` to `value`.
-fn set(workspace: &Workspace, path: &str, key: &str, value: &str) -> Result<Patch, Error> {
-    let (_, base) = workspace.read(path)?.ok_or("the file is missing")?;
-    Ok(Patch {
-        path: path.to_owned(),
-        base,
-        ops: vec![PatchOp::Set {
-            key: key.to_owned(),
-            value: RawValue::Text(value.to_owned()),
-        }],
-    })
 }
 
 /// An edit that appends `text` to the record `path`.

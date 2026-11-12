@@ -1,11 +1,19 @@
-//! Helpers of the studio tests: a temporary content project, its files, and the helper process.
+//! Helpers of the studio tests: a temporary content project, its files, a workspace on it, the
+//! commands most tests build, and the helper process.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus};
 use std::time::{Duration, Instant};
 
+use theos_content::PatchOp;
+use theos_content::yaml::RawValue;
+use theos_studio::{Base, Patch, Workspace};
+
 use crate::helper::HelperTask;
+
+/// The error of a test helper.
+type Error = Box<dyn std::error::Error>;
 
 /// The `theos.toml` of data model §13.
 const THEOS_TOML: &str = "[project]\nname = \"synthetic\"\nkind = \"content\"\nschema_version = 1\n\n[parts]\nenabled = [\"codex\", \"changes\", \"scripts\", \"graph\", \"concepts\", \"maps\", \"review\", \"mcp\"]\n";
@@ -115,8 +123,33 @@ pub fn cold_dump(root: &Path) -> Result<String, Box<dyn std::error::Error>> {
         }
         std::fs::write(target, bytes)?;
     }
-    let cold = theos_studio::Workspace::open(copy.path())?;
+    let cold = Workspace::open(copy.path())?;
     Ok(cold.index().dump()?)
+}
+
+/// A copy of the P06 fixture `name` and a workspace on it.
+pub fn open(name: &str) -> Result<(TempProject, Workspace), Error> {
+    let project = TempProject::copy_of_studio(name)?;
+    let workspace = Workspace::open(project.root())?;
+    Ok((project, workspace))
+}
+
+/// The base of the file `path` as the workspace reads it now.
+pub fn base_of(workspace: &Workspace, path: &str) -> Result<Base, Error> {
+    let (_, base) = workspace.read(path)?.ok_or("the file is missing")?;
+    Ok(base)
+}
+
+/// A patch that sets the field `key` of the record `path` to `value`.
+pub fn set(workspace: &Workspace, path: &str, key: &str, value: &str) -> Result<Patch, Error> {
+    Ok(Patch {
+        path: path.to_owned(),
+        base: base_of(workspace, path)?,
+        ops: vec![PatchOp::Set {
+            key: key.to_owned(),
+            value: RawValue::Text(value.to_owned()),
+        }],
+    })
 }
 
 /// The helper process; it is killed and waited for when this is dropped, so a failing test

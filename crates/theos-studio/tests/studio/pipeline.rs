@@ -4,40 +4,19 @@
 use std::collections::BTreeSet;
 use std::time::Duration;
 
-use theos_content::yaml::RawValue;
-use theos_content::{Finding, PatchOp, Severity};
+use theos_content::{Finding, Severity};
 use theos_studio::lock::{self, COMMAND_WAIT, LockError};
 use theos_studio::{
-    Applied, Base, Command, CommandError, Create, EntryId, EntrySummary, FileChange, Patch, Plan,
+    Applied, Base, Command, CommandError, Create, EntryId, EntrySummary, FileChange, Plan,
     PlanContext, Reads, Route, Workspace, Write,
 };
 
-use crate::common::{TempProject, files};
+use crate::common::{TempProject, cold_dump, files, open, set};
 
 type Error = Box<dyn std::error::Error>;
 type TestResult = Result<(), Error>;
 
 const TRUTH: &str = "lore/truths/T-960.md";
-
-/// A copy of the P06 fixture `name` and a workspace on it.
-fn open(name: &str) -> Result<(TempProject, Workspace), Error> {
-    let project = TempProject::copy_of_studio(name)?;
-    let workspace = Workspace::open(project.root())?;
-    Ok((project, workspace))
-}
-
-/// A patch that sets the field `key` of the record `path` to `value`.
-fn set(workspace: &Workspace, path: &str, key: &str, value: &str) -> Result<Patch, Error> {
-    let (_, base) = workspace.read(path)?.ok_or("the file is missing")?;
-    Ok(Patch {
-        path: path.to_owned(),
-        base,
-        ops: vec![PatchOp::Set {
-            key: key.to_owned(),
-            value: RawValue::Text(value.to_owned()),
-        }],
-    })
-}
 
 /// The (path, rule) of every error in `findings`.
 fn errors(findings: &[Finding]) -> BTreeSet<(String, String)> {
@@ -119,16 +98,7 @@ fn an_applied_command_updates_the_index_and_returns_its_outcome() -> TestResult 
     assert_eq!(workspace.redo_entries(), Vec::<EntrySummary>::new());
 
     // The cache matches the disk: a cold build of a copy dumps the same.
-    let copy = tempfile::tempdir()?;
-    for (path, bytes) in files(project.root())? {
-        let target = copy.path().join(&path);
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(target, bytes)?;
-    }
-    let cold = Workspace::open(copy.path())?;
-    assert_eq!(cold.index().dump()?, workspace.index().dump()?);
+    assert_eq!(cold_dump(project.root())?, workspace.index().dump()?);
     Ok(())
 }
 

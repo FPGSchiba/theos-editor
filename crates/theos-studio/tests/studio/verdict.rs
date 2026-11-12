@@ -1,13 +1,10 @@
 //! CE-20.1, the verdict: a command that introduces an error is rejected and changes nothing;
 //! standing errors and warnings do not block.
 
-use theos_content::yaml::RawValue;
-use theos_content::{Finding, PatchOp, Severity, Span, TextEdit};
-use theos_studio::{
-    Base, Command, CommandError, Create, Edit, EntrySummary, Patch, Workspace, Write,
-};
+use theos_content::{Finding, Severity, Span, TextEdit};
+use theos_studio::{Command, CommandError, Create, Edit, EntrySummary, Workspace, Write};
 
-use crate::common::{TempProject, files};
+use crate::common::{TempProject, base_of, files, open, set};
 
 type Error = Box<dyn std::error::Error>;
 type TestResult = Result<(), Error>;
@@ -22,31 +19,6 @@ const STANDING_TRUTH: &str = "lore/truths/T-980.md";
 const STANDING_CLUE: &str = "lore/clues/C-980.md";
 const CLUELESS_TRUTH: &str = "lore/truths/T-981.md";
 const STANDING_SCRIPT: &str = "story/scripts/S-980.md";
-
-/// A copy of the P06 fixture `name` and a workspace on it.
-fn open(name: &str) -> Result<(TempProject, Workspace), Error> {
-    let project = TempProject::copy_of_studio(name)?;
-    let workspace = Workspace::open(project.root())?;
-    Ok((project, workspace))
-}
-
-/// The base of the file `path` as the workspace reads it now.
-fn base_of(workspace: &Workspace, path: &str) -> Result<Base, Error> {
-    let (_, base) = workspace.read(path)?.ok_or("the file is missing")?;
-    Ok(base)
-}
-
-/// A patch that sets the field `key` of the record `path` to `value`.
-fn set(workspace: &Workspace, path: &str, key: &str, value: &str) -> Result<Patch, Error> {
-    Ok(Patch {
-        path: path.to_owned(),
-        base: base_of(workspace, path)?,
-        ops: vec![PatchOp::Set {
-            key: key.to_owned(),
-            value: RawValue::Text(value.to_owned()),
-        }],
-    })
-}
 
 /// A write of `text` over the settings file.
 fn settings(workspace: &Workspace, text: &str) -> Result<Write, Error> {
