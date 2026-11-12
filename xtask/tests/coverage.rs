@@ -93,6 +93,8 @@ fn the_thresholds_of_the_gate_are_the_decided_ones() -> TestResult {
             ("theos", CrateClass::Binary),
             ("theos-content", CrateClass::Library),
             ("theos-editor", CrateClass::Binary),
+            ("theos-map-format", CrateClass::Library),
+            ("theos-maps", CrateClass::Library),
             ("theos-mcp", CrateClass::Binary),
             ("theos-studio", CrateClass::Library),
             ("theos-vcs", CrateClass::Library),
