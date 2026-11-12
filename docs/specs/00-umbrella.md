@@ -1,17 +1,19 @@
 # Theos content editor — umbrella spec
 
-Status: accepted when this file is merged by Jann · version 5 · 12 Nov 2026 (version 1: 31 Oct 2026;
+Status: accepted when this file is merged by Jann · version 6 · 12 Nov 2026 (version 1: 31 Oct 2026;
 version 2, 5 Nov 2026, adds the world atlas, quests and art from lore: G19, P20–P28, slices S8 and
 S9; version 3, 10 Nov 2026, moves the map generator to Rust in this repo, decision 0003: G1, G4,
 G11, G20, P08 rewritten, P09 (with `theos gen`), P22 and P23 adjusted, P29, P30 and slice S10;
-version 4 takes in the map generation research, decision 0004: CE-76.5; P29 becomes settlements
-and child maps at the state of the art (CE-78 reworded); new P34 Interiors (CE-80) with the room
-graph; P30 becomes the generator half of stacked levels (CE-79.1 reworded) and P45 the Atlas half;
-new P31 Floor frame and places, P32 Recipe families and P33 Map metrics and batch tool (CE-81 to
-CE-83) in a new slice S11; the research track in §5; version 5 splits P05 into P05 CLI and
-hook, P48 MCP read and P49 Releases and the check action, and CE-08R.3 names the run and commit
-that built a release instead of build provenance, which GitHub offers private repositories only
-on GitHub Enterprise Cloud)
+version 4, 12 Nov 2026, takes in the map generation research, decision 0004: CE-76.5; P29
+becomes settlements and child maps at the state of the art (CE-78 reworded); new P34 Interiors
+(CE-80) with the room graph; P30 becomes the generator half of stacked levels (CE-79.1 reworded)
+and P45 the Atlas half; new P31 Floor frame and places, P32 Recipe families and P33 Map metrics
+and batch tool (CE-81 to CE-83) in a new slice S11; the research track in §5; version 5 splits
+P06 into P06 Command layer and repo lock (CE-20, CE-22.2), P46 Git read (CE-21) and P47 Git write
+(CE-22.1, CE-22.3), with no AC reworded; version 6 splits P05 into P05 CLI and hook, P48 MCP
+read and P49 Releases and the check action, and CE-08R.3 names the run and commit that built a
+release instead of build provenance, which GitHub offers private repositories only on GitHub
+Enterprise Cloud)
 Owner of architecture: Jann · Built by: Claude Code with superpowers
 
 This spec defines the whole build as phases. Each phase runs one superpowers cycle:
@@ -91,8 +93,8 @@ Slices say what Jann can do once their phases are merged; Jira tracks slices.
 | P03 | Kinds, index, search, lenses | theos-editor | S2 | P02 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | S2 | P03 |
 | P05 | CLI and hook | theos-editor | S2 | P04 |
-| P06 | Command layer and git | theos-editor | S3 | P04 |
-| P07 | Agent sessions, review, MCP propose | theos-editor | S3 | P05, P06, P48 |
+| P06 | Command layer and repo lock | theos-editor | S3 | P04 |
+| P07 | Agent sessions, review, MCP propose | theos-editor | S3 | P05, P06, P47, P48 |
 | P08 | Map format and terrain generator | theos-editor | S4 | P00 |
 | P09 | Generator layer and generator tools | theos-editor | S4 | P07, P08 |
 | P10 | Prose editor research | theos-editor | S1 | – |
@@ -121,22 +123,25 @@ Slices say what Jann can do once their phases are merged; Jira tracks slices.
 | P33 | Map metrics and batch tool | theos-editor | S11 | P32 |
 | P34 | Interiors | theos-editor | S8 | P08 |
 | P45 | Atlas level switcher | theos-editor | S10 | P25, P30 |
+| P46 | Git read | theos-editor | S3 | P05 |
+| P47 | Git write | theos-editor | S3 | P06, P46 |
 | P48 | MCP read | theos-editor | S2 | P05 |
 | P49 | Releases and the check action | theos-editor | S2 | P05, P48 |
 
-Core track runs in order P00 → P02 → … → P07, with P48 after P05 and before P07; P49 can run
-beside P06 and P07 once P48 is merged. P01, P08 and P10 can run in parallel sessions in their own
-worktrees. UI phases start after P06. P20, P23, P29 and P34 can also run in parallel sessions once
-their dependencies are merged. P28 runs in a session linked to Jann's PC, where ComfyUI runs. The
-map phases of version 4 run P31 → P32 → P33 after P08 and P09 (decision 0004). Phase numbers
-P35–P44 are held by proposals of the map generation research
+Core track runs in order P00 → P02 → … → P07; the git phases P46 (after P05) and P47 (after P06
+and P46) and the MCP read phase P48 (after P05) belong to it and come before P07. P49 can run
+beside P06 and P07 once P48 is merged. P01, P08 and P10 can run in parallel sessions in their
+own worktrees. UI phases start after P06. P20, P23, P29 and P34 can also run in parallel
+sessions once their dependencies are merged. P28 runs in a session linked to Jann's PC, where
+ComfyUI runs. The map phases of version 4 run P31 → P32 → P33 after P08 and P09 (decision
+0004). Phase numbers P35–P44 are held by proposals of the map generation research
 (`research/map-generation/09-proposed-phases.md`) that are not phases yet (§5).
 
 Slices: **S1** write lore now (P01, P10) · **S2** canon checks (P00, P02–P05, P48, P49) · **S3**
-propose and review (P06, P07) · **S4** maps (P08, P09) · **S5** core UI (P11–P13, P19) · **S6**
-complete UI (P14, P15) · **S7** pictures and places (P16–P18) · **S8** the world on the map
-(P20–P25, P29, P34) · **S9** art from lore (P26–P28) · **S10** indoor floors (P30, P45) ·
-**S11** designable floors (P31–P33).
+propose and review (P06, P07, P46, P47) · **S4** maps (P08, P09) · **S5** core UI (P11–P13,
+P19) · **S6** complete UI (P14, P15) · **S7** pictures and places (P16–P18) · **S8** the world
+on the map (P20–P25, P29, P34) · **S9** art from lore (P26–P28) · **S10** indoor floors (P30,
+P45) · **S11** designable floors (P31–P33).
 
 ---
 
@@ -246,33 +251,30 @@ real records are added once the lore import exists.
 
 ### P05 · CLI and hook
 
-Version 5 splits the former P05 (CLI, hook, releases, MCP read) into three phases. P48 builds the
+Version 6 splits the former P05 (CLI, hook, releases, MCP read) into three phases. P48 builds the
 MCP read tools. P49 builds the release pipeline, `--version` and the check action for
 tower-of-theos. Where an earlier phase spec hands work to "P05", the MCP read tools mean P48, and
-releases and `--version` mean P49. P05 also builds what the hook shares with the commit of CE-22.1:
-the git runner and the staged snapshot in `theos-vcs`, and the staged check in `theos-studio`.
-P05's and P06's phase specs agree on these.
+releases and `--version` mean P49. P05 also builds what the hook shares with P47's commit
+(CE-22.1): the git runner and the staged snapshot in `theos-vcs`, and the staged check in
+`theos-studio`. P05's and P06's phase specs agree on these.
 
 **CE-17 CLI and hook**
 - CE-17.1 `theos check | ledger | new | schema | hook install` with `--json` output.
 - CE-17.2 The hook refuses a commit with a never-confirm violation and checks the staged snapshot.
 
-### P06 · Command layer and git
+### P06 · Command layer and repo lock
+
+The first of the three phases that version 5 made of the command layer and git; P46 reads git and
+P47 writes it. The repo lock is built here with its first writer: the commands of this phase write
+under it, and P47's git writes take the same lock (architecture §8).
 
 **CE-20 Command layer**
 - CE-20.1 A blocking finding rejects the command and leaves files untouched.
 - CE-20.2 Undo restores the bytes.
 - CE-20.3 Renaming an id updates every inbound link in one command.
 
-**CE-21 Git read**
-- CE-21.1 A renamed record keeps its history.
-- CE-21.2 Field diff shows old and new per field; prose diff is word-level.
-- CE-21.3 A missing or too-old git gives a clear message.
-
-**CE-22 Git write and repo lock**
-- CE-22.1 Commit is blocked on errors in the staged snapshot and allowed with warnings.
+**CE-22 Git write and repo lock** (CE-22.1 and CE-22.3 in P47)
 - CE-22.2 The repo lock keeps two writers apart across processes.
-- CE-22.3 Push errors show git's message; credentials only through the system helper.
 
 ### P07 · Agent sessions, review, MCP propose
 
@@ -871,6 +873,25 @@ in this phase's spec PR (G18).
 **CE-79 Indoor floors** (continued from P30)
 - CE-79.3 The Atlas shows a map with levels one level at a time, with a level switcher; a pin
   shows on its own level only.
+
+### P46 · Git read
+
+The read side of git in `theos-vcs`, on the git runner that P05 builds for the hook: the git
+version, status, history and diffs.
+
+**CE-21 Git read**
+- CE-21.1 A renamed record keeps its history.
+- CE-21.2 Field diff shows old and new per field; prose diff is word-level.
+- CE-21.3 A missing or too-old git gives a clear message.
+
+### P47 · Git write
+
+Staging, committing and syncing, under P06's repo lock. The commit checks the staged snapshot
+with the same check as P05's hook.
+
+**CE-22 Git write and repo lock** (continued from P06)
+- CE-22.1 Commit is blocked on errors in the staged snapshot and allowed with warnings.
+- CE-22.3 Push errors show git's message; credentials only through the system helper.
 
 ### P48 · MCP read
 

@@ -12,7 +12,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | done | #21 | #28 |
 | P05 | CLI and hook | theos-editor | todo | | |
-| P06 | Command layer and git | theos-editor | todo | | |
+| P06 | Command layer and repo lock | theos-editor | todo | | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map format and terrain generator | theos-editor | spec-approved | #27 | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
@@ -42,26 +42,26 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
 | P34 | Interiors | theos-editor | todo | | |
 | P45 | Atlas level switcher | theos-editor | todo | | |
+| P46 | Git read | theos-editor | todo | | |
+| P47 | Git write | theos-editor | todo | | |
 | P48 | MCP read | theos-editor | todo | | |
 | P49 | Releases and the check action | theos-editor | todo | | |
 
 Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and P23 from version 3
 (decision 0003, #24). Rows P31–P34 and P45, and the new P29 and P30, come from umbrella version 4
-(decision 0004, #31). Rows P48 and P49, and the new P05, come from umbrella version 5 (the P05
-split), which waits for Jann in its docs PR #34.
+(decision 0004, #31). Rows P46 and P47 and the new P06 come from umbrella version 5 (the split of
+P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the split of P05),
+which waits for Jann in its docs PR #34.
 
 ## Needs Jann
 
-- The P05 split (umbrella version 5, `docs/release.md`) waits for Jann in its docs PR #34. Jann
+- The P05 split (umbrella version 6, `docs/release.md`) waits for Jann in its docs PR #34. Jann
   chose it on 12 Nov 2026, and it holds three things:
   - P05 CLI and hook, P48 MCP read and P49 Releases and the check action;
   - CE-08R.3 with the run and commit that built a release instead of build provenance, which
     GitHub offers private repositories only on GitHub Enterprise Cloud;
   - the P49 decisions on the check action and on proof before the first release.
-
-  The gate PR #32, which makes an xtask test check P05 with CE-17.1 instead of CE-08R.1, merges
-  first.
-- For P49 (umbrella version 5):
+- For P49 (umbrella version 6):
   - before its gate PR: Jann creates a GitHub App for release-plz (contents and pull requests
     write), installs it on this repository and stores its id and key as secrets; the tag ruleset
     names it as the only actor that creates `v*` tags;
@@ -118,7 +118,7 @@ split), which waits for Jann in its docs PR #34.
   replaces (Jann confirmed on 10 Nov 2026 that it fixes nothing different).
 - Decision 0004 (map generation research, merged in #31): the readable copies of the umbrella
   spec (version 4) and the generator protocol, and a decision page for 0004.
-- The P05 split, once merged: the readable copies of the umbrella spec (version 5) and of the
+- The P05 split, once merged: the readable copies of the umbrella spec (version 6) and of the
   release pipeline (`docs/release.md`).
 - The `theos_maps` skill in Jann's other Claude account: once P09 is merged, point it at the
   editor's map generator (`theos gen run` in a shell, or `gen_run` over MCP) or retire it; its
