@@ -282,45 +282,54 @@ fn renaming_a_concept_renames_and_moves_its_versions() -> TestResult {
     Ok(())
 }
 
+/// The moves of the floor rename: the floor, and everything under its folder.
+const FLOOR_MOVES: [(&str, &str); 2] = [
+    (FLOOR, "world/synthetic-band/f04-renamed.md"),
+    (
+        "world/synthetic-band/f04-synthetic/",
+        "world/synthetic-band/f04-renamed/",
+    ),
+];
+
+/// A child's `parent` field, before and after the floor rename.
+const FLOOR_PARENT: (&str, &str) = ("\nparent: f04-synthetic\n", "\nparent: f04-renamed\n");
+
+/// The flow list `where` of a clue and the script, before and after the floor rename.
+const FLOOR_WHERE: (&str, &str) = ("\nwhere: [f04-synthetic]\n", "\nwhere: [f04-renamed]\n");
+
+/// The edits of the floor rename in `commands/`: the floor, its hall and every record that links
+/// the floor.
+const FLOOR_EDITS: [(&str, &[(&str, &str)]); 5] = [
+    (
+        "world/synthetic-band/f04-renamed.md",
+        &[("\nid: f04-synthetic\n", "\nid: f04-renamed\n")],
+    ),
+    (
+        "world/synthetic-band/f04-renamed/synthetic-hall.md",
+        &[FLOOR_PARENT],
+    ),
+    (
+        CLUE,
+        &[(
+            "\n  - f04-synthetic  # synthetic comment\n",
+            "\n  - f04-renamed  # synthetic comment\n",
+        )],
+    ),
+    (SECOND_CLUE, &[FLOOR_WHERE]),
+    (
+        SCRIPT,
+        &[
+            FLOOR_WHERE,
+            ("at:: [[f04-synthetic]]", "at:: [[f04-renamed]]"),
+        ],
+    ),
+];
+
 // AC: CE-20.3
 #[test]
 fn renaming_a_floor_moves_its_child_folder() -> TestResult {
     let run = renamed("f04-synthetic", "f04-renamed", &["f04-synthetic"])?;
-    let new = "world/synthetic-band/f04-renamed.md";
-    let hall = "world/synthetic-band/f04-renamed/synthetic-hall.md";
-    let where_list = ("\nwhere: [f04-synthetic]\n", "\nwhere: [f04-renamed]\n");
-    let expected = expected(
-        &run.before,
-        &[
-            (FLOOR, new),
-            (
-                "world/synthetic-band/f04-synthetic/",
-                "world/synthetic-band/f04-renamed/",
-            ),
-        ],
-        &[
-            (new, &[("\nid: f04-synthetic\n", "\nid: f04-renamed\n")]),
-            (
-                hall,
-                &[("\nparent: f04-synthetic\n", "\nparent: f04-renamed\n")],
-            ),
-            (
-                CLUE,
-                &[(
-                    "\n  - f04-synthetic  # synthetic comment\n",
-                    "\n  - f04-renamed  # synthetic comment\n",
-                )],
-            ),
-            (SECOND_CLUE, &[where_list]),
-            (
-                SCRIPT,
-                &[
-                    where_list,
-                    ("at:: [[f04-synthetic]]", "at:: [[f04-renamed]]"),
-                ],
-            ),
-        ],
-    )?;
+    let expected = expected(&run.before, &FLOOR_MOVES, &FLOOR_EDITS)?;
     assert_files(&run.project, &expected)?;
     for moved in [
         "synthetic-hall.md",
@@ -334,6 +343,47 @@ fn renaming_a_floor_moves_its_child_folder() -> TestResult {
         );
     }
     assert!(!run.project.root().join(FLOOR_FOLDER).exists());
+    Ok(())
+}
+
+/// Spec section 7: one rename of a parent whose folder holds 50 files, 46 of them generated child
+/// records that each link the parent. It checks the result only; the plan of P06 records how long
+/// it took (Measurements).
+#[test]
+fn renaming_a_parent_with_fifty_files_in_its_folder() -> TestResult {
+    let project = TempProject::copy_of_studio("commands")?;
+    let rooms: Vec<String> = (1..=46).map(|n| format!("synthetic-room-{n:02}")).collect();
+    for id in &rooms {
+        std::fs::write(
+            project.root().join(FLOOR_FOLDER).join(format!("{id}.md")),
+            format!(
+                "---\n# synthetic fixture (P06), not canon\nid: {id}\nkind: location\n\
+                 title: Synthetic room\nparent: f04-synthetic\n---\nSynthetic text of a room.\n"
+            ),
+        )?;
+    }
+    let mut workspace = Workspace::open(project.root())?;
+    let before = files(project.root())?;
+    let in_folder = before
+        .keys()
+        .filter(|path| path.starts_with(&format!("{FLOOR_FOLDER}/")))
+        .count();
+    assert_eq!(in_folder, 50);
+
+    let outcome = workspace.run(&rename("f04-synthetic", "f04-renamed"))?;
+    assert_clean(&project, &workspace, &outcome, &["f04-synthetic"])?;
+    // The floor and the 50 files move, each a removal and a creation; two clues and the script
+    // are edited in place.
+    assert_eq!(outcome.changed.len(), 2 * 51 + 3);
+    let moved: Vec<String> = rooms
+        .iter()
+        .map(|id| format!("{RENAMED_FLOOR_FOLDER}/{id}.md"))
+        .collect();
+    let mut edits = FLOOR_EDITS.to_vec();
+    let parent: &[(&str, &str)] = &[FLOOR_PARENT];
+    edits.extend(moved.iter().map(|path| (path.as_str(), parent)));
+    assert_files(&project, &expected(&before, &FLOOR_MOVES, &edits)?)?;
+    assert!(!project.root().join(FLOOR_FOLDER).exists());
     Ok(())
 }
 
