@@ -891,6 +891,7 @@ dependencies = [
  "theos-content",
  "thiserror",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

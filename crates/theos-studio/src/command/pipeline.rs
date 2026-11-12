@@ -86,13 +86,15 @@ struct Replayed {
 }
 
 /// Runs `work` through every step on `route`. The repo lock, when the route holds it, is released
-/// on every way out.
+/// on every way out. Every log line of the run is in the span `command`, which names the work by
+/// its label.
 pub(crate) fn run(
     workspace: &mut Workspace,
     work: Work<'_>,
     route: &mut dyn Route,
 ) -> Result<Outcome, CommandError> {
     let label = work.label();
+    let _span = tracing::info_span!("command", %label).entered();
     let held = Held::take(workspace, &label, route.holds_lock())?;
     steps(held.workspace, work, label, route)
 }

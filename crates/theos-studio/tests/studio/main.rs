@@ -3,6 +3,7 @@
 mod common;
 mod helper;
 mod lock;
+mod log;
 mod pipeline;
 mod rename;
 mod undo;
