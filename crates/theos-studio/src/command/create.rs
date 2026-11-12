@@ -46,7 +46,7 @@ impl Command for Create {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::test_support::{Fixture, TRUTH, TestResult};
+    use crate::test_support::{Fixture, TRUTH, TestResult};
 
     fn create(path: &str, text: &str) -> Create {
         Create {

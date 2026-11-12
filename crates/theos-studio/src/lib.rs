@@ -13,6 +13,8 @@ mod command;
 pub mod error;
 pub mod introduced;
 pub mod lock;
+#[cfg(test)]
+mod test_support;
 pub mod workspace;
 
 pub use command::*;

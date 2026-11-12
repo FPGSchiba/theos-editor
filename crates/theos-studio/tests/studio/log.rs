@@ -8,11 +8,7 @@ use tracing::Level;
 
 use theos_studio::{Applied, CommandError, EntryId, Route, Workspace};
 
-use crate::common::{open, set};
-
-type TestResult = Result<(), Box<dyn std::error::Error>>;
-
-const TRUTH: &str = "lore/truths/T-960.md";
+use crate::common::{Error, TRUTH, TestResult, open, set};
 
 /// A log writer that keeps what it is given.
 #[derive(Clone, Default)]
@@ -20,7 +16,7 @@ struct Captured(Arc<Mutex<Vec<u8>>>);
 
 impl Captured {
     /// What the log has written so far.
-    fn text(&self) -> Result<String, Box<dyn std::error::Error>> {
+    fn text(&self) -> Result<String, Error> {
         let bytes = self.0.lock().map_err(|_| "the log buffer is poisoned")?;
         Ok(String::from_utf8(bytes.clone())?)
     }
@@ -43,10 +39,7 @@ impl io::Write for Captured {
 
 /// Runs `f` under a subscriber that lets the lines up to `level` through; what `f` returned and
 /// the log it wrote.
-fn logged<T>(
-    level: Level,
-    f: impl FnOnce() -> T,
-) -> Result<(T, String), Box<dyn std::error::Error>> {
+fn logged<T>(level: Level, f: impl FnOnce() -> T) -> Result<(T, String), Error> {
     let captured = Captured::default();
     let writer = captured.clone();
     let subscriber = tracing_subscriber::fmt()

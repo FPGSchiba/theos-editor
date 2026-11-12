@@ -4,8 +4,9 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use theos_content::{Record, Span, TextEdit};
-use theos_studio::{CommandError, Edit, Workspace, lock};
+use theos_studio::{CommandError, Workspace, lock};
+
+use crate::common::{TestResult, append};
 
 /// What the helper process does.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -48,12 +49,7 @@ pub const WRITER_WAIT: Duration = Duration::from_secs(120);
 const STALE_TRIES: usize = 1_000;
 
 /// Appends the lines `<tag> 1` to `<tag> <count>` to the record `path`, one edit each.
-pub fn append_lines(
-    workspace: &mut Workspace,
-    path: &str,
-    tag: &str,
-    count: usize,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn append_lines(workspace: &mut Workspace, path: &str, tag: &str, count: usize) -> TestResult {
     for n in 1..=count {
         append_line(workspace, path, &format!("{tag} {n}\n"))?;
     }
@@ -62,23 +58,9 @@ pub fn append_lines(
 
 /// Appends `line` to the record `path` as one edit; a stale base is read again and retried, up to
 /// `STALE_TRIES` times.
-fn append_line(
-    workspace: &mut Workspace,
-    path: &str,
-    line: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn append_line(workspace: &mut Workspace, path: &str, line: &str) -> TestResult {
     for _ in 0..STALE_TRIES {
-        let (bytes, base) = workspace.read(path)?.ok_or("the record is missing")?;
-        let record = Record::parse(&String::from_utf8(bytes)?)?;
-        let end = record.text().len();
-        let edit = Edit {
-            path: path.to_owned(),
-            base,
-            edits: vec![TextEdit {
-                span: Span { start: end, end },
-                replacement: line.to_owned(),
-            }],
-        };
+        let edit = append(workspace, path, line)?;
         match workspace.run(&edit) {
             Ok(_) => return Ok(()),
             Err(CommandError::Stale { .. }) => {}
@@ -90,7 +72,7 @@ fn append_line(
 
 /// Runs the task of `THEOS_STUDIO_HELPER`; returns at once when it is unset.
 #[test]
-fn helper() -> Result<(), Box<dyn std::error::Error>> {
+fn helper() -> TestResult {
     let Ok(task) = std::env::var("THEOS_STUDIO_HELPER") else {
         return Ok(());
     };

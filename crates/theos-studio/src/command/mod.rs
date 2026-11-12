@@ -21,8 +21,6 @@ mod rename;
 mod route;
 mod run;
 pub(crate) mod state;
-#[cfg(test)]
-mod test_support;
 mod undo;
 mod verdict;
 mod write;
@@ -221,5 +219,45 @@ impl Plan {
             .iter()
             .map(|change| change.path.clone())
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{Fixture, TRUTH, TRUTH_PATH, TestResult};
+
+    /// Every command that takes a base plans on the bytes its caller saw: a file whose bytes
+    /// differ from the base is stale.
+    #[test]
+    fn a_base_that_differs_is_stale() -> TestResult {
+        let fixture = Fixture::new(&[(TRUTH_PATH, TRUTH.as_bytes())])?;
+        let truth = TRUTH_PATH.to_owned();
+        let base = Base::of(b"other");
+        let write = Write {
+            path: truth.clone(),
+            base: base.clone(),
+            text: TRUTH.to_owned(),
+        };
+        let edit = Edit {
+            path: truth.clone(),
+            base: base.clone(),
+            edits: Vec::new(),
+        };
+        let patch = Patch {
+            path: truth.clone(),
+            base: base.clone(),
+            ops: Vec::new(),
+        };
+        let delete = Delete { path: truth, base };
+        for command in [&write as &dyn Command, &edit, &patch, &delete] {
+            let result = command.plan(&fixture.ctx());
+            assert!(
+                matches!(&result, Err(CommandError::Stale { path }) if path == TRUTH_PATH),
+                "{}: {result:?}",
+                command.label()
+            );
+        }
+        Ok(())
     }
 }

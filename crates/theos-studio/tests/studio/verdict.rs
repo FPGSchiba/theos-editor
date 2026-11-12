@@ -1,24 +1,19 @@
 //! CE-20.1, the verdict: a command that introduces an error is rejected and changes nothing;
 //! standing errors and warnings do not block.
 
-use theos_content::{Finding, Severity, Span, TextEdit};
-use theos_studio::{Command, CommandError, Create, Edit, EntrySummary, Workspace, Write};
+use theos_content::{Finding, Severity};
+use theos_studio::{Command, CommandError, Create, Workspace, Write};
 
-use crate::common::{TempProject, base_of, files, open, set};
+use crate::common::{
+    CLUE, Error, SCRIPT, SECOND_CLUE, STANDING_SCRIPT, TRUTH, TempProject, TestResult, append,
+    base_of, holds, open, refused, set,
+};
 
-type Error = Box<dyn std::error::Error>;
-type TestResult = Result<(), Error>;
-
-const TRUTH: &str = "lore/truths/T-960.md";
-const CLUE: &str = "lore/clues/C-960.md";
-const SECOND_CLUE: &str = "lore/clues/C-961.md";
-const SCRIPT: &str = "story/scripts/S-960.md";
 const SETTINGS: &str = ".theos/settings.toml";
 
 const STANDING_TRUTH: &str = "lore/truths/T-980.md";
 const STANDING_CLUE: &str = "lore/clues/C-980.md";
 const CLUELESS_TRUTH: &str = "lore/truths/T-981.md";
-const STANDING_SCRIPT: &str = "story/scripts/S-980.md";
 
 /// A write of `text` over the settings file.
 fn settings(workspace: &Workspace, text: &str) -> Result<Write, Error> {
@@ -29,28 +24,17 @@ fn settings(workspace: &Workspace, text: &str) -> Result<Write, Error> {
     })
 }
 
-/// Runs `command`, which must be rejected, and checks that it changed nothing: every file keeps
-/// its bytes, the index its dump, and the journal stays empty. Returns the blocking findings.
+/// Runs `command`, which must be rejected, and checks that it changed nothing, as [`refused`]
+/// does. Returns the blocking findings.
 fn rejected(
     project: &TempProject,
     workspace: &mut Workspace,
     command: &dyn Command,
 ) -> Result<Vec<Finding>, Error> {
-    let files_before = files(project.root())?;
-    let dump_before = workspace.index().dump()?;
-    let result = workspace.run(command);
-    let Err(CommandError::Rejected { blocking, .. }) = result else {
-        return Err(format!("expected Rejected, got {result:?}").into());
-    };
-    assert_eq!(files(project.root())?, files_before);
-    assert_eq!(workspace.index().dump()?, dump_before);
-    assert_eq!(workspace.undo_entries(), Vec::<EntrySummary>::new());
-    Ok(blocking)
-}
-
-/// Whether `findings` hold one of `rule` on `path`.
-fn holds(findings: &[Finding], path: &str, rule: &str) -> bool {
-    findings.iter().any(|f| f.path == path && f.rule == rule)
+    match refused(project, workspace, command)? {
+        CommandError::Rejected { blocking, .. } => Ok(blocking),
+        other => Err(format!("expected Rejected, got {other:?}").into()),
+    }
 }
 
 /// Whether `findings` hold one of `rule` on `path` with `severity`.
@@ -83,16 +67,11 @@ fn an_invalid_value_is_rejected() -> TestResult {
 #[test]
 fn a_dangling_link_is_rejected() -> TestResult {
     let (project, mut workspace) = open("commands")?;
-    let (bytes, base) = workspace.read(SCRIPT)?.ok_or("no script")?;
-    let end = bytes.len();
-    let command = Edit {
-        path: SCRIPT.to_owned(),
-        base,
-        edits: vec![TextEdit {
-            span: Span { start: end, end },
-            replacement: "\nSynthetic text with [[synthetic-nowhere]].\n".to_owned(),
-        }],
-    };
+    let command = append(
+        &workspace,
+        SCRIPT,
+        "\nSynthetic text with [[synthetic-nowhere]].\n",
+    )?;
     let blocking = rejected(&project, &mut workspace, &command)?;
     assert!(holds(&blocking, SCRIPT, "link/dangling"), "{blocking:#?}");
     Ok(())

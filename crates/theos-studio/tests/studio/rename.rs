@@ -1,23 +1,16 @@
 //! CE-20.3, rename: one command renames an id, its file, its child folder, a concept's versions
 //! and every link the index knows to them. CE-20.2: undoing it puts every path back.
 
-use std::collections::BTreeMap;
-
 use theos_content::Finding;
-use theos_studio::{CommandError, EntrySummary, Outcome, Rename, Scope, Workspace};
+use theos_studio::{CommandError, Outcome, Rename, Scope, Workspace};
 
-use crate::common::{TempProject, cold_dump, files, open};
+use crate::common::{
+    CLUE, Error, Files, SCRIPT, SECOND_CLUE, TRUTH, TempProject, TestResult, cold_dump, files,
+    holds, open, refused,
+};
 
-type Error = Box<dyn std::error::Error>;
-type TestResult = Result<(), Error>;
-type Files = BTreeMap<String, Vec<u8>>;
-
-const TRUTH: &str = "lore/truths/T-960.md";
-const CLUE: &str = "lore/clues/C-960.md";
-const SECOND_CLUE: &str = "lore/clues/C-961.md";
 const BELIEF: &str = "lore/beliefs/B-960.md";
 const NPC: &str = "people/synthetic-folk/synthetic-singer.md";
-const SCRIPT: &str = "story/scripts/S-960.md";
 const CONCEPT: &str = "concepts/synthetic-shrine.md";
 const FLOOR: &str = "world/synthetic-band/f04-synthetic.md";
 const FLOOR_FOLDER: &str = "world/synthetic-band/f04-synthetic";
@@ -126,19 +119,6 @@ fn assert_files(project: &TempProject, expected: &Files) -> TestResult {
         assert_eq!(found, bytes, "{path}");
     }
     Ok(())
-}
-
-/// Runs `rename`, which must fail, and checks that it changed no file and added no entry.
-fn refused(
-    project: &TempProject,
-    workspace: &mut Workspace,
-    rename: &Rename,
-) -> Result<CommandError, Error> {
-    let before = files(project.root())?;
-    let error = workspace.run(rename).err().ok_or("the rename applied")?;
-    assert_eq!(files(project.root())?, before);
-    assert_eq!(workspace.undo_entries(), Vec::<EntrySummary>::new());
-    Ok(error)
 }
 
 // AC: CE-20.3
@@ -570,9 +550,7 @@ fn an_id_that_breaks_the_kind_rule_is_rejected() -> TestResult {
         return Err(format!("expected Rejected, got {error:?}").into());
     };
     assert!(
-        blocking
-            .iter()
-            .any(|f| f.rule == "schema/id" && f.path == "lore/truths/x960.md"),
+        holds(blocking, "lore/truths/x960.md", "schema/id"),
         "{blocking:#?}"
     );
     Ok(())
@@ -613,10 +591,7 @@ fn a_rename_keeps_a_standing_error_of_the_moved_record() -> TestResult {
     let outcome = workspace.run(&rename("T-980", "T-990"))?;
     let new = "lore/truths/T-990.md";
     assert!(
-        outcome
-            .findings
-            .iter()
-            .any(|f| f.path == new && f.rule == "lore/three-clue"),
+        holds(&outcome.findings, new, "lore/three-clue"),
         "{:#?}",
         outcome.findings
     );

@@ -10,17 +10,14 @@ use std::time::Duration;
 use theos_content::Record;
 use theos_studio::Workspace;
 
-use crate::common::{TempProject, spawn_helper};
+use crate::common::{Error, SCRIPT, TempProject, TestResult, files, spawn_helper};
 use crate::helper::{HelperTask, WRITER_WAIT, append_lines};
 
-type Error = Box<dyn std::error::Error>;
-
-const SCRIPT: &str = "story/scripts/S-960.md";
 const LINES: usize = 20;
 
 // AC: CE-22.2
 #[test]
-fn two_processes_append_without_losing_a_line() -> Result<(), Error> {
+fn two_processes_append_without_losing_a_line() -> TestResult {
     let project = TempProject::copy_of_studio("commands")?;
     let original = std::fs::read_to_string(project.root().join(SCRIPT))?;
     let ready = project.root().join("helper.ready");
@@ -52,8 +49,7 @@ fn two_processes_append_without_losing_a_line() -> Result<(), Error> {
             assert_eq!(count, 1, "the line {line:?} is in the record {count} times");
         }
     }
-    let mut leftovers = Vec::new();
-    find_tmp(project.root(), &mut leftovers)?;
+    let leftovers = temp_files(project.root())?;
     assert!(
         leftovers.is_empty(),
         "temporary files are left: {leftovers:?}"
@@ -151,23 +147,13 @@ fn whole(original: &str, text: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Collects every `.theos-*.tmp` file under `dir`.
-fn find_tmp(dir: &Path, found: &mut Vec<PathBuf>) -> std::io::Result<()> {
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if entry.file_type()?.is_dir() {
-            find_tmp(&path, found)?;
-        } else {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if name.starts_with(".theos-")
-                && path
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("tmp"))
-            {
-                found.push(path);
-            }
-        }
-    }
-    Ok(())
+/// The writer's temporary files (`.theos-*.tmp`) left in the project at `root`.
+fn temp_files(root: &Path) -> std::io::Result<Vec<String>> {
+    Ok(files(root)?
+        .into_keys()
+        .filter(|path| {
+            let name = path.rsplit('/').next().unwrap_or(path);
+            name.starts_with(".theos-") && name.to_ascii_lowercase().ends_with(".tmp")
+        })
+        .collect())
 }

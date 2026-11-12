@@ -90,7 +90,7 @@ pub(crate) fn on_disk(root: &Path, path: &str) -> Result<Option<Metadata>, Comma
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::test_support::TestResult;
+    use crate::test_support::TestResult;
 
     #[test]
     fn folder_and_join_work_at_the_root_and_below() {

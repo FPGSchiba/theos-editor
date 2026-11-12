@@ -63,9 +63,7 @@ mod tests {
     use theos_content::yaml::RawValue;
 
     use super::*;
-    use crate::command::test_support::{Fixture, TRUTH, TestResult};
-
-    const PATH: &str = "lore/truths/T-960.md";
+    use crate::test_support::{Fixture, TRUTH, TRUTH_PATH, TestResult};
 
     fn set(key: &str, value: &str) -> PatchOp {
         PatchOp::Set {
@@ -76,30 +74,15 @@ mod tests {
 
     fn patch(text: &str, ops: Vec<PatchOp>) -> Patch {
         Patch {
-            path: PATH.to_owned(),
+            path: TRUTH_PATH.to_owned(),
             base: Base::of(text.as_bytes()),
             ops,
         }
     }
 
     #[test]
-    fn a_base_that_differs_is_stale() -> TestResult {
-        let fixture = Fixture::new(&[(PATH, TRUTH.as_bytes())])?;
-        let command = Patch {
-            path: PATH.to_owned(),
-            base: Base::of(b"other"),
-            ops: Vec::new(),
-        };
-        assert!(matches!(
-            command.plan(&fixture.ctx()),
-            Err(CommandError::Stale { .. })
-        ));
-        Ok(())
-    }
-
-    #[test]
     fn patch_keeps_the_kind_order() -> TestResult {
-        let fixture = Fixture::new(&[(PATH, TRUTH.as_bytes())])?;
+        let fixture = Fixture::new(&[(TRUTH_PATH, TRUTH.as_bytes())])?;
         let plan = patch(TRUTH, vec![set("status", "draft")]).plan(&fixture.ctx())?;
         let after = String::from_utf8(plan.changes[0].after.clone().ok_or("deleted")?)?;
         // The kind puts `status` after `title` and before `target`.
@@ -111,7 +94,7 @@ mod tests {
     #[test]
     fn a_patch_that_changes_nothing_is_an_empty_plan() -> TestResult {
         for text in [TRUTH.to_owned(), TRUTH.replace('\n', "\r\n")] {
-            let fixture = Fixture::new(&[(PATH, text.as_bytes())])?;
+            let fixture = Fixture::new(&[(TRUTH_PATH, text.as_bytes())])?;
             for ops in [Vec::new(), vec![set("title", "Old")]] {
                 let plan = patch(&text, ops).plan(&fixture.ctx())?;
                 assert_eq!(plan, Plan::default(), "{text:?}");
@@ -123,7 +106,7 @@ mod tests {
     #[test]
     fn patch_of_an_unknown_kind_keeps_the_order_of_its_fields() -> TestResult {
         let text = "---\nid: W-1\nkind: widget\ntitle: Old\n---\nBody\n";
-        let fixture = Fixture::new(&[(PATH, text.as_bytes())])?;
+        let fixture = Fixture::new(&[(TRUTH_PATH, text.as_bytes())])?;
         let plan = patch(text, vec![set("title", "New")]).plan(&fixture.ctx())?;
         assert_eq!(
             plan.changes[0].after.as_deref(),

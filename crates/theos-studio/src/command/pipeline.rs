@@ -395,7 +395,7 @@ mod tests {
 
     use super::*;
     use crate::command::HumanRoute;
-    use crate::command::test_support::{Fixture, TRUTH, TestResult};
+    use crate::test_support::{self, Fixture, ReadOnly, TRUTH, TRUTH_PATH, TestResult, change};
 
     #[test]
     fn reentry_is_refused() -> TestResult {
@@ -429,17 +429,10 @@ mod tests {
         Ok(())
     }
 
-    fn replay(before: &[u8], after: &[u8]) -> Work<'static> {
+    fn replay(before: &str, after: &str) -> Work<'static> {
         Work::Replay {
             label: "undo: synthetic".to_owned(),
-            plan: Plan {
-                changes: vec![FileChange {
-                    path: "notes.txt".to_owned(),
-                    before: Some(before.to_vec()),
-                    after: Some(after.to_vec()),
-                }],
-                ..Plan::default()
-            },
+            plan: test_support::plan(vec![change("notes.txt", Some(before), Some(after))]),
             allowance: FindingCounts::default(),
             entry: EntryId(7),
         }
@@ -450,7 +443,7 @@ mod tests {
         let mut fixture = Fixture::new(&[("notes.txt", b"later\n")])?;
         let result = run(
             fixture.workspace_mut(),
-            replay(b"one\n", b"two\n"),
+            replay("one\n", "two\n"),
             &mut HumanRoute,
         );
         assert!(
@@ -463,7 +456,7 @@ mod tests {
 
     #[test]
     fn a_failed_reindex_after_the_write_keeps_the_entry() -> TestResult {
-        let path = "lore/truths/T-960.md";
+        let path = TRUTH_PATH;
         let mut fixture = Fixture::new(&[(path, TRUTH.as_bytes())])?;
         let root = fixture.root().to_path_buf();
         let after = TRUTH.replace("title: Old", "title: New");
@@ -501,6 +494,51 @@ mod tests {
         Ok(())
     }
 
+    /// Ruling R9, through the pipeline on every OS: a command that would replace or remove a
+    /// read-only file is refused with `ReadOnly`, and the files, the index cache and the journal
+    /// stay as they were.
+    #[test]
+    fn a_read_only_target_is_refused() -> TestResult {
+        // Nothing links the second truth, so deleting it would be applied.
+        let other = "lore/truths/T-961.md";
+        let other_text = TRUTH.replace("T-960", "T-961");
+        let mut fixture = Fixture::new(&[
+            (TRUTH_PATH, TRUTH.as_bytes()),
+            (other, other_text.as_bytes()),
+        ])?;
+        let write = crate::Write {
+            path: TRUTH_PATH.to_owned(),
+            base: crate::Base::of(TRUTH.as_bytes()),
+            text: TRUTH.replace("title: Old", "title: New"),
+        };
+        let delete = crate::Delete {
+            path: other.to_owned(),
+            base: crate::Base::of(other_text.as_bytes()),
+        };
+        let dump = fixture.workspace().index().dump()?;
+        let _truth = ReadOnly::set(fixture.root().join(TRUTH_PATH))?;
+        let _other = ReadOnly::set(fixture.root().join(other))?;
+        for (command, target) in [(&write as &dyn Command, TRUTH_PATH), (&delete, other)] {
+            let result = fixture.workspace_mut().run(command);
+            assert!(
+                matches!(&result, Err(CommandError::ReadOnly { path }) if path == target),
+                "{}: {result:?}",
+                command.label()
+            );
+            assert_eq!(
+                std::fs::read(fixture.root().join(TRUTH_PATH))?,
+                TRUTH.as_bytes()
+            );
+            assert_eq!(
+                std::fs::read(fixture.root().join(other))?,
+                other_text.as_bytes()
+            );
+            assert_eq!(fixture.workspace().index().dump()?, dump);
+            assert_eq!(fixture.workspace().undo_entries(), []);
+        }
+        Ok(())
+    }
+
     /// Ruling R15: no command reaches the repo lock or the shared index, which the command holds
     /// and the reindex writes.
     #[test]
@@ -532,7 +570,7 @@ mod tests {
             );
             assert!(cache.join("lock").is_file());
         }
-        assert_eq!(fixture.workspace_mut().undo_entries(), []);
+        assert_eq!(fixture.workspace().undo_entries(), []);
         Ok(())
     }
 
@@ -541,13 +579,13 @@ mod tests {
         let mut fixture = Fixture::new(&[("notes.txt", b"one\n")])?;
         let outcome = run(
             fixture.workspace_mut(),
-            replay(b"one\n", b"two\n"),
+            replay("one\n", "two\n"),
             &mut HumanRoute,
         )?;
         assert_eq!(outcome.entry, Some(EntryId(7)));
         assert_eq!(outcome.changed, ["notes.txt"]);
         assert_eq!(
-            fixture.workspace_mut().undo_entries(),
+            fixture.workspace().undo_entries(),
             Vec::<crate::EntrySummary>::new()
         );
         assert_eq!(std::fs::read(fixture.root().join("notes.txt"))?, b"two\n");

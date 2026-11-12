@@ -39,26 +39,7 @@ pub(crate) fn judge(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn finding(path: &str, rule: &str, severity: Severity, message: &str) -> Finding {
-        Finding {
-            rule: rule.to_owned(),
-            severity,
-            path: path.to_owned(),
-            id: None,
-            span: None,
-            position: None,
-            message: message.to_owned(),
-        }
-    }
-
-    fn error(path: &str, rule: &str) -> Finding {
-        finding(path, rule, Severity::Error, "an error")
-    }
-
-    fn warning(path: &str, rule: &str, message: &str) -> Finding {
-        finding(path, rule, Severity::Warning, message)
-    }
+    use crate::test_support::{error, warning};
 
     const DANGLING: &str = "link/dangling";
     const THREE: &str = "lore/three-clue";
@@ -66,8 +47,11 @@ mod tests {
     // AC: CE-20.1
     #[test]
     fn a_new_error_blocks_and_a_standing_one_does_not() {
-        let before = [error("a.md", DANGLING)];
-        let after = [error("a.md", DANGLING), error("b.md", DANGLING)];
+        let before = [error("a.md", DANGLING, "an error")];
+        let after = [
+            error("a.md", DANGLING, "an error"),
+            error("b.md", DANGLING, "an error"),
+        ];
         let verdict = judge(&before, &BTreeMap::new(), None, &after);
         assert_eq!(verdict.blocking, [after[1].clone()]);
         assert_eq!(verdict.introduced, Vec::<Finding>::new());
@@ -89,16 +73,19 @@ mod tests {
     // AC: CE-20.1
     #[test]
     fn a_moved_file_keeps_its_findings_under_its_new_path() {
-        let before = [error("old.md", DANGLING)];
+        let before = [error("old.md", DANGLING, "an error")];
         let moved = BTreeMap::from([("old.md".to_owned(), "new.md".to_owned())]);
-        let after = [error("new.md", DANGLING)];
+        let after = [error("new.md", DANGLING, "an error")];
         assert_eq!(judge(&before, &moved, None, &after), Verdict::default());
     }
 
     #[test]
     fn an_allowance_lets_the_restored_errors_back() {
-        let allowance = FindingCounts::of(&[error("a.md", DANGLING)], &BTreeMap::new());
-        let after = [error("a.md", DANGLING), error("b.md", DANGLING)];
+        let allowance = FindingCounts::of(&[error("a.md", DANGLING, "an error")], &BTreeMap::new());
+        let after = [
+            error("a.md", DANGLING, "an error"),
+            error("b.md", DANGLING, "an error"),
+        ];
         let verdict = judge(&[], &BTreeMap::new(), Some(&allowance), &after);
         assert_eq!(verdict.blocking, [after[1].clone()]);
     }

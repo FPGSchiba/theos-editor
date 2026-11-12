@@ -5,19 +5,15 @@ use proptest::prelude::*;
 use proptest::test_runner::TestCaseError;
 use theos_content::{Span, TextEdit};
 use theos_studio::{
-    Command, CommandError, Create, Delete, Edit, EntrySummary, Outcome, Scope, Workspace, Write,
+    Command, CommandError, Delete, Edit, EntrySummary, Outcome, Scope, Workspace, Write,
 };
 
-use crate::common::{TempProject, cold_dump, files, open, set};
+use crate::common::{
+    Error, OTHER_TRUTH, SCRIPT, STANDING_SCRIPT, TRUTH, TempProject, TestResult, append, base_of,
+    cold_dump, files, holds, new_truth, open, set,
+};
 
-type Error = Box<dyn std::error::Error>;
-type TestResult = Result<(), Error>;
-
-const TRUTH: &str = "lore/truths/T-960.md";
-const OTHER_TRUTH: &str = "lore/truths/T-961.md";
-const SCRIPT: &str = "story/scripts/S-960.md";
 const NEW_TRUTH: &str = "lore/truths/T-962.md";
-const STANDING_SCRIPT: &str = "story/scripts/S-980.md";
 const CRLF: &str = "lore/beliefs/B-970.md";
 const BARE: &str = "lore/beliefs/B-971.md";
 
@@ -39,20 +35,6 @@ fn write_line_end_records(project: &TempProject) -> TestResult {
     Ok(())
 }
 
-/// An edit that appends `text` to the record `path`.
-fn append(workspace: &Workspace, path: &str, text: &str) -> Result<Edit, Error> {
-    let (bytes, base) = workspace.read(path)?.ok_or("the file is missing")?;
-    let end = String::from_utf8(bytes)?.replace("\r\n", "\n").len();
-    Ok(Edit {
-        path: path.to_owned(),
-        base,
-        edits: vec![TextEdit {
-            span: Span { start: end, end },
-            replacement: text.to_owned(),
-        }],
-    })
-}
-
 /// A write that replaces the record `path` by its text and one more line.
 fn rewrite(workspace: &Workspace, path: &str) -> Result<Write, Error> {
     let (bytes, base) = workspace.read(path)?.ok_or("the file is missing")?;
@@ -65,24 +47,12 @@ fn rewrite(workspace: &Workspace, path: &str) -> Result<Write, Error> {
     })
 }
 
+/// A delete of the file `path`.
 fn delete(workspace: &Workspace, path: &str) -> Result<Delete, Error> {
-    let (_, base) = workspace.read(path)?.ok_or("the file is missing")?;
     Ok(Delete {
         path: path.to_owned(),
-        base,
+        base: base_of(workspace, path)?,
     })
-}
-
-/// A truth without clues, as `Create` takes it.
-fn new_truth(id: &str) -> Create {
-    Create {
-        path: format!("lore/truths/{id}.md"),
-        text: format!(
-            "---\n# synthetic fixture (P06), not canon\nid: {id}\nkind: truth\n\
-             title: Synthetic truth without clues\nstatus: draft\ntarget: hinted\n---\n\
-             Synthetic statement.\n"
-        ),
-    }
 }
 
 /// Runs `command`, undoes it, and checks the files and the index are as before.
@@ -333,10 +303,7 @@ fn undoing_a_fix_brings_the_error_back() -> TestResult {
     let restored = std::fs::read_to_string(project.root().join(STANDING_SCRIPT))?;
     assert_eq!(restored, text);
     assert!(
-        outcome
-            .findings
-            .iter()
-            .any(|f| f.path == STANDING_SCRIPT && f.rule == "link/dangling"),
+        holds(&outcome.findings, STANDING_SCRIPT, "link/dangling"),
         "{:#?}",
         outcome.findings
     );
@@ -348,16 +315,11 @@ fn undoing_a_fix_brings_the_error_back() -> TestResult {
 fn undoing_a_linked_create_is_rejected() -> TestResult {
     let (project, mut workspace) = open("commands")?;
     workspace.run(&new_truth("T-962"))?;
-    let (bytes, base) = workspace.read(SCRIPT)?.ok_or("no script")?;
-    let end = bytes.len();
-    let link = Edit {
-        path: SCRIPT.to_owned(),
-        base,
-        edits: vec![TextEdit {
-            span: Span { start: end, end },
-            replacement: "\nSynthetic text that names [[T-962]].\n".to_owned(),
-        }],
-    };
+    let link = append(
+        &workspace,
+        SCRIPT,
+        "\nSynthetic text that names [[T-962]].\n",
+    )?;
     workspace.run(&link)?;
     let before = files(project.root())?;
 

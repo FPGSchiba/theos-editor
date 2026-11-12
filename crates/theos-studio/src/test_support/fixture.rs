@@ -1,15 +1,17 @@
-//! A project in a temporary folder with a workspace over it, for the unit tests of the commands.
+//! A project in a temporary folder with a workspace over it.
+
+use std::path::Path;
 
 use tempfile::TempDir;
 
-use super::PlanContext;
-use crate::Workspace;
-
-pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
+use crate::{PlanContext, Workspace};
 
 /// A synthetic truth record (LF).
 pub(crate) const TRUTH: &str =
     "---\nid: T-960\nkind: truth\ntitle: Old\ntarget: confirmed\n---\nBody\n";
+
+/// The path of [`TRUTH`] in a project.
+pub(crate) const TRUTH_PATH: &str = "lore/truths/T-960.md";
 
 /// A temporary project with the given files and its workspace.
 pub(crate) struct Fixture {
@@ -45,13 +47,18 @@ impl Fixture {
         )
     }
 
+    /// The workspace.
+    pub(crate) fn workspace(&self) -> &Workspace {
+        &self.workspace
+    }
+
     /// The workspace, for running the pipeline.
     pub(crate) fn workspace_mut(&mut self) -> &mut Workspace {
         &mut self.workspace
     }
 
     /// The project folder.
-    pub(crate) fn root(&self) -> &std::path::Path {
+    pub(crate) fn root(&self) -> &Path {
         self.dir.path()
     }
 }

@@ -34,24 +34,14 @@ impl Command for Write {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::test_support::{Fixture, TRUTH, TestResult};
-
-    const PATH: &str = "lore/truths/T-960.md";
+    use crate::test_support::{Fixture, TRUTH, TRUTH_PATH, TestResult};
 
     fn write(base: Base, text: &str) -> Write {
         Write {
-            path: PATH.to_owned(),
+            path: TRUTH_PATH.to_owned(),
             base,
             text: text.to_owned(),
         }
-    }
-
-    #[test]
-    fn a_base_that_differs_is_stale() -> TestResult {
-        let fixture = Fixture::new(&[(PATH, TRUTH.as_bytes())])?;
-        let result = write(Base::of(b"other"), TRUTH).plan(&fixture.ctx());
-        assert!(matches!(result, Err(CommandError::Stale { path }) if path == PATH));
-        Ok(())
     }
 
     #[test]
@@ -64,7 +54,7 @@ mod tests {
 
     #[test]
     fn write_turns_line_ends_into_lf() -> TestResult {
-        let fixture = Fixture::new(&[(PATH, TRUTH.as_bytes())])?;
+        let fixture = Fixture::new(&[(TRUTH_PATH, TRUTH.as_bytes())])?;
         let plan = write(Base::of(TRUTH.as_bytes()), "a\r\nb\r\n").plan(&fixture.ctx())?;
         assert_eq!(plan.changes.len(), 1);
         assert_eq!(plan.changes[0].before.as_deref(), Some(TRUTH.as_bytes()));
@@ -76,7 +66,7 @@ mod tests {
     #[test]
     fn an_unchanged_save_of_a_crlf_record_is_an_empty_plan() -> TestResult {
         let crlf = TRUTH.replace('\n', "\r\n");
-        let fixture = Fixture::new(&[(PATH, crlf.as_bytes())])?;
+        let fixture = Fixture::new(&[(TRUTH_PATH, crlf.as_bytes())])?;
         let plan = write(Base::of(crlf.as_bytes()), TRUTH).plan(&fixture.ctx())?;
         assert!(plan.is_empty());
         let plan = write(Base::of(crlf.as_bytes()), &crlf).plan(&fixture.ctx())?;

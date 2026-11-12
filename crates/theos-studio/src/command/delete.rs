@@ -37,42 +37,26 @@ impl Command for Delete {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::test_support::{Fixture, TRUTH, TestResult};
-
-    const PATH: &str = "lore/truths/T-960.md";
-
-    #[test]
-    fn a_base_that_differs_is_stale() -> TestResult {
-        let fixture = Fixture::new(&[(PATH, TRUTH.as_bytes())])?;
-        let command = Delete {
-            path: PATH.to_owned(),
-            base: Base::of(b"other"),
-        };
-        assert!(matches!(
-            command.plan(&fixture.ctx()),
-            Err(CommandError::Stale { .. })
-        ));
-        Ok(())
-    }
+    use crate::test_support::{Fixture, TRUTH, TRUTH_PATH, TestResult};
 
     #[test]
     fn delete_plans_a_removal() -> TestResult {
-        let fixture = Fixture::new(&[(PATH, TRUTH.as_bytes())])?;
+        let fixture = Fixture::new(&[(TRUTH_PATH, TRUTH.as_bytes())])?;
         let command = Delete {
-            path: PATH.to_owned(),
+            path: TRUTH_PATH.to_owned(),
             base: Base::of(TRUTH.as_bytes()),
         };
         let plan = command.plan(&fixture.ctx())?;
         assert_eq!(
             plan.changes,
             vec![FileChange {
-                path: PATH.to_owned(),
+                path: TRUTH_PATH.to_owned(),
                 before: Some(TRUTH.as_bytes().to_vec()),
                 after: None,
             }]
         );
-        assert_eq!(plan.paths(), vec![PATH.to_owned()]);
-        assert!(fixture.root().join(PATH).exists());
+        assert_eq!(plan.paths(), vec![TRUTH_PATH.to_owned()]);
+        assert!(fixture.root().join(TRUTH_PATH).exists());
         Ok(())
     }
 }

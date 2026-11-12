@@ -150,27 +150,17 @@ mod tests {
     use std::cell::Cell;
 
     use super::*;
-
-    type TestResult = Result<(), Box<dyn std::error::Error>>;
-
-    fn project() -> Result<(tempfile::TempDir, Project, KindRegistry), Box<dyn std::error::Error>> {
-        let dir = tempfile::tempdir()?;
-        std::fs::write(
-            dir.path().join("theos.toml"),
-            "[project]\nname = \"synthetic\"\nkind = \"content\"\nschema_version = 1\n",
-        )?;
-        let project = Project::open(dir.path())?;
-        Ok((dir, project, parts::builtin()?))
-    }
+    use crate::test_support::{Fixture, TestResult};
 
     #[test]
     fn a_contended_cache_falls_back_to_memory() -> TestResult {
-        let (_dir, project, registry) = project()?;
+        let fixture = Fixture::new(&[])?;
+        let workspace = fixture.workspace();
         let (_index, in_memory) = fallback(
             Err(IndexError::Contended {
                 path: PathBuf::from("index.sqlite"),
             }),
-            || Index::in_memory(&project, &registry),
+            || Index::in_memory(workspace.project(), workspace.registry()),
         )?;
         assert!(in_memory);
         Ok(())
@@ -196,8 +186,9 @@ mod tests {
 
     #[test]
     fn an_opened_index_is_kept() -> TestResult {
-        let (_dir, project, registry) = project()?;
-        let index = Index::in_memory(&project, &registry)?;
+        let fixture = Fixture::new(&[])?;
+        let workspace = fixture.workspace();
+        let index = Index::in_memory(workspace.project(), workspace.registry())?;
         let (_index, in_memory) = fallback(Ok(index), || {
             Err(IndexError::Contended {
                 path: PathBuf::new(),
@@ -209,8 +200,8 @@ mod tests {
 
     #[test]
     fn a_contended_write_runs_again_in_memory() -> TestResult {
-        let (dir, _project, _registry) = project()?;
-        let mut workspace = Workspace::open(dir.path())?;
+        let mut fixture = Fixture::new(&[])?;
+        let workspace = fixture.workspace_mut();
         assert!(!workspace.is_in_memory());
         let mut calls = 0;
         let value = workspace.write(|_| {

@@ -75,7 +75,7 @@ fn relocate(path: &str, folders: &BTreeMap<String, String>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::test_support::TestResult;
+    use crate::test_support::TestResult;
 
     #[test]
     fn relocate_renames_every_renamed_folder_of_a_path() {

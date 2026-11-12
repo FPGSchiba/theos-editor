@@ -56,32 +56,15 @@ mod tests {
     use theos_content::Span;
 
     use super::*;
-    use crate::command::test_support::{Fixture, TRUTH, TestResult};
-
-    const PATH: &str = "lore/truths/T-960.md";
-
-    #[test]
-    fn a_base_that_differs_is_stale() -> TestResult {
-        let fixture = Fixture::new(&[(PATH, TRUTH.as_bytes())])?;
-        let command = Edit {
-            path: PATH.to_owned(),
-            base: Base::of(b"other"),
-            edits: Vec::new(),
-        };
-        assert!(matches!(
-            command.plan(&fixture.ctx()),
-            Err(CommandError::Stale { .. })
-        ));
-        Ok(())
-    }
+    use crate::test_support::{Fixture, TRUTH, TRUTH_PATH, TestResult};
 
     #[test]
     fn edit_applies_span_edits() -> TestResult {
         let crlf = TRUTH.replace('\n', "\r\n");
-        let fixture = Fixture::new(&[(PATH, crlf.as_bytes())])?;
+        let fixture = Fixture::new(&[(TRUTH_PATH, crlf.as_bytes())])?;
         let start = TRUTH.find("Old").ok_or("no Old")?;
         let command = Edit {
-            path: PATH.to_owned(),
+            path: TRUTH_PATH.to_owned(),
             base: Base::of(crlf.as_bytes()),
             edits: vec![TextEdit {
                 span: Span {
@@ -103,7 +86,7 @@ mod tests {
     #[test]
     fn an_edit_that_changes_nothing_is_an_empty_plan() -> TestResult {
         for text in [TRUTH.to_owned(), TRUTH.replace('\n', "\r\n")] {
-            let fixture = Fixture::new(&[(PATH, text.as_bytes())])?;
+            let fixture = Fixture::new(&[(TRUTH_PATH, text.as_bytes())])?;
             let start = TRUTH.find("Old").ok_or("no Old")?;
             for edits in [
                 Vec::new(),
@@ -116,7 +99,7 @@ mod tests {
                 }],
             ] {
                 let command = Edit {
-                    path: PATH.to_owned(),
+                    path: TRUTH_PATH.to_owned(),
                     base: Base::of(text.as_bytes()),
                     edits,
                 };
@@ -149,9 +132,9 @@ mod tests {
 
     #[test]
     fn edit_names_a_failing_edit() -> TestResult {
-        let fixture = Fixture::new(&[(PATH, TRUTH.as_bytes())])?;
+        let fixture = Fixture::new(&[(TRUTH_PATH, TRUTH.as_bytes())])?;
         let command = Edit {
-            path: PATH.to_owned(),
+            path: TRUTH_PATH.to_owned(),
             base: Base::of(TRUTH.as_bytes()),
             edits: vec![TextEdit {
                 span: Span {

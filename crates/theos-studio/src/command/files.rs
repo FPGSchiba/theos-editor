@@ -324,40 +324,9 @@ mod tests {
     use super::*;
     use crate::command::FileChange;
     use crate::command::failing_ops::{Fail, FailingOps, Op};
-    use crate::command::test_support::TestResult;
+    use crate::test_support::{ReadOnly, TestResult, change, entries, plan};
 
-    fn change(path: &str, before: Option<&str>, after: Option<&str>) -> FileChange {
-        FileChange {
-            path: path.to_owned(),
-            before: before.map(|s| s.as_bytes().to_vec()),
-            after: after.map(|s| s.as_bytes().to_vec()),
-        }
-    }
-
-    fn plan(changes: Vec<FileChange>) -> Plan {
-        Plan {
-            changes,
-            ..Plan::default()
-        }
-    }
-
-    /// Every file and folder under `dir`: its path and whether it is a folder.
-    fn entries(dir: &Path) -> Vec<(PathBuf, bool)> {
-        let mut found = Vec::new();
-        let mut stack = vec![dir.to_path_buf()];
-        while let Some(folder) = stack.pop() {
-            for entry in fs::read_dir(&folder).into_iter().flatten().flatten() {
-                let path = entry.path();
-                let is_folder = path.is_dir();
-                if is_folder {
-                    stack.push(path.clone());
-                }
-                found.push((path, is_folder));
-            }
-        }
-        found
-    }
-
+    /// The temporary files of the writer left under `dir`, joined.
     fn temp_files(dir: &Path) -> String {
         let temp: Vec<String> = entries(dir)
             .into_iter()
@@ -454,13 +423,10 @@ mod tests {
         fs::create_dir_all(dir.path().join("old/inner"))?;
         fs::create_dir_all(dir.path().join("unrelated"))?;
         fs::write(dir.path().join("old/inner/x.md"), "x")?;
-        let moved = Plan {
-            changes: vec![
-                change("old/inner/x.md", Some("x"), None),
-                change("new/x.md", None, Some("x")),
-            ],
-            ..Plan::default()
-        };
+        let moved = plan(vec![
+            change("old/inner/x.md", Some("x"), None),
+            change("new/x.md", None, Some("x")),
+        ]);
         write_plan(dir.path(), &moved)?;
         assert_eq!(fs::read_to_string(dir.path().join("new/x.md"))?, "x");
         assert!(!dir.path().join("old").exists());
@@ -580,28 +546,6 @@ mod tests {
         );
         assert_eq!(temp_files(dir.path()), "");
         Ok(())
-    }
-
-    /// Makes a file read-only until it is dropped, then gives it back its permissions.
-    struct ReadOnly {
-        path: std::path::PathBuf,
-        permissions: fs::Permissions,
-    }
-
-    impl ReadOnly {
-        fn set(path: std::path::PathBuf) -> io::Result<ReadOnly> {
-            let permissions = fs::metadata(&path)?.permissions();
-            let mut read_only = permissions.clone();
-            read_only.set_readonly(true);
-            fs::set_permissions(&path, read_only)?;
-            Ok(ReadOnly { path, permissions })
-        }
-    }
-
-    impl Drop for ReadOnly {
-        fn drop(&mut self) {
-            let _ = fs::set_permissions(&self.path, self.permissions.clone());
-        }
     }
 
     /// Ruling R9, on every OS: a read-only file that a plan would replace or remove is refused

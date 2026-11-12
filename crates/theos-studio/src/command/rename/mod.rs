@@ -175,9 +175,7 @@ mod tests {
     use super::*;
     use crate::command::failing_ops::{Fail, FailingOps, Op};
     use crate::command::files::write_plan_with;
-    use crate::command::test_support::{Fixture, TRUTH, TestResult};
-
-    const PATH: &str = "lore/truths/T-960.md";
+    use crate::test_support::{Fixture, TRUTH, TRUTH_PATH, TestResult};
 
     fn rename(id: &str, to: &str) -> Rename {
         Rename {
@@ -189,14 +187,14 @@ mod tests {
     // AC: CE-20.3
     #[test]
     fn a_rename_plans_a_removal_a_creation_and_the_move() -> TestResult {
-        let fixture = Fixture::new(&[(PATH, TRUTH.as_bytes())])?;
+        let fixture = Fixture::new(&[(TRUTH_PATH, TRUTH.as_bytes())])?;
         let plan = rename("T-960", "T-970").plan(&fixture.ctx())?;
         let new = "lore/truths/T-970.md";
         assert_eq!(
             plan.changes,
             [
                 FileChange {
-                    path: PATH.to_owned(),
+                    path: TRUTH_PATH.to_owned(),
                     before: Some(TRUTH.as_bytes().to_vec()),
                     after: None,
                 },
@@ -209,7 +207,7 @@ mod tests {
         );
         assert_eq!(
             plan.moved,
-            BTreeMap::from([(PATH.to_owned(), new.to_owned())])
+            BTreeMap::from([(TRUTH_PATH.to_owned(), new.to_owned())])
         );
         Ok(())
     }
@@ -219,7 +217,7 @@ mod tests {
     fn a_new_child_folder_on_disk_takes_the_id() -> TestResult {
         // The folder holds no record, so only the disk knows it.
         let fixture = Fixture::new(&[
-            (PATH, TRUTH.as_bytes()),
+            (TRUTH_PATH, TRUTH.as_bytes()),
             ("lore/truths/T-976/notes.txt", b"synthetic notes\n"),
         ])?;
         let result = rename("T-960", "T-976").plan(&fixture.ctx());
@@ -234,7 +232,7 @@ mod tests {
     #[test]
     fn a_rename_whose_write_failed_plans_again() -> TestResult {
         let fixture = Fixture::new(&[
-            (PATH, TRUTH.as_bytes()),
+            (TRUTH_PATH, TRUTH.as_bytes()),
             ("lore/truths/T-960/notes.txt", b"synthetic notes\n"),
         ])?;
         let command = rename("T-960", "T-970");
@@ -255,7 +253,7 @@ mod tests {
 
     #[test]
     fn a_rename_to_the_same_id_changes_nothing() -> TestResult {
-        let fixture = Fixture::new(&[(PATH, TRUTH.as_bytes())])?;
+        let fixture = Fixture::new(&[(TRUTH_PATH, TRUTH.as_bytes())])?;
         assert_eq!(
             rename("T-960", "T-960").plan(&fixture.ctx())?,
             Plan::default()
@@ -265,7 +263,7 @@ mod tests {
 
     #[test]
     fn a_new_id_that_is_not_a_file_name_is_refused() -> TestResult {
-        let fixture = Fixture::new(&[(PATH, TRUTH.as_bytes())])?;
+        let fixture = Fixture::new(&[(TRUTH_PATH, TRUTH.as_bytes())])?;
         for to in ["sub/T-970", "sub\\T-970", "", "../T-970", "T-970."] {
             let result = rename("T-960", to).plan(&fixture.ctx());
             assert!(
@@ -279,9 +277,9 @@ mod tests {
     #[test]
     fn a_record_with_nothing_to_rename_keeps_its_bytes() -> TestResult {
         let crlf = TRUTH.replace('\n', "\r\n");
-        let fixture = Fixture::new(&[(PATH, crlf.as_bytes())])?;
+        let fixture = Fixture::new(&[(TRUTH_PATH, crlf.as_bytes())])?;
         let ids = IdMap::from([("T-999".to_owned(), "T-998".to_owned())]);
-        let bytes = renamed(&fixture.ctx(), PATH, crlf.as_bytes(), &ids)?;
+        let bytes = renamed(&fixture.ctx(), TRUTH_PATH, crlf.as_bytes(), &ids)?;
         assert_eq!(bytes, crlf.as_bytes());
         Ok(())
     }

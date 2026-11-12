@@ -101,26 +101,7 @@ pub(crate) fn surplus(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn finding(path: &str, rule: &str, severity: Severity, message: &str) -> Finding {
-        Finding {
-            rule: rule.to_owned(),
-            severity,
-            path: path.to_owned(),
-            id: None,
-            span: None,
-            position: None,
-            message: message.to_owned(),
-        }
-    }
-
-    fn error(path: &str, rule: &str, message: &str) -> Finding {
-        finding(path, rule, Severity::Error, message)
-    }
-
-    fn none() -> FindingCounts {
-        FindingCounts::of(&[], &BTreeMap::new())
-    }
+    use crate::test_support::{error, warning};
 
     const RULE: &str = "clue/moves-truth";
 
@@ -128,7 +109,7 @@ mod tests {
     #[test]
     fn a_new_error_of_a_rule_on_a_path_is_introduced() {
         let after = [error("a.md", RULE, "No clue moves T-981")];
-        assert_eq!(introduced(&none(), &after), after);
+        assert_eq!(introduced(&FindingCounts::default(), &after), after);
     }
 
     // AC: CE-20.1
@@ -143,12 +124,7 @@ mod tests {
     // AC: CE-20.1
     #[test]
     fn a_raised_severity_is_not_introduced() {
-        let before = [finding(
-            "a.md",
-            RULE,
-            Severity::Warning,
-            "No clue moves T-981",
-        )];
+        let before = [warning("a.md", RULE, "No clue moves T-981")];
         let allowed = FindingCounts::of(&before, &BTreeMap::new());
         let after = [error("a.md", RULE, "No clue moves T-981")];
         assert_eq!(introduced(&allowed, &after), Vec::<Finding>::new());
@@ -157,13 +133,11 @@ mod tests {
     // AC: CE-20.1
     #[test]
     fn warnings_are_never_introduced() {
-        let after = [finding(
-            "a.md",
-            RULE,
-            Severity::Warning,
-            "No clue moves T-981",
-        )];
-        assert_eq!(introduced(&none(), &after), Vec::<Finding>::new());
+        let after = [warning("a.md", RULE, "No clue moves T-981")];
+        assert_eq!(
+            introduced(&FindingCounts::default(), &after),
+            Vec::<Finding>::new()
+        );
     }
 
     // AC: CE-20.1

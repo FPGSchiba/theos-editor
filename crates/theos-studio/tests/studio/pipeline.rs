@@ -7,16 +7,14 @@ use std::time::Duration;
 use theos_content::{Finding, Severity};
 use theos_studio::lock::{self, COMMAND_WAIT, LockError};
 use theos_studio::{
-    Applied, Base, Command, CommandError, Create, Delete, Edit, EntryId, EntrySummary, FileChange,
-    Plan, PlanContext, Reads, Route, Workspace, Write,
+    Applied, Base, Command, CommandError, Edit, EntryId, EntrySummary, FileChange, Plan,
+    PlanContext, Reads, Route, Workspace, Write,
 };
 
-use crate::common::{TempProject, base_of, cold_dump, files, open, set};
-
-type Error = Box<dyn std::error::Error>;
-type TestResult = Result<(), Error>;
-
-const TRUTH: &str = "lore/truths/T-960.md";
+use crate::common::{
+    Error, TRUTH, TempProject, TestResult, base_of, cold_dump, holds, new_truth, open, put,
+    refused, set,
+};
 
 /// The (path, rule) of every error in `findings`.
 fn errors(findings: &[Finding]) -> BTreeSet<(String, String)> {
@@ -77,10 +75,7 @@ fn an_applied_command_updates_the_index_and_returns_its_outcome() -> TestResult 
     );
     // The truth's standing three-clue warning comes back, and nothing is new.
     assert!(
-        outcome
-            .findings
-            .iter()
-            .any(|f| f.path == TRUTH && f.rule == "lore/three-clue"),
+        holds(&outcome.findings, TRUTH, "lore/three-clue"),
         "{:#?}",
         outcome.findings
     );
@@ -106,14 +101,7 @@ fn an_applied_command_updates_the_index_and_returns_its_outcome() -> TestResult 
 fn a_new_warning_is_applied_and_introduced() -> TestResult {
     let (_project, mut workspace) = open("commands")?;
     let path = "lore/truths/T-962.md";
-    let command = Create {
-        path: path.to_owned(),
-        text: "---\n# synthetic fixture (P06), not canon\nid: T-962\nkind: truth\n\
-               title: Synthetic truth without clues\nstatus: draft\ntarget: hinted\n---\n\
-               Synthetic statement.\n"
-            .to_owned(),
-    };
-    let outcome = workspace.run(&command)?;
+    let outcome = workspace.run(&new_truth("T-962"))?;
     assert_eq!(outcome.changed, [path]);
     let introduced: Vec<(&str, &str, Severity)> = outcome
         .introduced
@@ -193,9 +181,7 @@ const SYNTHETIC_TRUTH: &str = "---\n# synthetic fixture (P06), not canon\nid: T-
 /// A project that holds only the truth `TRUTH` with `bytes`, and a workspace on it.
 fn lone_truth(bytes: &str) -> Result<(TempProject, Workspace), Error> {
     let project = TempProject::new()?;
-    let full = project.root().join(TRUTH);
-    std::fs::create_dir_all(full.parent().ok_or("no parent")?)?;
-    std::fs::write(&full, bytes)?;
+    put(project.root(), TRUTH, bytes.as_bytes())?;
     let workspace = Workspace::open(project.root())?;
     Ok((project, workspace))
 }
@@ -252,72 +238,17 @@ fn a_patch_or_an_edit_that_changes_nothing_writes_nothing() -> TestResult {
     Ok(())
 }
 
-/// Makes a file read-only until it is dropped, then gives it back its permissions.
-struct ReadOnly {
-    path: std::path::PathBuf,
-    permissions: std::fs::Permissions,
-}
-
-impl ReadOnly {
-    fn set(path: std::path::PathBuf) -> std::io::Result<ReadOnly> {
-        let permissions = std::fs::metadata(&path)?.permissions();
-        let mut read_only = permissions.clone();
-        read_only.set_readonly(true);
-        std::fs::set_permissions(&path, read_only)?;
-        Ok(ReadOnly { path, permissions })
-    }
-}
-
-impl Drop for ReadOnly {
-    fn drop(&mut self) {
-        let _ = std::fs::set_permissions(&self.path, self.permissions.clone());
-    }
-}
-
-/// Review focus: a read-only target file. Ruling R9, on every OS: a command that would replace or
-/// remove it is refused at once with `ReadOnly`, and nothing is written.
-#[test]
-fn a_read_only_target_is_refused() -> TestResult {
-    // No other record links the second truth, so deleting it would be applied.
-    let unlinked = "lore/truths/T-961.md";
-    let (project, mut workspace) = open("commands")?;
-    let patch = set(&workspace, TRUTH, "title", "Synthetic truth, retitled")?;
-    let delete = Delete {
-        path: unlinked.to_owned(),
-        base: base_of(&workspace, unlinked)?,
-    };
-    let before = files(project.root())?;
-    let dump = workspace.index().dump()?;
-    let _read_only = ReadOnly::set(project.root().join(TRUTH))?;
-    let _unlinked_read_only = ReadOnly::set(project.root().join(unlinked))?;
-    for (command, target) in [(&patch as &dyn Command, TRUTH), (&delete, unlinked)] {
-        let result = workspace.run(command);
-        assert!(
-            matches!(&result, Err(CommandError::ReadOnly { path }) if path == target),
-            "{}: {result:?}",
-            command.label()
-        );
-        assert_eq!(files(project.root())?, before);
-        assert_eq!(workspace.index().dump()?, dump);
-        assert_eq!(workspace.undo_entries(), Vec::<EntrySummary>::new());
-    }
-    Ok(())
-}
-
 #[test]
 fn a_held_lock_makes_the_command_busy() -> TestResult {
     let (project, mut workspace) = open("commands")?;
     let command = set(&workspace, TRUTH, "title", "Synthetic truth, retitled")?;
-    let before = files(project.root())?;
     let _held = lock::acquire(project.root(), "synthetic holder", COMMAND_WAIT)?;
     workspace.set_lock_wait(Duration::from_millis(200));
-    let result = workspace.run(&command);
+    let error = refused(&project, &mut workspace, &command)?;
     assert!(
-        matches!(result, Err(CommandError::Lock(LockError::Busy { .. }))),
-        "{result:?}"
+        matches!(error, CommandError::Lock(LockError::Busy { .. })),
+        "{error:?}"
     );
-    assert_eq!(files(project.root())?, before);
-    assert_eq!(workspace.undo_entries(), Vec::<EntrySummary>::new());
     Ok(())
 }
 
