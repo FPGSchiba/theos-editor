@@ -1,0 +1,121 @@
+[
+ {
+  "recipe": "p6-city-size-4km",
+  "seed": 1,
+  "settlement": "Thornstead",
+  "cls": "city",
+  "window_m": 4000,
+  "cell_m": 5.0,
+  "regional_roads_entering": 5,
+  "buildings": 4765,
+  "houses": 4757,
+  "population_est": 23785,
+  "street_km": {
+   "main": 4.12,
+   "street": 9.88,
+   "lane": 48.48
+  },
+  "landmarks": [
+   "archive",
+   "granary",
+   "guardhouse",
+   "inn",
+   "keep",
+   "market",
+   "mill",
+   "smithy",
+   "temple"
+  ],
+  "gates": 5,
+  "bridges": 2,
+  "built_area_ha": 53.04,
+  "constraints": {
+   "street_grid_index": {
+    "value": null,
+    "ok": false
+   },
+   "storeys_max": {
+    "value": null,
+    "ok": false
+   },
+   "population_est": {
+    "value": 23785,
+    "ok": false
+   },
+   "all_ok": false
+  },
+  "run_s": 255.4,
+  "storeys_hist": {
+   "1": 4002,
+   "2": 481,
+   "3": 282
+  },
+  "grid_cells": [
+   800,
+   800
+  ],
+  "storeys_max": 3,
+  "street_grid_index": 0.064,
+  "wall": true
+ },
+ {
+  "recipe": "p6-city-size-4km",
+  "seed": 2,
+  "settlement": "Hearthwell",
+  "cls": "city",
+  "window_m": 4000,
+  "cell_m": 5.0,
+  "regional_roads_entering": 4,
+  "buildings": 3792,
+  "houses": 3784,
+  "population_est": 18920,
+  "street_km": {
+   "main": 7.11,
+   "street": 3.19,
+   "lane": 38.21
+  },
+  "landmarks": [
+   "archive",
+   "granary",
+   "guardhouse",
+   "harbour",
+   "inn",
+   "keep",
+   "market",
+   "mill",
+   "smithy",
+   "temple"
+  ],
+  "gates": 4,
+  "bridges": 3,
+  "built_area_ha": 42.31,
+  "constraints": {
+   "street_grid_index": {
+    "value": null,
+    "ok": false
+   },
+   "storeys_max": {
+    "value": null,
+    "ok": false
+   },
+   "population_est": {
+    "value": 18920,
+    "ok": false
+   },
+   "all_ok": false
+  },
+  "run_s": 215.5,
+  "storeys_hist": {
+   "1": 3051,
+   "2": 431,
+   "3": 310
+  },
+  "grid_cells": [
+   800,
+   800
+  ],
+  "storeys_max": 3,
+  "street_grid_index": 0.087,
+  "wall": true
+ }
+]

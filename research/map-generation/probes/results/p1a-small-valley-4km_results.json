@@ -1,0 +1,492 @@
+[
+ {
+  "recipe": "p1a-small-valley-4km",
+  "seed": 1,
+  "geology_pct": {
+   "limestone": 68.4,
+   "shale": 31.6
+  },
+  "evolution_s": 5.7,
+  "elevation_m": {
+   "min": -20,
+   "median": 23,
+   "max": 254,
+   "relief": 274
+  },
+  "terminal_lakes": 1,
+  "precip_mm_yr": {
+   "p5": 676,
+   "median": 955,
+   "p95": 1090
+  },
+  "rivers_pct": 0.45,
+  "max_discharge_m3s": 0.1,
+  "lakes": 3,
+  "lake_pct": 1.16,
+  "temperature_c": {
+   "min": 10.3,
+   "max": 12.0
+  },
+  "vegetation_cover_pct": 85.9,
+  "snow_pct": 0.0,
+  "element_mix": {
+   "water": 0.211,
+   "wood": 0.468,
+   "earth": 0.295,
+   "metal": 0.0,
+   "fire": 0.026
+  },
+  "poi_requested": {
+   "ruin": 1,
+   "extraction": 2
+  },
+  "roads": {
+   "trail": 2.5,
+   "track": 2.6
+  },
+  "sites": {
+   "ford": 1,
+   "lumber_camp": 2,
+   "quarry": 1
+  },
+  "travel": {
+   "extraction_to_extraction_min": 26.0,
+   "settlement_to_nearest_extraction_min": {
+    "village-1": 10.1,
+    "hamlet-1": 6.1,
+    "hamlet-2": 10.1,
+    "hamlet-3": 9.5
+   },
+   "floor_pct_within_15min_of_extraction": 42.2
+  },
+  "feature_counts": {
+   "village": 1,
+   "hamlet": 3,
+   "ruin": 1,
+   "extraction": 2,
+   "stone": 1,
+   "clay": 1,
+   "timber": 2,
+   "ford": 1,
+   "quarry": 1,
+   "lumber_camp": 2
+  },
+  "constraints": {
+   "elevation_m.relief": {
+    "value": 274,
+    "ok": true
+   },
+   "lake_pct": {
+    "value": 1.16,
+    "ok": true
+   },
+   "vegetation_cover_pct": {
+    "value": 85.9,
+    "ok": false
+   },
+   "feature_counts.village": {
+    "value": 1,
+    "ok": true
+   },
+   "feature_counts.hamlet": {
+    "value": 3,
+    "ok": true
+   },
+   "travel.extraction_to_extraction_min": {
+    "value": 26.0,
+    "ok": true
+   },
+   "ruin_placed": {
+    "value": 1,
+    "ok": true
+   },
+   "extraction_placed": {
+    "value": 2,
+    "ok": true
+   },
+   "all_ok": false
+  },
+  "run_s": 7.5,
+  "probe": {
+   "slope_deg": {
+    "p50": 5.4,
+    "p90": 20.3,
+    "p99": 34.3,
+    "max": 59.6
+   },
+   "slope_pct_over_30deg": 2.24,
+   "slope_pct_over_45deg": 0.18,
+   "slope_pct_over_60deg": 0.0,
+   "local_peaks": 7,
+   "towers_100m_drop_within_150m": 0,
+   "cell_m": 15.6
+  }
+ },
+ {
+  "recipe": "p1a-small-valley-4km",
+  "seed": 2,
+  "geology_pct": {
+   "limestone": 32.3,
+   "sandstone": 51.0,
+   "shale": 16.7
+  },
+  "evolution_s": 5.3,
+  "elevation_m": {
+   "min": -4,
+   "median": 38,
+   "max": 239,
+   "relief": 244
+  },
+  "terminal_lakes": 0,
+  "precip_mm_yr": {
+   "p5": 688,
+   "median": 950,
+   "p95": 1098
+  },
+  "rivers_pct": 0.75,
+  "max_discharge_m3s": 0.3,
+  "lakes": 3,
+  "lake_pct": 9.07,
+  "temperature_c": {
+   "min": 10.4,
+   "max": 12.0
+  },
+  "vegetation_cover_pct": 83.6,
+  "snow_pct": 0.0,
+  "element_mix": {
+   "water": 0.245,
+   "wood": 0.43,
+   "earth": 0.301,
+   "metal": 0.0,
+   "fire": 0.023
+  },
+  "poi_requested": {
+   "ruin": 1,
+   "extraction": 2
+  },
+  "roads": {
+   "trail": 2.1,
+   "track": 2.5
+  },
+  "sites": {
+   "ford": 1,
+   "lumber_camp": 2,
+   "quarry": 1
+  },
+  "travel": {
+   "extraction_to_extraction_min": 28.5,
+   "settlement_to_nearest_extraction_min": {
+    "village-1": 16.7,
+    "hamlet-1": 21.0,
+    "hamlet-2": 6.5,
+    "hamlet-3": 13.0
+   },
+   "floor_pct_within_15min_of_extraction": 34.3
+  },
+  "feature_counts": {
+   "village": 1,
+   "hamlet": 3,
+   "ruin": 1,
+   "extraction": 2,
+   "stone": 1,
+   "clay": 1,
+   "timber": 2,
+   "ford": 1,
+   "quarry": 1,
+   "lumber_camp": 2
+  },
+  "constraints": {
+   "elevation_m.relief": {
+    "value": 244,
+    "ok": true
+   },
+   "lake_pct": {
+    "value": 9.07,
+    "ok": false
+   },
+   "vegetation_cover_pct": {
+    "value": 83.6,
+    "ok": false
+   },
+   "feature_counts.village": {
+    "value": 1,
+    "ok": true
+   },
+   "feature_counts.hamlet": {
+    "value": 3,
+    "ok": true
+   },
+   "travel.extraction_to_extraction_min": {
+    "value": 28.5,
+    "ok": true
+   },
+   "ruin_placed": {
+    "value": 1,
+    "ok": true
+   },
+   "extraction_placed": {
+    "value": 2,
+    "ok": true
+   },
+   "all_ok": false
+  },
+  "run_s": 6.4,
+  "probe": {
+   "slope_deg": {
+    "p50": 5.0,
+    "p90": 15.6,
+    "p99": 29.7,
+    "max": 39.5
+   },
+   "slope_pct_over_30deg": 0.9,
+   "slope_pct_over_45deg": 0.0,
+   "slope_pct_over_60deg": 0.0,
+   "local_peaks": 15,
+   "towers_100m_drop_within_150m": 0,
+   "cell_m": 15.6
+  }
+ },
+ {
+  "recipe": "p1a-small-valley-4km",
+  "seed": 3,
+  "geology_pct": {
+   "limestone": 49.1,
+   "shale": 50.9
+  },
+  "evolution_s": 4.6,
+  "elevation_m": {
+   "min": -32,
+   "median": 4,
+   "max": 472,
+   "relief": 504
+  },
+  "terminal_lakes": 1,
+  "precip_mm_yr": {
+   "p5": 654,
+   "median": 955,
+   "p95": 1087
+  },
+  "rivers_pct": 0.17,
+  "max_discharge_m3s": 0.0,
+  "lakes": 1,
+  "lake_pct": 0.87,
+  "temperature_c": {
+   "min": 8.9,
+   "max": 12.0
+  },
+  "vegetation_cover_pct": 86.4,
+  "snow_pct": 0.0,
+  "element_mix": {
+   "water": 0.195,
+   "wood": 0.445,
+   "earth": 0.332,
+   "metal": 0.0,
+   "fire": 0.028
+  },
+  "poi_requested": {
+   "ruin": 1,
+   "extraction": 2
+  },
+  "roads": {
+   "trail": 1.8,
+   "track": 4.2
+  },
+  "sites": {
+   "ford": 1,
+   "lumber_camp": 2,
+   "quarry": 1
+  },
+  "travel": {
+   "extraction_to_extraction_min": 23.1,
+   "settlement_to_nearest_extraction_min": {
+    "village-1": 12.4,
+    "hamlet-1": 9.5,
+    "hamlet-2": 9.7,
+    "hamlet-3": 6.7
+   },
+   "floor_pct_within_15min_of_extraction": 45.2
+  },
+  "feature_counts": {
+   "village": 1,
+   "hamlet": 3,
+   "ruin": 1,
+   "extraction": 2,
+   "stone": 1,
+   "clay": 1,
+   "timber": 2,
+   "ford": 1,
+   "quarry": 1,
+   "lumber_camp": 2
+  },
+  "constraints": {
+   "elevation_m.relief": {
+    "value": 504,
+    "ok": false
+   },
+   "lake_pct": {
+    "value": 0.87,
+    "ok": true
+   },
+   "vegetation_cover_pct": {
+    "value": 86.4,
+    "ok": false
+   },
+   "feature_counts.village": {
+    "value": 1,
+    "ok": true
+   },
+   "feature_counts.hamlet": {
+    "value": 3,
+    "ok": true
+   },
+   "travel.extraction_to_extraction_min": {
+    "value": 23.1,
+    "ok": true
+   },
+   "ruin_placed": {
+    "value": 1,
+    "ok": true
+   },
+   "extraction_placed": {
+    "value": 2,
+    "ok": true
+   },
+   "all_ok": false
+  },
+  "run_s": 5.8,
+  "probe": {
+   "slope_deg": {
+    "p50": 3.7,
+    "p90": 17.0,
+    "p99": 38.6,
+    "max": 68.4
+   },
+   "slope_pct_over_30deg": 2.24,
+   "slope_pct_over_45deg": 0.5,
+   "slope_pct_over_60deg": 0.04,
+   "local_peaks": 5,
+   "towers_100m_drop_within_150m": 0,
+   "cell_m": 15.6
+  }
+ },
+ {
+  "recipe": "p1a-small-valley-4km",
+  "seed": 4,
+  "geology_pct": {
+   "sandstone": 40.6,
+   "shale": 59.4
+  },
+  "evolution_s": 4.8,
+  "elevation_m": {
+   "min": -26,
+   "median": 0,
+   "max": 181,
+   "relief": 208
+  },
+  "terminal_lakes": 1,
+  "precip_mm_yr": {
+   "p5": 747,
+   "median": 917,
+   "p95": 1091
+  },
+  "rivers_pct": 0.12,
+  "max_discharge_m3s": 0.0,
+  "lakes": 1,
+  "lake_pct": 3.1,
+  "temperature_c": {
+   "min": 10.8,
+   "max": 12.0
+  },
+  "vegetation_cover_pct": 92.7,
+  "snow_pct": 0.0,
+  "element_mix": {
+   "water": 0.195,
+   "wood": 0.426,
+   "earth": 0.35,
+   "metal": 0.0,
+   "fire": 0.028
+  },
+  "poi_requested": {
+   "ruin": 1,
+   "extraction": 2
+  },
+  "roads": {
+   "trail": 1.8,
+   "track": 3.4
+  },
+  "sites": {
+   "ford": 1,
+   "lumber_camp": 2
+  },
+  "travel": {
+   "extraction_to_extraction_min": 24.5,
+   "settlement_to_nearest_extraction_min": {
+    "village-1": 8.4,
+    "hamlet-1": 5.6,
+    "hamlet-2": 17.5,
+    "hamlet-3": 12.5
+   },
+   "floor_pct_within_15min_of_extraction": 42.9
+  },
+  "feature_counts": {
+   "village": 1,
+   "hamlet": 3,
+   "ruin": 1,
+   "extraction": 2,
+   "clay": 1,
+   "timber": 2,
+   "ford": 1,
+   "lumber_camp": 2
+  },
+  "constraints": {
+   "elevation_m.relief": {
+    "value": 208,
+    "ok": true
+   },
+   "lake_pct": {
+    "value": 3.1,
+    "ok": true
+   },
+   "vegetation_cover_pct": {
+    "value": 92.7,
+    "ok": false
+   },
+   "feature_counts.village": {
+    "value": 1,
+    "ok": true
+   },
+   "feature_counts.hamlet": {
+    "value": 3,
+    "ok": true
+   },
+   "travel.extraction_to_extraction_min": {
+    "value": 24.5,
+    "ok": true
+   },
+   "ruin_placed": {
+    "value": 1,
+    "ok": true
+   },
+   "extraction_placed": {
+    "value": 2,
+    "ok": true
+   },
+   "all_ok": false
+  },
+  "run_s": 5.9,
+  "probe": {
+   "slope_deg": {
+    "p50": 3.2,
+    "p90": 11.1,
+    "p99": 22.7,
+    "max": 56.5
+   },
+   "slope_pct_over_30deg": 0.22,
+   "slope_pct_over_45deg": 0.01,
+   "slope_pct_over_60deg": 0.0,
+   "local_peaks": 4,
+   "towers_100m_drop_within_150m": 0,
+   "cell_m": 15.6
+  }
+ }
+]

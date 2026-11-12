@@ -1,0 +1,16 @@
+# Probe 2 (band 2), detail: the walled seat `city-1` of the p2 region at the class defaults
+# (window 2400 m, 5 m cells, radius 560 m, 55 lanes, wall, keep).
+# `parent.package` is filled in per seed by scripts/probe.py --parent-template.
+name: p2-walled-town-detail
+kind: settlement
+renders: [plan]
+parent: {package: "@REGION@", feature: city-1}
+pipeline:
+  - stage: local_terrain
+  - stage: settlement_plan
+  - stage: fields
+  - stage: settlement_analysis
+  - stage: constraints
+    gates: [2, 8]
+    bridges: [1, 6]
+    buildings: [400, 5000]

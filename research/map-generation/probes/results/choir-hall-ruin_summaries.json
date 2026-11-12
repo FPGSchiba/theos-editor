@@ -1,0 +1,70 @@
+[
+ {
+  "recipe": "choir-hall-ruin",
+  "seed": 1,
+  "topology": {
+   "rooms": 14,
+   "connections": 15,
+   "cycles": 2,
+   "locks": 2,
+   "one_way": 1
+  },
+  "cover_items": 22,
+  "analysis": {
+   "rooms_carved": "14/14",
+   "all_connected": true,
+   "solvable": true,
+   "unreachable_rooms": [],
+   "critical_path_m": 246.0,
+   "critical_route": [
+    "entrance",
+    "tuning_gallery",
+    "junction",
+    "tuning_gallery",
+    "choir_hall"
+   ],
+   "goal_to_extractions_m": [
+    168.0,
+    54.0
+   ],
+   "start_to_extractions_m": [
+    114.0,
+    112.0
+   ],
+   "chokepoints": 4,
+   "cycles": 2,
+   "dead_end_pct": 50.0,
+   "longest_sightline_m": 54.0,
+   "footprint_used_pct": 20.5,
+   "floor_size_m": [
+    200,
+    200
+   ]
+  },
+  "constraints": {
+   "analysis.critical_path_m": {
+    "value": 246.0,
+    "ok": true
+   },
+   "analysis.longest_sightline_m": {
+    "value": 54.0,
+    "ok": false
+   },
+   "analysis.chokepoints": {
+    "value": 4,
+    "ok": true
+   },
+   "all_ok": false
+  },
+  "pipeline": [
+   "envelope",
+   "program",
+   "topology",
+   "layout",
+   "corridors",
+   "cover",
+   "analysis",
+   "constraints"
+  ]
+ }
+]
