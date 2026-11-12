@@ -1,6 +1,7 @@
-//! The rules for a path a command is given. The changes of a plan must also leave the boundary
-//! between records and other files where the verdict sees it (`boundary`, ruling R21): no
-//! `.gitignore`, no hidden file replaced on Windows, and no path spelled unlike the disk.
+//! The rules for a path a command is given, and the normal form of a plan path: with `/`, never
+//! `\` (ruling R22). The changes of a plan must also leave the boundary between records and other
+//! files where the verdict sees it (`boundary`, ruling R21): no `.gitignore`, no hidden file
+//! replaced on Windows, and no path spelled unlike the disk.
 
 use super::CommandError;
 
@@ -18,6 +19,24 @@ pub(crate) fn project_path(path: &str) -> Result<String, CommandError> {
             path: path.to_owned(),
             reason,
         }),
+    }
+}
+
+/// Checks that the plan path `path` is in normal form: what [`project_path`] gives for it, so it
+/// has no `\` (ruling R22). The pipeline reads a plan path in that form but writes it as given,
+/// so a `\` would be checked as `/` and written as `\`, which on Unix names another file.
+///
+/// # Errors
+///
+/// [`CommandError::Path`] when the path breaks a rule of [`project_path`] or has a `\`.
+pub(crate) fn normal_path(path: &str) -> Result<(), CommandError> {
+    if project_path(path)? == path {
+        Ok(())
+    } else {
+        Err(CommandError::Path {
+            path: path.to_owned(),
+            reason: "has a `\\`; a plan spells its paths with `/`",
+        })
     }
 }
 
@@ -110,6 +129,27 @@ mod tests {
             "lore/truths/T-960.md"
         );
         assert_eq!(project_path(".gitignore")?, ".gitignore");
+        Ok(())
+    }
+
+    /// Ruling R22: a plan path is in the form `project_path` gives, or refused.
+    #[test]
+    fn a_plan_path_must_be_in_normal_form() -> Result<(), CommandError> {
+        normal_path("lore/truths/T-960.md")?;
+        assert!(matches!(
+            normal_path("lore\\truths\\T-960.md"),
+            Err(CommandError::Path {
+                reason: "has a `\\`; a plan spells its paths with `/`",
+                ..
+            })
+        ));
+        assert!(matches!(
+            normal_path("../x.md"),
+            Err(CommandError::Path {
+                reason: "leaves the project",
+                ..
+            })
+        ));
         Ok(())
     }
 

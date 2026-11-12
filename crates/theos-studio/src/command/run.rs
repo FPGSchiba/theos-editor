@@ -45,10 +45,11 @@ impl Workspace {
     /// cache too, except where the pipeline, before it plans, brought the cache in line with files
     /// changed outside the workspace:
     /// [`CommandError::Lock`] when the repo lock cannot be taken,
-    /// [`CommandError::Path`] when a path breaks the rules, or a change would alter which files
-    /// are records where the verdict cannot see it (ruling R21): a change of a `.gitignore`, on
-    /// Windows the replacement of a hidden file, or a path that the disk spells otherwise or that
-    /// passes a symbolic link to a folder,
+    /// [`CommandError::Path`] when a path breaks the rules, a plan path is not in normal form (it
+    /// has a `\`, ruling R22; a rename also refuses a file name with one), or a change would alter
+    /// which files are records where the verdict cannot see it (ruling R21): a change of a
+    /// `.gitignore`, on Windows the replacement of a hidden file, or a path that the disk spells
+    /// otherwise or that passes a symbolic link to a folder,
     /// [`CommandError::Stale`] when a file changed on disk since the caller or the plan read it,
     /// [`CommandError::NotARecord`] when a record it moves would not be read as a record at its
     /// new path (ruling R16),

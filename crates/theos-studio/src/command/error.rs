@@ -76,10 +76,10 @@ pub enum CommandError {
         /// The new path.
         path: String,
     },
-    /// A path that breaks a rule of the project, or a change whose effect on which files are
-    /// records the verdict could not judge (ruling R21): of a `.gitignore`, on Windows the
-    /// replacement of a hidden file, or of a path that the disk spells otherwise or that passes a
-    /// symbolic link to a folder.
+    /// A path that breaks a rule of the project; a plan path that is not in normal form, with a
+    /// `\` (ruling R22); or a change whose effect on which files are records the verdict could not
+    /// judge (ruling R21): of a `.gitignore`, on Windows the replacement of a hidden file, or of a
+    /// path that the disk spells otherwise or that passes a symbolic link to a folder.
     #[error("the path `{path}` {reason}")]
     Path {
         /// The path as given.

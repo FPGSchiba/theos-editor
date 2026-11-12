@@ -44,7 +44,7 @@ pub use rename::Rename;
 pub use route::{Applied, HumanRoute, Route};
 pub use write::Write;
 
-pub(crate) use path::project_path;
+pub(crate) use path::{normal_path, project_path};
 
 /// A change to a project, planned before anything is written.
 pub trait Command {

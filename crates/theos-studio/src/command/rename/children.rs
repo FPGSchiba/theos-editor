@@ -36,7 +36,8 @@ impl Participant for Children {
 }
 
 /// Adds the project path of every file under the folder `dir`, whose project path is `folder`, to
-/// `found`: in every subfolder, dot files included.
+/// `found`: in every subfolder, dot files included. A name that is not UTF-8 or that holds a `\`
+/// (possible on Unix) fails with [`CommandError::Path`].
 fn files_under(dir: &Path, folder: &str, found: &mut Vec<String>) -> Result<(), CommandError> {
     let io = |source| CommandError::read_io(folder.to_owned(), source);
     for entry in std::fs::read_dir(dir).map_err(io)? {
@@ -48,6 +49,13 @@ fn files_under(dir: &Path, folder: &str, found: &mut Vec<String>) -> Result<(), 
                 reason: "is not valid UTF-8, so a rename cannot move it",
             });
         };
+        // A project path reads `\` as `/`: the file would be read as another (ruling R22).
+        if name.contains('\\') {
+            return Err(CommandError::Path {
+                path: join(folder, name),
+                reason: "has a backslash in its name, so a rename cannot move it",
+            });
+        }
         let path = join(folder, name);
         if entry.file_type().map_err(io)?.is_dir() {
             files_under(&entry.path(), &path, found)?;

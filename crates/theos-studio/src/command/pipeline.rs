@@ -12,7 +12,10 @@ use super::journal::EntryId;
 use super::route::{Applied, Route};
 use super::state::CommandState;
 use super::verdict;
-use super::{Command, CommandError, FileChange, Plan, PlanContext, Reads, project_path, read_file};
+use super::{
+    Command, CommandError, FileChange, Plan, PlanContext, Reads, normal_path, project_path,
+    read_file,
+};
 use crate::introduced::FindingCounts;
 use crate::lock::{self, LockError, LockGuard};
 use crate::{StudioError, Workspace};
@@ -156,8 +159,9 @@ fn steps(
         return Ok(Outcome::unchanged());
     }
     let root = workspace.project().root().to_path_buf();
-    // Step 3: no change moves the boundary between records and other files unseen (ruling
-    // R21), and every file holds its `before`.
+    // Step 3: every path is in normal form (ruling R22), no change moves the boundary between
+    // records and other files unseen (ruling R21), and every file holds its `before`.
+    check_paths(&plan)?;
     boundary::check(&root, &plan)?;
     check_bases(&root, &plan, replayed.is_some())?;
     let (preview, before) = preview(workspace, &plan)?;
@@ -254,6 +258,14 @@ fn freshen(workspace: &mut Workspace, reads: &Reads) -> Result<(), CommandError>
     };
     tracing::debug!(?update, "freshened the index");
     Ok(())
+}
+
+/// Step 3 begins: every path of the plan is in normal form ([`normal_path`], ruling R22), checked
+/// before anything is read for it.
+fn check_paths(plan: &Plan) -> Result<(), CommandError> {
+    plan.changes
+        .iter()
+        .try_for_each(|change| normal_path(&change.path))
 }
 
 /// Step 3: every file of the plan must hold its `before` right now; another program may have
@@ -403,7 +415,9 @@ mod tests {
 
     use super::*;
     use crate::command::HumanRoute;
-    use crate::test_support::{self, Fixture, ReadOnly, TRUTH, TRUTH_PATH, TestResult, change};
+    use crate::test_support::{
+        self, Fixture, Planned, ReadOnly, TRUTH, TRUTH_PATH, TestResult, change,
+    };
 
     #[test]
     fn reentry_is_refused() -> TestResult {
@@ -578,6 +592,42 @@ mod tests {
             );
             assert!(cache.join("lock").is_file());
         }
+        assert_eq!(fixture.workspace().undo_entries(), []);
+        Ok(())
+    }
+
+    /// Ruling R22, on every OS: a plan path with a `\` is refused before anything is read for
+    /// it. It would be checked as `notes/a.txt` but written as given, which on Unix is another
+    /// file.
+    #[test]
+    fn a_plan_path_that_is_not_in_normal_form_is_refused() -> TestResult {
+        let mut fixture = Fixture::new(&[("notes/a.txt", b"one\n")])?;
+        let command = Planned(test_support::plan(vec![change(
+            "notes\\a.txt",
+            Some("one\n"),
+            Some("two\n"),
+        )]));
+        let result = fixture.workspace_mut().run(&command);
+        assert!(
+            matches!(
+                &result,
+                Err(CommandError::Path {
+                    path,
+                    reason: "has a `\\`; a plan spells its paths with `/`",
+                }) if path == "notes\\a.txt"
+            ),
+            "{result:?}"
+        );
+        assert_eq!(
+            std::fs::read(fixture.root().join("notes").join("a.txt"))?,
+            b"one\n"
+        );
+        // No file named `notes\a.txt` appeared beside the folder, as it would on Unix.
+        let named_a = test_support::entries(fixture.root())
+            .into_iter()
+            .filter(|(path, _)| path.to_string_lossy().contains("a.txt"))
+            .count();
+        assert_eq!(named_a, 1);
         assert_eq!(fixture.workspace().undo_entries(), []);
         Ok(())
     }

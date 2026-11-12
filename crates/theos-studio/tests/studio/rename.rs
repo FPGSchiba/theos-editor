@@ -601,6 +601,34 @@ fn a_rename_whose_child_folder_holds_a_gitignore_is_refused() -> TestResult {
     Ok(())
 }
 
+/// Ruling R22, on Unix: a name may hold a `\`, which a project path reads as `/`. Moving
+/// `a\b.txt` would read `a/b.txt` beside it and write its bytes under the old name, so the bytes
+/// of `a\b.txt` would be lost; the rename is refused, and nothing is written.
+#[cfg(unix)]
+#[test]
+fn a_rename_of_a_folder_with_a_backslash_in_a_name_is_refused() -> TestResult {
+    let project = TempProject::copy_of_studio("commands")?;
+    let backslash = format!("{FLOOR_FOLDER}/a\\b.txt");
+    std::fs::write(project.root().join(&backslash), "synthetic backslash\n")?;
+    crate::common::put(
+        project.root(),
+        &format!("{FLOOR_FOLDER}/a/b.txt"),
+        b"synthetic slash\n",
+    )?;
+    let mut workspace = Workspace::open(project.root())?;
+    let error = refused(
+        &project,
+        &mut workspace,
+        &rename("f04-synthetic", "f04-renamed"),
+    )?;
+    assert!(
+        matches!(&error, CommandError::Path { path, reason }
+            if *path == backslash && reason.starts_with("has a backslash in its name")),
+        "{error:?}"
+    );
+    Ok(())
+}
+
 /// Review focus 4: a file the index does not see (ignored by git) still takes its path.
 #[test]
 fn an_id_taken_by_an_ignored_file_is_refused() -> TestResult {

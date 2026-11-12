@@ -9,7 +9,7 @@ mod plans;
 pub(crate) use disk::{ReadOnly, entries};
 pub(crate) use findings::{error, warning};
 pub(crate) use fixture::{Fixture, TRUTH, TRUTH_PATH};
-pub(crate) use plans::{change, plan};
+pub(crate) use plans::{Planned, change, plan};
 
 /// The result of a unit test.
 pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
