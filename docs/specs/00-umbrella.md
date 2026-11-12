@@ -1,6 +1,6 @@
 # Theos content editor — umbrella spec
 
-Status: accepted when this file is merged by Jann · version 4 · 12 Nov 2026 (version 1: 31 Oct 2026;
+Status: accepted when this file is merged by Jann · version 5 · 12 Nov 2026 (version 1: 31 Oct 2026;
 version 2, 5 Nov 2026, adds the world atlas, quests and art from lore: G19, P20–P28, slices S8 and
 S9; version 3, 10 Nov 2026, moves the map generator to Rust in this repo, decision 0003: G1, G4,
 G11, G20, P08 rewritten, P09 (with `theos gen`), P22 and P23 adjusted, P29, P30 and slice S10;
@@ -8,7 +8,10 @@ version 4 takes in the map generation research, decision 0004: CE-76.5; P29 beco
 and child maps at the state of the art (CE-78 reworded); new P34 Interiors (CE-80) with the room
 graph; P30 becomes the generator half of stacked levels (CE-79.1 reworded) and P45 the Atlas half;
 new P31 Floor frame and places, P32 Recipe families and P33 Map metrics and batch tool (CE-81 to
-CE-83) in a new slice S11; the research track in §5)
+CE-83) in a new slice S11; the research track in §5; version 5 splits P05 into P05 CLI and
+hook, P48 MCP read and P49 Releases and the check action, and CE-08R.3 names the run and commit
+that built a release instead of build provenance, which GitHub offers private repositories only
+on GitHub Enterprise Cloud)
 Owner of architecture: Jann · Built by: Claude Code with superpowers
 
 This spec defines the whole build as phases. Each phase runs one superpowers cycle:
@@ -87,9 +90,9 @@ Slices say what Jann can do once their phases are merged; Jira tracks slices.
 | P02 | Records and grammars | theos-editor | S2 | P00 |
 | P03 | Kinds, index, search, lenses | theos-editor | S2 | P02 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | S2 | P03 |
-| P05 | CLI, hook, releases, MCP read | theos-editor | S2 | P04 |
+| P05 | CLI and hook | theos-editor | S2 | P04 |
 | P06 | Command layer and git | theos-editor | S3 | P04 |
-| P07 | Agent sessions, review, MCP propose | theos-editor | S3 | P05, P06 |
+| P07 | Agent sessions, review, MCP propose | theos-editor | S3 | P05, P06, P48 |
 | P08 | Map format and terrain generator | theos-editor | S4 | P00 |
 | P09 | Generator layer and generator tools | theos-editor | S4 | P07, P08 |
 | P10 | Prose editor research | theos-editor | S1 | – |
@@ -100,7 +103,7 @@ Slices say what Jann can do once their phases are merged; Jira tracks slices.
 | P15 | Lenses, Scripts, Graph | theos-editor | S6 | P04, P12 |
 | P16 | Generative screens: Concepts, ComfyUI, Maps | theos-editor | S7 | P09, P12 |
 | P17 | AI drafts and semantic search | theos-editor | S7 | P04, P15 |
-| P18 | Installer, first run, Code preset | theos-editor | S7 | P14 |
+| P18 | Installer, first run, Code preset | theos-editor | S7 | P14, P49 |
 | P19 | Comments | theos-editor | S5 | P12, P13 |
 | P20 | Content layout for world and art kinds | tower-of-theos | S8 | P01 |
 | P21 | World kinds: enemies, spawns, quests | theos-editor | S8 | P07 |
@@ -118,19 +121,22 @@ Slices say what Jann can do once their phases are merged; Jira tracks slices.
 | P33 | Map metrics and batch tool | theos-editor | S11 | P32 |
 | P34 | Interiors | theos-editor | S8 | P08 |
 | P45 | Atlas level switcher | theos-editor | S10 | P25, P30 |
+| P48 | MCP read | theos-editor | S2 | P05 |
+| P49 | Releases and the check action | theos-editor | S2 | P05, P48 |
 
-Core track runs in order P00 → P02 → … → P07. P01, P08 and P10 can run in parallel sessions in
-their own worktrees. UI phases start after P06. P20, P23, P29 and P34 can also run in parallel
-sessions once their dependencies are merged. P28 runs in a session linked to Jann's PC, where
-ComfyUI runs. The map phases of version 4 run P31 → P32 → P33 after P08 and P09 (decision 0004).
-Phase numbers P35–P44 are held by proposals of the map generation research
+Core track runs in order P00 → P02 → … → P07, with P48 after P05 and before P07; P49 can run
+beside P06 and P07 once P48 is merged. P01, P08 and P10 can run in parallel sessions in their own
+worktrees. UI phases start after P06. P20, P23, P29 and P34 can also run in parallel sessions once
+their dependencies are merged. P28 runs in a session linked to Jann's PC, where ComfyUI runs. The
+map phases of version 4 run P31 → P32 → P33 after P08 and P09 (decision 0004). Phase numbers
+P35–P44 are held by proposals of the map generation research
 (`research/map-generation/09-proposed-phases.md`) that are not phases yet (§5).
 
-Slices: **S1** write lore now (P01, P10) · **S2** canon checks (P00, P02–P05) · **S3** propose and
-review (P06, P07) · **S4** maps (P08, P09) · **S5** core UI (P11–P13, P19) · **S6** complete UI
-(P14, P15) · **S7** pictures and places (P16–P18) · **S8** the world on the map (P20–P25, P29,
-P34) · **S9** art from lore (P26–P28) · **S10** indoor floors (P30, P45) · **S11** designable
-floors (P31–P33).
+Slices: **S1** write lore now (P01, P10) · **S2** canon checks (P00, P02–P05, P48, P49) · **S3**
+propose and review (P06, P07) · **S4** maps (P08, P09) · **S5** core UI (P11–P13, P19) · **S6**
+complete UI (P14, P15) · **S7** pictures and places (P16–P18) · **S8** the world on the map
+(P20–P25, P29, P34) · **S9** art from lore (P26–P28) · **S10** indoor floors (P30, P45) ·
+**S11** designable floors (P31–P33).
 
 ---
 
@@ -238,33 +244,18 @@ real records are added once the lore import exists.
 - CE-16.3 A hand edit of a mirror record fails the check.
 - CE-16.4 Regenerating is idempotent.
 
-### P05 · CLI, hook, releases, MCP read
+### P05 · CLI and hook
+
+Version 5 splits the former P05 (CLI, hook, releases, MCP read) into three phases. P48 builds the
+MCP read tools. P49 builds the release pipeline, `--version` and the check action for
+tower-of-theos. Where an earlier phase spec hands work to "P05", the MCP read tools mean P48, and
+releases and `--version` mean P49. P05 also builds what the hook shares with the commit of CE-22.1:
+the git runner and the staged snapshot in `theos-vcs`, and the staged check in `theos-studio`.
+P05's and P06's phase specs agree on these.
 
 **CE-17 CLI and hook**
 - CE-17.1 `theos check | ledger | new | schema | hook install` with `--json` output.
 - CE-17.2 The hook refuses a commit with a never-confirm violation and checks the staged snapshot.
-- CE-17.3 A GitHub Action for tower-of-theos runs the released `theos check` and shows findings.
-
-**CE-08R Release pipeline** (`docs/release.md`)
-- CE-08R.1 Pushes to `main` keep one release PR up to date with the next version and a
-  `CHANGELOG.md` section generated from the Conventional Commits since the last tag.
-- CE-08R.2 Merging the release PR creates exactly one annotated tag `vX.Y.Z` on `main`; all
-  crates carry that version; nothing is published to crates.io.
-- CE-08R.3 The tag builds `theos` and `theos-mcp` for Windows, Linux and macOS (universal
-  binary) with `--locked` and publishes them with `SHA256SUMS` and build provenance in a GitHub
-  Release whose notes are the changelog section and the macOS first-start steps.
-- CE-08R.6 The release workflow runs the full test suite on Windows, Linux and macOS first and
-  creates no release if any platform fails.
-- CE-08R.4 A tag with `-rc.N` produces a GitHub pre-release.
-- CE-08R.5 `theos --version` and `theos-mcp --version` print the version, the commit, the data
-  model `schema_version` and the generator protocol version.
-
-**CE-18 MCP read tools**
-- CE-18.1 `project_info`, `codex_search`, `codex_read`, `codex_list`, `codex_graph`,
-  `ledger_check` work over stdio from Claude Code.
-- CE-18.2 Claude answers "what does Mother Ilse believe" from records alone.
-- CE-18.3 Locked records are readable and flagged; truths with target `never` are marked in every
-  result.
 
 ### P06 · Command layer and git
 
@@ -881,6 +872,65 @@ in this phase's spec PR (G18).
 - CE-79.3 The Atlas shows a map with levels one level at a time, with a level switcher; a pin
   shows on its own level only.
 
+### P48 · MCP read
+
+The MCP server `theos-mcp` with its read tools, built on the queries that P05 adds to
+`theos-studio` for the CLI.
+
+**CE-18 MCP read tools**
+- CE-18.1 `project_info`, `codex_search`, `codex_read`, `codex_list`, `codex_graph`,
+  `ledger_check` work over stdio from Claude Code.
+- CE-18.2 Claude answers "what does Mother Ilse believe" from records alone.
+- CE-18.3 Locked records are readable and flagged; truths with target `never` are marked in every
+  result.
+
+### P49 · Releases and the check action
+
+The release pipeline of `docs/release.md`, `--version` for both binaries, and the GitHub Action
+that runs `theos check` for tower-of-theos. Settled with Jann on 12 Nov 2026:
+
+- **Gate PR first.** The pipeline's files are protected: `.github/**`, `release-plz.toml`,
+  `cliff.toml`, `CHANGELOG.md`, `gate/**` and `xtask/**`. A gate PR adds them before the build,
+  as P08's did. Jann creates the GitHub App whose token release-plz uses, because pull requests
+  and tags made with the workflow token start no workflows. The tag ruleset lets only that App
+  create `v*` tags.
+- **The check action lives in this repository**, at `actions/theos-check/`, with a problem
+  matcher for the lines `theos check` prints. tower-of-theos uses it at a release tag, and the tag
+  selects the binary it downloads. Adopting it there waits for the first release and for three
+  steps by Jann:
+  - turn on access to this repository's actions for his other private repositories;
+  - add a read-only token for this repository's releases as a tower-of-theos secret;
+  - add the job to tower-of-theos's workflow.
+- **Proof before the first release:**
+  - configuration tests;
+  - `release.yml` also runs on its gate PR and on demand without creating a release: the tests on
+    all three platforms, the builds, the universal binary, `SHA256SUMS` and the notes, kept as
+    workflow artifacts;
+  - the real release PR appears once the gate PR is merged.
+
+  Jann's first release, `v0.1.0-rc.1`, proves the tag, the GitHub Release and the pre-release end
+  to end.
+- **Build provenance.** GitHub's artifact attestations are available to private repositories
+  only on GitHub Enterprise Cloud. `release.yml` adds them once the repository is public.
+
+**CE-17 CLI and hook** (continued from P05: the check action)
+- CE-17.3 A GitHub Action for tower-of-theos runs the released `theos check` and shows findings.
+
+**CE-08R Release pipeline** (`docs/release.md`)
+- CE-08R.1 Pushes to `main` keep one release PR up to date with the next version and a
+  `CHANGELOG.md` section generated from the Conventional Commits since the last tag.
+- CE-08R.2 Merging the release PR creates exactly one annotated tag `vX.Y.Z` on `main`; all
+  crates carry that version; nothing is published to crates.io.
+- CE-08R.3 The tag builds `theos` and `theos-mcp` for Windows, Linux and macOS (universal
+  binary) with `--locked` and publishes them with `SHA256SUMS` in a GitHub Release whose notes
+  are the changelog section, the macOS first-start steps and a link to the workflow run and the
+  commit that built them.
+- CE-08R.6 The release workflow runs the full test suite on Windows, Linux and macOS first and
+  creates no release if any platform fails.
+- CE-08R.4 A tag with `-rc.N` produces a GitHub pre-release.
+- CE-08R.5 `theos --version` and `theos-mcp --version` print the version, the commit, the data
+  model `schema_version` and the generator protocol version.
+
 ---
 
 ## 4. Work outside the build
@@ -895,7 +945,7 @@ work sessions). Each item lands in tower-of-theos or Confluence, not in this rep
 | CE-05 | Split the false Seal into atomic truths with reveal targets; update the plugin's canon rule. |
 | CE-07 | Decision pages in Confluence for the decision log; Workspace Crate Architecture page. |
 | CE-16S | Write `canon/formalism/_source.json` from Shared Formalism (needed by P04). |
-| CE-19, CE-27, CE-31 | theos-design plugin: read through MCP (after P05), propose through MCP (after P07), maps through the generator tools (after P09), quests, the atlas and pipelines through their tools and the guides in `tools/guides/` (after P21, P22, P27). |
+| CE-19, CE-27, CE-31 | theos-design plugin: read through MCP (after P48), propose through MCP (after P07), maps through the generator tools (after P09), quests, the atlas and pipelines through their tools and the guides in `tools/guides/` (after P21, P22, P27). |
 | CE-75 | Move the style bible (`style.yaml` v2 and its reference crops) from Drive into `art/` style records (after P20). |
 
 ## 5. Later (not planned)
