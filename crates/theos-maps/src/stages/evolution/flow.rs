@@ -154,7 +154,7 @@ pub fn accumulate(stack: &[u32], w: &FlowWeights, input: &Grid<f64>) -> Grid<f64
 /// The flow that leaves the map: [`accumulate`]d flow summed over the `outlets`, in cell order.
 /// The closed map's sink is not an outlet; its water stays on the map.
 #[must_use]
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 28"))]
+#[cfg(test)]
 pub fn outflow(stack: &[u32], w: &FlowWeights, input: &Grid<f64>, outlets: &Grid<bool>) -> f64 {
     accumulate(stack, w, input)
         .as_slice()

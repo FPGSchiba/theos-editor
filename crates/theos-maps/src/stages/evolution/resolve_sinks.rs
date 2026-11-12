@@ -32,6 +32,9 @@ mod tree;
 use serde::Deserialize;
 
 pub use self::depressions::Depressions;
+// The tests of the processes after this one build spill points.
+#[cfg(test)]
+pub(crate) use self::depressions::SpillPoint;
 use super::flow::{cell_u32, steepest_receivers};
 use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, TypedStage};
 use crate::world::{Layer, ValueType};

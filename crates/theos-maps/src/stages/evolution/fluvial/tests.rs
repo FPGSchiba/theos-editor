@@ -1,5 +1,7 @@
 //! `fluvial` on a hand-built 2 x 2 world, and after `uplift` and the routing processes on 64 x 64
-//! landscapes of 100 m cells.
+//! landscapes of 100 m cells. Deposition (G > 0) and depression filling are in `deposition`.
+
+mod deposition;
 
 use std::f64::consts::SQRT_2;
 
@@ -12,7 +14,7 @@ use crate::kernels::num::{max, min, to_f64};
 use crate::rng::StageRng;
 use crate::stage::{LayerSpec, Stage, StageError};
 use crate::stages::evolution::flow::{FlowWeights, cell_index};
-use crate::stages::evolution::resolve_sinks::Depressions;
+use crate::stages::evolution::resolve_sinks::{Depressions, SpillPoint};
 use crate::stages::evolution::test_support::{evolve, processes};
 use crate::stages::terrain::climate::{Climate, ClimateFields, ClimateParams};
 use crate::stages::terrain::grid::GridStage;
@@ -126,6 +128,7 @@ fn square(height: [f64; 4], climate: Climate) -> World {
     let fixed = Grid::from_vec(2, 2, vec![false, false, true, false]).unwrap();
     let u32s = |v: Vec<u32>| Layer::U32(Grid::from_vec(2, 2, v).unwrap());
     w.insert("height", grid(height.to_vec())).unwrap();
+    w.insert("routing_surface", grid(height.to_vec())).unwrap();
     w.insert("erodibility", grid(vec![K; 4])).unwrap();
     w.insert("erosion", grid(vec![0.0; 4])).unwrap();
     w.insert("deposition", grid(vec![0.0; 4])).unwrap();
@@ -517,17 +520,6 @@ fn stability_at_ten_times_the_time_step() {
     }
 }
 
-#[test]
-fn deposition_is_refused_until_it_is_built() {
-    let mut w = square([0.0, 10.0, 20.0, 30.0], no_fields());
-    let err = fluvial_step(&mut w, "g = 1.0").unwrap_err();
-    assert!(
-        matches!(&err, StageError::Failed { message, .. }
-            if message == "deposition (g > 0) is not implemented yet"),
-        "{err:?}"
-    );
-}
-
 /// Asserts that one step of `fluvial` with `params` over `w` fails with a message that is
 /// exactly `text`.
 fn fails_with(mut w: World, params: &str, text: &str) {
@@ -603,6 +595,51 @@ fn inputs_that_do_not_fit_the_grid_are_a_failure() {
 }
 
 #[test]
+fn depressions_that_do_not_fit_the_grid_are_a_failure_with_deposition() {
+    let spill = |cell: u32, level: f64| SpillPoint { cell, to: 0, level };
+    let cases = [
+        (
+            Grid::filled(3, 3, 0),
+            vec![],
+            "the depressions label 9 cells, but the grid has 4",
+        ),
+        (
+            Grid::from_vec(2, 2, vec![0, 2, 0, 0]).unwrap(),
+            vec![spill(1, 15.0)],
+            "cell 1 lies in depression 2, but only 1 depression spills",
+        ),
+        (
+            Grid::from_vec(2, 2, vec![0, 1, 0, 0]).unwrap(),
+            vec![spill(4, 15.0)],
+            "depression 1 spills from cell 4, outside the grid of 4 cells",
+        ),
+        (
+            Grid::from_vec(2, 2, vec![0, 1, 0, 2]).unwrap(),
+            vec![spill(1, 15.0), spill(1, 15.0)],
+            "depressions 1 and 2 both spill from cell 1",
+        ),
+        (
+            Grid::from_vec(2, 2, vec![0, 1, 0, 0]).unwrap(),
+            vec![spill(1, f64::NAN)],
+            "depression 1 has the spill level NaN",
+        ),
+    ];
+    for (label, spill, text) in cases {
+        let bad = Depressions { label, spill };
+        // G = 0 does not fill, so it never looks at the depressions.
+        let mut plain = square([0.0, 10.0, 20.0, 30.0], no_fields());
+        plain
+            .insert("depressions", Layer::Value(Box::new(bad.clone())))
+            .unwrap();
+        fluvial_step(&mut plain, "g = 0.0").unwrap();
+        let mut w = square([0.0, 10.0, 20.0, 30.0], no_fields());
+        w.insert("depressions", Layer::Value(Box::new(bad)))
+            .unwrap();
+        fails_with(w, "g = 1.0", text);
+    }
+}
+
+#[test]
 fn fluvial_outside_the_evolution_fails() {
     let mut w = square([0.0, 10.0, 20.0, 30.0], no_fields());
     let err = run_stage(&mut w, &Fluvial, "g = 0.0").unwrap_err();
@@ -659,5 +696,21 @@ fn fluvial_declares_its_layers_and_parameters() {
             LayerSpec::f64("deposition"),
             LayerSpec::f64("drainage_area"),
         ]
+    );
+    // Deposition also reads the routing surface (the depressions' flood order) and the uplift
+    // (Yuan et al.'s tolerance), which may be absent.
+    let deposits = stage.params(&"g = 1.0".parse().unwrap()).unwrap();
+    let reads = stage.reads(deposits.as_ref());
+    assert_eq!(reads[..10], stage.reads(params.as_ref())[..]);
+    assert_eq!(
+        reads[10..],
+        [
+            LayerSpec::f64("routing_surface"),
+            LayerSpec::f64("uplift").optional(),
+        ]
+    );
+    assert_eq!(
+        stage.writes(deposits.as_ref()),
+        stage.writes(params.as_ref())
     );
 }
