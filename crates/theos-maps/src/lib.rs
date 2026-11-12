@@ -10,6 +10,7 @@
 pub mod grid;
 pub mod kernels;
 pub mod progress;
+pub mod recipe;
 pub mod rng;
 pub mod stage;
 pub mod stages;
