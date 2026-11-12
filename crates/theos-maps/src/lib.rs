@@ -6,6 +6,12 @@
 //! [`grid::Grid`] with its neighbour tables, the float and cast helpers every kernel shares
 //! ([`kernels::num`]), the per-stage random streams ([`rng`]) and the run's [`progress`] events
 //! and cancel token. The same inputs give the same bytes on every platform.
+//!
+//! Engine callers must not set flush-to-zero (or denormals-are-zero) or change the
+//! floating-point environment of the thread that calls the generator; the generator never does
+//! (spec 5.7).
+
+pub mod api;
 
 pub mod constraints;
 pub mod error;
@@ -25,3 +31,12 @@ pub mod runner;
 pub mod stage;
 pub mod stages;
 pub mod world;
+
+pub use api::{
+    Description, GENERATOR, ManifestFrame, Note, RecipeInfo, RunManifest, RunRequest, StageInfo,
+    VERSION,
+};
+pub use error::RunError;
+pub use progress::{CancelToken, Progress};
+pub use recipe::RecipeProblem;
+pub use runner::RunOptions;

@@ -4,6 +4,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+
 use super::RecipeError;
 use super::builtin::BUILTIN;
 use super::schema::{LoadedRecipe, RecipeOrigin, from_table, parse_table};
@@ -18,7 +20,7 @@ pub struct Catalog {
 }
 
 /// A recipe file that could not be loaded.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecipeProblem {
     /// The file (`builtin:<name>` for an embedded recipe).
     pub file: PathBuf,
