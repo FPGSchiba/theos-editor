@@ -15,6 +15,7 @@ mod journal;
 mod patch;
 mod path;
 mod pipeline;
+mod rename;
 mod route;
 mod run;
 pub(crate) mod state;
@@ -37,6 +38,7 @@ pub use error::CommandError;
 pub use journal::{EntryId, EntrySummary, Scope};
 pub use patch::Patch;
 pub use pipeline::Outcome;
+pub use rename::Rename;
 pub use route::{Applied, HumanRoute, Route};
 pub use write::Write;
 

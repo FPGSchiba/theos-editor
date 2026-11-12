@@ -4,6 +4,7 @@ mod common;
 mod helper;
 mod lock;
 mod pipeline;
+mod rename;
 mod undo;
 mod verdict;
 mod workspace;
