@@ -45,13 +45,13 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 
 Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and P23 from version 3
 (decision 0003, #24). Rows P31–P34 and P45, and the new P29 and P30, come from umbrella version 4
-(decision 0004), which waits for Jann in its docs PR.
+(decision 0004), which waits for Jann in its docs PR #31.
 
 ## Needs Jann
 
 - Decision 0004, what the map generation research changes (umbrella version 4, the P08 spec,
-  `docs/map-package.md`, `docs/generators.md` §3, decision 0003), waits for Jann in its docs PR.
-  P08's plan starts once it is merged.
+  `docs/map-package.md`, `docs/generators.md` §3, decision 0003), waits for Jann in its docs PR
+  #31. P08's plan starts once it is merged.
 - Deferred by Jann on 12 Nov 2026 (decision 0004):
   - the shape of regions with a recommended power (D11): areas inside the floor's map (the
     working assumption) or separate maps; the power scale (working assumption: 1–5, like
