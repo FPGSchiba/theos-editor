@@ -302,6 +302,10 @@ These go into the ledger's "Rulings (build)" and the PR, in this form.
 - L26. Ruling: P04's test `a_folder_without_theos_toml_exits_with_1` becomes `…_exits_with_2` —
   spec §5.4 moves failures to 2; the test is changed to the spec, not weakened — cost if wrong:
   none.
+- L27. Ruling: on P06's `Create`, `theos new`'s `introduced` holds only the errors that refused
+  it, empty when the file is written. New warnings appear in `findings`, not in `introduced`,
+  although P06's `Outcome.introduced` lists them — spec §5.9 gives `introduced` that meaning, and
+  the exit code follows it — cost if wrong: one more key, added without breaking the shape.
 
 ## File structure
 
@@ -441,10 +445,12 @@ pub fn common_dir(git: &Git, top: &Path) -> Result<PathBuf, GitError>;  // rev-p
 **Before you start:** run `git fetch origin`.
 - **If `origin/main` already holds `crates/theos-studio/src/workspace.rs`:** run
   `git merge origin/main` and write only what is missing here.
-- **Otherwise P06 has written these files on its pushed branch,**
-  `origin/phase/P06-command-layer-and-repo-lock`. P06 copied this plan's shapes. Read P06's
+  P06 is expected to merge first (its build was nearly done when this plan was committed).
+- **Otherwise P06 has written these files on its pushed branch.** It was
+  `phase/P06-command-layer-and-repo-lock`; P06 renames it before its PR, so find the current one
+  with `gh pr list --search "P06"` or `git branch -r`. P06 copied this plan's shapes. Read P06's
   `crates/theos-studio/src/{error,workspace}.rs`, `Cargo.toml` and
-  `tests/studio/{main,common,workspace}.rs` with `git show origin/phase/P06-…:<path>`. Write
+  `tests/studio/{main,common,workspace}.rs` with `git show origin/<branch>:<path>`. Write
   P05's files to match them line for line wherever the interfaces agree, so the later merge has
   only small add/add conflicts:
   - P05 leaves out P06's `commands: CommandState` field, its line in `open`, and P06's
@@ -548,8 +554,8 @@ pub fn report(error: &dyn std::error::Error) -> String;
 **Before you start:** run `git fetch origin`.
 - If `origin/main` holds `crates/theos-studio/src/introduced.rs`, run `git merge origin/main`,
   note "Task 3 taken from P06 (#PR)" in the ledger, and go to Task 4.
-- Otherwise read P06's version on `origin/phase/P06-command-layer-and-repo-lock` and write
-  P05's line for line like it, with its unit tests, as in Task 2.
+- Otherwise read P06's version on its pushed branch (see Task 2) and write P05's line for line
+  like it, with its unit tests, as in Task 2.
 
 **Files:** create `crates/theos-studio/src/introduced.rs`; modify `src/lib.rs`.
 
@@ -1034,6 +1040,28 @@ pub struct BeatView { key: String, targets: Vec<String> }                       
 
 **ACs:** CE-17.1.
 
+**Before you start:** run `git fetch origin` and `git merge origin/main`.
+- **P06 merges first,** so moving `theos new` onto P06's `Create` command falls to P05 (spec §4.2,
+  P06 spec §6.1).
+- **P06's command layer** (on `main`, or on P06's branch until then):
+  - `theos_studio::command::{Create, Command, CommandError}`;
+  - `Workspace::run(&dyn Command) -> Result<Outcome, CommandError>`;
+  - `Create { path, text }` never replaces a file (`persist_noclobber`, case-insensitive on
+    Windows and macOS);
+  - `CommandError::Exists { path }`;
+  - `CommandError::Rejected { blocking, findings }`, whose `blocking` are the introduced errors;
+  - `Outcome { findings, introduced, .. }`.
+- **With `Create` on `main`,** steps 6 and 7 below become one call,
+  `workspace.run(&Create { path, text })`, and `create.rs` keeps only steps 1 to 5:
+  - `Ok(outcome)` gives `Created { findings: outcome.findings, introduced: vec![] }`, written;
+  - `Rejected { blocking, findings }` gives `Created { findings, introduced: blocking }`, not
+    written;
+  - `Exists { path }` gives `CreateError::Exists { path }`;
+  - any other `CommandError` becomes a `StudioError` variant `Command(#[from] CommandError)`,
+    transparent, added in this task if P06 has not.
+- **Without `Create` on `main`** when this task starts, build steps 6 and 7 as written, and note
+  in the ledger that the move falls to P06.
+
 **Files:**
 - Modify:
   - `crates/theos-content/src/kinds/spec.rs`: `number_prefix` and `under_parent`;
@@ -1089,7 +1117,7 @@ pub struct NewView { path: String, id: String, findings: Vec<FindingView>, intro
    - `UnderParent(field)` takes the patched front matter's scalar `field` (missing is
      `NoParent`), then `index().record(parent)` (empty is `ParentMissing`), and takes the first
      record's path into `Placement::under_parent`.
-6. **Verdict:**
+6. **Verdict** (P06's `Create` does steps 6 and 7 when it is on `main`; see above):
    - `preview = workspace.write(|i| i.preview(&[Change::text(path, record.text())]))`;
    - before is `findings_for` each of `update.reparsed`, `relinked`, `revalidated`, `removed`
      and the new path;
@@ -1297,7 +1325,7 @@ its stderr names `lore/never-confirm` (or the rule in question) and the file, an
 
 theos-phase steps 4 to 6:
 1. **The final review loop** of `CLAUDE.md`: a fresh reviewer on the most capable model each
-   round, cap 5. The brief includes this plan's rulings L1–L26, the P06 agreement and the spec's
+   round, cap 5. The brief includes this plan's rulings L1–L27, the P06 agreement and the spec's
    Review Focus (§8).
 2. **Verify:**
    - `git fetch origin`. If P06 merged theos-studio files meanwhile, run `git merge origin/main`
@@ -1305,7 +1333,7 @@ theos-phase steps 4 to 6:
    - `cargo xtask gate` on Windows;
    - `cargo xtask ac-trace --phase P05`.
 3. **The PR** `feat(cli): command line and hook (P05)`. It:
-   - lists every ruling: L1–L26 above and the build's;
+   - lists every ruling: L1–L27 above and the build's;
    - gets the labels `windows` and `macos` at creation, since the hook's mode and the Windows
      `sh` path are per OS, and links their `platforms` runs (re-dispatch
      `gh workflow run platforms --ref <branch>` after pushes);
