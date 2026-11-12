@@ -14,9 +14,9 @@ pub(crate) const RETRY_PAUSE: Duration = Duration::from_millis(100);
 
 /// Writes `plan` under `root`: content first in plan order, removals last, then the folders those
 /// removals emptied. A read-only file the plan would replace or remove fails it with `ReadOnly`
-/// before anything is written. On a failure it puts back what it wrote from each change's `before`, removes
-/// the folders it created that are empty again, and fails with `Write`, or with `Partial` when a
-/// file cannot be put back.
+/// before anything is written. On a failure it puts back what it wrote from each change's
+/// `before`, removes the folders it created that are empty again, and fails with `Write`, or with
+/// `Partial` when a file cannot be put back.
 pub(crate) fn write_plan(root: &Path, plan: &Plan) -> Result<(), CommandError> {
     write_plan_with(root, plan, &mut DiskOps)
 }
@@ -273,7 +273,7 @@ fn with_retries(target: &Path, mut op: impl FnMut() -> io::Result<()>) -> io::Re
 }
 
 /// Whether another program may be holding the file only for now.
-fn retryable(error: &io::Error) -> bool {
+pub(super) fn retryable(error: &io::Error) -> bool {
     if error.kind() == ErrorKind::PermissionDenied {
         return true;
     }
@@ -315,20 +315,35 @@ mod tests {
         }
     }
 
-    fn temp_files(dir: &Path) -> String {
+    /// Every file and folder under `dir`: its path and whether it is a folder.
+    fn entries(dir: &Path) -> Vec<(PathBuf, bool)> {
         let mut found = Vec::new();
         let mut stack = vec![dir.to_path_buf()];
         while let Some(folder) = stack.pop() {
             for entry in fs::read_dir(&folder).into_iter().flatten().flatten() {
                 let path = entry.path();
-                if path.is_dir() {
-                    stack.push(path);
-                } else if entry.file_name().to_string_lossy().starts_with(".theos-") {
-                    found.push(path.display().to_string());
+                let is_folder = path.is_dir();
+                if is_folder {
+                    stack.push(path.clone());
                 }
+                found.push((path, is_folder));
             }
         }
-        found.join(", ")
+        found
+    }
+
+    fn temp_files(dir: &Path) -> String {
+        let temp: Vec<String> = entries(dir)
+            .into_iter()
+            .filter(|(path, is_folder)| {
+                !is_folder
+                    && path
+                        .file_name()
+                        .is_some_and(|name| name.to_string_lossy().starts_with(".theos-"))
+            })
+            .map(|(path, _)| path.display().to_string())
+            .collect();
+        temp.join(", ")
     }
 
     #[test]
@@ -364,6 +379,12 @@ mod tests {
             ]),
         );
         assert!(matches!(result, Err(CommandError::Write { ref path, .. }) if path == "b.md"));
+        // The create was never retried: the message does not blame another program.
+        let message = result
+            .err()
+            .map(|error| error.to_string())
+            .unwrap_or_default();
+        assert!(!message.contains("another program"), "{message}");
         assert_eq!(fs::read_to_string(dir.path().join("b.md"))?, "appeared");
         assert_eq!(fs::read_to_string(dir.path().join("a.md"))?, "a-old");
         assert_eq!(temp_files(dir.path()), "");
@@ -645,18 +666,14 @@ mod tests {
 
     /// Every folder under `dir`, as paths relative to it with `/`.
     fn folders(dir: &Path) -> Vec<String> {
-        let mut found = Vec::new();
-        let mut stack = vec![dir.to_path_buf()];
-        while let Some(folder) = stack.pop() {
-            for entry in fs::read_dir(&folder).into_iter().flatten().flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    let relative = path.strip_prefix(dir).unwrap_or(&path);
-                    found.push(relative.to_string_lossy().replace('\\', "/"));
-                    stack.push(path);
-                }
-            }
-        }
+        let mut found: Vec<String> = entries(dir)
+            .into_iter()
+            .filter(|(_, is_folder)| *is_folder)
+            .map(|(path, _)| {
+                let relative = path.strip_prefix(dir).unwrap_or(&path);
+                relative.to_string_lossy().replace('\\', "/")
+            })
+            .collect();
         found.sort();
         found
     }

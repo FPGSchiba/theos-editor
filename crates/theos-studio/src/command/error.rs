@@ -3,6 +3,7 @@
 use theos_content::rename::RenameError;
 use theos_content::{Finding, IndexError, PatchError, ReadError, RecordEditError, RecordError};
 
+use super::files::retryable;
 use crate::StudioError;
 use crate::lock::LockError;
 
@@ -135,7 +136,7 @@ pub enum CommandError {
         path: String,
     },
     /// A file cannot be written.
-    #[error("cannot write `{path}`: {source}; another program may have it open")]
+    #[error("cannot write `{path}`: {source}{}", retried_hint(.source))]
     Write {
         /// The file.
         path: String,
@@ -165,6 +166,16 @@ pub enum CommandError {
     /// The studio failed.
     #[error(transparent)]
     Studio(#[from] StudioError),
+}
+
+/// The hint for a write error whose kind the writer retried (spec §5.6): the retries are used up,
+/// so another program probably holds the file. Other errors get no hint.
+fn retried_hint(source: &std::io::Error) -> &'static str {
+    if retryable(source) {
+        "; another program may have it open"
+    } else {
+        ""
+    }
 }
 
 impl CommandError {
