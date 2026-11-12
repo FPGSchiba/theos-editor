@@ -348,6 +348,10 @@ fn a_broken_source_is_a_finding_with_its_position() -> TestResult {
     assert_eq!(hits[0].path, SOURCE);
     assert_eq!(hits[0].id, None);
     assert_eq!(hits[0].position.map(|p| (p.line, p.column)), Some((3, 3)));
+    // The span agrees: an empty span at that place (the `o` of `oops`).
+    let broken = "{\n  \"format\": 1,\n  oops\n}\n";
+    let at = broken.find("oops").ok_or("oops")?;
+    assert_eq!(hits[0].span.map(|s| (s.start, s.end)), Some((at, at)));
     // A broken source gives no stray, edited or missing finding.
     assert_eq!(of_rule(&found, "formalism/stray"), Vec::new());
     assert_eq!(of_rule(&found, "formalism/edited"), Vec::new());
@@ -367,6 +371,56 @@ fn a_broken_source_is_a_finding_with_its_position() -> TestResult {
     std::fs::write(project.root().join(SOURCE), [0xff, 0xfe, 0x00])?;
     let found = findings(&project)?;
     assert_eq!(of_rule(&found, "formalism/source").len(), 1, "{found:?}");
+    Ok(())
+}
+
+#[test]
+fn a_source_error_after_non_ascii_text_counts_scalar_values() -> TestResult {
+    let project = generated()?;
+    // `é` and `😀` before the error on the same line: 6 bytes, 2 scalar values. serde_json
+    // reports the unknown field after its key.
+    let text = "{\n  \"é😀\": 1\n}\n";
+    project.write(SOURCE, text)?;
+    let found = findings(&project)?;
+    let hits = of_rule(&found, "formalism/source");
+    assert_eq!(hits.len(), 1, "{found:?}");
+    let span = hits[0].span.ok_or("a span")?;
+    assert_eq!(span.start, span.end);
+    let offset = span.start;
+    assert!(offset > text.find('😀').ok_or("emoji")?, "{offset}");
+    let position = hits[0].position.ok_or("a position")?;
+    let line_start = text[..offset].rfind('\n').map_or(0, |i| i + 1);
+    assert_eq!(position.line, 2);
+    assert_eq!(
+        position.column,
+        text[line_start..offset].chars().count() + 1
+    );
+    Ok(())
+}
+
+#[test]
+fn a_source_cut_off_at_the_end_is_placed_at_the_end() -> TestResult {
+    let project = generated()?;
+    for text in ["{\n  \"format\": 1,", "{\n  \"format\": 1,\n", "{"] {
+        project.write(SOURCE, text)?;
+        let found = findings(&project)?;
+        let hits = of_rule(&found, "formalism/source");
+        assert_eq!(hits.len(), 1, "{text:?}: {found:?}");
+        let span = hits[0].span.ok_or("a span")?;
+        // serde_json's column at the end of a line without LF is the line's length: the span
+        // is the end of the text, or the last byte before it.
+        assert_eq!(span.start, span.end, "{text:?}");
+        assert!(
+            span.end + 1 >= text.len() && span.end <= text.len(),
+            "{text:?}: {span:?}"
+        );
+        let position = hits[0].position.ok_or("a position")?;
+        assert_eq!(
+            position.line,
+            text.matches('\n').count() + 1,
+            "{text:?}: {position:?}"
+        );
+    }
     Ok(())
 }
 
