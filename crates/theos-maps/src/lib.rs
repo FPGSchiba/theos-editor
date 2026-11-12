@@ -7,11 +7,15 @@
 //! ([`kernels::num`]), the per-stage random streams ([`rng`]) and the run's [`progress`] events
 //! and cancel token. The same inputs give the same bytes on every platform.
 
+pub mod error;
+pub mod golden;
 pub mod grid;
 pub mod kernels;
 pub mod progress;
 pub mod recipe;
 pub mod rng;
+#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 11"))]
+pub mod runner;
 pub mod stage;
 pub mod stages;
 pub mod world;
