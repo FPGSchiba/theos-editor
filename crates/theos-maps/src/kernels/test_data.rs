@@ -277,3 +277,102 @@ pub fn assert_close(actual: &[f64], expected: &[f64], tol: f64) {
         assert!((a - e).abs() <= tol * scale, "cell {i}: {a} vs {e}");
     }
 }
+
+// Raster masks (rows of 7 columns) and their scipy.ndimage results; 1 is true.
+// SPARSE = ["0110000","0110010","0000100","1001000","1000011","0100011"]
+pub const SPARSE: [u8; 42] = [
+    0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0,
+    0, 1, 1, 0, 1, 0, 0, 0, 1, 1,
+];
+// label(SPARSE, structure=generate_binary_structure(2, 1))
+pub const LABELS_4: [u32; 42] = [
+    0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 2, 0, 0, 0, 0, 0, 3, 0, 0, 4, 0, 0, 5, 0, 0, 0, 4, 0, 0, 0,
+    0, 6, 6, 0, 7, 0, 0, 0, 6, 6,
+];
+// label(SPARSE, structure=ones((3, 3)))
+pub const LABELS_8: [u32; 42] = [
+    0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 2, 0, 0, 0, 0, 0, 2, 0, 0, 3, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0,
+    0, 4, 4, 0, 3, 0, 0, 0, 4, 4,
+];
+// distance_transform_edt(~SPARSE, sampling=2.0)
+pub const EDT_SPARSE: [f64; 42] = [
+    2.0,
+    0.0,
+    0.0,
+    2.0,
+    2.8284271247461903,
+    2.0,
+    2.8284271247461903,
+    2.0,
+    0.0,
+    0.0,
+    2.0,
+    2.0,
+    0.0,
+    2.0,
+    2.0,
+    2.0,
+    2.0,
+    2.0,
+    0.0,
+    2.0,
+    2.8284271247461903,
+    0.0,
+    2.0,
+    2.0,
+    0.0,
+    2.0,
+    2.0,
+    2.0,
+    0.0,
+    2.0,
+    2.8284271247461903,
+    2.0,
+    2.0,
+    0.0,
+    0.0,
+    2.0,
+    0.0,
+    2.0,
+    4.0,
+    2.0,
+    0.0,
+    0.0,
+];
+// BLOB = ["0111100","1111110","1111111","0111110","0011100","0100001"]
+pub const BLOB: [u8; 42] = [
+    0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1,
+    1, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+];
+// binary_dilation(BLOB, generate_binary_structure(2, 1), border_value=0)
+pub const BLOB_DIL_CROSS: [u8; 42] = [
+    1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+];
+// binary_erosion(BLOB, generate_binary_structure(2, 1), border_value=0)
+pub const BLOB_ERO_CROSS: [u8; 42] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+// binary_dilation(binary_erosion(BLOB, cross, border_value=0), cross, border_value=0)
+pub const BLOB_OPEN_CROSS: [u8; 42] = [
+    0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+// disk = (yy**2 + xx**2) <= 2.25 on mgrid[-2:3, -2:3]  (a 1.5-cell disk: the full 3 x 3)
+// binary_dilation(BLOB, disk, border_value=0): every cell true
+// binary_erosion(BLOB, disk, border_value=0)
+pub const BLOB_ERO_DISK: [u8; 42] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+// binary_dilation(binary_erosion(BLOB, disk, border_value=0), disk, border_value=0)
+pub const BLOB_OPEN_DISK: [u8; 42] = [
+    0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+// binary_erosion(BLOB, cross, iterations=2, border_value=0)
+pub const BLOB_ERO_CROSS_2: [u8; 42] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];

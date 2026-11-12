@@ -2,8 +2,11 @@
 
 pub mod complex;
 pub mod diff;
+pub mod distance;
 pub mod fft;
 pub mod filters;
+pub mod labels;
+pub mod morphology;
 pub mod noise;
 pub mod num;
 pub mod reflect;
@@ -22,6 +25,9 @@ pub enum KernelError {
     /// A statistic of no values.
     #[error("no values to summarise")]
     Empty,
+    /// A distance transform of a mask with no `true` cell.
+    #[error("the mask has no true cell")]
+    EmptyMask,
     /// An FFT length that is not a power of two.
     #[error("FFT length {len} is not a power of two")]
     NotPowerOfTwo {
