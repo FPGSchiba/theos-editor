@@ -12,7 +12,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | done | #21 | #28 |
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
-| P06 | Command layer and git | theos-editor | todo | | |
+| P06 | Command layer and repo lock | theos-editor | todo | | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map format and terrain generator | theos-editor | spec-approved | #27 | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
@@ -42,13 +42,21 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
 | P34 | Interiors | theos-editor | todo | | |
 | P45 | Atlas level switcher | theos-editor | todo | | |
+| P46 | Git read | theos-editor | todo | | |
+| P47 | Git write | theos-editor | todo | | |
 
 Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and P23 from version 3
 (decision 0003, #24). Rows P31–P34 and P45, and the new P29 and P30, come from umbrella version 4
-(decision 0004), which waits for Jann in its docs PR #31.
+(decision 0004, #31). Rows P46 and P47 and the new P06 come from umbrella version 5 (the split of
+P06), which waits for Jann in its docs PR.
 
 ## Needs Jann
 
+- Umbrella version 5 splits P06 into P06 Command layer and repo lock (CE-20, CE-22.2), P46 Git
+  read (CE-21) and P47 Git write (CE-22.1, CE-22.3), as Jann chose on 12 Nov 2026. It waits for
+  Jann in its docs PR. P06's spec PR builds on it. Agreed with the P05 session: P05 builds
+  `theos_vcs::Git`, `theos_vcs::staged`, `theos_studio::Workspace` and `check_staged`, which P46
+  and P47 extend; P05's own split takes P48 and up.
 - Decision 0004, what the map generation research changes (umbrella version 4, the P08 spec,
   `docs/map-package.md`, `docs/generators.md` §3, decision 0003), waits for Jann in its docs PR
   #31. P08's plan starts once it is merged.
