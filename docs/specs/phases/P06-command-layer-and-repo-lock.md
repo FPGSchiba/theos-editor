@@ -61,6 +61,9 @@ Later phases build on it:
   - the repo lock (§5.9).
 - P05's `Workspace`, extended with the journal and the lock (§5.2). If P06's build starts before
   P05 has merged, P06 creates `Workspace` in the agreed shape, and P05 merges onto it.
+- In `theos-content`, one public function: the edits that rename ids in a record, spelling each
+  front-matter scalar in its own quoting style (§5.8). It belongs there because P02's YAML
+  encoder is private to that crate.
 - A `tracing` log line for each command, with its `Update` and `revalidated` included (P04
   ruling L21).
 - Every part uses std or a crate already in `Cargo.lock` (§4.2, §5.1): `std::fs::File::lock`,
@@ -132,6 +135,9 @@ A scratch crate outside the repo, with the versions pinned in `Cargo.lock`.
 
   So a file is written as a temporary file from `tempfile` in the same folder, kept, and moved
   with `std::fs::rename` (§5.6).
+- **A create that never replaces:** `NamedTempFile::persist_noclobber` writes a new file; over
+  an existing target it fails with `AlreadyExists` (os error 183), also when the target is
+  spelled in another case, and it leaves no temporary file behind.
 - **The content project today:** `../tower-of-theos` has no records yet and no findings
   (`Index::in_memory` and `sync`), so nothing there is a standing error.
 - P03's `preview`, `update` and `backlinks`, P02's `Record::with_edits`, `Record::patch` and the
@@ -146,6 +152,7 @@ The git probes of this brainstorming belong to P46 and P47 and are kept in §11.
 | Split | P06 command layer + lock, P46 git read, P47 git write (Jann) | the lock in P47 (command writes would get it later, changing P06's code); two phases, with all of git in one (about P04's size); no split |
 | Undo storage | in memory, per workspace (Jann) | in `.theos/cache/undo/` (copies of uncommitted edits beside the files); as blobs in git's object store (the command layer would need git, and gc prunes them) |
 | Blocking | errors the command introduces (Jann) | any error on the paths the command touches or revalidates: a standing error, or a neighbour with one, would block every command, saves included |
+| What "introduced" means | more errors of a rule on a path than findings of it before | the same path, rule and message (messages change with edits, §5.5); a stable key for every finding in `theos-content` (work in P03's and P04's rules for one P06 question) |
 | Undo entries | the bytes of each file before and after | inverse commands, such as setting the old field value back: "restores the bytes" is then a property to prove for every command, not a given |
 | Undo order | the newest entry, or the newest entry that touched one record, allowed only while its files still hold the bytes it left | one global stack only (a per-record undo in P12 would undo an unrelated record) |
 | Lock | std `File::try_lock` on `.theos/cache/lock` | `fd-lock` 4.0.4, `fs4` 1.1.0 (both wrap the same OS calls std now has); a lock file whose existence is the lock (stays behind after a crash) |
@@ -164,10 +171,11 @@ The git probes of this brainstorming belong to P46 and P47 and are kept in §11.
 | Commands | `command::{create, write, edit, patch, delete}` | P02's `Record`, `with_edits`, `patch`; P03's `KindSpec::order` | Each builds a plan (§5.3) |
 | Base | `command::base` | `sha2` | SHA-256 of the bytes a caller saw (§5.3) |
 | Pipeline | `command::pipeline` | P03's `update`, `preview`, `findings_for` | The order of §5.4 |
-| Verdict | `command::verdict` | – | Introduced errors (§5.5) |
-| Writing | `command::write` | `tempfile`, `std::fs::rename` | Order, retries, rollback (§5.6) |
+| Verdict | `introduced` (shared with P05's `theos new`) | – | Counts per path and rule (§5.5); one function, built by whichever of P05 and P06 builds first |
+| Writing | `command::write` | `tempfile` (`persist_noclobber`), `std::fs::rename` | Order, retries, rollback (§5.6) |
 | Undo | `command::undo` | – | The journal (§5.7) |
-| Rename | `command::rename` | P03's `backlinks`, `children`, `record`; P02's body links and scalars; P02's YAML encoder | Id map, participants (§5.8) |
+| Rename | `command::rename` | P03's `backlinks`, `children`, `record` | Id map, path map, participants (§5.8) |
+| Rename edits | `theos_content::rename` (new, public) | P02's front-matter model and body links, P02's YAML encoder (crate-private, hence this module) | The `id` field and every link to a renamed id, as span edits (§5.8) |
 | Repo lock | `lock` | `std::fs::File::try_lock`, `serde_json` | Waiting, the owner file (§5.9) |
 | Routes | `command::route` | – | The seam for P07 (§5.10) |
 
@@ -261,19 +269,32 @@ an error.
   every path the plan gives content for.
 - **After:** `Preview.findings`, with configured severities (P04).
 - **Before:** `findings_for` of each affected path, read after the preview. A file the plan
-  moves (rename, §5.8) has its findings looked up under its old path and compared under its new
+  moves (rename, §5.8) has its findings looked up under its old path and counted under its new
   one.
-- **Matching:** by path, rule and message. Severity and position play no part: a finding whose
-  severity a settings change raised, or whose line moved, is not new. Each finding before matches
-  at most one finding after.
-- **Blocking:** a finding after that has no match before, and whose severity after configuration
-  is error.
-  - Guardrails are always errors (G8), so a command that introduces a never-confirm,
-    no-overshoot or inworld-vocab finding is always rejected.
-  - A settings change that lowers a guardrail gives P04's `settings/guardrail` error, which is
-    new, so the change is rejected.
+- **Counting, not messages.** Findings are compared as counts per path and rule, not by message.
+  Many P03 and P04 messages change with ordinary edits:
+  - three-clue's "No clue moves T-012…" becomes "Only one clue…" when a first clue is added;
+  - `link/dangling`, `schema/version-id`, `record/file-name`, reveal-order and requires quote
+    ids or places.
+
+  Matching by message would treat such an error as new. A truth with a standing three-clue error
+  (set to error in the settings) could then never get its first clue through a command, and a
+  rename would trip on every standing error that quotes the renamed id. Positions and
+  severities play no part either.
+- **Blocking:** for a path and a rule, the number of errors (severity after configuration) after
+  the command is larger than the number of findings of that rule on that path before. The errors
+  above the count before are the blocking ones; when several are candidates, the ones whose
+  messages have no equal before are reported first.
+  - A new file has no findings before, so every error on it blocks.
+  - Guardrails are always errors (G8), so a command that adds a never-confirm, no-overshoot or
+    inworld-vocab error to a path is always rejected.
+  - A settings change that lowers a guardrail gives P04's `settings/guardrail` error on the
+    settings file, which had none, so the change is rejected.
+  - A settings change that raises a rule from warning to error does not block: the findings
+    were there before, now with a higher severity.
 - **Not blocking:** standing errors, and every warning. They come back in `Outcome.findings`,
-  and the new warnings also in `introduced`.
+  and the new warnings also in `introduced`. One command may also swap one error for another of
+  the same rule on the same path: the count stays, so it passes (ruling 7).
 
 Neighbours count (P04 §1: "P06 rejects a command whose preview has blocking findings, the
 neighbours' included"). Lowering a truth's `target` so that an existing clue overshoots
@@ -284,11 +305,13 @@ introduces a no-overshoot error on the clue, so the change is rejected.
 - **One file:**
   1. Create the parent folders.
   2. Write `after` to a temporary file from `tempfile` in the same folder (prefix `.theos-`,
-     suffix `.tmp`), flush it to disk, and keep it.
-  3. `std::fs::rename` it over the target.
-
-  The rename is atomic on every OS of G2. On Windows it also replaces a file that another
-  program has open with delete sharing (§4.2).
+     suffix `.tmp`), and flush it to disk.
+  3. A file that exists (`before` is `Some`): keep the temporary file and `std::fs::rename` it
+     over the target. The rename is atomic on every OS of G2. On Windows it also replaces a file
+     that another program has open with delete sharing (§4.2).
+  4. A new file (`before` is `None`): `persist_noclobber`, which fails with `AlreadyExists` if a
+     file has appeared at the target since the check, under any case on a case-insensitive disk
+     (§4.2). A create never replaces a file.
 - **Permissions.** A replaced file keeps its permissions. A new file gets the permissions a
   plain `File::create` would give, not `tempfile`'s owner-only mode.
 - **Retries.** A rename refused with `PermissionDenied`, or with Windows' sharing violation, is
@@ -311,8 +334,12 @@ introduces a no-overshoot error on the clue, so the change is rejected.
 
 ### 5.7 Undo and redo (CE-20.2)
 
-- **Entry.** One per applied command: an id, the command's label, and every `FileChange` with
-  its exact `before` and `after` bytes. A moved file is two changes: a removal and a creation.
+- **Entry.** One per applied command:
+  - an id and the command's label;
+  - every `FileChange` with its exact `before` and `after` bytes. A moved file is two changes:
+    a removal and a creation;
+  - the finding counts per path and rule of the affected paths, before and after the command
+    (§5.5).
 - **Journal.** Two lists per workspace: done and undone.
   - A new command appends to done and clears undone.
   - Done keeps the newest 100 entries and drops older ones.
@@ -326,13 +353,20 @@ introduces a no-overshoot error on the clue, so the change is rejected.
   - So an undo never overwrites a later change.
   - Undoing out of order works only where no later command touched the same files.
 - **Undo** runs the pipeline of §5.4 with the reversed plan (each `after` back to `before`). The
-  plan comes from the entry, so step 3 compares against the entry's `after`. The verdict
-  applies.
-  - An undo that would introduce an error is rejected like any command. One example: removing a
-    record that a later command linked to.
-  - On success, the entry moves from done to undone.
-- **Redo** is the same in the other direction. Its precondition is that every file holds the
-  entry's `before`. On success, the entry moves back to done.
+  plan comes from the entry, so step 3 compares against the entry's `after`.
+- **The verdict of an undo** counts the state the undo restores as standing. For each path and
+  rule, the allowed number of errors is the larger of:
+  - the count now;
+  - the entry's count before the command.
+
+  So undoing a fix brings its error back, because that error was there before the command. An
+  undo that would add an error that neither state had is rejected like any command. One
+  example: removing a record that a later command linked to.
+- On success, the entry moves from done to undone.
+- **Redo** is the same in the other direction:
+  - its precondition is that every file holds the entry's `before`;
+  - its verdict allows the larger of the count now and the entry's count after the command;
+  - on success, the entry moves back to done.
 - **The exact bytes.** Undo writes `before` as it was read, CRLF, missing final newline and all.
   It never writes the normalised text.
 
@@ -345,7 +379,10 @@ introduces a no-overshoot error on the clue, so the change is rejected.
    links to the id, so it must see links added outside the editor.
 2. **Checks.**
    - `id` names exactly one record: none is `NotFound`, several is `Ambiguous { paths }`.
-   - `to` differs from `id`.
+   - `to` differs from `id`, also when case is ignored. Every built-in id rule fixes the case
+     of its letters, so a rename that changes only case can never give a valid id. It fails at
+     once with `CaseOnly` on every OS, before it could trip over the record's own file on a
+     case-insensitive disk.
    - Once the maps of steps 3 and 4 are built: no record has a new id of the id map, and no new
      path of the path map exists on disk, the child folder `<folder>/<to>/` included. Existence
      is checked as for `Create`, hidden and ignored files included. Otherwise the error is
@@ -363,19 +400,24 @@ introduces a no-overshoot error on the clue, so the change is rejected.
      index's walk). World and people children and versions sit there (data model §2;
      `Placement::UnderParent`).
    - A version renamed by the id map moves inside the moved folder to its new file name.
-5. **Edits.** Each file whose content changes is parsed with P02 at its old path, edited, and
-   written at its new path:
-   - the `id` field of every renamed record: its scalar, written in the scalar's own quoting
-     style with P02's YAML encoder;
-   - every link whose target is in the id map:
-     - the index's `backlinks` of each old id names the source records;
-     - P02's model of each source gives the exact spans;
-     - in the front matter, the scalar is rewritten in its own style;
-     - in the body, only the `target_span` is rewritten, so `#fragment` and `|shown text`
-       stay;
-     - this covers every slot: fields, list items, lens entries, beat attributes, voice speakers
-       and beliefs, note version and `resolved by` links, and mentions;
-     - a record's links to itself are among its backlinks.
+5. **Edits.** The index's `backlinks` of each old id name the source records, and the renamed
+   records are sources too. Each source is read and parsed with P02 at its old path, edited, and
+   written at its new path. The edits come from one new public function of `theos-content`,
+   `rename::edits(&Record, &IdMap) -> Result<Vec<TextEdit>, …>`, applied with
+   `Record::with_edits`. It returns:
+   - an edit of the `id` field's scalar when the record's id is in the map;
+   - an edit for every link whose target is in the map:
+     - in the front matter, the scalar alone, in a field, a list item (block or flow), a map
+       entry or a lens entry. The new id is spelled in the scalar's own quoting style with P02's
+       encoder, so `"T-012"` stays double-quoted, `'T-012'` single-quoted and `T-012` plain;
+     - in the body, only the link's `target_span`, so `#fragment` and `|shown text` stay;
+     - this covers every slot: fields, list items, lens entries, beat attributes, voice
+       speakers and beliefs, note version and `resolved by` links, and mentions;
+     - a record's links to itself are included.
+
+   The function never goes through the patcher. The patcher re-encodes a changed list item
+   without its quoting and rewrites the item's lines, dropping a trailing comment. Span edits
+   leave every other byte as it is (G5).
 6. **Participants.** The steps above are participants: `versions`, `children`, `ids` and
    `links`. Each is one module with one job, and the participants are one list. P19 adds
    `comments` (`.theos/comments/<id>.toml`, decision 0002), and P22 adds whatever pins need
@@ -440,7 +482,7 @@ verdict on both routes. That is "every write passes the same validation" (archit
 - `CommandError` (`thiserror`), each variant with what a user needs:
   - `Rejected { blocking, findings }`;
   - `Stale { path }`, `NotFound`, `Exists { path }`, `IdTaken { id, path }`,
-    `Ambiguous { id, paths }`, `Path { path, reason }`;
+    `Ambiguous { id, paths }`, `CaseOnly { id, to }`, `Path { path, reason }`;
   - `Changed { path }`, `NothingToUndo`, `NothingToRedo`;
   - `Record` (P02's errors), `Patch`, `Edit`;
   - `Write { path, source }`, `Partial { path, source, unrestored }`;
@@ -469,9 +511,9 @@ Tests carry `// AC: <id>` directly above a `#[test]` function (P00's `ac-trace`)
 
 | AC | Proven by |
 |---|---|
-| CE-20.1 | (a) A patch that sets an invalid value, an edit that adds a dangling link, and a clue that newly reveals a `never` truth are each rejected with their blocking findings. After each, every file of the project has its bytes (hashed before and after), `dump()` of the index is unchanged, and no journal entry exists. (b) Lowering a truth's `target` so that an existing clue overshoots is rejected with the clue's finding: a neighbour. (c) A command on a record with a standing error, and a command whose neighbour has one, are applied, and `findings` lists the standing errors. (d) A settings write that lowers a guardrail is rejected. |
-| CE-20.2 | (a) For each command kind, undo gives every touched file its exact earlier bytes and the index equals a cold build. The CRLF record and the record without a final newline come back byte for byte. (b) Undo of a rename restores every path, removes the new folder and brings back the old one. (c) An undo whose file changed afterwards fails with `Changed` and writes nothing. (d) Redo gives the later bytes again. (e) `Scope::Record` undoes the newest entry of that record and leaves a newer entry of another record alone. (f) A property test: a random sequence of commands, then undo until the journal is empty, gives every file its first bytes. |
-| CE-20.3 | Renaming the truth, the concept and the floor of `commands/` in one command each:<br>• no record holds a link to an old id (`backlinks` of each old id is empty, and every expected link now names the new id);<br>• every slot of §5.8 is rewritten, with fragments, shown texts and quoting kept;<br>• the floor's child folder and the concept's versions moved and were renamed, and the versions' own inbound links (`picked`, `from`) were rewritten;<br>• the index has no `link/dangling` and no new finding;<br>• exactly one journal entry was added.<br>A rename to a taken id fails with `IdTaken`; a rename to an id that breaks the kind's rule is rejected with `schema/id`. |
+| CE-20.1 | (a) A patch that sets an invalid value, an edit that adds a dangling link, and a clue that newly reveals a `never` truth are each rejected with their blocking findings. After each, every file of the project has its bytes (hashed before and after), `dump()` of the index is unchanged, and no journal entry exists. (b) Lowering a truth's `target` so that an existing clue overshoots is rejected with the clue's finding: a neighbour. (c) A command on a record with a standing error, and a command whose neighbour has one, are applied, and `findings` lists the standing errors. With three-clue set to error, a truth with no clue gets its first clue although the message of its standing error changes. A create whose new record has an error is rejected. (d) A settings write that lowers a guardrail is rejected; one that raises a rule from warning to error is applied. |
+| CE-20.2 | (a) For each command kind, undo gives every touched file its exact earlier bytes and the index equals a cold build. The CRLF record and the record without a final newline come back byte for byte. (b) Undo of a rename restores every path, removes the new folder and brings back the old one. (c) An undo whose file changed afterwards fails with `Changed` and writes nothing. (d) Redo gives the later bytes again. (e) `Scope::Record` undoes the newest entry of that record and leaves a newer entry of another record alone. (f) Undo of a command that fixed a dangling link brings the link and its error back; undo of a create that a later command linked to is rejected. (g) A property test: a random sequence of commands, then undo until the journal is empty, gives every file its first bytes. |
+| CE-20.3 | Renaming the truth, the concept and the floor of `commands/` in one command each:<br>• no record holds a link to an old id (`backlinks` of each old id is empty, and every expected link now names the new id);<br>• every slot of §5.8 is rewritten, with fragments, shown texts and quoting kept (double-quoted, single-quoted and plain items in block and flow lists), and a trailing comment on a list item stays;<br>• the floor's child folder and the concept's versions moved and were renamed, and the versions' own inbound links (`picked`, `from`) were rewritten;<br>• the index has no `link/dangling` and no new finding;<br>• exactly one journal entry was added.<br>A rename to a taken id fails with `IdTaken`, a case-only rename with `CaseOnly`, and a rename to an id that breaks the kind's rule is rejected with `schema/id`. Unit tests of `rename::edits` in `theos-content` cover each slot and quoting style on its own. |
 | CE-22.2 | Two processes (the test binary started again in a helper mode, or a small helper binary):<br>(a) the helper holds the lock, and the test's `acquire` with a short wait fails with `Busy` naming the helper's pid and purpose; after the helper exits, and in a second run after it is killed, `acquire` succeeds at once;<br>(b) the helper and the test each append a line to the same record 20 times with `Edit`, reading the base before each and trying again on `Stale`; at the end the record holds all 40 lines, each exactly once, and every intermediate write was whole. |
 
 Untagged tests cover the rest:
@@ -496,7 +538,8 @@ is in `gate/thresholds.toml`, and no gate PR is needed.
 |---|---|
 | `theos_studio::Workspace` | One per working tree. It holds `Project`, `KindRegistry` and `Index`, opens with `Workspace::open(root)`, takes the registry from `parts::builtin()`, and gives `&mut Index`. P06 adds fields and `impl Workspace` blocks in its own modules. |
 | `check_staged` | Never takes the repo lock. P47's commit, which holds the lock, runs git, and git runs the hook. |
-| `theos new` | P05 writes the file after a `preview`. Whichever of P05 and P06 merges second moves it onto `Create`. |
+| `theos new` | P05 writes the file after a `preview`, blocking only on introduced errors, and creates it with no-clobber (`create_new`), as `Create` does. Whichever of P05 and P06 merges second moves it onto `Create`; its behaviour stays the same. |
+| `theos_studio::introduced(before, after)` | The counting of §5.5, one function for `theos new` and the command verdict, built by whichever of P05 and P06 builds first. |
 
 If P06's build reaches `Workspace` before P05 has merged, it builds against these signatures, and
 whichever PR merges second merges `origin/main`.
@@ -522,7 +565,7 @@ whichever PR merges second merges `origin/main`.
 | Programs that ignore the lock (Obsidian, VS Code, git in a terminal) | A write between the plan and the write | Base check at the plan and again right before the write (§5.4). The window that remains is the write itself. |
 | Windows: a file held open without delete sharing | Write fails | Retries, then rollback with a message naming the file (§5.6) |
 | The index misses an outside edit before a command | The verdict compares against stale neighbours | Each command updates its own paths first, and a rename syncs everything. The commit check and the hook are strict (P05, P47). |
-| A message that names what the command changes | A standing error looks new and blocks: a message that quotes a renamed id | Messages of P03 and P04 rarely embed ids. Such a rejection names the finding, and the user fixes it first. The class gets a ruling if reviews find more (directive 3). |
+| Counting per path and rule lets one command swap an error for another of the same rule on the same path | That one new error passes the command verdict | The commit check and the hook block on every error of the staged snapshot (P05, P47), so it cannot be committed. Counting was chosen because many messages change with ordinary edits (§5.5). |
 | A rename of a parent with many children | A large plan and preview | Correct by construction. Previews are incremental (P03, P04). The test project measures one rename of 50 files, and the plan records the time. |
 | Undo memory | 100 entries with the bytes of every file they touched | Records are small text files. A rename of 200 files at 5 KB is 2 MB. |
 | P05 and P06 build `Workspace` at the same time | A conflict on merge | One agreed shape (§6.1). The second to merge merges `origin/main`. |
@@ -534,15 +577,19 @@ whichever PR merges second merges `origin/main`.
 - `[[T-012#3|the truth]]`, `[[T-012|T-012]]`, `[[T-012]]` twice in one line, and a link inside a
   voice block, a beat attribute, a note title (`resolved by [[…]]`) and a lens `unaware_of` list.
 - Front-matter links in a block list, a flow list `[T-012, T-013]`, a quoted scalar `"T-012"`
-  and a single-quoted one.
+  and a single-quoted one, and a block-list item with a trailing comment.
+- With three-clue set to error: the first, second and third clue of a truth, each as its own
+  command. The standing error's message changes each time.
 - A rename where the record links to itself; a rename of `mother-ilse` whose children are npcs
   with grandchildren; a concept whose versions link each other through `from` and are `picked`.
 - A rename to an id that only a hidden file, or a file ignored by git, already has.
-- A rename to `t-012` on a case-insensitive disk, and back.
+- A rename that changes only case (`T-012` to `t-012`), on a case-insensitive disk and on Linux.
+- A create whose target appears, written by another program, between the check and the write.
 - A rename whose child folder holds a file that is not a record.
 - A command on a record changed on disk after the caller read it, and changed again between the
   plan and the write.
 - An undo after a later command touched one of its files, and after a git pull rewrote one.
+- An undo of a command that fixed an error; a redo of it afterwards.
 - A redo after a new command.
 - An undo of a create that a later command linked to.
 - Two processes, the holder killed with `taskkill /F` or `SIGKILL` while it holds the lock.
@@ -569,24 +616,30 @@ whichever PR merges second merges `origin/main`.
 4. Ruling: commands carry the base hash of the bytes the caller saw, and a mismatch is `Stale` —
    architecture §5 asks to reload or offer a merge on an outside change, and that is the UI's
    (P11, P12) — cost if wrong: none for P06.
-5. Ruling: files are written whole through a temporary file and `std::fs::rename`, writes before
-   removals, with rollback from the plan's `before`, and with no recovery journal — §4.2, §4.3,
-   git is the history — cost if wrong: a journal in the cache later.
+5. Ruling: files are written whole through a temporary file: `std::fs::rename` for a file that
+   exists, `persist_noclobber` for a new one. Writes come before removals, rollback restores
+   the plan's `before`, and there is no recovery journal — §4.2, §4.3, git is the history — cost
+   if wrong: a journal in the cache later.
 6. Ruling: the lock is std's `File::try_lock`, polled, with the owner in a separate file;
    commands wait up to 10 s; re-entry fails at once; readers never lock — §4.2 — cost if wrong:
    one constant.
-7. Ruling: introduced findings are matched by path, rule and message, not severity or position,
-   and a moved file's old findings count under its new path — positions move with every edit,
-   and a raised severity is not a new finding — cost if wrong: the rare standing error whose
-   message changes blocks once (§7).
+7. Ruling: an error is introduced when a command raises the number of errors of a rule on a
+   path above the number of findings of that rule there before. Messages, positions and
+   severities play no part, and a moved file's old findings count under its new path. The
+   function is shared with P05's `theos new` — messages change with ordinary edits
+   (three-clue's count, quoted ids), positions move with every edit, and a raised severity is not
+   a new finding — cost if wrong: a swapped error of the same rule on the same path passes the
+   command and is caught at commit (§7).
 8. Ruling: each command updates the index on its own paths before planning, and a rename syncs
    the whole project — a rename must see every link, while a save must stay cheap — cost if
    wrong: a neighbour edited outside the editor is compared stale until the next sync.
 9. Ruling: `Create` and `Write` turn line ends into LF, and an unchanged save writes nothing —
    G5, CE-09.4, P02's `was_normalized` — cost if wrong: none.
-10. Ruling: undo and redo go through the full pipeline, verdict included, and `Scope::Record`
-    picks the newest entry that touched the record — an undo is a write like any other, and P12
-    undoes per record — cost if wrong: none.
+10. Ruling: undo and redo go through the full pipeline, and `Scope::Record` picks the newest
+    entry that touched the record. Their verdict counts the state they restore as standing (the
+    entry's counts before or after the command), so undoing a fix brings its error back —
+    an undo is a write like any other, "undo restores the bytes" must also hold for a fix, and
+    P12 undoes per record — cost if wrong: none.
 11. Ruling: commands are a trait, one module each. A serialisable request type for IPC and MCP
     comes with P11 and P07 — no P06 caller dispatches by name — cost if wrong: one enum later.
 12. Ruling: P06 does not build the editor-part registry that P03 §4.1 placed "from P06".
@@ -599,6 +652,14 @@ whichever PR merges second merges `origin/main`.
 14. Ruling: `Outcome.findings` lists every finding on the affected paths after the command, and
     `introduced` the new ones among them — architecture §5: "warnings come back with it" — cost
     if wrong: none.
+15. Ruling: the rename edits come from a new public function in `theos-content`
+    (`rename::edits`), as span edits that spell each scalar in its own style — P02's YAML
+    encoder is private to that crate, and the patcher re-encodes changed list items without
+    their quoting and drops a trailing comment — cost if wrong: none; P06's build PR changes
+    `theos-content` code, not a protected path.
+16. Ruling: a rename that changes only the case of an id fails at once with `CaseOnly` — every
+    built-in id rule fixes its case, and a case-insensitive disk would otherwise report the
+    record's own file as taken — cost if wrong: a two-step move for case-only renames later.
 
 ## 10. Left to the builder
 
@@ -621,6 +682,10 @@ are written down here so P46's and P47's specs start from them.
 - `GitError` is `#[non_exhaustive]`, with stderr kept whole. P46 and P47 add variants.
 - Every read passes `--no-optional-locks`.
 - `staged::read` and `check_staged` cover the whole staged snapshot; any error blocks.
+  `check_staged` reads the snapshot's findings through P05's new `Index::snapshot(changes)`, and
+  treats every cached path that git does not track as removed (`Index::paths()`).
+- For P47: the commit must not hold an index transaction while git runs the hook, because the
+  hook syncs the same cache.
 
 **Probes** (12 Nov 2026, Windows 11, git 2.56.1):
 - **Word diff:**
