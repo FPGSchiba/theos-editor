@@ -9,6 +9,7 @@ mod create;
 mod delete;
 mod edit;
 mod error;
+mod files;
 mod patch;
 mod path;
 pub(crate) mod state;
