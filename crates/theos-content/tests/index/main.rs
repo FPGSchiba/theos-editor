@@ -1,13 +1,29 @@
 //! Behaviour tests of the index, the kind registry and what hangs on them.
 
+mod binaries;
+mod body;
 mod cache;
 mod changes;
 mod common;
 mod corpus;
+mod formalism;
+mod guardrails;
+mod inputs;
+mod inworld;
 mod kinds;
+mod ledger;
 mod lenses;
 mod links;
+mod lore;
+mod neighbours;
+mod order;
+mod rules;
 mod schema;
 mod search;
+mod settings;
 mod speed;
+mod story;
 mod sync;
+mod versions;
+mod vocab;
+mod world;

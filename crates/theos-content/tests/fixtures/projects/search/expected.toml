@@ -4,6 +4,13 @@
 
 [[finding]]
 path = "lore/truths/T-950.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-950.md"
 rule = "link/dangling"
 severity = "error"
 line = 11

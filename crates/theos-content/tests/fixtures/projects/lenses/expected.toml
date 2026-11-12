@@ -2,6 +2,27 @@
 # the fixture texts. Every finding of the project: path, rule, severity, line and column.
 
 [[finding]]
+path = "lore/truths/T-960.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-961.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-962.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
 path = "people/synthetic-folk/synthetic-flat.md"
 rule = "schema/value"
 severity = "error"

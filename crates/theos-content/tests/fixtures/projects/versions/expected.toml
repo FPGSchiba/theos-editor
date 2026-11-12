@@ -1,0 +1,88 @@
+# Checked by hand against docs/specs/phases/P04-validation-lore-rules-ledger-formalism-mirror.md
+# section 5.10 and the fixture texts. Every finding of the project: path, rule, severity, line
+# and column. synthetic-nowhere-v1 names a concept that does not exist and is not judged by
+# version/addresses; the `missing` and `tower` items of synthetic-beta give P03's findings only.
+
+[[finding]]
+path = "concepts/synthetic-alpha.md"
+rule = "version/picked"
+severity = "error"
+line = 7
+column = 30
+
+[[finding]]
+path = "concepts/synthetic-alpha/synthetic-alpha-v1.md"
+rule = "version/addresses"
+severity = "error"
+line = 12
+column = 17
+
+[[finding]]
+path = "concepts/synthetic-beta.md"
+rule = "version/picked"
+severity = "error"
+line = 7
+column = 29
+
+[[finding]]
+path = "concepts/synthetic-beta.md"
+rule = "link/dangling"
+severity = "error"
+line = 7
+column = 49
+
+[[finding]]
+path = "concepts/synthetic-beta.md"
+rule = "link/kind"
+severity = "error"
+line = 7
+column = 71
+
+[[finding]]
+path = "concepts/synthetic-beta/synthetic-beta-v1.md"
+rule = "version/from"
+severity = "error"
+line = 12
+column = 7
+
+[[finding]]
+path = "concepts/synthetic-beta/synthetic-beta-v1.md"
+rule = "version/addresses"
+severity = "error"
+line = 13
+column = 17
+
+[[finding]]
+path = "concepts/synthetic-nowhere/synthetic-nowhere-v1.md"
+rule = "link/dangling"
+severity = "error"
+line = 6
+column = 10
+
+[[finding]]
+path = "maps/synthetic-chart.md"
+rule = "version/picked"
+severity = "error"
+line = 7
+column = 30
+
+[[finding]]
+path = "maps/synthetic-chart/synthetic-chart-v1.md"
+rule = "version/addresses"
+severity = "error"
+line = 12
+column = 17
+
+[[finding]]
+path = "maps/synthetic-chart/synthetic-chart-v2.md"
+rule = "version/from"
+severity = "error"
+line = 12
+column = 7
+
+[[finding]]
+path = "maps/synthetic-plan/synthetic-plan-v1.md"
+rule = "version/from"
+severity = "error"
+line = 12
+column = 7

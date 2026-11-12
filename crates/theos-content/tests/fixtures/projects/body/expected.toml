@@ -1,0 +1,135 @@
+# Checked by hand against docs/specs/phases/P04-validation-lore-rules-ledger-formalism-mirror.md
+# section 5.3 and the fixture texts. Every finding of the project: path, rule, severity, line
+# and column. The equation E950, whose body holds a link and an embed, has no body finding (verbatim); its
+# only finding is formalism/stray.
+# Constructs without meaning in their kind give no finding: in the topic (no beats, no notes) the
+# beat headings and attributes of lines 11-15, 26-28 and 32-38 (a key twice, a bad heading, a
+# detached attribute line, two `at::` links, `when:: T4`, an unknown key, beat 3 twice, `at:: x`)
+# and the notes of lines 17 and 40-47 (an unknown state, n2 twice, the title `n3`); in the script
+# (no notes) the notes of lines 34-41 (an unknown state, n1 twice, the title `n3`).
+
+# formalism/stray (section 5.14, R-P4): the equation record has no _source.json to list it;
+# its id value sits at line 3, column 5.
+[[finding]]
+path = "canon/formalism/E950.md"
+rule = "formalism/stray"
+severity = "error"
+line = 3
+column = 5
+
+[[finding]]
+path = "concepts/synthetic-board.md"
+rule = "body/note-id"
+severity = "error"
+line = 15
+column = 11
+
+[[finding]]
+path = "concepts/synthetic-board.md"
+rule = "body/note-state"
+severity = "error"
+line = 18
+column = 16
+
+[[finding]]
+path = "concepts/synthetic-board.md"
+rule = "body/callout-title"
+severity = "error"
+line = 21
+column = 11
+
+[[finding]]
+path = "lore/topics/synthetic-board-explaining.md"
+rule = "body/link-target"
+severity = "error"
+line = 9
+column = 32
+
+[[finding]]
+path = "lore/topics/synthetic-board-explaining.md"
+rule = "body/embed"
+severity = "error"
+line = 9
+column = 44
+
+[[finding]]
+path = "lore/topics/synthetic-board-explaining.md"
+rule = "body/tier"
+severity = "error"
+line = 20
+column = 48
+
+[[finding]]
+path = "lore/topics/synthetic-board-explaining.md"
+rule = "body/callout-title"
+severity = "error"
+line = 23
+column = 12
+
+# body/link-unclosed (section 5.3, every kind): `[[a here.` never closes; the finding sits at the
+# `[[` after "Synthetic text with an unclosed ". The attribute line that a blank line separates
+# from `## Beat 2` above it means nothing in a topic, which has no beats: no misplaced-attributes.
+[[finding]]
+path = "lore/topics/synthetic-board-explaining.md"
+rule = "body/link-unclosed"
+severity = "error"
+line = 30
+column = 33
+
+[[finding]]
+path = "story/scripts/S-950.md"
+rule = "body/attribute-count"
+severity = "error"
+line = 11
+column = 27
+
+[[finding]]
+path = "story/scripts/S-950.md"
+rule = "body/attribute-duplicate"
+severity = "error"
+line = 13
+column = 1
+
+[[finding]]
+path = "story/scripts/S-950.md"
+rule = "body/when"
+severity = "error"
+line = 15
+column = 8
+
+[[finding]]
+path = "story/scripts/S-950.md"
+rule = "body/attribute-unknown"
+severity = "warning"
+line = 16
+column = 1
+
+[[finding]]
+path = "story/scripts/S-950.md"
+rule = "body/beat-number"
+severity = "error"
+line = 21
+column = 1
+
+[[finding]]
+path = "story/scripts/S-950.md"
+rule = "body/beat-heading"
+severity = "error"
+line = 24
+column = 1
+
+[[finding]]
+path = "story/scripts/S-950.md"
+rule = "body/beat-attribute"
+severity = "error"
+line = 28
+column = 1
+
+# body/misplaced-attributes (section 5.3, kinds with beats): a blank line separates the
+# attribute line of Beat 5 from its heading, so it is not read; the finding sits at that line.
+[[finding]]
+path = "story/scripts/S-950.md"
+rule = "body/misplaced-attributes"
+severity = "error"
+line = 32
+column = 1

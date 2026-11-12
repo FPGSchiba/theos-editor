@@ -1,0 +1,62 @@
+# synthetic fixture (P04), not canon
+# Checked by hand against docs/specs/phases/P04-validation-lore-rules-ledger-formalism-mirror.md
+# section 5.9 and the fixture texts. Every finding of the project: path, rule, severity, line and
+# column.
+
+[[finding]]
+path = "story/scripts/S-950.md"
+rule = "story/beat-at"
+severity = "error"
+line = 15
+column = 6
+
+# Beat 4 of S-950: the first `at::` names a people record (wrong kind for `at`), the second a place
+# outside `where`; the repeated attribute is its own fault. `story/beat-at` sits on the place link.
+[[finding]]
+path = "story/scripts/S-950.md"
+rule = "link/kind"
+severity = "error"
+line = 21
+column = 6
+
+[[finding]]
+path = "story/scripts/S-950.md"
+rule = "body/attribute-duplicate"
+severity = "error"
+line = 22
+column = 1
+
+[[finding]]
+path = "story/scripts/S-950.md"
+rule = "story/beat-at"
+severity = "error"
+line = 22
+column = 6
+
+[[finding]]
+path = "story/scripts/S-953.md"
+rule = "story/says-rejected"
+severity = "error"
+line = 16
+column = 8
+
+[[finding]]
+path = "story/scripts/S-953.md"
+rule = "story/says-rejected"
+severity = "error"
+line = 20
+column = 19
+
+[[finding]]
+path = "story/scripts/S-954.md"
+rule = "story/reveal-where"
+severity = "error"
+line = 17
+column = 11
+
+[[finding]]
+path = "story/scripts/S-955.md"
+rule = "story/reveal-gate"
+severity = "error"
+line = 11
+column = 11

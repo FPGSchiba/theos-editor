@@ -57,17 +57,29 @@ pub struct BeatAttribute {
 /// What a body of a kind may contain.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BodyGrammar {
-    /// The beat attributes when the body has beats.
+    /// The beat attributes that hold links, when the body has beats.
     pub beats: Option<&'static [BeatAttribute]>,
+    /// The beat attributes that are one bare word, such as `when`.
+    pub beat_tokens: &'static [&'static str],
     /// The kinds a note may link to when the body has notes.
     pub notes: Option<&'static [Target]>,
+    /// Whether the body is the page's text as it is, not Markdown to judge.
+    pub verbatim: bool,
 }
 
 impl BodyGrammar {
     /// A body of prose: no beats, no notes.
     pub const PROSE: BodyGrammar = BodyGrammar {
         beats: None,
+        beat_tokens: &[],
         notes: None,
+        verbatim: false,
+    };
+
+    /// A body that is verbatim text: no links, no beats, no notes, and no body rule judges it.
+    pub const VERBATIM: BodyGrammar = BodyGrammar {
+        verbatim: true,
+        ..BodyGrammar::PROSE
     };
 }
 

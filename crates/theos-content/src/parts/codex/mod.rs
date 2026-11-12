@@ -9,6 +9,7 @@ mod floor;
 mod location;
 mod npc;
 mod people;
+mod rules;
 mod thing;
 mod topic;
 mod tower;
@@ -34,5 +35,17 @@ pub fn register(registry: &mut KindRegistry) -> Result<(), RegistryError> {
     registry.register("codex", belief::spec())?;
     registry.register("codex", clue::spec())?;
     registry.register("codex", equation::spec())?;
+    registry.register_rule("codex", rules::FLOOR_NUMBER)?;
+    registry.register_rule("codex", rules::PARENT_CYCLE)?;
+    registry.register_rule("codex", rules::NEVER_CONFIRM)?;
+    registry.register_rule("codex", rules::NO_OVERSHOOT)?;
+    registry.register_rule("codex", rules::REVEAL_ORDER)?;
+    registry.register_rule("codex", rules::REQUIRES)?;
+    registry.register_rule("codex", rules::THREE_CLUE)?;
+    registry.register_rule("codex", rules::INWORLD_VOCAB)?;
+    registry.register_rule("codex", rules::FORMALISM_EDITED)?;
+    registry.register_rule("codex", rules::FORMALISM_STRAY)?;
+    registry.register_rule("codex", rules::FORMALISM_MISSING)?;
+    registry.register_rule("codex", rules::FORMALISM_SOURCE)?;
     Ok(())
 }

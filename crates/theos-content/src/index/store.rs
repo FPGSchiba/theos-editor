@@ -10,9 +10,17 @@ use crate::index::IndexError;
 use crate::index::identity::Identity;
 
 /// The tables `schema.sql` creates, the virtual `search` first so it is dropped first.
-const TABLES: [&str; 8] = [
+const TABLES: [&str; 16] = [
     "search",
+    "binary_memo",
+    "configured",
+    "ledger_beats",
+    "ledger",
+    "inputs",
+    "deps",
     "findings",
+    "inworld",
+    "notes",
     "beats",
     "links",
     "field_values",
@@ -161,9 +169,13 @@ fn stored_meta(conn: &Connection) -> Result<Option<BTreeMap<String, String>>, ru
 }
 
 fn has_every_table(conn: &Connection) -> Result<bool, rusqlite::Error> {
+    let names = TABLES
+        .iter()
+        .map(|table| format!("'{table}'"))
+        .collect::<Vec<_>>()
+        .join(", ");
     let present: i64 = conn.query_row(
-        "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN \
-         ('meta', 'files', 'records', 'field_values', 'links', 'beats', 'findings', 'search')",
+        &format!("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ({names})"),
         [],
         |row| row.get(0),
     )?;

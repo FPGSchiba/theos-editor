@@ -378,8 +378,12 @@ and column. **Children** are the backlinks in the slot field `parent`, `concept`
 ### 5.7 Which files are records
 
 - The index walks the project root with `ignore`'s `WalkBuilder`:
-  - hidden entries are skipped. That covers `.theos/`, `.git/`, `.obsidian/`, `.vscode/`,
-    `.github/`, `.worktrees/` and `.trash/`;
+  - hidden entries are skipped the native way of the OS (Jann's ruling of 10 Nov 2026): on
+    Windows, a file or folder with the hidden attribute; on Linux and macOS, a name that starts
+    with a dot. On every OS, `.theos/`, `.git/`, `.obsidian/`, `.vscode/`, `.github/`,
+    `.worktrees/` and `.trash/` are never records, at any depth. So a file hidden only by its
+    attribute on Windows is a record on Linux, and on Windows a dot folder outside that list and
+    without the attribute (`.claude/`, `.idea/`) is walked unless `.gitignore` ignores it;
   - `.gitignore` files inside the project are honoured. The global git excludes,
     `.git/info/exclude` and ignore files above the root are not, so every machine sees the same
     records;
@@ -642,7 +646,7 @@ their runs. `cargo xtask gate` runs on Windows before the phase is claimed done 
 |---|---|---|
 | SQLite is compiled from C on each OS | A build fails where no C compiler is set up; universal macOS builds need it per architecture | `bundled` uses `cc`: MSVC on Windows (already needed by Rust), gcc on CI Linux, clang on macOS; CI builds it on every PR; the weekly runs build it on Windows and macOS |
 | A stale cache answers wrongly | Findings or links that the files no longer have | Size and time first, then the content hash; the racy rule (§5.9); identity in `meta`, with the rule set and source fingerprints; a damaged cache is rebuilt; CE-12.4's test compares a rebuild with an incremental history |
-| Two builds with different fingerprints share one project (a released `theos-mcp` and a dev build of the editor) | Each open rebuilds the cache the other wrote | Correct but slow; a rebuild is under a second for 500 records; noted for P05 and P11 |
+| Two builds with different fingerprints share one project (a released `theos-mcp` and a dev build of the editor) | Each build rebuilds the cache the other wrote | Every write first checks the cache's identity in `meta` and rebuilds the cache for its own build when another build has written since; after three rebuilds in one write it fails with `IndexError::Contended`, which asks to close one of the theos processes; a rebuild is under a second for 500 records; noted for P05 and P11 |
 | Several processes write at once | Busy errors | WAL, `BEGIN IMMEDIATE`, a busy timeout of 5 s; a test opens two indexes on one project from two threads |
 | Windows: a cache file held open by another process cannot be deleted | Rebuilding a damaged cache fails | The error names the file and asks to close the other theos processes; the README already demands a local disk |
 | The timing test of CE-12.1 is flaky on a busy runner | A red build without a regression | The fastest of three cold runs; the probe needs about a tenth of the limit in a debug build |

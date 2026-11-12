@@ -1,0 +1,368 @@
+# synthetic fixture (P04), not canon
+# The expected `Index::ledger()` of this project, checked by hand against spec 5.7.
+
+[[truth]]
+id = "T-950"
+path = "lore/truths/T-950.md"
+title = "Synthetic truth"
+target = "confirmed"
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-950"
+clue_path = "lore/clues/C-950.md"
+placed_by = [{ script = "S-950", beat = 2 }]
+
+[[truth.entry]]
+state = "suspected"
+floor = 21
+place = "f21-synthetic"
+gate = "T2"
+clue = "C-951"
+clue_path = "lore/clues/C-951.md"
+placed_by = []
+
+[[truth.entry]]
+state = "confirmed"
+floor = 57
+place = "f57-synthetic"
+gate = "T2"
+clue = "C-952"
+clue_path = "lore/clues/C-952.md"
+placed_by = []
+
+[[truth.entry]]
+state = "confirmed"
+floor = 57
+place = "f57-synthetic"
+gate = "T2"
+clue = "C-953"
+clue_path = "lore/clues/C-953.md"
+placed_by = []
+
+[[truth.entry]]
+state = "confirmed"
+floor = 57
+place = "f57-synthetic"
+gate = "T2"
+clue = "C-954"
+clue_path = "lore/clues/C-954.md"
+placed_by = []
+
+[[truth]]
+id = "T-951"
+path = "lore/truths/T-951.md"
+title = "Synthetic truth without clues"
+target = "hinted"
+
+[[truth]]
+id = "T-952"
+path = "lore/truths/T-952.md"
+title = "Synthetic truth that is never revealed"
+target = "never"
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-955"
+clue_path = "lore/clues/C-955.md"
+placed_by = [{ script = "S-951", beat = 2 }]
+
+[[truth]]
+id = "T-953"
+path = "lore/truths/T-953.md"
+title = "Synthetic truth with a low target"
+target = "hinted"
+
+[[truth.entry]]
+state = "suspected"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-956"
+clue_path = "lore/clues/C-956.md"
+placed_by = [{ script = "S-951", beat = 3 }]
+
+[[truth]]
+id = "T-954"
+path = "lore/truths/T-954.md"
+title = "Synthetic duplicated truth"
+target = "never"
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-957"
+clue_path = "lore/clues/C-957.md"
+placed_by = []
+
+[[truth]]
+id = "T-954"
+path = "lore/truths/synthetic-copy/T-954.md"
+title = "Synthetic duplicated truth, second copy"
+target = "confirmed"
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-957"
+clue_path = "lore/clues/C-957.md"
+placed_by = []
+
+[[truth]]
+id = "T-955"
+path = "lore/truths/T-955.md"
+title = "Synthetic duplicated truth, never and hinted"
+target = "never"
+
+[[truth.entry]]
+state = "suspected"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-958"
+clue_path = "lore/clues/C-958.md"
+placed_by = []
+
+[[truth]]
+id = "T-955"
+path = "lore/truths/synthetic-copy/T-955.md"
+title = "Synthetic duplicated truth, second copy, hinted"
+target = "hinted"
+
+[[truth.entry]]
+state = "suspected"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-958"
+clue_path = "lore/clues/C-958.md"
+placed_by = []
+
+[[truth]]
+id = "T-956"
+path = "lore/truths/T-956.md"
+title = "Synthetic truth with clues in order"
+target = "hinted"
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-960"
+clue_path = "lore/clues/C-960.md"
+placed_by = []
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-969"
+clue_path = "lore/clues/C-969.md"
+placed_by = []
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T3"
+clue = "C-993"
+clue_path = "lore/clues/C-993.md"
+placed_by = []
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-994"
+clue_path = "lore/clues/C-994.md"
+placed_by = []
+
+[[truth.entry]]
+state = "hinted"
+floor = 21
+place = "f21-synthetic"
+gate = "T2"
+clue = "C-961"
+clue_path = "lore/clues/C-961.md"
+placed_by = []
+
+[[truth]]
+id = "T-957"
+path = "lore/truths/T-957.md"
+title = "Synthetic truth confirmed early"
+target = "confirmed"
+
+[[truth.entry]]
+state = "confirmed"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-970"
+clue_path = "lore/clues/C-970.md"
+placed_by = []
+
+[[truth.entry]]
+state = "confirmed"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-971"
+clue_path = "lore/clues/C-971.md"
+placed_by = []
+
+[[truth.entry]]
+state = "confirmed"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-972"
+clue_path = "lore/clues/C-972.md"
+placed_by = []
+
+[[truth]]
+id = "T-958"
+path = "lore/truths/T-958.md"
+title = "Synthetic truth with states out of order"
+target = "confirmed"
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-980"
+clue_path = "lore/clues/C-980.md"
+placed_by = []
+
+[[truth.entry]]
+state = "suspected"
+floor = 50
+place = "f50-synthetic"
+gate = "T2"
+clue = "C-981"
+clue_path = "lore/clues/C-981.md"
+placed_by = []
+
+[[truth.entry]]
+state = "confirmed"
+floor = 21
+place = "f21-synthetic"
+gate = "T2"
+clue = "C-982"
+clue_path = "lore/clues/C-982.md"
+placed_by = []
+
+[[truth]]
+id = "T-959"
+path = "lore/truths/T-959.md"
+title = "Synthetic truth requiring a hinted truth"
+target = "confirmed"
+
+[[truth]]
+id = "T-960"
+path = "lore/truths/T-960.md"
+title = "Synthetic truth confirmed before its requirement"
+target = "confirmed"
+
+[[truth.entry]]
+state = "confirmed"
+floor = 21
+place = "f21-synthetic"
+gate = "T2"
+clue = "C-990"
+clue_path = "lore/clues/C-990.md"
+placed_by = []
+
+[[truth]]
+id = "T-961"
+path = "lore/truths/T-961.md"
+title = "Synthetic truth in a requires cycle"
+target = "confirmed"
+
+[[truth]]
+id = "T-962"
+path = "lore/truths/T-962.md"
+title = "Synthetic truth in a requires cycle, second"
+target = "confirmed"
+
+[[truth]]
+id = "T-963"
+path = "lore/truths/T-963.md"
+title = "Synthetic truth with one clue"
+target = "confirmed"
+
+[[truth.entry]]
+state = "confirmed"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-992"
+clue_path = "lore/clues/C-992.md"
+placed_by = []
+
+[[truth]]
+id = "T-964"
+path = "lore/truths/T-964.md"
+title = "Synthetic truth with clues in a cycle"
+target = "hinted"
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-962"
+clue_path = "lore/clues/C-962.md"
+placed_by = []
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-963"
+clue_path = "lore/clues/C-963.md"
+placed_by = []
+
+[[truth.entry]]
+state = "hinted"
+floor = 4
+place = "f04-synthetic"
+gate = "T1"
+clue = "C-968"
+clue_path = "lore/clues/C-968.md"
+placed_by = []
+
+[[truth]]
+id = "T-965"
+path = "lore/truths/T-965.md"
+title = "Synthetic truth that only hints"
+target = "hinted"
+
+[[truth]]
+id = "T-966"
+path = "lore/truths/T-966.md"
+title = "Synthetic truth confirmed late"
+target = "confirmed"
+
+[[truth.entry]]
+state = "confirmed"
+floor = 57
+place = "f57-synthetic"
+gate = "T2"
+clue = "C-991"
+clue_path = "lore/clues/C-991.md"
+placed_by = []

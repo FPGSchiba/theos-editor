@@ -1,4 +1,4 @@
-//! Findings: what a check reports about a record.
+//! Findings: what a check reports about a record or an input file of the index.
 
 use std::fmt;
 
@@ -7,9 +7,9 @@ use crate::text::{Position, Span};
 /// How serious a finding is by default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Severity {
-    /// The record is wrong.
+    /// The record or input file is wrong.
     Error,
-    /// The record is suspicious.
+    /// The record or input file is suspicious.
     Warning,
 }
 
@@ -34,7 +34,7 @@ impl Severity {
     }
 }
 
-/// One thing a check found in a record.
+/// One thing a check found in a record or an input file of the index.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Finding {
     /// The rule, `<group>/<name>`.
@@ -43,9 +43,10 @@ pub struct Finding {
     pub severity: Severity,
     /// Project-relative path with `/`.
     pub path: String,
-    /// The record's id (file stem); `None` for `record/path`.
+    /// The record's id (file stem); `None` for `record/path` and for a finding on an input file
+    /// (`.theos/settings.toml`, `canon/formalism/_source.json`).
     pub id: Option<String>,
-    /// Record coordinates; `None` only for `record/path`.
+    /// Coordinates in the file; `None` only for `record/path`.
     pub span: Option<Span>,
     /// Line and column of the span start.
     pub position: Option<Position>,

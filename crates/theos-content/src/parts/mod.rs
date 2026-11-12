@@ -6,6 +6,7 @@ pub mod concepts;
 pub mod maps;
 pub mod scripts;
 mod version;
+mod version_rules;
 
 use crate::kinds::{KindRegistry, RegistryError};
 
