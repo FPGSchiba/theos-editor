@@ -97,6 +97,18 @@ pub struct ParamError {
     pub message: String,
 }
 
+impl ParamError {
+    /// The error of `stage` about its `parameter` (a path such as `source[0].r`).
+    #[must_use]
+    pub fn at(stage: &str, parameter: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            stage: stage.to_owned(),
+            parameter: Some(parameter.into()),
+            message: message.into(),
+        }
+    }
+}
+
 impl fmt::Display for ParamError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "stage `{}`", self.stage)?;

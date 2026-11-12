@@ -40,11 +40,14 @@ pub trait TypedStage: Send + Sync + 'static {
         Vec::new()
     }
 
-    /// Checks `params` beyond their types.
+    /// Checks `params` beyond their types and completes them: a stage may fill fields the recipe
+    /// does not set (`#[serde(skip)]`), such as the parsed per-step processes of
+    /// `landscape_evolution`.
     ///
     /// # Errors
-    /// What is wrong, in words; it becomes a [`ParamError`] naming the stage.
-    fn validate(&self, _params: &Self::Params) -> Result<(), String> {
+    /// [`ParamError`] naming the stage and, where one is to blame, the parameter
+    /// ([`ParamError::at`]).
+    fn validate(&self, _params: &mut Self::Params) -> Result<(), ParamError> {
         Ok(())
     }
 
@@ -111,12 +114,8 @@ impl<T: TypedStage> Stage for T {
     }
 
     fn params(&self, table: &toml::Table) -> Result<Box<dyn StageParams>, ParamError> {
-        let parsed: T::Params = params::parse(T::ID, table)?;
-        TypedStage::validate(self, &parsed).map_err(|message| ParamError {
-            stage: T::ID.to_owned(),
-            parameter: None,
-            message,
-        })?;
+        let mut parsed: T::Params = params::parse(T::ID, table)?;
+        TypedStage::validate(self, &mut parsed)?;
         Ok(Box::new(parsed))
     }
 
@@ -200,6 +199,9 @@ mod tests {
         rate: f64,
         steps: u32,
         deposit: bool,
+        /// Derived by `validate`: the rate per step.
+        #[serde(skip)]
+        per_step: f64,
     }
 
     impl Default for RateParams {
@@ -208,6 +210,7 @@ mod tests {
                 rate: 2.5,
                 steps: 3,
                 deposit: false,
+                per_step: 0.0,
             }
         }
     }
@@ -237,10 +240,11 @@ mod tests {
             vec!["mean_rate"]
         }
 
-        fn validate(&self, p: &RateParams) -> Result<(), String> {
+        fn validate(&self, p: &mut RateParams) -> Result<(), ParamError> {
             if p.steps == 0 {
-                return Err("steps must be positive".into());
+                return Err(ParamError::at(Self::ID, "steps", "must be positive"));
             }
+            p.per_step = p.rate / f64::from(p.steps);
             Ok(())
         }
 
@@ -292,6 +296,14 @@ mod tests {
             .unwrap()
     }
 
+    fn per_step(params: &dyn crate::stage::StageParams) -> f64 {
+        params
+            .as_any()
+            .downcast_ref::<RateParams>()
+            .map(|p| p.per_step)
+            .unwrap()
+    }
+
     #[test]
     fn params_reject_unknown_keys_naming_them() {
         let err = Rate.params(&table("id = \"t\"\nbogus = 1")).unwrap_err();
@@ -312,11 +324,38 @@ mod tests {
             err,
             ParamError {
                 stage: "t".into(),
-                parameter: None,
-                message: "steps must be positive".into(),
+                parameter: Some("steps".into()),
+                message: "must be positive".into(),
             }
         );
-        assert_eq!(err.to_string(), "stage `t`: steps must be positive");
+        assert_eq!(
+            err.to_string(),
+            "stage `t`, parameter `steps`: must be positive"
+        );
+    }
+
+    #[test]
+    fn validate_completes_the_parameters_it_checks() {
+        let params = Rate.params(&table("rate = 6.0\nsteps = 4")).unwrap();
+        assert!((per_step(params.as_ref()) - 1.5).abs() < 1e-12);
+        let params = Rate.params(&table("per_step = 9.0"));
+        assert_eq!(
+            params.unwrap_err().parameter.as_deref(),
+            Some("per_step"),
+            "a field filled by validate is not a recipe parameter"
+        );
+    }
+
+    #[test]
+    fn param_errors_at_a_parameter_name_it() {
+        assert_eq!(
+            ParamError::at("t", "source[0].r", "must be positive"),
+            ParamError {
+                stage: "t".into(),
+                parameter: Some("source[0].r".into()),
+                message: "must be positive".into(),
+            }
+        );
     }
 
     #[test]

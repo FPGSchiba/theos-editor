@@ -17,7 +17,9 @@ use super::grid::FrameValue;
 use crate::grid::Grid;
 use crate::kernels::num::max;
 use crate::kernels::stats::percentile;
-use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, TypedStage};
+use crate::stage::{
+    LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
+};
 use crate::world::{Layer, MapFrame, ValueType, WorldValue};
 
 /// The climate parameters; defaults are 0.3.0's, `budyko_w` is the builder's choice.
@@ -96,11 +98,12 @@ impl ClimateParams {
     /// Checks that every value is finite and that the ones that must be positive are.
     ///
     /// # Errors
-    /// A message naming the first offending parameter.
-    pub fn validate(&self) -> Result<(), String> {
+    /// [`ParamError`] of `climate_model` naming the first offending parameter.
+    pub fn validate(&self) -> Result<(), ParamError> {
+        let at = |name: &str, message: &str| ParamError::at(ClimateModel::ID, name, message);
         for (name, value) in self.named() {
             if !value.is_finite() {
-                return Err(format!("{name} must be finite"));
+                return Err(at(name, "must be finite"));
             }
         }
         let non_negative = [
@@ -115,10 +118,10 @@ impl ClimateParams {
             ("tau_f", self.tau_f),
         ];
         if let Some((name, _)) = non_negative.iter().find(|(_, v)| *v < 0.0) {
-            return Err(format!("{name} must not be negative"));
+            return Err(at(name, "must not be negative"));
         }
         if self.budyko_w <= 0.0 {
-            return Err("budyko_w must be positive".to_owned());
+            return Err(at("budyko_w", "must be positive"));
         }
         Ok(())
     }
@@ -249,7 +252,7 @@ impl TypedStage for ClimateModel {
         vec![LayerSpec::value("climate", Climate::NAME)]
     }
 
-    fn validate(&self, params: &ClimateParams) -> Result<(), String> {
+    fn validate(&self, params: &mut ClimateParams) -> Result<(), ParamError> {
         params.validate()
     }
 
@@ -364,14 +367,15 @@ t_base_c = 15.0",
 
     #[test]
     fn bad_values_and_old_keys_are_refused() {
-        for (toml, text) in [
-            ("nm = nan", "nm"),
-            ("wind_speed = -1.0", "wind_speed"),
-            ("budyko_w = 0.0", "budyko_w"),
-            ("hw = inf", "hw"),
-            ("T_base_c = 10.0", "T_base_c"),
+        for (toml, parameter, text) in [
+            ("nm = nan", "nm", "finite"),
+            ("wind_speed = -1.0", "wind_speed", "not be negative"),
+            ("budyko_w = 0.0", "budyko_w", "positive"),
+            ("hw = inf", "hw", "finite"),
+            ("T_base_c = 10.0", "T_base_c", "unknown"),
         ] {
             let err = ClimateModel.params(&table(toml)).unwrap_err();
+            assert_eq!(err.parameter.as_deref(), Some(parameter), "{toml}: {err}");
             assert!(err.to_string().contains(text), "{toml}: {err}");
         }
     }

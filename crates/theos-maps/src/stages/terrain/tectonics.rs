@@ -11,7 +11,9 @@ use super::grid::FrameValue;
 use crate::grid::Grid;
 use crate::kernels::noise::{spectral_noise, warped_coords};
 use crate::kernels::num::max;
-use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, TypedStage};
+use crate::stage::{
+    LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
+};
 use crate::world::{Layer, ValueType, WorldValue};
 
 fn grid_json(grid: &Grid<f64>) -> serde_json::Value {
@@ -131,13 +133,17 @@ impl TypedStage for Tectonics {
         ]
     }
 
-    fn validate(&self, params: &TectonicsParams) -> Result<(), String> {
+    fn validate(&self, params: &mut TectonicsParams) -> Result<(), ParamError> {
         if params.sag_duration_yr.is_nan() || params.sag_duration_yr <= 0.0 {
-            return Err("sag_duration_yr must be positive".to_owned());
+            return Err(ParamError::at(
+                Self::ID,
+                "sag_duration_yr",
+                "must be positive",
+            ));
         }
         for (k, source) in params.source.iter().enumerate() {
             if let Some(problem) = source.problem() {
-                return Err(format!("source[{k}]: {problem}"));
+                return Err(ParamError::at(Self::ID, format!("source[{k}]"), problem));
             }
         }
         Ok(())
@@ -366,22 +372,26 @@ mod tests {
 
     #[test]
     fn bad_values_are_refused() {
-        for (toml, text) in [
-            ("sag_duration_yr = 0.0", "sag_duration_yr"),
+        for (toml, parameter, text) in [
+            ("sag_duration_yr = 0.0", "sag_duration_yr", "positive"),
             (
                 "[[source]]\ntype = \"fault\"\npath = [[0.1, 0.1]]\nrate = 1.0",
                 "source[0]",
+                "two points",
             ),
             (
                 "[[source]]\ntype = \"dome\"\nat = [0.5, 0.5]\nr = 0.0\nrate = 1.0",
+                "source[0]",
                 "r must be positive",
             ),
             (
                 "[[source]]\ntype = \"orogen\"\npath = [[0,0],[1,1]]\nwidth = -1.0\nrate = 1.0",
+                "source[0]",
                 "width",
             ),
         ] {
             let err = Tectonics.params(&table(toml)).unwrap_err();
+            assert_eq!(err.parameter.as_deref(), Some(parameter), "{toml}: {err}");
             assert!(err.to_string().contains(text), "{toml}: {err}");
         }
     }

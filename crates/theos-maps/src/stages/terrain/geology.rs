@@ -12,7 +12,9 @@ use crate::grid::Grid;
 use crate::kernels::noise::spectral_noise;
 use crate::kernels::num::{max, min};
 use crate::kernels::voronoi::nearest_seed;
-use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, TypedStage};
+use crate::stage::{
+    LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
+};
 use crate::world::{Layer, ValueType};
 
 /// The fold belt around the first orogen: alternating hard and weak strata.
@@ -102,27 +104,31 @@ impl TypedStage for Geology {
         ]
     }
 
-    fn validate(&self, params: &GeologyParams) -> Result<(), String> {
+    fn validate(&self, params: &mut GeologyParams) -> Result<(), ParamError> {
+        let at = |parameter: &str, message: &str| ParamError::at(Self::ID, parameter, message);
         if params.provinces == 0 {
-            return Err("provinces must be at least 1".to_owned());
+            return Err(at("provinces", "must be at least 1"));
         }
         let weights = params.rock_mix.values();
         if weights.clone().any(|w| !w.is_finite() || *w < 0.0) {
-            return Err("rock_mix weights must be finite and not negative".to_owned());
+            return Err(at("rock_mix", "weights must be finite and not negative"));
         }
         if weights.sum::<f64>() <= 0.0 {
-            return Err("rock_mix needs a positive total weight".to_owned());
+            return Err(at("rock_mix", "needs a positive total weight"));
         }
         if params.plutons[0] > params.plutons[1] {
-            return Err("plutons must be [min, max] with min <= max".to_owned());
+            return Err(at("plutons", "must be [min, max] with min <= max"));
         }
         if let Some(fb) = &params.fold_belt {
             let ok = |v: f64| v.is_finite() && v > 0.0;
             if !(ok(fb.width) && ok(fb.period) && ok(fb.contrast)) {
-                return Err("fold_belt width, period and contrast must be positive".to_owned());
+                return Err(at(
+                    "fold_belt",
+                    "width, period and contrast must be positive",
+                ));
             }
             if !fb.strength.is_finite() {
-                return Err("fold_belt strength must be finite".to_owned());
+                return Err(at("fold_belt.strength", "must be finite"));
             }
         }
         Ok(())
@@ -416,16 +422,21 @@ mod tests {
 
     #[test]
     fn bad_values_are_refused() {
-        for (toml, text) in [
-            ("provinces = 0", "provinces"),
-            ("[rock_mix]\ngranite = -1.0", "rock_mix"),
-            ("[rock_mix]\ngranite = 0.0", "positive"),
-            ("plutons = [3, 1]", "plutons"),
-            ("[fold_belt]\nperiod = 0.0", "fold_belt"),
-            ("[fold_belt]\nstrength = nan", "strength"),
-            ("[fold_belt]\nzz = 1", "zz"),
+        for (toml, parameter, text) in [
+            ("provinces = 0", "provinces", "at least 1"),
+            ("[rock_mix]\ngranite = -1.0", "rock_mix", "not negative"),
+            ("[rock_mix]\ngranite = 0.0", "rock_mix", "positive"),
+            ("plutons = [3, 1]", "plutons", "min <= max"),
+            ("[fold_belt]\nperiod = 0.0", "fold_belt", "period"),
+            (
+                "[fold_belt]\nstrength = nan",
+                "fold_belt.strength",
+                "finite",
+            ),
+            ("[fold_belt]\nzz = 1", "fold_belt.zz", "unknown"),
         ] {
             let err = Geology.params(&table(toml)).unwrap_err();
+            assert_eq!(err.parameter.as_deref(), Some(parameter), "{toml}: {err}");
             assert!(err.to_string().contains(text), "{toml}: {err}");
         }
     }
