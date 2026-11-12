@@ -3,7 +3,7 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
-use crate::git::{Git, GitError};
+use crate::git::{Git, GitError, args_text};
 
 /// Runs a `rev-parse` in `cwd` and reads the answer as one line of UTF-8 text.
 fn rev_parse(git: &Git, cwd: &Path, extra: &[&str]) -> Result<String, GitError> {
@@ -11,7 +11,7 @@ fn rev_parse(git: &Git, cwd: &Path, extra: &[&str]) -> Result<String, GitError> 
     args.extend(extra.iter().map(OsStr::new));
     let out = git.run(&args, cwd, None, &[])?;
     let text = String::from_utf8(out).map_err(|_| GitError::Output {
-        args: owned(&args),
+        args: args_text(&args),
         message: "the answer is not UTF-8".to_owned(),
     })?;
     // git ends its answer with one newline.
@@ -19,12 +19,6 @@ fn rev_parse(git: &Git, cwd: &Path, extra: &[&str]) -> Result<String, GitError> 
         Some(line) => line.to_owned(),
         None => text,
     })
-}
-
-fn owned(args: &[&OsStr]) -> Vec<String> {
-    args.iter()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect()
 }
 
 /// The top folder of the work tree that holds `folder`.

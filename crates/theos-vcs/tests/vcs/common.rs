@@ -56,6 +56,16 @@ impl Sandbox {
 
     /// Runs git in `cwd` with the isolation of the sandbox and returns stdout.
     pub fn run(&self, cwd: &Path, args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
+        self.run_env(cwd, args, &[])
+    }
+
+    /// Like [`Sandbox::run`], with more variables set after the isolation.
+    pub fn run_env(
+        &self,
+        cwd: &Path,
+        args: &[&str],
+        env: &[(&str, &str)],
+    ) -> Result<String, Box<dyn std::error::Error>> {
         let output = Command::new("git")
             .args(args)
             .current_dir(cwd)
@@ -64,6 +74,7 @@ impl Sandbox {
             .env_remove("GIT_DIR")
             .env_remove("GIT_WORK_TREE")
             .env_remove("GIT_INDEX_FILE")
+            .envs(env.iter().copied())
             .output()?;
         if !output.status.success() {
             return Err(format!(

@@ -3,3 +3,4 @@
 mod common;
 mod git;
 mod repo;
+mod staged;

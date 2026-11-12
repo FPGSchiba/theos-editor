@@ -38,6 +38,13 @@ pub enum GitError {
     },
 }
 
+/// The arguments as text, for error messages.
+pub(crate) fn args_text(args: &[&OsStr]) -> Vec<String> {
+    args.iter()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect()
+}
+
 fn exit_text(code: Option<i32>) -> String {
     code.map_or_else(
         || "no exit code".to_owned(),
@@ -121,10 +128,7 @@ impl Git {
         let output = output.map_err(|source| GitError::Io { source })?;
         if !output.status.success() {
             return Err(GitError::Failed {
-                args: args
-                    .iter()
-                    .map(|arg| arg.to_string_lossy().into_owned())
-                    .collect(),
+                args: args_text(args),
                 code: output.status.code(),
                 stderr: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
             });

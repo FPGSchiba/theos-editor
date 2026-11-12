@@ -64,7 +64,7 @@ fn a_large_answer_does_not_block() -> Result<(), Box<dyn std::error::Error>> {
     let sandbox = Sandbox::new()?;
     let repo = sandbox.init("repo")?;
     let git = sandbox.git()?;
-    let blob = vec![b'x'; 3 * 1024 * 1024];
+    let blob = vec![b'x'; 1024];
     let id = git.run(
         &args(&["hash-object", "-w", "--stdin"]),
         &repo,
@@ -72,14 +72,16 @@ fn a_large_answer_does_not_block() -> Result<(), Box<dyn std::error::Error>> {
         &[],
     )?;
     let id = String::from_utf8(id)?;
-    // The batch input is written while the answer is read.
+    // About 82 KB in and 2 MB out, both above any pipe buffer: a runner that wrote all of
+    // stdin before it read stdout would deadlock.
+    let input = id.repeat(2000);
     let out = git.run(
         &args(&["cat-file", "--batch"]),
         &repo,
-        Some(id.as_bytes()),
+        Some(input.as_bytes()),
         &[],
     )?;
-    assert!(out.len() > 3 * 1024 * 1024);
+    assert!(out.len() >= 2000 * 1024, "{} bytes", out.len());
     Ok(())
 }
 
