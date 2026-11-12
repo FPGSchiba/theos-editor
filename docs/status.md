@@ -14,7 +14,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
 | P06 | Command layer and git | theos-editor | todo | | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
-| P08 | Map format and terrain generator | theos-editor | spec-approved | #27 | |
+| P08 | Map format and terrain generator | theos-editor | in-progress | #27 | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
 | P10 | Prose editor research | theos-editor | done | #3 | #11 |
 | P11 | Editor shell and Codex | theos-editor | todo | | |
@@ -45,13 +45,10 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 
 Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and P23 from version 3
 (decision 0003, #24). Rows P31–P34 and P45, and the new P29 and P30, come from umbrella version 4
-(decision 0004), which waits for Jann in its docs PR #31.
+(decision 0004, #31).
 
 ## Needs Jann
 
-- Decision 0004, what the map generation research changes (umbrella version 4, the P08 spec,
-  `docs/map-package.md`, `docs/generators.md` §3, decision 0003), waits for Jann in its docs PR
-  #31. P08's plan starts once it is merged.
 - Deferred by Jann on 12 Nov 2026 (decision 0004):
   - the shape of regions with a recommended power (D11): areas inside the floor's map (the
     working assumption) or separate maps; the power scale (working assumption: 1–5, like
@@ -64,9 +61,11 @@ Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and 
 - For P09's spec (decision 0004): the machine-aware memory budget for map runs (at least 3 GiB,
   more where the machine allows) covers all seeds running at once, so the built-in adapter starts
   only as many seeds in parallel as fit.
-- Before P08's build, one more gate PR (decision 0003 §12) adds `theos-map-format` and
-  `theos-maps` to the workspace test and `gate/thresholds.toml`, and bans the std float methods in
-  `gate/clippy.toml`. P08's spec lists its contents.
+- Before P08's build, one more gate PR (decision 0003 §12; P08 plan Task 1) adds
+  `theos-map-format` and `theos-maps` to the workspace test and `gate/thresholds.toml`, bans the
+  std float methods in `gate/clippy.toml` and other deflate backends in `deny.toml`, and adds an
+  Intel macOS test job. P08's build runs on a branch that merges it while it waits; P08's PR
+  opens once it is merged.
 - The Maps screen reference (`docs/ui/screens/11-maps.html`) still says "theos_maps 0.3.0 ·
   Python 3.12 (uv)", describes a Python venv, and shows "2 extractions" and "extraction ↔
   extraction 99 min". P16's spec PR updates it to the built-in generator and the place types
@@ -99,7 +98,7 @@ Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and 
   (version 3), the architecture, the data model and the generator protocol; a decision page for
   0003; and Confluence Decision 221741058 (the engine package format), which `docs/map-package.md`
   replaces (Jann confirmed on 10 Nov 2026 that it fixes nothing different).
-- Decision 0004 (map generation research), once merged: the readable copies of the umbrella spec
+- Decision 0004 (map generation research, merged in #31): the readable copies of the umbrella spec
   (version 4) and the generator protocol, and a decision page for 0004.
 - The `theos_maps` skill in Jann's other Claude account: once P09 is merged, point it at the
   editor's map generator (`theos gen run` in a shell, or `gen_run` over MCP) or retire it; its
