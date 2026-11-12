@@ -7,9 +7,9 @@ use crate::text::{Position, Span};
 /// How serious a finding is by default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Severity {
-    /// The record is wrong.
+    /// The record or input file is wrong.
     Error,
-    /// The record is suspicious.
+    /// The record or input file is suspicious.
     Warning,
 }
 
