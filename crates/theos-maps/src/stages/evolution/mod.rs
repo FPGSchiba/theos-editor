@@ -17,6 +17,7 @@
 mod declaration;
 mod flow;
 mod initial;
+mod partition_flow;
 mod processes;
 mod resolve_sinks;
 mod route_steepest;
