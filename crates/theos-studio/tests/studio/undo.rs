@@ -279,6 +279,39 @@ fn scope_record_undoes_the_newest_entry_of_that_record() -> TestResult {
     Ok(())
 }
 
+/// Review focus, paths: `Scope::Record` reads a `\` as `/`, as every command path does, and
+/// refuses a path outside the rules.
+#[test]
+fn scope_record_reads_a_backslash_as_a_slash() -> TestResult {
+    let (project, mut workspace) = open("commands")?;
+    let path = project.root().join(TRUTH);
+    let start = std::fs::read(&path)?;
+    let command = set(&workspace, TRUTH, "title", "Synthetic truth, retitled")?;
+    workspace.run(&command)?;
+    let later = std::fs::read(&path)?;
+    let windows = TRUTH.replace('/', "\\");
+
+    workspace.undo(Scope::Record(windows.clone()))?;
+    assert_eq!(std::fs::read(&path)?, start);
+    workspace.redo(Scope::Record(windows))?;
+    assert_eq!(std::fs::read(&path)?, later);
+
+    for bad in ["../outside.md", "lore\\..\\..\\outside.md"] {
+        let error = workspace
+            .undo(Scope::Record(bad.to_owned()))
+            .err()
+            .ok_or("undo applied")?;
+        assert!(matches!(error, CommandError::Path { .. }), "{error:?}");
+        let error = workspace
+            .redo(Scope::Record(bad.to_owned()))
+            .err()
+            .ok_or("redo applied")?;
+        assert!(matches!(error, CommandError::Path { .. }), "{error:?}");
+    }
+    assert_eq!(std::fs::read(&path)?, later);
+    Ok(())
+}
+
 // AC: CE-20.2
 #[test]
 fn undoing_a_fix_brings_the_error_back() -> TestResult {

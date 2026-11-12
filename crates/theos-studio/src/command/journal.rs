@@ -75,7 +75,7 @@ pub enum Scope {
     /// The newest entry.
     Newest,
     /// The newest entry that changed this project-relative path; for a moved file, the old and
-    /// the new path both count.
+    /// the new path both count. A `\` is read as `/`, as in every command path.
     Record(String),
 }
 

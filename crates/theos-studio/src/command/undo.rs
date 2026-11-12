@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use super::journal::{EntryId, Scope};
 use super::pipeline::{self, Outcome, Work};
 use super::route::{Applied, HumanRoute};
-use super::{CommandError, FileChange, Plan};
+use super::{CommandError, FileChange, Plan, project_path};
 use crate::Workspace;
 
 impl Workspace {
@@ -19,9 +19,10 @@ impl Workspace {
     /// [`CommandError::NothingToUndo`] when no entry matches. [`CommandError::Changed`] when a
     /// file differs from what the command wrote. [`CommandError::Rejected`] when taking the
     /// command back would introduce an error, for example by removing a file that another
-    /// record links. Otherwise as [`Workspace::run_with`]; the entry stays where it was.
+    /// record links. [`CommandError::Path`] when the path of [`Scope::Record`] breaks the rules
+    /// of a command path. Otherwise as [`Workspace::run_with`]; the entry stays where it was.
     pub fn undo(&mut self, scope: Scope) -> Result<Outcome, CommandError> {
-        let found = self.commands.journal.find_done(scope);
+        let found = self.commands.journal.find_done(checked(scope)?);
         let (id, applied) = found.ok_or(CommandError::NothingToUndo)?;
         let work = replay("undo", id, applied, true);
         let outcome = pipeline::run(self, work, &mut HumanRoute)?;
@@ -35,12 +36,24 @@ impl Workspace {
     ///
     /// [`CommandError::NothingToRedo`] when no entry matches; otherwise as [`Workspace::undo`].
     pub fn redo(&mut self, scope: Scope) -> Result<Outcome, CommandError> {
-        let found = self.commands.journal.find_undone(scope);
+        let found = self.commands.journal.find_undone(checked(scope)?);
         let (id, applied) = found.ok_or(CommandError::NothingToRedo)?;
         let work = replay("redo", id, applied, false);
         let outcome = pipeline::run(self, work, &mut HumanRoute)?;
         self.commands.journal.mark_redone(id);
         Ok(outcome)
+    }
+}
+
+/// `scope` with the path of [`Scope::Record`] read as every command path is: a `\` as `/`.
+///
+/// # Errors
+///
+/// [`CommandError::Path`] for a path outside the rules.
+fn checked(scope: Scope) -> Result<Scope, CommandError> {
+    match scope {
+        Scope::Record(path) => Ok(Scope::Record(project_path(&path)?)),
+        Scope::Newest => Ok(Scope::Newest),
     }
 }
 
