@@ -11,8 +11,8 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P02 | Records and grammars | theos-editor | done | #16 | #17 |
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | done | #21 | #28 |
-| P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
-| P06 | Command layer and git | theos-editor | todo | | |
+| P05 | CLI and hook | theos-editor | todo | | |
+| P06 | Command layer and repo lock | theos-editor | todo | | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map format and terrain generator | theos-editor | in-progress | #27 | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
@@ -42,13 +42,33 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
 | P34 | Interiors | theos-editor | todo | | |
 | P45 | Atlas level switcher | theos-editor | todo | | |
+| P46 | Git read | theos-editor | todo | | |
+| P47 | Git write | theos-editor | todo | | |
+| P48 | MCP read | theos-editor | todo | | |
+| P49 | Releases and the check action | theos-editor | todo | | |
 
 Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and P23 from version 3
 (decision 0003, #24). Rows P31–P34 and P45, and the new P29 and P30, come from umbrella version 4
-(decision 0004, #31).
+(decision 0004, #31). Rows P46 and P47 and the new P06 come from umbrella version 5 (the split of
+P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the split of P05),
+which waits for Jann in its docs PR #34.
 
 ## Needs Jann
 
+- The P05 split (umbrella version 6, `docs/release.md`) waits for Jann in its docs PR #34. Jann
+  chose it on 12 Nov 2026, and it holds three things:
+  - P05 CLI and hook, P48 MCP read and P49 Releases and the check action;
+  - CE-08R.3 with the run and commit that built a release instead of build provenance, which
+    GitHub offers private repositories only on GitHub Enterprise Cloud;
+  - the P49 decisions on the check action and on proof before the first release.
+- For P49 (umbrella version 6):
+  - before its gate PR: Jann creates a GitHub App for release-plz (contents and pull requests
+    write), installs it on this repository and stores its id and key as secrets; the tag ruleset
+    names it as the only actor that creates `v*` tags;
+  - after the first release: Jann allows access to this repository's actions from his private
+    repositories, adds a read-only token for this repository's releases as a tower-of-theos
+    secret, and adds the check job to tower-of-theos;
+  - Jann's first release, `v0.1.0-rc.1`, is the end-to-end proof of CE-08R.2–08R.4.
 - Deferred by Jann on 12 Nov 2026 (decision 0004):
   - the shape of regions with a recommended power (D11): areas inside the floor's map (the
     working assumption) or separate maps; the power scale (working assumption: 1–5, like
@@ -98,8 +118,10 @@ Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and 
   (version 3), the architecture, the data model and the generator protocol; a decision page for
   0003; and Confluence Decision 221741058 (the engine package format), which `docs/map-package.md`
   replaces (Jann confirmed on 10 Nov 2026 that it fixes nothing different).
-- Decision 0004 (map generation research, merged in #31): the readable copies of the umbrella spec
-  (version 4) and the generator protocol, and a decision page for 0004.
+- Decision 0004 (map generation research, merged in #31): the readable copies of the umbrella
+  spec (version 4) and the generator protocol, and a decision page for 0004.
+- The P05 split, once merged: the readable copies of the umbrella spec (version 6) and of the
+  release pipeline (`docs/release.md`).
 - The `theos_maps` skill in Jann's other Claude account: once P09 is merged, point it at the
   editor's map generator (`theos gen run` in a shell, or `gen_run` over MCP) or retire it; its
   recipes move into the content project in P23.
