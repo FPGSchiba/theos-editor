@@ -87,8 +87,8 @@ struct Replayed {
 
 /// Runs `work` through every step on `route`. The repo lock, when the route holds it, is released
 /// on every way out. Every log line of the run is in the span `command`, which names the work by
-/// its label. The span is at level WARN so that it is on under any filter that lets a line of the
-/// run through.
+/// its label. The span is at level WARN, with the target `theos_studio::command::pipeline`, so
+/// that it is on under any level filter; a filter by target can still switch it off.
 pub(crate) fn run(
     workspace: &mut Workspace,
     work: Work<'_>,
