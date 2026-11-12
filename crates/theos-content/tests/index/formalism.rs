@@ -3,7 +3,7 @@
 //! temporary copy.
 
 use theos_content::formalism::{self, FormalismError, Regenerated};
-use theos_content::{Finding, Index, parts};
+use theos_content::{Finding, Index, Span, parts};
 
 use crate::common::{TempProject, expected, fixture, keys};
 
@@ -364,13 +364,25 @@ fn a_broken_source_is_a_finding_with_its_position() -> TestResult {
     let hits = of_rule(&found, "formalism/source");
     assert_eq!(hits.len(), 1, "{found:?}");
     assert_eq!(hits[0].position.map(|p| (p.line, p.column)), Some((1, 1)));
+    assert_eq!(hits[0].span, Some(Span::default()));
     assert!(hits[0].message.contains("`E04`"), "{}", hits[0].message);
 
     // Bytes that are not UTF-8.
     project.write_fresh(SOURCE, "")?;
     std::fs::write(project.root().join(SOURCE), [0xff, 0xfe, 0x00])?;
     let found = findings(&project)?;
-    assert_eq!(of_rule(&found, "formalism/source").len(), 1, "{found:?}");
+    let hits = of_rule(&found, "formalism/source");
+    assert_eq!(hits.len(), 1, "{found:?}");
+    assert_eq!(hits[0].span, Some(Span::default()));
+    assert_eq!(hits[0].position.map(|p| (p.line, p.column)), Some((1, 1)));
+
+    // A format error of the page's `format`, not only of an equation.
+    project.write(SOURCE, &text.replace("\"format\": 1", "\"format\": 2"))?;
+    let found = findings(&project)?;
+    let hits = of_rule(&found, "formalism/source");
+    assert_eq!(hits.len(), 1, "{found:?}");
+    assert_eq!(hits[0].span, Some(Span::default()));
+    assert_eq!(hits[0].position.map(|p| (p.line, p.column)), Some((1, 1)));
     Ok(())
 }
 
@@ -408,26 +420,38 @@ fn a_source_error_after_non_ascii_text_counts_scalar_values() -> TestResult {
 }
 
 #[test]
-fn a_source_cut_off_at_the_end_is_placed_at_the_end() -> TestResult {
+fn a_source_cut_off_is_placed_where_serde_json_reports_it() -> TestResult {
     let project = generated()?;
-    for text in ["{\n  \"format\": 1,", "{\n  \"format\": 1,\n", "{"] {
+    // serde_json reports an end-of-input error at the last byte of the text; with a final LF
+    // that is the end of the text, on the empty last line. (text, offset, line, column)
+    let cases = [
+        (
+            "{
+  \"format\": 1,",
+            15,
+            2,
+            14,
+        ),
+        (
+            "{
+  \"format\": 1,
+",
+            17,
+            3,
+            1,
+        ),
+        ("{", 0, 1, 1),
+    ];
+    for (text, offset, line, column) in cases {
         project.write(SOURCE, text)?;
         let found = findings(&project)?;
         let hits = of_rule(&found, "formalism/source");
         assert_eq!(hits.len(), 1, "{text:?}: {found:?}");
-        let span = hits[0].span.ok_or("a span")?;
-        // serde_json's column at the end of a line without LF is the line's length: the span
-        // is the end of the text, or the last byte before it.
-        assert_eq!(span.start, span.end, "{text:?}");
-        assert!(
-            span.end + 1 >= text.len() && span.end <= text.len(),
-            "{text:?}: {span:?}"
-        );
-        let position = hits[0].position.ok_or("a position")?;
+        assert_eq!(hits[0].span, Some(Span::new(offset, offset)), "{text:?}");
         assert_eq!(
-            position.line,
-            text.matches('\n').count() + 1,
-            "{text:?}: {position:?}"
+            hits[0].position.map(|p| (p.line, p.column)),
+            Some((line, column)),
+            "{text:?}"
         );
     }
     Ok(())
