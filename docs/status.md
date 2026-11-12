@@ -59,8 +59,7 @@ from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#2
 - Three sentences of the P10 corpus read like lore claims (B-901's link text, "the Cutter is
   near", "the operator-plate names a Listener"). P02's fixture copies reword them neutrally until
   Jann, or a session that can read Confluence, confirms they are canon.
-- The docs PR `docs(spec): align the P02, P03 and P04 specs with the build (docs)` waits for
-  Jann. It aligns four approved specs with what was built:
+- The docs PR #30 waits for Jann. It aligns four approved specs with what was built:
   - P02 §5.11: a design note starts on any line with `Design note:` (data model §9.2);
   - P03 §5.7: hiding is native per OS (Jann's ruling of 10 Nov 2026);
   - P03 §7: two builds sharing one cache recheck its identity on every write;
