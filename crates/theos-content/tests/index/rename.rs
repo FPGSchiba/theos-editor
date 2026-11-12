@@ -42,9 +42,9 @@ fn clue(id_line: &str, rest: &str) -> String {
     )
 }
 
+// AC: CE-20.3
 #[test]
 fn renames_the_id_field_in_its_style() -> TestResult {
-    // AC: CE-20.3
     for (old, new) in [
         ("id: T-960", "id: T-970"),
         ("id: 'T-960'", "id: 'T-970'"),
@@ -56,9 +56,9 @@ fn renames_the_id_field_in_its_style() -> TestResult {
     Ok(())
 }
 
+// AC: CE-20.3
 #[test]
 fn renames_a_field_link_and_keeps_its_quoting() -> TestResult {
-    // AC: CE-20.3
     let renames = [("T-960", "T-970")];
     for (old, new) in [
         ("reveals: \"T-960\"\n", "reveals: \"T-970\"\n"),
@@ -74,9 +74,9 @@ fn renames_a_field_link_and_keeps_its_quoting() -> TestResult {
     Ok(())
 }
 
+// AC: CE-20.3
 #[test]
 fn renames_list_items_and_keeps_comments() -> TestResult {
-    // AC: CE-20.3
     let renames = [("f04-synthetic", "f04-renamed")];
     let got = renamed(
         &clue("id: C-960", "where: [f04-synthetic, f05-synthetic]\n"),
@@ -103,9 +103,9 @@ fn renames_list_items_and_keeps_comments() -> TestResult {
     Ok(())
 }
 
+// AC: CE-20.3
 #[test]
 fn renames_lens_entries() -> TestResult {
-    // AC: CE-20.3
     let text = |a: &str, b: &str| {
         format!(
             "---\n# synthetic fixture (P06), not canon\nid: synthetic-npc\nkind: npc\ntitle: N\nlens:\n  unaware_of: [{a}]\n  rejects: ['{b}']\n---\nBody.\n"
@@ -119,9 +119,9 @@ fn renames_lens_entries() -> TestResult {
     Ok(())
 }
 
+// AC: CE-20.3
 #[test]
 fn renames_body_links_and_keeps_fragment_and_shown_text() -> TestResult {
-    // AC: CE-20.3
     let body = |a: &str, b: &str| {
         format!(
             "---\n# synthetic fixture (P06), not canon\nid: S-960\nkind: script\ntitle: S\nstatus: draft\n---\n\
@@ -147,9 +147,9 @@ Brief.\n\n## Notes\n\n> [!note] n1 · [[{a}]] · open\n> Text.\n\n> [!note] n2 �
     Ok(())
 }
 
+// AC: CE-20.3
 #[test]
 fn leaves_text_that_only_looks_like_an_id() -> TestResult {
-    // AC: CE-20.3
     let text = clue(
         "id: C-960",
         "reveals: T-961\nwhere: [T-9600, f01-synthetic]\n",
@@ -180,9 +180,9 @@ fn edits_of(
     edits(record, links, &map(pairs))
 }
 
+// AC: CE-20.3
 #[test]
 fn a_span_the_record_does_not_have_is_an_error() -> TestResult {
-    // AC: CE-20.3
     let text = clue("id: C-960", "reveals: T-960\n");
     let (record, mut links) = indexed(&text)?;
     for link in &mut links {

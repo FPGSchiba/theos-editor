@@ -424,7 +424,7 @@ fn history_undoes_to_the_start(steps: &[(u8, u8)]) -> TestResult {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(16))]
 
-    // AC: CE-20.2
+    // Backs CE-20.2 with random histories (proptest tests are not traced).
     #[test]
     fn undoing_a_random_history_gives_the_first_bytes(
         steps in proptest::collection::vec((0u8..5, 0u8..5), 0..=8)

@@ -124,15 +124,15 @@ mod tests {
 
     const RULE: &str = "clue/moves-truth";
 
-    #[test]
     // AC: CE-20.1
+    #[test]
     fn a_new_error_of_a_rule_on_a_path_is_introduced() {
         let after = [error("a.md", RULE, "No clue moves T-981")];
         assert_eq!(introduced(&none(), &after), after);
     }
 
-    #[test]
     // AC: CE-20.1
+    #[test]
     fn a_changed_message_of_a_standing_error_is_not_introduced() {
         let before = [error("a.md", RULE, "No clue moves T-981")];
         let allowed = FindingCounts::of(&before, &BTreeMap::new());
@@ -140,8 +140,8 @@ mod tests {
         assert_eq!(introduced(&allowed, &after), Vec::<Finding>::new());
     }
 
-    #[test]
     // AC: CE-20.1
+    #[test]
     fn a_raised_severity_is_not_introduced() {
         let before = [finding(
             "a.md",
@@ -154,8 +154,8 @@ mod tests {
         assert_eq!(introduced(&allowed, &after), Vec::<Finding>::new());
     }
 
-    #[test]
     // AC: CE-20.1
+    #[test]
     fn warnings_are_never_introduced() {
         let after = [finding(
             "a.md",
@@ -166,8 +166,8 @@ mod tests {
         assert_eq!(introduced(&none(), &after), Vec::<Finding>::new());
     }
 
-    #[test]
     // AC: CE-20.1
+    #[test]
     fn a_moved_file_keeps_its_findings() {
         let before = [
             error("old.md", RULE, "No clue moves T-981"),
@@ -185,8 +185,8 @@ mod tests {
         assert_eq!(introduced(&allowed, &after), Vec::<Finding>::new());
     }
 
-    #[test]
     // AC: CE-20.1
+    #[test]
     fn max_takes_the_larger_count_per_key() {
         let one = FindingCounts::of(&[error("a.md", RULE, "x")], &BTreeMap::new());
         let two = FindingCounts::of(
@@ -200,8 +200,8 @@ mod tests {
         assert!(max.has_seen(&error("a.md", RULE, "z")));
     }
 
-    #[test]
     // AC: CE-20.1
+    #[test]
     fn max_keeps_the_keys_of_both_sides() {
         let a = FindingCounts::of(&[error("a.md", RULE, "x")], &BTreeMap::new());
         let b = FindingCounts::of(&[error("b.md", RULE, "y")], &BTreeMap::new());
@@ -212,16 +212,16 @@ mod tests {
         assert!(max.has_seen(&error("b.md", RULE, "y")));
     }
 
-    #[test]
     // AC: CE-20.1
+    #[test]
     fn unseen_messages_come_first() {
         let allowed = FindingCounts::of(&[error("a.md", RULE, "seen")], &BTreeMap::new());
         let after = [error("a.md", RULE, "seen"), error("a.md", RULE, "unseen")];
         assert_eq!(introduced(&allowed, &after), [after[1].clone()]);
     }
 
-    #[test]
     // AC: CE-20.1
+    #[test]
     fn unseen_messages_win_over_a_seen_one_that_comes_first() {
         let allowed = FindingCounts::of(&[error("a.md", RULE, "seen")], &BTreeMap::new());
         let after = [
@@ -235,8 +235,8 @@ mod tests {
         );
     }
 
-    #[test]
     // AC: CE-20.1
+    #[test]
     fn a_surplus_beyond_the_unseen_takes_seen_ones_and_keeps_after_order() {
         let allowed = FindingCounts::of(&[error("a.md", RULE, "seen")], &BTreeMap::new());
         let after = [
@@ -251,8 +251,8 @@ mod tests {
         );
     }
 
-    #[test]
     // AC: CE-20.1
+    #[test]
     fn count_is_zero_for_an_unknown_key() {
         let counts = FindingCounts::of(&[error("a.md", RULE, "x")], &BTreeMap::new());
         assert_eq!(counts.count("a.md", RULE), 1);
