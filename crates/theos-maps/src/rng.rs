@@ -138,6 +138,16 @@ mod tests {
     }
 
     #[test]
+    fn stage_stream_is_pinned() {
+        let mut rng = StageRng::for_key(1, "tectonics#0");
+        // Checked against an independent Python PCG-64 (XSL-RR, seed bytes = four SplitMix64
+        // outputs, little-endian, state then increment).
+        assert_eq!(rng.next_u64(), 7_739_573_837_118_461_441);
+        assert_eq!(rng.next_u64(), 17_749_986_308_897_808_859);
+        assert_eq!(rng.next_u64(), 1_391_999_321_210_941_311);
+    }
+
+    #[test]
     fn below_stays_below() {
         let mut rng = StageRng::for_key(3, "below");
         for n in [1_u64, 7, 1 << 40] {

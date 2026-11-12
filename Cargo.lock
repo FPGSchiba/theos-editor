@@ -1017,6 +1017,8 @@ dependencies = [
  "libm",
  "rand_core",
  "rand_pcg",
+ "serde_json",
+ "theos-map-format",
  "thiserror",
 ]
 
