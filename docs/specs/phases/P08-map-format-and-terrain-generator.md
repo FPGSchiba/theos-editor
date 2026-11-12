@@ -1,8 +1,10 @@
 # P08 · Map format and terrain generator — phase spec
 
-Status: waiting for Jann's approval · 10 Nov 2026 · repo of the build: `theos-editor`
-Source: `docs/specs/00-umbrella.md` §3 P08 and decision 0003
-(`docs/decisions/0003-map-generator-in-rust.md`). Scope and acceptance criteria come from there;
+Status: approved (#27, 11 Nov 2026) · amended by decision 0004 (12 Nov 2026) · repo of the build:
+`theos-editor`
+Source: `docs/specs/00-umbrella.md` §3 P08, decision 0003
+(`docs/decisions/0003-map-generator-in-rust.md`) and decision 0004
+(`docs/decisions/0004-map-generation-research.md`). Scope and acceptance criteria come from there;
 this spec decides how.
 
 ## 1. Goal
@@ -20,13 +22,14 @@ that P08 builds a terrain generator at the current state of the art. 0.3.0 provi
 recipes and a sanity range for the numbers, not the target (§4.1). Three research passes (§4.2)
 found 0.3.0's architecture current but its processes about ten years old. P08 therefore adds:
 
-- sediment deposition, so lakes and basins fill and valleys get alluvial floors;
-- flow routing to several neighbours, so rivers no longer follow the grid;
+- sediment deposition, so basins and lakes fill with sediment and valley floors widen;
+- flow routing to several neighbours in erosion, so valleys lose the grid's bias (river lines still
+  follow the steepest receiver, smoothed);
 - a lake water balance;
 - a slope limit per rock type;
 - vegetation from a water balance;
-- roads costed by the grade along their way, in 16 directions, with bridges as single spans,
-  networks measured in terrain distance, and settlements promoted where roads meet.
+- roads costed by the grade along their way, in 16 directions, with bridges as single spans and
+  networks measured in terrain distance.
 
 Every step of the generator, now and in later phases, is a **`Stage`** with one contract (§5.3).
 A stage declares the layers it reads and writes, takes typed parameters, and is checked after it
@@ -40,7 +43,8 @@ What later phases build on it:
 - P22 reads `features` and the frame;
 - P23 moves the recipes into the content project;
 - P25 shows `base` under the pins;
-- P29 and P30 add settlement, interior and indoor-floor stages through the same contract;
+- P29, P34 and P30 add settlement, interior and indoor-floor stages through the same contract;
+- P31, P32 and P33 add the floor's frame and places, recipe families, metrics and batches;
 - the engine reads packages with `theos-map-format`.
 
 ## 2. Acceptance criteria (verbatim from the umbrella)
@@ -55,6 +59,8 @@ What later phases build on it:
   its level; on a map with levels, a layer or feature without a level, or with a level the frame
   does not list, is rejected.
 - CE-76.4 `theos-map-format` depends on no other crate of this workspace.
+- CE-76.5 A package whose `requires` names a capability the reader does not implement is refused
+  with a message naming it.
 
 **CE-28 theos-maps terrain generator**
 - CE-28.1 `describe` gives the name `theos-maps`, the generator's own version, `produces: ["map"]`
@@ -102,8 +108,8 @@ What later phases build on it:
   - features, renders and the contact sheet;
   - the package writing;
   - the library API with progress and cancel;
-  - the metrics module, the snapshot export, the golden hashes with their recording tool, and
-    the physics tests;
+  - the metrics the parity check needs, the memory budget, the golden hashes with their recording
+    tool, and the physics tests;
   - a developer example that runs recipes.
 - The parity fixture of the 0.3.0 reference numbers (§5.14).
 - Additions to `docs/map-package.md` (still format 1.0, since no package exists yet) and the Stage
@@ -115,8 +121,11 @@ What later phases build on it:
 | Item | Where |
 |---|---|
 | The `builtin` adapter, settings registration, `theos gen` | P09 |
-| Settlement and interior maps, child maps | P29 |
-| Indoor floors with stacked levels (the generator; the format already carries levels) | P30 |
+| Settlement maps and their child maps | P29 |
+| Interior maps on one level, ruins' child maps, the room graph | P34 |
+| Indoor floors with stacked levels (the format already carries levels) | P30 (generator), P45 (Atlas) |
+| The extra terrain metrics (hypsometry, slope histogram, drainage-area distribution, pits, breaching volume) and the snapshot export | P33 (decision 0004) |
+| Promoting settlements at road junctions, markets at route centres | The placement work of P31 or P32; the research track until then (decision 0004) |
 | Recipes in the content project | P23 |
 | Glacial erosion, layered strata, flexure, water depths (GraphFlood), several wind directions | Later, when a floor needs them (§4.4) |
 | Learned methods (surrogate, inverse authoring, amplification) | A research track outside the generator: a learned step is always a separate generator whose output is baked and hashed (decision 0003; §4.2) |
@@ -125,7 +134,7 @@ What later phases build on it:
 
 ## 4. Decisions
 
-### 4.1 Decided by Jann (10 Nov 2026)
+### 4.1 Decided by Jann (10 and 12 Nov 2026)
 
 - Decision 0003 and its umbrella changes, merged in #24: Rust, in-process, baked canon,
   deterministic, format 1.0, stacked levels, focused phases, `theos gen` in P09.
@@ -141,6 +150,17 @@ What later phases build on it:
   better as well".
 - The crate and approach choices of §4.3 (Jann, 10 Nov 2026, on the list of eight). Point 4 (pit
   handling) changed after the research: keep the MST resolver and add deposition.
+- **12 Nov 2026, after the map generation research (decision 0004):**
+  - the text corrections of the audit (§4.2, §5.9);
+  - the fluvial law as Yuan et al. 2019 write it, with their tolerance and an extra physics test
+    (§5.9, §5.14);
+  - the place types `chime`, `gate-up` and `gate-down` instead of `extraction`, `portal-out` and
+    `portal-in`;
+  - absolute discharge thresholds that every recipe sets, a mill rule relative to `river_q`, edge
+    margins as a share of the frame, and single-flow channel discharge in `hydrology`;
+  - a `requires` list in the manifest and CE-76.5;
+  - no size limit in the format; a memory budget instead of a fixed grid limit;
+  - `route_potential` leaves P08; the extra metrics and the snapshot export move to P33.
 
 ### 4.2 Research (10 Nov 2026)
 
@@ -152,24 +172,33 @@ Three passes, sources in their reports (summarised in §5.9 by stage):
      Unreal), which stack hydraulic and thermal passes.
    - Its processes are about 2013-era: no sediment deposition (Yuan et al. 2019; goSPL; Landlab
      SPACE) and single-flow routing only.
-   - Both gaps explain the observed weaknesses (oversized lakes, grid-aligned rivers, no alluvial
-     plains), and both fit the same implicit O(n) solver.
+   - Both gaps plausibly explain the observed weaknesses (oversized lakes, grid-aligned valleys,
+     no filled basins); only runs with G > 0 and multiple flow can prove it. Both fit the same
+     implicit solver, O(n) per iteration.
 2. **Placement, refinement and tools.**
-   - 0.3.0's placement is the 2010–2012 research recipe: Emilien 2012 interest maps, Galin 2010
-     roads, Galin 2011 networks.
-   - It is behind that recipe in the 8-neighbour Dijkstra, the per-cell slope cost, straight-line
-     distances, and no route-potential promotion.
+   - 0.3.0's placement follows the 2010–2012 research: after Emilien 2012's interest maps (which
+     place buildings inside a village) and Galin 2010's roads. Its network construction is not
+     Galin 2011's method, and no paper has a promotion step (the audit, decision 0004).
+   - It is behind Galin 2010 in the 8-neighbour Dijkstra and the per-cell slope cost, and it
+     measures links in straight-line distance.
    - Refinement to walking scale later fits multi-scale erosion amplification (Schott et al. 2024,
-     MIT code). The package must carry flow, rivers, lakes, roads and erosion fields for it.
+     MIT code; the code needs GPU compute shaders, so only the method can be reused under G20).
+     The package must carry flow, rivers, lakes, roads and erosion fields for it.
 3. **Deep learning.** Worth pursuing beside the generator, never inside it:
-   - No neural inference is bit-identical across platforms.
+   - Stock frameworks do not give bit-identical inference across platforms; reproducible inference
+     exists (RepDL, 2025) but adds a dependency. The conclusion stands for cost and dependency
+     reasons.
    - Strict physics-informed networks are a poor fit for stream power.
    - Surrogates trained on our own generator output are the better hybrid.
    - Ranked tracks: inverse authoring (sketch → uplift), an erosion preview surrogate, engine
      amplification.
    - It asks the first port for hooks: a layer export, resolution-independent parameters, a
-     metrics module, and stages as pure, typed steps. P08 builds all four (§5.6, §5.5, §5.14,
-     §5.3).
+     metrics module, and stages as pure, typed steps. P08 builds the last three: §5.5; §5.14, with
+     the parity metrics that P33 extends; §5.3. The layer export comes with P33 (decision 0004).
+4. **The map generation research of 11–12 Nov** (`research/map-generation/`, decision 0004)
+   audited these claims. Later options it names: analytical stream power as a deterministic
+   preview (Tzathas et al. 2024), an adjoint model for inverse authoring (ESurf 2025), and the
+   terrain-descriptor survey (Argudo et al. 2025) to check the metrics against.
 
 ### 4.3 Probes (10 Nov 2026, rustc 1.99.1, Windows 11)
 
@@ -197,9 +226,9 @@ uv) ran seeds 1–8 of the three recipes: about 17 s per hearth-valley seed (§5
 | Port or state of the art | State of the art with 0.3.0 as a sanity range | A faithful port keeps the known defects (Jann) |
 | Pipeline model | Named, typed layers with a `Stage` contract checked before and after each stage (CE-28.3) | A fixed typed pipeline per kind: compile-time safety, but recipes could not choose or switch stages, and CE-28.3 asks for the check by name |
 | Erosion processes | Separate per-step stages in an evolution loop, switchable per recipe | One monolithic erosion function: untestable per process and not tunable |
-| Fluvial law | Erosion–deposition after Davy & Lague 2009 with the implicit O(n) solution of Yuan et al. 2019; deposition coefficient G; G = 0 is detachment-limited stream power (Braun & Willett 2013) | Transport-limited only: wrong for bedrock mountains; explicit schemes: unstable at 25 kyr steps |
-| Routing | Multiple flow directions: FastScape's slope-dependent exponent in erosion, Qin et al. 2007's convergent exponent for discharge in hydrology; the single steepest receiver kept for the MST resolver and the river lines | D8 only: grid-aligned rivers; D∞: harder to make implicit with deposition |
-| Pits | MST resolver (Cordonnier, Bovy & Braun 2019) with sediment filling depressions (goSPL's rule, from its documentation) | Priority-flood filling of the surface each step: removes lakes that should exist |
+| Fluvial law | Erosion–deposition after Davy & Lague 2009 with the implicit solution of Yuan et al. 2019 (O(n) per Gauss–Seidel iteration); deposition coefficient G; G = 0 is detachment-limited stream power (Braun & Willett 2013) | Transport-limited only: wrong for bedrock mountains; explicit schemes: unstable at 25 kyr steps |
+| Routing | Multiple flow directions in erosion (FastScape's slope-dependent exponent); single flow in channels for discharge, rivers and their lines (decision 0004); the steepest receiver kept for the MST resolver | D8 only: grid bias in valleys; Qin et al. 2007's exponent for discharge: dispersive on low gradients, so rivers would spread across plains (the audit); D∞: harder to make implicit with deposition |
+| Pits | MST of basins (Cordonnier, Bovy & Braun 2019), an ε-lifted routing surface (Barnes et al. 2014), sediment filling depressions (after goSPL's documentation; the combination is ours) | Priority-flood filling of the surface each step: removes lakes that should exist |
 | ZIP backend | `zip` + `flate2`/miniz_oxide + cargo-deny bans | `rawzip`: writes a 1980-00-00 date or extra fields, which the format forbids; Stored: masks would not shrink (97.5 % saved by deflate) |
 | FFT | Own radix-2, padding to powers of two | Patched `rustfft`: a fork to maintain |
 | Raster kernels | Own code | `imageproc`: u8/f32 images, runtime CPU dispatch in its dependencies |
@@ -245,7 +274,7 @@ crates/theos-maps/
   src/lib.rs          API: describe, run, RunRequest, RunManifest, Progress, CancelToken
   src/stage/          the Stage trait, StageContext, LayerSpec, Finding, Metrics, registry
   src/world.rs        World: the layer store
-  src/runner.rs       validation, execution, checks, hashes, snapshots, progress, cancel
+  src/runner.rs       validation, memory budget, execution, checks, hashes, progress, cancel
   src/recipe/         schema, parsing, built-in recipes (recipes/*.toml, include_str!)
   src/rng.rs          seeds per stage, Pcg64, samplers
   src/kernels/        fft, noise, filters, distance, labels, morphology, curves, paths, mst
@@ -286,7 +315,7 @@ pub trait Stage: Send + Sync {
     /// Names of the metrics the stage reports, known before anything runs.
     fn metric_names(&self, params: &dyn StageParams) -> Vec<&'static str>;
     /// Runs the stage. The context hands out only the declared layers; the report carries
-    /// values that are not layers (for example a walking time between two extraction points).
+    /// values that are not layers (for example a walking time between two Chimes).
     fn run(&self, ctx: &mut StageContext<'_>, params: &dyn StageParams)
         -> Result<StageReport, StageError>;
     /// Invariants checked after the run (finite values, ranges, balances).
@@ -298,7 +327,7 @@ pub trait Stage: Send + Sync {
 }
 ```
 
-The capabilities above are binding for P08, P29 and P30. The plan may rename items or split the
+The capabilities above are binding for P08, P29, P30, P31, P33 and P34. The plan may rename items or split the
 trait, but not lose a capability:
 
 - reads and writes that depend on the parameters (a `landscape_evolution` without `hillslope`
@@ -369,7 +398,7 @@ The world stores them in a `BTreeMap` by name, so iteration order is fixed.
   throughout: `height`, `vegetation`, `temperature`, `precipitation`, `discharge`, `roads` (the
   road-class raster). The road network as a value is `road_network`. Internal layers (`uplift`,
   `erodibility`, `diffusivity`, `sag_rate`, `receivers`, `routing_surface`, `stack`) are written
-  to the package only when the run asks for snapshots (§5.6).
+  to the package only as snapshot layers, which P33 adds (decision 0004).
 - **Non-raster values** (features, the road network, the climate parameters, the flow graph) have
   a canonical byte form: their `serde` value written as canonical JSON (§5.7). The golden hashes
   use that form.
@@ -403,6 +432,11 @@ background_uplift = 2.2e-4
   jitter = 0.06
 
 [[stage]]
+id          = "hydrology"
+river_q     = 0.15            # m³/s; required, no default
+big_river_q = 2.0             # m³/s; required, no default
+
+[[stage]]
 id     = "landscape_evolution"
 steps  = 240
 dt_yr  = 2.5e4
@@ -432,7 +466,7 @@ dt_yr  = 2.5e4
 lake_pct             = [0, 8]
 vegetation_cover_pct = [25, 75]
 "features.ruin"      = [2, 2]
-"features.extraction" = [2, 2]
+"features.chime"     = [2, 2]
 
 [render.inworld]                  # optional; built-in recipes carry no in-world texts (§9)
 title  = ""
@@ -448,13 +482,13 @@ labels = []
   Grids are `[rows, columns]` and sizes `[width, height]`, as in the format's frame.
 - **Summary paths and metrics.** The metrics module (§5.14) writes 0.3.0's top-level paths, so
   0.3.0's constraints keep their meaning: `elevation_m.relief`, `lake_pct`, `rivers_pct`,
-  `vegetation_cover_pct`, `precip_mm_yr.median`, `travel.extraction_to_extraction_min`. It
+  `vegetation_cover_pct`, `precip_mm_yr.median`, `travel.chime_to_chime_min`. It
   follows 0.3.0's definitions: vegetation cover is the share of cells with density above 0.5;
   river share is the share of non-lake cells whose discharge exceeds `river_q`. Stage metrics go
   under `summary.stages.<id>`. A constraint's result keys follow `docs/generators.md` §3
   (`elevation_m.relief` → `elevation_m_relief`, `_min`, `_max`, `_ok`).
-- **Placement checks.** 0.3.0 silently counted placed ruins and extractions in its "all ok". The
-  converted recipes state them as constraints (`features.ruin`, `features.extraction`), so
+- **Placement checks.** 0.3.0 silently counted placed ruins and extraction points in its "all ok".
+  The converted recipes state them as constraints (`features.ruin`, `features.chime`), so
   CE-28.5 compares like with like. `features.<type>` is the count of features of that type.
 - **Validation before any stage runs** (CE-28.3):
   - every stage id is known and applies to the recipe's kind;
@@ -476,9 +510,11 @@ labels = []
   - `hearth-valley-omega` stays as 0.3.0 had it: no settlements, resources, roads or sites. So
     `pois` reads `features` and `travel` reads `road_network` as optional reads; without roads,
     travel uses off-road walking only.
-  - Deposition steepens channels at steady state (slope grows with 1 + G/p in Yuan et al.'s
-    model), so G > 0 raises relief at the same uplift. Uplift rates and K are retuned so relief
+  - Deposition steepens channels at steady state (slope grows by (1 + G/p̂)^(1/n), Yuan et al.'s
+    eq. 24), so G > 0 raises relief at the same uplift. Uplift rates and K are retuned so relief
     stays inside the recipe's range.
+  - Every recipe sets `river_q` and `big_river_q` on `hydrology`; they have no default. The
+    built-in recipes keep 0.3.0's values (0.15 and 2.0 m³/s; `fixture-small` 0.05 and 0.5).
 - **Units.** Lengths in metres or kilometres, positions as fractions of the frame, rates per year.
   0.3.0 gave filter sizes and iterations in cells; P08 converts them at 0.3.0's cell size
   (62.5 m), so they mean the same at 384² and scale correctly at other sizes.
@@ -486,6 +522,11 @@ labels = []
 ### 5.6 The runner
 
 1. **Validate** the recipe (§5.5). Nothing runs on an error.
+   - **Memory budget** (decision 0004): the runner estimates the run's memory as the cells times
+     the bytes of every layer the recipe's stages declare, times 1.5 for temporaries. Above
+     `RunOptions.memory_budget` the run is refused before any stage runs, naming the largest
+     layers. Without a budget from the caller it is 3 GiB. The machine-aware budget (at least
+     3 GiB, more where the machine allows) is the caller's to set; in the editor that is P09.
 2. **For each pipeline stage, in order:**
    - report a progress event `{stage: <stage id>, done: <index>, total: <pipeline length>}`;
    - check the cancel token;
@@ -499,9 +540,7 @@ labels = []
    - record its `metrics` under `summary.stages.<id>`. Its wall time goes into the
      `RunManifest`'s `timing` only, never into the package, whose bytes must not change between
      runs;
-   - hash every layer it wrote (canonical bytes, SHA-256) into the golden record (CE-77.1);
-   - if the run asked for snapshots of this stage, copy its written layers as snapshot layers
-     (below).
+   - hash every layer it wrote (canonical bytes, SHA-256) into the golden record (CE-77.1).
 4. **After the pipeline**, each step with its own progress event (`stage` = `constraints`,
    `features`, `renders`, `package`):
    - evaluate the constraints into results (`docs/generators.md` §3 keys and `pass`). The runner
@@ -520,13 +559,8 @@ labels = []
      it returns, and only that: files that were there before stay (CE-28.4).
    - Outputs are first written under a temporary name in that folder and renamed at the end, so a
      crash never leaves a complete-looking output.
-7. **Snapshots** (the training-data and debugging hook):
-   - `RunOptions.snapshots` names stages, or `all`.
-   - Every layer those stages wrote is added to the package as a snapshot layer: name
-     `<layer>@<stage>`, file `layers/snapshots/<stage>/<layer>.<dtype>`, f32 or u8 (§5.18).
-   - The manifest's `summary.snapshots` lists them.
-   - A package with snapshots is a debugging or training artefact, not a canon output, and its
-     hash differs.
+7. **Snapshots** of the layers a stage wrote (`docs/map-package.md` §4.5), the training-data and
+   debugging hook, come with P33 (decision 0004).
 
 ### 5.7 Determinism (G20)
 
@@ -597,60 +631,78 @@ Pure functions with unit tests against known values (scipy semantics where 0.3.0
 ### 5.9 Terrain stages
 
 Every stage below is a `Stage` with its own tests. Reads and writes are layer names (optional
-reads in brackets). "Paper" names what the stage implements from; GPL code is never read.
+reads in brackets). "Paper" names what the stage implements from; "own" marks this spec's own
+design. GPL code is never read.
 
 | Stage | Reads → writes | Method | Paper |
 |---|---|---|---|
 | `grid` | – → `frame`, `fixed` | Raster with drained (fixed-value) edges on chosen sides, the rest closed | – |
-| `tectonics` | `frame`, `fixed` → `uplift`, `sag_rate`, `belts`, `warp` | 0.3.0's parametric sources (orogen, fault, rift, dome, volcano, basin) on warped coordinates with spectral variation. Young subsidence becomes `sag_rate` (m/yr), applied **during** evolution, so subsiding basins fill with sediment | Cordonnier et al. 2016; Schott et al. 2023 |
-| `geology` | `frame`, `uplift`, `sag_rate`, `belts`, `warp` → `rock`, `erodibility`, `diffusivity`, `critical_slope` | 0.3.0's provinces, fold belt, plutons, and alluvium where `sag_rate` is high. Per rock type: erodibility K, diffusivity kd, critical slope (granite and quartzite steepest, shale and alluvium gentlest) | Montgomery & Brandon 2002 |
+| `tectonics` | `frame`, `fixed` → `uplift`, `sag_rate`, `belts`, `warp` | 0.3.0's parametric sources (orogen, fault, rift, dome, volcano, basin) on warped coordinates with spectral variation. Young subsidence becomes `sag_rate` (m/yr), applied **during** evolution, so subsiding basins fill with sediment | Uplift-domain authoring as in Cordonnier et al. 2016 and Schott et al. 2023; the parametric sources are 0.3.0's |
+| `geology` | `frame`, `uplift`, `sag_rate`, `belts`, `warp` → `rock`, `erodibility`, `diffusivity`, `critical_slope` | 0.3.0's provinces, fold belt, plutons, and alluvium where `sag_rate` is high. Per rock type: erodibility K, diffusivity kd, critical slope (granite and quartzite steepest, shale and alluvium gentlest) | Own table; the idea of threshold slopes after Montgomery & Brandon 2002 |
 | `climate_model` | `frame` → `climate` | Orographic precipitation by linear theory (FFT), base + scaled orographic part; temperature by lapse rate; potential evaporation PET = clamp(300 + 45·T, 200, 1800) mm/yr (0.3.0's lake evaporation); actual evapotranspiration by Fu's form of the Budyko curve; runoff = P − AET | Smith & Barstad 2004; Fu 1981; Bracht-Flyr et al. 2013 |
 | `landscape_evolution` | the union of its processes → `height`, `erosion`, `deposition`, `receivers`, `drainage_area` | Initial surface from spectral noise, then `steps` time steps of its process list (below) | – |
 | ↳ `uplift` | `height`, `uplift`, `sag_rate`, `fixed` → `height` | height += (uplift − sag_rate)·dt; drained edges stay at base level | – |
 | ↳ `route_steepest` | `height`, `fixed` → `receivers` | Steepest-descent receiver per cell (D8 distances), ties by index | Braun & Willett 2013 |
-| ↳ `resolve_sinks` | `height`, `receivers` → `receivers`, `routing_surface`, `depressions` | MST of closed basins over their passes, reconnecting each basin through its lowest pass; `routing_surface` lifts depression cells to their spill level + ε along the priority-flood order (the "fill" mode), `height` itself unchanged; `depressions` labels routed depressions with their spill node | Cordonnier, Bovy & Braun 2019 |
-| ↳ `partition_flow` | `routing_surface`, `receivers` → `weights`, `stack` | Weights over the lower neighbours of the routing surface: `exponent = "steepest"` (all to the receiver) or `"slope_adaptive"`, p = 0.5 + 0.6·S with S the steepest slope (FastScape's slope-dependent partition for erosion). A fresh topological order (`stack`, receivers before donors) of the resulting graph | FastScape documentation; Freeman 1991 |
-| ↳ `fluvial` | `height`, `erodibility`, `receivers`, `weights`, `stack`, `depressions`, `fixed`, `climate` → `height`, `erosion`, `deposition`, `drainage_area` | The ξ–q erosion–deposition law with n = 1 (equation below), solved implicitly in stack order with Gauss–Seidel iterations; sediment filling routed depressions; cumulative erosion and deposition | Davy & Lague 2009; Yuan et al. 2019; Braun & Willett 2013; goSPL documentation |
-| ↳ `hillslope` | `height`, `diffusivity`, `fixed` → `height`, `erosion`, `deposition` | Linear diffusion, implicit ADI (Thomas algorithm per row and column); per cell, a net loss books as erosion and a net gain as deposition | – |
-| ↳ `slope_limit` | `height`, `critical_slope`, `fixed` → `height`, `erosion`, `deposition` | Thermal step (algorithm below) | Montgomery & Brandon 2002; Schott et al. 2024 |
+| ↳ `resolve_sinks` | `height`, `receivers` → `receivers`, `routing_surface`, `depressions` | Connects each closed basin through its lowest pass by the minimum spanning tree of basins; `routing_surface` lifts depression cells to their spill level + ε along the priority-flood order, `height` itself unchanged; `depressions` labels routed depressions with their spill node | MST of basins: Cordonnier, Bovy & Braun 2019; the ε lift: Barnes et al. 2014 |
+| ↳ `partition_flow` | `routing_surface`, `receivers` → `weights`, `stack` | Weights over the lower neighbours of the routing surface for erosion: `exponent = "steepest"` (all to the receiver) or `"slope_adaptive"`, p = 0.5 + 0.6·S with S the steepest slope (FastScape's slope-dependent partition; that S is the steepest slope is this spec's reading). A fresh topological order (`stack`, receivers before donors) of the resulting graph | FastScape documentation; Freeman 1991 |
+| ↳ `fluvial` | `height`, `erodibility`, `receivers`, `weights`, `stack`, `depressions`, `fixed`, `climate` → `height`, `erosion`, `deposition`, `drainage_area` | The erosion–deposition law with n = 1 (below), solved implicitly in stack order with Gauss–Seidel iterations; sediment filling routed depressions; cumulative erosion and deposition | Yuan et al. 2019 (eq. 9, 11, 13–21), after Davy & Lague 2009; Braun & Willett 2013. Multiple flow with deposition as in FastScape's documentation (Yuan et al. solve single flow); the depression filling after goSPL's documentation, combined with the MST resolver as our own step |
+| ↳ `hillslope` | `height`, `diffusivity`, `fixed` → `height`, `erosion`, `deposition` | Linear diffusion, implicit ADI (Thomas algorithm per row and column), after `fluvial` as in Yuan et al.; per cell, a net loss books as erosion and a net gain as deposition | – |
+| ↳ `slope_limit` | `height`, `critical_slope`, `fixed` → `height`, `erosion`, `deposition` | Thermal step (algorithm below) | The classic thermal erosion step of graphics (Musgrave, Kolb & Mace 1989); threshold slopes after Montgomery & Brandon 2002 |
 | ↳ `climate_update` | `height`, `climate` → `climate` | Recomputes precipitation, AET and runoff from the current surface every `every` steps | – |
-| `hydrology` | `height`, `climate`, `receivers` → `height`, `lake`, `lake_id`, `lake_level`, `river`, `big_river`, `discharge`, `flow_dir`, `water_surface`, `water_features` | Lakes by water balance, discharge, rivers, river lines and lake outlines (below) | Barnes et al. 2014; Bracht-Flyr et al. 2013; Qin et al. 2007; Leopold & Maddock 1953; Génevaux et al. 2013 |
-| `ecology` | `height`, `climate`, `drainage_area` → `temperature`, `slope`, `vegetation`, `snow`, `wetness` | Net primary productivity from actual evapotranspiration (Lieth's Montreal model, NPP = 3000·(1 − e^(−0.0009695·(AET − 20))) g/m²/yr), density = min(NPP / 2000, 1) × a slope factor (1 − smoothstep(0.45, 0.9, slope), as 0.3.0) × (1 + a wetness bonus from ln(a / tan β), capped); snow from temperature and slope as 0.3.0 | Lieth 1975 (Montreal model); Adams et al. 2004; Sørensen et al. 2006 |
+| `hydrology` | `height`, `climate` → `height`, `lake`, `lake_id`, `lake_level`, `river`, `big_river`, `discharge`, `flow_dir`, `water_surface`, `water_features` | Lakes by water balance, channel discharge over single flow, rivers, river lines and lake outlines (below) | Barnes et al. 2014; Bracht-Flyr et al. 2013; Quinn et al. 1991 (multiple flow on hillslopes, single flow in channels); Leopold & Maddock 1953; Génevaux et al. 2013 |
+| `ecology` | `height`, `climate`, `drainage_area` → `temperature`, `slope`, `vegetation`, `snow`, `wetness` | Net primary productivity from actual evapotranspiration (the Thornthwaite Memorial model, NPP = 3000·(1 − e^(−0.0009695·(AET − 20))) g dry matter/m²/yr), density = min(NPP / 2000, 1) × a slope factor (1 − smoothstep(0.45, 0.9, slope), as 0.3.0) × (1 + a wetness bonus from ln(a / tan β), capped); snow from temperature and slope as 0.3.0 | Lieth & Box 1972; Lieth 1975; Sørensen et al. 2006 |
 | `elements` | `river`, `lake`, `climate`, `vegetation`, `slope`, `rock`, `temperature` → `elements` | 0.3.0's ambient element mix (water, wood, earth, metal, fire) | – |
-| `settlements` | terrain layers → `features` (settlements), `site_quality` | 0.3.0's site quality (interest maps) with hinterland; greedy picking by class with spacing; names from a recipe list or the built-in syllable lists (generated, not canon) | Emilien et al. 2012 |
-| `pois` | terrain layers, [`features`] → `features` (ruins, extractions, portals) | 0.3.0's rules; with no settlements, no distance to settlements is enforced | – |
+| `settlements` | terrain layers → `features` (settlements), `site_quality` | 0.3.0's site quality with hinterland; greedy picking by class with spacing (absolute, set per recipe); names from a recipe list or the built-in syllable lists (generated, not canon) | After Emilien et al. 2012, whose interest maps place buildings inside a village; siting whole settlements with them is 0.3.0's adaptation |
+| `pois` | terrain layers, [`features`] → `features` (ruins, Chimes, gates) | 0.3.0's rules: ruins on prominent hard ridges; `chime` where 0.3.0 placed extraction points; `gate-down` and `gate-up` where it placed the arrival and ascent portals. With no settlements, no distance to settlements is enforced | – |
 | `resources` | terrain layers, `features`, [`omega`] → `features` (deposits), `resource_fields` | 0.3.0's suitability fields | – |
-| `roads` | terrain layers, `features` → `road_network`, `roads`, `features` (bridges, fords) | Network and routing on terrain cost (below) | Galin et al. 2010, 2011 |
-| `route_potential` | `road_network`, `features` → `features`, `road_network`, `roads` | Promotion and route-centre sites (below) | Emilien et al. 2012; site and situation geography |
-| `sites` | terrain layers, `road_network`, `features` → `features` (sites), `road_network`, `roads` | 0.3.0's mills, mines, quarries, lumber camps, shrines, watchtowers, inns, caves and camps, with spur tracks routed by the `roads` router | – |
-| `travel` | `height`, [`road_network`], water layers, `features` → `reach_min` | Tobler's hiking function on the 16-direction graph, a road speed-up and an off-path factor of 0.6 off roads, ford and lake penalties; multi-source Dijkstra from extraction points. Unreachable cells, or every cell when there is no extraction, hold −1 (finite, documented); the extraction-to-extraction time goes into the stage report | Tobler 1993 |
+| `roads` | terrain layers, `features` → `road_network`, `roads`, `features` (bridges, fords) | Network and routing on terrain cost (below) | Routing after Galin et al. 2010 (16 directions instead of its 80, no curvature cost); the network construction is own |
+| `sites` | terrain layers, `road_network`, `features` → `features` (sites), `road_network`, `roads` | 0.3.0's mills, mines, quarries, lumber camps, shrines, watchtowers, inns (at the midpoint of long main and road links away from settlements) and camps, with spur tracks routed by the `roads` router. A mill needs discharge of at least `mill_q_factor` × `river_q` (default 2.7, which is 0.3.0's 0.4 m³/s at its 0.15) | – |
+| `travel` | `height`, [`road_network`], water layers, `features` → `reach_min` | Tobler's hiking function on the 16-direction graph, a road speed-up and an off-path factor of 0.6 off roads, ford and lake penalties; multi-source Dijkstra from the Chimes. Unreachable cells, or every cell when there is no Chime, hold −1 (finite, documented); the Chime-to-Chime time goes into the stage report | Tobler 1993 |
 | `detuning` | `height`, `features` → `omega` | 0.3.0's ω field: baseline, hot spots around ruins, slow drift (CE-28.7) | – |
 
 Constraints are evaluated by the runner after the pipeline (§5.6), not by a stage.
 
-**The fluvial law.** With elevation h, uplift rate U, erodibility K, drainage area A weighted by
-runoff, slope S to the receivers, sediment flux Qs and deposition coefficient G (Yuan et al. 2019,
-after Davy & Lague 2009):
+**Margins.** `settlements`, `pois`, `resources` and `sites` keep their places away from the frame's
+edge by `edge_margin`, a share of the frame's shorter side (default 0.025, which is 0.3.0's 0.6 km
+at 24 km; 0.0125 for `resources`, 0.3.0's 0.3 km). A map is a region of a floor, so its edge is a
+cut, not a landform (decision 0004).
 
-    dh/dt = U − K · (p̂ · A)^m · S + G · Qs / (p̂ · A)
+**The fluvial law** (Yuan et al. 2019, eq. 11, after Davy & Lague 2009). With elevation h, uplift
+rate U, erodibility K and the slope S to the receivers:
 
-- p̂ is runoff divided by its mean over the map, dimensionless as in 0.3.0 (precipitation ÷ mean),
-  so 0.3.0's K table keeps its meaning. With G = 0 the law is detachment-limited stream power.
-- **Solution, each time step:**
+- Q = the sum over the cell and every cell upstream of p̂ × cell area, split by the flow weights,
+  where p̂ = local runoff ÷ map-mean runoff (dimensionless). Q is the runoff-weighted drainage area
+  and stands in both terms; with uniform runoff, Q = p̃·A as in Yuan's eq. 6 and 11.
+- Qs = the sediment volume flux leaving the cell: the upstream sum of (U − ∂h/∂t) × cell area,
+  uplift included.
+
+      dh/dt = U − K·Q^m·S + G·Qs / Q
+
+- G = d\*·v_s / r̄ (Yuan's eq. 9; Davy & Lague's eq. 7 and 17, where G/p̃ is their dimensionless
+  number), with r̄ the map-mean runoff. G is dimensionless. With G = 0 the law is detachment-limited
+  stream power (Braun & Willett 2013), 0.3.0's process family. There is no porosity term.
+- At steady state, slope and relief grow by the factor (1 + G/p̂)^(1/n) (Yuan's eq. 24 and 28;
+  Davy & Lague's eq. 15). With n = 1 and mean runoff that is 1 + G, so G = 1 doubles slopes at equal
+  K and uplift.
+- **Solution, each time step** (Yuan's eq. 20, 21):
   1. Accumulate Qs from donors to receivers (reverse stack order, split by `weights`) using the
      current heights.
   2. Solve h implicitly from receivers to donors (stack order).
-  3. Repeat both until the largest height change between iterations is below 1e-6 m or 50
-     iterations have run. Non-convergence is a warning finding with the residual; the result stays
-     deterministic.
+  3. Repeat both until the largest height change between iterations is below 10⁻³ × max(U)·Δt
+     (Yuan's tolerance; 10⁻⁶ m when no cell uplifts) or 50 iterations have run. Non-convergence is
+     a warning finding with the residual; the result stays deterministic. Convergence is proven for
+     G/p̂ ≤ 1 and shown experimentally above it; the iteration count depends on G, not on the grid.
 - **Depression filling** (part of step 1, only when G > 0): when the Qs accumulation reaches a
   routed depression, the sediment volume fills the depression's cells in height order, up to its
   spill level. Filled cells get an ε slope toward the spill node, so they are not pits next step.
   The excess passes on from the spill node in the same sweep: `resolve_sinks` connects the spill
   node downstream of the depression in the stack. With G = 0 there is no deposition and no
-  filling, which is 0.3.0's process family.
+  filling.
 - `erosion` books the thickness removed per cell and step, `deposition` the thickness added
   (deposition and filling); both are cumulative, non-negative and in metres.
+- Deposition alone is not expected to give braided rivers, meanders or deltas: recent work needs
+  more than this law for alluvial forms (McDonald & Cordonnier 2026, seen at video level). P08
+  promises filled basins and wider valley floors, not those forms.
 
 **Slope limit.**
 
@@ -668,8 +720,8 @@ after Davy & Lague 2009):
 - **Depressions:** by priority-flood with ε on the final height (Barnes et al. 2014).
 - **Lake balance:** each maximal depression receives land runoff Q_land from its catchment. Its
   equilibrium lake area is A = Q_land / (E_lake − P) when lake evaporation E_lake (= PET) exceeds
-  precipitation P on the lake; otherwise it fills to spill (Bracht-Flyr et al. 2013, rain on the
-  lake counted).
+  precipitation P on the lake; otherwise it fills to spill. This is Bracht-Flyr et al. 2013's
+  steady-state balance (rain on the lake counted), rearranged for the area.
   - A terminal lake fills the depression's cells in height order until its area reaches A, at one
     level.
   - Nested sub-depressions are not merged separately in P08; Fill–Spill–Merge (Barnes et al.
@@ -679,19 +731,22 @@ after Davy & Lague 2009):
 - **Shallow pits:** depressions shallower than `min_lake_depth_m` (default 2 m) or smaller than
   `min_lake_area_m2` (default 4 cells) are filled to spill + ε in `height`. That is why
   `hydrology` writes `height`; river beds then never cross dry pits.
-- **Discharge:**
-  - computed over multiple flow directions with Qin et al.'s exponent p = 8.9·min(tan β_max, 1) +
-    1.1 and contour-length weights (0.5 cardinal, 0.354 diagonal). This is convergent on slopes
-    and keeps rivers narrow; FastScape's dispersive exponent stays inside erosion;
+- **Channel discharge:** runoff accumulated over the single steepest receiver on the
+  depression-filled surface, as 0.3.0 did and as channels behave (Quinn et al. 1991: multiple flow
+  on hillslopes, single flow in channels). The `river` raster, the river lines, `discharge` and the
+  fords therefore agree by construction, and discharge cannot spread across plains. Multiple flow
+  stays in erosion (`partition_flow`) and in `drainage_area` for the wetness index.
   - lakes route over their outlets; terminal lakes absorb their inflow;
   - rivers are where discharge exceeds `river_q`, big rivers above `big_river_q`, outside lakes.
+    Both thresholds are absolute discharges (m³/s) because widths, depths, fords and the lake
+    balance depend on them, and every recipe must set both: they have no default (decision 0004).
 - **River lines** (`water_features`):
   - traced downstream over the steepest receivers on the filled surface;
   - cut at confluences and at lake shores (an outlet starts a new line);
   - smoothed by two Chaikin passes;
-  - per vertex: width w = a·Q^0.5 and depth d = c·Q^0.4 (Leopold & Maddock 1953), discharge, and
-    bed height = the terrain height at the vertex (water surface = bed + depth); Strahler order
-    per line.
+  - per vertex: width w = a·Q^0.5 and depth d = c·Q^0.4 (the downstream exponents commonly given
+    after Leopold & Maddock 1953, not checked against its body text), discharge, and bed height =
+    the terrain height at the vertex (water surface = bed + depth); Strahler order per line.
 - **Lakes:**
   - outlines by marching squares on `lake_id`;
   - `surface_m` = the lake level;
@@ -718,9 +773,9 @@ after Davy & Lague 2009):
   flow direction), plus a deck term. `deck_m` = the higher bank's height + clearance (default
   3 m), in metres above the base level. Lakes get bridges only within the span limit; streams
   (below `big_river_q`) are forded.
-- **Network:**
-  - candidate links are the Delaunay edges over settlements and portals, each weighted by its
-    routed terrain cost;
+- **Network** (own design):
+  - candidate links are the Delaunay edges over settlements and gates, each weighted by its routed
+    terrain cost;
   - the MST of those costs, plus each further link whose cost through the current network
     exceeds `loop_detour` × its direct cost, between settlements of class village or higher;
   - links are routed in order of class, then cost, with a discount on cells that already carry a
@@ -729,34 +784,24 @@ after Davy & Lague 2009):
   - trails to ruins;
   - bridges and fords become `site` features.
 
-**Route potential.**
+**Not in P08** (§3):
+- glacial erosion (Hergarten 2021), layered strata K(x, y, z) (Cordonnier et al. 2018), flexure,
+  GraphFlood water depths, several wind directions;
+- Yuan et al.'s second erodibility for deposited sediment (their eq. 22, a basement layer);
+- the transport needed for braided rivers, meanders and deltas (McDonald & Cordonnier 2026);
+- promoting settlements at road junctions and markets at route centres, moved to the placement work
+  of P31 or P32 (decision 0004).
 
-- **Scoring:** after `roads`, each settlement's route score = its road degree + 2 per bridge
-  within 1 km + 1 if it sits in a gap (a pass between higher ground).
-- **Promotion:**
-  - the top-scoring settlements below `city` are promoted one class, at most `promotions`
-    (default 1 per class);
-  - promotions do not count against the recipe's `counts`;
-  - the classes of roads touching a promoted settlement, and the `roads` raster, are re-derived.
-- **Route centres:**
-  - an `inn` goes at the midpoint of each main or road link longer than 6 km away from
-    settlements, as 0.3.0;
-  - a `market` goes at the highest-scoring settlement of class town or above.
-- **Ids:** feature ids are assigned by the runner after the pipeline (§5.10). Stages refer to
-  features by internal handles, so a promotion never renames a reference.
-
-**Not in P08** (§3): glacial erosion (Hergarten 2021), layered strata K(x, y, z) (Cordonnier et
-al. 2018), flexure, GraphFlood water depths, several wind directions. Each is a later stage under
-the same contract.
+Each is a later stage under the same contract.
 
 ### 5.10 Features and package layers
 
 - **Features** follow `docs/map-package.md` §5. While the pipeline runs, stages refer to features
   by internal handles. After the pipeline the runner assigns the ids `<type>-<n>`, numbered per
   final type in the order the stages added the features (deterministic), and resolves every
-  reference (`from`, `to`, `road`, `serves`, `deposit`) to those ids. A settlement promoted by
-  `route_potential` therefore gets the id of its new class, and nothing points at an old one.
-- **Kinds and types are lower case with hyphens:** `portal-in`, `iron-ore`, `lumber-camp`.
+  reference (`from`, `to`, `road`, `serves`, `deposit`) to those ids. A later stage that changes
+  a feature's type (a promotion, in P31 or P32) therefore renames no reference.
+- **Kinds and types are lower case with hyphens:** `gate-up`, `iron-ore`, `lumber-camp`.
 - **Settlement names** carry no claim to canon.
 - **Water features:**
   - rivers: `water`/`river` LineStrings with (x, y, bed height), `width_m`, `depth_m`,
@@ -775,7 +820,6 @@ the same contract.
   - climate: `precipitation`, `temperature`;
   - classes and densities: `water`, `rock`, `vegetation`, `snow`, `roads`;
   - the five `element_*` layers, and `omega` when the recipe runs `detuning`;
-  - snapshot layers when asked (§5.6).
 - **The manifest** carries the frame, the full recipe as it ran, the seed, the inputs (empty) and
   the results. Its summary holds the stage metrics, the metrics module's values (§5.14) and the
   constraint details. Timing is only in the `RunManifest` (§5.6).
@@ -787,7 +831,7 @@ Plain styling with every layer and feature kind visible (Jann). All PNG.
 | Render | Content |
 |---|---|
 | `base` | Frame-exact (2 pixels per cell, square pixels): shaded relief (three-light hillshade), rock and soil colours, vegetation, farmland around settlements, snow, rivers by width, lakes. No symbols, no text. On the Atlas it lies under the pins (data model §8) |
-| `truth` | `base`, plus: roads by class (width, dashes); every feature kind as a plain shape per type (square settlements sized by class, triangle ruins, circle extractions, star portals, small marks for sites and deposits); settlement names; a legend of what is present; a scale bar; a title (recipe, seed, relief, lakes, extraction walk). It may have margins |
+| `truth` | `base`, plus: roads by class (width, dashes); every feature kind as a plain shape per type (square settlements sized by class, triangle ruins, circle Chimes, star gates, small marks for sites and deposits); settlement names; a legend of what is present; a scale bar; a title (recipe, seed, relief, lakes, Chime walk). It may have margins |
 | `geology` | Rock colours over hillshade, rivers and lakes, legend |
 | `resources` | Grey relief, deposits as circles by type sized by radius, a ring for exceptional tier, legend |
 | `inworld` | Paper tone, the known area around settlements and main roads, main roads, settlements with names, lakes, big rivers, simple ridge and forest marks. Texts (title, labels and their positions) only from the recipe's `[renders.inworld]`, never from code; everything is drawn inside the frame |
@@ -814,7 +858,7 @@ pub fn describe(recipe_dirs: &[PathBuf]) -> Result<Description, RecipeError>;
 
 pub struct RunRequest { pub recipe: String, pub seed: u64, pub inputs: serde_json::Map<String, Value>,
                         pub from: Option<PathBuf>, pub notes: Vec<Note>, pub options: RunOptions }
-pub struct RunOptions { pub snapshots: Snapshots }          // None | Stages(Vec<String>) | All
+pub struct RunOptions { pub memory_budget: Option<u64> }    // bytes; 3 GiB when None (§5.6)
 
 pub fn run(request: &RunRequest, recipe_dirs: &[PathBuf], out_dir: &Path,
            progress: &mut dyn FnMut(&Progress), cancel: &CancelToken)
@@ -834,11 +878,12 @@ pub fn run(request: &RunRequest, recipe_dirs: &[PathBuf], out_dir: &Path,
 
 - **Types:** `Package { manifest: Manifest, features: geojson::FeatureCollection, layers:
   BTreeMap<LayerKey, LayerData> }`, `Manifest` and `Frame` with optional `origin_m`, `parent` and
-  `levels`, `Level`, `LayerEntry`, `LayerKey`, `DType`.
+  `levels`, `Level`, `LayerEntry`, `LayerKey`, `DType`; `Manifest.requires: Vec<String>`.
 - **`write(&Package, impl Write + Seek)`:**
   - validates the package (shapes against the grid, levels rules, no NaN or infinity, unique
     names);
   - computes each layer's SHA-256 into its entry;
+  - writes `requires`, sorted: the capabilities the package uses (none in P08, so `[]`);
   - writes `manifest.json`, `features.geojson` and the layers in index order.
 - **ZIP options for every entry:**
   - `CompressionMethod::Deflated`, level 6;
@@ -849,6 +894,8 @@ pub fn run(request: &RunRequest, recipe_dirs: &[PathBuf], out_dir: &Path,
   - checks `format` and the major of `format_version` (an unknown major is refused, naming both
     versions);
   - reads the manifest leniently: unknown fields, entries, layers and feature kinds are ignored;
+  - refuses a package whose `requires` names a capability this reader does not implement, naming
+    it (CE-76.5); in P08 the reader implements none;
   - checks each layer's size and hash;
   - applies the levels rules (CE-76.3).
 - **JSON:** values go through `serde_json::Value` and the crate's canonical writer (§5.7), which
@@ -891,17 +938,14 @@ pub fn run(request: &RunRequest, recipe_dirs: &[PathBuf], out_dir: &Path,
 13. **Resolution independence:** the same recipe at 192² and 384², over seeds 1–4, gives median
     relief and lake share within 15 % and median river length per km² (not river cell share,
     which halves with the cell size) within 25 %.
+14. **Steady state with deposition:** with uniform U, K and runoff, n = 1 and no hillslope
+    processes, the steady-state slope at G > 0 is (1 + G) times the slope at G = 0 within 2 %, and
+    so is the relief (Yuan et al. 2019, eq. 24 and 28). Run with both flow partitions.
 
-**Metrics module** (`metrics.rs`), deterministic and reported in every summary:
-
-- hypsometry (elevation quantiles);
-- a slope histogram;
-- the drainage-area distribution and its exponent;
-- pit count and breaching volume;
-- lake, river and vegetation shares;
-- relief and median precipitation.
-
-It is used by the parity test now, and later as the yardstick for learned models.
+**Metrics** (`metrics.rs`), deterministic and reported in every summary: relief, lake share, river
+share, vegetation cover, median precipitation and the Chime-to-Chime walk, as 0.3.0 defined them
+(§5.5). The parity test uses them. The further terrain metrics (hypsometry, slope histogram,
+drainage-area distribution, pits, breaching volume) come with P33 (decision 0004).
 
 **Parity with 0.3.0 (CE-28.5).** `tests/fixtures/parity/theos_maps-0.3.0.toml` holds 0.3.0's
 per-seed values for seeds 1–8 of the three recipes. It records the provenance: toolset 0.3.0,
@@ -956,7 +1000,7 @@ identical package bytes.
 ### 5.15 The developer example
 
 `cargo run -p theos-maps --release --example run -- <recipe>… --seeds 1..8 --out <dir>
-[--recipes <dir>] [--snapshots <stage>|all]` runs recipes and writes each seed's outputs and a
+[--recipes <dir>]` runs recipes and writes each seed's outputs and a
 contact sheet. The P08 PR carries a contact sheet of the three built-in recipes for Jann's review.
 That review is a review item, not an AC (decision 0003 §11). The example is not a shipped binary
 and adds nothing to G4.
@@ -1000,6 +1044,7 @@ gate file).
 | CE-76.2 | A manifest with major 2 is refused with both versions in the message; a manifest with unknown fields, an unknown entry, an unknown layer and an unknown feature kind reads |
 | CE-76.3 | A synthetic two-level package round-trips with every layer and feature on its level. Four rejections, each by the writer and by the reader: a layer without a level, a layer with an unknown level, a feature without a level, a feature with an unknown level. The reader tests use packages assembled by the test with the `zip` crate, bypassing the writer's validation |
 | CE-76.4 | `cargo_metadata` (dev-dependency): `theos-map-format`'s dependencies contain no workspace member |
+| CE-76.5 | A package whose `requires` lists `slabs` is refused with a message naming `slabs`; a package with an empty `requires` reads; the writer writes `requires` sorted |
 | CE-28.1 | `describe` with no folder lists the three built-ins with `name`, `version`, `produces`; with a temporary folder holding a `fixture-small.toml` of another title, that one wins |
 | CE-28.2 | A 64² test recipe with constraints and the extra render `omega` reports a starting progress event for every pipeline stage in order, and returns the standard outputs, the `omega` render and the constraint result keys of `docs/generators.md` §3 with `pass` |
 | CE-28.3 | Recipes with a stage before its input, an unknown stage, an unknown parameter and a recipe input each fail before any stage runs, naming stage and layer or parameter |
@@ -1024,26 +1069,29 @@ gate file).
     f32 or u8, ignored by readers that do not ask for them).
 - **`docs/architecture.md` §11:** the Stage rule (§5.3).
 
+Decision 0004 (12 Nov 2026) later removed the site type `market` again, with `route_potential`,
+renamed the place types, added `requires` and dropped the size note of §4.3.
+
 ## 6. Interfaces other phases use
 
 | Interface | Used by |
 |---|---|
-| `theos_map_format::{Package, Manifest, Frame, Level, LayerEntry, DType, LayerData, read, write}` | The engine; P22 (frame); P29, P30; later the blockout (P23 reads packages in Python) |
+| `theos_map_format::{Package, Manifest, Frame, Level, LayerEntry, DType, LayerData, read, write}` | The engine; P22 (frame); P29, P30, P31, P34; the blockout (P23 reads packages in Python) |
 | `theos_maps::{describe, run, RunRequest, RunOptions, RunManifest, Progress, CancelToken, RunError, GENERATOR, VERSION}` | P09 (`builtin` adapter, `theos gen`) |
-| The recipe schema (§5.5) | P23 (content recipes), P29, P30 |
-| The `Stage` trait, `StageContext`, `LayerSpec`, the registry | P29, P30 and every later generation capability |
+| The recipe schema (§5.5) | P23 (content recipes), P29, P30, P31, P32 (families), P34 |
+| The `Stage` trait, `StageContext`, `LayerSpec`, the registry | P29, P30, P31, P33, P34 and every later generation capability |
 | `render::contact_sheet` | P09 (`theos gen run`) |
-| The metrics module | P29, P30 parity; later learned-terrain evaluation |
-| Snapshot export | Later training data for learned terrain |
+| The metrics (§5.14) | P29, P34 parity; P33 extends them |
+| `RunOptions.memory_budget` | P09 (the machine-aware budget, seeds in parallel) |
 | The constraint result keys | P16 (Maps screen) |
 | The `base` render and feature types | P22, P25 |
-| Golden files per version, `bless` | P29, P30 |
+| Golden files per version, `bless` | P29, P30, P31, P34 |
 
 ## 7. Risks
 
 | Risk | Mitigation |
 |---|---|
-| The full text of Yuan et al. 2019 was not reachable by the research | Implement from Davy & Lague 2009 and the FastScape documentation of the ξ-q model, with Landlab's ErosionDeposition (MIT) as a readable reference; physics tests 1, 4 and 5 check the result; the plan's first task fetches the paper through the publisher |
+| Yuan et al. 2019 solve single flow; multiple flow with deposition is FastScape's practice, not the paper's | Physics tests 1, 4, 5 and 14 run with both flow partitions; FastScape's documentation and Landlab's ErosionDeposition (MIT) are readable references |
 | Several new processes at once make defects hard to place | Each process is its own stage with its own tests; the recipe can switch each off; golden hashes per stage name where a change appears |
 | Tuning the built-in recipes takes long | Tuning targets are the recipe constraints; the developer example's contact sheet and metrics make iterations quick; CE-28.5's tolerance is wide |
 | A dependency quietly enables `num-traits/std`, `serde_json/preserve_order` or another deflate backend | `spade` without default features; the plan inspects `cargo tree -e features`; deny bans for backends; a test asserts sorted JSON keys; golden hashes on four platforms catch the rest |
@@ -1051,7 +1099,7 @@ gate file).
 | Golden hashes differ on a platform only the weekly run sees | The release run covers all platforms; a red weekly run blocks the next phase from claiming done |
 | A run at 1024² is slow (deposition iterations, 16-direction paths) | Budgets measured in the plan; P08's recipes are 384²; threads inside a run are a later option |
 | The OFL fonts must ship with the binaries that embed them | Needs Jann: P09 (or the release workflow) adds the licence texts to releases |
-| `catch_unwind` cannot catch an abort (out of memory) | Grid size limit per recipe (≤ 2048² in P08), checked in validation |
+| `catch_unwind` cannot catch an abort (out of memory) | The memory estimate before the run (§5.6) refuses a recipe above the budget |
 
 ## 8. Review Focus — inputs most likely to break it
 
@@ -1060,7 +1108,8 @@ gate file).
    - a 64² grid with metre-sized kernels larger than the map;
    - a non-power-of-two grid;
    - flat terrain, where routing has ties;
-   - zero precipitation or zero uplift.
+   - zero precipitation or zero uplift;
+   - a recipe without `river_q` or `big_river_q`.
 2. **Erosion:**
    - G = 0 vs G > 0;
    - `steepest` vs `slope_adaptive` routing;
@@ -1080,7 +1129,7 @@ gate file).
    - two equal-cost paths (tie-breaking);
    - a road along a drained edge.
 5. **Features:**
-   - zero settlements, ruins or extractions;
+   - zero settlements, ruins or Chimes;
    - ids when a stage adds no feature;
    - rivers shorter than two vertices;
    - lakes whose outline touches the frame edge.
@@ -1096,14 +1145,15 @@ gate file).
    - cancel at every stage boundary and inside every long loop;
    - a panic in a per-step process;
    - a stage writing an undeclared layer;
-   - snapshots of `all`;
+   - a recipe whose memory estimate lies just above or below the budget;
    - an output folder that already holds files.
 8. **Format:**
    - levels rules;
    - unknown fields at every level of the manifest;
    - a layer whose size or hash does not match;
    - NaN in an f32 layer;
-   - a ZIP64 boundary.
+   - a ZIP64 boundary;
+   - `requires` naming a capability the reader does not know; an empty `requires`.
 
 ## 9. Rulings (Claude's calls)
 
@@ -1132,19 +1182,20 @@ gate file).
    recipes to code.
 9. Ruling: generated settlement names keep 0.3.0's syllable lists as defaults, overridable per
    recipe — they are Jann's and marked "generated, not canon" — cost if wrong: new lists.
-10. Ruling: feature types become lower case with hyphens (`portal-in`, `iron-ore`) —
+10. Ruling: feature types become lower case with hyphens (`gate-up`, `iron-ore`) —
     `docs/map-package.md` §5 — cost if wrong: renames before P22.
 11. Ruling: the fixture package of CE-76.1 is text (JSON, GeoJSON, TOML values) plus a recorded
     SHA-256, not a committed ZIP — G10 keeps binaries out of git — cost if wrong: none.
 12. Ruling: snapshots are a run option, not a recipe input, and a package with snapshots is not
-    canon — recipe inputs are empty in P08, and canon packages stay minimal — cost if wrong: an
-    input later.
+    canon; P33 builds them (decision 0004) — recipe inputs are empty in P08, and canon packages
+    stay minimal — cost if wrong: an input later.
 13. Ruling: no threads inside a run in P08 — determinism by construction; seeds already run in
     parallel — cost if wrong: slower 1024² runs.
 14. Ruling: `theos-maps` is optimised in the dev profile — parity and golden runs would otherwise
     take about half an hour — cost if wrong: coverage numbers drift; then a separate job.
-15. Ruling: the grid limit is 2048² per side in P08 — aborts (out of memory) cannot be caught — cost
-    if wrong: a higher limit later.
+15. Ruling: a memory estimate before the run (cells × the declared layers' bytes × 1.5) and a budget
+    replace the fixed grid limit (Jann, decision 0004) — aborts (out of memory) cannot be caught —
+    cost if wrong: the factor 1.5 needs tuning.
 16. Ruling: `docs/map-package.md` gains its additions as format 1.0 — no package or reader exists
     yet — cost if wrong: they become 1.1.
 17. Ruling: the gate PR proves the cargo-deny ban with a probe crate before relying on it — the
@@ -1160,23 +1211,28 @@ gate file).
 21. Ruling: the conversion swaps 0.3.0's `[y, x]` pairs to `[x, y]` — G19 and the format define
     positions that way — cost if wrong: recipes rewritten.
 22. Ruling: feature ids are assigned by the runner after the pipeline, and stages use internal
-    handles — a promotion must not rename references, and P22's pins bind to the final ids — cost
-    if wrong: none.
+    handles — a later stage that changes a type (a promotion, in P31 or P32) must not rename
+    references, and P22's pins bind to the final ids — cost if wrong: none.
 23. Ruling: 0.3.0's hidden ruin and extraction placement checks become explicit constraints
-    (`features.ruin`, `features.extraction`) — CE-28.5 then compares like with like — cost if
+    (`features.ruin`, `features.chime`) — CE-28.5 then compares like with like — cost if
     wrong: none.
 24. Ruling: metric paths and definitions follow 0.3.0's summary (`elevation_m.relief`,
-    `lake_pct`, …) — the constraints keep their meaning — cost if wrong: renames before P16.
+    `lake_pct`, …), except that the walk between extraction points is `travel.chime_to_chime_min`
+    (decision 0004) — the constraints keep their meaning — cost if wrong: renames before P16.
 25. Ruling: the runner evaluates constraints after the pipeline; `constraints` is not a stage —
     constraints read the whole summary, not layers — cost if wrong: none.
-26. Ruling: the routing order is steepest receivers → MST resolver (fill mode) → flow partition on
-    the corrected surface with a fresh stack — fastscapelib's documented order; partitioning before
-    the resolver would leave pits out of order — cost if wrong: none.
-27. Ruling: erosion uses FastScape's dispersive exponent p = 0.5 + 0.6·S; hydrology's discharge uses
-    Qin et al.'s convergent exponent — erosion should spread on plains, rivers should stay narrow —
-    cost if wrong: the hydrology exponent is one parameter.
-28. Ruling: runoff weighting in the fluvial law is normalised by the map mean, as 0.3.0 did — 0.3.0's
-    K table keeps its meaning — cost if wrong: K retuned.
+26. Ruling: the routing order is steepest receivers → MST of basins with an ε-lifted routing
+    surface → flow partition on the corrected surface with a fresh stack — fastscapelib's
+    documented order; partitioning before the resolver would leave pits out of order — cost if
+    wrong: none.
+27. Ruling (Jann, decision 0004): erosion uses FastScape's dispersive exponent p = 0.5 + 0.6·S;
+    channel discharge in `hydrology` uses the single steepest receiver — rivers, their lines and
+    the fords agree by construction and do not spread across plains, and river share is measured
+    as 0.3.0 measured it — cost if wrong: a channel exponent later.
+28. Ruling: runoff enters the fluvial law once, as the runoff-weighted area Q (the upstream sum of
+    p̂ × cell area, p̂ normalised by the map mean) in both terms — Yuan et al.'s eq. 11 with p̃·A,
+    generalised to runoff that varies across a catchment; 0.3.0's K table keeps its meaning —
+    cost if wrong: K retuned.
 29. Ruling: G = 0 switches off deposition and depression filling together — G = 0 is meant to be
     0.3.0's process family — cost if wrong: one more switch.
 30. Ruling: potential evaporation is 0.3.0's temperature formula, clamp(300 + 45·T, 200, 1800)
@@ -1187,8 +1243,9 @@ gate file).
     Fill–Spill–Merge later — cost if wrong: nested lakes look merged.
 32. Ruling: shallow pits are filled in `height` by `hydrology` — river beds must not cross dry pits —
     cost if wrong: breaching instead.
-33. Ruling: vegetation uses Lieth's Montreal model on actual evapotranspiration — the water balance
-    the research recommends; Miami uses precipitation — cost if wrong: one formula.
+33. Ruling: vegetation uses the Thornthwaite Memorial model (Lieth & Box 1972; Lieth 1975) on
+    actual evapotranspiration — the water balance the research recommends; the Miami model uses
+    precipitation — cost if wrong: one formula.
 34. Ruling: river bed height is the terrain height at the vertex; rivers end at lake shores and
     outlets start new lines — the engine places the water surface at bed + depth — cost if wrong:
     a property's meaning before P22.
@@ -1211,7 +1268,31 @@ gate file).
     version — cost if wrong: none.
 42. Ruling: the `Stage` trait's capabilities (parameter-dependent reads and writes, metric names
     before the run, checks and metrics with parameters and a report) are binding; its exact
-    signatures are the plan's — P29 and P30 build on the capabilities — cost if wrong: none.
+    signatures are the plan's — the later map phases build on the capabilities — cost if wrong:
+    none.
+
+Rulings of decision 0004 (12 Nov 2026), Claude's calls inside Jann's decisions:
+
+43. Ruling: the fluvial tolerance is Yuan et al.'s 10⁻³ × max(U)·Δt, with 10⁻⁶ m when no cell
+    uplifts — the paper's rule; 10⁻⁶ m everywhere cost iterations for nothing — cost if wrong: a
+    stricter constant.
+44. Ruling: the deposition test (14) runs with both flow partitions — Yuan et al. prove the factor
+    for single flow only, and the multiple-flow combination is ours — cost if wrong: none.
+45. Ruling: the mill rule is `mill_q_factor` × `river_q` with default 2.7 — 0.4 m³/s at 0.3.0's
+    `river_q` of 0.15 — cost if wrong: one default.
+46. Ruling: `edge_margin` is a share of the frame's shorter side, 0.025 by default and 0.0125 for
+    `resources` — 0.3.0's 0.6 km and 0.3 km at 24 km — cost if wrong: two defaults.
+47. Ruling: `requires` is always written, as `[]` when empty — one canonical form, so golden
+    hashes do not depend on whether a writer omits it — cost if wrong: none.
+48. Ruling: the memory estimate counts the declared layers once each, times 1.5 for temporaries,
+    and the library's default budget is 3 GiB — the library reads no operating-system values,
+    which also suits the engine; P09 sets the machine-aware budget — cost if wrong: the factor
+    needs tuning.
+49. Ruling: the site type `market` leaves the format with `route_potential` — nothing writes it in
+    P08 — cost if wrong: a minor version adds it back.
+50. Ruling: feature ids stay assigned after the pipeline although `route_potential` left — P31 or
+    P32 may bring promotion back, and the mechanism is already specified — cost if wrong: a little
+    unused generality.
 
 ## 10. Left to the builder
 
@@ -1229,8 +1310,10 @@ gate file).
 
 Run on 10 Nov 2026 with `theos_maps` 0.3.0 (Jann's export), Python 3.12, fastscapelib 0.3.0,
 numpy 2.5.4 and scipy 1.18.1 through uv, without the engine export (`do_export=False`). The
-parity fixture copies these values. "All constraints" includes 0.3.0's ruin and extraction placement checks; no
-seed failed those, so the failures listed are the recipe's own constraints.
+parity fixture copies these values. The column "Extraction walk" is 0.3.0's
+`travel.extraction_to_extraction_min`; P08 reports it as `travel.chime_to_chime_min`. "All
+constraints" includes 0.3.0's ruin and extraction placement checks; no seed failed those, so the
+failures listed are the recipe's own constraints.
 
 | Recipe | Seed | Relief (m) | Lake share (%) | River share (%) | Vegetation cover (%) | Median precipitation (mm/yr) | Lakes | Extraction walk (min) | All constraints |
 |---|---|---|---|---|---|---|---|---|---|
