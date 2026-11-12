@@ -48,12 +48,12 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and P23 from version 3
 (decision 0003, #24). Rows P31–P34 and P45, and the new P29 and P30, come from umbrella version 4
 (decision 0004, #31). Rows P48 and P49, and the new P05, come from umbrella version 5 (the P05
-split), which waits for Jann in its docs PR.
+split), which waits for Jann in its docs PR #34.
 
 ## Needs Jann
 
-- The P05 split (umbrella version 5, `docs/release.md`) waits for Jann in its docs PR. Jann chose
-  it on 12 Nov 2026, and it holds three things:
+- The P05 split (umbrella version 5, `docs/release.md`) waits for Jann in its docs PR #34. Jann
+  chose it on 12 Nov 2026, and it holds three things:
   - P05 CLI and hook, P48 MCP read and P49 Releases and the check action;
   - CE-08R.3 with the run and commit that built a release instead of build provenance, which
     GitHub offers private repositories only on GitHub Enterprise Cloud;
