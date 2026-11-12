@@ -380,6 +380,72 @@ fn renaming_an_npc_rewrites_voice_and_beat_links() -> TestResult {
     Ok(())
 }
 
+// AC: CE-20.3
+#[test]
+fn renaming_a_belief_rewrites_the_voice_belief() -> TestResult {
+    let new = "lore/beliefs/B-970.md";
+    let run = renamed("B-960", "B-970", &["B-960"])?;
+    let expected = expected(
+        &run.before,
+        &[(BELIEF, new)],
+        &[
+            (new, &[("\nid: B-960\n", "\nid: B-970\n")]),
+            (
+                SCRIPT,
+                &[(
+                    "> [!voice] [[synthetic-singer]] · [[B-960]]\n",
+                    "> [!voice] [[synthetic-singer]] · [[B-970]]\n",
+                )],
+            ),
+        ],
+    )?;
+    assert_files(&run.project, &expected)?;
+    Ok(())
+}
+
+// AC: CE-20.3
+#[test]
+fn renaming_a_belief_keeps_a_single_quoted_lens_entry_single_quoted() -> TestResult {
+    let old = "lore/beliefs/B-961.md";
+    let new = "lore/beliefs/B-971.md";
+    let run = renamed("B-961", "B-971", &["B-961"])?;
+    let expected = expected(
+        &run.before,
+        &[(old, new)],
+        &[
+            (new, &[("\nid: B-961\n", "\nid: B-971\n")]),
+            (
+                NPC,
+                &[("\n  rejects: ['B-961']\n", "\n  rejects: ['B-971']\n")],
+            ),
+        ],
+    )?;
+    assert_files(&run.project, &expected)?;
+    Ok(())
+}
+
+/// Review focus: a record that links to itself takes the new id in its link too.
+// AC: CE-20.3
+#[test]
+fn renaming_a_record_that_links_to_itself() -> TestResult {
+    let old = "lore/truths/T-961.md";
+    let new = "lore/truths/T-971.md";
+    let run = renamed("T-961", "T-971", &["T-961"])?;
+    let expected = expected(
+        &run.before,
+        &[(old, new)],
+        &[(
+            new,
+            &[
+                ("\nid: T-961\n", "\nid: T-971\n"),
+                ("see [[T-961]] itself", "see [[T-971]] itself"),
+            ],
+        )],
+    )?;
+    assert_files(&run.project, &expected)?;
+    Ok(())
+}
+
 /// Review focus 4: the files of the folder that are not records move byte for byte, dot files
 /// included, on every OS; so does a record none of whose links changes.
 #[test]
