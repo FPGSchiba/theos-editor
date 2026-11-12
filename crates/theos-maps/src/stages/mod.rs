@@ -2,6 +2,7 @@
 
 use crate::stage::Registry;
 
+pub mod evolution;
 pub mod terrain;
 
 /// Adds every built-in stage to `registry`, one line per stage.
@@ -10,6 +11,7 @@ pub fn register(registry: &mut Registry) {
     registry.add(Box::new(terrain::tectonics::Tectonics));
     registry.add(Box::new(terrain::geology::Geology));
     registry.add(Box::new(terrain::climate::ClimateModel));
+    registry.add(Box::new(evolution::Evolution::new()));
 }
 
 #[cfg(test)]

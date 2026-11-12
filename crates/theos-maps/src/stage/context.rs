@@ -124,6 +124,13 @@ impl<'w> StageContext<'w> {
         self.world.frame()
     }
 
+    /// The whole world, for a stage that runs the checks of its nested processes the way the
+    /// runner runs a stage's checks. A stage reads layers through the declared accessors.
+    #[must_use]
+    pub(crate) fn world(&self) -> &World {
+        self.world
+    }
+
     /// The name in errors and progress events: the stage id, `<parent>/<process id>` in a child.
     #[must_use]
     pub fn stage(&self) -> &str {
