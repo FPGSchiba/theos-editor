@@ -578,9 +578,11 @@ mod tests {
         let line = log
             .lines()
             .find(|line| line.contains("a warning inside the run"))
-            .ok_or_else(|| format!("no warning in:
-{log}"))?;
-        assert!(line.contains("command{label=write lore/truths/T-960.md}"), "{line}");
+            .ok_or_else(|| format!("no warning in:\n{log}"))?;
+        assert!(
+            line.contains("command{label=write lore/truths/T-960.md}"),
+            "{line}"
+        );
         Ok(())
     }
 }
