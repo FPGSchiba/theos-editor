@@ -21,6 +21,31 @@ pub fn key(x: f64) -> f64 {
     x + 0.0
 }
 
+/// A float ordered by [`f64::total_cmp`], so it can sit in a `BinaryHeap` or be sorted; build it
+/// from [`key`] so that `-0.0` and `+0.0` are one value.
+#[derive(Debug, Clone, Copy)]
+pub struct OrdF64(pub f64);
+
+impl PartialEq for OrdF64 {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.total_cmp(&other.0).is_eq()
+    }
+}
+
+impl Eq for OrdF64 {}
+
+impl PartialOrd for OrdF64 {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for OrdF64 {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.total_cmp(&other.0)
+    }
+}
+
 /// Turns `-0.0` into `+0.0` and leaves every other value unchanged.
 #[must_use]
 pub fn canonical(x: f64) -> f64 {

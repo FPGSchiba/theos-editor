@@ -7,10 +7,13 @@ pub mod diff;
 pub mod distance;
 pub mod fft;
 pub mod filters;
+pub mod flood;
 pub mod labels;
 pub mod morphology;
+pub mod mst;
 pub mod noise;
 pub mod num;
+pub mod paths;
 pub mod reflect;
 pub mod stats;
 pub mod voronoi;
@@ -59,4 +62,7 @@ pub enum KernelError {
         /// Length of the data given.
         len: usize,
     },
+    /// The caller asked to stop a long kernel.
+    #[error("the kernel was cancelled")]
+    Cancelled,
 }
