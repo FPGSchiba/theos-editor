@@ -7,6 +7,7 @@ use crate::body::{AttributeValue, CalloutTitle, NoteState};
 use crate::check::Checked;
 use crate::finding::Finding;
 use crate::index::slots::Slot;
+use crate::inworld::segments;
 use crate::kinds::{FieldType, KindRegistry, KindSpec, LENS_ENTRIES, ValueRef};
 use crate::record::Record;
 use crate::text::{Position, Span};
@@ -22,6 +23,10 @@ pub(crate) struct RecordRows {
     pub links: Vec<LinkRow>,
     /// The beats of a kind with beats.
     pub beats: Vec<BeatRow>,
+    /// The notes of a kind with notes.
+    pub notes: Vec<NoteRow>,
+    /// The in-world segments, see [`crate::inworld`].
+    pub inworld: Vec<SegmentRow>,
     /// The findings of the record check.
     pub findings: Vec<Finding>,
     /// The search row; none when the file could not be decoded or split.
@@ -111,6 +116,36 @@ pub(crate) struct BeatRow {
     pub span: Span,
     /// The line of the heading.
     pub line: usize,
+    /// The first `when::` token, as written.
+    pub when: Option<String>,
+}
+
+/// One row of `notes`.
+pub(crate) struct NoteRow {
+    /// The note id as written.
+    pub id: String,
+    /// The number in the id.
+    pub number: u32,
+    /// `open`, `dropped`, `resolved`, or the unknown word as written.
+    pub state: String,
+    /// The target of the `resolved by` link.
+    pub resolved_by: Option<String>,
+    /// The target of the version link.
+    pub version: Option<String>,
+    /// The bytes of the note id.
+    pub span: Span,
+    /// Line and column of the span's start.
+    pub position: Position,
+}
+
+/// One row of `inworld`: a span of in-world text.
+pub(crate) struct SegmentRow {
+    /// The bytes of the segment.
+    pub span: Span,
+    /// Line and column of the span's start.
+    pub position: Position,
+    /// The record's text in the span.
+    pub text: String,
 }
 
 /// One row of `search`.
@@ -148,6 +183,8 @@ pub(crate) fn rows(path: &str, checked: Checked, registry: &KindRegistry) -> Rec
             values: Vec::new(),
             links: Vec::new(),
             beats: Vec::new(),
+            notes: Vec::new(),
+            inworld: Vec::new(),
             findings,
             search: None,
         };
@@ -160,6 +197,8 @@ pub(crate) fn rows(path: &str, checked: Checked, registry: &KindRegistry) -> Rec
         }
     }
     let beats = beat_rows(&record, spec);
+    let notes = note_rows(&record, spec);
+    let inworld = segments(&record, spec, &front.values);
     let narrow = narrow_values(&front.values, spec, registry);
     let mut links = std::mem::take(&mut front.links);
     links.extend(body_links(&record, spec));
@@ -190,6 +229,8 @@ pub(crate) fn rows(path: &str, checked: Checked, registry: &KindRegistry) -> Rec
         values: front.values,
         links,
         beats,
+        notes,
+        inworld,
         findings,
         search: Some(search),
     }
@@ -266,6 +307,45 @@ fn beat_rows(record: &Record, spec: Option<&KindSpec>) -> Vec<BeatRow> {
             name: beat.name.clone(),
             span: beat.span,
             line: position(record, beat.heading_span.start).line,
+            when: beat.attributes.iter().find_map(|attribute| {
+                match (attribute.key.as_str(), &attribute.value) {
+                    ("when", AttributeValue::Token(token)) => Some(token.text.clone()),
+                    _ => None,
+                }
+            }),
+        })
+        .collect()
+}
+
+/// The notes of a kind whose grammar has notes.
+fn note_rows(record: &Record, spec: Option<&KindSpec>) -> Vec<NoteRow> {
+    if spec.is_none_or(|s| s.body.notes.is_none()) {
+        return Vec::new();
+    }
+    record
+        .body()
+        .callouts()
+        .iter()
+        .filter_map(|callout| match &callout.title {
+            Some(CalloutTitle::Note(note)) => Some(note),
+            _ => None,
+        })
+        .map(|note| {
+            let (state, resolved_by) = match &note.state {
+                NoteState::Open => ("open".to_owned(), None),
+                NoteState::Dropped => ("dropped".to_owned(), None),
+                NoteState::ResolvedBy(link) => ("resolved".to_owned(), Some(link.target.clone())),
+                NoteState::Unknown(word) => (word.clone(), None),
+            };
+            NoteRow {
+                id: note.id.text.clone(),
+                number: note.number,
+                state,
+                resolved_by,
+                version: note.version.as_ref().map(|link| link.target.clone()),
+                span: note.id.span,
+                position: position(record, note.id.span.start),
+            }
         })
         .collect()
 }
@@ -445,6 +525,9 @@ fn is_searched(ty: Option<FieldType>, field: bool) -> bool {
 
 /// The links of the body in document order, each with its slot.
 fn body_links(record: &Record, spec: Option<&KindSpec>) -> Vec<LinkRow> {
+    if spec.is_some_and(|spec| spec.body.verbatim) {
+        return Vec::new();
+    }
     let body = record.body();
     let mut slots: HashMap<Span, (Slot, Option<u32>)> = HashMap::new();
     if let Some(attributes) = spec.and_then(|spec| spec.body.beats) {
@@ -799,6 +882,82 @@ mod tests {
             bad,
             facts("codex/x.md", "---\nid: x\nkind: topic\ntitle: t\n---\n")?
         );
+        Ok(())
+    }
+
+    #[test]
+    fn notes_rows_come_only_from_kinds_with_notes() -> Res {
+        let body = "> [!note] n1 · [[c-v1]] · resolved by [[c-v2]]\n> text\n\n\
+            > [!note] n2 · [[c-v1]] · open\n> more\n\n\
+            > [!note] n3 · [[c-v1]] · dropped\n> x\n\n\
+            > [!note] n4 · [[c-v1]] · maybe\n> y\n";
+        let concept = build("concepts/x.md", &format!("{}{body}", front("concept", "")))?;
+        let shown: Vec<_> = concept
+            .notes
+            .iter()
+            .map(|n| {
+                (
+                    n.id.as_str(),
+                    n.number,
+                    n.state.as_str(),
+                    n.resolved_by.as_deref(),
+                    n.version.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("n1", 1, "resolved", Some("c-v2"), Some("c-v1")),
+                ("n2", 2, "open", None, Some("c-v1")),
+                ("n3", 3, "dropped", None, Some("c-v1")),
+                ("n4", 4, "maybe", None, Some("c-v1")),
+            ]
+        );
+        assert_eq!(concept.notes[0].position.line, 6);
+        let topic = build("codex/x.md", &format!("{}{body}", front("topic", "")))?;
+        assert!(topic.notes.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn a_note_without_a_version_link_has_no_version() -> Res {
+        let body = "> [!note] n2 · open
+> text
+
+> [!note] n4 · resolved by [[x-v5]]
+> y
+";
+        let concept = build("concepts/x.md", &format!("{}{body}", front("concept", "")))?;
+        let shown: Vec<_> = concept
+            .notes
+            .iter()
+            .map(|n| {
+                (
+                    n.id.as_str(),
+                    n.state.as_str(),
+                    n.resolved_by.as_deref(),
+                    n.version.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("n2", "open", None, None),
+                ("n4", "resolved", Some("x-v5"), None)
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_beat_keeps_its_when_token() -> Res {
+        let text = "---\nid: S-930\nkind: script\ntitle: t\n---\n\
+            ## Beat 1 — A\nwhen:: T2\n\n## Beat 2 — B\nat:: [[a]]\n";
+        let found = build("story/scripts/S-930.md", text)?;
+        let whens: Vec<_> = found.beats.iter().map(|b| b.when.as_deref()).collect();
+        assert_eq!(whens, [Some("T2"), None]);
         Ok(())
     }
 

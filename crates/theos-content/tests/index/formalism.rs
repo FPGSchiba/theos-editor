@@ -1,0 +1,517 @@
+//! The Shared Formalism mirror (spec §5.14) over the `formalism/` fixture project: its
+//! `_source.json` has 18 equations and no records; the tests generate the records into a
+//! temporary copy.
+
+use theos_content::formalism::{self, FormalismError, Regenerated};
+use theos_content::{Finding, Index, Span, parts};
+
+use crate::common::{TempProject, expected, fixture, keys};
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+const E7: &str = "canon/formalism/E7.md";
+const SOURCE: &str = "canon/formalism/_source.json";
+
+/// The bytes the fixture's E7 must have.
+const E7_TEXT: &str = "---\n# generated from canon/formalism/_source.json by theos; a hand edit fails the check\nid: E7\nkind: equation\ntitle: Synthetic equation 7\nsource: https://example.invalid/synthetic-formalism#E7\ngenerated: true\n---\n$x_{7} = 7$\n";
+
+/// A copy of the fixture with its 18 records generated.
+fn generated() -> Result<TempProject, Box<dyn std::error::Error>> {
+    let project = TempProject::copy_of("formalism")?;
+    formalism::regenerate(project.root())?;
+    Ok(project)
+}
+
+/// The findings of a fresh index over `project`.
+fn findings(project: &TempProject) -> Result<Vec<Finding>, Box<dyn std::error::Error>> {
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    Ok(index.findings()?)
+}
+
+fn of_rule(findings: &[Finding], rule: &str) -> Vec<Finding> {
+    findings
+        .iter()
+        .filter(|finding| finding.rule == rule)
+        .cloned()
+        .collect()
+}
+
+fn read(project: &TempProject, rel: &str) -> Result<String, std::io::Error> {
+    std::fs::read_to_string(project.root().join(rel))
+}
+
+/// The source of the fixture, as the index would parse it.
+fn fixture_source() -> Result<formalism::Source, Box<dyn std::error::Error>> {
+    Ok(formalism::parse(&std::fs::read_to_string(
+        fixture("formalism").join(SOURCE),
+    )?)?)
+}
+
+// AC: CE-16.1
+#[test]
+fn the_source_generates_e1_to_e18() -> TestResult {
+    let files = formalism::render(&fixture_source()?)?;
+    assert_eq!(files.len(), 18);
+    let paths: Vec<&str> = files.iter().map(|(path, _)| path.as_str()).collect();
+    assert_eq!(paths[0], "canon/formalism/E1.md");
+    assert_eq!(paths[17], "canon/formalism/E18.md");
+    let e7 = files.iter().find(|(path, _)| path == E7).map(|(_, t)| t);
+    assert_eq!(e7.map(String::as_str), Some(E7_TEXT));
+
+    let project = TempProject::copy_of("formalism")?;
+    let done = formalism::regenerate(project.root())?;
+    assert_eq!(done.written.len(), 18);
+    assert_eq!(read(&project, E7)?, E7_TEXT);
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    assert_eq!(index.records_of_kind("equation")?.len(), 18);
+    assert_eq!(
+        keys(&index.findings()?),
+        expected(&fixture("formalism").join("expected.toml"))?
+    );
+    Ok(())
+}
+
+// AC: CE-16.1
+#[test]
+fn a_bracket_pair_in_latex_is_verbatim() -> TestResult {
+    let project = generated()?;
+    assert!(read(&project, "canon/formalism/E3.md")?.contains("$\\left[[a, b]\\right]$"));
+    let found = findings(&project)?;
+    assert!(
+        found.iter().all(|f| f.path != "canon/formalism/E3.md"),
+        "{found:?}"
+    );
+    Ok(())
+}
+
+// AC: CE-16.2
+#[test]
+fn a_record_citing_e7_resolves() -> TestResult {
+    let project = generated()?;
+    let found = findings(&project)?;
+    assert!(
+        found.iter().all(|f| !f.rule.starts_with("link/")),
+        "{found:?}"
+    );
+    project.remove(E7)?;
+    let found = findings(&project)?;
+    let dangling = of_rule(&found, "link/dangling");
+    assert_eq!(dangling.len(), 1, "{found:?}");
+    assert_eq!(dangling[0].path, "lore/truths/T-950.md");
+    assert_eq!(of_rule(&found, "formalism/missing").len(), 1);
+    Ok(())
+}
+
+// AC: CE-16.3
+#[test]
+fn a_hand_edit_fails_the_check() -> TestResult {
+    let original = E7_TEXT;
+    let edits = [
+        original.replace(
+            "title: Synthetic equation 7",
+            "title: Synthetic equation seven",
+        ),
+        original.replace("$x_{7} = 7$", "$x_{7} = 8$"),
+        original.replace("$x_{7} = 7$", "$x_{7} = 7$ "),
+        original.replace('\n', "\r\n"),
+    ];
+    for edited in edits {
+        let project = generated()?;
+        project.write(E7, &edited)?;
+        let found = findings(&project)?;
+        let hits = of_rule(&found, "formalism/edited");
+        assert_eq!(hits.len(), 1, "{edited:?}: {found:?}");
+        assert_eq!(hits[0].path, E7);
+        assert_eq!(hits[0].id.as_deref(), Some("E7"));
+        // The finding sits on the value of `generated`.
+        let line = edited
+            .lines()
+            .position(|l| l == "generated: true")
+            .map(|i| i + 1);
+        assert_eq!(hits[0].position.map(|p| p.line), line);
+        assert_eq!(hits[0].position.map(|p| p.column), Some(12));
+
+        let done = formalism::regenerate(project.root())?;
+        assert_eq!(done.written, [E7]);
+        assert_eq!(read(&project, E7)?, E7_TEXT);
+        assert_eq!(
+            of_rule(&findings(&project)?, "formalism/edited"),
+            Vec::new()
+        );
+    }
+    Ok(())
+}
+
+// AC: CE-16.4
+#[test]
+fn regenerating_is_idempotent() -> TestResult {
+    let project = TempProject::copy_of("formalism")?;
+    formalism::regenerate(project.root())?;
+    let before: Vec<String> = (1..=18)
+        .map(|n| read(&project, &format!("canon/formalism/E{n}.md")))
+        .collect::<Result<_, _>>()?;
+    let again = formalism::regenerate(project.root())?;
+    assert_eq!(again.written, Vec::<String>::new());
+    assert_eq!(again.unchanged.len(), 18);
+    let after: Vec<String> = (1..=18)
+        .map(|n| read(&project, &format!("canon/formalism/E{n}.md")))
+        .collect::<Result<_, _>>()?;
+    assert_eq!(before, after);
+
+    // Also after a repair.
+    project.write(E7, "edited\n")?;
+    let repaired = formalism::regenerate(project.root())?;
+    assert_eq!(repaired.written, [E7]);
+    let last = formalism::regenerate(project.root())?;
+    assert_eq!(
+        last,
+        Regenerated {
+            written: Vec::new(),
+            unchanged: again.unchanged.clone(),
+        }
+    );
+    let third: Vec<String> = (1..=18)
+        .map(|n| read(&project, &format!("canon/formalism/E{n}.md")))
+        .collect::<Result<_, _>>()?;
+    assert_eq!(before, third);
+    Ok(())
+}
+
+// AC: CE-16.4
+#[test]
+fn an_equation_text_with_a_dashes_line_is_verbatim() -> TestResult {
+    // A text that starts with `---` puts that line right after the closing fence.
+    let project = TempProject::copy_of("formalism")?;
+    let source = read(&project, SOURCE)?;
+    let from = "\"text\": \"$x_{7} = 7$\"";
+    assert!(source.contains(from), "the fixture has E7's text");
+    project.write(
+        SOURCE,
+        &source.replace(
+            from,
+            "\"text\": \"---\\n$x_{7} = 7$\\n---\\nSynthetic line after a rule.\"",
+        ),
+    )?;
+    let done = formalism::regenerate(project.root())?;
+    assert_eq!(done.written.len(), 18);
+    let e7 = read(&project, E7)?;
+    assert!(
+        e7.ends_with("generated: true\n---\n---\n$x_{7} = 7$\n---\nSynthetic line after a rule.\n"),
+        "{e7}"
+    );
+    // The record reads back as E7 with that body: no `formalism/edited`, no finding at all.
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    assert_eq!(index.records_of_kind("equation")?.len(), 18);
+    assert_eq!(
+        keys(&index.findings()?),
+        expected(&fixture("formalism").join("expected.toml"))?
+    );
+    // Regenerating again writes nothing and leaves the bytes.
+    let again = formalism::regenerate(project.root())?;
+    assert_eq!(again.written, Vec::<String>::new());
+    assert_eq!(again.unchanged.len(), 18);
+    assert_eq!(read(&project, E7)?, e7);
+    Ok(())
+}
+
+#[test]
+fn a_stray_equation_and_a_missing_one_are_findings() -> TestResult {
+    let project = generated()?;
+    // A record the source does not list.
+    let stray = E7_TEXT.replace("E7", "E99");
+    project.write("canon/formalism/E99.md", &stray)?;
+    project.remove("canon/formalism/E2.md")?;
+    let found = findings(&project)?;
+    let strays = of_rule(&found, "formalism/stray");
+    assert_eq!(strays.len(), 1, "{found:?}");
+    assert_eq!(strays[0].path, "canon/formalism/E99.md");
+    assert_eq!(strays[0].id.as_deref(), Some("E99"));
+    assert_eq!(strays[0].position.map(|p| (p.line, p.column)), Some((3, 5)));
+    let missing = of_rule(&found, "formalism/missing");
+    assert_eq!(missing.len(), 1, "{found:?}");
+    assert_eq!(missing[0].path, SOURCE);
+    assert_eq!(missing[0].id, None);
+    assert_eq!(
+        missing[0].position.map(|p| (p.line, p.column)),
+        Some((1, 1))
+    );
+    assert!(missing[0].message.contains("E2"), "{}", missing[0].message);
+    // `regenerate` never deletes the stray record, and writes the missing one.
+    let done = formalism::regenerate(project.root())?;
+    assert_eq!(done.written, ["canon/formalism/E2.md"]);
+    assert!(project.root().join("canon/formalism/E99.md").exists());
+    Ok(())
+}
+
+#[test]
+fn every_equation_record_is_stray_without_a_source() -> TestResult {
+    let project = generated()?;
+    project.remove(SOURCE)?;
+    let found = findings(&project)?;
+    assert_eq!(of_rule(&found, "formalism/stray").len(), 18, "{found:?}");
+    assert_eq!(of_rule(&found, "formalism/source"), Vec::new());
+    assert_eq!(of_rule(&found, "formalism/missing"), Vec::new());
+    assert!(matches!(
+        formalism::regenerate(project.root()),
+        Err(FormalismError::Missing)
+    ));
+    Ok(())
+}
+
+/// Renames the file `from` of `project` to `to`, also when the two differ only in case.
+fn rename(project: &TempProject, from: &str, to: &str) -> std::io::Result<()> {
+    std::fs::rename(project.root().join(from), project.root().join(to))
+}
+
+/// Whether the file system of `project` ignores case: it finds `CANON` for `canon`.
+fn folds_case(project: &TempProject) -> bool {
+    project.root().join("CANON").exists()
+}
+
+#[test]
+fn a_source_spelled_unlike_the_file_on_disk_is_no_source() -> TestResult {
+    // Only `canon/formalism/_Source.json` is on disk. The index sees no source, so every
+    // equation record is stray; `regenerate` reads nothing either, also where the file system
+    // ignores case and would open the file.
+    let project = generated()?;
+    let recased = "canon/formalism/_Source.json";
+    rename(&project, SOURCE, recased)?;
+    let found = findings(&project)?;
+    assert_eq!(of_rule(&found, "formalism/stray").len(), 18, "{found:?}");
+    project.remove(E7)?;
+    let refused = formalism::regenerate(project.root());
+    if folds_case(&project) {
+        assert!(
+            matches!(
+                &refused,
+                Err(FormalismError::Spelling { path, on_disk }) if path == SOURCE && on_disk == recased
+            ),
+            "{refused:?}"
+        );
+    } else {
+        assert!(
+            matches!(refused, Err(FormalismError::Missing)),
+            "{refused:?}"
+        );
+    }
+    assert!(!project.root().join(E7).exists(), "nothing is written");
+    Ok(())
+}
+
+// AC: CE-16.1
+#[test]
+fn a_record_spelled_unlike_its_equation_is_never_written_into() -> TestResult {
+    // `canon/formalism/e7.md` stands where `E7.md` belongs, and `E2.md` is missing. Where the
+    // file system ignores case, writing `E7.md` would write into `e7.md`: `regenerate` refuses,
+    // naming both spellings, and writes nothing. Elsewhere the two are different files.
+    let project = generated()?;
+    let recased = "canon/formalism/e7.md";
+    rename(&project, E7, recased)?;
+    project.remove("canon/formalism/E2.md")?;
+    let result = formalism::regenerate(project.root());
+    if folds_case(&project) {
+        assert!(
+            matches!(
+                &result,
+                Err(FormalismError::Spelling { path, on_disk }) if path == E7 && on_disk == recased
+            ),
+            "{result:?}"
+        );
+        assert!(
+            !project.root().join("canon/formalism/E2.md").exists(),
+            "a refused record leaves every record unwritten"
+        );
+    } else {
+        let done = result?;
+        assert_eq!(done.written, ["canon/formalism/E2.md", E7]);
+        assert_eq!(read(&project, E7)?, E7_TEXT);
+    }
+    assert_eq!(
+        read(&project, recased)?,
+        E7_TEXT,
+        "the other file stays as it was"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_broken_source_is_a_finding_with_its_position() -> TestResult {
+    let project = generated()?;
+    // A syntax error: serde_json's line and column.
+    project.write(SOURCE, "{\n  \"format\": 1,\n  oops\n}\n")?;
+    let found = findings(&project)?;
+    let hits = of_rule(&found, "formalism/source");
+    assert_eq!(hits.len(), 1, "{found:?}");
+    assert_eq!(hits[0].path, SOURCE);
+    assert_eq!(hits[0].id, None);
+    assert_eq!(hits[0].position.map(|p| (p.line, p.column)), Some((3, 3)));
+    // The span agrees: an empty span at that place (the `o` of `oops`).
+    let broken = "{\n  \"format\": 1,\n  oops\n}\n";
+    let at = broken.find("oops").ok_or("oops")?;
+    assert_eq!(hits[0].span.map(|s| (s.start, s.end)), Some((at, at)));
+    // A broken source gives no stray, edited or missing finding.
+    assert_eq!(of_rule(&found, "formalism/stray"), Vec::new());
+    assert_eq!(of_rule(&found, "formalism/edited"), Vec::new());
+    assert_eq!(of_rule(&found, "formalism/missing"), Vec::new());
+
+    // A rule of the format: 1:1, naming the equation.
+    let text = std::fs::read_to_string(fixture("formalism").join(SOURCE))?;
+    project.write(SOURCE, &text.replace("\"E4\"", "\"E04\""))?;
+    let found = findings(&project)?;
+    let hits = of_rule(&found, "formalism/source");
+    assert_eq!(hits.len(), 1, "{found:?}");
+    assert_eq!(hits[0].position.map(|p| (p.line, p.column)), Some((1, 1)));
+    assert_eq!(hits[0].span, Some(Span::default()));
+    assert!(hits[0].message.contains("`E04`"), "{}", hits[0].message);
+
+    // Bytes that are not UTF-8.
+    project.write_fresh(SOURCE, "")?;
+    std::fs::write(project.root().join(SOURCE), [0xff, 0xfe, 0x00])?;
+    let found = findings(&project)?;
+    let hits = of_rule(&found, "formalism/source");
+    assert_eq!(hits.len(), 1, "{found:?}");
+    assert_eq!(hits[0].span, Some(Span::default()));
+    assert_eq!(hits[0].position.map(|p| (p.line, p.column)), Some((1, 1)));
+
+    // A format error of the page's `format`, not only of an equation.
+    project.write(SOURCE, &text.replace("\"format\": 1", "\"format\": 2"))?;
+    let found = findings(&project)?;
+    let hits = of_rule(&found, "formalism/source");
+    assert_eq!(hits.len(), 1, "{found:?}");
+    assert_eq!(hits[0].span, Some(Span::default()));
+    assert_eq!(hits[0].position.map(|p| (p.line, p.column)), Some((1, 1)));
+    Ok(())
+}
+
+#[test]
+fn a_source_error_after_non_ascii_text_counts_scalar_values() -> TestResult {
+    let project = generated()?;
+    // `é` and `😀` before the error on the same line: 6 bytes, 2 scalar values. serde_json
+    // reports the unknown field after its key.
+    let text = "{\n  \"é😀\": 1\n}\n";
+    project.write(SOURCE, text)?;
+    let found = findings(&project)?;
+    let hits = of_rule(&found, "formalism/source");
+    assert_eq!(hits.len(), 1, "{found:?}");
+    let span = hits[0].span.ok_or("a span")?;
+    assert_eq!(span.start, span.end);
+    let offset = span.start;
+    assert!(offset > text.find('😀').ok_or("emoji")?, "{offset}");
+    let position = hits[0].position.ok_or("a position")?;
+    let line_start = text[..offset].rfind('\n').map_or(0, |i| i + 1);
+    assert_eq!(position.line, 2);
+    assert_eq!(
+        position.column,
+        text[line_start..offset].chars().count() + 1
+    );
+    // The place is the finding's position, not part of its message: serde_json's byte column
+    // (10 here) would contradict the scalar column (6).
+    assert_eq!((position.line, position.column), (2, 6));
+    assert!(
+        hits[0].message.contains("unknown field `é😀`"),
+        "{}",
+        hits[0].message
+    );
+    assert!(!hits[0].message.contains("column"), "{}", hits[0].message);
+    Ok(())
+}
+
+#[test]
+fn a_source_cut_off_is_placed_where_serde_json_reports_it() -> TestResult {
+    let project = generated()?;
+    // serde_json reports an end-of-input error at the last byte of the text; with a final LF
+    // that is the end of the text, on the empty last line. (text, offset, line, column)
+    let cases = [
+        (
+            "{
+  \"format\": 1,",
+            15,
+            2,
+            14,
+        ),
+        (
+            "{
+  \"format\": 1,
+",
+            17,
+            3,
+            1,
+        ),
+        ("{", 0, 1, 1),
+    ];
+    for (text, offset, line, column) in cases {
+        project.write(SOURCE, text)?;
+        let found = findings(&project)?;
+        let hits = of_rule(&found, "formalism/source");
+        assert_eq!(hits.len(), 1, "{text:?}: {found:?}");
+        assert_eq!(hits[0].span, Some(Span::new(offset, offset)), "{text:?}");
+        assert_eq!(
+            hits[0].position.map(|p| (p.line, p.column)),
+            Some((line, column)),
+            "{text:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_source_change_re_runs_the_checks_of_the_records() -> TestResult {
+    let project = generated()?;
+    let mut index = Index::in_memory(&project.project()?, &parts::builtin()?)?;
+    index.sync()?;
+    assert_eq!(of_rule(&index.findings()?, "formalism/edited"), Vec::new());
+    let text = std::fs::read_to_string(project.root().join(SOURCE))?;
+    project.write(
+        SOURCE,
+        &text.replace("Synthetic equation 7", "Synthetic equation seven"),
+    )?;
+    index.sync()?;
+    let hits = of_rule(&index.findings()?, "formalism/edited");
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].path, E7);
+    Ok(())
+}
+
+#[test]
+fn a_source_that_cannot_be_rendered_is_refused_by_the_check_and_by_regenerate() -> TestResult {
+    let project = generated()?;
+    let text = std::fs::read_to_string(fixture("formalism").join(SOURCE))?;
+    project.write(
+        SOURCE,
+        &text.replace("Synthetic equation 7", "Synthetic \\u0001 seven"),
+    )?;
+    let found = findings(&project)?;
+    let hits = of_rule(&found, "formalism/source");
+    assert_eq!(hits.len(), 1, "{found:?}");
+    assert_eq!(hits[0].position.map(|p| (p.line, p.column)), Some((1, 1)));
+    assert!(hits[0].message.contains("`E7`"), "{}", hits[0].message);
+    let refused = formalism::regenerate(project.root());
+    let Err(FormalismError::Source(error)) = refused else {
+        return Err(format!("regenerate did not refuse: {refused:?}").into());
+    };
+    assert_eq!(error.message, hits[0].message);
+    Ok(())
+}
+
+#[test]
+fn only_an_equation_record_at_its_place_hides_a_missing_equation() -> TestResult {
+    let project = generated()?;
+    project.remove("canon/formalism/E2.md")?;
+    // Another kind with the id, and an equation record of the id elsewhere.
+    project.write(
+        "things/E2.md",
+        "---\nid: E2\nkind: thing\ntitle: Synthetic thing\ntype: synthetic\n---\nSynthetic text.\n",
+    )?;
+    let found = findings(&project)?;
+    let missing = of_rule(&found, "formalism/missing");
+    assert_eq!(missing.len(), 1, "{found:?}");
+    assert!(missing[0].message.contains("E2"));
+    project.remove("things/E2.md")?;
+    project.write("canon/E2.md", &E7_TEXT.replace("E7", "E2"))?;
+    let found = findings(&project)?;
+    assert_eq!(of_rule(&found, "formalism/missing").len(), 1, "{found:?}");
+    Ok(())
+}

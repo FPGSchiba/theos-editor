@@ -1,0 +1,122 @@
+# synthetic fixture (P04), not canon
+# Checked by hand against docs/specs/phases/P04-validation-lore-rules-ledger-formalism-mirror.md
+# section 5.12 and the settings file. The findings as they are read, with the configured
+# severities applied: a `warning` entry for each of the three guardrails (lines 3 to 5; the
+# never-confirm finding on C-951 and the no-overshoot finding on C-952 stay errors, and so do
+# the two inworld-vocab findings on the dialogue: T-950 and the project word `synthetic-word`,
+# while `T3` is allowed with a reason), the unknown rule, the fixed rule, the value
+# `off`, the word with a space, the two allow entries without a reason, the misspelt table
+# `inworld_vocab`, and lore/three-clue on T-950 and T-952, which line 9 of the settings raises
+# from its default warning to an error.
+
+[[finding]]
+path = ".theos/settings.toml"
+rule = "settings/guardrail"
+severity = "error"
+line = 3
+column = 1
+
+[[finding]]
+path = ".theos/settings.toml"
+rule = "settings/guardrail"
+severity = "error"
+line = 4
+column = 1
+
+[[finding]]
+path = ".theos/settings.toml"
+rule = "settings/guardrail"
+severity = "error"
+line = 5
+column = 1
+
+[[finding]]
+path = ".theos/settings.toml"
+rule = "settings/unknown-rule"
+severity = "warning"
+line = 6
+column = 1
+
+[[finding]]
+path = ".theos/settings.toml"
+rule = "settings/fixed"
+severity = "error"
+line = 7
+column = 1
+
+[[finding]]
+path = ".theos/settings.toml"
+rule = "settings/severity"
+severity = "error"
+line = 8
+column = 23
+
+[[finding]]
+path = ".theos/settings.toml"
+rule = "settings/word"
+severity = "error"
+line = 12
+column = 28
+
+[[finding]]
+path = ".theos/settings.toml"
+rule = "settings/allow-reason"
+severity = "error"
+line = 14
+column = 3
+
+[[finding]]
+path = ".theos/settings.toml"
+rule = "settings/allow-reason"
+severity = "error"
+line = 15
+column = 3
+
+[[finding]]
+path = ".theos/settings.toml"
+rule = "settings/unknown-key"
+severity = "error"
+line = 19
+column = 11
+
+[[finding]]
+path = "dialogue/synthetic-vocab-dialogue.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 8
+column = 6
+
+[[finding]]
+path = "dialogue/synthetic-vocab-dialogue.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 8
+column = 20
+
+[[finding]]
+path = "lore/clues/C-951.md"
+rule = "lore/never-confirm"
+severity = "error"
+line = 7
+column = 10
+
+[[finding]]
+path = "lore/clues/C-952.md"
+rule = "lore/no-overshoot"
+severity = "error"
+line = 8
+column = 11
+
+[[finding]]
+path = "lore/truths/T-950.md"
+rule = "lore/three-clue"
+severity = "error"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-952.md"
+rule = "lore/three-clue"
+severity = "error"
+line = 7
+column = 9

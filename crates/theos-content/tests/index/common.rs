@@ -1,5 +1,6 @@
-//! Helpers of the index tests: a temporary content project and its files.
+//! Helpers of the index tests: a temporary content project, its files, and dumps compared.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -174,7 +175,9 @@ struct Expectation {
 }
 
 #[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Expectations {
+    #[serde(default)]
     finding: Vec<Expectation>,
 }
 
@@ -224,4 +227,38 @@ pub fn expected_index(path: &Path) -> Result<IndexExpectation, Box<dyn std::erro
             .map(|c| (c.input, key(c.key)))
             .collect(),
     })
+}
+
+/// The lines of a dump, each with its section, that are in `left` and not in `right`.
+fn only_in(left: &str, right: &str) -> Vec<String> {
+    let lines = |dump: &str| -> BTreeSet<String> {
+        let mut section = "";
+        let mut lines = BTreeSet::new();
+        for line in dump.lines() {
+            if line.starts_with('[') {
+                section = line;
+            } else {
+                lines.insert(format!("{section} {line}"));
+            }
+        }
+        lines
+    };
+    let right = lines(right);
+    lines(left)
+        .into_iter()
+        .filter(|line| !right.contains(line))
+        .collect()
+}
+
+/// Fails with the lines that differ when the dump `got` is not `want`.
+pub fn same_dump(what: &str, got: &str, want: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if got == want {
+        return Ok(());
+    }
+    Err(format!(
+        "{what}\nonly in the index:\n{}\nonly in the fresh build:\n{}",
+        only_in(got, want).join("\n"),
+        only_in(want, got).join("\n")
+    )
+    .into())
 }

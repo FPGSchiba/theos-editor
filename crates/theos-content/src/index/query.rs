@@ -4,8 +4,11 @@ use rusqlite::types::Type;
 use rusqlite::{Connection, Params, Row};
 
 use crate::finding::{Finding, Severity};
+use crate::index::configured;
 use crate::index::slots::Slot;
 use crate::index::{Index, IndexError};
+use crate::kinds::KindRegistry;
+use crate::rules;
 use crate::text::{Position, Span};
 
 /// What the index knows of a record at a glance.
@@ -54,25 +57,24 @@ const FINDING_ORDER: &str = "ORDER BY path, line, col, rule, message, span_start
 const RECORD_COLUMNS: &str = "SELECT id, path, kind, title, status FROM records";
 
 impl Index {
-    /// Every finding, ordered by path, line, column and rule.
+    /// Every finding, ordered by path, line, column and rule, with the severities that the
+    /// project's settings configure (spec §5.12); a guardrail is always an error.
     ///
     /// # Errors
     ///
     /// Fails when SQLite fails.
     pub fn findings(&self) -> Result<Vec<Finding>, IndexError> {
-        self.finding_rows(&format!("{FINDING_COLUMNS} {FINDING_ORDER}"), [])
+        let found = self.finding_rows(&format!("{FINDING_COLUMNS} {FINDING_ORDER}"), [])?;
+        self.configured(found)
     }
 
-    /// The findings of one path, in the same order.
+    /// The findings of one path, in the same order, with the configured severities applied.
     ///
     /// # Errors
     ///
     /// Fails when SQLite fails.
     pub fn findings_for(&self, path: &str) -> Result<Vec<Finding>, IndexError> {
-        self.finding_rows(
-            &format!("{FINDING_COLUMNS} WHERE path = ?1 {FINDING_ORDER}"),
-            [path],
-        )
+        findings_in(&self.store.conn, &self.registry, path)
     }
 
     /// Every record, ordered by path.
@@ -169,18 +171,30 @@ impl Index {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
+    /// `found` with the configured severities applied.
+    fn configured(&self, found: Vec<Finding>) -> Result<Vec<Finding>, IndexError> {
+        let table = rules::all(&self.registry);
+        Ok(configured::apply(&self.store.conn, &table, found)?)
+    }
+
     fn finding_rows(&self, sql: &str, params: impl Params) -> Result<Vec<Finding>, IndexError> {
         finding_rows_in(&self.store.conn, sql, params)
     }
 }
 
-/// The findings of one path on `conn`, in the order of [`Index::findings_for`].
-pub(super) fn findings_in(conn: &Connection, path: &str) -> Result<Vec<Finding>, IndexError> {
-    finding_rows_in(
+/// The findings of one path on `conn`, in the order of [`Index::findings_for`], with the
+/// severities configured in `conn` applied.
+pub(super) fn findings_in(
+    conn: &Connection,
+    registry: &KindRegistry,
+    path: &str,
+) -> Result<Vec<Finding>, IndexError> {
+    let found = finding_rows_in(
         conn,
         &format!("{FINDING_COLUMNS} WHERE path = ?1 {FINDING_ORDER}"),
         [path],
-    )
+    )?;
+    Ok(configured::apply(conn, &rules::all(registry), found)?)
 }
 
 fn finding_rows_in(

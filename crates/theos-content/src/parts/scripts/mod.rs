@@ -1,6 +1,7 @@
 //! The scripts part.
 
 mod dialogue;
+mod rules;
 mod script;
 mod template;
 
@@ -14,5 +15,9 @@ pub fn register(registry: &mut KindRegistry) -> Result<(), RegistryError> {
     registry.register("scripts", script::spec())?;
     registry.register("scripts", dialogue::spec())?;
     registry.register("scripts", template::spec())?;
+    registry.register_rule("scripts", rules::BEAT_AT)?;
+    registry.register_rule("scripts", rules::SAYS_REJECTED)?;
+    registry.register_rule("scripts", rules::REVEAL_WHERE)?;
+    registry.register_rule("scripts", rules::REVEAL_GATE)?;
     Ok(())
 }

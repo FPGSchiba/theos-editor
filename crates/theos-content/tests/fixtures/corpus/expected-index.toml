@@ -5,10 +5,25 @@
 #   link/dangling (data model example ids, P01 placeholders such as `todo`, and ids of records
 #   the corpus does not hold), schema/version-id (a version whose parent is the placeholder
 #   `todo`), schema/topic-counterpart (an in-world topic without `counterpart`) and
-#   schema/unknown-field (fields that a `thing` does not have, in P02's YAML fixtures). Items of
-#   a malformed body are P04's findings, not listed here;
+#   schema/unknown-field (fields that a `thing` does not have, in P02's YAML fixtures). The body
+#   rules of P04 add the `body/` findings: the malformed constructs of `malformed/` (each case
+#   of its `expected.toml`), the unknown beat keys (`synthetic::`) and the unknown note state
+#   of `synthetic-concept-notes.md` (CE-15.5), and the three-clue warning of T-901, which no clue
+#   reveals; and lore/inworld-vocab (section 5.11): `B-902` as a belief title and `S-004` as a
+#   bare link in a voice block. The malformed voice titles of
+#   `synthetic-malformed-voices-in-world.md` are cut from the in-world text like good ones: their
+#   fault is the `body/callout-title` finding, so they give no inworld-vocab finding;
 # - [[crlf]]: the findings of the CRLF files that have no twin among the records, each with the
 #   name of its `input` file, indexed alone at `things/<input>`.
+
+# formalism/stray (section 5.14, R-P4): the equation record has no _source.json to list it;
+# its id value sits at line 3, column 5.
+[[project]]
+path = "canon/formalism/E901.md"
+rule = "formalism/stray"
+severity = "error"
+line = 3
+column = 5
 
 [[project]]
 path = "concepts/fates-shrine/fates-shrine-v5.md"
@@ -23,6 +38,13 @@ rule = "link/dangling"
 severity = "error"
 line = 10
 column = 7
+
+[[project]]
+path = "concepts/synthetic-concept-notes.md"
+rule = "body/note-state"
+severity = "error"
+line = 21
+column = 16
 
 [[project]]
 path = "concepts/synthetic-concept.md"
@@ -79,6 +101,13 @@ rule = "link/dangling"
 severity = "error"
 line = 17
 column = 1
+
+[[project]]
+path = "lore/beliefs/B-902.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 5
+column = 8
 
 [[project]]
 path = "lore/beliefs/B-902.md"
@@ -201,6 +230,13 @@ column = 29
 
 [[project]]
 path = "lore/topics/synthetic-callouts-in-world.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 54
+column = 31
+
+[[project]]
+path = "lore/topics/synthetic-callouts-in-world.md"
 rule = "link/dangling"
 severity = "error"
 line = 58
@@ -292,10 +328,24 @@ column = 7
 
 [[project]]
 path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "body/callout-title"
+severity = "error"
+line = 11
+column = 12
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
 rule = "link/dangling"
 severity = "error"
 line = 14
 column = 12
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "body/callout-title"
+severity = "error"
+line = 14
+column = 35
 
 [[project]]
 path = "lore/topics/synthetic-malformed-voices-in-world.md"
@@ -309,6 +359,20 @@ path = "lore/topics/synthetic-malformed-voices-in-world.md"
 rule = "link/dangling"
 severity = "error"
 line = 17
+column = 12
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "body/callout-title"
+severity = "error"
+line = 17
+column = 30
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "body/callout-title"
+severity = "error"
+line = 20
 column = 12
 
 [[project]]
@@ -327,6 +391,13 @@ column = 28
 
 [[project]]
 path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "body/callout-title"
+severity = "error"
+line = 23
+column = 12
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
 rule = "link/dangling"
 severity = "error"
 line = 23
@@ -341,10 +412,24 @@ column = 30
 
 [[project]]
 path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "body/callout-title"
+severity = "error"
+line = 26
+column = 12
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
 rule = "link/dangling"
 severity = "error"
 line = 26
 column = 12
+
+[[project]]
+path = "lore/topics/synthetic-malformed-voices-in-world.md"
+rule = "body/callout-title"
+severity = "error"
+line = 29
+column = 11
 
 [[project]]
 path = "lore/topics/synthetic-voices-in-world.md"
@@ -411,6 +496,13 @@ column = 56
 
 [[project]]
 path = "lore/truths/T-901.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[project]]
+path = "lore/truths/T-901.md"
 rule = "link/dangling"
 severity = "error"
 line = 8
@@ -436,6 +528,48 @@ rule = "link/dangling"
 severity = "error"
 line = 14
 column = 16
+
+[[project]]
+path = "maps/synthetic-malformed-notes.md"
+rule = "body/callout-title"
+severity = "error"
+line = 13
+column = 11
+
+[[project]]
+path = "maps/synthetic-malformed-notes.md"
+rule = "body/callout-title"
+severity = "error"
+line = 16
+column = 11
+
+[[project]]
+path = "maps/synthetic-malformed-notes.md"
+rule = "body/callout-title"
+severity = "error"
+line = 19
+column = 11
+
+[[project]]
+path = "maps/synthetic-malformed-notes.md"
+rule = "body/callout-title"
+severity = "error"
+line = 22
+column = 16
+
+[[project]]
+path = "maps/synthetic-malformed-notes.md"
+rule = "body/callout-title"
+severity = "error"
+line = 25
+column = 23
+
+[[project]]
+path = "maps/synthetic-malformed-notes.md"
+rule = "body/callout-title"
+severity = "error"
+line = 28
+column = 11
 
 [[project]]
 path = "maps/synthetic-map.md"
@@ -551,10 +685,24 @@ column = 6
 
 [[project]]
 path = "story/scripts/S-901.md"
+rule = "body/attribute-unknown"
+severity = "warning"
+line = 34
+column = 1
+
+[[project]]
+path = "story/scripts/S-901.md"
 rule = "link/dangling"
 severity = "error"
 line = 36
 column = 30
+
+[[project]]
+path = "story/scripts/S-901.md"
+rule = "body/beat-heading"
+severity = "error"
+line = 39
+column = 1
 
 [[project]]
 path = "story/scripts/S-901.md"
@@ -593,6 +741,13 @@ column = 6
 
 [[project]]
 path = "story/scripts/S-903.md"
+rule = "body/attribute-unknown"
+severity = "warning"
+line = 23
+column = 1
+
+[[project]]
+path = "story/scripts/S-903.md"
 rule = "link/dangling"
 severity = "error"
 line = 31
@@ -628,6 +783,20 @@ column = 6
 
 [[project]]
 path = "story/scripts/S-904.md"
+rule = "body/beat-attribute"
+severity = "error"
+line = 12
+column = 1
+
+[[project]]
+path = "story/scripts/S-904.md"
+rule = "body/beat-attribute"
+severity = "error"
+line = 13
+column = 1
+
+[[project]]
+path = "story/scripts/S-904.md"
 rule = "link/dangling"
 severity = "error"
 line = 13
@@ -642,10 +811,31 @@ column = 14
 
 [[project]]
 path = "story/scripts/S-904.md"
+rule = "body/beat-attribute"
+severity = "error"
+line = 14
+column = 1
+
+[[project]]
+path = "story/scripts/S-904.md"
 rule = "link/dangling"
 severity = "error"
 line = 14
 column = 8
+
+[[project]]
+path = "story/scripts/S-904.md"
+rule = "body/beat-attribute"
+severity = "error"
+line = 15
+column = 1
+
+[[project]]
+path = "story/scripts/S-904.md"
+rule = "body/beat-attribute"
+severity = "error"
+line = 16
+column = 1
 
 [[project]]
 path = "story/scripts/S-904.md"
@@ -656,10 +846,108 @@ column = 10
 
 [[project]]
 path = "story/scripts/S-904.md"
+rule = "body/beat-heading"
+severity = "error"
+line = 18
+column = 1
+
+[[project]]
+path = "story/scripts/S-904.md"
+rule = "body/beat-heading"
+severity = "error"
+line = 20
+column = 1
+
+[[project]]
+path = "story/scripts/S-904.md"
+rule = "body/beat-heading"
+severity = "error"
+line = 22
+column = 1
+
+[[project]]
+path = "story/scripts/S-904.md"
+rule = "body/beat-heading"
+severity = "error"
+line = 24
+column = 1
+
+[[project]]
+path = "story/scripts/S-904.md"
+rule = "body/beat-heading"
+severity = "error"
+line = 26
+column = 1
+
+[[project]]
+path = "story/scripts/S-904.md"
+rule = "body/misplaced-attributes"
+severity = "error"
+line = 30
+column = 1
+
+[[project]]
+path = "story/scripts/S-904.md"
 rule = "link/dangling"
 severity = "error"
 line = 30
 column = 6
+
+[[project]]
+path = "things/synthetic-malformed-links.md"
+rule = "body/link-unclosed"
+severity = "error"
+line = 10
+column = 20
+
+[[project]]
+path = "things/synthetic-malformed-links.md"
+rule = "body/link-unclosed"
+severity = "error"
+line = 12
+column = 15
+
+[[project]]
+path = "things/synthetic-malformed-links.md"
+rule = "body/link-unclosed"
+severity = "error"
+line = 14
+column = 23
+
+[[project]]
+path = "things/synthetic-malformed-links.md"
+rule = "body/link-target"
+severity = "error"
+line = 16
+column = 22
+
+[[project]]
+path = "things/synthetic-malformed-links.md"
+rule = "body/link-target"
+severity = "error"
+line = 18
+column = 8
+
+[[project]]
+path = "things/synthetic-malformed-links.md"
+rule = "body/link-target"
+severity = "error"
+line = 20
+column = 9
+
+[[project]]
+path = "things/synthetic-malformed-links.md"
+rule = "body/link-target"
+severity = "error"
+line = 22
+column = 30
+
+[[project]]
+path = "things/synthetic-malformed-links.md"
+rule = "body/embed"
+severity = "error"
+line = 24
+column = 10
 
 [[project]]
 path = "things/synthetic-whitespace.md"

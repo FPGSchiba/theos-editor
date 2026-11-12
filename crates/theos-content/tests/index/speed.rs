@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use theos_content::{Index, parts};
+use theos_content::{Index, formalism, parts};
 
 use crate::common::TempProject;
 
@@ -12,6 +12,12 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Records per kind; 20 kinds make 500 records.
 const PER_KIND: usize = 25;
+
+/// The truths that can be revealed: each has three clues that confirm it, on rising floors, and
+/// requires the one before. The others have the target `never` (the three-clue rule leaves them
+/// alone) and require the last revealed one. The 25th clue is a fourth confirming clue of the
+/// last revealed truth.
+const REVEALED: usize = 8;
 
 /// The longest a cold index of the project may take.
 const LIMIT: Duration = Duration::from_secs(1);
@@ -54,8 +60,10 @@ impl Writer<'_> {
         fields: &str,
         text: &str,
     ) -> std::io::Result<()> {
+        // The title spells the id with spaces: an id in a belief title is a developer word.
+        let title = id.replace('-', " ");
         let record = format!(
-            "---\n# synthetic fixture (P03), not canon\nid: {id}\nkind: {kind}\ntitle: Synthetic {id}\n{fields}---\n{text}"
+            "---\n# synthetic fixture (P03), not canon\nid: {id}\nkind: {kind}\ntitle: Synthetic {title}\n{fields}---\n{text}"
         );
         self.project.write(path, &record)
     }
@@ -76,7 +84,7 @@ impl Writer<'_> {
             "",
             &text,
         )?;
-        let fields = format!("parent: tower-{n:02}\nfloors: [1, 1]\n");
+        let fields = format!("parent: tower-{n:02}\nfloors: [{n}, {n}]\n");
         self.put(&format!("world/{band}.md"), "band", &band, &fields, &text)?;
         let fields = format!("status: draft\nparent: {band}\nnumber: {n}\n");
         self.put(
@@ -130,18 +138,11 @@ impl Writer<'_> {
         )
     }
 
-    /// The lore: equation, topic, truth, belief, clue.
+    /// The lore: topic, truth, belief, clue. The equations are generated, see
+    /// `write_formalism`.
     fn lore(&self, i: usize) -> std::io::Result<()> {
         let (n, num) = (i + 1, 930 + i);
         let text = body("");
-        let fields = format!("source: https://example.invalid/e{num}\ngenerated: true\n");
-        self.put(
-            &format!("canon/formalism/E{num}.md"),
-            "equation",
-            &format!("E{num}"),
-            &fields,
-            &text,
-        )?;
         let topic = format!("topic-{n:02}-explaining");
         let fields =
             format!("status: draft\ntrack: explaining\nsource: https://example.invalid/t{n}\n");
@@ -152,14 +153,15 @@ impl Writer<'_> {
             &fields,
             &text,
         )?;
-        let requires = if i == 0 {
-            String::new()
-        } else {
-            format!("requires: [T-{}]\n", num - 1)
+        // The revealed truths require the one before; the others require the last revealed one.
+        let requires = match i {
+            0 => String::new(),
+            i if i >= REVEALED => format!("requires: [T-{}]\n", 930 + REVEALED - 1),
+            _ => format!("requires: [T-{}]\n", num - 1),
         };
-        let fields = format!(
-            "status: draft\ntarget: confirmed\n{requires}topic: {topic}\ncites: [E{num}]\n"
-        );
+        let target = if i < REVEALED { "confirmed" } else { "never" };
+        let fields =
+            format!("status: draft\ntarget: {target}\n{requires}topic: {topic}\ncites: [E{num}]\n");
         self.put(
             &format!("lore/truths/T-{num}.md"),
             "truth",
@@ -177,8 +179,9 @@ impl Writer<'_> {
             &fields,
             &text,
         )?;
+        let truth = 930 + (i / 3).min(REVEALED - 1);
         let fields = format!(
-            "status: draft\nreveals: T-{num}\nmoves_to: hinted\nwhere: [band-{n:02}]\ngate: T1\nvector: synthetic\n"
+            "status: draft\nreveals: T-{truth}\nmoves_to: confirmed\nwhere: [band-{n:02}]\ngate: T1\nvector: synthetic\n"
         );
         self.put(
             &format!("lore/clues/C-{num}.md"),
@@ -259,8 +262,39 @@ impl Writer<'_> {
     }
 }
 
-/// Writes the 500 records of the speed test into `project`.
-fn write_records(project: &TempProject) -> std::io::Result<()> {
+/// Writes the Shared Formalism source of the 25 equations and their generated records, so that
+/// no equation record is stray, edited or missing. Each text has the size of the other bodies.
+fn write_formalism(project: &TempProject) -> Result<(), Box<dyn std::error::Error>> {
+    let page = "https://example.invalid/speed";
+    let equations: Vec<formalism::Equation> = (0..PER_KIND)
+        .map(|i| {
+            let id = format!("E{}", 930 + i);
+            formalism::Equation {
+                title: format!("Synthetic {id}"),
+                anchor: format!("{page}#{}", id.to_lowercase()),
+                text: body(""),
+                id,
+            }
+        })
+        .collect();
+    let listed: Vec<_> = equations
+        .iter()
+        .map(|e| serde_json::json!({"id": e.id, "title": e.title, "anchor": e.anchor, "text": e.text}))
+        .collect();
+    let source = serde_json::json!({"format": 1, "page": page, "equations": listed});
+    project.write(formalism::SOURCE, &serde_json::to_string_pretty(&source)?)?;
+    let source = formalism::Source {
+        page: page.to_owned(),
+        equations,
+    };
+    for (path, text) in formalism::render(&source)? {
+        project.write(&path, &text)?;
+    }
+    Ok(())
+}
+
+/// Writes the 500 records of the speed test into `project`: 475 written here, 25 generated.
+fn write_records(project: &TempProject) -> Result<(), Box<dyn std::error::Error>> {
     let writer = Writer { project };
     for i in 0..PER_KIND {
         writer.world(i + 1)?;
@@ -268,7 +302,7 @@ fn write_records(project: &TempProject) -> std::io::Result<()> {
         writer.stories(i)?;
         writer.pictures(i + 1)?;
     }
-    Ok(())
+    write_formalism(project)
 }
 
 /// Deletes the cache and times one cold `Index::open`; returns the time and the record count.

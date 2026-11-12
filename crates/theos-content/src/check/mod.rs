@@ -2,8 +2,10 @@
 //! schema rules every kind shares and then the checks of the kind itself.
 //!
 //! The order of the rules is the order of the phase spec's table. Each schema rule is one
-//! module with one `RULE` constant, registered by one line in `SCHEMA_RULES`.
+//! module with one `RULE` constant, registered by one line in `SCHEMA_RULES`; the body rules
+//! follow, listed in `body::BODY_RULES`.
 
+mod body;
 mod decode;
 mod file_name;
 mod id;
@@ -14,10 +16,11 @@ mod unknown_field;
 mod value;
 
 use crate::finding::{Finding, Severity};
-use crate::kinds::{CheckInput, KindRegistry, KindSpec, Problem};
+use crate::kinds::{BodyGrammar, CheckInput, KindRegistry, KindSpec, Problem};
 use crate::record::{Record, decode as decode_bytes};
 use crate::text::{Position, Span};
 use crate::yaml::{FrontMatter, YamlRule};
+use body::{BODY_RULES, BodyInput};
 
 /// The result of checking one record.
 #[derive(Clone, Debug)]
@@ -90,6 +93,7 @@ pub fn rules() -> Vec<(&'static str, Severity)> {
         .chain(yaml)
         .chain([(kind::RULE, Severity::Error)])
         .chain(SCHEMA_RULES.iter().map(|rule| (rule.id, rule.severity)))
+        .chain(BODY_RULES.iter().map(|rule| (rule.id, rule.severity)))
         .collect()
 }
 
@@ -134,6 +138,7 @@ pub fn check_record(registry: &KindRegistry, path: &str, bytes: &[u8]) -> Checke
         record: &record,
     };
     let mut findings = Vec::new();
+    let mut spec = None;
     match record.front_matter() {
         Err(error) => findings.push(found.finding(
             error.rule.id(),
@@ -142,9 +147,11 @@ pub fn check_record(registry: &KindRegistry, path: &str, bytes: &[u8]) -> Checke
             error.message.clone(),
         )),
         Ok(front) => {
-            checked.kind = judge(registry, front, &found, &mut findings);
+            spec = judge(registry, front, &found, &mut findings);
         }
     }
+    checked.kind = spec.map(|spec| spec.name);
+    judge_body(spec, &found, &mut findings);
     checked.findings = findings;
     checked.record = Some(record);
     checked
@@ -181,12 +188,12 @@ impl Found<'_> {
 }
 
 /// Runs `schema/kind`, the schema rules and the kind's checks; returns the kind when it passed.
-fn judge(
-    registry: &KindRegistry,
+fn judge<'r>(
+    registry: &'r KindRegistry,
     front: &FrontMatter,
     found: &Found<'_>,
     findings: &mut Vec<Finding>,
-) -> Option<&'static str> {
+) -> Option<&'r KindSpec> {
     let (spec, kind_span) = match kind::run(registry, front) {
         Ok(known) => known,
         Err(problem) => {
@@ -212,7 +219,23 @@ fn judge(
     for check in &spec.checks {
         found.all(check.rule, Severity::Error, (check.run)(&input), findings);
     }
-    Some(spec.name)
+    Some(spec)
+}
+
+/// Runs the body rules with the grammar of the kind, or of prose when the kind is not known; a
+/// verbatim body is not judged.
+fn judge_body(spec: Option<&KindSpec>, found: &Found<'_>, findings: &mut Vec<Finding>) {
+    let grammar = spec.map_or(BodyGrammar::PROSE, |spec| spec.body);
+    if grammar.verbatim {
+        return;
+    }
+    let input = BodyInput {
+        body: found.record.body(),
+        grammar: &grammar,
+    };
+    for rule in BODY_RULES {
+        found.all(rule.id, rule.severity, (rule.run)(&input), findings);
+    }
 }
 
 /// The file stem of a project-relative path.
@@ -438,6 +461,45 @@ mod tests {
         )?;
         assert_eq!(rows(&list), expect(&[("schema/id", Error, 2, 5)]));
         Ok(())
+    }
+
+    #[test]
+    fn body_rules_run_in_prose_when_the_kind_is_unknown() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let text = "---
+id: a
+kind: kindd
+---
+A [[a b]] and ![[x]].
+## Beat 1 - x
+";
+        let checked = run("world/a.md", text.as_bytes())?;
+        assert_eq!(
+            rows(&checked),
+            expect(&[
+                ("schema/kind", Error, 3, 7),
+                ("body/link-target", Error, 5, 3),
+                ("body/embed", Error, 5, 15),
+            ])
+        );
+        let equation = "---
+id: E930
+kind: equation
+title: E
+source: https://example.invalid/x
+generated: true
+---
+A [[a b]].
+";
+        let verbatim = run("canon/formalism/E930.md", equation.as_bytes())?;
+        assert_eq!(rows(&verbatim), expect(&[]));
+        Ok(())
+    }
+
+    #[test]
+    fn body_rules_are_listed_once_each() {
+        let ids: Vec<_> = rules().into_iter().map(|(id, _)| id).collect();
+        assert_eq!(ids.iter().filter(|id| id.starts_with("body/")).count(), 15);
     }
 
     #[test]

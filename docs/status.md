@@ -10,7 +10,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P01 | Content layout and templates | tower-of-theos | done | #4 | tower-of-theos#2 |
 | P02 | Records and grammars | theos-editor | done | #16 | #17 |
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
-| P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | spec-pr | #21 | |
+| P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | pr-open | #21 | #28 |
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
 | P06 | Command layer and git | theos-editor | todo | | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
@@ -78,6 +78,10 @@ from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#2
   build follows data model §9.2 instead ("on a line starting with `Design note:`"), which ranks
   higher: a note line inside a paragraph starts a note that runs to the paragraph's end. The spec
   wording can be aligned in a docs PR.
+- P04's build PR #28 waits for Jann's merge (`needs-jann`). Its final review loop reached the
+  cap of five rounds; on 12 Nov 2026 Jann approved one targeted fix round, which closed the two
+  open Minors (R5-1, R5-2) and the three its first check found (R6-1 to R6-3); a fresh targeted
+  review was clean. The CE-12.1 project wording is aligned in docs PR #30.
 - tower-of-theos#3 (P20, merged) locks `markdown-it-py` 4.3.0 in `tools/repo_checks`, which was
   released the day it was locked. Pinning an older 4.x is a one-line follow-up if Jann prefers a
   cool-down.
