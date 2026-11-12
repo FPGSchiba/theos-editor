@@ -395,6 +395,15 @@ fn a_source_error_after_non_ascii_text_counts_scalar_values() -> TestResult {
         position.column,
         text[line_start..offset].chars().count() + 1
     );
+    // The place is the finding's position, not part of its message: serde_json's byte column
+    // (10 here) would contradict the scalar column (6).
+    assert_eq!((position.line, position.column), (2, 6));
+    assert!(
+        hits[0].message.contains("unknown field `é😀`"),
+        "{}",
+        hits[0].message
+    );
+    assert!(!hits[0].message.contains("column"), "{}", hits[0].message);
     Ok(())
 }
 

@@ -2,9 +2,10 @@
 
 use serde::Deserialize;
 
+use super::place::place;
 use super::render_equation;
 use crate::kinds::is_url;
-use crate::text::Position;
+use crate::text::{Position, Span};
 
 /// The source file: the page and its equations in page order.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -29,22 +30,55 @@ pub struct Equation {
 }
 
 /// Why a source is not valid, or cannot be rendered.
+///
+/// Its `Display` is the message and, where `serde_json` found the problem, its place in the
+/// crate's units: `{message} at line {line} column {column}`.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("{message}")]
+#[error("{message}{}", place_suffix(.position.as_ref()))]
 pub struct SourceError {
-    /// What is wrong, naming the equation when one is at fault.
+    /// What is wrong, naming the equation when one is at fault. `serde_json`'s words, without
+    /// the " at line L column C" it appends: the place is in `position` and `span`.
     pub message: String,
-    /// Where `serde_json` found the problem; none for a rule of the format (it gives no value
-    /// spans), which the checks report at 1:1.
+    /// Where `serde_json` found the problem, in Unicode scalar values like every position of
+    /// the crate; none for a rule of the format (it gives no value spans) and for a source that
+    /// is not UTF-8, which the checks report at 1:1.
     pub position: Option<Position>,
+    /// The empty span at that place, as byte offsets into the source text; none where
+    /// `position` is none.
+    pub span: Option<Span>,
+}
+
+/// " at line L column C", or nothing.
+fn place_suffix(position: Option<&Position>) -> String {
+    position.map_or_else(String::new, |at| {
+        format!(" at line {} column {}", at.line, at.column)
+    })
 }
 
 impl SourceError {
-    /// An error of the format, without a position.
+    /// An error of the format or of the file, without a place.
     pub(super) fn format(message: String) -> SourceError {
         SourceError {
             message,
             position: None,
+            span: None,
+        }
+    }
+
+    /// An error of `serde_json` in `text`, placed in the crate's units.
+    fn json(error: &serde_json::Error, text: &str) -> SourceError {
+        let (line, column) = (error.line(), error.column());
+        let shown = error.to_string();
+        let suffix = format!(" at line {line} column {column}");
+        let message = match shown.strip_suffix(&suffix) {
+            Some(words) if line > 0 => words.to_owned(),
+            _ => shown,
+        };
+        let (span, position) = place(text, line, column);
+        SourceError {
+            message,
+            position: Some(position),
+            span: Some(span),
         }
     }
 }
@@ -73,18 +107,13 @@ struct RawEquation {
 ///
 /// # Errors
 ///
-/// [`SourceError`] when the text is not JSON of the format (with `serde_json`'s line and
-/// column), or breaks a rule of spec §5.14: `format` is 1, ids are `E` and a number without
+/// [`SourceError`] when the text is not JSON of the format (with `serde_json`'s words and place,
+/// the column in Unicode scalar values), or breaks a rule of spec §5.14: `format` is 1, ids are `E` and a number without
 /// leading zeros and are unique, a title is one non-empty line, an anchor and the page are URLs,
 /// a text is not empty.
 pub fn parse(text: &str) -> Result<Source, SourceError> {
-    let raw: RawSource = serde_json::from_str(text).map_err(|error| SourceError {
-        message: error.to_string(),
-        position: Some(Position {
-            line: error.line().max(1),
-            column: error.column().max(1),
-        }),
-    })?;
+    let raw: RawSource =
+        serde_json::from_str(text).map_err(|error| SourceError::json(&error, text))?;
     if raw.format != 1 {
         return Err(SourceError::format(format!(
             "`format` is {}, only 1 is known",
@@ -202,6 +231,41 @@ mod tests {
             error.and_then(|e| e.position),
             Some(Position { line: 3, column: 3 })
         );
+    }
+
+    #[test]
+    fn the_place_is_in_scalar_values_and_not_in_the_message()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // `é😀` is 6 bytes and 2 scalar values; serde_json says column 10 after the key.
+        let text = "{
+  \"é😀\": 1
+}
+";
+        let error = parse(text).err().ok_or("an error")?;
+        assert!(!error.message.contains(" at line"), "{}", error.message);
+        assert!(
+            error.message.contains("unknown field `é😀`"),
+            "{}",
+            error.message
+        );
+        assert_eq!(error.position, Some(Position { line: 2, column: 6 }));
+        let at = text.find("\": 1").ok_or("the key's end")?;
+        assert_eq!(error.span, Some(Span::new(at, at)));
+        assert_eq!(
+            error.to_string(),
+            format!("{} at line 2 column 6", error.message)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn an_error_of_the_format_has_no_place() -> Result<(), Box<dyn std::error::Error>> {
+        let error = parse(&source("").replace("\"format\": 1", "\"format\": 2"))
+            .err()
+            .ok_or("an error")?;
+        assert_eq!((error.position, error.span), (None, None));
+        assert_eq!(error.to_string(), error.message);
+        Ok(())
     }
 
     #[test]

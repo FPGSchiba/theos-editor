@@ -1,6 +1,7 @@
 //! The Shared Formalism mirror (spec §5.14): the format of `canon/formalism/_source.json`, the
 //! equation records rendered from it and the regeneration that writes them.
 
+mod place;
 mod regenerate;
 mod render;
 mod source;

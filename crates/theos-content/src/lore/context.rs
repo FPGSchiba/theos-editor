@@ -167,6 +167,7 @@ impl<'a> Context<'a> {
                         None => Err(SourceError {
                             message: "the file is not UTF-8".to_owned(),
                             position: None,
+                            span: None,
                         }),
                     })
                 })
