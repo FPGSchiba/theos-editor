@@ -80,12 +80,6 @@ Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and 
 - Three sentences of the P10 corpus read like lore claims (B-901's link text, "the Cutter is
   near", "the operator-plate names a Listener"). P02's fixture copies reword them neutrally until
   Jann, or a session that can read Confluence, confirms they are canon.
-- The docs PR #30 waits for Jann. It aligns four approved specs with what was built:
-  - P02 §5.11: a design note starts on any line with `Design note:` (data model §9.2);
-  - P03 §5.7: hiding is native per OS (Jann's ruling of 10 Nov 2026);
-  - P03 §7: two builds sharing one cache recheck its identity on every write;
-  - P04 §5.17 and §7: the CE-12.1 project keeps P03's size, shape and limit, with its data kept
-    valid under the current rules.
 - tower-of-theos#3 (P20, merged) locks `markdown-it-py` 4.3.0 in `tools/repo_checks`, which was
   released the day it was locked. Pinning an older 4.x is a one-line follow-up if Jann prefers a
   cool-down.
