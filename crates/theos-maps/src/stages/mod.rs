@@ -9,6 +9,7 @@ pub fn register(registry: &mut Registry) {
     registry.add(Box::new(terrain::grid::GridStage));
     registry.add(Box::new(terrain::tectonics::Tectonics));
     registry.add(Box::new(terrain::geology::Geology));
+    registry.add(Box::new(terrain::climate::ClimateModel));
 }
 
 #[cfg(test)]
