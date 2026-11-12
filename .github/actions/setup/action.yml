@@ -3,6 +3,21 @@ description: >-
   Installs the Rust toolchain of rust-toolchain.toml, restores the build cache and installs the
   tools at the versions of gate/tools.toml. Every job of the gate runs it after the checkout.
 
+# Without inputs a job gets rust-cache's own behaviour: a cache of its own, saved by every run.
+inputs:
+  cache-key:
+    description: >-
+      The cache key of jobs that build the same thing and share one build cache. Empty: the job
+      id.
+    required: false
+    default: ''
+  save-cache:
+    description: >-
+      Whether the job saves the build cache: `true` or `false`. A job that only restores passes
+      `false`.
+    required: false
+    default: 'true'
+
 runs:
   using: composite
   steps:
@@ -14,6 +29,9 @@ runs:
 
     - name: Restore the build cache
       uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      with:
+        shared-key: ${{ inputs.cache-key }}
+        save-if: ${{ inputs.save-cache }}
 
     # The line is `name@version,...` for every tool of gate/tools.toml. It goes to the next step
     # as a step output.
