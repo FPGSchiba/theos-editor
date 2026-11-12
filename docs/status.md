@@ -12,7 +12,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | done | #21 | #28 |
 | P05 | CLI and hook | theos-editor | spec-approved | #35 | |
-| P06 | Command layer and repo lock | theos-editor | pr-open | #36 | |
+| P06 | Command layer and repo lock | theos-editor | pr-open | #36 | #39 |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map format and terrain generator | theos-editor | spec-approved | #27 | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
@@ -55,9 +55,9 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
-- P06's build PR is a draft labelled `needs-jann`. The final review loop reached its cap of five
-  rounds. Round 5 found no Critical or Important issue and left two Minor ones open, listed in
-  the PR:
+- P06's build PR #39 is a draft labelled `needs-jann`. The final review loop reached its cap of
+  five rounds. Round 5 found no Critical or Important issue and left two Minor ones open, listed
+  in the PR:
   - m5-1: a plan that writes, moves or deletes a `.gitignore`, or on Windows replaces a hidden
     file, changes which files are records without the verdict judging it;
   - m5-2: on Unix, a plan path with `\` is checked as `/` but written as written.
