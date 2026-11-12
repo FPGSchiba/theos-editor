@@ -35,6 +35,7 @@ use self::fill::Traps;
 use self::inputs::{depressions_misfit, routing_misfit};
 use self::sediment::settle;
 use self::solve::{Deposition, Incision, deposit, incise};
+use super::booking::book;
 use super::flow::{FlowWeights, accumulate};
 use crate::grid::Grid;
 use crate::kernels::num::{max, to_f64};
@@ -262,20 +263,6 @@ fn tolerance(uplift: Option<&Grid<f64>>, dt: f64) -> f64 {
         TOLERANCE_SHARE * most * dt
     } else {
         FALLBACK_TOLERANCE_M
-    }
-}
-
-/// Adds the thickness each cell lost from `start` to `end` to `erosion` and the thickness it
-/// gained to `deposition`.
-fn book(start: &Grid<f64>, end: &Grid<f64>, erosion: &mut Grid<f64>, deposition: &mut Grid<f64>) {
-    let cells = start.as_slice().iter().zip(end.as_slice());
-    let records = erosion
-        .as_mut_slice()
-        .iter_mut()
-        .zip(deposition.as_mut_slice());
-    for ((&before, &after), (eroded, deposited)) in cells.zip(records) {
-        *eroded += max(before - after, 0.0);
-        *deposited += max(after - before, 0.0);
     }
 }
 

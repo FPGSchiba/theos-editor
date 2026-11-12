@@ -14,14 +14,18 @@
 //!
 //! A new process is one module here plus one line in `PROCESSES` (`processes.rs`).
 
+mod booking;
+mod climate_update;
 mod declaration;
 mod flow;
 mod fluvial;
+mod hillslope;
 mod initial;
 mod partition_flow;
 mod processes;
 mod resolve_sinks;
 mod route_steepest;
+mod slope_limit;
 mod steps;
 #[cfg(test)]
 pub(crate) mod test_support;

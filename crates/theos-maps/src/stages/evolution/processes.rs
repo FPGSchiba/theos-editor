@@ -4,10 +4,13 @@
 use std::collections::BTreeMap;
 
 use super::Evolution;
+use super::climate_update::ClimateUpdate;
 use super::fluvial::Fluvial;
+use super::hillslope::Hillslope;
 use super::partition_flow::PartitionFlow;
 use super::resolve_sinks::ResolveSinks;
 use super::route_steepest::RouteSteepest;
+use super::slope_limit::SlopeLimit;
 use super::uplift::Uplift;
 use crate::stage::{ParamError, Registry, Stage, StageParams, TypedStage};
 
@@ -21,6 +24,9 @@ pub(crate) const PROCESSES: &[Constructor] = &[
     || Box::new(ResolveSinks),
     || Box::new(PartitionFlow),
     || Box::new(Fluvial),
+    || Box::new(Hillslope),
+    || Box::new(SlopeLimit),
+    || Box::new(ClimateUpdate),
 ];
 
 /// One per-step process of a recipe, with its parsed parameters.

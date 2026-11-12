@@ -16,6 +16,7 @@ pub mod num;
 pub mod paths;
 pub mod reflect;
 pub mod stats;
+pub mod tridiagonal;
 pub mod voronoi;
 
 #[cfg(test)]
@@ -61,6 +62,12 @@ pub enum KernelError {
         cols: usize,
         /// Length of the data given.
         len: usize,
+    },
+    /// A tridiagonal system with a zero pivot, which the Thomas algorithm cannot solve.
+    #[error("the tridiagonal system has a zero pivot at row {index}")]
+    Singular {
+        /// Row of the zero pivot.
+        index: usize,
     },
     /// The caller asked to stop a long kernel.
     #[error("the kernel was cancelled")]
