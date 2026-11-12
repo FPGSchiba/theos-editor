@@ -1,7 +1,10 @@
 //! The time loop of `landscape_evolution`: every step, each planned process runs in its own
 //! child context and is checked, as a pipeline stage is by the runner (spec §5.3, §5.6).
 
+use std::collections::BTreeMap;
+
 use super::processes::PlannedProcess;
+use crate::rng::StageRng;
 use crate::stage::{
     Finding, Registry, Severity, Stage, StageContext, StageError, StageReport, StepInfo,
 };
@@ -27,6 +30,26 @@ struct Folded {
     more: usize,
 }
 
+/// One planned process during the run.
+struct Running<'a> {
+    process: &'a PlannedProcess,
+    stage: &'a dyn Stage,
+    /// `<ctx key>/<id>#<occurrence>`.
+    key: String,
+    /// The process's one random stream for the whole run, `for_key(seed, key)`.
+    stream: StageRng,
+    /// Its warnings so far.
+    warnings: Option<Folded>,
+}
+
+/// What one step asks of every process.
+#[derive(Clone, Copy)]
+struct Step {
+    info: StepInfo,
+    /// Whether the processes' checks run.
+    checking: bool,
+}
+
 /// Runs the `planned` processes of `registry` for `schedule.steps` steps inside the stage of
 /// `ctx`. Every step it checks the cancel token, reports progress every [`PROGRESS_EVERY`]
 /// steps, and runs each process that is due (`every`) in a child context keyed
@@ -34,13 +57,13 @@ struct Folded {
 /// findings of a process's own report count every step it runs; its `checks` run at every
 /// multiple of `check_every` and on the last step.
 ///
-/// The returned report holds the first warning of each process that warned, in process order,
-/// with the count of the warnings that followed it. The values of the processes' own reports are
-/// not carried over.
+/// Each process keeps one random stream for the whole run, made once from its key (plan ruling
+/// L12), so `ctx.rng()` in a process continues where the last step left it.
 ///
-/// A child context builds its random streams from its key, which is the same every step, so a
-/// process's `ctx.rng()` starts afresh each step; a process that needs new numbers every step
-/// derives them with `ctx.sub_rng` and the step.
+/// The returned report holds the values of the processes' reports, each summed over the steps
+/// it ran, under `<id>_<name>` (`<id>_<occurrence>_<name>` past the first occurrence), and the
+/// first warning of each process that warned, in process order, with the count of the warnings
+/// that followed it.
 ///
 /// # Errors
 /// [`StageError::Cancelled`]; any error of a process (named `<stage>/<process id>` by its child
@@ -52,18 +75,20 @@ pub(crate) fn run(
     planned: &[PlannedProcess],
     schedule: Schedule,
 ) -> Result<StageReport, StageError> {
-    let mut stages: Vec<&dyn Stage> = Vec::with_capacity(planned.len());
+    let mut running = Vec::with_capacity(planned.len());
     for process in planned {
         let stage = registry
             .get(process.id)
             .ok_or_else(|| ctx.fail(format!("unknown process `{}`", process.id)))?;
-        stages.push(stage);
+        running.push(Running {
+            process,
+            stage,
+            key: format!("{}/{}", ctx.key(), process.key),
+            stream: ctx.sub_rng(&process.key),
+            warnings: None,
+        });
     }
-    let keys: Vec<String> = planned
-        .iter()
-        .map(|p| format!("{}/{}", ctx.key(), p.key))
-        .collect();
-    let mut warnings: Vec<Option<Folded>> = planned.iter().map(|_| None).collect();
+    let mut values = BTreeMap::new();
     let Schedule {
         steps,
         dt_yr,
@@ -75,53 +100,79 @@ pub(crate) fn run(
             ctx.progress(step, steps);
         }
         let last = step + 1 == steps;
-        let checking = last || step.checked_rem(check_every).is_some_and(|r| r == 0);
-        let info = StepInfo { step, steps, dt_yr };
-        for (k, (process, &stage)) in planned.iter().zip(&stages).enumerate() {
-            if !process.runs_at(step, steps) {
-                continue;
-            }
-            let params = process.params.as_ref();
-            let report = {
-                let mut child = ctx.child(stage, params, &keys[k], info);
-                let report = stage.run(&mut child, params)?;
-                child.finish()?;
-                report
-            };
-            let checked = if checking {
-                stage.checks(ctx.world(), params, &report)
-            } else {
-                Vec::new()
-            };
-            for finding in report.findings.into_iter().chain(checked) {
-                if finding.severity == Severity::Error {
-                    return Err(StageError::Failed {
-                        stage: format!("{}/{}", ctx.stage(), process.id),
-                        message: format!("at step {step}: {}", finding.message),
-                    });
-                }
-                match &mut warnings[k] {
-                    Some(folded) => folded.more += 1,
-                    slot @ None => {
-                        *slot = Some(Folded {
-                            first: finding,
-                            step,
-                            more: 0,
-                        });
-                    }
-                }
+        let now = Step {
+            info: StepInfo { step, steps, dt_yr },
+            checking: last || step.checked_rem(check_every).is_some_and(|r| r == 0),
+        };
+        for one in &mut running {
+            if one.process.runs_at(step, steps) {
+                run_process(ctx, one, now, &mut values)?;
             }
         }
     }
-    let findings = planned
-        .iter()
-        .zip(warnings)
-        .filter_map(|(process, folded)| folded.map(|f| summary(process, f)))
+    let findings = running
+        .into_iter()
+        .filter_map(|one| one.warnings.map(|f| summary(one.process, f)))
         .collect();
-    Ok(StageReport {
-        findings,
-        ..StageReport::default()
-    })
+    Ok(StageReport { values, findings })
+}
+
+/// Runs `one` process for the step `now` in its child context with its own stream, checks its
+/// writes and, when due, its checks; adds its values to `values` and folds its warnings.
+fn run_process(
+    ctx: &mut StageContext<'_>,
+    one: &mut Running<'_>,
+    now: Step,
+    values: &mut BTreeMap<String, f64>,
+) -> Result<(), StageError> {
+    let (stage, params) = (one.stage, one.process.params.as_ref());
+    let report = {
+        let mut child = ctx.child(stage, params, &one.key, now.info);
+        child.swap_rng(&mut one.stream);
+        let outcome = stage.run(&mut child, params);
+        child.swap_rng(&mut one.stream);
+        let report = outcome?;
+        child.finish()?;
+        report
+    };
+    let checked = if now.checking {
+        ctx.checks_of(stage, params, &report)
+    } else {
+        Vec::new()
+    };
+    let prefix = value_prefix(one.process);
+    for (name, value) in &report.values {
+        *values.entry(format!("{prefix}_{name}")).or_insert(0.0) += value;
+    }
+    let step = now.info.step;
+    for finding in report.findings.into_iter().chain(checked) {
+        if finding.severity == Severity::Error {
+            return Err(StageError::Failed {
+                stage: format!("{}/{}", ctx.stage(), one.process.id),
+                message: format!("at step {step}: {}", finding.message),
+            });
+        }
+        match &mut one.warnings {
+            Some(folded) => folded.more += 1,
+            slot @ None => {
+                *slot = Some(Folded {
+                    first: finding,
+                    step,
+                    more: 0,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The prefix of `process`'s values in the stage report: its id, or `<id>_<occurrence>` past
+/// the first occurrence.
+fn value_prefix(process: &PlannedProcess) -> String {
+    match process.key.strip_suffix("#0") {
+        Some(id) => id.to_owned(),
+        None => process.key.replace('#', "_"),
+    }
 }
 
 /// The warning that stands for all warnings of `process`: the first, naming the process (its

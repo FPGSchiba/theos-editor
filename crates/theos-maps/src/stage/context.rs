@@ -7,7 +7,7 @@ mod tests;
 
 use std::collections::BTreeSet;
 
-use super::{Access, LayerSpec, Stage, StageError, StageParams};
+use super::{Access, Finding, LayerSpec, Stage, StageError, StageParams, StageReport};
 use crate::progress::{CancelToken, Progress};
 use crate::rng::StageRng;
 use crate::world::{Layer, LayerKind, MapFrame, World};
@@ -124,11 +124,24 @@ impl<'w> StageContext<'w> {
         self.world.frame()
     }
 
-    /// The whole world, for a stage that runs the checks of its nested processes the way the
-    /// runner runs a stage's checks. A stage reads layers through the declared accessors.
+    /// The findings of `process`'s checks with `params` and `report` against the world, for a
+    /// stage that checks its nested processes the way the runner checks a pipeline stage. The
+    /// world itself stays behind the declared accessors.
     #[must_use]
-    pub(crate) fn world(&self) -> &World {
-        self.world
+    pub(crate) fn checks_of(
+        &self,
+        process: &dyn Stage,
+        params: &dyn StageParams,
+        report: &StageReport,
+    ) -> Vec<Finding> {
+        process.checks(self.world, params, report)
+    }
+
+    /// Swaps this context's own random stream with `stream`. A stage that runs a nested process
+    /// every step hands the process the one stream it keeps for the whole run (plan ruling L12)
+    /// and takes it back after the step.
+    pub(crate) fn swap_rng(&mut self, stream: &mut StageRng) {
+        std::mem::swap(&mut self.rng, stream);
     }
 
     /// The name in errors and progress events: the stage id, `<parent>/<process id>` in a child.

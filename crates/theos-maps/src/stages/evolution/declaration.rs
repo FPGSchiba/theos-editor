@@ -29,7 +29,8 @@ fn required_writes(stage: &dyn Stage, process: &PlannedProcess) -> Vec<LayerSpec
 }
 
 /// Adds `spec` to `specs` unless a spec of that name is there; a required `spec` makes an
-/// optional one of that name required.
+/// optional one of that name required. Kinds are not compared here: [`check_order`] refuses a
+/// layer declared as two kinds before anything runs.
 fn merge(specs: &mut Vec<LayerSpec>, spec: LayerSpec) {
     match specs.iter_mut().find(|s| s.name == spec.name) {
         Some(existing) => existing.optional &= spec.optional,
@@ -64,46 +65,84 @@ pub(super) fn writes(registry: &Registry, planned: &[PlannedProcess]) -> Vec<Lay
     writes
 }
 
-/// Checks that every process's required reads are `available` before the stage, written by the
-/// initial surface or written by an earlier process, and that a layer written inside the stage
-/// is read as the kind it was written as.
+/// The first declaration of a layer inside the stage: its kind, and who declared it how, as
+/// words (``process `route` (process[0]) writes``).
+struct First {
+    kind: LayerKind,
+    by: String,
+}
+
+/// Checks the process list before the run:
+/// - every process's required reads are `available` before the stage, written by the initial
+///   surface or written by an earlier process;
+/// - every layer is declared as one kind throughout: a process that reads or writes a layer as
+///   another kind than the initial surface or an earlier process declared it is refused.
 ///
 /// # Errors
-/// [`ParamError`] of `landscape_evolution` at `process[<i>]`, naming the process and the layer.
+/// [`ParamError`] of `landscape_evolution` at `process[<i>]`, naming the process and the layer
+/// (and, for a kind conflict, both kinds and who declared the first).
 pub(super) fn check_order(
     registry: &Registry,
     planned: &[PlannedProcess],
     available: &BTreeSet<&str>,
 ) -> Result<(), ParamError> {
-    let mut written: BTreeMap<&str, LayerKind> =
-        initial::WRITES.iter().map(|w| (w.name, w.kind)).collect();
+    let initial = |access: &str, spec: &LayerSpec| {
+        let by = format!("the initial surface {access}");
+        (
+            spec.name,
+            First {
+                kind: spec.kind,
+                by,
+            },
+        )
+    };
+    let mut first: BTreeMap<&str, First> = std::iter::once(initial("reads", &initial::READ))
+        .chain(initial::WRITES.iter().map(|w| initial("writes", w)))
+        .collect();
+    let mut written: BTreeSet<&str> = initial::WRITES.iter().map(|w| w.name).collect();
     for (i, process, stage) in with_stages(registry, planned) {
         let at = || format!("process[{i}]");
-        for read in stage.reads(process.params.as_ref()) {
-            let (id, layer) = (process.id, read.name);
-            match written.get(layer) {
-                Some(kind) if *kind != read.kind => {
+        let (id, params) = (process.id, process.params.as_ref());
+        let reads = stage.reads(params).into_iter().map(|spec| ("reads", spec));
+        let writes = stage
+            .writes(params)
+            .into_iter()
+            .map(|spec| ("writes", spec));
+        for (access, spec) in reads.chain(writes) {
+            let layer = spec.name;
+            match first.get(layer) {
+                Some(earlier) if earlier.kind != spec.kind => {
                     let message = format!(
-                        "process `{id}` reads `{layer}` as {}, but it is written as {kind} \
-                         before it",
-                        read.kind
+                        "process `{id}` {access} `{layer}` as {}, but {} it as {}",
+                        spec.kind, earlier.by, earlier.kind
                     );
                     return Err(ParamError::at(Evolution::ID, at(), message));
                 }
                 Some(_) => {}
-                None if read.optional || available.contains(layer) => {}
                 None => {
-                    let message = format!(
-                        "process `{id}` reads `{layer}`, which no earlier process and no \
-                         earlier stage writes"
+                    let by = format!("process `{id}` ({}) {access}", at());
+                    first.insert(
+                        layer,
+                        First {
+                            kind: spec.kind,
+                            by,
+                        },
                     );
-                    return Err(ParamError::at(Evolution::ID, at(), message));
                 }
             }
+            let missing = access == "reads"
+                && !spec.optional
+                && !written.contains(layer)
+                && !available.contains(layer);
+            if missing {
+                let message = format!(
+                    "process `{id}` reads `{layer}`, which no earlier process and no earlier \
+                     stage writes"
+                );
+                return Err(ParamError::at(Evolution::ID, at(), message));
+            }
         }
-        for write in required_writes(stage, process) {
-            written.insert(write.name, write.kind);
-        }
+        written.extend(required_writes(stage, process).iter().map(|w| w.name));
     }
     Ok(())
 }

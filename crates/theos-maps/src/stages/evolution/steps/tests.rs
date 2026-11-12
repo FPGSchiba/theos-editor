@@ -1,6 +1,9 @@
 use crate::progress::CancelToken;
+use crate::rng::StageRng;
 use crate::stage::{Severity, StageError, StageReport};
-use crate::stages::evolution::test_support::{grid_world, logged, run_evolution, test_evolution};
+use crate::stages::evolution::test_support::{
+    Draws, SEED, evolve_with, grid_world, logged, processes_of, run_evolution, test_evolution,
+};
 use crate::world::World;
 
 /// The progress events of a run as `(stage, done, total)`.
@@ -192,4 +195,98 @@ fn processes_run_in_order_on_the_initial_surface() {
         let zeros = world.f64(layer).unwrap().as_slice().iter();
         assert!(zeros.copied().all(|v| v.to_bits() == 0), "{layer}");
     }
+}
+
+/// The initial height of the test runs (one step, no processes).
+fn initial_height() -> Vec<f64> {
+    let (world, result, _) = run("steps = 1", &CancelToken::new());
+    result.unwrap();
+    world.f64("height").unwrap().as_slice().to_vec()
+}
+
+#[test]
+fn processes_run_in_list_order() {
+    let initial = initial_height();
+    let doubled_then_bumped = "steps = 1\n[[process]]\nid = \"scale\"\nfactor = 2.0\n\
+                               [[process]]\nid = \"bump\"";
+    let bumped_then_doubled = "steps = 1\n[[process]]\nid = \"bump\"\n\
+                               [[process]]\nid = \"scale\"\nfactor = 2.0";
+    for (toml, expected) in [
+        (
+            doubled_then_bumped,
+            initial.iter().map(|h| h * 2.0 + 1.0).collect::<Vec<_>>(),
+        ),
+        (
+            bumped_then_doubled,
+            initial.iter().map(|h| (h + 1.0) * 2.0).collect(),
+        ),
+    ] {
+        let (world, result, _) = run(toml, &CancelToken::new());
+        result.unwrap();
+        let height = world.f64("height").unwrap().as_slice();
+        for (h, e) in height.iter().zip(&expected) {
+            assert_eq!(h.to_bits(), e.to_bits(), "{toml}");
+        }
+    }
+}
+
+#[test]
+fn process_values_are_summed_per_process_over_the_run() {
+    let toml = "steps = 5\n[[process]]\nid = \"judge\"\n\
+                [[process]]\nid = \"judge\"\nevery = 2";
+    let (_, result, _) = run(toml, &CancelToken::new());
+    let values = result.unwrap().values;
+    let entries: Vec<(&str, f64)> = values.iter().map(|(k, v)| (k.as_str(), *v)).collect();
+    assert_eq!(entries.len(), 2, "{entries:?}");
+    assert_eq!(entries[0].0, "judge_1_step");
+    assert!(
+        (entries[0].1 - 6.0).abs() < 1e-12,
+        "steps 0 + 2 + 4: {entries:?}"
+    );
+    assert_eq!(entries[1].0, "judge_step");
+    assert!(
+        (entries[1].1 - 10.0).abs() < 1e-12,
+        "steps 0 to 4: {entries:?}"
+    );
+}
+
+#[test]
+fn evolve_returns_summed_values_and_folded_warnings() {
+    let stage = test_evolution();
+    let planned = processes_of(&stage, "[[process]]\nid = \"judge\"\nwarn_in_run = true");
+    let mut world = grid_world();
+    let report = evolve_with(&stage, &mut world, &planned, 4, 1.0, SEED).unwrap();
+    assert!(
+        (report.values["judge_step"] - 6.0).abs() < 1e-12,
+        "{report:?}"
+    );
+    let messages: Vec<&str> = report.findings.iter().map(|f| f.message.as_str()).collect();
+    assert_eq!(
+        messages,
+        ["process `judge` at step 0: ran at step 0 (7 more warnings from this process)"],
+        "a run warning and a check warning on each of 4 steps"
+    );
+}
+
+#[test]
+fn each_process_keeps_one_random_stream_for_the_run() {
+    let stage = test_evolution();
+    let planned = processes_of(
+        &stage,
+        "[[process]]\nid = \"draw\"\n[[process]]\nid = \"log\"",
+    );
+    let draws = || {
+        let mut world = grid_world();
+        evolve_with(&stage, &mut world, &planned, 3, 1.0, SEED).unwrap();
+        world.value::<Draws>("draws").unwrap().0.clone()
+    };
+    let first = draws();
+    let mut stream = StageRng::for_key(SEED, "landscape_evolution#0/draw#0");
+    let expected: Vec<u64> = (0..3).map(|_| stream.next_u64()).collect();
+    assert_eq!(
+        first, expected,
+        "one stream, keyed once per run (plan ruling L12)"
+    );
+    assert!(first[0] != first[1] && first[1] != first[2]);
+    assert_eq!(draws(), first, "the same sequence on a rerun");
 }

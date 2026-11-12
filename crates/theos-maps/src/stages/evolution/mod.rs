@@ -8,6 +8,10 @@
 //! processes' (minus what one process writes for a later one), so validation sees exactly what
 //! the process list needs.
 //!
+//! The stage's report carries the values of its processes' reports, summed over the run under
+//! `<process id>_<value name>`, and the first warning of each process with a count of the rest.
+//! Process metrics are not forwarded in P08: no process declares any.
+//!
 //! A new process is one module here plus one line in `PROCESSES` (`processes.rs`).
 
 mod declaration;

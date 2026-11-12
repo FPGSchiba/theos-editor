@@ -145,6 +145,62 @@ fn a_process_before_its_input_fails_naming_the_process() {
 }
 
 #[test]
+fn processes_declaring_a_layer_as_different_kinds_are_refused() {
+    let stage = test_evolution();
+    let available = BTreeSet::from(["fixed", "kd", "receivers"]);
+    for (ids, at, words) in [
+        (
+            ["route", "floaty"],
+            "process[1]",
+            [
+                "process `floaty` reads `receivers` as an f64 raster",
+                "process `route` (process[0]) writes it as a u32 raster",
+            ],
+        ),
+        (
+            ["floaty", "route"],
+            "process[1]",
+            [
+                "process `route` writes `receivers` as a u32 raster",
+                "process `floaty` (process[0]) reads it as an f64 raster",
+            ],
+        ),
+        (
+            ["route", "rewrite"],
+            "process[1]",
+            [
+                "process `rewrite` writes `receivers` as an f64 raster",
+                "process `route` (process[0]) writes it as a u32 raster",
+            ],
+        ),
+        (
+            ["erode", "floaty"],
+            "process[1]",
+            [
+                "process `floaty` reads `receivers` as an f64 raster",
+                "process `erode` (process[0]) reads it as a u32 raster",
+            ],
+        ),
+        (
+            ["misread", "route"],
+            "process[0]",
+            [
+                "process `misread` reads `height` as a u8 raster",
+                "the initial surface writes it as an f64 raster",
+            ],
+        ),
+    ] {
+        let p = params(&stage, &listing(&ids)).unwrap();
+        let err = Stage::check_order(&stage, p.as_ref(), &available).unwrap_err();
+        assert_eq!(err.stage, "landscape_evolution");
+        assert_eq!(err.parameter.as_deref(), Some(at), "{ids:?}: {err}");
+        for word in words {
+            assert!(err.message.contains(word), "{ids:?}: {err}");
+        }
+    }
+}
+
+#[test]
 fn the_plan_refuses_a_process_before_its_input() {
     let mut registry = Registry::empty();
     registry.add(Box::new(GridStage));

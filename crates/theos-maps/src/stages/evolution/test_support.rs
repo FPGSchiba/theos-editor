@@ -26,38 +26,55 @@ pub(crate) const KEY: &str = "landscape_evolution#0";
 /// The run seed of [`run_evolution`].
 pub(crate) const SEED: u64 = 3;
 
-/// Runs the planned `processes` for `steps` time steps of `dt_yr` years over `world`, keyed as
-/// the first `landscape_evolution` of a run with `seed`. It skips the initial surface, so the
-/// world holds whatever the test put there, and it runs every process's checks every step.
+/// Runs the planned built-in `processes` for `steps` time steps of `dt_yr` years over `world`,
+/// keyed as the first `landscape_evolution` of a run with `seed`. It skips the initial surface,
+/// so the world holds whatever the test put there, and it runs every process's checks every
+/// step. The report holds the processes' values summed over the run (`<id>_<name>`) and their
+/// folded warnings.
 pub(crate) fn evolve(
     world: &mut World,
     processes: &[PlannedProcess],
     steps: u32,
     dt_yr: f64,
     seed: u64,
-) -> Result<(), StageError> {
-    let host = Evolution::new();
+) -> Result<StageReport, StageError> {
+    evolve_with(&Evolution::new(), world, processes, steps, dt_yr, seed)
+}
+
+/// [`evolve`] with the processes of `stage`.
+pub(crate) fn evolve_with(
+    stage: &Evolution,
+    world: &mut World,
+    processes: &[PlannedProcess],
+    steps: u32,
+    dt_yr: f64,
+    seed: u64,
+) -> Result<StageReport, StageError> {
     let params = EvolutionParams::default();
     let cancel = CancelToken::new();
     let mut sink = |_: &Progress| {};
-    let mut ctx = StageContext::new(world, &host, &params, KEY, seed, &cancel, &mut sink);
+    let mut ctx = StageContext::new(world, stage, &params, KEY, seed, &cancel, &mut sink);
     let schedule = Schedule {
         steps,
         dt_yr,
         check_every: 1,
     };
-    steps::run(&mut ctx, host.processes(), processes, schedule)?;
-    Ok(())
+    steps::run(&mut ctx, stage.processes(), processes, schedule)
 }
 
 /// The built-in processes that the `[[process]]` tables of `toml` name, planned.
 pub(crate) fn processes(toml: &str) -> Vec<PlannedProcess> {
+    processes_of(&Evolution::new(), toml)
+}
+
+/// The processes of `stage` that the `[[process]]` tables of `toml` name, planned.
+pub(crate) fn processes_of(stage: &Evolution, toml: &str) -> Vec<PlannedProcess> {
     #[derive(Deserialize)]
     struct Doc {
         process: Vec<toml::Table>,
     }
     let doc: Doc = toml::from_str(toml).unwrap();
-    processes::plan(Evolution::new().processes(), &doc.process).unwrap()
+    processes::plan(stage.processes(), &doc.process).unwrap()
 }
 
 /// A 64 x 64 world of 100 m cells after `grid` (the south edge drains).
@@ -158,6 +175,88 @@ declaring!(Erode, "erode",
 declaring!(Lazy, "lazy", reads: vec![], writes: vec![LayerSpec::u32("receivers")]);
 declaring!(Tint, "tint", reads: vec![LayerSpec::f64("omega")], writes: vec![]);
 declaring!(Misread, "misread", reads: vec![LayerSpec::u8("height")], writes: vec![]);
+declaring!(Floaty, "floaty",
+    reads: vec![LayerSpec::f64("receivers"), LayerSpec::u8("kd")],
+    writes: vec![]);
+declaring!(Rewrite, "rewrite", reads: vec![], writes: vec![LayerSpec::f64("receivers")]);
+
+/// The numbers [`Draw`] drew, one per step.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Draws(pub(crate) Vec<u64>);
+
+impl WorldValue for Draws {
+    fn type_name(&self) -> &'static str {
+        Self::NAME
+    }
+    fn canonical_json(&self) -> serde_json::Value {
+        serde_json::json!(self.0)
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl ValueType for Draws {
+    const NAME: &'static str = "draws";
+}
+
+/// Draws one number from its own stream per step into the value `draws`.
+pub(crate) struct Draw;
+
+impl TypedStage for Draw {
+    type Params = Nothing;
+    const ID: &'static str = "draw";
+    const SUMMARY: &'static str = "Draws a number every step.";
+    const KINDS: &'static [MapKind] = &[MapKind::Terrain];
+
+    fn reads(&self, _: &Nothing) -> Vec<LayerSpec> {
+        vec![LayerSpec::value("draws", Draws::NAME).optional()]
+    }
+
+    fn writes(&self, _: &Nothing) -> Vec<LayerSpec> {
+        vec![LayerSpec::value("draws", Draws::NAME)]
+    }
+
+    fn run(&self, ctx: &mut StageContext<'_>, _: &Nothing) -> Result<StageReport, StageError> {
+        let mut draws = ctx
+            .value_opt::<Draws>("draws")?
+            .cloned()
+            .unwrap_or_default();
+        draws.0.push(ctx.rng().next_u64());
+        ctx.write("draws", Layer::Value(Box::new(draws)))?;
+        Ok(StageReport::default())
+    }
+}
+
+/// Adds 1 m to every cell's `height`.
+pub(crate) struct Bump;
+
+impl TypedStage for Bump {
+    type Params = Nothing;
+    const ID: &'static str = "bump";
+    const SUMMARY: &'static str = "Raises the height by 1 m.";
+    const KINDS: &'static [MapKind] = &[MapKind::Terrain];
+
+    fn reads(&self, _: &Nothing) -> Vec<LayerSpec> {
+        vec![LayerSpec::f64("height")]
+    }
+
+    fn writes(&self, _: &Nothing) -> Vec<LayerSpec> {
+        vec![LayerSpec::f64("height")]
+    }
+
+    fn run(&self, ctx: &mut StageContext<'_>, _: &Nothing) -> Result<StageReport, StageError> {
+        let mut height = ctx.take_f64("height")?;
+        for h in height.as_mut_slice() {
+            *h += 1.0;
+        }
+        ctx.write("height", Layer::F64(height))?;
+        Ok(StageReport::default())
+    }
+}
 
 /// Appends its step to the value `log`.
 pub(crate) struct Log;
@@ -311,6 +410,10 @@ pub(crate) const TEST_PROCESSES: &[Constructor] = &[
     || Box::new(Lazy),
     || Box::new(Tint),
     || Box::new(Misread),
+    || Box::new(Floaty),
+    || Box::new(Rewrite),
+    || Box::new(Draw),
+    || Box::new(Bump),
     || Box::new(Boom),
     || Box::new(Judge),
 ];

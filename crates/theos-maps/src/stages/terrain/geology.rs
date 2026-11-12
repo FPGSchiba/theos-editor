@@ -120,12 +120,13 @@ impl TypedStage for Geology {
             return Err(at("plutons", "must be [min, max] with min <= max"));
         }
         if let Some(fb) = &params.fold_belt {
-            let ok = |v: f64| v.is_finite() && v > 0.0;
-            if !(ok(fb.width) && ok(fb.period) && ok(fb.contrast)) {
-                return Err(at(
-                    "fold_belt",
-                    "width, period and contrast must be positive",
-                ));
+            let sizes = [
+                ("fold_belt.width", fb.width),
+                ("fold_belt.period", fb.period),
+                ("fold_belt.contrast", fb.contrast),
+            ];
+            if let Some((name, _)) = sizes.iter().find(|(_, v)| !(v.is_finite() && *v > 0.0)) {
+                return Err(at(name, "must be positive and finite"));
             }
             if !fb.strength.is_finite() {
                 return Err(at("fold_belt.strength", "must be finite"));
@@ -427,7 +428,13 @@ mod tests {
             ("[rock_mix]\ngranite = -1.0", "rock_mix", "not negative"),
             ("[rock_mix]\ngranite = 0.0", "rock_mix", "positive"),
             ("plutons = [3, 1]", "plutons", "min <= max"),
-            ("[fold_belt]\nperiod = 0.0", "fold_belt", "period"),
+            ("[fold_belt]\nperiod = 0.0", "fold_belt.period", "positive"),
+            ("[fold_belt]\nwidth = -1.0", "fold_belt.width", "positive"),
+            (
+                "[fold_belt]\ncontrast = inf",
+                "fold_belt.contrast",
+                "positive",
+            ),
             (
                 "[fold_belt]\nstrength = nan",
                 "fold_belt.strength",
