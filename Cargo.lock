@@ -843,6 +843,12 @@ dependencies = [
 [[package]]
 name = "theos"
 version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "tempfile",
+ "theos-content",
+]
 
 [[package]]
 name = "theos-content"
@@ -853,7 +859,9 @@ dependencies = [
  "pulldown-cmark",
  "regex",
  "rusqlite",
+ "same-file",
  "serde",
+ "serde_json",
  "sha2",
  "similar",
  "tempfile",

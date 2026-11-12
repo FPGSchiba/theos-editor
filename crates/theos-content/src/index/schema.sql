@@ -13,10 +13,30 @@ CREATE TABLE links (path TEXT NOT NULL, source_id TEXT NOT NULL, slot TEXT NOT N
                     target TEXT NOT NULL, fragment TEXT, span_start INTEGER NOT NULL,
                     span_end INTEGER NOT NULL, line INTEGER NOT NULL, col INTEGER NOT NULL);
 CREATE TABLE beats (path TEXT NOT NULL, number INTEGER NOT NULL, name TEXT NOT NULL,
-                    span_start INTEGER NOT NULL, span_end INTEGER NOT NULL, line INTEGER NOT NULL);
+                    span_start INTEGER NOT NULL, span_end INTEGER NOT NULL, line INTEGER NOT NULL,
+                    when_token TEXT);
+CREATE TABLE notes (path TEXT NOT NULL, id TEXT NOT NULL, number INTEGER NOT NULL,
+                    state TEXT NOT NULL, resolved_by TEXT, version TEXT,
+                    span_start INTEGER NOT NULL, span_end INTEGER NOT NULL,
+                    line INTEGER NOT NULL, col INTEGER NOT NULL);
+CREATE TABLE inworld (path TEXT NOT NULL, span_start INTEGER NOT NULL, span_end INTEGER NOT NULL,
+                      line INTEGER NOT NULL, col INTEGER NOT NULL, text TEXT NOT NULL);
 CREATE TABLE findings (path TEXT NOT NULL, id TEXT, rule TEXT NOT NULL, severity TEXT NOT NULL,
                        span_start INTEGER, span_end INTEGER, line INTEGER, col INTEGER,
                        message TEXT NOT NULL, step TEXT NOT NULL);
+-- The input files that are not records: `text` is NULL when the file is not UTF-8.
+CREATE TABLE inputs (path TEXT PRIMARY KEY, size INTEGER, mtime_ns INTEGER, racy INTEGER NOT NULL,
+                     hash TEXT NOT NULL, text TEXT) WITHOUT ROWID;
+-- The reads of the lore step: `subject` read `key` (`rec:<id>`, `in:<id>` or `file:<path>`).
+CREATE TABLE deps (subject TEXT NOT NULL, key TEXT NOT NULL);
+-- The reveal ledger of a truth (`path`), one row per clue; `ledger_beats` holds the beats that
+-- place the clue.
+CREATE TABLE ledger (path TEXT NOT NULL, clue TEXT NOT NULL, clue_path TEXT NOT NULL,
+                     state TEXT NOT NULL, floor INTEGER, place TEXT, gate TEXT);
+CREATE TABLE ledger_beats (path TEXT NOT NULL, clue_path TEXT NOT NULL, script TEXT NOT NULL,
+                           beat INTEGER NOT NULL);
+-- The severities that `.theos/settings.toml` configures, per rule; findings keep their default.
+CREATE TABLE configured (rule TEXT PRIMARY KEY, severity TEXT NOT NULL) WITHOUT ROWID;
 CREATE VIRTUAL TABLE search USING fts5(path UNINDEXED, title, fields, body,
                                        tokenize = 'porter unicode61 remove_diacritics 2');
 CREATE INDEX records_id ON records(id);
@@ -27,3 +47,13 @@ CREATE INDEX links_path ON links(path);
 CREATE INDEX links_target ON links(target);
 CREATE INDEX beats_path ON beats(path);
 CREATE INDEX findings_path ON findings(path);
+CREATE INDEX notes_path ON notes(path);
+CREATE INDEX inworld_path ON inworld(path);
+CREATE INDEX deps_key ON deps(key);
+CREATE INDEX deps_subject ON deps(subject);
+CREATE INDEX ledger_path ON ledger(path);
+CREATE INDEX ledger_beats_path ON ledger_beats(path);
+-- The hashes of binary files for `binary_findings`, per machine and folder; not part of `dump()`.
+CREATE TABLE binary_memo (root TEXT NOT NULL, path TEXT NOT NULL, size INTEGER NOT NULL,
+                          mtime_ns INTEGER NOT NULL, hash TEXT NOT NULL,
+                          PRIMARY KEY (root, path)) WITHOUT ROWID;

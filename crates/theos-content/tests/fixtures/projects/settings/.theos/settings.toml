@@ -1,0 +1,20 @@
+# synthetic fixture (P04), not canon
+[validate.severity]
+"lore/never-confirm" = "warning"
+"lore/no-overshoot" = "warning"
+"lore/inworld-vocab" = "warning"
+"lore/nothing-like-it" = "warning"
+"link/dangling" = "warning"
+"lore/reveal-order" = "off"
+"lore/three-clue" = "error"
+
+[validate.inworld-vocab]
+words = ["synthetic-word", "two words"]
+allow = [
+  { word = "T1" },
+  { word = "T2", reason = "  " },
+  { word = "T3", reason = "synthetic example of a reason" },
+]
+
+[validate.inworld_vocab]
+words = ["synthetic-other"]

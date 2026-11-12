@@ -1,0 +1,298 @@
+# synthetic fixture (P04), not canon
+# Checked by hand against docs/specs/phases/P04-validation-lore-rules-ledger-formalism-mirror.md
+# section 5.8 and the fixture texts. Every finding of the project: path, rule, severity, line and
+# column: the guardrails, the duplicated T-954 and T-955, the order rules (reveal-order on C-960, C-994,
+# C-962, C-963 and C-982; requires on T-959 to T-962) and the three-clue warnings of the truths
+# with fewer than three clues that reach their target (T-951, T-953, T-958, T-959 to T-963, T-965,
+# T-966 and the second copies of T-954 and T-955), and lore/inworld-vocab (section 5.11): in the
+# dialogue `Ledger` (a project word) and `T3`, in B-951 the rule name in the title, and in the
+# voice block of the in-world topic `reveal-order`, `T-950`, `ledger` and `T2` in its caption. Not
+# flagged: `T1`, which `allow` exempts, the voice titles, the design notes, the dialogue heading,
+# and the explaining topics.
+
+[[finding]]
+path = "dialogue/synthetic-vocab-dialogue.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 11
+column = 10
+
+[[finding]]
+path = "dialogue/synthetic-vocab-dialogue.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 11
+column = 55
+
+[[finding]]
+path = "lore/beliefs/B-951.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 5
+column = 17
+
+[[finding]]
+path = "lore/clues/C-955.md"
+rule = "lore/never-confirm"
+severity = "error"
+line = 7
+column = 10
+
+[[finding]]
+path = "lore/clues/C-956.md"
+rule = "lore/no-overshoot"
+severity = "error"
+line = 8
+column = 11
+
+[[finding]]
+path = "lore/clues/C-957.md"
+rule = "lore/never-confirm"
+severity = "error"
+line = 7
+column = 10
+
+[[finding]]
+path = "lore/clues/C-958.md"
+rule = "lore/never-confirm"
+severity = "error"
+line = 7
+column = 10
+
+[[finding]]
+path = "lore/clues/C-958.md"
+rule = "lore/no-overshoot"
+severity = "error"
+line = 8
+column = 11
+
+[[finding]]
+path = "lore/clues/C-960.md"
+rule = "lore/reveal-order"
+severity = "error"
+line = 11
+column = 9
+
+[[finding]]
+path = "lore/clues/C-962.md"
+rule = "lore/reveal-order"
+severity = "error"
+line = 11
+column = 9
+
+[[finding]]
+path = "lore/clues/C-963.md"
+rule = "lore/reveal-order"
+severity = "error"
+line = 11
+column = 9
+
+[[finding]]
+path = "lore/clues/C-982.md"
+rule = "lore/reveal-order"
+severity = "error"
+line = 8
+column = 11
+
+[[finding]]
+path = "lore/clues/C-994.md"
+rule = "lore/reveal-order"
+severity = "error"
+line = 11
+column = 9
+
+[[finding]]
+path = "lore/topics/synthetic-vocab-voice-in-world.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 13
+column = 34
+
+[[finding]]
+path = "lore/topics/synthetic-vocab-voice-in-world.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 14
+column = 12
+
+[[finding]]
+path = "lore/topics/synthetic-vocab-voice-in-world.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 14
+column = 41
+
+[[finding]]
+path = "lore/topics/synthetic-vocab-voice-in-world.md"
+rule = "lore/inworld-vocab"
+severity = "error"
+line = 15
+column = 23
+
+[[finding]]
+path = "lore/truths/T-951.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-953.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-954.md"
+rule = "index/duplicate-id"
+severity = "error"
+line = 3
+column = 5
+
+[[finding]]
+path = "lore/truths/T-955.md"
+rule = "index/duplicate-id"
+severity = "error"
+line = 3
+column = 5
+
+[[finding]]
+path = "lore/truths/T-958.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-959.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-959.md"
+rule = "lore/requires"
+severity = "error"
+line = 8
+column = 12
+
+[[finding]]
+path = "lore/truths/T-960.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-960.md"
+rule = "lore/requires"
+severity = "error"
+line = 8
+column = 12
+
+[[finding]]
+path = "lore/truths/T-961.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-961.md"
+rule = "lore/requires"
+severity = "error"
+line = 8
+column = 12
+
+[[finding]]
+path = "lore/truths/T-962.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-962.md"
+rule = "lore/requires"
+severity = "error"
+line = 8
+column = 12
+
+[[finding]]
+path = "lore/truths/T-963.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-965.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/T-966.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/synthetic-copy/T-954.md"
+rule = "index/duplicate-id"
+severity = "error"
+line = 3
+column = 5
+
+[[finding]]
+path = "lore/truths/synthetic-copy/T-954.md"
+rule = "index/placement"
+severity = "warning"
+line = 4
+column = 7
+
+[[finding]]
+path = "lore/truths/synthetic-copy/T-954.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "lore/truths/synthetic-copy/T-955.md"
+rule = "index/duplicate-id"
+severity = "error"
+line = 3
+column = 5
+
+[[finding]]
+path = "lore/truths/synthetic-copy/T-955.md"
+rule = "index/placement"
+severity = "warning"
+line = 4
+column = 7
+
+[[finding]]
+path = "lore/truths/synthetic-copy/T-955.md"
+rule = "lore/three-clue"
+severity = "warning"
+line = 7
+column = 9
+
+[[finding]]
+path = "story/scripts/S-951.md"
+rule = "lore/never-confirm"
+severity = "error"
+line = 14
+column = 11
+
+[[finding]]
+path = "story/scripts/S-951.md"
+rule = "lore/no-overshoot"
+severity = "error"
+line = 17
+column = 11

@@ -30,8 +30,8 @@ pub struct Block {
 /// The kind of a [`Block`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BlockKind {
-    /// A heading, ATX or setext.
-    Heading,
+    /// A heading, ATX or setext, with its level from 1 to 6.
+    Heading(u8),
     /// A top-level callout: the index into [`Body::callouts`].
     Callout(usize),
     /// A top-level `Design note:` paragraph: the index into [`Body::design_notes`].
@@ -136,10 +136,10 @@ fn blocks(
             continue;
         }
         let kind = match event {
-            Event::Start(Tag::Heading { .. }) => beats
+            Event::Start(Tag::Heading { level, .. }) => beats
                 .iter()
                 .position(|b| b.heading_span.start == span.start)
-                .map_or(BlockKind::Heading, BlockKind::BeatHeading),
+                .map_or(BlockKind::Heading(*level as u8), BlockKind::BeatHeading),
             Event::Start(Tag::BlockQuote(_)) => callouts
                 .iter()
                 .position(|c| c.depth == 1 && c.span.start == span.start)
@@ -327,8 +327,29 @@ mod tests {
             let block = blocks[link.block].span;
             assert!(block.start <= link.span.start && link.span.end <= block.end);
         }
-        assert_eq!(blocks[1].kind, BlockKind::Heading);
-        assert_eq!(blocks[r.body().links()[1].block].kind, BlockKind::Heading);
+        assert_eq!(blocks[1].kind, BlockKind::Heading(1));
+        assert_eq!(
+            blocks[r.body().links()[1].block].kind,
+            BlockKind::Heading(1)
+        );
+    }
+
+    #[test]
+    fn headings_carry_their_level() {
+        let text = "# One\n\n## Two\n\n###### Six\n\nSetext one\n===\n\nSetext two\nover two lines\n---\n\n## Beat 1 — Start\n";
+        let r = record("id: a\n", text);
+        let kinds: Vec<_> = r.body().blocks().iter().map(|b| b.kind).collect();
+        assert_eq!(
+            kinds,
+            [
+                BlockKind::Heading(1),
+                BlockKind::Heading(2),
+                BlockKind::Heading(6),
+                BlockKind::Heading(1),
+                BlockKind::Heading(2),
+                BlockKind::BeatHeading(0),
+            ]
+        );
     }
 
     #[test]

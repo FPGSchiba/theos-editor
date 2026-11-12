@@ -1,5 +1,6 @@
 //! Bringing the index in line with the folder or with given changes (spec §5.9, steps 1 to 3
-//! and 5): compare, read what changed, parse and check it, replace its rows, commit.
+//! and 5): compare, read what changed, parse and check it, replace its rows, resolve the links,
+//! run the lore step, commit.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
@@ -13,6 +14,8 @@ use sha2::{Digest, Sha256};
 use crate::check::check_record;
 use crate::finding::{Finding, Severity};
 use crate::index::identity::Identity;
+use crate::index::inputs::{self, INPUTS, is_input};
+use crate::index::lore_step::{self, LoreWork};
 use crate::index::store::{self, map_error};
 use crate::index::{Index, IndexError, query, resolve, rows, write};
 use crate::kinds::KindRegistry;
@@ -23,17 +26,18 @@ use crate::walk::{
 /// A file whose time lies within this many nanoseconds before it was hashed is racy.
 const RACY_WINDOW_NS: i64 = 2_000_000_000;
 
-/// One change to apply to the index.
+/// One change to apply to the index: to a record, or to one of the two input files of the lore
+/// step, `.theos/settings.toml` and `canon/formalism/_source.json` (spec §5.4).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Change {
-    /// A record with the given bytes.
+    /// A record or an input file with the given bytes.
     Content {
         /// The project-relative path; a `\` is read as `/`.
         path: String,
         /// The bytes of the file.
         bytes: Vec<u8>,
     },
-    /// A record that is gone.
+    /// A record or an input file that is gone.
     Removed {
         /// The project-relative path; a `\` is read as `/`.
         path: String,
@@ -41,7 +45,7 @@ pub enum Change {
 }
 
 impl Change {
-    /// A record with the given text.
+    /// A record or an input file with the given text.
     #[must_use]
     pub fn text(path: impl Into<String>, text: impl Into<String>) -> Change {
         Change::Content {
@@ -75,6 +79,9 @@ pub struct Update {
     pub removed: Vec<String>,
     /// The records whose links were recomputed without being re-parsed.
     pub relinked: Vec<String>,
+    /// The subjects whose lore rules ran again without being re-parsed or relinked, because
+    /// they read something the change touched: the neighbours it affects (CE-14.3).
+    pub revalidated: Vec<String>,
 }
 
 impl Update {
@@ -84,6 +91,7 @@ impl Update {
             &mut self.reparsed,
             &mut self.removed,
             &mut self.relinked,
+            &mut self.revalidated,
         ] {
             list.sort();
             list.dedup();
@@ -93,13 +101,15 @@ impl Update {
 }
 
 /// What [`Index::preview`] found: the update the changes would make and the findings it would
-/// leave on every re-parsed or relinked record and on every record given as content.
+/// leave on every re-parsed, relinked or revalidated record or input file and on every record or
+/// input file given as content.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Preview {
     /// What an apply of the changes would do.
     pub update: Update,
-    /// The findings of every re-parsed or relinked record and of every record given as content,
-    /// also one whose bytes equal the stored ones, ordered like [`Index::findings`].
+    /// The findings of every re-parsed, relinked or revalidated record or input file and of every
+    /// record or input file given as content, also one whose bytes equal the stored ones, ordered
+    /// like [`Index::findings`].
     pub findings: Vec<Finding>,
 }
 
@@ -140,6 +150,8 @@ struct Syncer<'a> {
     /// the rows deletes the record's duplicate-id findings, so they are recomputed even when the
     /// link facts stayed.
     rechecked: BTreeSet<String>,
+    /// The changed keys and the subjects of the lore step (spec §5.5).
+    lore: LoreWork,
 }
 
 impl Index {
@@ -158,14 +170,17 @@ impl Index {
         self.run(|work| work.sync(&walked))
     }
 
-    /// Does what [`Index::sync`] does for the given project-relative paths only. A path that is
-    /// not a record by its spelling ([`is_record_path`]: also one under
-    /// `.theos`, `.git`, `.obsidian`, `.vscode`, `.github`, `.worktrees` or `.trash`) is
-    /// ignored; one that no longer exists is removed. So is one that the walk would not list: a
-    /// hidden path (on Unix a folder or file of it has a name that starts with `.`, on Windows
-    /// one carries the hidden attribute), a path that a `.gitignore` keeps out, or one spelled
-    /// unlike the file on disk (another case, a symbolic link). A `\` in a path is read as `/`,
-    /// so paths joined on Windows work.
+    /// Does what [`Index::sync`] does for the given project-relative paths only. The two input
+    /// files of the lore step, `.theos/settings.toml` and `canon/formalism/_source.json` (spec
+    /// §5.4), are taken as changes, as a sync takes them: what reads one whose bytes changed runs
+    /// again, and its own findings change with it. Any other path that is not a record by its
+    /// spelling ([`is_record_path`]: also one under `.theos`, `.git`, `.obsidian`, `.vscode`,
+    /// `.github`, `.worktrees` or `.trash`) is ignored; one that no longer exists is removed. So
+    /// is one that the walk would not list: a hidden path (on Unix a folder or file of it has a
+    /// name that starts with `.`, on Windows one carries the hidden attribute), a path that a
+    /// `.gitignore` keeps out, or one spelled unlike the file on disk (another case, a symbolic
+    /// link); an input file spelled so counts as absent. A `\` in a path is read as `/`, so paths
+    /// joined on Windows work.
     ///
     /// A cache file that another theos build keeps rebuilding is rebuilt at most three times per
     /// call; then the call fails with [`IndexError::Contended`].
@@ -184,7 +199,8 @@ impl Index {
 
     /// Commits the given changes. A content whose bytes equal the stored ones changes nothing;
     /// otherwise the record is parsed again, with no file times, so the next sync reads the file.
-    /// A path that is not a record by its spelling is ignored, as in [`Index::update`]. One that
+    /// The two input files are taken as changes, with the given bytes or as removed, as in
+    /// [`Index::update`]; any other path that is not a record by its spelling is ignored. One that
     /// is hidden or that a `.gitignore` keeps out is no record either, and what the index holds
     /// for it is removed. Hidden is decided the way of the OS, as in [`Index::update`]; on
     /// Windows a path that is not on disk is hidden only when a folder of it that exists carries
@@ -201,13 +217,15 @@ impl Index {
         self.run(|work| apply_changes(work, changes))
     }
 
-    /// Does what [`Index::apply`] does, reads the findings of every re-parsed or relinked record
-    /// and of every record given as content, and rolls everything back: the cache is not
-    /// changed. The findings are those [`Index::apply`] would leave, ordered like
-    /// [`Index::findings`]; a content equal to the stored bytes is not parsed again, and its
-    /// stored findings are the ones it would leave. Paths are taken as in [`Index::apply`]: one
-    /// that is not a record by its spelling, is hidden the way of the OS, or that a `.gitignore`
-    /// keeps out gives no findings, and a `\` is read as `/`.
+    /// Does what [`Index::apply`] does, reads the findings of every re-parsed, relinked or
+    /// revalidated record or input file and of every record or input file given as content, and
+    /// rolls everything back: the cache is not changed. The findings are those [`Index::apply`]
+    /// would leave, ordered like [`Index::findings`]; a content equal to the stored bytes is not
+    /// parsed again, and its stored findings are the ones it would leave. Paths are taken as in
+    /// [`Index::apply`]: the two input files are changes and give their own findings, so a
+    /// settings change can be previewed; any other path that is not a record by its spelling, is
+    /// hidden the way of the OS, or that a `.gitignore` keeps out gives no findings, and a `\` is
+    /// read as `/`.
     ///
     /// A cache file that another theos build keeps rebuilding is rebuilt at most three times per
     /// call; then the call fails with [`IndexError::Contended`].
@@ -220,16 +238,22 @@ impl Index {
             Change::Content { path, .. } => Some(slashed(path)),
             Change::Removed { .. } => None,
         });
-        let given: BTreeSet<String> = given.filter(|path| is_record_path(path)).collect();
+        let given: BTreeSet<String> = given
+            .filter(|path| is_record_path(path) || is_input(path))
+            .collect();
         let (update, findings) = self.transact(
             |work| apply_changes(work, changes),
-            |conn, update| {
-                let mut paths: BTreeSet<&String> =
-                    update.reparsed.iter().chain(&update.relinked).collect();
+            |conn, registry, update| {
+                let mut paths: BTreeSet<&String> = update
+                    .reparsed
+                    .iter()
+                    .chain(&update.relinked)
+                    .chain(&update.revalidated)
+                    .collect();
                 paths.extend(&given);
                 let mut findings = Vec::new();
                 for path in paths {
-                    findings.extend(query::findings_in(conn, path)?);
+                    findings.extend(query::findings_in(conn, registry, path)?);
                 }
                 Ok(findings)
             },
@@ -243,7 +267,7 @@ impl Index {
         &mut self,
         work: impl FnOnce(&mut Syncer<'_>) -> Result<(), IndexError>,
     ) -> Result<Update, IndexError> {
-        self.transact(work, |_, _| Ok(()), true)
+        self.transact(work, |_, _, _| Ok(()), true)
             .map(|(update, ())| update)
     }
 
@@ -260,7 +284,7 @@ impl Index {
     fn transact<T>(
         &mut self,
         work: impl FnOnce(&mut Syncer<'_>) -> Result<(), IndexError>,
-        read: impl FnOnce(&Connection, &Update) -> Result<T, IndexError>,
+        read: impl FnOnce(&Connection, &KindRegistry, &Update) -> Result<T, IndexError>,
         commit: bool,
     ) -> Result<(Update, T), IndexError> {
         let path = self.store.path.clone();
@@ -294,9 +318,9 @@ impl Index {
             }
             let mut syncer = Syncer::new(&tx, &self.registry, &self.root);
             work(&mut syncer)?;
-            syncer.resolve()?;
+            syncer.finish()?;
             let update = syncer.update.sorted();
-            let read = read(&tx, &update)?;
+            let read = read(&tx, &self.registry, &update)?;
             if commit {
                 tx.commit()?;
             } else {
@@ -328,7 +352,7 @@ fn rebuild(
     let walked = walk(root)?;
     let mut syncer = Syncer::new(tx, registry, root);
     syncer.sync(&walked)?;
-    syncer.resolve()
+    syncer.finish()
 }
 
 /// Step 3 for each given change.
@@ -352,7 +376,26 @@ impl<'a> Syncer<'a> {
             update: Update::default(),
             affected: BTreeSet::new(),
             rechecked: BTreeSet::new(),
+            lore: LoreWork::default(),
         }
+    }
+
+    /// Steps 4 and 4b: resolve the links, then run the lore step. `revalidated` lists the
+    /// subjects it re-ran that were neither re-parsed nor relinked.
+    fn finish(&mut self) -> Result<(), IndexError> {
+        self.resolve()?;
+        let reran = lore_step::run(self.conn, self.registry, &self.lore)?;
+        let touched: BTreeSet<&String> = self
+            .update
+            .reparsed
+            .iter()
+            .chain(&self.update.relinked)
+            .collect();
+        self.update.revalidated = reran
+            .into_iter()
+            .filter(|path| !touched.contains(path))
+            .collect();
+        Ok(())
     }
 
     /// Step 4: relink the re-parsed records and the records that link to an affected id
@@ -385,13 +428,17 @@ impl<'a> Syncer<'a> {
         Ok(())
     }
 
-    /// The id and link facts that the rows of `path` hold, none when it has no record row.
-    fn old_facts(&self, path: &str) -> Result<Option<(String, String)>, IndexError> {
-        Ok(self
+    /// The id and link facts that the rows of `path` hold, none when it has no record row. Runs
+    /// before the rows change, and notes for the lore step the keys they answer.
+    fn old_facts(&mut self, path: &str) -> Result<Option<(String, String)>, IndexError> {
+        let old: Option<(String, String)> = self
             .conn
             .prepare_cached("SELECT id, facts FROM records WHERE path = ?1")?
             .query_row([path], |row| Ok((row.get(0)?, row.get(1)?)))
-            .optional()?)
+            .optional()?;
+        self.lore
+            .old_rows(self.conn, path, old.as_ref().map(|(id, _)| id.as_str()))?;
+        Ok(old)
     }
 
     /// Step 2 of the affected set: before the rows of a path are replaced or deleted, note the
@@ -437,17 +484,27 @@ impl<'a> Syncer<'a> {
         for path in known.iter().filter(|path| !seen.contains(*path)) {
             self.remove(path)?;
         }
+        for path in INPUTS {
+            self.input_from_disk(path)?;
+        }
         Ok(())
     }
 
-    /// One change of `update` or `apply`, at `path` with `\` read as `/`. A path that is no
-    /// record by its spelling is ignored. One that the walk would not list, since it is hidden,
-    /// a `.gitignore` keeps it out or, for a path read from disk, no file of that spelling is
-    /// listed, is no record of the project either: the index holds nothing for it, so whatever it
-    /// held is removed.
+    /// One change of `update` or `apply`, at `path` with `\` read as `/`. An input file is taken
+    /// first; any other path that is no record by its spelling is ignored. One that the walk would
+    /// not list, since it is hidden, a `.gitignore` keeps it out or, for a path read from disk, no
+    /// file of that spelling is listed, is no record of the project either: the index holds
+    /// nothing for it, so whatever it held is removed.
     fn change(&mut self, path: &str, source: Source) -> Result<(), IndexError> {
         let path = slashed(path);
         let path = path.as_str();
+        if is_input(path) {
+            return match source {
+                Source::Disk => self.input_from_disk(path),
+                Source::Given(bytes) => self.settle_input(path, Some(&bytes), None),
+                Source::Gone => self.settle_input(path, None, None),
+            };
+        }
         if !is_record_path(path) {
             return Ok(());
         }
@@ -501,6 +558,87 @@ impl<'a> Syncer<'a> {
         }
     }
 
+    /// Steps 1 to 3 for an input file on disk: read it unless its size and time say it is
+    /// unchanged. A file that is gone is removed; one that cannot be read counts as absent, with a
+    /// warning. As for a record, only a file listed under exactly the input's name counts: one
+    /// spelled in another case, where the file system ignores case, or a symbolic link is absent.
+    fn input_from_disk(&mut self, path: &str) -> Result<(), IndexError> {
+        let meta = match std::fs::metadata(self.root.join(path)) {
+            Ok(meta) if meta.is_file() && is_listed(self.root, path) => meta,
+            Ok(_) => return self.settle_input(path, None, None),
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                return self.settle_input(path, None, None);
+            }
+            Err(error) => return self.input_unreadable(path, &error),
+        };
+        let stamp = Stamp {
+            size: meta.len(),
+            mtime_ns: mtime_ns(&meta),
+        };
+        if let Some(row) = inputs::row(self.conn, path)?
+            && !row.racy
+            && row.size == i64::try_from(stamp.size).ok()
+            && row.mtime_ns == Some(stamp.mtime_ns)
+        {
+            return Ok(());
+        }
+        match std::fs::read(self.root.join(path)) {
+            Ok(bytes) => {
+                self.update.read.push(path.to_owned());
+                self.settle_input(path, Some(&bytes), Some(stamp))
+            }
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                self.settle_input(path, None, None)
+            }
+            Err(error) => self.input_unreadable(path, &error),
+        }
+    }
+
+    /// An input file that exists but cannot be read counts as absent, as it does for a cold
+    /// build: its row, findings and reads go.
+    fn input_unreadable(&mut self, path: &str, error: &std::io::Error) -> Result<(), IndexError> {
+        tracing::warn!(path, %error, "the input file cannot be read; it counts as absent");
+        self.settle_input(path, None, None)
+    }
+
+    /// Step 3 for an input file whose `bytes` are known, or none when it is gone. A new hash
+    /// replaces the row and makes the input a subject of the lore step; the key `file:<path>`
+    /// changed, so whatever read the file runs again. `stamp` is none for given bytes (racy).
+    fn settle_input(
+        &mut self,
+        path: &str,
+        bytes: Option<&[u8]>,
+        stamp: Option<Stamp>,
+    ) -> Result<(), IndexError> {
+        let known = inputs::row(self.conn, path)?;
+        let key = crate::lore::ReadKey::File(path.to_owned()).as_db();
+        let Some(bytes) = bytes else {
+            if known.is_some() {
+                inputs::delete(self.conn, path)?;
+                self.lore.changed.insert(key);
+                self.lore.remove_subject(path);
+            }
+            return Ok(());
+        };
+        let hash = sha256_hex(bytes);
+        let racy = stamp.is_none_or(|stamp| is_racy(stamp.mtime_ns, now_ns()));
+        let times = (
+            stamp.and_then(|stamp| i64::try_from(stamp.size).ok()),
+            stamp.map(|stamp| stamp.mtime_ns),
+        );
+        if known.is_some_and(|row| row.hash == hash) {
+            if stamp.is_some() {
+                inputs::restamp(self.conn, path, times, racy)?;
+            }
+            return Ok(());
+        }
+        let text = std::str::from_utf8(bytes).ok();
+        inputs::put(self.conn, path, times, &hash, text, racy)?;
+        self.lore.changed.insert(key);
+        self.lore.add_subject(path);
+        Ok(())
+    }
+
     /// Step 3 for one record whose `bytes` are known. `stamp` is the file's size and time, or
     /// `None` for given bytes, which leaves no times so that the next sync reads the file.
     /// `known` is the path's `files` row, as the caller read it.
@@ -536,6 +674,7 @@ impl<'a> Syncer<'a> {
             self.touch(None, facts);
             write::insert(self.conn, path, &new)?;
         }
+        self.lore.new_rows(&new);
         self.put_file(path, stamp, &hash, racy)?;
         self.reparsed(path);
         Ok(())
@@ -584,15 +723,17 @@ impl<'a> Syncer<'a> {
             write::delete_all(self.conn, path)?;
             self.update.reparsed.retain(|other| other != path);
             self.update.removed.push(path.to_owned());
+            self.lore.remove_subject(path);
         }
         Ok(())
     }
 
     /// Notes that the rows of `path` were replaced. A removal of it earlier in the same call no
-    /// longer counts: the path exists again, and step 4 must relink it.
+    /// longer counts: the path exists again, and steps 4 and 4b must relink and check it.
     fn reparsed(&mut self, path: &str) {
         self.update.removed.retain(|other| other != path);
         self.update.reparsed.push(path.to_owned());
+        self.lore.add_subject(path);
     }
 
     fn file_row(&self, path: &str) -> Result<Option<FileRow>, IndexError> {
@@ -653,7 +794,7 @@ fn now_ns() -> i64 {
 }
 
 /// The SHA-256 of `bytes` as lower-case hex.
-fn sha256_hex(bytes: &[u8]) -> String {
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     let mut hex = String::new();
     for byte in Sha256::digest(bytes) {
         // Writing to a String cannot fail.
