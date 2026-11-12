@@ -14,7 +14,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P05 | CLI, hook, releases, MCP read | theos-editor | todo | | |
 | P06 | Command layer and git | theos-editor | todo | | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
-| P08 | Map format and terrain generator | theos-editor | spec-pr | #27 | |
+| P08 | Map format and terrain generator | theos-editor | spec-approved | #27 | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
 | P10 | Prose editor research | theos-editor | done | #3 | #11 |
 | P11 | Editor shell and Codex | theos-editor | todo | | |
@@ -35,22 +35,43 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P26 | Style bible and briefs | theos-editor | todo | | |
 | P27 | Asset pipelines | theos-editor | todo | | |
 | P28 | Workflow catalogue and asset guide | tower-of-theos | todo | | |
-| P29 | Settlements, interiors and child maps | theos-editor | todo | | |
-| P30 | Indoor floors with stacked levels | theos-editor | todo | | |
+| P29 | Settlements and child maps | theos-editor | todo | | |
+| P30 | Levels in the generator | theos-editor | todo | | |
+| P31 | Floor frame and places | theos-editor | todo | | |
+| P32 | Recipe families | theos-editor | todo | | |
+| P33 | Map metrics and batch tool | theos-editor | todo | | |
+| P34 | Interiors | theos-editor | todo | | |
+| P45 | Atlas level switcher | theos-editor | todo | | |
 
-Rows P20–P28 come from umbrella version 2 (#19). Rows P29 and P30, and the new P08 and P23, come
-from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#24).
+Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and P23 from version 3
+(decision 0003, #24). Rows P31–P34 and P45, and the new P29 and P30, come from umbrella version 4
+(decision 0004), which waits for Jann in its docs PR #31.
 
 ## Needs Jann
 
-- Decision 0003, the map generator in Rust (umbrella version 3, `docs/map-package.md`), waits for
-  Jann in its docs PR #24. The gate PR #23, which moved one assertion of an xtask test from P08
-  to P20 for it, is merged. P08's spec starts once #24 is merged.
+- Decision 0004, what the map generation research changes (umbrella version 4, the P08 spec,
+  `docs/map-package.md`, `docs/generators.md` §3, decision 0003), waits for Jann in its docs PR
+  #31. P08's plan starts once it is merged.
+- Deferred by Jann on 12 Nov 2026 (decision 0004):
+  - the shape of regions with a recommended power (D11): areas inside the floor's map (the
+    working assumption) or separate maps; the power scale (working assumption: 1–5, like
+    `threat`); authored in the map body or generated as a proposal;
+  - who writes the band recipe families (D13); they live in `tower-of-theos`
+    `tools/maps/recipes/`;
+  - the research-track phases of umbrella §5 (P35–P40, P42–P44, requirements and trial sites,
+    promotion at road junctions, regions and power), each until its sources are read and its
+    probe has run.
+- For P09's spec (decision 0004): the machine-aware memory budget for map runs (at least 3 GiB,
+  more where the machine allows) covers all seeds running at once, so the built-in adapter starts
+  only as many seeds in parallel as fit.
 - Before P08's build, one more gate PR (decision 0003 §12) adds `theos-map-format` and
   `theos-maps` to the workspace test and `gate/thresholds.toml`, and bans the std float methods in
   `gate/clippy.toml`. P08's spec lists its contents.
 - The Maps screen reference (`docs/ui/screens/11-maps.html`) still says "theos_maps 0.3.0 ·
-  Python 3.12 (uv)" and describes a Python venv. P16's spec PR updates it (G18).
+  Python 3.12 (uv)", describes a Python venv, and shows "2 extractions" and "extraction ↔
+  extraction 99 min". P16's spec PR updates it to the built-in generator and the place types
+  `chime`, `gate-up`, `gate-down` (decision 0004; G18). The Atlas tower reference
+  (`13-atlas-tower.html`) shows `portal-in-1` and `portal-out-1`; P25's spec PR renames them.
 - P00's macOS `platforms` evidence is still open: the run on #7 got no GitHub runner (macOS
   capacity). The weekly Monday run, or a re-run, gives it.
 - Comments on text sections (decision 0002, #15, phase P19): before P19 starts, Jann settles the
@@ -59,12 +80,6 @@ from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#2
 - Three sentences of the P10 corpus read like lore claims (B-901's link text, "the Cutter is
   near", "the operator-plate names a Listener"). P02's fixture copies reword them neutrally until
   Jann, or a session that can read Confluence, confirms they are canon.
-- The docs PR #30 waits for Jann. It aligns four approved specs with what was built:
-  - P02 §5.11: a design note starts on any line with `Design note:` (data model §9.2);
-  - P03 §5.7: hiding is native per OS (Jann's ruling of 10 Nov 2026);
-  - P03 §7: two builds sharing one cache recheck its identity on every write;
-  - P04 §5.17 and §7: the CE-12.1 project keeps P03's size, shape and limit, with its data kept
-    valid under the current rules.
 - tower-of-theos#3 (P20, merged) locks `markdown-it-py` 4.3.0 in `tools/repo_checks`, which was
   released the day it was locked. Pinning an older 4.x is a one-line follow-up if Jann prefers a
   cool-down.
@@ -80,10 +95,12 @@ from umbrella version 3 (decision 0003), which waits for Jann in its docs PR (#2
 - CE-04 / CE-05: lore import and Seal split (umbrella §4).
 - Readable copies in Confluence: the umbrella spec (version 2), the data model and the
   architecture page need the world and art additions once the docs PR is merged.
-- Decision 0003 (map generator in Rust), once merged: the readable copies of the umbrella spec
+- Decision 0003 (map generator in Rust, merged in #24): the readable copies of the umbrella spec
   (version 3), the architecture, the data model and the generator protocol; a decision page for
   0003; and Confluence Decision 221741058 (the engine package format), which `docs/map-package.md`
   replaces (Jann confirmed on 10 Nov 2026 that it fixes nothing different).
+- Decision 0004 (map generation research), once merged: the readable copies of the umbrella spec
+  (version 4) and the generator protocol, and a decision page for 0004.
 - The `theos_maps` skill in Jann's other Claude account: once P09 is merged, point it at the
   editor's map generator (`theos gen run` in a shell, or `gen_run` over MCP) or retire it; its
   recipes move into the content project in P23.

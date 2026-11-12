@@ -3,7 +3,8 @@
 Status: accepted with the umbrella spec. Binding. Map frames and features, camera inputs,
 blockouts, workflow sidecars and pipelines added with umbrella spec version 2; the built-in adapter
 for the map generator, levels in the frame and the `base` render added with umbrella spec
-version 3 (decision 0003).
+version 3 (decision 0003); inputs of type `number` and `enum` and the place types `chime`,
+`gate-up` and `gate-down` with umbrella spec version 4 (decision 0004).
 
 A **generator** turns a recipe, inputs and a seed into output files and results: the map
 generator `theos-maps`, the blockout generator, ComfyUI for concept art, and later perhaps a
@@ -122,6 +123,17 @@ id as a string, for example `{"feature": "town-2"}`. A child map (a settlement i
 interior inside a ruin) is made this way. Its seed is the request's seed, like any other run, so
 several seeds give several candidates for the same place.
 
+Inputs of type `number` and `enum` carry a recipe's own parameters, for example the floor a recipe
+family is expanded for (decision 0004):
+
+```json
+{"floor": {"type": "number", "default": 1, "min": 1, "max": 10, "integer": true},
+ "season": {"type": "enum", "values": ["spring", "autumn"], "default": "spring"}}
+```
+
+`min`, `max` and `integer` are optional. The editor refuses a value outside the declared range or
+values before the run; a run records its inputs in the manifest.
+
 Events on stdout while running:
 
 ```json
@@ -169,7 +181,7 @@ features, a `features` output:
   (x east, y south, origin north-west), not longitude and latitude: an alternative coordinate
   system by prior arrangement, as RFC 7946 §4 allows. Every feature has a string `id` that stays the
   same for the same generator version, recipe, seed and inputs, and `properties.kind` and
-  `properties.type` (city, town, village, ruin, shrine, portal-in, portal-out, extraction, camp,
+  `properties.type` (city, town, village, ruin, shrine, chime, gate-up, gate-down, camp,
   watchtower, building, street, wall, room, …; `docs/map-package.md` §5).
 - `base` is an image that lies exactly on the frame: its north-west pixel corner is the frame's
   origin and its pixels cover `size_m` (`docs/map-package.md` §8). A map with levels has one
@@ -206,8 +218,8 @@ included — is ready when this passes. A built-in generator meets the same rule
 The protocol version is the integer `protocol`. Breaking changes raise it; the editor supports the
 versions listed here. Changes to this document need Jann's approval (`docs/gate.md`). `frame`,
 `features` and inputs of type `cameras` were added to protocol 1 as optional parts, and
-`frame.levels`, the `base` output, inputs of type `feature` and the constraint keys later; a
-generator without them stays valid.
+`frame.levels`, the `base` output, inputs of type `feature` and the constraint keys later, and
+inputs of type `number` and `enum` with umbrella version 4; a generator without them stays valid.
 
 A generator's `version` in `describe` is its own, not the editor's product version. A map version
 records it (`docs/specs/data-model.md` §8), so it must change whenever the generator's data

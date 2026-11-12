@@ -55,6 +55,7 @@ hash per layer.
 | `format` | `"theos-map"` | |
 | `format_version` | `"MAJOR.MINOR"` | `"1.0"` for this document (§6) |
 | `generator` | `name@version` | As the generator's `describe` reports it, for example `theos-maps@1.0.0` (`docs/generators.md` §6) |
+| `requires` | array of strings | The capabilities a reader must implement to build this map correctly (§6), sorted; empty when the package uses none. Format 1.0 defines none yet |
 | `kind` | text | `terrain`, `settlement`, `interior`, … (the map's `type` in the data model) |
 | `recipe_id` | text | The recipe's id |
 | `recipe` | object | The full recipe as it ran, so the package can be regenerated after the recipe file changed |
@@ -114,6 +115,7 @@ A shortened example (`…` marks left-out parts):
   ],
   "recipe": …,
   "recipe_id": "hearth-valley",
+  "requires": [],
   "results": {
     "elevation_m_relief": 1234,
     "elevation_m_relief_max": 2200,
@@ -163,8 +165,8 @@ map's base level, plus an optional `name`. When `levels` is present:
 
 A map without `levels` has one implicit level; its layers and features carry no `level`.
 
-All levels share the frame's grid. Indoor floors are at most about 2 km across (decision 0003
-§7), so a level at 1–2 m cells has at most 2,000² cells per layer.
+All levels share the frame's grid. The format sets no size limit; the generator refuses a run that
+would not fit its memory budget. A later capability (§6) may give levels a grid of their own.
 
 ### 4.4 Standard layers
 
@@ -220,8 +222,8 @@ longitude and latitude: an alternative coordinate reference by prior arrangement
 | Kind | Types | Geometry | Properties besides kind and type |
 |---|---|---|---|
 | `settlement` | `city`, `town`, `village`, `hamlet` | Point | `name` (generated, not canon) |
-| `poi` | `ruin`, `extraction`, `portal-in`, `portal-out` | Point | |
-| `site` | `mill`, `mine`, `quarry`, `lumber-camp`, `shrine`, `watchtower`, `inn`, `market`, `cave`, `camp`, `bridge`, `ford` | Point | links to related features by id (`road`, `serves`, `deposit`); bridges also `span_m` and `deck_m` (the deck's height above the base level, m) |
+| `poi` | `ruin`, `chime`, `gate-up`, `gate-down` | Point | |
+| `site` | `mill`, `mine`, `quarry`, `lumber-camp`, `shrine`, `watchtower`, `inn`, `cave`, `camp`, `bridge`, `ford` | Point | links to related features by id (`road`, `serves`, `deposit`); bridges also `span_m` and `deck_m` (the deck's height above the base level, m) |
 | `resource` | one type per resource (`iron-ore`, `timber`, …) | Point | `richness`, `tier`, `element`, `harvest`, `radius_m` |
 | `road` | `trail`, `track`, `road`, `main` | LineString | `from`, `to` (feature ids), `length_m`, `width_m`, `grade_max` |
 | `water` | `river` | LineString (x, y, bed height) | `width_m`, `depth_m`, `discharge_m3s` per vertex; `order` (Strahler) |
@@ -244,7 +246,13 @@ type or property is an addition (§6).
 - `format_version` is `MAJOR.MINOR`. A reader refuses a package whose major it does not know,
   with a message naming both versions.
 - Within a major, a reader ignores fields, entries, layers, feature kinds and properties it does
-  not know. A minor version only adds optional things; anything else is a new major.
+  not know, with one exception: a reader refuses a package whose `requires` names a capability it
+  does not implement, with a message naming the capability.
+- A minor version only adds things. An addition that changes how existing fields must be read
+  (ground above ground, cells that are not part of the floor) is a **capability**: the minor
+  version that defines it gives it a name, and every package that uses it lists that name in
+  `requires`. An older reader then refuses such a package instead of building a wrong map.
+  Anything that cannot be expressed this way is a new major.
 - The crate `theos-map-format` is the reference reader and writer. It depends on no other crate
   of this workspace, so the engine can depend on it alone (G1).
 

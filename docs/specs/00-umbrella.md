@@ -1,9 +1,14 @@
 # Theos content editor — umbrella spec
 
-Status: accepted when this file is merged by Jann · version 3 · 10 Nov 2026 (version 1: 31 Oct 2026;
+Status: accepted when this file is merged by Jann · version 4 · 12 Nov 2026 (version 1: 31 Oct 2026;
 version 2, 5 Nov 2026, adds the world atlas, quests and art from lore: G19, P20–P28, slices S8 and
-S9; version 3 moves the map generator to Rust in this repo, decision 0003: G1, G4, G11, G20, P08
-rewritten, P09 (with `theos gen`), P22 and P23 adjusted, P29, P30 and slice S10)
+S9; version 3, 10 Nov 2026, moves the map generator to Rust in this repo, decision 0003: G1, G4,
+G11, G20, P08 rewritten, P09 (with `theos gen`), P22 and P23 adjusted, P29, P30 and slice S10;
+version 4 takes in the map generation research, decision 0004: CE-76.5; P29 becomes settlements
+and child maps at the state of the art (CE-78 reworded); new P34 Interiors (CE-80) with the room
+graph; P30 becomes the generator half of stacked levels (CE-79.1 reworded) and P45 the Atlas half;
+new P31 Floor frame and places, P32 Recipe families and P33 Map metrics and batch tool (CE-81 to
+CE-83) in a new slice S11; the research track in §5)
 Owner of architecture: Jann · Built by: Claude Code with superpowers
 
 This spec defines the whole build as phases. Each phase runs one superpowers cycle:
@@ -100,23 +105,32 @@ Slices say what Jann can do once their phases are merged; Jira tracks slices.
 | P20 | Content layout for world and art kinds | tower-of-theos | S8 | P01 |
 | P21 | World kinds: enemies, spawns, quests | theos-editor | S8 | P07 |
 | P22 | Map pins, cameras and frames | theos-editor | S8 | P09 |
-| P23 | Map recipes and blockout generator | tower-of-theos | S8 | P08, P29 |
+| P23 | Map recipes and blockout generator | tower-of-theos | S8 | P08, P29, P34 |
 | P24 | Quest screen and flow editor | theos-editor | S8 | P12, P21 |
 | P25 | Atlas | theos-editor | S8 | P16, P22, P24 |
 | P26 | Style bible and briefs | theos-editor | S9 | P17, P21 |
 | P27 | Asset pipelines | theos-editor | S9 | P16, P22, P26 |
 | P28 | Workflow catalogue and asset guide | tower-of-theos | S9 | P20, P23 |
-| P29 | Settlements, interiors and child maps | theos-editor | S8 | P08 |
-| P30 | Indoor floors with stacked levels | theos-editor | S10 | P25, P29 |
+| P29 | Settlements and child maps | theos-editor | S8 | P08 |
+| P30 | Levels in the generator | theos-editor | S10 | P34 |
+| P31 | Floor frame and places | theos-editor | S11 | P08 |
+| P32 | Recipe families | theos-editor | S11 | P09, P16, P31 |
+| P33 | Map metrics and batch tool | theos-editor | S11 | P32 |
+| P34 | Interiors | theos-editor | S8 | P08 |
+| P45 | Atlas level switcher | theos-editor | S10 | P25, P30 |
 
 Core track runs in order P00 → P02 → … → P07. P01, P08 and P10 can run in parallel sessions in
-their own worktrees. UI phases start after P06. P20, P23 and P29 can also run in parallel sessions
-once their dependencies are merged. P28 runs in a session linked to Jann's PC, where ComfyUI runs.
+their own worktrees. UI phases start after P06. P20, P23, P29 and P34 can also run in parallel
+sessions once their dependencies are merged. P28 runs in a session linked to Jann's PC, where
+ComfyUI runs. The map phases of version 4 run P31 → P32 → P33 after P08 and P09 (decision 0004).
+Phase numbers P35–P44 are held by proposals of the map generation research
+(`research/map-generation/09-proposed-phases.md`) that are not phases yet (§5).
 
 Slices: **S1** write lore now (P01, P10) · **S2** canon checks (P00, P02–P05) · **S3** propose and
 review (P06, P07) · **S4** maps (P08, P09) · **S5** core UI (P11–P13, P19) · **S6** complete UI
-(P14, P15) · **S7** pictures and places (P16–P18) · **S8** the world on the map (P20–P25, P29) ·
-**S9** art from lore (P26–P28) · **S10** indoor floors (P30).
+(P14, P15) · **S7** pictures and places (P16–P18) · **S8** the world on the map (P20–P25, P29,
+P34) · **S9** art from lore (P26–P28) · **S10** indoor floors (P30, P45) · **S11** designable
+floors (P31–P33).
 
 ---
 
@@ -309,6 +323,8 @@ crates to the gate's crate lists and bans the std float methods (decision 0003 �
   its level; on a map with levels, a layer or feature without a level, or with a level the frame
   does not list, is rejected.
 - CE-76.4 `theos-map-format` depends on no other crate of this workspace.
+- CE-76.5 A package whose `requires` names a capability the reader does not implement is refused
+  with a message naming it.
 
 **CE-28 theos-maps terrain generator**
 - CE-28.1 `describe` gives the name `theos-maps`, the generator's own version, `produces: ["map"]`
@@ -743,39 +759,127 @@ run, in the binaries folder); Jann's judgement of them is a review item of the P
 - CE-74.2 `tools/guides/asset-workflow.md` says which pipeline serves which family, how picks and
   notes drive the next stage, and what fits in 16 GB.
 
-### P29 · Settlements, interiors and child maps
+### P29 · Settlements and child maps
 
-The rest of the port of `theos_maps` 0.3.0 into `theos-maps` (decision 0003): settlement and
-interior maps, one level each, and child maps made inside a parent map.
+Settlement maps in `theos-maps` at the state of the art, as P08 is for terrain (decision 0004).
+This phase's spec chooses the method after reading its main sources (street fields, blocks and
+parcels) and running its probes; where a probe fails, the spec may port 0.3.0's method for that
+part and says why. Interiors are P34.
 
-**CE-78 theos-maps settlements, interiors and child maps**
-- CE-78.1 The settlement and interior kinds of 0.3.0 run from built-in recipes (`choir-hall-ruin`
-  and a settlement recipe), with the renders `base`, `plan`, `blueprint` and `graph`, and packages
-  whose layers and features follow `docs/map-package.md` §4.4 and §5 (buildings, streets, walls,
-  gates, landmarks; rooms as polygons, doors, connections, the critical route).
-- CE-78.2 A child map runs from a parent package (`from`) and one of its features (an input of
-  type `feature`: a settlement or a ruin); its frame carries `origin_m` in the parent's frame and
-  `parent` with the parent package's hash and the feature id; the same parent, feature, seed and
-  inputs give the same child.
-- CE-78.3 For seeds 1–8 of each built-in interior recipe, every interior passes the playability
-  analysis of 0.3.0 (every room carved and reachable, lock and key solvable with one-way drops);
-  settlement summaries stay within the tolerances the phase spec sets around the 0.3.0 reference.
-- CE-78.4 The golden hashes of CE-77.1 cover a settlement, an interior and a child map.
+**CE-78 theos-maps settlements and child maps**
+- CE-78.1 Settlement maps run from a built-in settlement recipe, with the renders `base` and
+  `plan`, and packages whose layers and features follow `docs/map-package.md` §4.4 and §5
+  (buildings, streets, walls, gates, landmarks).
+- CE-78.2 A child map runs from a parent package (`from`) and one of its settlement features (an
+  input of type `feature`); its frame carries `origin_m` in the parent's frame and `parent` with
+  the parent package's hash and the feature id; the same parent, feature, seed and inputs give the
+  same child.
+- CE-78.3 For seeds 1–8, the built-in settlement recipe passes its constraints at least as often as
+  0.3.0's settlement recipe did on the same seeds, recorded as a fixture.
+- CE-78.4 The golden hashes of CE-77.1 cover a settlement and a settlement's child map.
 
-### P30 · Indoor floors with stacked levels
+### P30 · Levels in the generator
 
-Floors that are indoors, with storeys on top of each other (decision 0003 §7). The UI reference
-for the level switcher is added in this phase's spec PR (G18).
+Stacked levels in `theos-maps`: layers addressed by level and name in the world, the runner and
+the `Stage` contract, and indoor floors with storeys on top of each other (decision 0003 §7,
+decision 0004). The Atlas shows levels in P45.
 
 **CE-79 Indoor floors**
-- CE-79.1 An indoor-floor recipe builds an interior up to 2 km across with at least two stacked
-  levels: the frame lists the levels, every layer and feature carries its level, and stairs,
-  ladders, lifts and drops connect levels.
+- CE-79.1 An indoor-floor recipe builds an interior with at least two stacked levels: the frame
+  lists the levels, every layer and feature carries its level, and stairs, ladders, lifts and drops
+  connect levels.
 - CE-79.2 The playability analysis covers paths across levels: every room is reachable from the
   start, lock and key are solvable, and drops go one way only.
+- CE-79.4 The golden hashes of CE-77.1 cover an indoor floor with levels.
+
+### P31 · Floor frame and places
+
+What every floor's map needs before band-specific work (decision 0004). A map shows one region of
+a floor, and that region carries the hub and both gates. Where the floor's rim or the Bore crosses
+it, its cells are `void`. `void` and the frame's edges come as a format capability named in
+`requires` (`docs/map-package.md` §6).
+
+**CE-81 Floor frame and places**
+- CE-81.1 A recipe can declare a round outline and a hole; the package carries a `void` mask and
+  names it in `requires`; for seeds 1–8 of a synthetic recipe with a central hole, no feature, road
+  or site lies in a `void` cell, and every river line that reaches the hole or the outline ends
+  there.
+- CE-81.2 `frame.edges` names each side's kind (`rim`, `wall`, `open`), and `void` holds exactly
+  the cells outside the declared outline or inside the hole.
+- CE-81.3 A terrain recipe asks for counts of `chime`, `gate-up` and `gate-down`; a run that places
+  fewer fails the constraint `features.<type>`.
+- CE-81.4 When a recipe asks for a hub, exactly one settlement carries `hub: true`, and a Chime lies
+  within a walking time of it that the recipe sets.
+
+### P32 · Recipe families
+
+One recipe per band instead of one per floor (decision 0004): inputs, inheritance and curves.
+Placing required features and trial sites is not in this phase; it waits in the research track (§5).
+
+**CE-82 Recipe families**
+- CE-82.1 A recipe with `extends` and a `floor` input expands to a concrete recipe by a pure
+  function; the package's `recipe` is the expanded one, and the same floor and seed give the same
+  package bytes.
+- CE-82.2 A numeric parameter may be a curve over an input, with linear, smoothstep and step easing;
+  a fixture checks the expanded values at five inputs.
+- CE-82.3 An input of type `number` or `enum` (`docs/generators.md` §3) set in the Maps screen, in
+  `theos gen run` and through the adapter reaches the generator unchanged and is recorded in the
+  manifest's `inputs`; a value outside its declared range or values is refused before the run.
+- CE-82.4 A recipe can override one stage's seed; only that stage's and later stages' layer hashes
+  change.
+- CE-82.5 With the run option `stop_early`, a run ends after the first stage that finalises a
+  failing constraint and returns results with every evaluated constraint and `pass: false`;
+  without the option a run behaves as before.
+
+### P33 · Map metrics and batch tool
+
+Measuring floors and reviewing many of them (decision 0004): metric stages, the extra terrain
+metrics and the snapshot export moved from P08, and a batch command with sheets and a table.
+
+**CE-83 Map metrics and batches**
+- CE-83.1 Metric stages report under `summary.stages.<id>`: walking time from the gate down to each
+  Chime and to the gate up; the number of edge-disjoint routes between the gates and the detour of
+  the second; the narrowest walkable width on each main route; the visible area and the longest
+  sightline from each place; the largest flat disc; each can be named in `[constraints]`.
+- CE-83.2 Line of sight uses integer stepping and exact comparisons; the golden hashes cover the
+  metric layers.
+- CE-83.3 Every terrain summary reports hypsometry, a slope histogram, the drainage-area
+  distribution, the pit count and the breaching volume.
+- CE-83.4 The run option `snapshots` writes the layers of the named stages as snapshot layers
+  (`docs/map-package.md` §4.5); a run that does not ask for them writes the same package bytes as
+  before.
+- CE-83.5 The batch command writes, for a recipe family over floors and seeds, a contact sheet per
+  floor, a family sheet and a table of every metric by floor; the same inputs give the same files
+  and the same ranking.
+- CE-83.6 The table flags every pair of neighbouring floors whose metric differs by more than a
+  bound the family sets.
+
+### P34 · Interiors
+
+Interior maps on one level in `theos-maps` at the state of the art (decision 0004). This phase's
+spec chooses the method after reading its main sources (cyclic mission graphs) and running its
+probes. Rooms and connections are a shared value that other kinds can write later.
+
+**CE-80 theos-maps interiors**
+- CE-80.1 Interior maps run from built-in recipes (`choir-hall-ruin` among them), with the renders
+  `base`, `blueprint` and `graph`, and packages whose layers and features follow
+  `docs/map-package.md` §4.4 and §5 (rooms as polygons, doors, connections, the critical route).
+- CE-80.2 For seeds 1–8 of each built-in interior recipe, every interior passes the playability
+  analysis: every room carved and reachable, lock and key solvable with one-way drops.
+- CE-80.3 The interior stages read rooms and connections from a `room_graph` value; a test stage
+  that writes a hand-made graph yields an interior that passes the playability analysis.
+- CE-80.4 A ruin's child map runs from a parent package and its ruin feature, with the frame and
+  repeatability of CE-78.2.
+- CE-80.5 The golden hashes of CE-77.1 cover an interior and a ruin's child map.
+
+### P45 · Atlas level switcher
+
+The Atlas side of stacked levels (decision 0004). The UI reference for the level switcher is added
+in this phase's spec PR (G18).
+
+**CE-79 Indoor floors** (continued from P30)
 - CE-79.3 The Atlas shows a map with levels one level at a time, with a level switcher; a pin
   shows on its own level only.
-- CE-79.4 The golden hashes of CE-77.1 cover an indoor floor with levels.
 
 ---
 
@@ -804,4 +908,12 @@ the map package, `docs/map-package.md` §9); NPC schedules and NPCs that move; p
 maps; tiled map images beyond 4K; 3D assets (meshes, textures); a LoRA per main character if faces
 drift between images; runtime dialogue built from quest step context. From version 3: refining
 baked maps at a finer scale in the engine; generating dungeons or detail from a seed in the game;
-the blockout generator in Rust.
+the blockout generator in Rust. From version 4, the map generation research track
+(`research/map-generation/09-proposed-phases.md`, decision 0004), each to become a phase with
+criteria once its main sources are read and its probe has run: fortification and districts (P35);
+steering by layers and field mixing (P36); a ruin pass (P37); needle peaks and forest classes
+(P38); floating ground (P39); the cavern kind (P40); city tiers, transit and city scale (P42);
+giant trees (P43, last); band recipe families in `tower-of-theos` (P44); placing required features
+and trial sites, where a guardian arena is one option, not a rule; promoting settlements at road
+junctions; regions with a recommended power and danger zones; ring layouts; larger places as a
+parent map with child maps; per-level grids; stored volumes.

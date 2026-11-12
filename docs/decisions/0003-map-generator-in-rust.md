@@ -8,11 +8,9 @@ platform. The same PR turns these decisions into umbrella spec version 3 (§10, 
 
 ## Status
 
-proposed · 2026-11-10 · accepted when Jann merges the PR
-`docs(spec): map generator in Rust (docs)`. Merging it accepts this design, `docs/map-package.md`,
-and the changes to the umbrella spec, the architecture, the generator protocol, the data model and
-`CONTRIBUTING.md` listed in §10. The gate PR #23 (one assertion of an xtask test moved from P08
-to P20) merges first.
+accepted · 2026-11-10 · merged in #24 (after the gate PR #23). Amended by
+[decision 0004](0004-map-generation-research.md) on 2026-11-12: §7 (no size limit for levels), the
+phases of §10 (P29, P30), and the Horizon Zero Dawn quotation of §2.
 
 Sources:
 
@@ -96,8 +94,8 @@ needs uv or Python; the blockout generator still does.
 - **Generated while the game runs.** Minecraft, No Man's Sky and Deep Rock Galactic. Even there,
   authored content is placed by rules (template pools, designer-built rooms), never pinned by hand.
 - **Hybrid.** Horizon Zero Dawn bakes its world into 2D maps (about 4 MB/km²) and places detail at
-  runtime, "deterministic and locally stable". Diablo IV has a hand-made world and random dungeon
-  layouts.
+  runtime; its slides name two separate goals for that placement, "deterministic" and "locally
+  stable". Diablo IV has a hand-made world and random dungeon layouts.
 
 **What breaks when a generator changes under existing worlds:**
 
@@ -253,10 +251,12 @@ at the package's feature ids (`docs/map-package.md` §9). That export stays in u
 
 ## 7. Stacked levels
 
-Jann expects indoor floors with storeys on top of each other, at most about 2 km across
-(2026-11-10). At the interior's 1–2 m cells that is 1,000²–2,000² cells per layer and level
-(1–4 MB for a mask), so every level shares the frame's grid; per-level grids or tiles are not
-needed. A larger indoor floor would need a new major format version.
+Jann expects indoor floors with storeys on top of each other (2026-11-10). Every level shares the
+frame's grid. On 2026-11-12 (decision 0004) Jann decided that the format sets no size limit:
+indoor maps are expected to be considerably smaller than outdoor maps, and the generator's memory
+budget is what limits a run. Per-level grids or tiles, if a phase needs them, come as a format
+capability named in `requires`, a minor version that older readers refuse cleanly
+(`docs/map-package.md` §6).
 
 - **Format 1.0** carries them from the start. `frame.levels` lists the levels with their
   elevations. Layers and features carry `level`. Stairs, ladders, lifts and drops are features
@@ -270,8 +270,9 @@ needed. A larger indoor floor would need a new major format version.
   - A map with levels has one `base-<level id>` render per level.
 - **Phases.**
   - P22's pin grammar and findings include `level` from the start (CE-61.2 gains the finding).
-  - P30 builds the generator for indoor floors with stacked levels and the Atlas's level switcher.
-  - Until P30, the interior generator makes one level, as in 0.3.0.
+  - P30 builds the generator for indoor floors with stacked levels, and P45 the Atlas's level
+    switcher (decision 0004).
+  - Until P30, interiors (P34) have one level.
 
 ## 8. Versions
 
@@ -352,6 +353,12 @@ P29 is in S8 because the Atlas drills down into settlement and interior maps (CE
 blockout builds from them (CE-64.2). P30 is a new slice S10 after 1.0, because Jann expects
 stacked levels but nothing earlier needs them.
 
+Decision 0004 (2026-11-12) amends this table:
+- P29 becomes "Settlements and child maps" at the state of the art, and the new P34 "Interiors"
+  takes the interior half;
+- P30 becomes "Levels in the generator" (after P34), and the new P45 "Atlas level switcher" (after
+  P25 and P30) takes CE-79.3.
+
 **Documents this PR changes:**
 
 | Document | Change |
@@ -429,7 +436,7 @@ P08's phase spec lists the exact contents; the PR waits for Jann.
 | Implementing erosion from papers takes longer than porting | The probe's core loop was about 200 lines; the papers are precise; P08 is terrain only |
 | A floor with stacked levels needs more than the format foresees | Additions are minor versions (`docs/map-package.md` §6); P30's spec can add what it needs |
 | The engine wants a different runtime format | The package is the source format; the engine's asset pipeline converts it, and reads it with `theos-map-format` |
-| A panic in a run takes down the editor | Runs are on their own threads and panics end as failed runs; aborts (out of memory) are not caught, so P08 limits grid sizes per recipe |
+| A panic in a run takes down the editor | Runs are on their own threads and panics end as failed runs; aborts (out of memory) are not caught, so P08 refuses a run above its memory budget (decision 0004) |
 
 ## 14. If rejected
 
