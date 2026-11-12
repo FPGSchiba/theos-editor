@@ -49,6 +49,8 @@ fn workspace_members_are_the_g4_crates() -> TestResult {
         "theos-content@crates/theos-content",
         "theos-vcs@crates/theos-vcs",
         "theos-studio@crates/theos-studio",
+        "theos-map-format@crates/theos-map-format",
+        "theos-maps@crates/theos-maps",
         "theos@crates/theos",
         "theos-mcp@crates/theos-mcp",
         "theos-editor@crates/theos-editor",

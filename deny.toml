@@ -39,6 +39,14 @@ wildcards = "deny"
 # `path = "../x"` dependencies between our crates carry no version.
 allow-wildcard-paths = true
 
+# Only miniz_oxide may deflate map packages: another backend changes their bytes (P08 section 4.3).
+deny = [
+    { crate = "zlib-rs", reason = "map packages must deflate with miniz_oxide (G20)" },
+    { crate = "libz-sys", reason = "map packages must deflate with miniz_oxide (G20)" },
+    { crate = "libz-ng-sys", reason = "map packages must deflate with miniz_oxide (G20)" },
+    { crate = "cloudflare-zlib-sys", reason = "map packages must deflate with miniz_oxide (G20)" },
+]
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
