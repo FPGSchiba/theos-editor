@@ -25,8 +25,11 @@ pub struct Depressions {
     /// Per cell, the number `n` (from 1) of the depression holding it; 0 outside every
     /// depression. A depression is the set of cells its routing surface lifts above `height`.
     pub label: Grid<u32>,
-    /// The spill point of depression `n` at index `n − 1`. A depression drains into the root
-    /// basin or into a depression with a smaller number.
+    /// The spill point of depression `n` at index `n − 1`. The cell across its pass,
+    /// `label[spill[n − 1].to]`, is 0 (outside every depression) or less than `n`. That does
+    /// not order the depressions by where their water goes: the flow from a spill cell can
+    /// still reach a depression with a larger number, so a walk downstream takes them in
+    /// reverse stack order of their spill cells.
     pub spill: Vec<SpillPoint>,
 }
 
