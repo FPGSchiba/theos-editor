@@ -81,11 +81,11 @@ which waits for Jann in its docs PR #34.
 - For P09's spec (decision 0004): the machine-aware memory budget for map runs (at least 3 GiB,
   more where the machine allows) covers all seeds running at once, so the built-in adapter starts
   only as many seeds in parallel as fit.
-- Before P08's build, one more gate PR (decision 0003 §12; P08 plan Task 1) adds
-  `theos-map-format` and `theos-maps` to the workspace test and `gate/thresholds.toml`, bans the
-  std float methods in `gate/clippy.toml` and other deflate backends in `deny.toml`, and adds an
-  Intel macOS test job. P08's build runs on a branch that merges it while it waits; P08's PR
-  opens once it is merged.
+- The gate PR #38 before P08's build (decision 0003 §12; P08 plan Task 1) waits for Jann. It
+  adds `theos-map-format` and `theos-maps` to the workspace test and `gate/thresholds.toml`, bans
+  the std float methods in `gate/clippy.toml` and other deflate backends in `deny.toml`, and adds
+  an Intel macOS test job. P08's build runs on a branch that carries its content while it waits;
+  P08's PR opens once it is merged.
 - The Maps screen reference (`docs/ui/screens/11-maps.html`) still says "theos_maps 0.3.0 ·
   Python 3.12 (uv)", describes a Python venv, and shows "2 extractions" and "extraction ↔
   extraction 99 min". P16's spec PR updates it to the built-in generator and the place types
