@@ -36,11 +36,21 @@ fn on_rule(check: &StagedCheck, rule: &str, path: &str) -> bool {
         .any(|finding| finding.rule == rule && finding.path == path)
 }
 
+/// Asserts that the check ran and found no error: the clean fixture's known warning is there.
+fn assert_checked(check: &StagedCheck) {
+    assert!(!check.blocks(), "{:?}", check.findings);
+    assert!(
+        on_rule(check, "lore/three-clue", T900),
+        "the check did not run: {:?}",
+        check.findings
+    );
+}
+
 #[test]
 fn the_clean_fixture_has_no_error() -> TestResult {
     let repo = Repo::committed("")?;
     let result = check(&repo, "")?;
-    assert!(!result.blocks());
+    assert_checked(&result);
     assert_eq!(result.errors(), 0);
     assert_eq!(result.changed.len(), 0);
     Ok(())
@@ -77,12 +87,12 @@ fn a_violation_only_in_the_working_tree_does_not_block() -> TestResult {
     let repo = Repo::committed("")?;
     let violating = variant("C-901.md")?;
     write(&repo, "", C901, &violating)?;
-    assert!(!check(&repo, "")?.blocks());
+    assert_checked(&check(&repo, "")?);
     let clean = violating.replace("reveals: T-901", "reveals: T-900");
     stage(&repo, "", C901, &clean)?;
     write(&repo, "", C901, &violating)?;
     let result = check(&repo, "")?;
-    assert!(!result.blocks());
+    assert_checked(&result);
     assert_eq!(result.changed, [C901]);
     Ok(())
 }
@@ -115,7 +125,7 @@ fn a_locally_excluded_record_does_not_block() -> TestResult {
     let repo = Repo::committed("")?;
     write(&repo, "", ".git/info/exclude", &format!("{C901}\n"))?;
     write(&repo, "", C901, &variant("C-901.md")?)?;
-    assert!(!check(&repo, "")?.blocks());
+    assert_checked(&check(&repo, "")?);
     Ok(())
 }
 
@@ -152,7 +162,15 @@ fn links_and_submodules_at_record_paths_are_not_records() -> TestResult {
         "--cacheinfo",
         &format!("120000,{blob},{C901}"),
     ])?;
-    assert!(!check(&repo, "")?.blocks());
+    assert_checked(&check(&repo, "")?);
+    let head = repo.run(&["rev-parse", "HEAD"])?.trim().to_owned();
+    repo.run(&[
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        &format!("160000,{head},{C901}"),
+    ])?;
+    assert_checked(&check(&repo, "")?);
     Ok(())
 }
 
@@ -191,7 +209,7 @@ fn a_force_added_ignored_record_is_not_checked() -> TestResult {
     repo.commit("ignore")?;
     write(&repo, "", C901, &variant("C-901.md")?)?;
     repo.run(&["add", "-f", "--", C901])?;
-    assert!(!check(&repo, "")?.blocks());
+    assert_checked(&check(&repo, "")?);
     Ok(())
 }
 

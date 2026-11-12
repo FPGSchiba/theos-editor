@@ -20,7 +20,7 @@ pub struct StagedCheck {
 }
 
 impl StagedCheck {
-    /// Whether a finding is an error: the commit must not go through.
+    /// Whether any finding is an error: the commit must not go through.
     #[must_use]
     pub fn blocks(&self) -> bool {
         self.errors() > 0
