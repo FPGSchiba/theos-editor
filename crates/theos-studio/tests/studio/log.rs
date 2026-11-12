@@ -100,12 +100,7 @@ fn a_warning_carries_the_command_label_under_a_warn_filter() -> TestResult {
     let line = log
         .lines()
         .find(|line| line.contains("a warning inside the run"))
-        .ok_or_else(|| {
-            format!(
-                "no warning in:
-{log}"
-            )
-        })?;
+        .ok_or_else(|| format!("no warning in:\n{log}"))?;
     assert!(
         line.contains(&format!("command{{label=patch {TRUTH}}}")),
         "{line}"
