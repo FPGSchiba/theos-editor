@@ -62,6 +62,7 @@ serde_json = "1.0"
 serde_path_to_error = "0.1.20"
 sha2 = "0.11"
 similar = "2.7"
+spade = { version = "2.15", default-features = false }
 syn = { version = "2.0", features = ["full", "visit", "extra-traits"] }
 tempfile = "3.27"
 thiserror = "2.0"
