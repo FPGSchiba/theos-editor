@@ -1,8 +1,9 @@
 //! The command layer: the one place that changes a project, behind the repo lock.
 //!
-//! A [`Command`] builds a [`Plan`]: the files it changes, as the bytes before and after. This
-//! module holds the model and the five plain commands; later tasks of P06 add the writer, the
-//! pipeline and the journal. A new command is one module and one `pub use`.
+//! A [`Command`] builds a [`Plan`]: the files it changes, as the bytes before and after.
+//! [`Workspace::run`](crate::Workspace::run) takes it through the pipeline: the repo lock, the
+//! preview, the verdict, the write, the reindex and the [`Route`]'s finish. A new command is one
+//! module and one `pub use`.
 
 mod base;
 mod create;
@@ -10,11 +11,16 @@ mod delete;
 mod edit;
 mod error;
 mod files;
+mod journal;
 mod patch;
 mod path;
+mod pipeline;
+mod route;
+mod run;
 pub(crate) mod state;
 #[cfg(test)]
 mod test_support;
+mod verdict;
 mod write;
 
 use std::collections::BTreeMap;
@@ -27,7 +33,10 @@ pub use create::Create;
 pub use delete::Delete;
 pub use edit::Edit;
 pub use error::CommandError;
+pub use journal::{EntryId, EntrySummary};
 pub use patch::Patch;
+pub use pipeline::Outcome;
+pub use route::{Applied, HumanRoute, Route};
 pub use write::Write;
 
 pub(crate) use path::project_path;
@@ -63,13 +72,7 @@ pub struct PlanContext<'a> {
 }
 
 impl<'a> PlanContext<'a> {
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the pipeline of P06 builds the context; remove this then"
-        )
-    )]
+    /// The context of a plan on the project folder `root`, its index and its registry.
     pub(crate) fn new(root: &'a Path, index: &'a Index, registry: &'a KindRegistry) -> Self {
         PlanContext {
             root,
@@ -103,12 +106,7 @@ impl<'a> PlanContext<'a> {
     /// [`CommandError::Path`] for a path outside the rules, [`CommandError::Read`] when the file
     /// exists but cannot be read.
     pub fn read(&self, path: &str) -> Result<Option<Vec<u8>>, CommandError> {
-        let path = project_path(path)?;
-        match std::fs::read(self.root.join(&path)) {
-            Ok(bytes) => Ok(Some(bytes)),
-            Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(source) => Err(CommandError::read_io(path, source)),
-        }
+        read_file(self.root, path)
     }
 
     /// The bytes of the file `path` when they hash to `base`.
@@ -130,6 +128,22 @@ impl<'a> PlanContext<'a> {
                 path: path.to_owned(),
             })
         }
+    }
+}
+
+/// The bytes of the project file `path` under `root`, `None` when it is absent; the path is
+/// checked first.
+///
+/// # Errors
+///
+/// [`CommandError::Path`] for a path outside the rules, [`CommandError::Read`] when the file
+/// exists but cannot be read.
+pub(crate) fn read_file(root: &Path, path: &str) -> Result<Option<Vec<u8>>, CommandError> {
+    let path = project_path(path)?;
+    match std::fs::read(root.join(&path)) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(source) => Err(CommandError::read_io(path, source)),
     }
 }
 

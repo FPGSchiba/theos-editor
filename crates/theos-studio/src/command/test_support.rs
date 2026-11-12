@@ -45,6 +45,11 @@ impl Fixture {
         )
     }
 
+    /// The workspace, for running the pipeline.
+    pub(crate) fn workspace_mut(&mut self) -> &mut Workspace {
+        &mut self.workspace
+    }
+
     /// The project folder.
     pub(crate) fn root(&self) -> &std::path::Path {
         self.dir.path()

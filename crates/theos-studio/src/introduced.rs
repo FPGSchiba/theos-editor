@@ -66,9 +66,21 @@ impl FindingCounts {
 /// `allowed` has not seen, then from the rest. Warnings are never introduced.
 #[must_use]
 pub fn introduced(allowed: &FindingCounts, after: &[Finding]) -> Vec<Finding> {
+    surplus(allowed, after, Severity::Error)
+}
+
+/// The findings of `severity` in `after` above `allowed`'s count for their (path, rule), in
+/// `after` order, taken as [`introduced`] takes errors: first those whose message `allowed` has
+/// not seen.
+#[must_use]
+pub(crate) fn surplus(
+    allowed: &FindingCounts,
+    after: &[Finding],
+    severity: Severity,
+) -> Vec<Finding> {
     let mut by_key: BTreeMap<(&str, &str), Vec<usize>> = BTreeMap::new();
     for (position, finding) in after.iter().enumerate() {
-        if finding.severity == Severity::Error {
+        if finding.severity == severity {
             by_key
                 .entry((&finding.path, &finding.rule))
                 .or_default()

@@ -1,13 +1,5 @@
 //! Writes a plan to disk: whole files, each swapped in atomically, put back on a failure.
 
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the pipeline of P06 calls the writer; remove this then"
-    )
-)]
-
 use std::fs;
 use std::io::{self, ErrorKind, Write};
 use std::path::Path;

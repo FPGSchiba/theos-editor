@@ -31,6 +31,18 @@ impl TempProject {
         Ok(TempProject { dir })
     }
 
+    /// A project in a temporary folder with the files of the P06 fixture project `name` of
+    /// `theos-studio` (`tests/fixtures/<name>`).
+    pub fn copy_of_studio(name: &str) -> Result<TempProject, Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let from = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join(name);
+        copy_dir(&from, dir.path())?;
+        Ok(TempProject { dir })
+    }
+
     /// The project folder.
     pub fn root(&self) -> &Path {
         self.dir.path()

@@ -13,10 +13,6 @@ pub struct Workspace {
     registry: KindRegistry,
     index: Index,
     in_memory: bool,
-    #[expect(
-        dead_code,
-        reason = "the command tasks of P06 read it; remove this then"
-    )]
     pub(crate) commands: CommandState,
 }
 
