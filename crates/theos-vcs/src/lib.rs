@@ -1,4 +1,10 @@
-//! Wrapper over the git command line: status, word diff, history with `--follow`, commit with
-//! trailers, worktrees, merge, pull and push.
+//! Wrapper over the git command line (G6).
 //!
-//! This crate is empty until phase P06.
+//! It provides [`Git`], a runner that starts the `git` program without a shell, and [`repo`],
+//! queries for a repository's top folder, a folder's place in it and its hooks folder.
+//! The staged-snapshot reader joins them in a later task.
+
+mod git;
+pub mod repo;
+
+pub use git::{Git, GitError};

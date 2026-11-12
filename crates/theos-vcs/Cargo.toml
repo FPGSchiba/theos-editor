@@ -8,3 +8,10 @@ repository.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+thiserror.workspace = true
+which.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
