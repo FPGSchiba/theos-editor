@@ -318,7 +318,7 @@ mod tests {
         assert_eq!(p00.repo, "theos-editor");
 
         let p05 = umbrella.phase(phase("P05")?).ok_or("no P05")?;
-        assert!(p05.acs.iter().any(|id| id == "CE-08R.1"), "{:?}", p05.acs);
+        assert!(p05.acs.iter().any(|id| id == "CE-17.1"), "{:?}", p05.acs);
 
         let p01 = umbrella.phase(phase("P01")?).ok_or("no P01")?;
         assert_eq!(p01.repo, "tower-of-theos");
