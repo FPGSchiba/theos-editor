@@ -501,6 +501,41 @@ mod tests {
         Ok(())
     }
 
+    /// Ruling R15: no command reaches the repo lock or the shared index, which the command holds
+    /// and the reindex writes.
+    #[test]
+    fn a_command_on_the_cache_is_refused() -> TestResult {
+        let mut fixture = Fixture::new(&[])?;
+        let cache = fixture.root().join(".theos").join("cache");
+        let index = std::fs::read(cache.join("index.sqlite"))?;
+        let delete = crate::Delete {
+            path: ".theos/cache/lock".to_owned(),
+            base: crate::Base::of(b""),
+        };
+        let write = crate::Write {
+            path: ".theos\\cache\\index.sqlite".to_owned(),
+            base: crate::Base::of(&index),
+            text: "synthetic".to_owned(),
+        };
+        for command in [&delete as &dyn Command, &write] {
+            let result = fixture.workspace_mut().run(command);
+            assert!(
+                matches!(
+                    &result,
+                    Err(CommandError::Path {
+                        reason: "is inside .theos/cache",
+                        ..
+                    })
+                ),
+                "{}: {result:?}",
+                command.label()
+            );
+            assert!(cache.join("lock").is_file());
+        }
+        assert_eq!(fixture.workspace_mut().undo_entries(), []);
+        Ok(())
+    }
+
     #[test]
     fn a_replay_names_its_entry_and_adds_none() -> TestResult {
         let mut fixture = Fixture::new(&[("notes.txt", b"one\n")])?;
