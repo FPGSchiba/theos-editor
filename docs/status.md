@@ -12,7 +12,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | done | #21 | #28 |
 | P05 | CLI and hook | theos-editor | todo | | |
-| P06 | Command layer and repo lock | theos-editor | spec-pr | | |
+| P06 | Command layer and repo lock | theos-editor | spec-pr | #36 | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map format and terrain generator | theos-editor | spec-approved | #27 | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
@@ -55,7 +55,7 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
-- P06's spec (command layer and repo lock) waits for Jann in its spec PR. Its §6.1 holds the
+- P06's spec (command layer and repo lock) waits for Jann in its spec PR #36. Its §6.1 holds the
   interfaces agreed with the P05 session, and its §11 the git probes for P46 and P47.
 - The P05 split (umbrella version 6, `docs/release.md`) waits for Jann in its docs PR #34. Jann
   chose it on 12 Nov 2026, and it holds three things:
