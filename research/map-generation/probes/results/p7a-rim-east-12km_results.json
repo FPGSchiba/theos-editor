@@ -1,0 +1,536 @@
+[
+ {
+  "recipe": "p7a-rim-east-12km",
+  "seed": 1,
+  "geology_pct": {
+   "granite": 12.6,
+   "quartzite": 4.2,
+   "limestone": 15.3,
+   "sandstone": 38.0,
+   "shale": 29.8
+  },
+  "evolution_s": 16.6,
+  "elevation_m": {
+   "min": -32,
+   "median": 83,
+   "max": 799,
+   "relief": 832
+  },
+  "terminal_lakes": 2,
+  "precip_mm_yr": {
+   "p5": 120,
+   "median": 609,
+   "p95": 1593
+  },
+  "rivers_pct": 0.62,
+  "max_discharge_m3s": 1.3,
+  "lakes": 15,
+  "lake_pct": 11.41,
+  "temperature_c": {
+   "min": 5.8,
+   "max": 11.0
+  },
+  "vegetation_cover_pct": 30.5,
+  "snow_pct": 0.0,
+  "element_mix": {
+   "water": 0.241,
+   "wood": 0.255,
+   "earth": 0.404,
+   "metal": 0.089,
+   "fire": 0.011
+  },
+  "poi_requested": {
+   "ruin": 1,
+   "extraction": 2
+  },
+  "roads": {
+   "trail": 4.6,
+   "track": 12.9,
+   "road": 13.5
+  },
+  "sites": {
+   "camp": 2,
+   "cave": 1,
+   "ford": 1,
+   "lumber_camp": 3,
+   "mill": 4,
+   "mine": 2,
+   "quarry": 3,
+   "watchtower": 3
+  },
+  "travel": {
+   "extraction_to_extraction_min": 61.9,
+   "settlement_to_nearest_extraction_min": {
+    "city-1": 65.9,
+    "town-1": 88.0,
+    "village-1": 46.3,
+    "village-2": 21.7,
+    "village-3": 23.4,
+    "village-4": 74.9,
+    "hamlet-1": 57.8,
+    "hamlet-2": 59.5,
+    "hamlet-3": 79.7,
+    "hamlet-4": 31.0,
+    "hamlet-5": 20.6
+   },
+   "floor_pct_within_15min_of_extraction": 5.6
+  },
+  "feature_counts": {
+   "city": 1,
+   "town": 1,
+   "village": 4,
+   "hamlet": 5,
+   "ruin": 1,
+   "extraction": 2,
+   "portal_in": 1,
+   "iron_ore": 2,
+   "stone": 3,
+   "clay": 2,
+   "timber": 3,
+   "herbs": 1,
+   "ford": 1,
+   "mill": 4,
+   "mine": 2,
+   "quarry": 3,
+   "lumber_camp": 3,
+   "watchtower": 3,
+   "cave": 1,
+   "camp": 2
+  },
+  "constraints": {
+   "elevation_m.relief": {
+    "value": 832,
+    "ok": true
+   },
+   "lake_pct": {
+    "value": 11.41,
+    "ok": false
+   },
+   "ruin_placed": {
+    "value": 1,
+    "ok": true
+   },
+   "extraction_placed": {
+    "value": 2,
+    "ok": true
+   },
+   "all_ok": false
+  },
+  "run_s": 20.1,
+  "probe": {
+   "slope_deg": {
+    "p50": 5.3,
+    "p90": 32.1,
+    "p99": 56.9,
+    "max": 79.3
+   },
+   "slope_pct_over_30deg": 11.46,
+   "slope_pct_over_45deg": 3.56,
+   "slope_pct_over_60deg": 0.66,
+   "local_peaks": 206,
+   "towers_100m_drop_within_150m": 11,
+   "cell_m": 31.2
+  }
+ },
+ {
+  "recipe": "p7a-rim-east-12km",
+  "seed": 2,
+  "geology_pct": {
+   "granite": 28.2,
+   "quartzite": 1.9,
+   "limestone": 17.6,
+   "sandstone": 12.7,
+   "shale": 39.6
+  },
+  "evolution_s": 16.7,
+  "elevation_m": {
+   "min": -7,
+   "median": 56,
+   "max": 647,
+   "relief": 655
+  },
+  "terminal_lakes": 2,
+  "precip_mm_yr": {
+   "p5": 120,
+   "median": 595,
+   "p95": 1609
+  },
+  "rivers_pct": 0.59,
+  "max_discharge_m3s": 3.4,
+  "lakes": 19,
+  "lake_pct": 17.41,
+  "temperature_c": {
+   "min": 6.8,
+   "max": 11.0
+  },
+  "vegetation_cover_pct": 35.7,
+  "snow_pct": 0.0,
+  "element_mix": {
+   "water": 0.286,
+   "wood": 0.275,
+   "earth": 0.313,
+   "metal": 0.115,
+   "fire": 0.01
+  },
+  "poi_requested": {
+   "ruin": 1,
+   "extraction": 2
+  },
+  "roads": {
+   "trail": 5.3,
+   "track": 16.1,
+   "road": 15.1,
+   "main": 2.6
+  },
+  "sites": {
+   "camp": 2,
+   "cave": 1,
+   "ford": 1,
+   "lumber_camp": 3,
+   "mill": 5,
+   "mine": 2,
+   "quarry": 3,
+   "watchtower": 3
+  },
+  "travel": {
+   "extraction_to_extraction_min": 92.5,
+   "settlement_to_nearest_extraction_min": {
+    "city-1": 38.7,
+    "town-1": 24.5,
+    "village-1": 44.8,
+    "village-2": 34.2,
+    "village-3": 86.9,
+    "village-4": 32.5,
+    "hamlet-1": 26.4,
+    "hamlet-2": 44.2,
+    "hamlet-3": 19.2,
+    "hamlet-4": 36.5,
+    "hamlet-5": 31.4
+   },
+   "floor_pct_within_15min_of_extraction": 5.3
+  },
+  "feature_counts": {
+   "city": 1,
+   "town": 1,
+   "village": 4,
+   "hamlet": 5,
+   "ruin": 1,
+   "extraction": 2,
+   "portal_in": 1,
+   "portal_out": 1,
+   "iron_ore": 2,
+   "stone": 3,
+   "clay": 2,
+   "timber": 3,
+   "herbs": 1,
+   "ford": 1,
+   "mill": 5,
+   "mine": 2,
+   "quarry": 3,
+   "lumber_camp": 3,
+   "watchtower": 3,
+   "cave": 1,
+   "camp": 2
+  },
+  "constraints": {
+   "elevation_m.relief": {
+    "value": 655,
+    "ok": true
+   },
+   "lake_pct": {
+    "value": 17.41,
+    "ok": false
+   },
+   "ruin_placed": {
+    "value": 1,
+    "ok": true
+   },
+   "extraction_placed": {
+    "value": 2,
+    "ok": true
+   },
+   "all_ok": false
+  },
+  "run_s": 20.0,
+  "probe": {
+   "slope_deg": {
+    "p50": 5.2,
+    "p90": 31.9,
+    "p99": 51.5,
+    "max": 74.2
+   },
+   "slope_pct_over_30deg": 11.51,
+   "slope_pct_over_45deg": 2.64,
+   "slope_pct_over_60deg": 0.19,
+   "local_peaks": 211,
+   "towers_100m_drop_within_150m": 3,
+   "cell_m": 31.2
+  }
+ },
+ {
+  "recipe": "p7a-rim-east-12km",
+  "seed": 3,
+  "geology_pct": {
+   "granite": 16.7,
+   "quartzite": 2.5,
+   "limestone": 26.2,
+   "sandstone": 18.9,
+   "shale": 35.7
+  },
+  "evolution_s": 15.6,
+  "elevation_m": {
+   "min": -17,
+   "median": 21,
+   "max": 1442,
+   "relief": 1459
+  },
+  "terminal_lakes": 1,
+  "precip_mm_yr": {
+   "p5": 120,
+   "median": 532,
+   "p95": 1440
+  },
+  "rivers_pct": 0.7,
+  "max_discharge_m3s": 2.9,
+  "lakes": 3,
+  "lake_pct": 19.09,
+  "temperature_c": {
+   "min": 1.6,
+   "max": 11.0
+  },
+  "vegetation_cover_pct": 23.4,
+  "snow_pct": 0.0,
+  "element_mix": {
+   "water": 0.277,
+   "wood": 0.202,
+   "earth": 0.424,
+   "metal": 0.081,
+   "fire": 0.015
+  },
+  "poi_requested": {
+   "ruin": 1,
+   "extraction": 2
+  },
+  "roads": {
+   "trail": 5.7,
+   "track": 30.2,
+   "road": 7.4,
+   "main": 5.4
+  },
+  "sites": {
+   "bridge": 2,
+   "camp": 2,
+   "cave": 1,
+   "ford": 5,
+   "lumber_camp": 3,
+   "mill": 6,
+   "mine": 2,
+   "quarry": 3,
+   "watchtower": 2
+  },
+  "travel": {
+   "extraction_to_extraction_min": 514.9,
+   "settlement_to_nearest_extraction_min": {
+    "city-1": 57.4,
+    "town-1": 54.5,
+    "village-1": 94.2,
+    "village-2": 58.4,
+    "village-3": 132.5,
+    "village-4": 35.4,
+    "hamlet-1": 153.0,
+    "hamlet-2": 52.5,
+    "hamlet-3": 84.7,
+    "hamlet-4": 62.3,
+    "hamlet-5": 141.8
+   },
+   "floor_pct_within_15min_of_extraction": 2.8
+  },
+  "feature_counts": {
+   "city": 1,
+   "town": 1,
+   "village": 4,
+   "hamlet": 5,
+   "ruin": 1,
+   "extraction": 2,
+   "portal_in": 1,
+   "iron_ore": 2,
+   "stone": 3,
+   "clay": 2,
+   "timber": 3,
+   "herbs": 1,
+   "bridge": 2,
+   "ford": 5,
+   "mill": 6,
+   "mine": 2,
+   "quarry": 3,
+   "lumber_camp": 3,
+   "watchtower": 2,
+   "cave": 1,
+   "camp": 2
+  },
+  "constraints": {
+   "elevation_m.relief": {
+    "value": 1459,
+    "ok": true
+   },
+   "lake_pct": {
+    "value": 19.09,
+    "ok": false
+   },
+   "ruin_placed": {
+    "value": 1,
+    "ok": true
+   },
+   "extraction_placed": {
+    "value": 2,
+    "ok": true
+   },
+   "all_ok": false
+  },
+  "run_s": 18.7,
+  "probe": {
+   "slope_deg": {
+    "p50": 4.2,
+    "p90": 34.2,
+    "p99": 69.8,
+    "max": 81.1
+   },
+   "slope_pct_over_30deg": 11.64,
+   "slope_pct_over_45deg": 6.48,
+   "slope_pct_over_60deg": 2.92,
+   "local_peaks": 190,
+   "towers_100m_drop_within_150m": 8,
+   "cell_m": 31.2
+  }
+ },
+ {
+  "recipe": "p7a-rim-east-12km",
+  "seed": 4,
+  "geology_pct": {
+   "granite": 1.6,
+   "quartzite": 3.7,
+   "limestone": 45.4,
+   "sandstone": 21.5,
+   "shale": 27.7
+  },
+  "evolution_s": 15.0,
+  "elevation_m": {
+   "min": 0,
+   "median": 54,
+   "max": 965,
+   "relief": 965
+  },
+  "terminal_lakes": 1,
+  "precip_mm_yr": {
+   "p5": 207,
+   "median": 614,
+   "p95": 1516
+  },
+  "rivers_pct": 0.27,
+  "max_discharge_m3s": 2.9,
+  "lakes": 5,
+  "lake_pct": 36.07,
+  "temperature_c": {
+   "min": 4.7,
+   "max": 11.0
+  },
+  "vegetation_cover_pct": 26.7,
+  "snow_pct": 0.0,
+  "element_mix": {
+   "water": 0.353,
+   "wood": 0.231,
+   "earth": 0.381,
+   "metal": 0.027,
+   "fire": 0.008
+  },
+  "poi_requested": {
+   "ruin": 1,
+   "extraction": 2
+  },
+  "roads": {
+   "track": 16.9
+  },
+  "sites": {
+   "camp": 2,
+   "cave": 1,
+   "ford": 3,
+   "lumber_camp": 3,
+   "mill": 2,
+   "mine": 2,
+   "quarry": 3
+  },
+  "travel": {
+   "extraction_to_extraction_min": 123.4,
+   "settlement_to_nearest_extraction_min": {
+    "city-1": 57.8,
+    "town-1": 41.4,
+    "village-1": 74.3,
+    "village-2": 62.1,
+    "village-3": 26.5,
+    "village-4": 390.9,
+    "hamlet-1": 66.0,
+    "hamlet-2": 48.4,
+    "hamlet-3": 38.5,
+    "hamlet-4": 386.6,
+    "hamlet-5": 52.6
+   },
+   "floor_pct_within_15min_of_extraction": 4.3
+  },
+  "feature_counts": {
+   "city": 1,
+   "town": 1,
+   "village": 4,
+   "hamlet": 5,
+   "ruin": 1,
+   "extraction": 2,
+   "portal_in": 1,
+   "portal_out": 1,
+   "iron_ore": 2,
+   "stone": 3,
+   "clay": 2,
+   "timber": 3,
+   "herbs": 1,
+   "ford": 3,
+   "mill": 2,
+   "mine": 2,
+   "quarry": 3,
+   "lumber_camp": 3,
+   "cave": 1,
+   "camp": 2
+  },
+  "constraints": {
+   "elevation_m.relief": {
+    "value": 965,
+    "ok": true
+   },
+   "lake_pct": {
+    "value": 36.07,
+    "ok": false
+   },
+   "ruin_placed": {
+    "value": 1,
+    "ok": true
+   },
+   "extraction_placed": {
+    "value": 2,
+    "ok": true
+   },
+   "all_ok": false
+  },
+  "run_s": 17.7,
+  "probe": {
+   "slope_deg": {
+    "p50": 5.3,
+    "p90": 24.2,
+    "p99": 63.4,
+    "max": 82.7
+   },
+   "slope_pct_over_30deg": 7.49,
+   "slope_pct_over_45deg": 3.54,
+   "slope_pct_over_60deg": 1.42,
+   "local_peaks": 217,
+   "towers_100m_drop_within_150m": 15,
+   "cell_m": 31.2
+  }
+ }
+]

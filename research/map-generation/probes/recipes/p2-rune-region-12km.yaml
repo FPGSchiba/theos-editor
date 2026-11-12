@@ -1,0 +1,58 @@
+# Probe 2 (band 2), region: a 12 km march with a river plain, one walled seat (class `city`
+# is the only class with a wall and a keep), one town, villages. Exported as an engine
+# package because the settlement detail probe (p2-walled-town-detail.yaml) reads it.
+name: p2-rune-region-12km
+kind: terrain
+grid: [384, 384]
+size_km: [12, 12]
+renders: [truth]
+pipeline:
+  - stage: grid
+    edges: [south]
+  - stage: tectonics
+    background_uplift: 1.6e-4
+    background_variation: 0.8
+    background_beta: 2.8
+    sources:
+      - {type: orogen, path: [[0.10, 0.02], [0.08, 0.50], [0.14, 0.98]], width: 0.08, rate: 1.8e-3, asymmetry: 0.5, jitter: 0.04}
+      - {type: fault, path: [[0.30, 0.85], [0.60, 0.80], [0.95, 0.88]], rate: 6.0e-4, reach: 0.12, jitter: 0.03}
+      - {type: dome, at: [0.50, 0.20], r: 0.08, rate: 5.0e-4, jitter: 0.05}
+  - stage: geology
+    provinces: 6
+    rock_mix: {granite: 0.15, sandstone: 0.35, shale: 0.25, limestone: 0.25}
+    fold_belt: {width: 0.07, strength: 0.4, period: 0.045, contrast: 1.8}
+    plutons: [0, 1]
+  - stage: climate_model
+    wind_from_deg: 250
+    base_precip_mm: 750
+    orographic_mm: 900
+    T_base_c: 11
+  - stage: landscape_evolution
+    steps: 240
+    dt_yr: 2.5e4
+    climate_every: 30
+  - stage: hydrology
+    river_q: 0.1
+    big_river_q: 1.0
+  - stage: ecology
+  - stage: elements
+  - stage: settlements
+    counts: {city: 1, town: 1, village: 4, hamlet: 5}
+    spacing_km: {city: 5, town: 4, village: 2.2, hamlet: 1.3}
+  - stage: pois
+    ruins: 1
+    extractions: 2
+    portals: 2
+    min_extraction_sep_km: 5
+    extraction_min_km_from_settlement: 1.5
+  - stage: resources
+    counts: {iron_ore: 2, stone: 3, clay: 2, timber: 3, herbs: 1}
+  - stage: roads
+  - stage: sites
+    counts: {watchtower: 4, cave: 1, camp: 2}
+  - stage: travel
+  - stage: constraints
+    elevation_m.relief: [400, 1800]
+    lake_pct: [0, 8]
+    feature_counts.city: [1, 1]
+    feature_counts.watchtower: [3, 4]

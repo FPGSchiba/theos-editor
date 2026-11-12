@@ -1,0 +1,64 @@
+# Probe 1b (band 1 at a wide scale): a 16 km farmland floor, three villages and a market town.
+# Same structure (stage list, source list) as p3-wildwood-16km.yaml so probe 8 can interpolate.
+name: p1b-farmland-16km
+kind: terrain
+grid: [384, 384]
+size_km: [16, 16]
+renders: [truth]
+pipeline:
+  - stage: grid
+    edges: [south]
+  - stage: tectonics
+    background_uplift: 1.2e-4
+    background_variation: 0.8
+    background_beta: 2.8
+    sources:
+      - {type: orogen, path: [[0.10, 0.02], [0.06, 0.50], [0.12, 0.98]], width: 0.07, rate: 9.0e-4, asymmetry: 0.5, jitter: 0.04}
+      - {type: dome, at: [0.55, 0.80], r: 0.10, rate: 3.0e-4, jitter: 0.06}
+      - {type: dome, at: [0.45, 0.15], r: 0.10, rate: 3.0e-4, jitter: 0.06}
+      - {type: basin, at: [0.65, 0.45], r: 0.05, rate: 0, depth_m: 4, jitter: 0.05}
+      - {type: basin, at: [0.35, 0.60], r: 0.04, rate: 0, depth_m: 3, jitter: 0.05}
+  - stage: geology
+    provinces: 6
+    rock_mix: {granite: 0.05, sandstone: 0.35, shale: 0.35, limestone: 0.25}
+    fold_belt: {width: 0.06, strength: 0.3, period: 0.045, contrast: 1.5}
+    plutons: [0, 1]
+  - stage: climate_model
+    wind_from_deg: 250
+    wind_speed: 10
+    base_precip_mm: 650
+    orographic_mm: 500
+    T_base_c: 12
+    lapse_c_per_km: 6.5
+  - stage: landscape_evolution
+    steps: 240
+    dt_yr: 2.5e4
+    climate_every: 30
+  - stage: hydrology
+    river_q: 0.15
+    big_river_q: 2.0
+  - stage: ecology
+  - stage: elements
+  - stage: settlements
+    counts: {town: 1, village: 3, hamlet: 6}
+    spacing_km: {town: 4.5, village: 3.0, hamlet: 1.4}
+  - stage: pois
+    ruins: 1
+    extractions: 2
+    portals: 2
+    min_extraction_sep_km: 6
+    extraction_min_km_from_settlement: 2.0
+  - stage: resources
+    counts: {stone: 2, clay: 3, timber: 2, peat_reeds: 1, herbs: 2}
+  - stage: roads
+    forest_cost: 0.8
+    loop_detour: 1.7
+  - stage: sites
+    counts: {watchtower: 1, cave: 0, camp: 1}
+  - stage: travel
+  - stage: constraints
+    elevation_m.relief: [150, 900]
+    lake_pct: [0, 6]
+    vegetation_cover_pct: [20, 70]
+    feature_counts.town: [1, 1]
+    feature_counts.village: [3, 3]

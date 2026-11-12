@@ -1,0 +1,37 @@
+# Probe 4b (band 4): a cavern-like interior from ragged and round rooms inside an eroded
+# circular envelope. One level only; corridors stay orthogonal and of constant width.
+name: p4b-cavern
+kind: interior
+grid: [160, 160]
+cell_m: 2.0
+renders: [blueprint]
+pipeline:
+  - stage: envelope
+    shape: circle
+    margin: 3
+    erosion: 1.0
+  - stage: program
+    rooms:
+      - {type: cave_mouth, role: start, size: [8, 10], shape: ragged}
+      - {type: great_cavern, role: goal, size: [[30, 36], [24, 30]], shape: ragged}
+      - {type: cavern, role: path, count: [6, 8], size: [[10, 18], [10, 18]], shape: ragged}
+      - {type: sump, role: path, count: [2, 3], size: [[8, 12], [8, 12]], shape: round}
+      - {type: grotto, role: leaf, count: [5, 7], size: [[6, 10], [6, 10]], shape: ragged}
+      - {type: crystal_pocket, role: leaf, size: [8, 9], shape: round, locked: true}
+      - {type: extraction, role: extraction, count: 2, size: [5, 6], shape: round}
+  - stage: topology
+    extra_cycles: 3
+  - stage: layout
+    gap: 1
+    iterations: 600
+    start_side: south
+    spread: 0.5
+  - stage: corridors
+    width_main: 2
+    width_side: 1
+  - stage: cover
+    max_sightline_m: 40
+  - stage: analysis
+  - stage: constraints
+    analysis.critical_path_m: [150, 900]
+    analysis.footprint_used_pct: [35, 90]
