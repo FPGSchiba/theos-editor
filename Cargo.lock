@@ -882,6 +882,16 @@ version = "0.0.0"
 [[package]]
 name = "theos-studio"
 version = "0.0.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "theos-content",
+ "thiserror",
+ "tracing",
+]
 
 [[package]]
 name = "theos-vcs"
