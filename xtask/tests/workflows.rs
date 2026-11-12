@@ -187,7 +187,7 @@ fn map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
 }
 
 /// The suffixes GitHub adds to the name of a job that runs on one OS of a matrix.
-const OS_SUFFIXES: [&str; 2] = [" (windows)", " (macos)"];
+const OS_SUFFIXES: [&str; 3] = [" (windows)", " (macos)", " (macos intel)"];
 
 /// The check a job runs: its name without the OS suffix.
 fn check_of(name: &str) -> &str {
@@ -203,6 +203,8 @@ fn runner_of(name: &str) -> &'static str {
         "windows-latest"
     } else if name.ends_with(" (macos)") {
         "macos-latest"
+    } else if name.ends_with(" (macos intel)") {
+        "macos-15-intel"
     } else {
         "ubuntu-latest"
     }
@@ -504,7 +506,7 @@ fn no_key_lets_a_step_of_the_setup_action_fail_silently() -> TestResult {
 fn timeout_of(name: &str) -> i64 {
     match name {
         "test" | "coverage" => 60,
-        _ if name.ends_with(" (windows)") || name.ends_with(" (macos)") => 60,
+        _ if OS_SUFFIXES.iter().any(|suffix| name.ends_with(suffix)) => 60,
         _ => 30,
     }
 }
@@ -579,6 +581,7 @@ fn platforms_runs_weekly_on_demand_and_by_label() -> TestResult {
             "ac-trace (windows)",
             "clippy (macos)",
             "test (macos)",
+            "test (macos intel)",
             "lints (macos)",
             "ac-trace (macos)",
         ])
