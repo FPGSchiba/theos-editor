@@ -473,8 +473,9 @@ fn no_key_lets_a_job_pass_while_xtask_fails() -> TestResult {
 #[test]
 fn no_key_lets_a_step_of_the_setup_action_fail_silently() -> TestResult {
     let action = parse(SETUP_ACTION)?;
+    // `inputs` are pinned by `setup_action_passes_the_cache_inputs_to_rust_cache`.
     assert_eq!(
-        unexpected_keys(&action, &["name", "description", "runs"])?,
+        unexpected_keys(&action, &["name", "description", "inputs", "runs"])?,
         Vec::<String>::new(),
         "the setup action has a key it does not need"
     );
@@ -1020,5 +1021,77 @@ fn setup_action_installs_the_toolchain_the_cache_and_the_pinned_tools() -> TestR
         steps[3]["with"]["tool"].as_str(),
         Some("${{ steps.tools.outputs.spec }}")
     );
+    Ok(())
+}
+
+/// The two inputs of the setup action reach rust-cache and nothing else: the key of jobs that
+/// build the same thing and share one cache, and whether the job saves the cache. Their defaults
+/// keep rust-cache's own behaviour, a cache per job that every run saves.
+#[test]
+fn setup_action_passes_the_cache_inputs_to_rust_cache() -> TestResult {
+    let action = parse(SETUP_ACTION)?;
+    let inputs = &action["inputs"];
+    assert_eq!(keys(inputs)?, set(&["cache-key", "save-cache"]));
+    for (input, default) in [("cache-key", ""), ("save-cache", "true")] {
+        assert_eq!(
+            scalar(&inputs[input]["default"]).as_deref(),
+            Some(default),
+            "{input}"
+        );
+        assert_eq!(inputs[input]["required"].as_bool(), Some(false), "{input}");
+    }
+    assert_eq!(
+        string_map(&action["runs"]["steps"][1]["with"])?,
+        map(&[
+            ("shared-key", "${{ inputs.cache-key }}"),
+            ("save-if", "${{ inputs.save-cache }}"),
+        ]),
+        "the rust-cache step"
+    );
+    Ok(())
+}
+
+/// `approval` runs on pull requests only, so a cache of its own is never saved on `main`, the one
+/// place every pull request restores from, and each of its runs built xtask from scratch. It
+/// restores the cache of `fmt` instead, which builds the same xtask, and saves nothing. `fmt`
+/// saves that cache on `main` only: a pull request is searched first, so a cache a pull request
+/// saved would win over the one of `main`, in the one job that holds a token that can label.
+#[test]
+fn approval_restores_the_xtask_cache_that_main_saves() -> TestResult {
+    let shared = [
+        (
+            "ci.yml",
+            "fmt",
+            map(&[
+                ("cache-key", "xtask"),
+                ("save-cache", "${{ github.ref == 'refs/heads/main' }}"),
+            ]),
+        ),
+        (
+            "approval.yml",
+            "approval",
+            map(&[("cache-key", "xtask"), ("save-cache", "false")]),
+        ),
+    ];
+    for (file, job) in all_jobs()? {
+        let name = &job.name;
+        let setup = job
+            .steps()?
+            .iter()
+            .find(|step| step["uses"].as_str() == Some(SETUP_USES))
+            .ok_or_else(|| format!("{file}: job {name} has no setup step"))?;
+        let expected = shared
+            .iter()
+            .find(|(in_file, job_name, _)| *in_file == file && job_name == name)
+            .map(|(_, _, with)| with);
+        match expected {
+            Some(with) => assert_eq!(&string_map(&setup["with"])?, with, "{file}: job {name}"),
+            None => assert_eq!(
+                setup["with"],
+                Yaml::BadValue,
+                "{file}: job {name} passes inputs to the setup action"
+            ),
+        }
+    }
     Ok(())
 }
