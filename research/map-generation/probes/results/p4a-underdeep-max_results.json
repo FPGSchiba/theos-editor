@@ -1,0 +1,286 @@
+[
+ {
+  "recipe": "p4a-underdeep-max",
+  "seed": 1,
+  "topology": {
+   "rooms": 62,
+   "connections": 68,
+   "cycles": 7,
+   "locks": 4,
+   "one_way": 1
+  },
+  "cover_items": 119,
+  "analysis": {
+   "rooms_carved": "62/62",
+   "all_connected": true,
+   "solvable": true,
+   "unreachable_rooms": [],
+   "critical_path_m": 854.0,
+   "critical_route": [
+    "entrance",
+    "junction",
+    "gallery",
+    "junction",
+    "gallery",
+    "gallery",
+    "gallery",
+    "junction",
+    "great_hall"
+   ],
+   "goal_to_extractions_m": [
+    408.0,
+    186.0,
+    336.0,
+    536.0
+   ],
+   "start_to_extractions_m": [
+    438.0,
+    568.0,
+    806.0,
+    566.0
+   ],
+   "chokepoints": 16,
+   "cycles": 7,
+   "dead_end_pct": 50.0,
+   "longest_sightline_m": 78.0,
+   "footprint_used_pct": 10.6,
+   "floor_size_m": [
+    600,
+    600
+   ]
+  },
+  "constraints": {
+   "analysis.critical_path_m": {
+    "value": 854.0,
+    "ok": true
+   },
+   "analysis.longest_sightline_m": {
+    "value": 78.0,
+    "ok": false
+   },
+   "analysis.footprint_used_pct": {
+    "value": 10.6,
+    "ok": false
+   },
+   "all_ok": false
+  },
+  "run_s": 8.1
+ },
+ {
+  "recipe": "p4a-underdeep-max",
+  "seed": 2,
+  "topology": {
+   "rooms": 65,
+   "connections": 71,
+   "cycles": 7,
+   "locks": 4,
+   "one_way": 1
+  },
+  "cover_items": 117,
+  "analysis": {
+   "rooms_carved": "65/65",
+   "all_connected": true,
+   "solvable": true,
+   "unreachable_rooms": [],
+   "critical_path_m": 2480.0,
+   "critical_route": [
+    "entrance",
+    "junction",
+    "gallery",
+    "junction",
+    "junction",
+    "gallery",
+    "junction",
+    "junction",
+    "junction",
+    "gallery",
+    "gallery",
+    "gallery",
+    "machine_hall",
+    "gallery",
+    "gallery",
+    "great_hall"
+   ],
+   "goal_to_extractions_m": [
+    288.0,
+    90.0,
+    204.0,
+    296.0
+   ],
+   "start_to_extractions_m": [
+    224.0,
+    446.0,
+    408.0,
+    232.0
+   ],
+   "chokepoints": 16,
+   "cycles": 7,
+   "dead_end_pct": 50.8,
+   "longest_sightline_m": 82.0,
+   "footprint_used_pct": 10.8,
+   "floor_size_m": [
+    600,
+    600
+   ]
+  },
+  "constraints": {
+   "analysis.critical_path_m": {
+    "value": 2480.0,
+    "ok": true
+   },
+   "analysis.longest_sightline_m": {
+    "value": 82.0,
+    "ok": false
+   },
+   "analysis.footprint_used_pct": {
+    "value": 10.8,
+    "ok": false
+   },
+   "all_ok": false
+  },
+  "run_s": 9.3
+ },
+ {
+  "recipe": "p4a-underdeep-max",
+  "seed": 3,
+  "topology": {
+   "rooms": 60,
+   "connections": 66,
+   "cycles": 7,
+   "locks": 4,
+   "one_way": 1
+  },
+  "cover_items": 105,
+  "analysis": {
+   "rooms_carved": "60/60",
+   "all_connected": true,
+   "solvable": true,
+   "unreachable_rooms": [],
+   "critical_path_m": 1578.0,
+   "critical_route": [
+    "entrance",
+    "gallery",
+    "junction",
+    "junction",
+    "gallery",
+    "junction",
+    "machine_hall",
+    "machine_hall",
+    "machine_hall",
+    "junction",
+    "gallery",
+    "gallery",
+    "junction",
+    "machine_hall",
+    "great_hall"
+   ],
+   "goal_to_extractions_m": [
+    522.0,
+    104.0,
+    388.0,
+    298.0
+   ],
+   "start_to_extractions_m": [
+    180.0,
+    514.0,
+    566.0,
+    556.0
+   ],
+   "chokepoints": 15,
+   "cycles": 7,
+   "dead_end_pct": 50.0,
+   "longest_sightline_m": 68.0,
+   "footprint_used_pct": 10.2,
+   "floor_size_m": [
+    600,
+    600
+   ]
+  },
+  "constraints": {
+   "analysis.critical_path_m": {
+    "value": 1578.0,
+    "ok": true
+   },
+   "analysis.longest_sightline_m": {
+    "value": 68.0,
+    "ok": true
+   },
+   "analysis.footprint_used_pct": {
+    "value": 10.2,
+    "ok": false
+   },
+   "all_ok": false
+  },
+  "run_s": 7.7
+ },
+ {
+  "recipe": "p4a-underdeep-max",
+  "seed": 4,
+  "topology": {
+   "rooms": 63,
+   "connections": 69,
+   "cycles": 7,
+   "locks": 4,
+   "one_way": 1
+  },
+  "cover_items": 105,
+  "analysis": {
+   "rooms_carved": "63/63",
+   "all_connected": true,
+   "solvable": true,
+   "unreachable_rooms": [],
+   "critical_path_m": 1114.0,
+   "critical_route": [
+    "entrance",
+    "junction",
+    "junction",
+    "junction",
+    "machine_hall",
+    "gallery",
+    "gallery",
+    "gallery",
+    "gallery",
+    "junction",
+    "machine_hall",
+    "great_hall"
+   ],
+   "goal_to_extractions_m": [
+    720.0,
+    98.0,
+    622.0,
+    462.0
+   ],
+   "start_to_extractions_m": [
+    66.0,
+    796.0,
+    544.0,
+    736.0
+   ],
+   "chokepoints": 19,
+   "cycles": 7,
+   "dead_end_pct": 50.8,
+   "longest_sightline_m": 70.0,
+   "footprint_used_pct": 10.6,
+   "floor_size_m": [
+    600,
+    600
+   ]
+  },
+  "constraints": {
+   "analysis.critical_path_m": {
+    "value": 1114.0,
+    "ok": true
+   },
+   "analysis.longest_sightline_m": {
+    "value": 70.0,
+    "ok": true
+   },
+   "analysis.footprint_used_pct": {
+    "value": 10.6,
+    "ok": false
+   },
+   "all_ok": false
+  },
+  "run_s": 9.0
+ }
+]

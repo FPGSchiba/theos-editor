@@ -1,0 +1,186 @@
+[
+ {
+  "seed": 1,
+  "t": 0.0,
+  "run_s": 21.3,
+  "relief_m": 340,
+  "lake_pct": 3.35,
+  "veg_pct": 45.8,
+  "rivers_pct": 0.05,
+  "slope_p90_deg": 7.7,
+  "settlements": 10,
+  "road_km": 49.0
+ },
+ {
+  "seed": 1,
+  "t": 0.25,
+  "run_s": 19.0,
+  "relief_m": 428,
+  "lake_pct": 3.63,
+  "veg_pct": 90.6,
+  "rivers_pct": 0.19,
+  "slope_p90_deg": 10.2,
+  "settlements": 8,
+  "road_km": 36.8,
+  "step_height_corr": 0.941,
+  "step_height_rms_m": 31.9,
+  "step_river_overlap": 0.082,
+  "step_lake_overlap": 0.144,
+  "step_settlement_move_km": {
+   "median": 8.65,
+   "max": 10.21
+  }
+ },
+ {
+  "seed": 1,
+  "t": 0.5,
+  "run_s": 19.1,
+  "relief_m": 930,
+  "lake_pct": 27.18,
+  "veg_pct": 80.3,
+  "rivers_pct": 0.64,
+  "slope_p90_deg": 30.7,
+  "settlements": 6,
+  "road_km": 33.8,
+  "step_height_corr": 0.88,
+  "step_height_rms_m": 130.6,
+  "step_river_overlap": 0.009,
+  "step_lake_overlap": 0.108,
+  "step_settlement_move_km": {
+   "median": 7.58,
+   "max": 9.72
+  }
+ },
+ {
+  "seed": 1,
+  "t": 0.75,
+  "run_s": 19.6,
+  "relief_m": 1264,
+  "lake_pct": 4.79,
+  "veg_pct": 81.2,
+  "rivers_pct": 1.25,
+  "slope_p90_deg": 41.4,
+  "settlements": 6,
+  "road_km": 33.1,
+  "step_height_corr": 0.788,
+  "step_height_rms_m": 194.4,
+  "step_river_overlap": 0.052,
+  "step_lake_overlap": 0.173,
+  "step_settlement_move_km": {
+   "median": 7.78,
+   "max": 10.21
+  }
+ },
+ {
+  "seed": 1,
+  "t": 1.0,
+  "run_s": 18.2,
+  "relief_m": 1469,
+  "lake_pct": 7.43,
+  "veg_pct": 71.7,
+  "rivers_pct": 1.87,
+  "slope_p90_deg": 47.8,
+  "settlements": 4,
+  "road_km": 41.5,
+  "step_height_corr": 0.954,
+  "step_height_rms_m": 171.5,
+  "step_river_overlap": 0.085,
+  "step_lake_overlap": 0.456,
+  "step_settlement_move_km": {
+   "median": 5.76,
+   "max": 8.24
+  }
+ },
+ {
+  "seed": 2,
+  "t": 0.0,
+  "run_s": 20.4,
+  "relief_m": 1059,
+  "lake_pct": 23.47,
+  "veg_pct": 58.0,
+  "rivers_pct": 0.46,
+  "slope_p90_deg": 31.8,
+  "settlements": 10,
+  "road_km": 97.1
+ },
+ {
+  "seed": 2,
+  "t": 0.25,
+  "run_s": 18.8,
+  "relief_m": 1225,
+  "lake_pct": 13.94,
+  "veg_pct": 83.0,
+  "rivers_pct": 0.86,
+  "slope_p90_deg": 41.6,
+  "settlements": 8,
+  "road_km": 58.2,
+  "step_height_corr": 0.859,
+  "step_height_rms_m": 106.5,
+  "step_river_overlap": 0.011,
+  "step_lake_overlap": 0.38,
+  "step_settlement_move_km": {
+   "median": 3.76,
+   "max": 12.57
+  }
+ },
+ {
+  "seed": 2,
+  "t": 0.5,
+  "run_s": 19.0,
+  "relief_m": 1439,
+  "lake_pct": 15.67,
+  "veg_pct": 87.0,
+  "rivers_pct": 1.23,
+  "slope_p90_deg": 37.2,
+  "settlements": 6,
+  "road_km": 83.5,
+  "step_height_corr": 0.712,
+  "step_height_rms_m": 144.1,
+  "step_river_overlap": 0.05,
+  "step_lake_overlap": 0.398,
+  "step_settlement_move_km": {
+   "median": 4.28,
+   "max": 12.12
+  }
+ },
+ {
+  "seed": 2,
+  "t": 0.75,
+  "run_s": 18.7,
+  "relief_m": 1358,
+  "lake_pct": 16.82,
+  "veg_pct": 87.7,
+  "rivers_pct": 1.44,
+  "slope_p90_deg": 31.1,
+  "settlements": 6,
+  "road_km": 72.9,
+  "step_height_corr": 0.833,
+  "step_height_rms_m": 106.1,
+  "step_river_overlap": 0.052,
+  "step_lake_overlap": 0.595,
+  "step_settlement_move_km": {
+   "median": 6.15,
+   "max": 14.29
+  }
+ },
+ {
+  "seed": 2,
+  "t": 1.0,
+  "run_s": 19.6,
+  "relief_m": 1324,
+  "lake_pct": 18.42,
+  "veg_pct": 86.4,
+  "rivers_pct": 1.75,
+  "slope_p90_deg": 39.2,
+  "settlements": 4,
+  "road_km": 40.2,
+  "step_height_corr": 0.936,
+  "step_height_rms_m": 83.3,
+  "step_river_overlap": 0.077,
+  "step_lake_overlap": 0.799,
+  "step_settlement_move_km": {
+   "median": 3.65,
+   "max": 11.18
+  }
+ }
+]

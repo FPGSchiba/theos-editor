@@ -1,0 +1,504 @@
+[
+ {
+  "recipe": "hearth-valley",
+  "seed": 1,
+  "geology_pct": {
+   "granite": 27.9,
+   "quartzite": 5.3,
+   "sandstone": 57.0,
+   "shale": 7.5,
+   "alluvium": 2.3
+  },
+  "evolution_s": 14.7,
+  "elevation_m": {
+   "min": -42,
+   "median": 49,
+   "max": 1191,
+   "relief": 1234
+  },
+  "terminal_lakes": 1,
+  "precip_mm_yr": {
+   "p5": 308,
+   "median": 877,
+   "p95": 1742
+  },
+  "rivers_pct": 0.99,
+  "max_discharge_m3s": 4.3,
+  "lakes": 17,
+  "lake_pct": 2.99,
+  "temperature_c": {
+   "min": 4.3,
+   "max": 12.0
+  },
+  "vegetation_cover_pct": 53.7,
+  "snow_pct": 0.0,
+  "element_mix": {
+   "water": 0.214,
+   "wood": 0.362,
+   "earth": 0.282,
+   "metal": 0.105,
+   "fire": 0.036
+  },
+  "poi_requested": {
+   "ruin": 2,
+   "extraction": 2
+  },
+  "roads": {
+   "trail": 11.8,
+   "track": 45.3,
+   "road": 42.4
+  },
+  "sites": {
+   "camp": 3,
+   "ford": 2,
+   "inn": 3,
+   "lumber_camp": 4,
+   "mill": 5,
+   "mine": 6,
+   "quarry": 3,
+   "shrine": 2,
+   "watchtower": 3
+  },
+  "travel": {
+   "extraction_to_extraction_min": 99.2,
+   "settlement_to_nearest_extraction_min": {
+    "city-1": 154.3,
+    "town-1": 180.4,
+    "town-2": 119.7,
+    "village-1": 39.0,
+    "village-2": 59.6,
+    "village-3": 86.6,
+    "village-4": 229.0,
+    "village-5": 97.4,
+    "hamlet-1": 147.3,
+    "hamlet-2": 160.7,
+    "hamlet-3": 131.1,
+    "hamlet-4": 165.4,
+    "hamlet-5": 53.2,
+    "hamlet-6": 75.4
+   },
+   "floor_pct_within_15min_of_extraction": 1.6
+  },
+  "poi": {
+   "city": [
+    [
+     120,
+     297
+    ]
+   ],
+   "town": [
+    [
+     144,
+     333
+    ],
+    [
+     135,
+     255
+    ]
+   ],
+   "village": [
+    [
+     201,
+     122
+    ],
+    [
+     171,
+     157
+    ],
+    [
+     241,
+     254
+    ],
+    [
+     9,
+     298
+    ],
+    [
+     119,
+     161
+    ]
+   ],
+   "hamlet": [
+    [
+     131,
+     289
+    ],
+    [
+     107,
+     301
+    ],
+    [
+     122,
+     266
+    ],
+    [
+     131,
+     313
+    ],
+    [
+     181,
+     128
+    ],
+    [
+     153,
+     162
+    ]
+   ],
+   "ruin": [
+    [
+     116,
+     356
+    ],
+    [
+     236,
+     359
+    ]
+   ],
+   "extraction": [
+    [
+     261,
+     142
+    ],
+    [
+     372,
+     75
+    ]
+   ],
+   "portal_in": [
+    [
+     261,
+     142
+    ]
+   ],
+   "portal_out": [
+    [
+     10,
+     350
+    ]
+   ],
+   "iron_ore": [
+    [
+     40,
+     95
+    ],
+    [
+     41,
+     23
+    ],
+    [
+     5,
+     90
+    ]
+   ],
+   "copper_ore": [
+    [
+     278,
+     42
+    ],
+    [
+     217,
+     307
+    ]
+   ],
+   "silver_ore": [
+    [
+     235,
+     359
+    ]
+   ],
+   "stone": [
+    [
+     196,
+     18
+    ],
+    [
+     360,
+     372
+    ],
+    [
+     73,
+     62
+    ]
+   ],
+   "clay": [
+    [
+     152,
+     134
+    ],
+    [
+     119,
+     148
+    ],
+    [
+     143,
+     103
+    ]
+   ],
+   "timber": [
+    [
+     200,
+     313
+    ],
+    [
+     97,
+     293
+    ],
+    [
+     128,
+     327
+    ],
+    [
+     140,
+     364
+    ]
+   ],
+   "peat_reeds": [
+    [
+     118,
+     296
+    ],
+    [
+     145,
+     270
+    ]
+   ],
+   "salt": [
+    [
+     170,
+     102
+    ]
+   ],
+   "resonance_crystal": [
+    [
+     235,
+     360
+    ],
+    [
+     260,
+     333
+    ]
+   ],
+   "herbs": [
+    [
+     5,
+     15
+    ],
+    [
+     4,
+     51
+    ]
+   ],
+   "ford": [
+    [
+     186,
+     322
+    ],
+    [
+     200,
+     327
+    ]
+   ],
+   "mill": [
+    [
+     118,
+     299
+    ],
+    [
+     147,
+     333
+    ],
+    [
+     126,
+     260
+    ],
+    [
+     248,
+     253
+    ],
+    [
+     22,
+     313
+    ]
+   ],
+   "mine": [
+    [
+     40,
+     95
+    ],
+    [
+     41,
+     23
+    ],
+    [
+     5,
+     90
+    ],
+    [
+     278,
+     42
+    ],
+    [
+     217,
+     307
+    ],
+    [
+     235,
+     359
+    ]
+   ],
+   "quarry": [
+    [
+     196,
+     18
+    ],
+    [
+     360,
+     372
+    ],
+    [
+     73,
+     62
+    ]
+   ],
+   "lumber_camp": [
+    [
+     200,
+     313
+    ],
+    [
+     97,
+     293
+    ],
+    [
+     128,
+     327
+    ],
+    [
+     140,
+     364
+    ]
+   ],
+   "shrine": [
+    [
+     235,
+     360
+    ],
+    [
+     260,
+     333
+    ]
+   ],
+   "watchtower": [
+    [
+     23,
+     356
+    ],
+    [
+     257,
+     254
+    ],
+    [
+     167,
+     236
+    ]
+   ],
+   "inn": [
+    [
+     205,
+     200
+    ],
+    [
+     230,
+     192
+    ],
+    [
+     230,
+     182
+    ]
+   ],
+   "camp": [
+    [
+     190,
+     373
+    ],
+    [
+     40,
+     359
+    ],
+    [
+     313,
+     250
+    ]
+   ]
+  },
+  "feature_counts": {
+   "city": 1,
+   "town": 2,
+   "village": 5,
+   "hamlet": 6,
+   "ruin": 2,
+   "extraction": 2,
+   "portal_in": 1,
+   "portal_out": 1,
+   "iron_ore": 3,
+   "copper_ore": 2,
+   "silver_ore": 1,
+   "stone": 3,
+   "clay": 3,
+   "timber": 4,
+   "peat_reeds": 2,
+   "salt": 1,
+   "resonance_crystal": 2,
+   "herbs": 2,
+   "ford": 2,
+   "mill": 5,
+   "mine": 6,
+   "quarry": 3,
+   "lumber_camp": 4,
+   "shrine": 2,
+   "watchtower": 3,
+   "inn": 3,
+   "camp": 3
+  },
+  "constraints": {
+   "elevation_m.relief": {
+    "value": 1234,
+    "ok": true
+   },
+   "lake_pct": {
+    "value": 2.99,
+    "ok": true
+   },
+   "vegetation_cover_pct": {
+    "value": 53.7,
+    "ok": true
+   },
+   "ruin_placed": {
+    "value": 2,
+    "ok": true
+   },
+   "extraction_placed": {
+    "value": 2,
+    "ok": true
+   },
+   "all_ok": true
+  },
+  "pipeline": [
+   "grid",
+   "tectonics",
+   "geology",
+   "climate_model",
+   "landscape_evolution",
+   "hydrology",
+   "ecology",
+   "elements",
+   "settlements",
+   "pois",
+   "resources",
+   "roads",
+   "sites",
+   "travel",
+   "constraints"
+  ]
+ }
+]
