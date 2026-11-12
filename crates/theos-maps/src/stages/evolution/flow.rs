@@ -139,7 +139,6 @@ impl ValueType for FlowWeights {
 /// reverse `stack` order (donors before receivers), so `out[i] = input[i] + sum of out[d]·w(d→i)`
 /// over the donors `d` of `i`.
 #[must_use]
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in by Task 24"))]
 pub fn accumulate(stack: &[u32], w: &FlowWeights, input: &Grid<f64>) -> Grid<f64> {
     let mut out = input.clone();
     for &cell in stack.iter().rev() {

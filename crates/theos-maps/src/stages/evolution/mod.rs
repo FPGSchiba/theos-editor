@@ -16,6 +16,7 @@
 
 mod declaration;
 mod flow;
+mod fluvial;
 mod initial;
 mod partition_flow;
 mod processes;

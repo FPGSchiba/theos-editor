@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use super::Evolution;
+use super::fluvial::Fluvial;
 use super::partition_flow::PartitionFlow;
 use super::resolve_sinks::ResolveSinks;
 use super::route_steepest::RouteSteepest;
@@ -19,6 +20,7 @@ pub(crate) const PROCESSES: &[Constructor] = &[
     || Box::new(RouteSteepest),
     || Box::new(ResolveSinks),
     || Box::new(PartitionFlow),
+    || Box::new(Fluvial),
 ];
 
 /// One per-step process of a recipe, with its parsed parameters.
