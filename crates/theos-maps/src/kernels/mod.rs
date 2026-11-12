@@ -1,6 +1,8 @@
 //! Numeric kernels shared by the generator stages.
 
 pub mod complex;
+pub mod contour;
+pub mod curves;
 pub mod diff;
 pub mod distance;
 pub mod fft;
@@ -11,6 +13,7 @@ pub mod noise;
 pub mod num;
 pub mod reflect;
 pub mod stats;
+pub mod voronoi;
 
 #[cfg(test)]
 #[expect(
@@ -32,6 +35,18 @@ pub enum KernelError {
     #[error("FFT length {len} is not a power of two")]
     NotPowerOfTwo {
         /// The length given.
+        len: usize,
+    },
+    /// A point that cannot enter a triangulation: a NaN, an infinity, or a value spade refuses.
+    #[error("point {index} is not finite or is out of range for the triangulation")]
+    InvalidPoint {
+        /// Index of the point (or grid cell) at fault.
+        index: usize,
+    },
+    /// More points than a `u32` label can number.
+    #[error("{len} points do not fit a u32 label")]
+    TooMany {
+        /// Number of points given.
         len: usize,
     },
     /// A data slice that does not hold `rows * cols` values.
