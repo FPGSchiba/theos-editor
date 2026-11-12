@@ -1,0 +1,39 @@
+# Probe 4c: scale test of p4a - 500 x 500 cells (1 km square), about 160 rooms.
+# 60-70 rooms. The recipe model has no levels: one grid, one walk mask.
+name: p4c-underdeep-scale-500
+kind: interior
+grid: [500, 500]
+cell_m: 2.0
+renders: [blueprint]
+pipeline:
+  - stage: envelope
+    shape: rect
+    margin: 3
+  - stage: program
+    rooms:
+      - {type: entrance, role: start, size: [6, 8]}
+      - {type: great_hall, role: goal, size: [30, 40], shape: rect}
+      - {type: gallery, role: path, count: [38, 40], size: [[5, 8], [14, 24]], shape: long}
+      - {type: junction, role: path, count: [22, 24], size: [5, 7]}
+      - {type: machine_hall, role: path, count: [11, 12], size: [[14, 20], [14, 20]]}
+      - {type: vault, role: leaf, count: 8, size: [9, 11], locked: true}
+      - {type: cell, role: leaf, count: [38, 40], size: [5, 8]}
+      - {type: store, role: leaf, count: [22, 24], size: [5, 7]}
+      - {type: extraction, role: extraction, count: 8, size: [5, 6], shape: round}
+  - stage: topology
+    extra_cycles: 15
+  - stage: layout
+    gap: 2
+    iterations: 600
+    start_side: south
+    spread: 0.8
+  - stage: corridors
+    width_main: 2
+    width_side: 1
+  - stage: cover
+    max_sightline_m: 60
+  - stage: analysis
+  - stage: constraints
+    analysis.critical_path_m: [400, 3000]
+    analysis.longest_sightline_m: [10, 70]
+    analysis.footprint_used_pct: [25, 80]

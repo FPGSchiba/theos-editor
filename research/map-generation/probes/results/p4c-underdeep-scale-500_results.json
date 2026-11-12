@@ -1,0 +1,77 @@
+[
+ {
+  "recipe": "p4c-underdeep-scale-500",
+  "seed": 1,
+  "topology": {
+   "rooms": 155,
+   "connections": 171,
+   "cycles": 17,
+   "locks": 9,
+   "one_way": 1
+  },
+  "cover_items": 120,
+  "analysis": {
+   "rooms_carved": "155/155",
+   "all_connected": true,
+   "solvable": true,
+   "unreachable_rooms": [],
+   "critical_path_m": 1150.0,
+   "critical_route": [
+    "entrance",
+    "junction",
+    "machine_hall",
+    "junction",
+    "junction",
+    "gallery",
+    "gallery",
+    "junction",
+    "great_hall"
+   ],
+   "goal_to_extractions_m": [
+    628.0,
+    120.0,
+    726.0,
+    1002.0,
+    122.0,
+    734.0,
+    664.0,
+    422.0
+   ],
+   "start_to_extractions_m": [
+    402.0,
+    946.0,
+    828.0,
+    636.0,
+    732.0,
+    836.0,
+    282.0,
+    600.0
+   ],
+   "chokepoints": 40,
+   "cycles": 17,
+   "dead_end_pct": 49.7,
+   "longest_sightline_m": 96.0,
+   "footprint_used_pct": 9.8,
+   "floor_size_m": [
+    1000,
+    1000
+   ]
+  },
+  "constraints": {
+   "analysis.critical_path_m": {
+    "value": 1150.0,
+    "ok": true
+   },
+   "analysis.longest_sightline_m": {
+    "value": 96.0,
+    "ok": false
+   },
+   "analysis.footprint_used_pct": {
+    "value": 9.8,
+    "ok": false
+   },
+   "all_ok": false
+  },
+  "run_s": 44.1
+ }
+]

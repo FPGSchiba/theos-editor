@@ -1,0 +1,60 @@
+# Probe 1a (band 1 at a small scale): a 4 km pastoral valley, one village and a few hamlets.
+# Changes against hearth-valley: size, gentler uplift, river thresholds lowered because a
+# 4 km catchment cannot reach the default 0.15 m3/s, settlement spacing shrunk.
+name: p1a-small-valley-4km
+kind: terrain
+grid: [256, 256]
+size_km: [4, 4]
+renders: [truth]
+pipeline:
+  - stage: grid
+    edges: [south]
+  - stage: tectonics
+    background_uplift: 1.0e-4
+    background_variation: 0.7
+    background_beta: 2.8
+    sources:
+      - {type: orogen, path: [[0.5, 0.04], [0.45, 0.10], [0.1, 0.08]], width: 0.10, rate: 6.0e-4, asymmetry: 0.3, jitter: 0.03}
+      - {type: orogen, path: [[0.5, 0.96], [0.45, 0.90], [0.1, 0.92]], width: 0.10, rate: 6.0e-4, asymmetry: 0.3, jitter: 0.03}
+      - {type: dome, at: [0.05, 0.5], r: 0.15, rate: 5.0e-4, jitter: 0.04}
+  - stage: geology
+    provinces: 4
+    rock_mix: {sandstone: 0.4, shale: 0.3, limestone: 0.3}
+    plutons: [0, 0]
+  - stage: climate_model
+    wind_from_deg: 250
+    base_precip_mm: 800
+    orographic_mm: 300
+    T_base_c: 12
+  - stage: landscape_evolution
+    steps: 240
+    dt_yr: 2.5e4
+    climate_every: 30
+  - stage: hydrology
+    river_q: 0.02
+    big_river_q: 0.15
+  - stage: ecology
+  - stage: elements
+  - stage: settlements
+    counts: {village: 1, hamlet: 3}
+    spacing_km: {village: 1.5, hamlet: 0.7}
+  - stage: pois
+    ruins: 1
+    extractions: 2
+    portals: 0
+    min_extraction_sep_km: 2
+    extraction_min_km_from_settlement: 0.5
+  - stage: resources
+    counts: {stone: 1, clay: 1, timber: 2, herbs: 1}
+    spacing_km: 0.6
+  - stage: roads
+  - stage: sites
+    counts: {watchtower: 0, cave: 0, camp: 1}
+  - stage: travel
+  - stage: constraints
+    elevation_m.relief: [60, 400]
+    lake_pct: [0, 6]
+    vegetation_cover_pct: [25, 80]
+    feature_counts.village: [1, 1]
+    feature_counts.hamlet: [3, 3]
+    travel.extraction_to_extraction_min: [10, 40]

@@ -1,0 +1,238 @@
+[
+ {
+  "recipe": "p2-walled-town-detail",
+  "seed": 1,
+  "settlement": "Thornstead",
+  "cls": "city",
+  "window_m": 2400,
+  "cell_m": 5.0,
+  "regional_roads_entering": 3,
+  "buildings": 648,
+  "houses": 640,
+  "population_est": 3200,
+  "street_km": {
+   "main": 2.58,
+   "street": 1.65,
+   "lane": 5.76
+  },
+  "landmarks": [
+   "archive",
+   "granary",
+   "guardhouse",
+   "inn",
+   "keep",
+   "market",
+   "mill",
+   "smithy",
+   "temple"
+  ],
+  "gates": 2,
+  "bridges": 1,
+  "built_area_ha": 7.29,
+  "constraints": {
+   "gates": {
+    "value": 2,
+    "ok": true
+   },
+   "bridges": {
+    "value": 1,
+    "ok": true
+   },
+   "buildings": {
+    "value": 648,
+    "ok": true
+   },
+   "all_ok": true
+  },
+  "run_s": 10.5,
+  "storeys_hist": {
+   "1": 542,
+   "2": 52,
+   "3": 54
+  },
+  "grid_cells": [
+   480,
+   480
+  ],
+  "storeys_max": 3,
+  "street_grid_index": 0.09,
+  "wall": true
+ },
+ {
+  "recipe": "p2-walled-town-detail",
+  "seed": 2,
+  "settlement": "Hearthwell",
+  "cls": "city",
+  "window_m": 2400,
+  "cell_m": 5.0,
+  "regional_roads_entering": 3,
+  "buildings": 638,
+  "houses": 630,
+  "population_est": 3150,
+  "street_km": {
+   "street": 4.11,
+   "lane": 5.18
+  },
+  "landmarks": [
+   "archive",
+   "granary",
+   "guardhouse",
+   "harbour",
+   "inn",
+   "keep",
+   "market",
+   "mill",
+   "smithy",
+   "temple"
+  ],
+  "gates": 3,
+  "bridges": 2,
+  "built_area_ha": 7.09,
+  "constraints": {
+   "gates": {
+    "value": 3,
+    "ok": true
+   },
+   "bridges": {
+    "value": 2,
+    "ok": true
+   },
+   "buildings": {
+    "value": 638,
+    "ok": true
+   },
+   "all_ok": true
+  },
+  "run_s": 8.8,
+  "storeys_hist": {
+   "1": 495,
+   "2": 90,
+   "3": 53
+  },
+  "grid_cells": [
+   480,
+   480
+  ],
+  "storeys_max": 3,
+  "street_grid_index": 0.132,
+  "wall": true
+ },
+ {
+  "recipe": "p2-walled-town-detail",
+  "seed": 3,
+  "settlement": "Brindale",
+  "cls": "city",
+  "window_m": 2400,
+  "cell_m": 5.0,
+  "regional_roads_entering": 4,
+  "buildings": 681,
+  "houses": 673,
+  "population_est": 3365,
+  "street_km": {
+   "main": 3.56,
+   "street": 2.6,
+   "lane": 5.82
+  },
+  "landmarks": [
+   "archive",
+   "granary",
+   "guardhouse",
+   "harbour",
+   "inn",
+   "keep",
+   "market",
+   "mill",
+   "smithy",
+   "temple"
+  ],
+  "gates": 5,
+  "bridges": 2,
+  "built_area_ha": 7.63,
+  "constraints": {
+   "gates": {
+    "value": 5,
+    "ok": true
+   },
+   "bridges": {
+    "value": 2,
+    "ok": true
+   },
+   "buildings": {
+    "value": 681,
+    "ok": true
+   },
+   "all_ok": true
+  },
+  "run_s": 10.8,
+  "storeys_hist": {
+   "1": 581,
+   "2": 56,
+   "3": 44
+  },
+  "grid_cells": [
+   480,
+   480
+  ],
+  "storeys_max": 3,
+  "street_grid_index": 0.126,
+  "wall": true
+ },
+ {
+  "recipe": "p2-walled-town-detail",
+  "seed": 4,
+  "settlement": "Bobbinley",
+  "cls": "city",
+  "window_m": 2400,
+  "cell_m": 5.0,
+  "regional_roads_entering": 5,
+  "buildings": 697,
+  "houses": 689,
+  "population_est": 3445,
+  "street_km": {
+   "street": 7.67,
+   "lane": 5.71
+  },
+  "landmarks": [
+   "archive",
+   "granary",
+   "guardhouse",
+   "inn",
+   "keep",
+   "market",
+   "mill",
+   "smithy",
+   "temple"
+  ],
+  "gates": 3,
+  "bridges": 4,
+  "built_area_ha": 7.85,
+  "constraints": {
+   "gates": {
+    "value": 3,
+    "ok": true
+   },
+   "bridges": {
+    "value": 4,
+    "ok": true
+   },
+   "buildings": {
+    "value": 697,
+    "ok": true
+   },
+   "all_ok": true
+  },
+  "run_s": 11.1,
+  "storeys_hist": {
+   "1": 572,
+   "2": 57,
+   "3": 68
+  },
+  "grid_cells": [
+   480,
+   480
+  ],
+  "storeys_max": 3,
+  "street_grid_index": 0.218,
+  "wall": true
+ }
+]

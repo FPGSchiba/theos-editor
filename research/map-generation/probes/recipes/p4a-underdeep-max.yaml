@@ -1,0 +1,39 @@
+# Probe 4a (bands 4 and 9): a large built interior. 300 x 300 cells at 2 m = 600 m square,
+# 60-70 rooms. The recipe model has no levels: one grid, one walk mask.
+name: p4a-underdeep-max
+kind: interior
+grid: [300, 300]
+cell_m: 2.0
+renders: [blueprint]
+pipeline:
+  - stage: envelope
+    shape: rect
+    margin: 3
+  - stage: program
+    rooms:
+      - {type: entrance, role: start, size: [6, 8]}
+      - {type: great_hall, role: goal, size: [30, 40], shape: rect}
+      - {type: gallery, role: path, count: [14, 16], size: [[5, 8], [14, 24]], shape: long}
+      - {type: junction, role: path, count: [8, 10], size: [5, 7]}
+      - {type: machine_hall, role: path, count: [4, 5], size: [[14, 20], [14, 20]]}
+      - {type: vault, role: leaf, count: 3, size: [9, 11], locked: true}
+      - {type: cell, role: leaf, count: [14, 16], size: [5, 8]}
+      - {type: store, role: leaf, count: [8, 10], size: [5, 7]}
+      - {type: extraction, role: extraction, count: 4, size: [5, 6], shape: round}
+  - stage: topology
+    extra_cycles: 6
+  - stage: layout
+    gap: 2
+    iterations: 600
+    start_side: south
+    spread: 0.8
+  - stage: corridors
+    width_main: 2
+    width_side: 1
+  - stage: cover
+    max_sightline_m: 60
+  - stage: analysis
+  - stage: constraints
+    analysis.critical_path_m: [400, 3000]
+    analysis.longest_sightline_m: [10, 70]
+    analysis.footprint_used_pct: [25, 80]

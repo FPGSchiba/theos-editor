@@ -1,0 +1,22 @@
+# Probe 6 (bands 6 and 7): the same `city-1` pushed to city size through the only overrides
+# the code accepts: local_terrain{window_m, cell_m} and settlement_plan{radius_m, lanes,
+# plot_m, wall}. 4 km window at 5 m cells = 800 x 800; built radius 1500 m; 400 lanes.
+name: p6-city-size-4km
+kind: settlement
+renders: [plan]
+parent: {package: "@REGION@", feature: city-1}
+pipeline:
+  - stage: local_terrain
+    window_m: 4000
+    cell_m: 5.0
+  - stage: settlement_plan
+    radius_m: 1500
+    lanes: 400
+    plot_m: 10
+    wall: true
+  - stage: fields
+  - stage: settlement_analysis
+  - stage: constraints
+    street_grid_index: [0.6, 1.0]     # a street grid (band 7)
+    storeys_max: [6, 200]             # many storeys (bands 6 and 7)
+    population_est: [50000, 5000000]
