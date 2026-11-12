@@ -1,10 +1,16 @@
 //! The deterministic terrain generator for maps.
 //!
-//! The crate holds the raster type [`grid::Grid`] with its neighbour tables, the float and cast
-//! helpers every kernel shares ([`kernels::num`]) and the per-stage random streams ([`rng`]).
-//! The same inputs give the same bytes on every platform.
+//! Every step of generation is a [`stage::Stage`]: it declares the layers of the [`world`] it
+//! reads and writes, runs in a [`stage::StageContext`] that hands out only those layers, and is
+//! listed once in the [`stage::Registry`] ([`stages`]). The crate also holds the raster type
+//! [`grid::Grid`] with its neighbour tables, the float and cast helpers every kernel shares
+//! ([`kernels::num`]), the per-stage random streams ([`rng`]) and the run's [`progress`] events
+//! and cancel token. The same inputs give the same bytes on every platform.
 
 pub mod grid;
 pub mod kernels;
+pub mod progress;
 pub mod rng;
+pub mod stage;
+pub mod stages;
 pub mod world;

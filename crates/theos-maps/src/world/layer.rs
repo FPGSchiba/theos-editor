@@ -18,6 +18,19 @@ pub enum LayerKind {
     Value(&'static str),
 }
 
+impl std::fmt::Display for LayerKind {
+    /// The kind as words for messages: `an f64 raster`, `a mask`, ``a `climate` value``.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::F64 => f.write_str("an f64 raster"),
+            Self::U8 => f.write_str("a u8 raster"),
+            Self::Mask => f.write_str("a mask"),
+            Self::U32 => f.write_str("a u32 raster"),
+            Self::Value(type_name) => write!(f, "a `{type_name}` value"),
+        }
+    }
+}
+
 /// A named layer of a world.
 #[derive(Debug)]
 pub enum Layer {
@@ -66,5 +79,19 @@ pub fn bytes_per_cell(kind: LayerKind) -> u64 {
         LayerKind::F64 | LayerKind::Value(_) => 8,
         LayerKind::U8 | LayerKind::Mask => 1,
         LayerKind::U32 => 4,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LayerKind;
+
+    #[test]
+    fn kinds_read_as_words_in_messages() {
+        assert_eq!(LayerKind::F64.to_string(), "an f64 raster");
+        assert_eq!(LayerKind::U8.to_string(), "a u8 raster");
+        assert_eq!(LayerKind::Mask.to_string(), "a mask");
+        assert_eq!(LayerKind::U32.to_string(), "a u32 raster");
+        assert_eq!(LayerKind::Value("climate").to_string(), "a `climate` value");
     }
 }
