@@ -8,3 +8,14 @@ repository.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+theos-content = { path = "../theos-content" }
+theos-vcs = { path = "../theos-vcs" }
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+ignore.workspace = true
+rusqlite.workspace = true
+tempfile.workspace = true

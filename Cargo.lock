@@ -882,6 +882,15 @@ version = "0.0.0"
 [[package]]
 name = "theos-studio"
 version = "0.0.0"
+dependencies = [
+ "ignore",
+ "rusqlite",
+ "tempfile",
+ "theos-content",
+ "theos-vcs",
+ "thiserror",
+ "tracing",
+]
 
 [[package]]
 name = "theos-vcs"
