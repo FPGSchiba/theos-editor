@@ -11,7 +11,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P02 | Records and grammars | theos-editor | done | #16 | #17 |
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | done | #21 | #28 |
-| P05 | CLI and hook | theos-editor | spec-pr | #PR | |
+| P05 | CLI and hook | theos-editor | spec-pr | #35 | |
 | P06 | Command layer and repo lock | theos-editor | todo | | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map format and terrain generator | theos-editor | spec-approved | #27 | |
@@ -55,7 +55,7 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
-- P05's spec (CLI and hook) waits for Jann in its spec PR #PR. Its interfaces with P06, P46 and
+- P05's spec (CLI and hook) waits for Jann in its spec PR #35. Its interfaces with P06, P46 and
   P47 are agreed with P06's spec: `theos_vcs::Git`, `theos_vcs::staged`, `Workspace`,
   `check_staged` and the matching of introduced errors.
 - For P49 (umbrella version 6):
