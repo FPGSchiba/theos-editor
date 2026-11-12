@@ -7,11 +7,11 @@ use std::time::Duration;
 use theos_content::{Finding, Severity};
 use theos_studio::lock::{self, COMMAND_WAIT, LockError};
 use theos_studio::{
-    Applied, Base, Command, CommandError, Create, EntryId, EntrySummary, FileChange, Plan,
+    Applied, Base, Command, CommandError, Create, Edit, EntryId, EntrySummary, FileChange, Plan,
     PlanContext, Reads, Route, Workspace, Write,
 };
 
-use crate::common::{TempProject, cold_dump, files, open, set};
+use crate::common::{TempProject, base_of, cold_dump, files, open, set};
 
 type Error = Box<dyn std::error::Error>;
 type TestResult = Result<(), Error>;
@@ -186,16 +186,26 @@ fn a_file_changed_after_the_plan_is_stale() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn an_unchanged_save_writes_nothing() -> TestResult {
+/// A truth record (LF) of its own, for the tests of a change that changes nothing.
+const SYNTHETIC_TRUTH: &str = "---\n# synthetic fixture (P06), not canon\nid: T-960\nkind: truth\n\
+    title: Synthetic truth\nstatus: draft\ntarget: hinted\n---\nSynthetic statement.\n";
+
+/// A project that holds only the truth `TRUTH` with `bytes`, and a workspace on it.
+fn lone_truth(bytes: &str) -> Result<(TempProject, Workspace), Error> {
     let project = TempProject::new()?;
-    let lf = "---\n# synthetic fixture (P06), not canon\nid: T-960\nkind: truth\n\
-              title: Synthetic truth\nstatus: draft\ntarget: hinted\n---\nSynthetic statement.\n";
-    let crlf = lf.replace('\n', "\r\n");
     let full = project.root().join(TRUTH);
     std::fs::create_dir_all(full.parent().ok_or("no parent")?)?;
-    std::fs::write(&full, &crlf)?;
-    let mut workspace = Workspace::open(project.root())?;
+    std::fs::write(&full, bytes)?;
+    let workspace = Workspace::open(project.root())?;
+    Ok((project, workspace))
+}
+
+#[test]
+fn an_unchanged_save_writes_nothing() -> TestResult {
+    let lf = SYNTHETIC_TRUTH;
+    let crlf = lf.replace('\n', "\r\n");
+    let (project, mut workspace) = lone_truth(&crlf)?;
+    let full = project.root().join(TRUTH);
     let (bytes, base) = workspace.read(TRUTH)?.ok_or("no record")?;
     assert_eq!(bytes, crlf.as_bytes());
     assert_eq!(base, Base::of(crlf.as_bytes()));
@@ -209,6 +219,36 @@ fn an_unchanged_save_writes_nothing() -> TestResult {
     assert_eq!(outcome.entry, None);
     assert_eq!(std::fs::read(&full)?, crlf.as_bytes());
     assert_eq!(workspace.undo_entries(), Vec::<EntrySummary>::new());
+    Ok(())
+}
+
+/// Review focus: a plan that changes nothing. A patch that sets a field to its own value and an
+/// edit without edits leave an LF and a CRLF record as they are: nothing is written, and no
+/// journal entry is added.
+#[test]
+fn a_patch_or_an_edit_that_changes_nothing_writes_nothing() -> TestResult {
+    for line_end in ["\n", "\r\n"] {
+        let bytes = SYNTHETIC_TRUTH.replace('\n', line_end);
+        let (project, mut workspace) = lone_truth(&bytes)?;
+        let same = set(&workspace, TRUTH, "title", "Synthetic truth")?;
+        let none = Edit {
+            path: TRUTH.to_owned(),
+            base: base_of(&workspace, TRUTH)?,
+            edits: Vec::new(),
+        };
+        for command in [&same as &dyn Command, &none] {
+            let outcome = workspace.run(command)?;
+            let label = command.label();
+            assert_eq!(
+                outcome.changed,
+                Vec::<String>::new(),
+                "{label} {line_end:?}"
+            );
+            assert_eq!(outcome.entry, None, "{label} {line_end:?}");
+            assert_eq!(std::fs::read(project.root().join(TRUTH))?, bytes.as_bytes());
+            assert_eq!(workspace.undo_entries(), Vec::<EntrySummary>::new());
+        }
+    }
     Ok(())
 }
 

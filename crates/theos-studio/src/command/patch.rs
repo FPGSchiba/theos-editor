@@ -4,10 +4,11 @@ use theos_content::yaml::Value;
 use theos_content::{KindRegistry, Order, PatchOp, Record};
 
 use super::edit::parse;
-use super::{Base, Command, CommandError, FileChange, Plan, PlanContext, Reads, project_path};
+use super::{Base, Command, CommandError, Plan, PlanContext, Reads, project_path};
 
 /// Applies `ops` to the front matter of the record `path`. New fields go where the order of the
 /// record's kind puts them; a record of an unregistered kind keeps the order of its fields.
+/// Operations that leave the text as it is plan nothing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Patch {
     /// Project-relative path.
@@ -37,14 +38,7 @@ impl Command for Patch {
                 path: path.clone(),
                 source,
             })?;
-        Ok(Plan {
-            changes: vec![FileChange {
-                path,
-                before: Some(before),
-                after: Some(patched.text().as_bytes().to_vec()),
-            }],
-            ..Plan::default()
-        })
+        Ok(Plan::text(path, before, patched.text()))
     }
 }
 
@@ -111,6 +105,18 @@ mod tests {
         // The kind puts `status` after `title` and before `target`.
         let expected = TRUTH.replace("target:", "status: draft\ntarget:");
         assert_eq!(after, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn a_patch_that_changes_nothing_is_an_empty_plan() -> TestResult {
+        for text in [TRUTH.to_owned(), TRUTH.replace('\n', "\r\n")] {
+            let fixture = Fixture::new(&[(PATH, text.as_bytes())])?;
+            for ops in [Vec::new(), vec![set("title", "Old")]] {
+                let plan = patch(&text, ops).plan(&fixture.ctx())?;
+                assert_eq!(plan, Plan::default(), "{text:?}");
+            }
+        }
         Ok(())
     }
 

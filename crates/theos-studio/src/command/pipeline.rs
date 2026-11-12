@@ -171,7 +171,7 @@ fn steps(
     let changes: Vec<FileChange> = plan
         .changes
         .into_iter()
-        .filter(|change| change.before != change.after)
+        .filter(FileChange::is_real)
         .collect();
     let paths: Vec<String> = changes.iter().map(|change| change.path.clone()).collect();
     tracing::info!(%label, ?paths, "command applied");

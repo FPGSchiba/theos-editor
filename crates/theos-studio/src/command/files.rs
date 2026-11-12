@@ -65,11 +65,7 @@ pub(crate) fn write_plan_with(
     plan: &Plan,
     ops: &mut dyn FileOps,
 ) -> Result<(), CommandError> {
-    let changes: Vec<&FileChange> = plan
-        .changes
-        .iter()
-        .filter(|change| change.before != change.after)
-        .collect();
+    let changes: Vec<&FileChange> = plan.real_changes().collect();
     let writes = changes.iter().filter(|change| change.after.is_some());
     let removals = changes.iter().filter(|change| change.after.is_none());
     let mut done = Done::default();

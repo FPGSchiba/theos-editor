@@ -2,10 +2,10 @@
 
 use theos_content::{Record, TextEdit, decode};
 
-use super::{Base, Command, CommandError, FileChange, Plan, PlanContext, Reads, project_path};
+use super::{Base, Command, CommandError, Plan, PlanContext, Reads, project_path};
 
 /// Applies `edits` to the record `path`. The spans are offsets into the record's text with LF
-/// line ends; the result is written with LF.
+/// line ends; the result is written with LF. Edits that leave the text as it is plan nothing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Edit {
     /// Project-relative path.
@@ -35,14 +35,7 @@ impl Command for Edit {
                 path: path.clone(),
                 source,
             })?;
-        Ok(Plan {
-            changes: vec![FileChange {
-                path,
-                before: Some(before),
-                after: Some(edited.text().as_bytes().to_vec()),
-            }],
-            ..Plan::default()
-        })
+        Ok(Plan::text(path, before, edited.text()))
     }
 }
 
@@ -104,6 +97,32 @@ mod tests {
             Some(TRUTH.replace("Old", "New").as_bytes())
         );
         assert_eq!(plan.changes[0].before.as_deref(), Some(crlf.as_bytes()));
+        Ok(())
+    }
+
+    #[test]
+    fn an_edit_that_changes_nothing_is_an_empty_plan() -> TestResult {
+        for text in [TRUTH.to_owned(), TRUTH.replace('\n', "\r\n")] {
+            let fixture = Fixture::new(&[(PATH, text.as_bytes())])?;
+            let start = TRUTH.find("Old").ok_or("no Old")?;
+            for edits in [
+                Vec::new(),
+                vec![TextEdit {
+                    span: Span {
+                        start,
+                        end: start + 3,
+                    },
+                    replacement: "Old".to_owned(),
+                }],
+            ] {
+                let command = Edit {
+                    path: PATH.to_owned(),
+                    base: Base::of(text.as_bytes()),
+                    edits,
+                };
+                assert_eq!(command.plan(&fixture.ctx())?, Plan::default(), "{text:?}");
+            }
+        }
         Ok(())
     }
 

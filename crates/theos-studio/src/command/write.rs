@@ -1,8 +1,6 @@
 //! The command that replaces a file's text.
 
-use theos_content::text::normalize;
-
-use super::{Base, Command, CommandError, FileChange, Plan, PlanContext, Reads, project_path};
+use super::{Base, Command, CommandError, Plan, PlanContext, Reads, project_path};
 
 /// Replaces the text of the file `path` with `text`, written with LF line ends. `base` is the
 /// base of the bytes the caller saw. A text equal to the file's own text with LF line ends
@@ -29,20 +27,7 @@ impl Command for Write {
     fn plan(&self, ctx: &PlanContext<'_>) -> Result<Plan, CommandError> {
         let path = project_path(&self.path)?;
         let before = ctx.read_based(&path, &self.base)?;
-        let after = normalize(&self.text).0.into_owned();
-        let unchanged = std::str::from_utf8(&before)
-            .is_ok_and(|current| normalize(current).0.as_ref() == after);
-        if unchanged {
-            return Ok(Plan::default());
-        }
-        Ok(Plan {
-            changes: vec![FileChange {
-                path,
-                before: Some(before),
-                after: Some(after.into_bytes()),
-            }],
-            ..Plan::default()
-        })
+        Ok(Plan::text(path, before, &self.text))
     }
 }
 

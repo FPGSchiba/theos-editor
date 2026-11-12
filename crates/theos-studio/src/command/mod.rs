@@ -30,6 +30,7 @@ mod write;
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use theos_content::text::normalize;
 use theos_content::{Index, KindRegistry};
 
 pub use base::Base;
@@ -163,6 +164,15 @@ pub struct FileChange {
     pub after: Option<Vec<u8>>,
 }
 
+impl FileChange {
+    /// Whether this is a real change: the file has other bytes after it than before. The plan,
+    /// the write and the journal entry all go by this one definition.
+    #[must_use]
+    pub fn is_real(&self) -> bool {
+        self.before != self.after
+    }
+}
+
 /// The files a command changes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Plan {
@@ -173,12 +183,35 @@ pub struct Plan {
 }
 
 impl Plan {
-    /// Whether the plan changes nothing: every file has the same bytes before and after.
+    /// The plan that gives the file `path`, which holds `before`, the text `after` with LF line
+    /// ends. It is empty when that is the text the file holds, line ends aside: a command that
+    /// leaves the text as it is writes nothing, also to a CRLF record (P02's `was_normalized`).
+    pub(crate) fn text(path: String, before: Vec<u8>, after: &str) -> Plan {
+        let after = normalize(after).0;
+        let unchanged =
+            std::str::from_utf8(&before).is_ok_and(|current| normalize(current).0 == after);
+        if unchanged {
+            return Plan::default();
+        }
+        Plan {
+            changes: vec![FileChange {
+                path,
+                before: Some(before),
+                after: Some(after.into_owned().into_bytes()),
+            }],
+            ..Plan::default()
+        }
+    }
+
+    /// Whether the plan changes nothing: it has no real change ([`FileChange::is_real`]).
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.changes
-            .iter()
-            .all(|change| change.before == change.after)
+        !self.changes.iter().any(FileChange::is_real)
+    }
+
+    /// The real changes of the plan ([`FileChange::is_real`]), in plan order.
+    pub fn real_changes(&self) -> impl Iterator<Item = &FileChange> {
+        self.changes.iter().filter(|change| change.is_real())
     }
 
     /// The paths of the changes.
