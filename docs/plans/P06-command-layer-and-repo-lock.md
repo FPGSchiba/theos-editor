@@ -898,3 +898,19 @@ These steps follow the theos-phase skill and are not tasks for an implementer:
 - `cargo xtask ac-trace --phase P06`: every AC has a passing test;
 - `docs/status.md` → `pr-open`;
 - the build PR with the labels `windows` and `macos`.
+
+---
+
+## Measurements
+
+**One rename of 50 files** (spec §7, risk "A rename of a parent with many children"):
+- The test `rename::renaming_a_parent_with_fifty_files_in_its_folder` renames the floor
+  `f04-synthetic` of `commands/` to `f04-renamed`. Its folder holds 50 files: 46 generated child
+  records that each link the floor, the hall, the nook, `notes.txt` and a hidden file.
+- The plan has 105 file changes: the floor and the 50 files move (a removal and a creation each),
+  and two clues and the script are edited in place. The test checks the result only.
+- `Workspace::run` of that rename took 223–227 ms, median 224 ms, over five runs: the full
+  pipeline, from the lock and the whole-project sync to the reindex.
+- Measured on 12 Nov 2026 on Windows 11, toolchain 1.99.1, **dev profile** (unoptimized), with
+  `cargo nextest run` running that test alone. The time came from a local, uncommitted `Instant`
+  around the call; the committed test has no timing.
