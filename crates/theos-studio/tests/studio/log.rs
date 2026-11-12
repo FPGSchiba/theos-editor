@@ -1,7 +1,10 @@
-//! The log of a command (spec §5.11, P04 ruling L21): the line of its reindex names the command.
+//! The log of a command (spec §5.11, P04 ruling L21): the line of its reindex names the command,
+//! and every line of the run carries its label, under any level filter.
 
 use std::io;
 use std::sync::{Arc, Mutex};
+
+use tracing::Level;
 
 use theos_studio::{Applied, CommandError, EntryId, Route, Workspace};
 
@@ -38,20 +41,30 @@ impl io::Write for Captured {
     }
 }
 
+/// Runs `f` under a subscriber that lets the lines up to `level` through; what `f` returned and
+/// the log it wrote.
+fn logged<T>(
+    level: Level,
+    f: impl FnOnce() -> T,
+) -> Result<(T, String), Box<dyn std::error::Error>> {
+    let captured = Captured::default();
+    let writer = captured.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(level)
+        .with_ansi(false)
+        .with_writer(move || writer.clone())
+        .finish();
+    let value = tracing::subscriber::with_default(subscriber, f);
+    Ok((value, captured.text()?))
+}
+
 #[test]
 fn the_reindex_line_names_its_command() -> TestResult {
     let (_project, mut workspace) = open("commands")?;
     let command = set(&workspace, TRUTH, "title", "Synthetic truth, retitled")?;
-    let captured = Captured::default();
-    let writer = captured.clone();
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .with_ansi(false)
-        .with_writer(move || writer.clone())
-        .finish();
-    tracing::subscriber::with_default(subscriber, || workspace.run(&command))?;
+    let (outcome, log) = logged(Level::DEBUG, || workspace.run(&command))?;
+    outcome?;
 
-    let log = captured.text()?;
     let line = log
         .lines()
         .find(|line| line.contains("reindexed"))
@@ -61,10 +74,14 @@ fn the_reindex_line_names_its_command() -> TestResult {
     Ok(())
 }
 
-/// A route that logs a warning, as the rollback and retry paths do.
-struct WarningRoute;
+/// The line every [`LeveledRoute`] logs.
+const INSIDE: &str = "a line inside the run";
 
-impl Route for WarningRoute {
+/// A route that logs one line at its level inside the run, as theos-content logs errors and the
+/// rollback and the retries log warnings.
+struct LeveledRoute(Level);
+
+impl Route for LeveledRoute {
     fn holds_lock(&self) -> bool {
         false
     }
@@ -74,36 +91,42 @@ impl Route for WarningRoute {
         _workspace: &mut Workspace,
         _applied: Applied,
     ) -> Result<Option<EntryId>, CommandError> {
-        tracing::warn!("a warning inside the run");
+        match self.0 {
+            Level::ERROR => tracing::error!("{INSIDE}"),
+            Level::WARN => tracing::warn!("{INSIDE}"),
+            Level::INFO => tracing::info!("{INSIDE}"),
+            Level::DEBUG => tracing::debug!("{INSIDE}"),
+            _ => tracing::trace!("{INSIDE}"),
+        }
         Ok(None)
     }
 }
 
-/// Under a WARN filter the span `command` is still on, so a warning of the run carries the label
-/// of its command.
+/// Ruling R14: the span `command` is on under every level filter, so a line of the run that the
+/// filter lets through carries the label of its command, an error under an ERROR filter too.
 #[test]
-fn a_warning_carries_the_command_label_under_a_warn_filter() -> TestResult {
+fn a_line_of_the_run_carries_the_command_label_under_every_level_filter() -> TestResult {
     let (_project, mut workspace) = open("commands")?;
-    let command = set(&workspace, TRUTH, "title", "Synthetic truth, retitled")?;
-    let captured = Captured::default();
-    let writer = captured.clone();
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::WARN)
-        .with_ansi(false)
-        .with_writer(move || writer.clone())
-        .finish();
-    tracing::subscriber::with_default(subscriber, || {
-        workspace.run_with(&command, &mut WarningRoute)
-    })?;
+    for level in [
+        Level::ERROR,
+        Level::WARN,
+        Level::INFO,
+        Level::DEBUG,
+        Level::TRACE,
+    ] {
+        let title = format!("Synthetic truth, retitled under {level}");
+        let command = set(&workspace, TRUTH, "title", &title)?;
+        let label = format!("command{{label=patch {TRUTH}}}");
+        let (outcome, log) = logged(level, || {
+            workspace.run_with(&command, &mut LeveledRoute(level))
+        })?;
+        outcome?;
 
-    let log = captured.text()?;
-    let line = log
-        .lines()
-        .find(|line| line.contains("a warning inside the run"))
-        .ok_or_else(|| format!("no warning in:\n{log}"))?;
-    assert!(
-        line.contains(&format!("command{{label=patch {TRUTH}}}")),
-        "{line}"
-    );
+        let line = log
+            .lines()
+            .find(|line| line.contains(INSIDE))
+            .ok_or_else(|| format!("no line under {level} in:\n{log}"))?;
+        assert!(line.contains(&label), "{level}: {line}");
+    }
     Ok(())
 }

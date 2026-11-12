@@ -87,15 +87,16 @@ struct Replayed {
 
 /// Runs `work` through every step on `route`. The repo lock, when the route holds it, is released
 /// on every way out. Every log line of the run is in the span `command`, which names the work by
-/// its label. The span is at level WARN, with the target `theos_studio::command::pipeline`, so
-/// that it is on under any level filter; a filter by target can still switch it off.
+/// its label. The span is at level ERROR, with the target `theos_studio::command::pipeline`, so
+/// that it is on under every level filter that lets any line of the run through (theos-content
+/// logs errors inside the run, ruling R14); a filter by target can still switch it off.
 pub(crate) fn run(
     workspace: &mut Workspace,
     work: Work<'_>,
     route: &mut dyn Route,
 ) -> Result<Outcome, CommandError> {
     let label = work.label();
-    let _span = tracing::warn_span!("command", %label).entered();
+    let _span = tracing::error_span!("command", %label).entered();
     let held = Held::take(workspace, &label, route.holds_lock())?;
     steps(held.workspace, work, label, route)
 }
