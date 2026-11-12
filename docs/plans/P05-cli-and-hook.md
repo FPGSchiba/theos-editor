@@ -438,9 +438,24 @@ pub fn common_dir(git: &Git, top: &Path) -> Result<PathBuf, GitError>;  // rev-p
 
 **ACs:** none directly; spec §5.3 and §5.12, used by every later task.
 
-**Before you start:** run `git fetch origin`, then check whether `origin/main` already holds
-`crates/theos-studio/src/workspace.rs`, which P06 may have written. If it does, run
-`git merge origin/main` and write only what is missing here.
+**Before you start:** run `git fetch origin`.
+- **If `origin/main` already holds `crates/theos-studio/src/workspace.rs`:** run
+  `git merge origin/main` and write only what is missing here.
+- **Otherwise P06 has written these files on its pushed branch,**
+  `origin/phase/P06-command-layer-and-repo-lock`. P06 copied this plan's shapes. Read P06's
+  `crates/theos-studio/src/{error,workspace}.rs`, `Cargo.toml` and
+  `tests/studio/{main,common,workspace}.rs` with `git show origin/phase/P06-…:<path>`. Write
+  P05's files to match them line for line wherever the interfaces agree, so the later merge has
+  only small add/add conflicts:
+  - P05 leaves out P06's `commands: CommandState` field, its line in `open`, and P06's
+    `command`, `lock` and helper modules and tests;
+  - P05 adds what P06 lacks: `StudioError::Git` and `NotInRepository`, and `report.rs`;
+  - P05's `tests/studio/common.rs` uses P06's helper names, `TempProject::{new, copy_of, root}`
+    and `files(root)`, and adds only P05's own helpers;
+  - `Cargo.toml` keeps the dependency lines in the same order as P06's, plus P05's
+    `theos-vcs`.
+
+  Never cherry-pick or merge P06's branch: its command layer is P06's to merge.
 
 **Files:**
 - Modify: `crates/theos-studio/Cargo.toml` (`theos-content` and `theos-vcs` by path, `thiserror`,
@@ -530,9 +545,11 @@ pub fn report(error: &dyn std::error::Error) -> String;
 
 **ACs:** none directly; Task 10's `theos new` proves CE-17.1 through it.
 
-**Before you start:** run `git fetch origin` and check `origin/main` for
-`crates/theos-studio/src/introduced.rs`. If P06 built it, run `git merge origin/main`, note
-"Task 3 taken from P06 (#PR)" in the ledger, and go to Task 4.
+**Before you start:** run `git fetch origin`.
+- If `origin/main` holds `crates/theos-studio/src/introduced.rs`, run `git merge origin/main`,
+  note "Task 3 taken from P06 (#PR)" in the ledger, and go to Task 4.
+- Otherwise read P06's version on `origin/phase/P06-command-layer-and-repo-lock` and write
+  P05's line for line like it, with its unit tests, as in Task 2.
 
 **Files:** create `crates/theos-studio/src/introduced.rs`; modify `src/lib.rs`.
 
@@ -547,6 +564,8 @@ impl FindingCounts {
     pub fn of(findings: &[Finding], moved: &BTreeMap<String, String>) -> FindingCounts;
     /// The larger count per key; messages united.
     pub fn max(&self, other: &FindingCounts) -> FindingCounts;
+    /// The count of (path, rule); 0 when absent. P06's verdict uses it for new warnings.
+    pub fn count(&self, path: &str, rule: &str) -> usize;
 }
 /// The errors of `after` above `allowed`'s count for their (path, rule).
 pub fn introduced(allowed: &FindingCounts, after: &[Finding]) -> Vec<Finding>;
@@ -567,7 +586,8 @@ Return the taken findings in `after` order. Warnings are never introduced.
   - `a_raised_severity_is_not_introduced`: before one warning, after one error of the same rule
     and path;
   - `moved_paths_count_under_their_new_path`;
-  - `max_takes_the_larger_count_and_unites_messages`.
+  - `max_takes_the_larger_count_and_unites_messages`;
+  - `count_is_zero_for_an_unknown_key`. Match P06's test names where its file has them.
 - [ ] **Step 2: Run them** — FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run** the per-task checks — PASS.
