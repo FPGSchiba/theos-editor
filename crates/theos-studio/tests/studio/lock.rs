@@ -41,10 +41,12 @@ fn a_second_process_waits_and_names_the_holder() -> Result<(), Box<dyn std::erro
     assert_eq!(owner.purpose, "synthetic hold");
     assert!(waited >= Duration::from_millis(300), "waited {waited:?}");
 
+    // After the helper has let go and exited, the lock is free at once.
     std::fs::write(scratch.path().join("release"), "")?;
-    let guard = lock::acquire(project.root(), "test", Duration::from_secs(5))?;
+    let status = child.wait()?;
+    assert!(status.success(), "the helper exited with {status}");
+    let guard = lock::acquire(project.root(), "test", Duration::ZERO)?;
     drop(guard);
-    child.wait()?;
     Ok(())
 }
 

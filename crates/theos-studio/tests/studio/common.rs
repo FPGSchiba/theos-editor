@@ -169,9 +169,20 @@ impl HelperProcess {
         self.child.kill()
     }
 
-    /// Waits for the helper to exit.
-    pub fn wait(&mut self) -> std::io::Result<ExitStatus> {
-        self.child.wait()
+    /// Waits up to five minutes for the helper to exit; fails after that, and the helper is killed
+    /// when this is dropped.
+    pub fn wait(&mut self) -> Result<ExitStatus, Box<dyn std::error::Error>> {
+        let limit = Duration::from_secs(300);
+        let start = Instant::now();
+        loop {
+            if let Some(status) = self.child.try_wait()? {
+                return Ok(status);
+            }
+            if start.elapsed() > limit {
+                return Err(format!("the helper did not exit within {limit:?}").into());
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     /// Waits up to 30 s for the file `path` to exist; fails at once, naming the exit status, when
