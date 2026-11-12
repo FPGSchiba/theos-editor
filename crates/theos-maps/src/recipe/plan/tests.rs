@@ -32,7 +32,7 @@ fn fields(err: &RecipeError) -> (Option<&str>, Option<&str>, Option<&str>, &str)
 #[test]
 fn a_valid_recipe_plans_frame_stages_and_keys() {
     let loaded = recipe(
-        "renders = [\"omega\"]\n[constraints]\n\"m.p\" = [1.0, 2.0]\n[render.base]\nk = 1\n",
+        "renders = [\"omega\"]\n[constraints]\nlake_pct = [1.0, 2.0]\n[render.base]\nk = 1\n",
         &["a", "b", "a", "c"],
     );
     let planned = plan(&loaded, &registry(), &no_inputs()).unwrap();
@@ -50,7 +50,7 @@ fn a_valid_recipe_plans_frame_stages_and_keys() {
         vec![crate::stage::LayerSpec::f64("y")]
     );
     assert_eq!(planned.stages[1].metric_names.len(), 0);
-    assert_eq!(planned.constraints["m.p"], [1.0, 2.0]);
+    assert_eq!(planned.constraints["lake_pct"], [1.0, 2.0]);
     assert_eq!(planned.renders, ["omega"]);
     assert!(planned.render_options.contains_key("base"));
 }
@@ -223,4 +223,61 @@ fn errors_display_what_they_name() {
         err.to_string(),
         "recipe `t`, stage `b`, layer `x`: stage `b` reads `x`, which no earlier stage writes"
     );
+}
+
+#[test]
+fn a_read_of_another_layer_kind_fails_naming_both_kinds() {
+    let err = refusal("", &["u", "b"]);
+    let (stage, layer, _, message) = fields(&err);
+    assert_eq!((stage, layer), (Some("b"), Some("x")));
+    assert!(
+        message.contains("an f64 raster") && message.contains("a u8 raster"),
+        "{message}"
+    );
+}
+
+#[test]
+fn the_later_write_decides_the_kind() {
+    assert!(plan(&recipe("", &["u", "a", "b"]), &registry(), &no_inputs()).is_ok());
+    let err = refusal("", &["a", "u", "b"]);
+    assert_eq!(fields(&err).0, Some("b"));
+}
+
+#[test]
+fn recipe_ids_are_folder_safe() {
+    for bad in ["", "-x", "A", "a b", "a_b", "a/b", "a.b"] {
+        let loaded = parse(
+            &text("", &[]).replace("id = \"t\"", &format!("id = \"{bad}\"")),
+            RecipeOrigin::Builtin,
+        )
+        .unwrap();
+        let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+        assert_eq!(fields(&err).2, Some("id"), "{bad:?}");
+    }
+    for good in ["t", "0a", "a-b-1"] {
+        let loaded = parse(
+            &text("", &[]).replace("id = \"t\"", &format!("id = \"{good}\"")),
+            RecipeOrigin::Builtin,
+        )
+        .unwrap();
+        assert!(plan(&loaded, &registry(), &no_inputs()).is_ok(), "{good}");
+    }
+}
+
+#[test]
+fn constraint_bounds_must_be_finite_and_ordered() {
+    for range in ["[2.0, 1.0]", "[nan, 1.0]", "[0.0, inf]"] {
+        let extra = format!(
+            "[constraints]
+lake_pct = {range}
+"
+        );
+        let err = refusal(&extra, &["a"]);
+        assert_eq!(fields(&err).2, Some("lake_pct"), "{range}");
+    }
+}
+
+#[test]
+fn a_kind_is_printed_in_the_recipe_spelling() {
+    assert_eq!(crate::stage::MapKind::Terrain.to_string(), "terrain");
 }

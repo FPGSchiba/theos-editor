@@ -10,7 +10,7 @@ mod load;
 mod plan;
 mod schema;
 #[cfg(test)]
-mod test_stages;
+pub(crate) mod test_stages;
 
 use std::fmt::Write as _;
 use std::path::PathBuf;

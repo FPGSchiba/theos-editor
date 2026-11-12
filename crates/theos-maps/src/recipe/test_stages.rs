@@ -40,7 +40,31 @@ macro_rules! test_stage {
 test_stage!(A, "a", reads: vec![], writes: vec![LayerSpec::f64("x")]);
 test_stage!(B, "b", reads: vec![LayerSpec::f64("x")], writes: vec![LayerSpec::f64("y")]);
 test_stage!(C, "c", reads: vec![LayerSpec::f64("z").optional()], writes: vec![]);
+test_stage!(U, "u", reads: vec![], writes: vec![LayerSpec::u8("x")]);
+test_stage!(Travel, "travel", reads: vec![], writes: vec![]);
 test_stage!(O, "o", reads: vec![], writes: vec![LayerSpec::f64("x").optional()]);
+
+/// Reports one metric, `hits`.
+pub(crate) struct M;
+
+impl TypedStage for M {
+    type Params = Knob;
+    const ID: &'static str = "m";
+    const SUMMARY: &'static str = "Reports a metric.";
+    const KINDS: &'static [MapKind] = &[MapKind::Terrain];
+    fn reads(&self, _: &Knob) -> Vec<LayerSpec> {
+        vec![]
+    }
+    fn writes(&self, _: &Knob) -> Vec<LayerSpec> {
+        vec![]
+    }
+    fn metric_names(&self, _: &Knob) -> Vec<&'static str> {
+        vec!["hits"]
+    }
+    fn run(&self, _: &mut StageContext<'_>, _: &Knob) -> Result<StageReport, StageError> {
+        Ok(StageReport::default())
+    }
+}
 
 pub(crate) struct Ord;
 
@@ -79,6 +103,9 @@ pub(crate) fn registry() -> Registry {
     registry.add(Box::new(C));
     registry.add(Box::new(O));
     registry.add(Box::new(Ord));
+    registry.add(Box::new(U));
+    registry.add(Box::new(Travel));
+    registry.add(Box::new(M));
     registry
 }
 

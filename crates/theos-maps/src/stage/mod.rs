@@ -39,6 +39,15 @@ pub enum MapKind {
     Terrain,
 }
 
+impl std::fmt::Display for MapKind {
+    /// The kind as recipes spell it.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Terrain => f.write_str("terrain"),
+        }
+    }
+}
+
 /// One step of map generation, object safe so that the registry and the runner can hold any
 /// stage. Stages implement [`TypedStage`], which gives them this trait.
 pub trait Stage: Send + Sync {

@@ -3,9 +3,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{EXTRA_RENDERS, LoadedRecipe, RecipeError, STANDARD_RENDERS};
+use crate::constraints::is_known_path;
 use crate::kernels::num;
 use crate::stage::{LayerSpec, MapKind, ParamError, Registry, StageParams};
-use crate::world::MapFrame;
+use crate::world::{LayerKind, MapFrame};
 
 /// How far two cell edges may differ, relative, and still count as square.
 const SQUARE_TOLERANCE: f64 = 1e-9;
@@ -73,7 +74,8 @@ fn at_parameter(parameter: &str) -> Spot<'_> {
 }
 
 /// Validates `recipe` against `registry` and the request's `inputs`, in the order of spec §5.5:
-/// frame, renders, inputs, then each stage (known, kind, parameters, order, reads).
+/// id, frame, renders, inputs, then each stage (known, kind, parameters, order, reads), then the
+/// constraints.
 ///
 /// # Errors
 /// [`RecipeError::Invalid`] naming the recipe and, where known, the stage, layer and parameter.
@@ -82,10 +84,12 @@ pub fn plan(
     registry: &Registry,
     inputs: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<Plan, RecipeError> {
+    check_id(recipe)?;
     let frame = check_frame(recipe)?;
     check_renders(recipe)?;
     check_inputs(recipe, inputs)?;
     let stages = plan_stages(recipe, registry)?;
+    check_constraints(recipe, &stages)?;
     let r = &recipe.recipe;
     Ok(Plan {
         recipe_id: r.id.clone(),
@@ -96,6 +100,46 @@ pub fn plan(
         renders: r.renders.clone(),
         render_options: r.render.clone(),
     })
+}
+
+/// Check 0: the id names output folders and manifest fields, `^[a-z0-9][a-z0-9-]*$`.
+fn check_id(recipe: &LoadedRecipe) -> Result<(), RecipeError> {
+    let id = &recipe.recipe.id;
+    let lower_or_digit = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit();
+    let mut chars = id.chars();
+    let valid =
+        chars.next().is_some_and(lower_or_digit) && chars.all(|c| lower_or_digit(c) || c == '-');
+    if valid {
+        return Ok(());
+    }
+    Err(invalid(
+        recipe,
+        &at_parameter("id"),
+        format!("recipe id `{id}` must match ^[a-z0-9][a-z0-9-]*$"),
+    ))
+}
+
+/// Check 5: constraint bounds are finite and ordered, and the paths exist.
+fn check_constraints(recipe: &LoadedRecipe, stages: &[PlannedStage]) -> Result<(), RecipeError> {
+    for (path, [min, max]) in &recipe.recipe.constraints {
+        if !(min.is_finite() && max.is_finite() && min <= max) {
+            return Err(invalid(
+                recipe,
+                &at_parameter(path),
+                format!(
+                    "constraint `{path}` needs finite bounds with min <= max, got [{min}, {max}]"
+                ),
+            ));
+        }
+        if !is_known_path(path, stages) {
+            return Err(invalid(
+                recipe,
+                &at_parameter(path),
+                format!("constraint path `{path}` is not a known summary path of this recipe"),
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Check 1: the grid, the size and square cells.
@@ -190,7 +234,7 @@ fn plan_stages(
     recipe: &LoadedRecipe,
     registry: &Registry,
 ) -> Result<Vec<PlannedStage>, RecipeError> {
-    let mut available: BTreeSet<&'static str> = BTreeSet::new();
+    let mut available: BTreeMap<&'static str, LayerKind> = BTreeMap::new();
     let mut seen: BTreeMap<&'static str, u32> = BTreeMap::new();
     let mut stages = Vec::new();
     for table in &recipe.recipe.stages {
@@ -208,10 +252,7 @@ fn plan_stages(
             return Err(invalid(
                 recipe,
                 &on_stage,
-                format!(
-                    "stage `{id}` does not apply to {:?} maps",
-                    recipe.recipe.kind
-                ),
+                format!("stage `{id}` does not apply to {} maps", recipe.recipe.kind),
             ));
         }
         let param_error = |e: ParamError| {
@@ -226,29 +267,49 @@ fn plan_stages(
             )
         };
         let params = stage.params(table).map_err(param_error)?;
-        let names: BTreeSet<&str> = available.iter().copied().collect();
+        let names: BTreeSet<&str> = available.keys().copied().collect();
         stage
             .check_order(params.as_ref(), &names)
             .map_err(param_error)?;
         let reads = stage.reads(params.as_ref());
-        for read in reads.iter().filter(|read| !read.optional) {
-            if !available.contains(read.name) {
-                return Err(invalid(
-                    recipe,
-                    &Spot {
-                        stage: Some(id),
-                        layer: Some(read.name),
-                        parameter: None,
-                    },
-                    format!(
-                        "stage `{id}` reads `{}`, which no earlier stage writes",
-                        read.name
-                    ),
-                ));
+        for read in &reads {
+            let on_layer = Spot {
+                stage: Some(id),
+                layer: Some(read.name),
+                parameter: None,
+            };
+            match available.get(read.name) {
+                Some(kind) if *kind != read.kind => {
+                    return Err(invalid(
+                        recipe,
+                        &on_layer,
+                        format!(
+                            "stage `{id}` reads `{}` as {}, but an earlier stage writes it as {kind}",
+                            read.name, read.kind
+                        ),
+                    ));
+                }
+                Some(_) => {}
+                None if read.optional => {}
+                None => {
+                    return Err(invalid(
+                        recipe,
+                        &on_layer,
+                        format!(
+                            "stage `{id}` reads `{}`, which no earlier stage writes",
+                            read.name
+                        ),
+                    ));
+                }
             }
         }
         let writes = stage.writes(params.as_ref());
-        available.extend(writes.iter().filter(|w| !w.optional).map(|w| w.name));
+        available.extend(
+            writes
+                .iter()
+                .filter(|w| !w.optional)
+                .map(|w| (w.name, w.kind)),
+        );
         let stage_id = stage.id();
         let occurrence = seen.entry(stage_id).or_insert(0);
         let key = format!("{stage_id}#{occurrence}");

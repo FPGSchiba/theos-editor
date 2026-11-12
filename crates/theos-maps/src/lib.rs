@@ -7,10 +7,13 @@
 //! ([`kernels::num`]), the per-stage random streams ([`rng`]) and the run's [`progress`] events
 //! and cancel token. The same inputs give the same bytes on every platform.
 
+pub mod constraints;
 pub mod error;
+pub mod features;
 pub mod golden;
 pub mod grid;
 pub mod kernels;
+pub mod metrics;
 pub mod progress;
 pub mod recipe;
 pub mod rng;
