@@ -3,6 +3,8 @@
 use std::io;
 use std::sync::{Arc, Mutex};
 
+use theos_studio::{Applied, CommandError, EntryId, Route, Workspace};
+
 use crate::common::{open, set};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -56,5 +58,57 @@ fn the_reindex_line_names_its_command() -> TestResult {
         .ok_or_else(|| format!("no reindex line in:\n{log}"))?;
     assert!(line.contains(&format!("patch {TRUTH}")), "{line}");
     assert!(line.contains("revalidated="), "{line}");
+    Ok(())
+}
+
+/// A route that logs a warning, as the rollback and retry paths do.
+struct WarningRoute;
+
+impl Route for WarningRoute {
+    fn holds_lock(&self) -> bool {
+        false
+    }
+
+    fn finish(
+        &mut self,
+        _workspace: &mut Workspace,
+        _applied: Applied,
+    ) -> Result<Option<EntryId>, CommandError> {
+        tracing::warn!("a warning inside the run");
+        Ok(None)
+    }
+}
+
+/// Under a WARN filter the span `command` is still on, so a warning of the run carries the label
+/// of its command.
+#[test]
+fn a_warning_carries_the_command_label_under_a_warn_filter() -> TestResult {
+    let (_project, mut workspace) = open("commands")?;
+    let command = set(&workspace, TRUTH, "title", "Synthetic truth, retitled")?;
+    let captured = Captured::default();
+    let writer = captured.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::WARN)
+        .with_ansi(false)
+        .with_writer(move || writer.clone())
+        .finish();
+    tracing::subscriber::with_default(subscriber, || {
+        workspace.run_with(&command, &mut WarningRoute)
+    })?;
+
+    let log = captured.text()?;
+    let line = log
+        .lines()
+        .find(|line| line.contains("a warning inside the run"))
+        .ok_or_else(|| {
+            format!(
+                "no warning in:
+{log}"
+            )
+        })?;
+    assert!(
+        line.contains(&format!("command{{label=patch {TRUTH}}}")),
+        "{line}"
+    );
     Ok(())
 }
