@@ -1,9 +1,9 @@
 # P06 · Command layer and repo lock — phase spec
 
 Status: waiting for Jann's approval · 12 Nov 2026 · repo of the build: `theos-editor`
-Source: `docs/specs/00-umbrella.md` §3 P06, as of umbrella version 5 (docs PR #33, which splits the
-old "Command layer and git" into P06, P46 Git read and P47 Git write). Scope and acceptance
-criteria come from there; this spec decides how.
+Source: `docs/specs/00-umbrella.md` §3 P06, as of umbrella version 6. Version 5 (#33) split the
+old "Command layer and git" into P06, P46 Git read and P47 Git write; version 6 (#34) split P05.
+Scope and acceptance criteria come from there; this spec decides how.
 
 ## 1. Goal
 
@@ -532,7 +532,7 @@ is in `gate/thresholds.toml`, and no gate PR is needed.
 
 ## 6. Interfaces
 
-### 6.1 From P05 (agreed on 12 Nov 2026 by both spec sessions)
+### 6.1 From P05 (agreed on 12 Nov 2026 by both spec sessions; P05 spec PR #35, §4.2 and §6)
 
 | Item | What P06 relies on |
 |---|---|
