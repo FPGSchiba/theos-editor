@@ -300,7 +300,7 @@ fn zero_precipitation_erodes_nothing_and_stays_finite() {
     let area = layer(&w, "drainage_area");
     assert!(area.iter().all(|a| a.is_finite() && *a >= CELL_AREA));
     let frame = *w.frame();
-    let none = runoff_weight(&with_runoff(Grid::filled(N, N, 0.0)), &frame);
+    let none = runoff_weight(&with_runoff(Grid::filled(N, N, 0.0)), &frame).unwrap();
     assert!(none.as_slice().iter().all(|p| p.to_bits() == 0));
 }
 
@@ -311,7 +311,7 @@ fn runoff_weight_is_runoff_over_its_mean() {
         cols: 2,
         cell_m: 100.0,
     };
-    let ones = runoff_weight(&no_fields(), &frame);
+    let ones = runoff_weight(&no_fields(), &frame).unwrap();
     assert_eq!((ones.rows(), ones.cols()), (2, 2));
     assert!(
         ones.as_slice()
@@ -319,8 +319,13 @@ fn runoff_weight_is_runoff_over_its_mean() {
             .all(|p| p.to_bits() == 1.0_f64.to_bits())
     );
     let runoff = Grid::from_vec(2, 2, vec![100.0, 300.0, 0.0, 400.0]).unwrap();
-    let p = runoff_weight(&with_runoff(runoff), &frame);
+    let p = runoff_weight(&with_runoff(runoff), &frame).unwrap();
     assert_close(p.as_slice(), &[0.5, 1.5, 0.0, 2.0]);
+    // A runoff of another shape, even with as many cells, does not fit the frame.
+    for (rows, cols) in [(1, 4), (3, 3)] {
+        let other = with_runoff(Grid::filled(rows, cols, 1.0));
+        assert!(runoff_weight(&other, &frame).is_none(), "{rows} x {cols}");
+    }
 }
 
 #[test]
@@ -523,44 +528,77 @@ fn deposition_is_refused_until_it_is_built() {
     );
 }
 
+/// Asserts that one step of `fluvial` with `params` over `w` fails with a message that is
+/// exactly `text`.
+fn fails_with(mut w: World, params: &str, text: &str) {
+    let err = fluvial_step(&mut w, params).unwrap_err();
+    assert!(
+        matches!(&err, StageError::Failed { message, .. } if message == text),
+        "{text}: {err:?}"
+    );
+}
+
 #[test]
 fn inputs_that_do_not_fit_the_grid_are_a_failure() {
-    let short = FlowWeights {
-        start: vec![0, 0, 1, 2],
-        to: vec![0, 0],
-        weight: vec![1.0, 1.0],
-        dist: vec![100.0, 100.0],
+    let weights = |start: Vec<u32>, to: Vec<u32>, weight: Vec<f64>, dist: Vec<f64>| FlowWeights {
+        start,
+        to,
+        weight,
+        dist,
     };
-    let far = FlowWeights {
-        start: vec![0, 0, 1, 2, 3],
-        to: vec![0, 0, 7],
-        weight: vec![1.0, 1.0, 1.0],
-        dist: vec![100.0; 3],
-    };
-    for (bad, text) in [(short, "3 cells"), (far, "outside the grid")] {
+    let cases = [
+        (
+            weights(vec![0, 0, 1, 2], vec![0, 0], vec![1.0; 2], vec![100.0; 2]),
+            "the flow weights cover 3 cells, but the grid has 4",
+        ),
+        (
+            weights(
+                vec![0, 0, 1, 2, 3],
+                vec![0, 0, 0],
+                vec![1.0; 2],
+                vec![100.0; 3],
+            ),
+            "the flow weights hold 3 targets, 2 shares and 3 distances",
+        ),
+        (
+            weights(
+                vec![0, 0, 1, 5, 3],
+                vec![0, 0, 0],
+                vec![1.0; 3],
+                vec![100.0; 3],
+            ),
+            "the flow weights start an edge list at 5, past their 3 edges",
+        ),
+        (
+            weights(
+                vec![0, 0, 1, 2, 3],
+                vec![0, 0, 7],
+                vec![1.0; 3],
+                vec![100.0; 3],
+            ),
+            "a flow weight sends water to cell 7, outside the grid of 4 cells",
+        ),
+    ];
+    for (bad, text) in cases {
         let mut w = square([0.0, 10.0, 20.0, 30.0], no_fields());
         w.insert("weights", Layer::Value(Box::new(bad))).unwrap();
-        let err = fluvial_step(&mut w, "g = 0.0").unwrap_err();
-        assert!(
-            matches!(&err, StageError::Failed { message, .. } if message.contains(text)),
-            "{text}: {err:?}"
-        );
+        fails_with(w, "g = 0.0", text);
     }
     let mut w = square([0.0, 10.0, 20.0, 30.0], no_fields());
     let stack = Grid::from_vec(2, 2, vec![0, 1, 2, 9]).unwrap();
     w.insert("stack", Layer::U32(stack)).unwrap();
-    let err = fluvial_step(&mut w, "g = 0.0").unwrap_err();
-    assert!(
-        matches!(&err, StageError::Failed { message, .. } if message.contains("outside the grid")),
-        "{err:?}"
+    fails_with(
+        w,
+        "g = 0.0",
+        "the stack names cell 9, outside the grid of 4 cells",
     );
     let mut w = square([0.0, 10.0, 20.0, 30.0], no_fields());
     let wide = with_runoff(Grid::filled(3, 3, 1.0));
     w.insert("climate", Layer::Value(Box::new(wide))).unwrap();
-    let err = fluvial_step(&mut w, "g = 0.0").unwrap_err();
-    assert!(
-        matches!(&err, StageError::Failed { message, .. } if message.contains("runoff")),
-        "{err:?}"
+    fails_with(
+        w,
+        "g = 0.0",
+        "the climate's runoff covers 3 x 3 cells, but the grid has 2 x 2",
     );
 }
 
@@ -589,12 +627,10 @@ fn fluvial_declares_its_layers_and_parameters() {
         ("g = 0.0\nm = -1.0", Some("m")),
         ("g = 0.0\nm = inf", Some("m")),
         ("g = 0.0\nmax_iterations = 0", Some("max_iterations")),
-        ("g = 0.0\nn = 1.0", None),
+        ("g = 0.0\nn = 1.0", Some("n")),
     ] {
         let err = stage.params(&bad.parse().unwrap()).unwrap_err();
-        if parameter.is_some() {
-            assert_eq!(err.parameter.as_deref(), parameter, "{bad}: {err}");
-        }
+        assert_eq!(err.parameter.as_deref(), parameter, "{bad}: {err}");
     }
     let params = stage.params(&"g = 0.0".parse().unwrap()).unwrap();
     let typed = params.as_any().downcast_ref::<FluvialParams>().unwrap();

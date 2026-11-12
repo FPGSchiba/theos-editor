@@ -8,14 +8,16 @@
 //! map-mean runoff ([`runoff_weight`]). Deposition (`g > 0`) comes with the erosion–deposition
 //! law of Yuan et al. 2019.
 
+mod inputs;
 mod solve;
 #[cfg(test)]
 mod tests;
 
 use serde::Deserialize;
 
+use self::inputs::routing_misfit;
 use self::solve::{Incision, incise};
-use super::flow::{FlowWeights, accumulate, cell_index};
+use super::flow::{FlowWeights, accumulate};
 use crate::grid::Grid;
 use crate::kernels::num::{max, to_f64};
 use crate::stage::{
@@ -132,17 +134,20 @@ fn erode(
 ) -> Result<(Grid<f64>, Grid<f64>), StageError> {
     let frame = *ctx.frame();
     let (weights, stack) = (ctx.value::<FlowWeights>("weights")?, ctx.u32("stack")?);
-    if let Some(problem) = misfit(weights, stack.as_slice(), frame.cells()) {
+    if let Some(problem) = routing_misfit(weights, stack.as_slice(), frame.cells()) {
         return Err(ctx.fail(problem));
     }
-    let p_hat = runoff_weight(ctx.value::<Climate>("climate")?, &frame);
-    if p_hat.len() != frame.cells() {
+    let climate = ctx.value::<Climate>("climate")?;
+    let Some(p_hat) = runoff_weight(climate, &frame) else {
+        let (rows, cols) = climate
+            .fields
+            .as_ref()
+            .map_or((0, 0), |f| (f.runoff.rows(), f.runoff.cols()));
         return Err(ctx.fail(format!(
-            "the climate's runoff has {} cells, but the grid has {}",
-            p_hat.len(),
-            frame.cells()
+            "the climate's runoff covers {rows} x {cols} cells, but the grid has {} x {}",
+            frame.rows, frame.cols
         )));
-    }
+    };
     let cell_area = frame.cell_area_m2();
     let discharge = accumulate(stack.as_slice(), weights, &p_hat.map(|p| p * cell_area));
     let area = Grid::filled(frame.rows, frame.cols, cell_area);
@@ -157,25 +162,6 @@ fn erode(
         dt,
     };
     Ok((incise(&step, start), drainage_area))
-}
-
-/// Why `weights` and `stack` do not fit a grid of `cells` cells, or `None` when they do.
-fn misfit(weights: &FlowWeights, stack: &[u32], cells: usize) -> Option<String> {
-    if weights.cells() != cells {
-        return Some(format!(
-            "the flow weights cover {} cells, but the grid has {cells}",
-            weights.cells()
-        ));
-    }
-    let edges = weights.to.len();
-    let broken = weights.weight.len() != edges
-        || weights.dist.len() != edges
-        || weights.start.iter().any(|&s| cell_index(s) > edges);
-    let outside = |&c: &u32| cell_index(c) >= cells;
-    if broken || weights.to.iter().any(outside) || stack.iter().any(outside) {
-        return Some("the flow weights or the stack name a cell outside the grid".to_owned());
-    }
-    None
 }
 
 /// Adds the thickness each cell lost from `start` to `end` to `erosion` and the thickness it
@@ -194,17 +180,21 @@ fn book(start: &Grid<f64>, end: &Grid<f64>, erosion: &mut Grid<f64>, deposition:
 
 /// The runoff weight `p̂ = runoff / mean(runoff)` of every cell (spec ruling 28): all 1 while
 /// the climate has no fields yet, and all 0 when the mean runoff is 0 (no water, no stream).
+/// `None` when the climate's runoff does not have the shape of `frame`.
 #[must_use]
-pub fn runoff_weight(climate: &Climate, frame: &MapFrame) -> Grid<f64> {
+pub fn runoff_weight(climate: &Climate, frame: &MapFrame) -> Option<Grid<f64>> {
     let Some(fields) = &climate.fields else {
-        return Grid::filled(frame.rows, frame.cols, 1.0);
+        return Some(Grid::filled(frame.rows, frame.cols, 1.0));
     };
     let runoff = &fields.runoff;
+    if (runoff.rows(), runoff.cols()) != (frame.rows, frame.cols) {
+        return None;
+    }
     let total: f64 = runoff.as_slice().iter().sum();
     let mean = total / to_f64(runoff.len());
-    if mean > 0.0 {
+    Some(if mean > 0.0 {
         runoff.map(|r| r / mean)
     } else {
         runoff.map(|_| 0.0)
-    }
+    })
 }
