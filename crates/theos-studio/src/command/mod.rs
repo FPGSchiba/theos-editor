@@ -6,6 +6,7 @@
 //! module: its `mod` line and one `pub use` here; the crate root re-exports this module whole.
 
 mod base;
+mod boundary;
 mod create;
 mod delete;
 mod edit;

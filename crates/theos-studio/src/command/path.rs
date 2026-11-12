@@ -1,4 +1,6 @@
-//! The rules for a path a command is given.
+//! The rules for a path a command is given. The changes of a plan must also leave the boundary
+//! between records and other files where the verdict sees it (`boundary`, ruling R21): no
+//! `.gitignore`, no hidden file replaced on Windows, and no path spelled unlike the disk.
 
 use super::CommandError;
 

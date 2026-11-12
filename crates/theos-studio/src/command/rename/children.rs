@@ -1,6 +1,7 @@
 //! The `children` participant: a renamed record's child folder `<folder>/<id>/` moves to
 //! `<folder>/<to>/` with every file in it, records or not, hidden and ignored files too. The
-//! folder is read with `std::fs::read_dir`, not the index's walk, which skips such files.
+//! folder is read with `std::fs::read_dir`, not the index's walk, which skips such files. A
+//! `.gitignore` among them makes the pipeline refuse the rename (ruling R21).
 
 use std::collections::BTreeMap;
 use std::path::Path;

@@ -76,11 +76,17 @@ impl TempProject {
         )
     }
 
-    /// A project in a temporary folder with the files under `from`, `.theos/cache` left out.
+    /// A project in a temporary folder with a copy of each file under `from`, `.theos/cache` left
+    /// out. `std::fs::copy` keeps what the walk of the index reads from a file besides its bytes:
+    /// the hidden attribute on Windows.
     fn copied(from: &Path) -> Result<TempProject, Error> {
         let dir = tempfile::tempdir()?;
-        for (path, bytes) in files(from)? {
-            put(dir.path(), &path, &bytes)?;
+        for path in files(from)?.keys() {
+            let target = dir.path().join(path);
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::copy(from.join(path), target)?;
         }
         Ok(TempProject { dir })
     }
@@ -91,7 +97,8 @@ impl TempProject {
     }
 }
 
-/// Every file under `root` except `.theos/cache`, by path with `/` separators.
+/// Every file under `root` except `.theos/cache`, by path with `/` separators. A symbolic link is
+/// left out, as the walk of the index leaves it out.
 pub fn files(root: &Path) -> std::io::Result<Files> {
     let mut found = BTreeMap::new();
     collect(root, root, &mut found)?;
@@ -111,7 +118,11 @@ fn collect(root: &Path, dir: &Path, found: &mut Files) -> std::io::Result<()> {
         if rel.join("/") == ".theos/cache" {
             continue;
         }
-        if entry.file_type()?.is_dir() {
+        let kind = entry.file_type()?;
+        if kind.is_symlink() {
+            continue;
+        }
+        if kind.is_dir() {
             collect(root, &path, found)?;
         } else {
             found.insert(rel.join("/"), std::fs::read(&path)?);
@@ -127,6 +138,27 @@ pub fn put(root: &Path, path: &str, bytes: &[u8]) -> std::io::Result<()> {
         std::fs::create_dir_all(parent)?;
     }
     std::fs::write(target, bytes)
+}
+
+/// Writes the new file `path` (with `/`) under `root` with `bytes` and the hidden attribute, and
+/// the folders above it. std's `OpenOptionsExt::attributes` gives the file the attribute as it
+/// creates it, as `attrib +h` would afterwards.
+#[cfg(windows)]
+pub fn put_hidden(root: &Path, path: &str, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::windows::fs::OpenOptionsExt;
+    /// `FILE_ATTRIBUTE_HIDDEN` of the Windows API.
+    const HIDDEN: u32 = 0x2;
+    let target = root.join(path);
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .attributes(HIDDEN)
+        .open(target)?
+        .write_all(bytes)
 }
 
 /// The dump of the index of a fresh `Workspace::open` of a copy of the files of `root`: what a

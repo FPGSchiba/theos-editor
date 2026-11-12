@@ -19,7 +19,9 @@ use participant::{PARTICIPANTS, RenameSet, folder_of, join, on_disk, record};
 /// Renames the record `id` to `to`: its file, its `id` field, its child folder with every file in
 /// it, the versions of a concept or map, and every link to one of these ids that the index knows.
 /// Whether `to` fits the kind's id rule is left to the verdict, and so is whether each moved
-/// record is still read as a record at its new path ([`CommandError::NotARecord`]).
+/// record is still read as a record at its new path ([`CommandError::NotARecord`]). A child
+/// folder that holds a `.gitignore` is not moved: the rename fails with [`CommandError::Path`]
+/// (ruling R21).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Rename {
     /// The id to rename.

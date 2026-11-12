@@ -579,6 +579,28 @@ fn a_rename_to_a_record_path_is_applied() -> TestResult {
     Ok(())
 }
 
+/// Ruling R21: a rename moves every file of the child folder, so a `.gitignore` in it would be
+/// removed at its old path and created at its new one, where the preview, which reads the disk
+/// before the write, does not see it.
+#[test]
+fn a_rename_whose_child_folder_holds_a_gitignore_is_refused() -> TestResult {
+    let project = TempProject::copy_of_studio("commands")?;
+    let gitignore = format!("{FLOOR_FOLDER}/.gitignore");
+    std::fs::write(project.root().join(&gitignore), "synthetic-hall/\n")?;
+    let mut workspace = Workspace::open(project.root())?;
+    let error = refused(
+        &project,
+        &mut workspace,
+        &rename("f04-synthetic", "f04-renamed"),
+    )?;
+    assert!(
+        matches!(&error, CommandError::Path { path, reason }
+            if *path == gitignore && reason.starts_with("is a .gitignore")),
+        "{error:?}"
+    );
+    Ok(())
+}
+
 /// Review focus 4: a file the index does not see (ignored by git) still takes its path.
 #[test]
 fn an_id_taken_by_an_ignored_file_is_refused() -> TestResult {

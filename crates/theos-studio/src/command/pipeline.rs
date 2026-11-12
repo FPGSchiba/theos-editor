@@ -1,11 +1,12 @@
-//! The pipeline every write runs through (spec §5.4): lock, freshen and plan, base check,
-//! preview, verdict, write, reindex, finish. The steps are the same for every route.
+//! The pipeline every write runs through (spec §5.4): lock, freshen and plan, the boundary and
+//! base checks, preview, verdict, write, reindex, finish. The steps are the same for every route.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use theos_content::{Change, Finding, Index, IndexError, Preview, Update};
 
+use super::boundary;
 use super::files::write_plan;
 use super::journal::EntryId;
 use super::route::{Applied, Route};
@@ -155,6 +156,9 @@ fn steps(
         return Ok(Outcome::unchanged());
     }
     let root = workspace.project().root().to_path_buf();
+    // Step 3: no change moves the boundary between records and other files unseen (ruling
+    // R21), and every file holds its `before`.
+    boundary::check(&root, &plan)?;
     check_bases(&root, &plan, replayed.is_some())?;
     let (preview, before) = preview(workspace, &plan)?;
     // Step 5, the verdict: no moved record leaves the index, and no error is new.
