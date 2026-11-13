@@ -13,7 +13,7 @@ prints and that later phases serve again. The rest arrives in P06, P07 and later
 | `Workspace` | A project with its kind registry and its index, opened once. `open(root)` and `find(start)` sync the index; `find_root` finds the project above a folder. When another process holds the cache (`IndexError::Contended`), the index lives in memory instead, and `is_in_memory()` says so |
 | `StudioError`, `report` | The error of the crate. `report` writes an error with each cause once; `theos` prints it after `error:` and P48 uses it for error results |
 | `check` | The findings of the project with configured severities, plus the warnings of the binaries folder (`Binaries`, `BinariesFolder`, `binaries_folder`) |
-| `check_staged` | Judges the snapshot git would commit, read through `theos-vcs`, and returns a `StagedCheck`: `blocks()`, `errors()`, `warnings()`. The working tree, the cache on disk and the repository stay as they are, and no lock is taken |
+| `check_staged` | Judges the snapshot git would commit, read through `theos-vcs`, and returns a `StagedCheck`: `blocks()`, `errors()`, `warnings()`. Paths are judged as git's index spells them, also when the disk spells a file or the project folder otherwise (a case-only rename). The working tree, the cache on disk and the repository stay as they are, and no lock is taken |
 | `introduced` | Counts the errors a change introduces (`FindingCounts`); `create` and the staged check both use it |
 | `create` | Makes a new record from the template of its kind, and writes it only when it introduces no error |
 | `install_hook` | Writes git's pre-commit hook, which runs `theos check --staged` |

@@ -304,6 +304,24 @@ fn a_project_in_a_subfolder_commits_through_its_hook() -> TestResult {
     Ok(())
 }
 
+// The cache holds the disk's spelling `c-900.md`, git's index `C-900.md`; the staged bytes at
+// git's spelling are judged, on a case-insensitive file system and on a case-sensitive one.
+// AC: CE-17.2
+#[test]
+fn a_case_only_rename_cannot_hide_a_violation() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let repo = Repo::with_hook(&sandbox, "")?;
+    repo.git_ok(&["config", "core.ignorecase", "true"])?;
+    repo.stage(C900, &clue_revealing_never(&repo)?)?;
+    std::fs::rename(
+        repo.project.join(C900),
+        repo.project.join("lore").join("clues").join("c-900.md"),
+    )?;
+    repo.commit(&["-m", "renamed"], &[])?
+        .assert_refused("lore/never-confirm", C900);
+    Ok(())
+}
+
 #[test]
 fn the_first_commit_is_checked() -> TestResult {
     let sandbox = Sandbox::new()?;

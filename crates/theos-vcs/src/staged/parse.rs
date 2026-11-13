@@ -1,14 +1,6 @@
 //! Readers for the documented formats of `diff -z`, `ls-files -s -z` and `cat-file --batch`.
 
-use super::{StagedPath, Status};
-
-/// One stage-0 entry of `ls-files -s`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Entry {
-    pub(super) path: Vec<u8>,
-    pub(super) mode: u32,
-    pub(super) object: String,
-}
+use super::{StagedPath, Status, Tracked};
 
 /// Splits NUL-terminated output into its fields; the last field must end with a NUL too.
 fn fields(out: &[u8]) -> Result<Vec<&[u8]>, String> {
@@ -54,13 +46,8 @@ pub(super) fn name_status(out: &[u8]) -> Result<Vec<StagedPath>, String> {
         .collect()
 }
 
-/// Reads `diff --name-only -z`: `<path> NUL` per entry.
-pub(super) fn name_only(out: &[u8]) -> Result<Vec<Vec<u8>>, String> {
-    Ok(fields(out)?.into_iter().map(<[u8]>::to_vec).collect())
-}
-
 /// Reads `ls-files -s -z`: `<mode> SP <object> SP <stage> TAB <path> NUL`, stage 0 only.
-pub(super) fn ls_files(out: &[u8]) -> Result<Vec<Entry>, String> {
+pub(super) fn ls_files(out: &[u8]) -> Result<Vec<Tracked>, String> {
     let mut entries = Vec::new();
     for field in fields(out)? {
         let tab = field
@@ -81,7 +68,7 @@ pub(super) fn ls_files(out: &[u8]) -> Result<Vec<Entry>, String> {
             .map_err(|_| format!("`{stage}` is not a stage"))?;
         // Stages 1 to 3 belong to a merge conflict; the snapshot keeps the settled entries.
         if stage == 0 {
-            entries.push(Entry {
+            entries.push(Tracked {
                 path: field[tab + 1..].to_vec(),
                 mode,
                 object: object.to_owned(),
@@ -165,15 +152,6 @@ mod tests {
     }
 
     #[test]
-    fn name_only_reads_paths() {
-        assert_eq!(
-            name_only(b"a\0b c\0"),
-            Ok(vec![b"a".to_vec(), b"b c".to_vec()])
-        );
-        assert!(name_only(b"a").is_err());
-    }
-
-    #[test]
     fn ls_files_reads_mode_object_and_path_and_keeps_stage_zero() {
         let out = b"100644 aaaa 0\tlore/a b.md\0\
                     100755 bbbb 0\ttab\there\0\
@@ -183,17 +161,17 @@ mod tests {
         assert_eq!(
             ls_files(out),
             Ok(vec![
-                Entry {
+                Tracked {
                     path: b"lore/a b.md".to_vec(),
                     mode: 0o100_644,
                     object: "aaaa".to_owned(),
                 },
-                Entry {
+                Tracked {
                     path: b"tab\there".to_vec(),
                     mode: 0o100_755,
                     object: "bbbb".to_owned(),
                 },
-                Entry {
+                Tracked {
                     path: b"link".to_vec(),
                     mode: 0o120_000,
                     object: "eeee".to_owned(),

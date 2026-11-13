@@ -2,7 +2,7 @@
 
 use std::fs::canonicalize;
 
-use theos_vcs::{GitError, repo};
+use theos_vcs::{Folding, GitError, repo};
 
 use crate::common::Sandbox;
 
@@ -50,6 +50,35 @@ fn top_outside_a_repository_fails() -> Result<(), Box<dyn std::error::Error>> {
     let sandbox = Sandbox::new()?;
     let result = repo::top(&sandbox.git()?, sandbox.path());
     assert!(matches!(result, Err(GitError::Failed { .. })));
+    Ok(())
+}
+
+#[test]
+fn a_flag_is_its_boolean_and_false_when_unset() -> Result<(), Box<dyn std::error::Error>> {
+    let sandbox = Sandbox::new()?;
+    let top = sandbox.init("repo")?;
+    let git = sandbox.git()?;
+    sandbox.run(&top, &["config", "core.ignorecase", "yes"])?;
+    sandbox.run(&top, &["config", "core.precomposeunicode", "false"])?;
+    assert!(repo::flag(&git, &top, "core.ignorecase")?);
+    assert!(!repo::flag(&git, &top, "core.precomposeunicode")?);
+    assert!(!repo::flag(&git, &top, "theos.unset")?);
+    assert_eq!(
+        Folding::read(&git, &top)?,
+        Folding {
+            ignore_case: true,
+            precompose: false,
+        }
+    );
+    sandbox.run(&top, &["config", "core.ignorecase", "maybe"])?;
+    assert!(matches!(
+        repo::flag(&git, &top, "core.ignorecase"),
+        Err(GitError::Failed { .. })
+    ));
+    assert!(matches!(
+        Folding::read(&git, &top),
+        Err(GitError::Failed { .. })
+    ));
     Ok(())
 }
 

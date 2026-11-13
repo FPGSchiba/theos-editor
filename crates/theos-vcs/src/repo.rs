@@ -1,4 +1,5 @@
-//! Questions about a repository: its top folder, a folder's place in it and its hooks folder.
+//! Questions about a repository: its top folder, a folder's place in it, its boolean settings and
+//! its hooks folder.
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -58,6 +59,23 @@ pub fn place(top: &Path, folder: &Path) -> Result<String, GitError> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(parts.join("/"))
+}
+
+/// Whether the boolean setting `key` (such as `core.ignorecase`) is true for the repository at
+/// `top`. A setting that is not set is false.
+///
+/// # Errors
+///
+/// [`GitError::Failed`] when the value is not a boolean, and the errors of [`Git::run`].
+pub fn flag(git: &Git, top: &Path, key: &str) -> Result<bool, GitError> {
+    let args = ["config", "--bool", "--get", key].map(OsStr::new);
+    match git.run(&args, top, None, &[]) {
+        // With `--bool` git answers `true` or `false`.
+        Ok(out) => Ok(out.trim_ascii() == b"true"),
+        // `--get` exits with 1 when the setting is not set.
+        Err(GitError::Failed { code: Some(1), .. }) => Ok(false),
+        Err(other) => Err(other),
+    }
 }
 
 /// The folder git runs hooks from for the work tree at `top`, honouring `core.hooksPath`.

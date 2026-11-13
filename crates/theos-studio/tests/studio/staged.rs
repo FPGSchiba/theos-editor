@@ -213,6 +213,54 @@ fn a_force_added_ignored_record_is_not_checked() -> TestResult {
     Ok(())
 }
 
+/// Makes git compare paths without case, as `git init` does on Windows and macOS.
+fn ignore_case(repo: &Repo) -> TestResult {
+    repo.run(&["config", "core.ignorecase", "true"])?;
+    Ok(())
+}
+
+// On a case-insensitive file system git still finds the file under its own spelling and the cache
+// holds the disk's; on a case-sensitive one git reports its spelling as gone from the working
+// tree. Both must check the staged bytes at git's spelling.
+// AC: CE-17.2
+#[test]
+fn a_case_only_rename_of_a_record_is_checked_in_git_spelling() -> TestResult {
+    let repo = Repo::committed("")?;
+    ignore_case(&repo)?;
+    let committed = std::fs::read_to_string(repo.top().join(C900))?;
+    let violating = committed.replace("reveals: T-900", "reveals: T-901");
+    stage(&repo, "", C900, &violating)?;
+    std::fs::rename(
+        repo.top().join(C900),
+        repo.top().join("lore/clues/c-900.md"),
+    )?;
+    let result = check(&repo, "")?;
+    assert!(result.blocks(), "{:?}", result.findings);
+    assert!(
+        on_rule(&result, "lore/never-confirm", C900),
+        "{:?}",
+        result.findings
+    );
+    Ok(())
+}
+
+// AC: CE-17.2
+#[test]
+fn a_case_only_rename_of_the_project_folder_is_checked() -> TestResult {
+    let repo = Repo::committed("content/")?;
+    ignore_case(&repo)?;
+    stage(&repo, "content/", C901, &variant("C-901.md")?)?;
+    std::fs::rename(repo.top().join("content"), repo.top().join("Content"))?;
+    let result = check(&repo, "Content")?;
+    assert!(result.blocks(), "{:?}", result.findings);
+    assert!(
+        on_rule(&result, "lore/never-confirm", C901),
+        "{:?}",
+        result.findings
+    );
+    Ok(())
+}
+
 #[test]
 fn a_folder_outside_git_is_not_in_a_repository() -> TestResult {
     let repo = Repo::committed("")?;

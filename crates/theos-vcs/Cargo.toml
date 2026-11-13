@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 thiserror.workspace = true
+unicode-normalization.workspace = true
 which.workspace = true
 
 [dev-dependencies]

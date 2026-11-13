@@ -218,6 +218,46 @@ fn the_first_commit_lists_every_staged_file_as_added() -> Result {
 }
 
 #[test]
+fn a_place_spelled_differently_on_disk_reads_git_spelling() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    Sandbox::write(&repo.join("content").join("a.md"), "one\n")?;
+    Sandbox::write(&repo.join("contents").join("b.md"), "one\n")?;
+    sandbox.commit(&repo, "first")?;
+    sandbox.run(&repo, &["config", "core.ignorecase", "true"])?;
+    std::fs::rename(repo.join("content"), repo.join("Content"))?;
+    let staged = read(&sandbox, &repo.join("Content"))?;
+    // On a case-insensitive file system git still finds `content/a.md`; on a case-sensitive one
+    // it is gone from the working tree, and `modified` holds its staged bytes. Either way the
+    // entry is the project's, in git's spelling.
+    assert_eq!(tracked_paths(&staged), vec![b"content/a.md".as_slice()]);
+    assert_eq!(staged.place, "content");
+    assert!(staged.folding.ignore_case);
+    assert!(
+        staged
+            .modified
+            .iter()
+            .all(|(path, bytes)| path == b"content/a.md" && bytes == b"one\n"),
+        "{:?}",
+        staged.modified
+    );
+    Ok(())
+}
+
+#[test]
+fn a_place_no_entry_lies_below_is_the_folder_as_found() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    Sandbox::write(&repo.join("other").join("a.md"), "one\n")?;
+    sandbox.commit(&repo, "first")?;
+    std::fs::create_dir_all(repo.join("New"))?;
+    let staged = read(&sandbox, &repo.join("New"))?;
+    assert_eq!(staged.place, "New");
+    assert_eq!(staged.tracked.len(), 0, "{:?}", staged.tracked);
+    Ok(())
+}
+
+#[test]
 fn a_folder_with_glob_characters_and_umlauts_is_read_literally() -> Result {
     let sandbox = Sandbox::new()?;
     let repo = sandbox.init("repo")?;
