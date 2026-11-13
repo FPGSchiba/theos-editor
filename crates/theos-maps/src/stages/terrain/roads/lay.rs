@@ -9,18 +9,18 @@ use crate::grid::Grid;
 
 /// The roads laid so far, the raster of their classes and the bridges built.
 #[derive(Debug, Clone, PartialEq)]
-pub(super) struct Laid {
+pub(crate) struct Laid {
     /// The roads in the order laid.
-    pub roads: Vec<Road>,
+    pub(crate) roads: Vec<Road>,
     /// The `roads` raster: 0, or the highest class code of the roads on the cell.
-    pub raster: Grid<u8>,
+    pub(crate) raster: Grid<u8>,
     /// The bridges built, as [`bridge_key`]s.
-    pub built: BTreeSet<(u32, u32)>,
+    pub(crate) built: BTreeSet<(u32, u32)>,
 }
 
 impl Laid {
     /// No road on a `rows` x `cols` grid.
-    pub(super) fn new(rows: usize, cols: usize) -> Self {
+    pub(crate) fn new(rows: usize, cols: usize) -> Self {
         Self {
             roads: Vec::new(),
             raster: Grid::filled(rows, cols, 0),
@@ -28,8 +28,23 @@ impl Laid {
         }
     }
 
+    /// The roads of a network already built and their `raster`: later roads merge with them and
+    /// reuse their bridges.
+    pub(crate) fn resume(roads: Vec<Road>, raster: Grid<u8>) -> Self {
+        let built = roads
+            .iter()
+            .flat_map(|r| r.bridges.iter())
+            .map(|&(a, b)| bridge_key(super::index(a), super::index(b)))
+            .collect();
+        Self {
+            roads,
+            raster,
+            built,
+        }
+    }
+
     /// The router over `cost` that sees the roads and bridges laid so far.
-    pub(super) fn router<'a>(&'a self, cost: &'a StepCost<'a>) -> Router<'a> {
+    pub(crate) fn router<'a>(&'a self, cost: &'a StepCost<'a>) -> Router<'a> {
         Router {
             cost,
             roads: &self.raster,
@@ -39,15 +54,16 @@ impl Laid {
 
     /// Lays the road of `class` along `path` from `from` to `to`: its cells, the bridges among
     /// its steps, and its class on the raster at every cell it passes (for a knight move the
-    /// cell between its ends that touches both, for a bridge every cell under it).
-    pub(super) fn add(
+    /// cell between its ends that touches both, for a bridge every cell under it). Returns the
+    /// road's index in the list.
+    pub(crate) fn add(
         &mut self,
         cost: &StepCost<'_>,
         path: &[usize],
         class: RoadClass,
         from: FeatureHandle,
         to: FeatureHandle,
-    ) {
+    ) -> usize {
         let mut marked: Vec<usize> = path.to_vec();
         let mut bridges = Vec::new();
         for pair in path.windows(2) {
@@ -75,17 +91,18 @@ impl Laid {
             to,
             bridges,
         });
+        self.roads.len() - 1
     }
 
     /// Whether some road starts or ends at `handle`.
-    pub(super) fn reaches(&self, handle: FeatureHandle) -> bool {
+    pub(crate) fn reaches(&self, handle: FeatureHandle) -> bool {
         self.roads
             .iter()
             .any(|r| r.from == handle || r.to == handle)
     }
 
     /// Every cell of every road's path.
-    pub(super) fn cells(&self) -> BTreeSet<usize> {
+    pub(crate) fn cells(&self) -> BTreeSet<usize> {
         self.roads
             .iter()
             .flat_map(|r| r.cells.iter().map(|&c| super::index(c)))

@@ -62,7 +62,10 @@ use std::any::Any;
 
 use serde::Serialize;
 
+pub(crate) use self::build::Layers;
+pub(crate) use self::cost::between;
 pub use self::cost::{StepCost, Terrain};
+pub(crate) use self::lay::Laid;
 pub use self::params::{MaxGrade, RoadsParams, WidthM};
 pub use self::route::{Router, bridge_key};
 use crate::features::{FeatureHandle, FeatureSet};
@@ -184,7 +187,7 @@ impl RoadNetwork {
 }
 
 /// [`RoadNetwork::end_near`] over `roads`.
-fn end_near(roads: &[Road], cell: u32) -> Option<FeatureHandle> {
+pub(crate) fn end_near(roads: &[Road], cell: u32) -> Option<FeatureHandle> {
     roads.iter().find_map(|road| {
         let at = road.cells.iter().position(|&c| c == cell)?;
         Some(if 2 * at < road.cells.len() {
@@ -221,7 +224,7 @@ fn index(cell: u32) -> usize {
 }
 
 /// The distance between the centres of cells `a` and `b`, m.
-fn distance_m(frame: &MapFrame, a: usize, b: usize) -> f64 {
+pub(crate) fn distance_m(frame: &MapFrame, a: usize, b: usize) -> f64 {
     let (ra, ca) = (a / frame.cols, a % frame.cols);
     let (rb, cb) = (b / frame.cols, b % frame.cols);
     let (dr, dc) = (to_f64(ra.abs_diff(rb)), to_f64(ca.abs_diff(cb)));
@@ -288,14 +291,7 @@ impl TypedStage for Roads {
             FeatureSet::default()
         };
         // The layers are copied so the context stays free for progress events while routing.
-        let layers = build::Layers {
-            height: ctx.f64("height")?.clone(),
-            vegetation: ctx.f64("vegetation")?.clone(),
-            river: ctx.mask("river")?.clone(),
-            big_river: ctx.mask("big_river")?.clone(),
-            lake: ctx.mask("lake")?.clone(),
-            flow_dir: ctx.u8("flow_dir")?.clone(),
-        };
+        let layers = build::Layers::read(ctx)?;
         let built = build::build(&layers, &set, &frame, params, ctx)?;
         let cost = StepCost::new(layers.terrain(), params, frame.cell_m);
         let found = crossings::sites(&cost, &built.roads, &frame);

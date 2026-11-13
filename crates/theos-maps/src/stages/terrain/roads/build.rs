@@ -14,7 +14,7 @@ use crate::world::MapFrame;
 
 /// The rasters `roads` reads, copied out of the context so that it stays free for progress
 /// events during the searches.
-pub(super) struct Layers {
+pub(crate) struct Layers {
     /// `height`.
     pub height: Grid<f64>,
     /// `vegetation`.
@@ -30,8 +30,23 @@ pub(super) struct Layers {
 }
 
 impl Layers {
+    /// Copies the layers out of `ctx`.
+    ///
+    /// # Errors
+    /// [`StageError`] when a layer is missing or has another type.
+    pub(crate) fn read(ctx: &StageContext<'_>) -> Result<Self, StageError> {
+        Ok(Self {
+            height: ctx.f64("height")?.clone(),
+            vegetation: ctx.f64("vegetation")?.clone(),
+            river: ctx.mask("river")?.clone(),
+            big_river: ctx.mask("big_river")?.clone(),
+            lake: ctx.mask("lake")?.clone(),
+            flow_dir: ctx.u8("flow_dir")?.clone(),
+        })
+    }
+
     /// The layers as the terrain of [`StepCost`].
-    pub(super) fn terrain(&self) -> Terrain<'_> {
+    pub(crate) fn terrain(&self) -> Terrain<'_> {
         Terrain {
             height: &self.height,
             vegetation: &self.vegetation,

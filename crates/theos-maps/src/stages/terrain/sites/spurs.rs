@@ -1,0 +1,98 @@
+//! Spur tracks: the road from the network to a site, laid with the router of `roads`.
+
+use crate::features::{Feature, FeatureHandle, FeatureSet, Geometry, Prop};
+use crate::kernels::KernelError;
+use crate::stage::Finding;
+use crate::stages::terrain::roads::{Laid, RoadClass, StepCost, end_near};
+use crate::world::MapFrame;
+
+/// The roads laid so far and the cost they are routed with.
+pub(super) struct Spurs<'a> {
+    cost: StepCost<'a>,
+    frame: MapFrame,
+    /// The roads of the network, spurs included, and their raster.
+    pub(super) laid: Laid,
+    /// One warning per site no road could reach.
+    pub(super) warnings: Vec<Finding>,
+    /// How many spurs were laid.
+    pub(super) count: usize,
+}
+
+impl<'a> Spurs<'a> {
+    /// Spurs over `cost` joining the network `laid`.
+    pub(super) fn new(cost: StepCost<'a>, frame: MapFrame, laid: Laid) -> Self {
+        Self {
+            cost,
+            frame,
+            laid,
+            warnings: Vec::new(),
+            count: 0,
+        }
+    }
+
+    /// Adds `site` to `set` and joins it to the network: its `road` property is the road it
+    /// stands on, else the spur of `class` routed to it from the nearest road cell. A map with
+    /// no road, or a site no road can reach (a warning), gets no `road`.
+    ///
+    /// # Errors
+    /// [`KernelError::Cancelled`] when `cancel` returns `true` during the search.
+    pub(super) fn connect(
+        &mut self,
+        set: &mut FeatureSet,
+        mut site: Feature,
+        class: RoadClass,
+        cancel: &dyn Fn() -> bool,
+    ) -> Result<FeatureHandle, KernelError> {
+        let handle = FeatureHandle(u32::try_from(set.len()).unwrap_or(u32::MAX));
+        if let Geometry::Point([x, y]) = site.geometry {
+            let (row, col) = self.frame.cell_at_m(x, y);
+            let cell = row * self.frame.cols + col;
+            if let Some(road) = self.road_through(cell) {
+                site.props.insert("road".to_owned(), Prop::Road(road));
+            } else if let Some(road) = self.lay(cell, class, handle, cancel)? {
+                site.props.insert("road".to_owned(), Prop::Road(road));
+            } else if !self.laid.roads.is_empty() {
+                self.warnings.push(Finding::warning(format!(
+                    "no spur reaches the {} at ({x:.0} m, {y:.0} m): water or steep ground \
+                     cuts it off from every road",
+                    site.ty
+                )));
+            }
+        }
+        Ok(set.add(site))
+    }
+
+    /// The index of the first road whose path passes `cell`.
+    fn road_through(&self, cell: usize) -> Option<u32> {
+        let at = u32::try_from(cell).ok()?;
+        let i = self.laid.roads.iter().position(|r| r.cells.contains(&at))?;
+        u32::try_from(i).ok()
+    }
+
+    /// Routes and lays the spur to `cell` from the nearest cell of any road; its index, or
+    /// `None` when there is no road or no route.
+    fn lay(
+        &mut self,
+        cell: usize,
+        class: RoadClass,
+        site: FeatureHandle,
+        cancel: &dyn Fn() -> bool,
+    ) -> Result<Option<u32>, KernelError> {
+        let sources: Vec<usize> = self.laid.cells().into_iter().collect();
+        if sources.is_empty() {
+            return Ok(None);
+        }
+        let path = self
+            .laid
+            .router(&self.cost)
+            .route(&sources, cell, class, cancel)?;
+        let Some(path) = path else { return Ok(None) };
+        let joined = u32::try_from(path[0])
+            .ok()
+            .and_then(|c| end_near(&self.laid.roads, c))
+            .unwrap_or(site);
+        let index = self.laid.add(&self.cost, &path, class, joined, site);
+        self.count += 1;
+        Ok(u32::try_from(index).ok())
+    }
+}

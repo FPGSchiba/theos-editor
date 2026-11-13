@@ -11,7 +11,9 @@ pub mod resources;
 pub mod roads;
 pub mod rocks;
 pub mod settlements;
+pub mod sites;
 pub mod tectonics;
+pub mod travel;
 
 #[cfg(test)]
 pub(crate) mod support;

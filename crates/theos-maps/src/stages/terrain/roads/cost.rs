@@ -127,21 +127,31 @@ impl<'a> StepCost<'a> {
     /// ends: none for a step to a side, the two side cells whose corner a diagonal passes, the
     /// two cells a knight move crosses (the one beside `from` first).
     pub(super) fn between(&self, from: usize, offset: (isize, isize)) -> [Option<usize>; 2] {
-        let (dr, dc) = offset;
-        let grid = self.grid();
-        let at = |d: (isize, isize)| grid.neighbour(from, d);
-        match (dr.abs(), dc.abs()) {
-            (1, 1) => [at((dr, 0)), at((0, dc))],
-            (1, 2) => [at((0, dc / 2)), at((dr, dc / 2))],
-            (2, 1) => [at((dr / 2, 0)), at((dr / 2, dc))],
-            _ => [None, None],
-        }
+        between(self.grid(), from, offset)
     }
 
     /// The length of a step `offset`, m.
     pub(super) fn length(&self, offset: (isize, isize)) -> f64 {
         let (dr, dc) = (offset.0.unsigned_abs(), offset.1.unsigned_abs());
         self.cell_m * libm::sqrt(to_f64(dr * dr + dc * dc))
+    }
+}
+
+/// The cells the segment of the step `offset` from `from` passes strictly between its ends on
+/// `grid`: none for a step to a side, the two side cells whose corner a diagonal passes, the two
+/// cells a knight move crosses (the one beside `from` first).
+pub(crate) fn between<T: Copy>(
+    grid: &Grid<T>,
+    from: usize,
+    offset: (isize, isize),
+) -> [Option<usize>; 2] {
+    let (dr, dc) = offset;
+    let at = |d: (isize, isize)| grid.neighbour(from, d);
+    match (dr.abs(), dc.abs()) {
+        (1, 1) => [at((dr, 0)), at((0, dc))],
+        (1, 2) => [at((0, dc / 2)), at((dr, dc / 2))],
+        (2, 1) => [at((dr / 2, 0)), at((dr / 2, dc))],
+        _ => [None, None],
     }
 }
 
