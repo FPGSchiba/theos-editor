@@ -30,6 +30,7 @@ pub mod rng;
 pub mod runner;
 pub mod stage;
 pub mod stages;
+mod summary;
 pub mod world;
 
 pub use api::{
