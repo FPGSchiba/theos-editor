@@ -213,6 +213,23 @@ fn a_force_added_ignored_record_is_not_checked() -> TestResult {
     Ok(())
 }
 
+// git does not commit an intent-to-add entry, so neither its placeholder in the index nor the
+// file on disk, which here violates never-confirm, is in the snapshot.
+#[test]
+fn an_intent_to_add_record_does_not_block_a_clean_commit() -> TestResult {
+    let repo = Repo::committed("")?;
+    write(&repo, "", C901, &variant("C-901.md")?)?;
+    repo.run(&["add", "-N", "--", C901])?;
+    let result = check(&repo, "")?;
+    assert_checked(&result);
+    assert!(
+        result.findings.iter().all(|finding| finding.path != C901),
+        "{:?}",
+        result.findings
+    );
+    Ok(())
+}
+
 /// Makes git compare paths without case, as `git init` does on Windows and macOS.
 fn ignore_case(repo: &Repo) -> TestResult {
     repo.run(&["config", "core.ignorecase", "true"])?;

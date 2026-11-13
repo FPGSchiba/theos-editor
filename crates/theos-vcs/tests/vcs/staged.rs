@@ -258,6 +258,21 @@ fn a_place_no_entry_lies_below_is_the_folder_as_found() -> Result {
 }
 
 #[test]
+fn an_intent_to_add_record_is_not_in_the_snapshot() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    Sandbox::write(&repo.join("a.md"), "one\n")?;
+    sandbox.commit(&repo, "first")?;
+    Sandbox::write(&repo.join("b.md"), "two\n")?;
+    sandbox.run(&repo, &["add", "-N", "b.md"])?;
+    let staged = read(&sandbox, &repo)?;
+    assert_eq!(tracked_paths(&staged), vec![b"a.md".as_slice()]);
+    assert_eq!(staged.modified.len(), 0, "{:?}", staged.modified);
+    assert_eq!(staged.changed.len(), 0, "{:?}", staged.changed);
+    Ok(())
+}
+
+#[test]
 fn a_folder_with_glob_characters_and_umlauts_is_read_literally() -> Result {
     let sandbox = Sandbox::new()?;
     let repo = sandbox.init("repo")?;

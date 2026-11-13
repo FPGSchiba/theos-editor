@@ -2,7 +2,7 @@
 
 mod parse;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
@@ -64,7 +64,7 @@ pub struct Staged {
     pub folding: Folding,
     /// Every path the index changes against `HEAD`, in the whole repository.
     pub changed: Vec<StagedPath>,
-    /// The index entries below the requested folder, at stage 0.
+    /// The index entries below the requested folder, at stage 0, without intent-to-add entries.
     pub tracked: Vec<Tracked>,
     /// `(path, staged bytes)` of regular tracked files whose work-tree copy differs or is gone.
     pub modified: Vec<PathBytes>,
@@ -108,8 +108,8 @@ fn query<T>(
 /// repository, and the entries whose first components are `folder`'s place under the
 /// repository's [`Folding`] are kept, in git's spelling. A path is in `modified` when it is a
 /// regular tracked file whose work-tree copy differs from its staged version, or is gone; the
-/// bytes are the staged ones. The runner's environment, such as `GIT_INDEX_FILE`, picks the
-/// index.
+/// bytes are the staged ones. An intent-to-add entry (`git add -N`) is in neither, since a commit
+/// leaves it out. The runner's environment, such as `GIT_INDEX_FILE`, picks the index.
 ///
 /// # Errors
 ///
@@ -153,12 +153,20 @@ pub fn read(git: &Git, folder: &Path) -> Result<Staged, GitError> {
         None,
         parse::name_status,
     )?;
+    // In the work-tree diff only an intent-to-add entry (`git add -N`) is added: its index entry
+    // is an empty placeholder that a commit leaves out, so the snapshot leaves it out too.
+    let (intent, edited): (Vec<StagedPath>, Vec<StagedPath>) = work_tree
+        .into_iter()
+        .partition(|entry| entry.status == Status::Added);
+    let intent: HashSet<Vec<u8>> = intent.into_iter().map(|entry| entry.path).collect();
     let place = git_place(&entries, &canonical, folding);
     let tracked: Vec<Tracked> = entries
         .into_iter()
-        .filter(|entry| folding.below(&canonical, &entry.path).is_some())
+        .filter(|entry| {
+            folding.below(&canonical, &entry.path).is_some() && !intent.contains(&entry.path)
+        })
         .collect();
-    let edited = work_tree.into_iter().map(|entry| entry.path).collect();
+    let edited = edited.into_iter().map(|entry| entry.path).collect();
     let modified = staged_bytes(git, &top, &tracked, edited)?;
     Ok(Staged {
         top,
