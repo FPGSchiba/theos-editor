@@ -11,7 +11,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P02 | Records and grammars | theos-editor | done | #16 | #17 |
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | done | #21 | #28 |
-| P05 | CLI and hook | theos-editor | in-progress | #35 | |
+| P05 | CLI and hook | theos-editor | pr-open | #35, #41 | |
 | P06 | Command layer and repo lock | theos-editor | spec-pr | #36 | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map format and terrain generator | theos-editor | spec-approved | #27 | |
@@ -55,6 +55,16 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
+- P05's build PR is a draft labelled `needs-jann`: its final review loop reached the cap of 5
+  rounds with one Minor open (R5-1: four `hook install` cases that spec PR #41 calls binary
+  tests have library tests only). The fix (four binary tests in `crates/theos/tests/cli/hook.rs`)
+  is ready to apply on Jann's word.
+- P05's spec change PR #41 (judge staged paths in git's spelling, the git environment of a hook,
+  intent-to-add entries, the hook for merge commits) waits for Jann. Its §7 has three rows for
+  Jann to decide: cherry-pick, rebase and revert run no commit hook; `Folding` folds Unicode case
+  where git folds ASCII; `core.ignorecase=false` on a case-insensitive file system.
+- P05 and P06 (#39): whichever PR merges second moves `theos new` onto P06's `Create` command
+  (agreed by both sessions). Until then P05's `create.rs` has its own preview, verdict and write.
 - P06's spec (command layer and repo lock) waits for Jann in its spec PR #36. Its §6.1 holds the
   interfaces agreed with the P05 session, and its §11 the git probes for P46 and P47.
 - For P49 (umbrella version 6):
