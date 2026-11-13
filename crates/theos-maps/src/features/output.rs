@@ -17,8 +17,10 @@
 //! one) and `depth_max_m`.
 
 mod lakes;
+mod roads;
 #[cfg(test)]
 mod tests;
+mod water;
 
 use std::collections::BTreeMap;
 
@@ -29,9 +31,9 @@ use serde_json::Value;
 
 use super::{Feature, FeatureHandle, FeatureSet, Geometry, Prop};
 use crate::kernels::num::canonical;
-use crate::stages::terrain::hydrology::{LakeShape, RiverLine, WaterFeatures};
+use crate::stages::terrain::hydrology::WaterFeatures;
 use crate::stages::terrain::roads::{Road, RoadNetwork};
-use crate::world::{MapFrame, ValueType, World};
+use crate::world::{ValueType, World};
 
 /// Why the features cannot be built.
 #[derive(Debug, thiserror::Error)]
@@ -82,12 +84,12 @@ pub enum FeaturesError {
     },
 }
 
-/// The ids of every feature, assigned before any feature is built so references can point
-/// forward (a site names its road, a road is numbered after the sites).
 /// A polygon: an exterior ring followed by its holes.
 type Polygon = Vec<Vec<[f64; 2]>>;
 
-struct Named {
+/// The ids of every feature, assigned before any feature is built so references can point
+/// forward (a site names its road, a road is numbered after the sites).
+pub(super) struct Named {
     /// The id of each feature of the set, by handle.
     set: Vec<String>,
     /// The id of each road, by index.
@@ -141,7 +143,7 @@ impl Named {
         })
     }
 
-    fn feature(&self, handle: FeatureHandle, by: &str) -> Result<&str, FeaturesError> {
+    pub(super) fn feature(&self, handle: FeatureHandle, by: &str) -> Result<&str, FeaturesError> {
         usize::try_from(handle.0)
             .ok()
             .and_then(|i| self.set.get(i))
@@ -152,7 +154,7 @@ impl Named {
             })
     }
 
-    fn road(&self, index: u32, by: &str) -> Result<&str, FeaturesError> {
+    pub(super) fn road(&self, index: u32, by: &str) -> Result<&str, FeaturesError> {
         usize::try_from(index)
             .ok()
             .and_then(|i| self.roads.get(i))
@@ -165,7 +167,7 @@ impl Named {
 }
 
 /// A finite number as JSON, with `-0.0` written as `0.0`.
-fn number(x: f64, feature: &str, property: &str) -> Result<Value, FeaturesError> {
+pub(super) fn number(x: f64, feature: &str, property: &str) -> Result<Value, FeaturesError> {
     serde_json::Number::from_f64(canonical(x))
         .map(Value::Number)
         .ok_or_else(|| FeaturesError::NonFinite {
@@ -174,7 +176,7 @@ fn number(x: f64, feature: &str, property: &str) -> Result<Value, FeaturesError>
         })
 }
 
-fn numbers(xs: &[f64], feature: &str, property: &str) -> Result<Value, FeaturesError> {
+pub(super) fn numbers(xs: &[f64], feature: &str, property: &str) -> Result<Value, FeaturesError> {
     xs.iter()
         .map(|&x| number(x, feature, property))
         .collect::<Result<Vec<_>, _>>()
@@ -193,23 +195,26 @@ fn coord(x: f64, feature: &str) -> Result<f64, FeaturesError> {
     }
 }
 
-fn position<const N: usize>(p: &[f64; N], feature: &str) -> Result<Vec<f64>, FeaturesError> {
+pub(super) fn position<const N: usize>(
+    p: &[f64; N],
+    feature: &str,
+) -> Result<Vec<f64>, FeaturesError> {
     p.iter().map(|&x| coord(x, feature)).collect()
 }
 
-fn ring(r: &[[f64; 2]], feature: &str) -> Result<Vec<Vec<f64>>, FeaturesError> {
+pub(super) fn ring(r: &[[f64; 2]], feature: &str) -> Result<Vec<Vec<f64>>, FeaturesError> {
     r.iter().map(|p| position(p, feature)).collect()
 }
 
 /// The properties every feature has: `kind` and `type`.
-fn base(kind: &str, ty: &str) -> JsonObject {
+pub(super) fn base(kind: &str, ty: &str) -> JsonObject {
     let mut props = JsonObject::new();
     props.insert("kind".to_owned(), Value::from(kind));
     props.insert("type".to_owned(), Value::from(ty));
     props
 }
 
-fn assemble(id: &str, props: JsonObject, geometry: GeometryValue) -> Gj {
+pub(super) fn assemble(id: &str, props: JsonObject, geometry: GeometryValue) -> Gj {
     Gj {
         bbox: None,
         geometry: Some(GjGeometry::new(geometry)),
@@ -268,91 +273,6 @@ fn set_feature(f: &Feature, id: &str, named: &Named) -> Result<Gj, FeaturesError
     Ok(assemble(id, props, geometry))
 }
 
-fn road_feature(
-    road: &Road,
-    id: &str,
-    network: &RoadNetwork,
-    height: &crate::grid::Grid<f64>,
-    frame: &MapFrame,
-    named: &Named,
-) -> Result<Gj, FeaturesError> {
-    let mut props = base("road", road.class.name());
-    props.insert(
-        "from".to_owned(),
-        Value::from(named.feature(road.from, id)?),
-    );
-    props.insert("to".to_owned(), Value::from(named.feature(road.to, id)?));
-    props.insert(
-        "length_m".to_owned(),
-        number(road.length_m(frame), id, "length_m")?,
-    );
-    props.insert(
-        "width_m".to_owned(),
-        number(network.params.width_m.of(road.class), id, "width_m")?,
-    );
-    props.insert(
-        "grade_max".to_owned(),
-        number(road.grade_max(height, frame), id, "grade_max")?,
-    );
-    let line = road
-        .cells
-        .iter()
-        .map(|&cell| {
-            let cell = usize::try_from(cell).unwrap_or(usize::MAX);
-            position(&frame.centre_m(cell / frame.cols, cell % frame.cols), id)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(assemble(id, props, GeometryValue::new_line_string(line)))
-}
-
-fn river_feature(river: &RiverLine, id: &str) -> Result<Gj, FeaturesError> {
-    let mut props = base("water", "river");
-    props.insert(
-        "width_m".to_owned(),
-        numbers(&river.width_m, id, "width_m")?,
-    );
-    props.insert(
-        "depth_m".to_owned(),
-        numbers(&river.depth_m, id, "depth_m")?,
-    );
-    props.insert(
-        "discharge_m3s".to_owned(),
-        numbers(&river.discharge_m3s, id, "discharge_m3s")?,
-    );
-    props.insert("order".to_owned(), Value::from(river.order));
-    let line = river
-        .points
-        .iter()
-        .map(|p| position(p, id))
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(assemble(id, props, GeometryValue::new_line_string(line)))
-}
-
-fn lake_feature(
-    lake: &LakeShape,
-    id: &str,
-    polygon: &[Vec<[f64; 2]>],
-) -> Result<Gj, FeaturesError> {
-    let mut props = base("water", "lake");
-    props.insert(
-        "surface_m".to_owned(),
-        number(lake.surface_m, id, "surface_m")?,
-    );
-    props.insert("terminal".to_owned(), Value::from(lake.terminal));
-    if let Some(at) = lake.outlet {
-        props.insert("outlet".to_owned(), numbers(&at, id, "outlet")?);
-    }
-    props.insert(
-        "depth_max_m".to_owned(),
-        number(lake.depth_max_m, id, "depth_max_m")?,
-    );
-    let rings = polygon
-        .iter()
-        .map(|r| ring(r, id))
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(assemble(id, props, GeometryValue::new_polygon(rings)))
-}
-
 /// The features of `world` and how many of each type there are.
 ///
 /// # Errors
@@ -383,15 +303,15 @@ pub(crate) fn build(
             .f64("height")
             .ok_or(FeaturesError::MissingLayer { name: "height" })?;
         for (road, id) in network.roads.iter().zip(&named.roads) {
-            features.push(road_feature(road, id, network, height, frame, &named)?);
+            features.push(roads::feature(road, id, network, height, frame, &named)?);
         }
     }
     for (river, id) in water.rivers.iter().zip(&named.rivers) {
-        features.push(river_feature(river, id)?);
+        features.push(water::river(river, id)?);
     }
     for (lake, polygons) in water.lakes.iter().zip(&named.lakes) {
         for (id, polygon) in polygons {
-            features.push(lake_feature(lake, id, polygon)?);
+            features.push(water::lake(lake, id, polygon)?);
         }
     }
     let collection = FeatureCollection {

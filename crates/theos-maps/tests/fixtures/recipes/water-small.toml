@@ -1,5 +1,5 @@
 # synthetic fixture (P08), not canon
-# A 64 x 64 terrain through the whole pipeline up to the roads, tuned so that seed 1 has at least
+# A 64 x 64 terrain through the whole pipeline through every terrain stage, tuned so that seed 1 has at least
 # one lake and one river. It exists for the features output (CE-28.6).
 id      = "water-small"
 title   = "Lakes, rivers and roads, 64 squared"
@@ -91,6 +91,9 @@ min_lake_area_m2 = 30000.0
 id = "ecology"
 
 [[stage]]
+id = "elements"
+
+[[stage]]
 id = "settlements"
   [stage.counts]
   city    = 0
@@ -109,4 +112,26 @@ chimes = 0
 gates = 2
 
 [[stage]]
+id = "detuning"
+
+[[stage]]
+id = "resources"
+spacing_km = 0.5
+  [stage.counts]
+  iron-ore = 3
+  timber   = 3
+  stone    = 3
+
+[[stage]]
 id = "roads"
+
+[[stage]]
+id = "sites"
+min_richness = 0.0
+  [stage.counts]
+  watchtower = 2
+  cave       = 1
+  camp       = 1
+
+[[stage]]
+id = "travel"

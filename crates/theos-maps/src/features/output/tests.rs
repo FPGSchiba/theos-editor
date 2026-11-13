@@ -433,3 +433,40 @@ fn the_lakes_of_a_run_are_polygons_of_closed_rings() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn every_reference_of_a_run_is_the_id_of_a_feature() -> TestResult {
+    let fc = run_and_build(WATER_SMALL, 1)?;
+    let known: std::collections::BTreeSet<String> = fc.features.iter().map(id).collect();
+    let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
+    for f in &fc.features {
+        for key in ["road", "serves", "deposit", "from", "to"] {
+            let Some(value) = prop(f, key) else { continue };
+            let refs: Vec<&str> = match value {
+                Value::String(s) => vec![s.as_str()],
+                Value::Array(items) => items.iter().filter_map(Value::as_str).collect(),
+                _ => Vec::new(),
+            };
+            assert_ne!(refs.len(), 0, "{} {key}", id(f));
+            for r in refs {
+                assert!(known.contains(r), "{} {key}: {r}", id(f));
+            }
+            *seen.entry(key).or_insert(0) += 1;
+        }
+    }
+    for key in ["road", "serves", "deposit", "from", "to"] {
+        assert!(
+            seen.get(key).is_some_and(|&n| n > 0),
+            "no `{key}` in the run"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_road_carries_its_class() -> TestResult {
+    let (fc, _) = build(&world_with(three_places())?)?;
+    let road = of(&fc, "road", "road")[0];
+    assert_eq!(prop(road, "class"), Some(&Value::from("road")));
+    Ok(())
+}
