@@ -1,6 +1,6 @@
 //! `check_staged` against real repositories: the commit is judged, not the working tree.
 
-use theos_studio::{StagedCheck, StudioError, Workspace, check_staged};
+use theos_studio::{StagedCheck, StudioError, Workspace, check_staged, report};
 
 use crate::common::{Error, TempProject, TestResult, put};
 use crate::repo::{Repo, variant};
@@ -283,9 +283,17 @@ fn a_folder_outside_git_is_not_in_a_repository() -> TestResult {
     let repo = Repo::committed("")?;
     let project = TempProject::copy_of_studio("projects/staged")?;
     let mut workspace = Workspace::open(project.root())?;
-    assert!(matches!(
-        check_staged(&mut workspace, &repo.git()?),
-        Err(StudioError::NotInRepository { .. })
-    ));
+    let error = check_staged(&mut workspace, &repo.git()?)
+        .err()
+        .ok_or("the check ran outside git")?;
+    assert!(
+        matches!(error, StudioError::NotInRepository { .. }),
+        "{error:?}"
+    );
+    // The report keeps git's own reason (here no repository; else, say, dubious ownership).
+    let text = report(&error);
+    assert!(text.contains("is not in a git repository"), "{text}");
+    assert!(text.contains("not a git repository"), "{text}");
+    assert_eq!(text.matches("rev-parse").count(), 1, "{text}");
     Ok(())
 }

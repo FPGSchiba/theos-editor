@@ -38,11 +38,14 @@ pub enum StudioError {
         /// Where the search started.
         start: PathBuf,
     },
-    /// The folder is not in a git repository.
+    /// The folder is not in a git repository, or git cannot use the repository it is in.
     #[error("`{}` is not in a git repository", folder.display())]
     NotInRepository {
         /// The folder.
         folder: PathBuf,
+        /// git's own answer, which names the reason (no repository, dubious ownership, …).
+        #[source]
+        source: GitError,
     },
     /// The user settings file is not valid.
     #[error("{}: {message}", path.display())]
