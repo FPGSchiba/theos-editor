@@ -53,6 +53,12 @@ pub enum HookError {
         /// The existing hook.
         path: PathBuf,
     },
+    /// The path of the running `theos` is not UTF-8, so the hook cannot name it.
+    #[error("the hook cannot name `{}`: its path is not valid UTF-8", path.display())]
+    TheosPath {
+        /// The path of `theos`.
+        path: PathBuf,
+    },
     /// `--force` would overwrite an earlier backup.
     #[error(
         "`{}` exists already; theos never overwrites a backup, move it away first",
@@ -98,14 +104,14 @@ pub fn install_hook(
         replaced: false,
         backup: None,
     };
-    if hook.exists() {
+    if present(&hook) {
         if is_ours(&hook, folder) {
             installed.replaced = true;
         } else if !force {
             return Err(HookError::Foreign { path: hook }.into());
         } else {
             let backup = hooks.join(BACKUP);
-            if backup.exists() {
+            if present(&backup) {
                 return Err(HookError::BackupExists { path: backup }.into());
             }
             std::fs::rename(&hook, &backup).map_err(|source| io(&hook, source))?;
@@ -116,6 +122,11 @@ pub fn install_hook(
     std::fs::write(&hook, text).map_err(|source| io(&hook, source))?;
     make_executable(&hook).map_err(|source| io(&hook, source))?;
     Ok(installed)
+}
+
+/// Whether something is at `path`, a dangling symbolic link included.
+fn present(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok()
 }
 
 fn io(path: &Path, source: std::io::Error) -> StudioError {
@@ -190,11 +201,14 @@ fn make_executable(path: &Path) -> std::io::Result<()> {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
 }
 
-/// Has no mode to set: Git for Windows runs `sh` hooks without an executable bit. It only
-/// confirms that the hook is there.
+/// Has no mode to set: Git for Windows runs `sh` hooks without an executable bit.
 #[cfg(windows)]
-fn make_executable(path: &Path) -> std::io::Result<()> {
-    std::fs::metadata(path).map(|_| ())
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "same signature as the unix fn, which can fail"
+)]
+fn make_executable(_path: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 #[cfg(test)]
@@ -237,7 +251,6 @@ mod tests {
         std::fs::write(&file, "x")?;
         make_executable(&file)?;
         assert!(file.is_file());
-        assert!(make_executable(&dir.path().join("missing")).is_err());
         Ok(())
     }
 }

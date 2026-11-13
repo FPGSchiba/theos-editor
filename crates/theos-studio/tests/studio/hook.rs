@@ -174,3 +174,48 @@ fn outside_git_is_not_in_a_repository() -> TestResult {
     );
     Ok(())
 }
+
+#[cfg(unix)]
+#[test]
+fn a_dangling_backup_link_counts_as_a_backup() -> TestResult {
+    let repo = Repo::committed("")?;
+    let hooks = repo.top().join(".git").join("hooks");
+    std::fs::create_dir_all(&hooks)?;
+    std::fs::write(pre_commit(&repo), "foreign\n")?;
+    let backup = hooks.join("pre-commit.before-theos");
+    std::os::unix::fs::symlink(repo.top().join("nowhere"), &backup)?;
+    let error = hook_error(install(&repo, "", true))?;
+    assert!(matches!(error, HookError::BackupExists { .. }));
+    assert_eq!(std::fs::read_to_string(pre_commit(&repo))?, "foreign\n");
+    assert!(std::fs::symlink_metadata(&backup)?.file_type().is_symlink());
+    assert!(!repo.top().join("nowhere").exists());
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn a_dangling_hook_link_is_a_foreign_hook() -> TestResult {
+    let repo = Repo::committed("")?;
+    let hooks = repo.top().join(".git").join("hooks");
+    std::fs::create_dir_all(&hooks)?;
+    std::os::unix::fs::symlink(repo.top().join("nowhere"), pre_commit(&repo))?;
+    let error = hook_error(install(&repo, "", false))?;
+    assert!(matches!(error, HookError::Foreign { .. }));
+    assert!(!repo.top().join("nowhere").exists());
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn a_non_utf8_theos_path_is_refused() -> TestResult {
+    use std::os::unix::ffi::OsStrExt;
+    let repo = Repo::committed("")?;
+    let theos = PathBuf::from(std::ffi::OsStr::from_bytes(b"/opt/theos-\xff"));
+    let result = install_hook(repo.top(), &repo.git()?, &theos, false);
+    assert!(
+        matches!(result, Err(StudioError::Hook(HookError::TheosPath { .. }))),
+        "{result:?}"
+    );
+    assert!(!pre_commit(&repo).exists());
+    Ok(())
+}
