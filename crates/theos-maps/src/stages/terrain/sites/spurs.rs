@@ -1,5 +1,7 @@
 //! Spur tracks: the road from the network to a site, laid with the router of `roads`.
 
+use std::collections::BTreeMap;
+
 use crate::features::{Feature, FeatureHandle, FeatureSet, Geometry, Prop};
 use crate::kernels::KernelError;
 use crate::stage::Finding;
@@ -10,6 +12,8 @@ use crate::world::MapFrame;
 pub(super) struct Spurs<'a> {
     cost: StepCost<'a>,
     frame: MapFrame,
+    /// The first road through each path cell.
+    first_road: BTreeMap<u32, u32>,
     /// The roads of the network, spurs included, and their raster.
     pub(super) laid: Laid,
     /// One warning per site no road could reach.
@@ -21,9 +25,17 @@ pub(super) struct Spurs<'a> {
 impl<'a> Spurs<'a> {
     /// Spurs over `cost` joining the network `laid`.
     pub(super) fn new(cost: StepCost<'a>, frame: MapFrame, laid: Laid) -> Self {
+        let mut first_road = BTreeMap::new();
+        for (i, road) in laid.roads.iter().enumerate() {
+            let id = u32::try_from(i).unwrap_or(u32::MAX);
+            for &c in &road.cells {
+                first_road.entry(c).or_insert(id);
+            }
+        }
         Self {
             cost,
             frame,
+            first_road,
             laid,
             warnings: Vec::new(),
             count: 0,
@@ -64,9 +76,7 @@ impl<'a> Spurs<'a> {
 
     /// The index of the first road whose path passes `cell`.
     fn road_through(&self, cell: usize) -> Option<u32> {
-        let at = u32::try_from(cell).ok()?;
-        let i = self.laid.roads.iter().position(|r| r.cells.contains(&at))?;
-        u32::try_from(i).ok()
+        self.first_road.get(&u32::try_from(cell).ok()?).copied()
     }
 
     /// Routes and lays the spur to `cell` from the nearest cell of any road; its index, or
@@ -93,6 +103,10 @@ impl<'a> Spurs<'a> {
             .unwrap_or(site);
         let index = self.laid.add(&self.cost, &path, class, joined, site);
         self.count += 1;
-        Ok(u32::try_from(index).ok())
+        let id = u32::try_from(index).unwrap_or(u32::MAX);
+        for &c in &self.laid.roads[index].cells {
+            self.first_road.entry(c).or_insert(id);
+        }
+        Ok(Some(id))
     }
 }

@@ -73,15 +73,12 @@ impl<'a> Walk<'a> {
     }
 
     /// The cells the step from `a` to `b` crosses between its ends (see [`between`]).
-    fn passed(&self, a: usize, b: usize) -> Vec<usize> {
+    fn passed(&self, a: usize, b: usize) -> [Option<usize>; 2] {
         let (ra, ca) = self.height.cell(a);
         let (rb, cb) = self.height.cell(b);
         let signed = |i: usize| isize::try_from(i).unwrap_or(0);
         let offset = (signed(rb) - signed(ra), signed(cb) - signed(ca));
         between(self.height, a, offset)
-            .into_iter()
-            .flatten()
-            .collect()
     }
 
     /// Tobler's speed on a road: at least `road_min_speed_ms`, times `road_speedup`.
@@ -103,10 +100,15 @@ impl<'a> Walk<'a> {
         };
         let mut time = length / speed;
         let passed = self.passed(a, b);
-        let fords = passed.iter().chain([&b]).filter(|&&c| self.wet[c]).count();
+        let fords = passed
+            .iter()
+            .flatten()
+            .chain([&b])
+            .filter(|&&c| self.wet[c])
+            .count();
         time += self.params.ford_penalty_s * to_f64(fords);
         let lake = self.lake.as_slice();
-        if lake[a] || lake[b] || passed.iter().any(|&c| lake[c]) {
+        if lake[a] || lake[b] || passed.iter().flatten().any(|&c| lake[c]) {
             time += self.params.lake_penalty_s;
         }
         time
@@ -119,7 +121,8 @@ impl<'a> Walk<'a> {
         cancel: &dyn Fn() -> bool,
     ) -> Result<PathTree, KernelError> {
         let mut step = |a: usize, b: usize| Some(self.seconds(a, b));
-        let mut extra = |a: usize| self.bridges.get(&a).cloned().unwrap_or_default();
+        // The kernel takes a list; an empty one does not allocate, so only bank cells clone.
+        let mut extra = |a: usize| self.bridges.get(&a).map_or_else(Vec::new, Clone::clone);
         shortest_paths(
             self.height.rows(),
             self.height.cols(),
