@@ -3,8 +3,9 @@
 //! (Bracht-Flyr et al. 2013, rain on the lake counted, rearranged for the area); and, after the
 //! routing, the dry nested pits of terminal depressions filled in `height`.
 
-use super::discharge::Drainage;
+use super::discharge::{Drainage, EPSILON};
 use crate::grid::Grid;
+use crate::kernels::flood::priority_flood_where;
 use crate::kernels::labels::{Connectivity, labels};
 use crate::kernels::num::{OrdF64, key, max, to_f64};
 use crate::stages::evolution::cell_index;
@@ -58,7 +59,9 @@ pub(crate) struct Lake {
     pub id: u32,
     /// Its cells, in index order.
     pub cells: Vec<usize>,
-    /// Its level, m.
+    /// Its level, m: the spill level of a lake that fills to spill; for a terminal lake the
+    /// value its fill from the bottom reached at its last cell (the height of that cell, or the
+    /// rim it passed to reach it, plus ε steps).
     pub level: f64,
 }
 
@@ -76,12 +79,18 @@ pub(crate) struct Basin {
 }
 
 /// How the water of a depression settles.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 enum Fill {
     /// It fills to its spill level and passes its water on.
     Spill,
-    /// It keeps its water in these, its lowest cells, in height order; none below one cell.
-    Terminal(Vec<usize>),
+    /// It keeps its water in `cells`, the first its fill from the bottom reaches (none below one
+    /// cell), at `level`, the fill's value at the last of them.
+    Terminal {
+        /// The lake cells, in fill order.
+        cells: Vec<usize>,
+        /// The lake level, m.
+        level: f64,
+    },
 }
 
 /// The lowest of `cells` on `height`, ties by index.
@@ -196,8 +205,8 @@ fn spills(q_out: f64, net: f64, cells: usize, cell_area: f64) -> bool {
     net <= 0.0 || q_out / net >= to_f64(cells) * cell_area
 }
 
-/// The lake of a terminal depression whose cells, in height order, have the runoff `runoff`
-/// (m³/yr each): the largest `n` with `n·a·(E − P) <= q_out + the runoff of the cells after the
+/// The lake of a terminal depression whose cells, in the order the lake reaches them, have the
+/// runoff `runoff` (m³/yr each): the largest `n` with `n·a·(E − P) <= q_out + the runoff of the cells after the
 /// first n`, where `a` is `cell_area` and `net` is `E − P` (positive). The dry cells are land in
 /// the lake's catchment. The left side rises and the right side falls with `n`, so one pass
 /// from `n = 0` finds it. Returns `n` and that land inflow, m³/yr.
@@ -213,41 +222,66 @@ fn terminal_lake(runoff: &[f64], q_out: f64, net: f64, cell_area: f64) -> (usize
     (n, q_out + dry[n])
 }
 
-/// The balance and the fill of `depression` with the inflow `q_out` from outside its cells and
-/// `runoff` (m³/yr per cell) on its cells.
-fn decide(
-    depression: &Depression,
-    q_out: f64,
-    runoff: &[f64],
-    fields: &ClimateFields,
-    height: &Grid<f64>,
+/// Decides every depression at its exit. The fills from the terminal bottoms share one surface
+/// and one visited table: each runs over its own depression only, so they never overlap.
+struct Decider<'a> {
+    /// Runoff per cell, m³/yr.
+    runoff: &'a [f64],
+    /// The yearly water fields, mm/yr.
+    fields: &'a ClimateFields,
+    /// Cell area, m².
     cell_area: f64,
-) -> (Balance, Fill) {
-    let (evaporation, precipitation) = means(depression, fields);
-    let net = evaporation - precipitation;
-    let balance = |q_land| Balance {
-        q_land,
-        evaporation,
-        precipitation,
-    };
-    if spills(q_out, net, depression.cells.len(), cell_area) {
-        return (balance(q_out), Fill::Spill);
+    /// The depression of every cell (its index in `settle`'s list), `usize::MAX` outside.
+    of: &'a [usize],
+    /// `height`, raised where a fill from a terminal bottom passes over a rim.
+    surface: Grid<f64>,
+    /// The cells those fills have entered.
+    visited: Vec<bool>,
+}
+
+impl Decider<'_> {
+    /// The balance and the fill of depression `k` with the inflow `q_out` from outside its cells.
+    ///
+    /// A terminal lake grows connected from the bottom: the depression's cells are taken in the
+    /// order a priority-flood from the bottom over the depression reaches them (ε, ties by index),
+    /// so a nested pit joins only once the level passes its rim. The cells not yet reached are
+    /// land in the lake's catchment ([`terminal_lake`]).
+    fn decide(&mut self, k: usize, depression: &Depression, q_out: f64) -> (Balance, Fill) {
+        let (evaporation, precipitation) = means(depression, self.fields);
+        let net = evaporation - precipitation;
+        let balance = |q_land| Balance {
+            q_land,
+            evaporation,
+            precipitation,
+        };
+        if spills(q_out, net, depression.cells.len(), self.cell_area) {
+            return (balance(q_out), Fill::Spill);
+        }
+        let of = self.of;
+        let order = priority_flood_where(
+            &mut self.surface,
+            &mut self.visited,
+            &[depression.bottom],
+            EPSILON,
+            |j, _| of[j] == k,
+        );
+        let mut cells: Vec<usize> = order.iter().map(|&c| cell_index(c)).collect();
+        let in_order: Vec<f64> = cells.iter().map(|&c| self.runoff[c]).collect();
+        let (n, q_land) = terminal_lake(&in_order, q_out, net, self.cell_area);
+        cells.truncate(n);
+        let level = cells.last().map_or(0.0, |&c| self.surface.as_slice()[c]);
+        (balance(q_land), Fill::Terminal { cells, level })
     }
-    let mut lowest = depression.cells.clone();
-    lowest.sort_unstable_by_key(|&c| (OrdF64(key(height.as_slice()[c])), c));
-    let in_order: Vec<f64> = lowest.iter().map(|&c| runoff[c]).collect();
-    let (n, q_land) = terminal_lake(&in_order, q_out, net, cell_area);
-    lowest.truncate(n);
-    (balance(q_land), Fill::Terminal(lowest))
 }
 
 /// Routes `runoff` (m³/yr per cell) over the receivers of `filled` in reverse fill order and
 /// settles every depression at its exit, after every depression upstream of it.
 ///
 /// A depression pools what reaches its cells: its own runoff and the inflow from outside its
-/// cells. At its exit the balance decides: a depression that fills to spill passes the pool on
-/// to the exit's receiver, a terminal one keeps it. Returns the basins in the order of
-/// `depressions`, their lakes numbered from 1 in that order.
+/// cells. At its exit the balance decides ([`Decider::decide`]): a depression that fills to
+/// spill passes the pool on to the exit's receiver, a terminal one keeps it in a lake grown from
+/// its bottom over `height`. Returns the basins in the order of `depressions`, their lakes
+/// numbered from 1 in that order.
 pub(crate) fn settle(
     filled: &Drainage,
     depressions: Vec<Depression>,
@@ -263,6 +297,14 @@ pub(crate) fn settle(
             of[c] = k;
         }
     }
+    let mut decider = Decider {
+        runoff: runoff.as_slice(),
+        fields,
+        cell_area,
+        of: &of,
+        surface: height.clone(),
+        visited: vec![false; height.len()],
+    };
     let mut flow = runoff.as_slice().to_vec();
     let mut pooled = vec![0.0; depressions.len()];
     let mut inflow = vec![0.0; depressions.len()];
@@ -278,15 +320,7 @@ pub(crate) fn settle(
             if i != depressions[k].exit {
                 continue;
             }
-            let on_cells = runoff.as_slice();
-            let (balance, fill) = decide(
-                &depressions[k],
-                inflow[k],
-                on_cells,
-                fields,
-                height,
-                cell_area,
-            );
+            let (balance, fill) = decider.decide(k, &depressions[k], inflow[k]);
             balances[k] = balance;
             fills[k] = fill;
             if fills[k] != Fill::Spill {
@@ -311,10 +345,9 @@ pub(crate) fn settle(
         .map(|((depression, balance), fill)| {
             let (terminal, cells, level) = match fill {
                 Fill::Spill => (false, depression.cells.clone(), depression.spill_level),
-                Fill::Terminal(mut lowest) => {
-                    let level = lowest.last().map_or(0.0, |&c| height.as_slice()[c]);
-                    lowest.sort_unstable();
-                    (true, lowest, level)
+                Fill::Terminal { mut cells, level } => {
+                    cells.sort_unstable();
+                    (true, cells, level)
                 }
             };
             let lake = (!cells.is_empty()).then(|| {
@@ -525,26 +558,35 @@ mod tests {
     }
 
     #[test]
-    fn a_terminal_lake_takes_the_lowest_cells_at_the_last_ones_height() {
+    fn a_terminal_lake_grows_from_its_bottom_over_its_rims() {
         // One depression of cells 1 to 4 at 5, 2, 3, 2 m behind a 9 m rim, drained at cell 6.
+        // Cell 4 is as low as the bottom (cell 2) but lies behind cell 3, a 3 m rim.
         let height = Grid::from_vec(1, 7, vec![9.0, 5.0, 2.0, 3.0, 2.0, 9.0, 0.0]).unwrap();
         let filled = drain(&height, &[6], 1.0);
-        let found = depressions(&height, &filled);
-        assert_eq!(found.len(), 1);
         let fields = ClimateFields {
             precipitation: Grid::filled(1, 7, 0.0),
             pet: Grid::filled(1, 7, 1000.0),
             aet: Grid::filled(1, 7, 0.0),
             runoff: Grid::filled(1, 7, 0.0),
         };
-        // Cell 0 drains into the depression with 3 m³/yr; E − P = 1 m/yr: three whole cells.
-        let mut runoff = Grid::filled(1, 7, 0.0);
-        runoff.as_mut_slice()[0] = 3.0;
-        let basins = settle(&filled, found, &runoff, &fields, &height, 1.0);
-        let lake = basins[0].lake.as_ref().unwrap();
-        assert!(basins[0].terminal);
-        assert_eq!(lake.cells, [2, 3, 4]);
-        assert_eq!(lake.level.to_bits(), 3.0_f64.to_bits());
-        assert_eq!(basins[0].depression.bottom, 2);
+        // Cell 0 drains into the depression with `q_out` m³/yr; E − P = 1 m/yr.
+        let lake = |q_out: f64| {
+            let found = depressions(&height, &filled);
+            assert_eq!(found.len(), 1);
+            let mut runoff = Grid::filled(1, 7, 0.0);
+            runoff.as_mut_slice()[0] = q_out;
+            let basins = settle(&filled, found, &runoff, &fields, &height, 1.0);
+            assert!(basins[0].terminal);
+            assert_eq!(basins[0].depression.bottom, 2);
+            basins[0].lake.clone().unwrap()
+        };
+        // Two cells: the rim joins before the cell behind it, at the rim's height.
+        let two = lake(2.0);
+        assert_eq!(two.cells, [2, 3]);
+        assert_eq!(two.level.to_bits(), 3.0_f64.to_bits());
+        // Three cells: the cell behind the rim joins once the level passes the rim.
+        let three = lake(3.0);
+        assert_eq!(three.cells, [2, 3, 4]);
+        assert_eq!(three.level.to_bits(), (3.0 + EPSILON).to_bits());
     }
 }

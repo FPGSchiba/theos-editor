@@ -4,6 +4,7 @@ use super::lakes::Limits;
 use super::{Hydrology, Water, WaterThresholds, water};
 use crate::grid::{D8, Grid};
 use crate::kernels::flood::priority_flood;
+use crate::kernels::labels::{Connectivity, labels};
 use crate::kernels::num::{OrdF64, key, max, min, to_f64};
 use crate::recipe::{RecipeError, RecipeOrigin, parse, plan};
 use crate::stage::{LayerSpec, Registry, Stage};
@@ -330,18 +331,38 @@ fn the_routing_surface_drains_to_an_outlet_over_non_increasing_heights() {
     assert_drains_downhill(&bowl_with_a_nested_pit(), &all_edges(), ARID);
 }
 
-// Physics test 8 (spec §5.14).
-#[test]
-fn a_terminal_lake_balances_evaporation_and_inflow() {
-    let height = bowl();
-    let water = compute(&height, &all_edges(), ARID);
+/// The bowl with a nested pit on its wall lowered by `by` metres: its rim (about 125 m) lies
+/// above the terminal lake under `ARID`, its floor below the lake level from about 16 m on.
+fn bowl_with_a_pit_below_the_lake(by: f64) -> Grid<f64> {
+    lowered(bowl(), 25..27, 31..34, by)
+}
+
+/// Physics test 8 on the one terminal depression of `height` (drained edges, `ARID`): the lake is
+/// one connected water body around the bottom, and its evaporation equals its land inflow within
+/// one cell's share. Returns the computation.
+fn assert_balanced(height: &Grid<f64>) -> Water {
+    let water = compute(height, &all_edges(), ARID);
     assert_eq!(water.basins.len(), 1, "the bowl is the one depression");
     let basin = &water.basins[0];
     assert!(basin.terminal);
+    let lake = basin.lake.as_ref().unwrap();
+    let wet = mask(|r, c| lake.cells.contains(&at(r, c)));
+    let (label, count) = labels(&wet, Connectivity::Eight);
+    assert_eq!(count, 1, "the lake is one connected water body");
+    assert_ne!(
+        label.as_slice()[basin.depression.bottom],
+        0,
+        "around the bottom"
+    );
+    for &c in &lake.cells {
+        assert!(
+            height.as_slice()[c] <= lake.level,
+            "lake cell {c} above the level"
+        );
+    }
     let balance = basin.balance;
     let net = balance.evaporation - balance.precipitation;
     assert!((net - 1.0).abs() < 1e-12, "E - P = {net}");
-    let lake = basin.lake.as_ref().unwrap();
     let cells = to_f64(lake.cells.len());
     let evaporated = cells * CELL_AREA * net;
     // The bottom absorbs everything that reaches the depression; rain on the lake is counted
@@ -370,7 +391,17 @@ fn a_terminal_lake_balances_evaporation_and_inflow() {
     let largest = ((q_out + depression * runoff) / (CELL_AREA * net + runoff)).floor();
     assert_eq!(cells.to_bits(), largest.to_bits(), "{cells} lake cells");
     assert!(lake.cells.len() > 10 && lake.cells.len() < basin.depression.cells.len());
-    // The lake fills the lowest cells, at the level of the highest of them.
+    water
+}
+
+// Physics test 8 (spec §5.14).
+#[test]
+fn a_terminal_lake_balances_evaporation_and_inflow() {
+    let height = bowl();
+    let water = assert_balanced(&height);
+    let basin = &water.basins[0];
+    let lake = basin.lake.as_ref().unwrap();
+    // On the cone the lake fills the lowest cells, at the level of the highest of them.
     let h = height.as_slice();
     let top = lake
         .cells
@@ -413,6 +444,41 @@ fn dry_nested_pits_of_terminal_depressions_are_filled_in_height() {
     assert_eq!(water.filled_nested, 6);
     let w = staged(&height, &all_edges(), ARID, "");
     assert_eq!(w.f64("height").unwrap(), &water.height);
+}
+
+// Fix round 2 ruling: a terminal lake grows connected from its bottom, so a nested pit whose
+// rim lies above the lake level stays a dry pit even where its floor lies below that level.
+#[test]
+fn a_terminal_lake_grows_connected_from_its_bottom() {
+    let plain = compute(&bowl(), &all_edges(), ARID);
+    let plain_lake = plain.basins[0].lake.clone().unwrap();
+    let pit: Vec<usize> = (25..27)
+        .flat_map(|r| (31..34).map(move |c| at(r, c)))
+        .collect();
+    for by in [16.0, 20.0, 24.0] {
+        let height = bowl_with_a_pit_below_the_lake(by);
+        let floor = pit
+            .iter()
+            .fold(f64::INFINITY, |m, &c| min(m, height.as_slice()[c]));
+        let water = assert_balanced(&height);
+        let lake = water.basins[0].lake.as_ref().unwrap();
+        assert!(
+            floor < lake.level,
+            "by {by}: the pit's floor lies below the lake"
+        );
+        assert_eq!(lake, &plain_lake, "by {by}: the pit does not join the lake");
+        let surface = water.routing.drainage.surface.as_slice();
+        for &c in &pit {
+            let out = water.height.as_slice()[c];
+            assert_eq!(
+                out.to_bits(),
+                surface[c].to_bits(),
+                "by {by}: {c} is filled"
+            );
+            assert!(out > lake.level, "by {by}: {c} stands above the lake");
+        }
+        assert_drains_downhill(&height, &all_edges(), ARID);
+    }
 }
 
 #[test]

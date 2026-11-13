@@ -20,17 +20,21 @@
 //!    the runoff from the lake's catchment, land outside the lake. With `E ≤ P`, or when the
 //!    whole depression evaporates no more than `Q_out` (`Q_out / (E − P)` reaches its area, and a
 //!    full lake leaves no land inside the depression), it fills to spill. Otherwise the lake is
-//!    terminal: of the depression's cells in height order (ties by index), the largest `n` with
-//!    `n·a·(E − P) ≤ Q_out +` the runoff of the cells after the first `n`, which stay dry land in
-//!    the catchment; its level is the height of the `n`-th cell. With `n = 0` there is no lake,
-//!    but the depression still keeps its water.
+//!    terminal and grows connected from the bottom, one water body: the depression's cells are
+//!    taken in the order a priority-flood from the bottom over the depression reaches them (ε,
+//!    ties by index), which is spec §5.9's height order for a lake at one level; a nested pit
+//!    whose rim lies above the level stays out. The lake is the first `n` of them, the largest
+//!    `n` with `n·a·(E − P) ≤ Q_out +` the runoff of the cells after the first `n`, which stay
+//!    dry land in the catchment; its level is the fill's value at the `n`-th cell. With `n = 0`
+//!    there is no lake, but the depression still keeps its water.
 //! 6. **Routing** (`discharge::route`): a second fill from the outlets and the lowest cell of
 //!    every terminal depression; the steepest receivers on it give `flow_dir`, and runoff
 //!    accumulated over them gives `discharge` in m³/s. A terminal bottom absorbs its inflow; on a
 //!    closed map so does the sink. Single flow in channels after Quinn et al. 1991 (spec ruling
 //!    27). The second fill starts at a terminal bottom, so it also fills the pits nested in a
-//!    terminal depression; those the lake leaves dry are set to it in `height`
-//!    (`lakes::fill_dry_pits`), so river beds never cross them either. `Q_out` comes from the
+//!    terminal depression; those the lake has not reached are dry, even where their floor lies
+//!    below the lake level, and are set to it in `height` (`lakes::fill_dry_pits`), so river beds
+//!    never cross them either. `Q_out` comes from the
 //!    first fill: a few rim cells next to a terminal depression, which drain over its pass on the
 //!    first fill, may drain into it on the second (ridge cells with little area; accepted).
 //! 7. **Rasters** (`rasters.rs`): `river` and `big_river` where the discharge exceeds `river_q` and
