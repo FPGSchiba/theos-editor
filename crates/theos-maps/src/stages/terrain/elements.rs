@@ -209,23 +209,19 @@ impl TypedStage for Elements {
                 grid.as_mut_slice()[i] = v;
             }
         }
+        let mut report = StageReport::default();
+        let means = out.each_ref().map(mean);
+        for (name, share) in NAMES.into_iter().zip(shares(means)) {
+            report.values.insert(name.to_owned(), share);
+        }
         for (name, grid) in ELEMENT_LAYERS.into_iter().zip(out) {
             ctx.write(name, Layer::F64(grid))?;
         }
-        Ok(StageReport::default())
+        Ok(report)
     }
 
-    fn metrics(&self, world: &World, _: &ElementsParams, _: &StageReport) -> Metrics {
-        let mut means = [0.0; 5];
-        for (m, name) in means.iter_mut().zip(ELEMENT_LAYERS) {
-            *m = world.f64(name).map_or(0.0, mean);
-        }
-        let values = NAMES
-            .into_iter()
-            .zip(shares(means))
-            .map(|(name, share)| (name.to_owned(), share))
-            .collect();
-        Metrics(values)
+    fn metrics(&self, _: &World, _: &ElementsParams, report: &StageReport) -> Metrics {
+        Metrics(report.values.clone())
     }
 }
 
@@ -363,7 +359,7 @@ mod tests {
     #[test]
     fn the_stage_spreads_water_from_rivers_and_reports_shares() {
         let mut w = setup(None);
-        run_stage(&mut w, &Elements, "").unwrap();
+        let report = run_stage(&mut w, &Elements, "").unwrap();
         assert!(w.value::<Climate>("climate").unwrap().fields.is_none());
         let water = w.f64("element_water").unwrap();
         assert!(
@@ -378,7 +374,7 @@ mod tests {
             );
         }
         let params = Elements.params(&table("")).unwrap();
-        let metrics = Stage::metrics(&Elements, &w, params.as_ref(), &StageReport::default());
+        let metrics = Stage::metrics(&Elements, &w, params.as_ref(), &report);
         let mut names = Stage::metric_names(&Elements, params.as_ref());
         names.sort_unstable();
         assert_eq!(
@@ -399,12 +395,90 @@ mod tests {
 
     #[test]
     fn a_world_with_no_elements_has_zero_shares() {
-        let mut w = setup(None);
-        for name in ELEMENT_LAYERS {
-            w.insert(name, Layer::F64(Grid::filled(N, N, 0.0))).unwrap();
+        let mut w = world(N, N);
+        let layers = [
+            ("vegetation", 0.0),
+            ("slope", 0.0),
+            ("temperature", -10.0),
+            ("height", 100.0),
+        ];
+        for (name, v) in layers {
+            w.insert(name, Layer::F64(Grid::filled(N, N, v))).unwrap();
         }
-        let params = Elements.params(&table("")).unwrap();
-        let metrics = Stage::metrics(&Elements, &w, params.as_ref(), &StageReport::default());
-        assert!(metrics.0.values().all(|v| *v == 0.0) && metrics.0.len() == 5);
+        w.insert("river", Layer::Mask(Grid::filled(N, N, false)))
+            .unwrap();
+        w.insert("lake", Layer::Mask(Grid::filled(N, N, false)))
+            .unwrap();
+        w.insert("rock", Layer::U8(Grid::filled(N, N, GRANITE)))
+            .unwrap();
+        let climate = Climate {
+            params: ClimateParams::default(),
+            fields: Some(climate::ClimateFields {
+                precipitation: Grid::filled(N, N, 0.0),
+                pet: Grid::filled(N, N, 0.0),
+                aet: Grid::filled(N, N, 0.0),
+                runoff: Grid::filled(N, N, 0.0),
+            }),
+        };
+        w.insert("climate", Layer::Value(Box::new(climate)))
+            .unwrap();
+        let report = run_stage(&mut w, &Elements, "").unwrap();
+        assert!(report.values.values().all(|v| *v == 0.0) && report.values.len() == 5);
+    }
+
+    #[test]
+    fn lakes_spread_water_scaled_by_three_and_clipped() {
+        let mut w = world(N, N);
+        let flat = |v: f64| Layer::F64(Grid::filled(N, N, v));
+        for (name, v) in [
+            ("vegetation", 0.0),
+            ("slope", 0.0),
+            ("temperature", 0.0),
+            ("height", 100.0),
+        ] {
+            w.insert(name, flat(v)).unwrap();
+        }
+        w.insert("river", Layer::Mask(Grid::filled(N, N, false)))
+            .unwrap();
+        // A lake of 5 x 5 cells and no river.
+        let block = |r: usize, c: usize| (6..11).contains(&r) && (6..11).contains(&c);
+        let lake: Vec<bool> = (0..N * N).map(|i| block(i / N, i % N)).collect();
+        w.insert(
+            "lake",
+            Layer::Mask(Grid::from_vec(N, N, lake.clone()).unwrap()),
+        )
+        .unwrap();
+        w.insert("rock", Layer::U8(Grid::filled(N, N, SHALE)))
+            .unwrap();
+        let zero = || Grid::filled(N, N, 0.0);
+        let climate = Climate {
+            params: ClimateParams::default(),
+            fields: Some(climate::ClimateFields {
+                precipitation: zero(),
+                pet: zero(),
+                aet: zero(),
+                runoff: zero(),
+            }),
+        };
+        w.insert("climate", Layer::Value(Box::new(climate)))
+            .unwrap();
+        run_stage(&mut w, &Elements, "").unwrap();
+
+        let source = Grid::from_vec(
+            N,
+            N,
+            lake.iter().map(|l| if *l { 1.0 } else { 0.0 }).collect(),
+        )
+        .unwrap();
+        let g = gaussian(&source, 250.0, 100.0);
+        let water = w.f64("element_water").unwrap();
+        // Beside the lake the water is positive and clipped; with no rain moist is 0.
+        let centre = g.get(8, 8);
+        assert!(centre > 1.0 / 3.0 && centre < 1.0, "centre {centre}");
+        assert!(near(water.get(8, 8), 1.0));
+        // Far from it the clip does not bite, and the value is exactly three times the spread.
+        let far = g.get(8, 14);
+        assert!(far > 0.0 && 3.0 * far < 1.0, "far {far}");
+        assert!(near(water.get(8, 14), 3.0 * far));
     }
 }
