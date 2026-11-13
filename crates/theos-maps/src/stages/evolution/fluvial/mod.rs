@@ -13,17 +13,21 @@
 //!   deposition and no filling (spec ruling 29).
 //! - **G > 0** couples each cell to its donors through `Qs`; Yuan's Gauss–Seidel iterations
 //!   solve it (`solve`), stopping at 10⁻³ × max(U)·Δt, or 10⁻⁶ m without uplift (ruling 43).
-//!   Each routed depression is a sediment trap (`fill`): while the iterations run, its cells
-//!   keep their height and the sediment that reaches it stays in it up to its capacity, so the
-//!   cells below see only what passes its spill. After the iterations one more routing of the
-//!   step's sediment (`sediment`) fills each depression in height order up to its spill level,
-//!   with an ε slope toward its spill cell, and passes the rest on.
+//!   Where dry catchments break Yuan's condition `G/p̂ ≤ 1` they oscillate, and Aitken's
+//!   relaxation (`relax`) damps them once they are not on track to converge in time; the
+//!   solution they converge to is unchanged. Each routed depression is a sediment trap
+//!   (`fill`): while the iterations run, its cells keep their height and the sediment that
+//!   reaches it stays in it up to its capacity, so the cells below see only what passes its
+//!   spill. After the iterations one more routing of the step's sediment (`sediment`) fills
+//!   each depression in height order up to its spill level, with an ε slope toward its spill
+//!   cell, and passes the rest on.
 //!
 //! The report holds `sediment_out_m3`, the sediment that left the map in the step at the cells
 //! without an edge (the drained edges, or the closed map's sink), and `iterations`.
 
 mod fill;
 mod inputs;
+mod relax;
 mod sediment;
 mod solve;
 #[cfg(test)]

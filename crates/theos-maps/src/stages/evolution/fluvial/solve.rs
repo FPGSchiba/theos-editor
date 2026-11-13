@@ -23,11 +23,14 @@
 //!
 //! With G = 0 one sweep solves the step exactly. With G > 0 `Qs_in` couples every cell to its
 //! donors, and Yuan's Gauss–Seidel iterations solve it ([`deposit`]): each iteration routes the
-//! net erosion of the last iterate, `(h*_j − h^k_j)·area`, then sweeps once.
+//! net erosion of the last iterate, `(h*_j − h^k_j)·area`, then sweeps once. Where runoff is low
+//! the lagged sediment makes the iterations oscillate; once they are not on track to reach the
+//! tolerance in time, each one is relaxed by Aitken's factor ([`Relaxation`]).
 
 use libm::pow;
 
 use super::fill::Traps;
+use super::relax::Relaxation;
 use super::sediment::route;
 use crate::grid::Grid;
 use crate::kernels::num::max;
@@ -147,7 +150,9 @@ impl Solution {
 ///    gets `Qs_in(i)·Δt`, the volume reaching it from upstream; a routed depression keeps what
 ///    reaches it up to its capacity and lets the rest go at its spill cell (`traps`);
 /// 2. sweeps once in stack order with `Δt·G·Qs_in(i)/Q_i` and the cell's own term `c_i`;
-/// 3. stops when no height changed by `tolerance` or more, or after `max_iterations`.
+/// 3. stops with the sweep's heights when it changed no height by `tolerance` or more, or after
+///    `max_iterations`; otherwise moves the heights toward the sweep's by Aitken's relaxation
+///    factor ([`Relaxation`]) and iterates again.
 pub(super) fn deposit(step: &Incision<'_>, dep: &Deposition<'_>, start: &Grid<f64>) -> Solution {
     let before = start.as_slice();
     let cells = before.len();
@@ -162,6 +167,7 @@ pub(super) fn deposit(step: &Incision<'_>, dep: &Deposition<'_>, start: &Grid<f6
     let (mut volume, mut arriving, mut inflow) =
         (vec![0.0; cells], vec![0.0; cells], vec![0.0; cells]);
     let (mut iterations, mut residual) = (0, f64::INFINITY);
+    let mut relaxation = Relaxation::new(dep.tolerance, dep.max_iterations);
     while iterations < dep.max_iterations {
         iterations += 1;
         for ((v, &b), &h) in volume.iter_mut().zip(before).zip(height.as_slice()) {
@@ -188,8 +194,12 @@ pub(super) fn deposit(step: &Incision<'_>, dep: &Deposition<'_>, start: &Grid<f6
             .iter()
             .zip(height.as_slice())
             .fold(0.0, |most, (a, b)| max(most, (a - b).abs()));
+        let converged = residual < dep.tolerance;
+        if !converged {
+            relaxation.apply(height.as_slice(), next.as_mut_slice(), residual);
+        }
         std::mem::swap(&mut height, &mut next);
-        if residual < dep.tolerance {
+        if converged {
             break;
         }
     }

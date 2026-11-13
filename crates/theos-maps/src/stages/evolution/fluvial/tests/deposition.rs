@@ -487,6 +487,58 @@ fn strong_deposition_stays_finite_at_the_iteration_limit() {
     }
 }
 
+/// Runoff that varies as the climate model's does across a range (synthetic): wet on the
+/// windward west, falling to a dry lee in the east where evapotranspiration takes almost all
+/// the rain. `p̂` runs from about 3 in the west to 0.005 in the east, below 0.5 on two fifths of
+/// the map (the 384² budget recipe: 0.005 to 4.1, below 0.5 on three tenths).
+fn rain_shadow() -> Grid<f64> {
+    let data = (0..N * N)
+        .map(|i| {
+            let east = to_f64(i % N) / to_f64(N - 1);
+            0.005 + 3.0 * (1.0 - east) * (1.0 - east)
+        })
+        .collect();
+    Grid::from_vec(N, N, data).unwrap()
+}
+
+/// Spec §5.9 with a climate that varies: where runoff is low, the catchment-mean `p̂` of a
+/// patch of cells falls below G, and Yuan et al.'s convergence condition `G/p̂ ≤ 1` fails. The
+/// lagged sediment flux then drives the whole dry patch up and down together from one
+/// iteration to the next: the iteration's dominant eigenvalue is negative and, with the
+/// erodibility of soft rock (shale, alluvium) at the default time step, below −1. Every step
+/// still converges within the iteration limit and stays finite (Task 27b: before the relaxation
+/// both erodibilities stopped at 50 iterations from step 1 on, the alluvium one diverging).
+#[test]
+fn dry_catchments_converge_at_the_default_time_step() {
+    const DT: f64 = 2.5e4;
+    for erodibility in [2e-4, 4e-4] {
+        for exponent in BOTH {
+            let mut w = landscape(r#"["south"]"#, 4);
+            w.insert(
+                "climate",
+                Layer::Value(Box::new(super::with_runoff(rain_shadow()))),
+            )
+            .unwrap();
+            w.insert("erodibility", Layer::F64(Grid::filled(N, N, erodibility)))
+                .unwrap();
+            let procs = processes(&recipe(exponent, "g = 1.0"));
+            for step in 0..40 {
+                let report = evolve(&mut w, &procs, 1, DT, 1).unwrap();
+                assert!(
+                    report.findings.is_empty(),
+                    "K {erodibility}, {exponent}, step {step}: {:?}",
+                    report.findings
+                );
+                let h = layer(&w, "height");
+                assert!(
+                    h.iter().all(|v| v.is_finite()),
+                    "K {erodibility}, {exponent}, step {step}"
+                );
+            }
+        }
+    }
+}
+
 /// Spec §8 and ruling 43: without uplift the Gauss–Seidel tolerance is 1e-6 m; with uplift it is
 /// Yuan et al.'s 1e-3 × max(U)·Δt. Two iterations are too few for either, so the warning names
 /// the tolerance in use; with the default limit the uplift-free step converges.
