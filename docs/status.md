@@ -55,11 +55,13 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
-- P08's spec change PR #40 (13 Nov 2026) waits for Jann: an exact one-sweep slope limiter (Jann
-  chose option (a)) whose removed material feeds the rivers as `slope_supply` (the mass rule is
-  Claude's proposal), plus the build's errata (reads of `resolve_sinks` and `fluvial`, Aitken
-  relaxation of Yuan's sweeps on dry cells, physics test 14 for `slope_adaptive`). The build
-  implements it meanwhile and adjusts if the review of #40 changes it.
+- P08's spec change PR #40 (13 Nov 2026) waits for Jann's merge: an exact one-sweep slope limiter
+  (Jann chose option (a)) whose removed material feeds the rivers as `slope_supply` (Jann
+  confirmed the mass rule the same day). The supply accumulates until `fluvial` takes it, so no
+  `every` setting counts it twice. The PR also carries the build's errata: the reads of
+  `resolve_sinks` and `fluvial`, Aitken relaxation of Yuan's sweeps on dry cells, and physics
+  test 14 for `slope_adaptive`. The build implements it (Task 27c), and #40 must be on main before
+  P08's build PR merges.
 - P06's spec (command layer and repo lock) waits for Jann in its spec PR #36. Its §6.1 holds the
   interfaces agreed with the P05 session, and its §11 the git probes for P46 and P47.
 - For P49 (umbrella version 6):
