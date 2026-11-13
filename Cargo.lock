@@ -892,8 +892,13 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "clap",
+ "serde",
+ "serde_json",
  "tempfile",
  "theos-content",
+ "theos-studio",
+ "theos-vcs",
+ "toml",
 ]
 
 [[package]]
