@@ -3,12 +3,13 @@
 //!
 //! P05 adds the [`Workspace`] (a project with its registry and index, which falls back to an
 //! index in memory while another process holds the cache), [`find_root`], the [`StudioError`] of
-//! the studio, [`report()`], which writes an error with each cause once, [`introduced()`], the count
-//! of errors a change introduces, [`check_staged`], which judges git's staged snapshot,
+//! the studio, [`report()`], which writes an error with each cause once, [`introduced()`], the
+//! count of errors a change introduces, [`check_staged`], which judges git's staged snapshot,
 //! [`check()`], which adds the binaries-folder warnings, [`user_settings`], which reads where that
-//! folder is, and the JSON [`views`] of findings, the [`schema`] of kinds and rules, and [`create()`](create::create), which makes a new record
-//! from its template and writes it only when it introduces no error. Later tasks of P05 extend this crate; the rest
-//! arrives in P06, P07 and later phases.
+//! folder is, and the JSON [`views`] of findings, the [`schema`] of kinds and rules, and
+//! [`create()`](create::create), which makes a new record from its template and writes it only
+//! when it introduces no error. Later tasks of P05 extend this crate; the rest arrives in P06,
+//! P07 and later phases.
 
 pub mod check;
 pub mod create;

@@ -2,7 +2,8 @@
 //! `hook install` follows in phase P05.
 //!
 //! The binary only parses arguments, calls `theos-studio` and prints. Exit codes: 0 when the
-//! command ran without error findings, 1 when `check` found errors, 2 when it could not run or `new` refused.
+//! command ran without error findings, 1 when `check` found errors, 2 when it could not run or
+//! `new` refused.
 
 mod check;
 mod formalism;

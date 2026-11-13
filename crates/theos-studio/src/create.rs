@@ -75,6 +75,12 @@ pub enum CreateError {
         /// The field.
         field: String,
     },
+    /// The field is not the request's to set.
+    #[error("`{field}` cannot be set: the id is the argument of the command and the kind is fixed")]
+    ReservedField {
+        /// The field.
+        field: String,
+    },
     /// A value cannot be written as the field.
     #[error("{field}: {message}")]
     Value {
@@ -129,6 +135,9 @@ pub fn create(workspace: &mut Workspace, request: &NewRequest<'_>) -> Result<Cre
     let record = fill(workspace, &spec, &id, request)?;
     let path = place(workspace, &spec, &id, &record)?;
     let text = record.text().to_owned();
+    if workspace.project().root().join(&path).exists() {
+        return Err(CreateError::Exists { path }.into());
+    }
 
     let preview = workspace.write(|index| index.preview(&[Change::text(&path, &text)]))?;
     let before = standing(workspace, &path, &preview.update)?;
@@ -207,16 +216,7 @@ fn skeleton(spec: &KindSpec, id: &str) -> String {
     if spec.field("status").is_some() {
         lines.push("status: draft".to_owned());
     }
-    format!(
-        "---
-{}
----
-",
-        lines.join(
-            "
-"
-        )
-    )
+    format!("---\n{}\n---\n", lines.join("\n"))
 }
 
 /// The record of the template or skeleton with the title and the fields of the request.
@@ -239,6 +239,9 @@ fn fill(
         ));
     }
     for (key, value) in request.set {
+        if key == "id" || key == "kind" {
+            return Err(CreateError::ReservedField { field: key.clone() }.into());
+        }
         if spec.field(key).is_none() {
             return Err(CreateError::UnknownField {
                 kind: spec.name.to_owned(),

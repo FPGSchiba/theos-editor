@@ -34,23 +34,19 @@ fn pairs(items: &[(&str, &str)]) -> Vec<(String, String)> {
         .collect()
 }
 
-/// A people record and a faction under it, so an npc has a parent.
-fn people() -> Vec<(&'static str, String)> {
-    vec![
-        (
-            "people/synthetic-people.md",
-            format!(
-                "---\n{SYNTHETIC}id: synthetic-people\nkind: people\ntitle: Synthetic people\n---\n"
-            ),
-        ),
-        (
-            "people/synthetic-people/synthetic-faction.md",
-            format!(
-                "---\n{SYNTHETIC}id: synthetic-faction\nkind: faction\ntitle: Synthetic faction\n\
-                 parent: synthetic-people\n---\n"
-            ),
-        ),
+/// The synthetic people record and the faction under it, from the fixture files.
+fn people() -> Result<Vec<(&'static str, String)>, Error> {
+    let from = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("new");
+    [
+        "people/synthetic-people.md",
+        "people/synthetic-people/synthetic-faction.md",
     ]
+    .into_iter()
+    .map(|path| Ok((path, std::fs::read_to_string(from.join(path))?)))
+    .collect()
 }
 
 fn created(result: Result<Created, StudioError>) -> Result<Created, Error> {
@@ -123,7 +119,11 @@ fn a_standing_error_elsewhere_does_not_refuse() -> TestResult {
     // revalidates C-900, so the standing error is in the findings.
     let (temp, mut workspace) = project(&[("lore/truths/T-900.md", variant("T-900-lowered.md")?)])?;
     let mut set = clue_fields("T-900");
-    set[1].1 = "suspected".to_owned();
+    for (key, value) in &mut set {
+        if key == "moves_to" {
+            "suspected".clone_into(value);
+        }
+    }
     let result = created(create(&mut workspace, &request("clue", None, &set)))?;
     assert!(result.written(), "{:?}", result.introduced);
     assert!(temp.root().join("lore/clues/C-901.md").is_file());
@@ -253,7 +253,7 @@ fn an_npc_without_a_parent_value_has_no_parent() -> TestResult {
 
 #[test]
 fn an_npc_is_placed_under_its_parent() -> TestResult {
-    let (temp, mut workspace) = project(&people())?;
+    let (temp, mut workspace) = project(&people()?)?;
     let set = pairs(&[("parent", "synthetic-faction")]);
     let result = created(create(
         &mut workspace,
@@ -322,6 +322,42 @@ fn a_template_that_is_not_a_record_is_a_template_error() -> TestResult {
         matches!(&error, CreateError::Template { path, .. } if path == "templates/records/truth.template.md"),
         "{error:?}"
     );
+    assert!(!temp.root().join("lore/truths/T-902.md").exists());
+    Ok(())
+}
+
+#[test]
+fn an_existing_file_is_reported_before_the_verdict() -> TestResult {
+    let (temp, mut workspace) = project(&[])?;
+    let before = std::fs::read(temp.root().join("lore/truths/T-900.md"))?;
+    // Lowering the target would also introduce an overshoot on C-900; the file comes first.
+    let set = pairs(&[("target", "hinted")]);
+    let error = create_error(create(
+        &mut workspace,
+        &request("truth", Some("T-900"), &set),
+    ))?;
+    assert!(
+        matches!(&error, CreateError::Exists { path } if path == "lore/truths/T-900.md"),
+        "{error:?}"
+    );
+    assert_eq!(
+        std::fs::read(temp.root().join("lore/truths/T-900.md"))?,
+        before
+    );
+    Ok(())
+}
+
+#[test]
+fn id_and_kind_cannot_be_set() -> TestResult {
+    let (temp, mut workspace) = project(&[])?;
+    for field in ["id", "kind"] {
+        let set = pairs(&[(field, "T-777")]);
+        let error = create_error(create(&mut workspace, &request("truth", None, &set)))?;
+        assert!(
+            matches!(&error, CreateError::ReservedField { field: found } if found == field),
+            "{error:?}"
+        );
+    }
     assert!(!temp.root().join("lore/truths/T-902.md").exists());
     Ok(())
 }
