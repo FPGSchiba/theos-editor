@@ -149,7 +149,66 @@ impl<'a> Repo<'a> {
     fn stage_notes(&self) -> TestResult {
         self.stage(NOTES, "Synthetic note.\n")
     }
+
+    /// The project in `content/` of a repository whose `.git` is a file, laid out as `layout`
+    /// says, next to the violating `archive/C-901.md`, which is not part of the project. With
+    /// `settings`, they are the project's committed `.theos/settings.toml`. Everything is
+    /// committed, then the hook of `theos hook install content` is installed; the answer is the
+    /// work tree to commit from. git gives the hooks of such a work tree an absolute `GIT_DIR`
+    /// and no `GIT_WORK_TREE`.
+    fn gitfile(
+        sandbox: &'a Sandbox,
+        layout: Layout,
+        settings: Option<&str>,
+    ) -> Result<Repo<'a>, Error> {
+        let project = sandbox.copy_project(&staged_project(), "repo/content")?;
+        let top = sandbox.work().join("repo");
+        if let Some(text) = settings {
+            std::fs::write(project.join(SETTINGS), text)?;
+        }
+        std::fs::create_dir_all(top.join("archive"))?;
+        std::fs::write(top.join(ARCHIVED), variant("C-901.md")?)?;
+        let mut init = vec!["init", "-q", "-b", "main"];
+        if layout == Layout::Separate {
+            init.extend(["--separate-git-dir", "../repo.git"]);
+        }
+        sandbox.git(&init, &top)?;
+        let main = Repo {
+            sandbox,
+            top,
+            project,
+        };
+        main.git_ok(&["add", "-A"])?;
+        main.commit(&["-m", "fixture"], &[])?.require_success()?;
+        let theos = Path::new(env!("CARGO_BIN_EXE_theos"));
+        let output = sandbox.run_binary(theos, &["hook", "install", "content"], &main.top)?;
+        if !output.status.success() {
+            return Err(format!("hook install failed: {}", stderr(&output)).into());
+        }
+        if layout == Layout::Separate {
+            return Ok(main);
+        }
+        sandbox.git(&["worktree", "add", "-q", "../linked"], &main.top)?;
+        let top = sandbox.work().join("linked");
+        Ok(Repo {
+            sandbox,
+            project: top.join("content"),
+            top,
+        })
+    }
 }
+
+/// How a work tree's `.git` file finds its repository.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Layout {
+    /// A linked work tree of `git worktree add`.
+    Linked,
+    /// The work tree of `git init --separate-git-dir`.
+    Separate,
+}
+
+/// A record outside the project of [`Repo::gitfile`], which violates never-confirm.
+const ARCHIVED: &str = "archive/C-901.md";
 
 /// The outcome of a `git commit` and the commit count around it.
 struct Committed {
@@ -182,6 +241,17 @@ impl Committed {
         let text = stderr(&self.output);
         assert!(self.output.status.success(), "{text}");
         assert_eq!(self.before + 1, self.after, "{text}");
+    }
+
+    /// Asserts that a finding line names `file` first and `found` after it, such as
+    /// `error lore/three-clue`.
+    fn assert_finding(&self, file: &str, found: &str) {
+        let text = stderr(&self.output);
+        assert!(
+            text.lines()
+                .any(|line| line.starts_with(&format!("{file}:")) && line.contains(found)),
+            "no `{found}` on {file}: {text}"
+        );
     }
 }
 
@@ -302,6 +372,57 @@ fn a_project_in_a_subfolder_commits_through_its_hook() -> TestResult {
     repo.commit(&["-m", "violation"], &[])?
         .assert_refused("lore/never-confirm", C901);
     Ok(())
+}
+
+/// From the work tree of `layout`, a clean change commits, files outside the project are not
+/// judged, and a violation inside it is refused.
+fn a_gitfile_work_tree_judges_its_project(layout: Layout) -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let repo = Repo::gitfile(&sandbox, layout, None)?;
+    repo.stage_notes()?;
+    repo.commit(&["-m", "clean"], &[])?.assert_commits();
+    repo.stage(C901, &variant("C-901.md")?)?;
+    let refused = repo.commit(&["-m", "violation"], &[])?;
+    refused.assert_refused("lore/never-confirm", C901);
+    refused.assert_finding(C901, "error lore/never-confirm");
+    Ok(())
+}
+
+/// From the work tree of `layout`, the project's committed settings raise the fixture's
+/// three-clue warning to an error, so a change is refused.
+fn a_gitfile_work_tree_applies_the_committed_settings(layout: Layout) -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let raising = variant("settings-raising.toml")?;
+    let repo = Repo::gitfile(&sandbox, layout, Some(&raising))?;
+    repo.stage_notes()?;
+    let refused = repo.commit(&["-m", "notes"], &[])?;
+    refused.assert_refused("lore/three-clue", T900);
+    refused.assert_finding(T900, "error lore/three-clue");
+    Ok(())
+}
+
+// AC: CE-17.2
+#[test]
+fn a_linked_work_tree_judges_its_project() -> TestResult {
+    a_gitfile_work_tree_judges_its_project(Layout::Linked)
+}
+
+// AC: CE-17.2
+#[test]
+fn a_linked_work_tree_applies_the_committed_settings() -> TestResult {
+    a_gitfile_work_tree_applies_the_committed_settings(Layout::Linked)
+}
+
+// AC: CE-17.2
+#[test]
+fn a_separate_git_dir_judges_its_project() -> TestResult {
+    a_gitfile_work_tree_judges_its_project(Layout::Separate)
+}
+
+// AC: CE-17.2
+#[test]
+fn a_separate_git_dir_applies_the_committed_settings() -> TestResult {
+    a_gitfile_work_tree_applies_the_committed_settings(Layout::Separate)
 }
 
 // The cache holds the disk's spelling `c-900.md`, git's index `C-900.md`; the staged bytes at

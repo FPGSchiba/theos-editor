@@ -56,11 +56,18 @@ fn exit_text(code: Option<i32>) -> String {
 #[derive(Debug, Clone)]
 pub struct Git {
     program: PathBuf,
-    env: Vec<(String, String)>,
+    env: Vec<(OsString, OsString)>,
 }
 
 impl Git {
     /// Finds `git` on the `PATH`.
+    ///
+    /// It also applies git's rule for a `GIT_DIR` without a work tree: when the environment
+    /// holds `GIT_DIR` and no `GIT_WORK_TREE`, the current folder is the top of the work tree
+    /// (`core.worktree` aside). git sets exactly that for the hooks of a linked work tree or of a
+    /// repository made with `--separate-git-dir`, and starts them in the top folder. So the
+    /// runner sets `GIT_WORK_TREE` to the current folder, and every command it starts sees that
+    /// work tree from any folder it runs in. `GIT_DIR` itself is left to git as it is.
     ///
     /// # Errors
     ///
@@ -68,7 +75,13 @@ impl Git {
     /// when the current folder cannot be read.
     pub fn find() -> Result<Git, GitError> {
         let cwd = std::env::current_dir().map_err(|source| GitError::Io { source })?;
-        find_in(std::env::var_os("PATH"), &cwd)
+        let mut git = find_in(std::env::var_os("PATH"), &cwd)?;
+        git.env.extend(implied_work_tree(
+            std::env::var_os(GIT_DIR).as_deref(),
+            std::env::var_os(GIT_WORK_TREE).as_deref(),
+            &cwd,
+        ));
+        Ok(git)
     }
 
     /// Adds variables to the environment of every command this runner starts.
@@ -76,7 +89,7 @@ impl Git {
     pub fn with_env(mut self, env: &[(&str, &str)]) -> Git {
         self.env.extend(
             env.iter()
-                .map(|(key, value)| ((*key).to_owned(), (*value).to_owned())),
+                .map(|(key, value)| (OsString::from(key), OsString::from(value))),
         );
         self
     }
@@ -140,6 +153,26 @@ impl Git {
     }
 }
 
+/// The variable that names the git folder.
+const GIT_DIR: &str = "GIT_DIR";
+
+/// The variable that names the top of the work tree.
+const GIT_WORK_TREE: &str = "GIT_WORK_TREE";
+
+/// The `GIT_WORK_TREE` that git implies for the values of `GIT_DIR` and `GIT_WORK_TREE` in a
+/// process whose current folder is `cwd`: `cwd` when only `GIT_DIR` is set, else nothing to add.
+/// `GIT_DIR` is not rewritten, also when it is relative.
+fn implied_work_tree(
+    git_dir: Option<&OsStr>,
+    work_tree: Option<&OsStr>,
+    cwd: &Path,
+) -> Option<(OsString, OsString)> {
+    match (git_dir, work_tree) {
+        (Some(_), None) => Some((OsString::from(GIT_WORK_TREE), cwd.as_os_str().to_owned())),
+        _ => None,
+    }
+}
+
 /// Finds `git` in the search path `path`, a list separated as `PATH` is, with relative entries
 /// resolved from `cwd`. With `None` there is nothing to search and the answer is `NotFound`.
 fn find_in(path: Option<OsString>, cwd: &Path) -> Result<Git, GitError> {
@@ -161,6 +194,36 @@ mod tests {
         let result = find_in(Some(OsString::new()), cwd.path());
         assert!(matches!(result, Err(GitError::NotFound)));
         Ok(())
+    }
+
+    #[test]
+    fn a_git_dir_alone_makes_the_current_folder_the_work_tree() {
+        let cwd = Path::new("work").join("linked");
+        assert_eq!(
+            implied_work_tree(Some(OsStr::new("/repo/.git/worktrees/linked")), None, &cwd),
+            Some((
+                OsString::from("GIT_WORK_TREE"),
+                cwd.clone().into_os_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn a_relative_git_dir_alone_still_only_adds_the_work_tree() {
+        let cwd = Path::new("top");
+        assert_eq!(
+            implied_work_tree(Some(OsStr::new(".git")), None, cwd),
+            Some((OsString::from("GIT_WORK_TREE"), OsString::from("top")))
+        );
+    }
+
+    #[test]
+    fn a_set_work_tree_or_no_git_dir_adds_nothing() {
+        let cwd = Path::new("top");
+        let some = Some(OsStr::new("/elsewhere"));
+        assert_eq!(implied_work_tree(Some(OsStr::new(".git")), some, cwd), None);
+        assert_eq!(implied_work_tree(None, some, cwd), None);
+        assert_eq!(implied_work_tree(None, None, cwd), None);
     }
 
     #[test]
