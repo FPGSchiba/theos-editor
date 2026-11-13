@@ -6,6 +6,8 @@ pub mod elements;
 pub mod geology;
 pub mod grid;
 pub mod hydrology;
+pub mod pois;
+pub mod resources;
 pub mod rocks;
 pub mod settlements;
 pub mod tectonics;

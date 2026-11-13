@@ -16,6 +16,8 @@ pub fn register(registry: &mut Registry) {
     registry.add(Box::new(terrain::ecology::Ecology));
     registry.add(Box::new(terrain::elements::Elements));
     registry.add(Box::new(terrain::settlements::Settlements));
+    registry.add(Box::new(terrain::pois::Pois));
+    registry.add(Box::new(terrain::resources::Resources));
 }
 
 #[cfg(test)]

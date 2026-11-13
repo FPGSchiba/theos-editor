@@ -47,6 +47,12 @@ impl Rock {
         Self::ALL.get(usize::from(code)).copied()
     }
 
+    /// Whether this is a hard rock: granite, quartzite or basalt.
+    #[must_use]
+    pub fn is_hard(self) -> bool {
+        matches!(self, Rock::Granite | Rock::Quartzite | Rock::Basalt)
+    }
+
     /// The lower-case name, as in recipes (`rock_mix` keys) and legends.
     #[must_use]
     pub fn name(self) -> &'static str {

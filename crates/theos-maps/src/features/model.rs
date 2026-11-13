@@ -97,6 +97,19 @@ impl FeatureSet {
         self.iter().filter(move |(_, f)| f.kind == kind)
     }
 
+    /// The points of the features of `kind` and type `ty` (`None`: any type), in metres, in
+    /// insertion order; features that are not points are left out.
+    #[must_use]
+    pub fn points(&self, kind: &str, ty: Option<&str>) -> Vec<[f64; 2]> {
+        self.of_kind(kind)
+            .filter(|(_, f)| ty.is_none_or(|t| f.ty == t))
+            .filter_map(|(_, f)| match f.geometry {
+                Geometry::Point(p) => Some(p),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// How many features have the type `ty`.
     #[must_use]
     pub fn count_type(&self, ty: &str) -> usize {
@@ -160,6 +173,20 @@ mod tests {
             geometry: Geometry::Point(at),
             props: BTreeMap::new(),
         }
+    }
+
+    #[test]
+    fn points_filter_by_kind_and_type() {
+        let mut set = FeatureSet::default();
+        set.add(feature("settlement", "hamlet", [1.0, 2.0]));
+        set.add(feature("poi", "ruin", [3.0, 4.0]));
+        set.add(feature("poi", "chime", [5.0, 6.0]));
+        let mut line = feature("poi", "ruin", [0.0, 0.0]);
+        line.geometry = Geometry::Line(vec![[0.0, 0.0, 0.0]]);
+        set.add(line);
+        assert_eq!(set.points("poi", Some("ruin")), [[3.0, 4.0]]);
+        assert_eq!(set.points("poi", None), [[3.0, 4.0], [5.0, 6.0]]);
+        assert_eq!(set.points("resource", None).len(), 0);
     }
 
     #[test]

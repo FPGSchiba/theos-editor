@@ -54,10 +54,7 @@ impl Default for ElementsParams {
 
 /// Whether `code` is a hard rock: granite, quartzite or basalt.
 fn is_hard(code: u8) -> bool {
-    matches!(
-        Rock::from_code(code),
-        Some(Rock::Granite | Rock::Quartzite | Rock::Basalt)
-    )
+    Rock::from_code(code).is_some_and(Rock::is_hard)
 }
 
 /// One cell's inputs.
