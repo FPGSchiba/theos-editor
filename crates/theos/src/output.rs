@@ -46,6 +46,32 @@ pub(crate) fn json(out: &mut impl Write, view: &impl Serialize) -> anyhow::Resul
     writeln!(out).context("cannot write the output")
 }
 
+/// Rows of cells as text lines: each column padded to its widest cell, two spaces apart, and no
+/// trailing spaces.
+pub(crate) fn columns(rows: &[Vec<String>]) -> String {
+    let count = rows.iter().map(Vec::len).max().unwrap_or(0);
+    let widths: Vec<usize> = (0..count)
+        .map(|column| {
+            rows.iter()
+                .filter_map(|row| row.get(column))
+                .map(|cell| cell.chars().count())
+                .max()
+                .unwrap_or(0)
+        })
+        .collect();
+    let mut text = String::new();
+    for row in rows {
+        let line: Vec<String> = row
+            .iter()
+            .zip(&widths)
+            .map(|(cell, width)| format!("{cell:<width$}"))
+            .collect();
+        text.push_str(line.join("  ").trim_end());
+        text.push('\n');
+    }
+    text
+}
+
 /// The counts as text: `1 error, 2 warnings`.
 pub(crate) fn summary(errors: usize, warnings: usize) -> String {
     format!(
@@ -84,6 +110,15 @@ mod tests {
     fn summary_pluralises_each_count() {
         assert_eq!(summary(1, 2), "1 error, 2 warnings");
         assert_eq!(summary(0, 1), "0 errors, 1 warning");
+    }
+
+    #[test]
+    fn columns_pad_to_the_widest_cell() {
+        let rows = vec![
+            vec!["a".to_owned(), "bbb".to_owned(), "c".to_owned()],
+            vec!["aaa".to_owned(), "b".to_owned()],
+        ];
+        assert_eq!(columns(&rows), "a    bbb  c\naaa  b\n");
     }
 
     #[test]

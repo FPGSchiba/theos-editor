@@ -1,4 +1,4 @@
-//! The `theos` command line: `check`, `ledger` and `formalism` today; `schema`, `new` and
+//! The `theos` command line: `check`, `ledger`, `schema` and `formalism` today; `new` and
 //! `hook install` follow in phase P05.
 //!
 //! The binary only parses arguments, calls `theos-studio` and prints. Exit codes: 0 when the
@@ -8,6 +8,7 @@ mod check;
 mod formalism;
 mod ledger;
 mod output;
+mod schema;
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -45,6 +46,15 @@ enum Command {
     Ledger {
         /// The project folder; the project above the current folder by default.
         folder: Option<PathBuf>,
+    },
+    /// Print every kind and rule, or the fields and body of one kind.
+    Schema {
+        /// The kind to describe; every kind and rule by default.
+        kind: Option<String>,
+        /// The project whose configured severities to show; the one above the current folder
+        /// by default.
+        #[arg(long)]
+        project: Option<PathBuf>,
     },
     /// Regenerate the Shared Formalism mirror and print each path written.
     Formalism {
@@ -93,6 +103,9 @@ fn run(cli: Cli, out: &mut impl Write, err: &mut impl Write) -> anyhow::Result<E
         ),
         Command::Ledger { folder } => {
             ledger::run(folder.as_deref(), json, out, err).map(|()| Exit::Ok)
+        }
+        Command::Schema { kind, project } => {
+            schema::run(kind.as_deref(), project.as_deref(), json, out).map(|()| Exit::Ok)
         }
         Command::Formalism { folder } => {
             formalism::run(folder.as_deref(), json, out).map(|()| Exit::Ok)

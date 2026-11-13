@@ -49,4 +49,12 @@ pub enum StudioError {
         /// What is wrong with it.
         message: String,
     },
+    /// The kind is not registered.
+    #[error("unknown kind `{kind}`; the kinds are: {}", known.join(", "))]
+    UnknownKind {
+        /// What was asked for.
+        kind: String,
+        /// The registered kinds, in order.
+        known: Vec<String>,
+    },
 }

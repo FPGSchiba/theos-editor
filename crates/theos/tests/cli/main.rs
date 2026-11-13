@@ -4,3 +4,4 @@ mod check;
 mod common;
 mod formalism;
 mod ledger;
+mod schema;
