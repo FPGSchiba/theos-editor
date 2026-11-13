@@ -13,6 +13,8 @@ pub fn register(registry: &mut Registry) {
     registry.add(Box::new(terrain::climate::ClimateModel));
     registry.add(Box::new(evolution::Evolution::new()));
     registry.add(Box::new(terrain::hydrology::Hydrology));
+    registry.add(Box::new(terrain::ecology::Ecology));
+    registry.add(Box::new(terrain::elements::Elements));
 }
 
 #[cfg(test)]
