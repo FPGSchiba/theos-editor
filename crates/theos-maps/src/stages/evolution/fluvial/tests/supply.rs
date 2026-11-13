@@ -2,11 +2,12 @@
 //! removed enters the sediment flux at its cell like eroded sediment, so G decides how much the
 //! rivers lay down and how much they carry on; `fluvial` empties the layer once it took it in.
 
-use super::deposition::{bowl, bowl_cells, routed, value, volume};
-use super::{ALL_EDGES, BOTH, CELL_AREA, N, UPLIFT, landscape, layer};
+use super::deposition::{bowl, bowl_cells, pass_strip, routed, value, volume};
+use super::{ALL_EDGES, BOTH, CELL_AREA, N, UPLIFT, fluvial_only, landscape, layer};
 use crate::grid::Grid;
 use crate::kernels::num::to_f64;
 use crate::stages::evolution::PlannedProcess;
+use crate::stages::evolution::fluvial::fill::EPSILON;
 use crate::stages::evolution::test_support::{evolve, processes};
 use crate::world::{Layer, World};
 
@@ -173,6 +174,52 @@ fn slope_supply_fills_a_routed_depression() {
         );
         let filled = cells.iter().filter(|&&c| h[c] > start[c] + 1e-3).count();
         assert!(filled > 0, "{exponent}: the depression took none of it");
+    }
+}
+
+/// A routed depression keeps the supply on its own cells like the sediment that reaches it, up
+/// to its capacity, also where they drain to a spill cell outside it (the pass's higher cell).
+/// On the strip of `pass_strip` with K = 0, the lake (cell 2, at 45 m, spilling at 50 m from
+/// cell 1) holds 5 m of one cell: 2 m of supply on it stay and raise it, 8 m fill it to its place
+/// one ε above the spill level and pass the rest on from the spill cell.
+#[test]
+fn slope_supply_on_a_depressions_cells_fills_it_up_to_its_capacity() {
+    for metres in [2.0, 8.0] {
+        let mut w = pass_strip();
+        let strip = |v: Vec<f64>| Layer::F64(Grid::from_vec(1, 4, v).unwrap());
+        w.insert("erodibility", strip(vec![0.0; 4])).unwrap();
+        w.insert("slope_supply", strip(vec![0.0, 0.0, metres, 0.0]))
+            .unwrap();
+        let start = layer(&w, "height");
+        let report = evolve(&mut w, &processes(&fluvial_only("g = 1.0")), 1, 1e5, 1).unwrap();
+        assert!(
+            report.findings.is_empty(),
+            "{metres} m: {:?}",
+            report.findings
+        );
+        let held = metres * CELL_AREA;
+        let out = value(&report, "sediment_out_m3");
+        let h = layer(&w, "height");
+        let raised = volume(&h) - volume(&start);
+        assert!(
+            (raised + out - held).abs() <= 1e-9 * held,
+            "{metres} m: raised {raised}, out {out}"
+        );
+        let full = 50.0 + EPSILON;
+        if metres < 5.0 {
+            assert!(
+                (h[2] - (45.0 + metres)).abs() < 1e-9,
+                "{metres} m: lake at {}",
+                h[2]
+            );
+            assert!(out.abs() < 1e-6 * held, "{metres} m: {out} m³ left");
+        } else {
+            assert!((h[2] - full).abs() < 1e-9, "{metres} m: lake at {}", h[2]);
+            assert!(
+                out > 0.0 && h[1] > start[1],
+                "{metres} m: the excess passes on"
+            );
+        }
     }
 }
 

@@ -152,7 +152,7 @@ fn a_receiver_below_the_deposit_takes_its_share() {
 /// - cell 1 at 50 m, the higher cell of the pass, so the spill cell lies outside the lake;
 /// - cell 2, a lake at 45 m (depression 1, spilling from cell 1 to cell 0 at 50 m);
 /// - cell 3, a slope at 100 m draining into the lake.
-fn pass_strip() -> World {
+pub(super) fn pass_strip() -> World {
     let mut w = world(1, 4);
     let grid = |v: Vec<f64>| Layer::F64(Grid::from_vec(1, 4, v).unwrap());
     let u32s = |v: Vec<u32>| Layer::U32(Grid::from_vec(1, 4, v).unwrap());

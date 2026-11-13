@@ -100,8 +100,9 @@ impl TypedStage for SlopeLimit {
 }
 
 /// Why the critical slopes cannot limit the surface, or `None` when they can: every cell that is
-/// not fixed needs a finite critical slope that is not negative, or the rule has no highest
-/// surface below the heights.
+/// not fixed needs a finite critical slope that is not negative. A negative slope breaks the
+/// sweep's exactness, whose step costs must not be negative, and can leave no surface that keeps
+/// the rule; NaN and infinity are not slopes of any rock.
 fn unusable_slope(critical: &[f64], fixed: &[bool]) -> Option<String> {
     critical
         .iter()

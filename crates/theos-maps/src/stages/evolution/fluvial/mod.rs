@@ -224,14 +224,15 @@ fn erode(
     let area = Grid::filled(frame.rows, frame.cols, cell_area);
     let drainage_area = accumulate(stack, weights, &area);
     let (fixed, erodibility) = (ctx.mask("fixed")?.as_slice(), ctx.f64("erodibility")?);
-    let supply: Vec<f64> = supply.map_or_else(
+    // The supply as a volume per cell, m³ (thickness × cell area).
+    let supply_m3: Vec<f64> = supply.map_or_else(
         || vec![0.0; cells],
         |s| s.as_slice().iter().map(|t| t * cell_area).collect(),
     );
     let mut report = StageReport::default();
     report
         .values
-        .insert("supply_m3".to_owned(), supply.iter().sum());
+        .insert("supply_m3".to_owned(), supply_m3.iter().sum());
     let mut step = Incision {
         weights,
         stack,
@@ -254,7 +255,7 @@ fn erode(
             g: params.g,
             traps: &traps,
             cell_area,
-            supply: &supply,
+            supply: &supply_m3,
             tolerance: tolerance(ctx.f64_opt("uplift")?, dt),
             max_iterations: params.max_iterations,
         };
@@ -282,7 +283,7 @@ fn erode(
         &mut sediment,
         start.as_slice(),
         height.as_slice(),
-        &supply,
+        &supply_m3,
         cell_area,
     );
     let out = settle(stack, weights, &traps, &sediment, height.as_mut_slice());

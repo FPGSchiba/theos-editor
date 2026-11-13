@@ -33,8 +33,10 @@ pub(super) fn step_sediment(
 /// cells of Yuan et al.'s `ups(i)`), plus what a depression lets go at it.
 ///
 /// While depression `n` is open, every share that would reach one of its cells goes into the
-/// depression's inflow instead. When the walk reaches the depression's spill cell, `close(n,
-/// inflow)` returns the volume the depression lets go. It counts as arriving at the spill cell,
+/// depression's inflow instead, and so does each of its cells' own volume (the slope supply on a
+/// held cell), wherever that cell's edges lead: to the spill cell outside the depression too, or,
+/// at a spill cell inside it, before the depression lets go. When the walk reaches the
+/// depression's spill cell, `close(n, inflow)` returns the volume the depression lets go. It counts as arriving at the spill cell,
 /// so it leaves with the spill cell's own flux over its flow edges (with steepest routing, to
 /// `SpillPoint.to`), as spec §5.9's "passes on from the spill node" says. A spill cell outside
 /// its depression (the higher cell of the pass) thus sees the release in its deposition term;
@@ -55,11 +57,16 @@ pub(super) fn route(
     let mut out = 0.0;
     for &cell in stack.iter().rev() {
         let i = cell_index(cell);
+        let mut own = volume[i];
+        if let Some(n) = traps.holding(i).filter(|&n| open[n]) {
+            inflow[n] += own;
+            own = 0.0;
+        }
         if let Some(n) = traps.spilling_at(i) {
             open[n] = false;
             arriving[i] += close(n, inflow[n]);
         }
-        let leaving = arriving[i] + volume[i];
+        let leaving = arriving[i] + own;
         let edges = weights.edges(i);
         if edges.is_empty() {
             out += leaving;
@@ -186,6 +193,51 @@ mod tests {
         assert_eq!(calls, [(0, 6.0)]);
         assert_eq!(arriving, [23.0, 23.0, 22.0, 0.0, 16.0, 0.0]);
         assert_eq!(out.to_bits(), 23.0_f64.to_bits());
+    }
+
+    #[test]
+    fn a_depression_keeps_its_own_cells_sediment() {
+        // Depression 1 holds cell 3 alone and spills from cell 2, outside it (the higher cell of
+        // the pass). Cell 3's own 5 (slope supply on a held cell) goes into the depression like
+        // cell 4's share of 6, although its edge leads to the spill cell.
+        let traps_outside = traps(vec![0, 0, 0, 1, 0, 0], &[(2, 1)]);
+        let mut arriving = vec![0.0; 6];
+        let volume = [0.0, 0.0, 0.0, 5.0, 8.0, 16.0];
+        let mut calls = Vec::new();
+        let out = route(
+            &STACK,
+            &strip(),
+            &traps_outside,
+            &volume,
+            &mut arriving,
+            |n, v| {
+                calls.push((n, v));
+                v - 2.0
+            },
+        );
+        // It keeps 2 of 11 and lets go 9 at cell 2, which passes 18 + 9.
+        assert_eq!(calls, [(0, 11.0)]);
+        assert_eq!(arriving, [27.0, 27.0, 27.0, 0.0, 16.0, 0.0]);
+        assert_eq!(out.to_bits(), 27.0_f64.to_bits());
+        // Depression 1 holds cells 2 and 3 and spills from cell 2, inside it: the spill cell's
+        // own 4 joins the depression before it lets go.
+        let traps_inside = traps(vec![0, 0, 1, 1, 0, 0], &[(2, 1)]);
+        let volume = [0.0, 1.0, 4.0, 0.0, 8.0, 16.0];
+        let mut calls = Vec::new();
+        let out = route(
+            &STACK,
+            &strip(),
+            &traps_inside,
+            &volume,
+            &mut arriving,
+            |n, v| {
+                calls.push((n, v));
+                v - 20.0
+            },
+        );
+        assert_eq!(calls, [(0, 28.0)]);
+        assert_eq!(arriving, [9.0, 8.0, 8.0, 0.0, 16.0, 0.0]);
+        assert_eq!(out.to_bits(), 9.0_f64.to_bits());
     }
 
     #[test]
