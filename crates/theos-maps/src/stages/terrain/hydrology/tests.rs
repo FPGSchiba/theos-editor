@@ -268,38 +268,66 @@ fn a_map_without_outlets_keeps_its_water() {
     assert_finite(&w);
 }
 
-// Physics test 7 (spec §5.14).
-#[test]
-fn the_routing_surface_drains_to_an_outlet_over_non_increasing_heights() {
-    let height = hills();
-    let fixed = all_edges();
-    let water = compute(&height, &fixed, WET);
-    assert!(water.basins.len() >= 2, "the hills have depressions");
+/// The bowl with a nested pit on its wall, 12 m deep, inside the depression but above the
+/// terminal lake under `ARID` (the review's probe).
+fn bowl_with_a_nested_pit() -> Grid<f64> {
+    lowered(bowl(), 25..27, 31..34, 12.0)
+}
+
+/// Physics test 7 on one map: the routing surface lies on or above the height, every cell but a
+/// seed drains to a strictly lower neighbour on it and ends at a seed (an edge cell, or a
+/// terminal bottom where `terminal` allows it), and the water surface never rises along the way
+/// by more than the 1 mm a cell may be raised without belonging to a depression.
+fn assert_drains_downhill(height: &Grid<f64>, fixed: &Grid<bool>, weather: Weather) {
+    let water = compute(height, fixed, weather);
+    assert!(
+        water.basins.len() >= 2 || weather.runoff < 30.0,
+        "a map with depressions"
+    );
     let drainage = &water.routing.drainage;
     let surface = drainage.surface.as_slice();
+    let bottoms: Vec<usize> = water
+        .basins
+        .iter()
+        .filter(|b| b.terminal)
+        .map(|b| b.depression.bottom)
+        .collect();
     for i in 0..N * N {
         assert!(surface[i] >= water.height.as_slice()[i]);
         let to = drainage.receivers[i];
-        if fixed.as_slice()[i] {
-            assert_eq!(to, i, "an outlet keeps its water");
+        if to == i {
+            let outlet = fixed.as_slice()[i] || !fixed.as_slice().contains(&true);
+            assert!(outlet || bottoms.contains(&i), "cell {i} is a pit");
             continue;
         }
-        assert_ne!(to, i, "cell {i} is a pit of the routing surface");
         assert!(surface[to] < surface[i], "cell {i} drains uphill");
     }
-    let w = staged(&height, &fixed, WET, "");
+    let w = staged(height, fixed, weather, "");
     let flow_dir = w.u8("flow_dir").unwrap();
     let water_surface = w.f64("water_surface").unwrap().as_slice();
     for i in 0..N * N {
         let path = follow(flow_dir, i);
         let end = *path.last().unwrap();
-        assert!(fixed.as_slice()[end], "cell {i} ends at {end}, not an edge");
+        assert_eq!(drainage.receivers[end], end, "cell {i} ends at {end}");
+        if bottoms.is_empty() && fixed.as_slice().contains(&true) {
+            assert!(fixed.as_slice()[end], "cell {i} ends at {end}, not an edge");
+        }
         // Cells raised by at most 1 mm belong to no lake; their water surface is the ground.
         for step in path.windows(2) {
             let rise = water_surface[step[1]] - water_surface[step[0]];
             assert!(rise <= 1.1e-3, "{step:?} rises {rise} m");
         }
     }
+}
+
+// Physics test 7 (spec §5.14).
+#[test]
+fn the_routing_surface_drains_to_an_outlet_over_non_increasing_heights() {
+    // Drained edges in a wet climate: every cell ends at an edge.
+    assert_drains_downhill(&hills(), &all_edges(), WET);
+    // Terminal basins: a closed map, and a terminal lake below a dry nested pit.
+    assert_drains_downhill(&hills(), &closed(), SEMI_ARID);
+    assert_drains_downhill(&bowl_with_a_nested_pit(), &all_edges(), ARID);
 }
 
 // Physics test 8 (spec §5.14).
@@ -314,14 +342,34 @@ fn a_terminal_lake_balances_evaporation_and_inflow() {
     let net = balance.evaporation - balance.precipitation;
     assert!((net - 1.0).abs() < 1e-12, "E - P = {net}");
     let lake = basin.lake.as_ref().unwrap();
-    let evaporated = to_f64(lake.cells.len()) * CELL_AREA * net;
-    let inflow = balance.q_land;
-    assert!(lake.cells.len() > 10, "{} lake cells", lake.cells.len());
-    assert!(lake.cells.len() < basin.depression.cells.len());
+    let cells = to_f64(lake.cells.len());
+    let evaporated = cells * CELL_AREA * net;
+    // The bottom absorbs everything that reaches the depression; rain on the lake is counted
+    // through P, so the land inflow is the routed inflow less the lake cells' own runoff.
+    let bottom = basin.depression.bottom;
+    assert_eq!(bottom, at(32, 32));
+    assert_eq!(water.routing.drainage.receivers[bottom], bottom);
+    let routed = water.routing.discharge.as_slice()[bottom] * SECONDS_PER_YEAR;
+    let runoff = cell_runoff_m3_yr(ARID);
+    let land = routed - cells * runoff;
     assert!(
-        evaporated <= inflow && inflow - evaporated < CELL_AREA * net,
-        "evaporation {evaporated} m³/yr against inflow {inflow} m³/yr"
+        is_close(balance.q_land, land, 1e-9),
+        "{} vs {land}",
+        balance.q_land
     );
+    // Within one cell's share: one more lake cell would evaporate a·(E − P) more and give up its
+    // runoff as inflow.
+    assert!(
+        evaporated <= land && land - evaporated < CELL_AREA * net + runoff,
+        "evaporation {evaporated} m³/yr against inflow {land} m³/yr"
+    );
+    // The dry ring of the depression counts as land: with uniform runoff the lake is the largest
+    // n with n·a·(E − P) <= Q_out + (cells − n)·runoff.
+    let depression = to_f64(basin.depression.cells.len());
+    let q_out = routed - depression * runoff;
+    let largest = ((q_out + depression * runoff) / (CELL_AREA * net + runoff)).floor();
+    assert_eq!(cells.to_bits(), largest.to_bits(), "{cells} lake cells");
+    assert!(lake.cells.len() > 10 && lake.cells.len() < basin.depression.cells.len());
     // The lake fills the lowest cells, at the level of the highest of them.
     let h = height.as_slice();
     let top = lake
@@ -336,16 +384,35 @@ fn a_terminal_lake_balances_evaporation_and_inflow() {
             assert!(h[c] >= lake.level);
         }
     }
-    // The inflow agrees with the routing: the bottom absorbs it and the depression's own runoff.
-    let bottom = basin.depression.bottom;
-    assert_eq!(bottom, at(32, 32));
-    let absorbed = water.routing.discharge.as_slice()[bottom] * SECONDS_PER_YEAR;
-    let own = to_f64(basin.depression.cells.len()) * cell_runoff_m3_yr(ARID);
-    assert!(
-        is_close(absorbed, inflow + own, 1e-9),
-        "{absorbed} vs {inflow} + {own}"
-    );
-    assert_eq!(water.routing.drainage.receivers[bottom], bottom);
+}
+
+// Spec ruling 32: river beds never cross dry pits, also inside a terminal depression.
+#[test]
+fn dry_nested_pits_of_terminal_depressions_are_filled_in_height() {
+    let height = bowl_with_a_nested_pit();
+    let water = compute(&height, &all_edges(), ARID);
+    assert_eq!(water.basins.len(), 1);
+    let basin = &water.basins[0];
+    let lake = basin.lake.as_ref().unwrap();
+    assert!(basin.terminal);
+    let surface = water.routing.drainage.surface.as_slice();
+    let out = water.height.as_slice();
+    let mut nested = 0;
+    for i in 0..N * N {
+        if lake.cells.contains(&i) {
+            assert_eq!(out[i].to_bits(), height.as_slice()[i].to_bits(), "lake {i}");
+            continue;
+        }
+        assert!(surface[i] - out[i] <= 1e-3, "cell {i} is a dry pit");
+        if out[i] > height.as_slice()[i] + 1e-3 {
+            assert_eq!(out[i].to_bits(), surface[i].to_bits(), "cell {i}");
+            nested += 1;
+        }
+    }
+    assert_eq!(nested, 6, "the 2 x 3 nested pit is filled");
+    assert_eq!(water.filled_nested, 6);
+    let w = staged(&height, &all_edges(), ARID, "");
+    assert_eq!(w.f64("height").unwrap(), &water.height);
 }
 
 #[test]
@@ -745,8 +812,11 @@ fn the_report_counts_lakes_and_the_terminal_balance() {
         ("lakes", 1.0),
         ("terminal_lakes", 1.0),
         ("filled_pits", 0.0),
-        ("terminal_inflow_m3_yr", 309_800.0),
-        ("terminal_evaporation_m3_yr", 30.0 * CELL_AREA),
+        ("filled_nested_cells", 0.0),
+        // 1549 cells × 200 m³/yr from outside, 159 dry cells × 200 m³/yr of the 193 in the
+        // depression; 34 lake cells × 1 m/yr.
+        ("terminal_inflow_m3_yr", 341_600.0),
+        ("terminal_evaporation_m3_yr", 34.0 * CELL_AREA),
     ] {
         expect(&arid, name, want);
     }

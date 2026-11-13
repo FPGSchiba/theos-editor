@@ -1,29 +1,38 @@
 //! The `hydrology` stage (spec §5.9 "Hydrology"): lakes by water balance, channel discharge over
 //! the single steepest receiver, river masks, `flow_dir` and the water surface.
 //!
-//! 1. **Fill** (`lakes.rs`): priority-flood of `height` with ε = 1e-6 (Barnes et al. 2014) from the
-//!    outlets: the `fixed` cells, or on a closed map the lowest cell (ties by index), the map's
-//!    sink.
-//! 2. **Depressions:** 8-connected cells the fill raised by more than 1e-3 m. A depression's spill
-//!    level is its highest filled value; its exit is its cell the fill reached first.
+//! 1. **Fill** (`discharge::drain`): priority-flood of `height` with ε = 1e-6 (Barnes et al.
+//!    2014) from the outlets (`lakes::outlets`): the `fixed` cells, or on a closed map the lowest
+//!    cell (ties by index), the map's sink.
+//! 2. **Depressions** (`lakes.rs`): 8-connected cells the fill raised by more than 1e-3 m. A
+//!    depression's spill level is its highest filled value; its exit is its cell the fill
+//!    reached first.
 //! 3. **Shallow pits:** a depression shallower than `min_lake_depth_m` (spill level − lowest
 //!    height) or smaller than `min_lake_area_m2` is set to the filled surface in `height`, so river
 //!    beds never cross dry pits (spec ruling 32).
 //! 4. **Inflow:** runoff (mm/yr → m³/yr) is routed over the single steepest receivers of the
 //!    filled surface, in reverse flood order, so a depression is settled after every depression
 //!    upstream of it (by the flood order of their spill cells, last first). A depression pools
-//!    what reaches its cells; its `Q_land` is the part that comes from outside them. A terminal
+//!    what reaches its cells: `Q_out` from outside them and its own cells' runoff. A terminal
 //!    depression passes nothing on.
 //! 5. **Lake balance** (Bracht-Flyr et al. 2013, with rain on the lake, rearranged for the area):
-//!    with `E` the mean PET and `P` the mean precipitation over the depression (m/yr), the
-//!    equilibrium area is `A = Q_land / (E − P)` when `E > P`. At least the depression's area, or
-//!    `E ≤ P`, fills it to spill. Otherwise the lake is terminal: the depression's cells in height
-//!    order (ties by index) as long as their area stays within `A`, at the height of the last one;
-//!    below one cell there is no lake, but the depression still keeps its water.
-//! 6. **Routing** (`discharge.rs`): a second fill from the outlets and the lowest cell of every
-//!    terminal depression; the steepest receivers on it give `flow_dir`, and runoff accumulated
-//!    over them gives `discharge` in m³/s. A terminal bottom absorbs its inflow; on a closed map so
-//!    does the sink. Single flow in channels after Quinn et al. 1991 (spec ruling 27).
+//!    `E` is the mean PET and `P` the mean precipitation over the depression (m/yr); `Q_land` is
+//!    the runoff from the lake's catchment, land outside the lake. With `E ≤ P`, or when the
+//!    whole depression evaporates no more than `Q_out` (`Q_out / (E − P)` reaches its area, and a
+//!    full lake leaves no land inside the depression), it fills to spill. Otherwise the lake is
+//!    terminal: of the depression's cells in height order (ties by index), the largest `n` with
+//!    `n·a·(E − P) ≤ Q_out +` the runoff of the cells after the first `n`, which stay dry land in
+//!    the catchment; its level is the height of the `n`-th cell. With `n = 0` there is no lake,
+//!    but the depression still keeps its water.
+//! 6. **Routing** (`discharge::route`): a second fill from the outlets and the lowest cell of
+//!    every terminal depression; the steepest receivers on it give `flow_dir`, and runoff
+//!    accumulated over them gives `discharge` in m³/s. A terminal bottom absorbs its inflow; on a
+//!    closed map so does the sink. Single flow in channels after Quinn et al. 1991 (spec ruling
+//!    27). The second fill starts at a terminal bottom, so it also fills the pits nested in a
+//!    terminal depression; those the lake leaves dry are set to it in `height`
+//!    (`lakes::fill_dry_pits`), so river beds never cross them either. `Q_out` comes from the
+//!    first fill: a few rim cells next to a terminal depression, which drain over its pass on the
+//!    first fill, may drain into it on the second (ridge cells with little area; accepted).
 //! 7. **Rasters** (`rasters.rs`): `river` and `big_river` where the discharge exceeds `river_q` and
 //!    `big_river_q` outside lakes; `lake`, `lake_id` (0 none, else the lake's number in the scan
 //!    order of its depression's first cell), `lake_level` (the level on lake cells, else 0) and
@@ -128,12 +137,14 @@ impl HydrologyParams {
 /// river lines and lake outlines.
 #[derive(Debug)]
 pub(crate) struct Water {
-    /// `height` with the shallow pits filled.
+    /// `height` with the shallow pits and the dry nested pits of terminal depressions filled.
     pub height: Grid<f64>,
     /// The depressions that keep their water, in the scan order of their first cell.
     pub basins: Vec<Basin>,
     /// How many shallow pits were filled.
     pub filled_pits: usize,
+    /// How many cells of dry nested pits in terminal depressions were filled.
+    pub filled_nested: usize,
     /// The routing surface, its receivers and the discharge.
     pub routing: Routing,
 }
@@ -166,10 +177,12 @@ pub(crate) fn water(
     seeds.sort_unstable();
     seeds.dedup();
     let routing = discharge::route(&height, &seeds, &runoff, cell_m);
+    let filled_nested = lakes::fill_dry_pits(&mut height, &routing.drainage.surface, &basins);
     Water {
         height,
         basins,
         filled_pits,
+        filled_nested,
         routing,
     }
 }
@@ -199,6 +212,7 @@ fn report(water: &Water, cell_area: f64) -> StageReport {
         to_f64(terminal.iter().filter(|b| b.lake.is_some()).count()),
     );
     put("filled_pits", to_f64(water.filled_pits));
+    put("filled_nested_cells", to_f64(water.filled_nested));
     put("terminal_inflow_m3_yr", inflow);
     put("terminal_evaporation_m3_yr", evaporated);
     report

@@ -103,6 +103,7 @@ mod tests {
             height,
             basins: vec![basin],
             filled_pits: 0,
+            filled_nested: 0,
             routing,
         };
         let thresholds = WaterThresholds {

@@ -1,11 +1,12 @@
 //! Steps 1 to 5 of `hydrology`: the outlets, the depressions of the filled surface, the shallow
 //! pits filled in `height`, the inflow of every depression, and its lake by water balance
-//! (Bracht-Flyr et al. 2013, rain on the lake counted, rearranged for the area).
+//! (Bracht-Flyr et al. 2013, rain on the lake counted, rearranged for the area); and, after the
+//! routing, the dry nested pits of terminal depressions filled in `height`.
 
 use super::discharge::Drainage;
 use crate::grid::Grid;
 use crate::kernels::labels::{Connectivity, labels};
-use crate::kernels::num::{OrdF64, key, max, to_f64, to_index};
+use crate::kernels::num::{OrdF64, key, max, to_f64};
 use crate::stages::evolution::cell_index;
 use crate::stages::terrain::climate::ClimateFields;
 
@@ -41,7 +42,8 @@ pub(crate) struct Depression {
 /// A depression's water balance.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(crate) struct Balance {
-    /// The inflow from outside the depression's cells, m³/yr.
+    /// The land inflow `Q_land`: the runoff that reaches the depression from outside its cells
+    /// and, for a terminal depression, the runoff of its cells the lake leaves dry, m³/yr.
     pub q_land: f64,
     /// The mean PET over the depression, the lake evaporation, m/yr.
     pub evaporation: f64,
@@ -74,12 +76,12 @@ pub(crate) struct Basin {
 }
 
 /// How the water of a depression settles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Fill {
     /// It fills to its spill level and passes its water on.
     Spill,
-    /// It keeps its water in this many of its lowest cells.
-    Terminal(usize),
+    /// It keeps its water in these, its lowest cells, in height order; none below one cell.
+    Terminal(Vec<usize>),
 }
 
 /// The lowest of `cells` on `height`, ties by index.
@@ -172,9 +174,9 @@ pub(crate) fn fill_shallow(
     (kept, filled)
 }
 
-/// The balance of `depression` with the inflow `q_land` (m³/yr): the means of PET and
-/// precipitation over its cells, in m/yr.
-fn balance(depression: &Depression, q_land: f64, fields: &ClimateFields) -> Balance {
+/// The means of PET (the lake evaporation `E`) and precipitation (`P`) over the cells of
+/// `depression`, in m/yr.
+fn means(depression: &Depression, fields: &ClimateFields) -> (f64, f64) {
     let cells = to_f64(depression.cells.len());
     let mean_m = |grid: &Grid<f64>| {
         let sum = depression
@@ -183,35 +185,68 @@ fn balance(depression: &Depression, q_land: f64, fields: &ClimateFields) -> Bala
             .fold(0.0, |sum, &c| sum + grid.as_slice()[c]);
         sum / cells / MM_PER_M
     };
-    Balance {
-        q_land,
-        evaporation: mean_m(&fields.pet),
-        precipitation: mean_m(&fields.precipitation),
-    }
+    (mean_m(&fields.pet), mean_m(&fields.precipitation))
 }
 
-/// How a depression of `cells` cells of `cell_area` m² settles with `balance`: when evaporation
-/// exceeds precipitation, the equilibrium area `A = Q_land / (E − P)` below the depression's
-/// area makes it terminal, holding the whole cells that fit in `A`; otherwise it fills to spill.
-fn fill(balance: &Balance, cells: usize, cell_area: f64) -> Fill {
-    let net = balance.evaporation - balance.precipitation;
-    if net <= 0.0 {
-        return Fill::Spill;
+/// Whether a depression of `cells` cells of `cell_area` m² fills to spill: when `net = E − P`
+/// is not positive, or when its whole area evaporates no more than the inflow `q_out` from
+/// outside its cells (the equilibrium area `A = q_out / net` reaches its area). A full lake
+/// leaves no cell dry, so `q_out` is its whole land inflow.
+fn spills(q_out: f64, net: f64, cells: usize, cell_area: f64) -> bool {
+    net <= 0.0 || q_out / net >= to_f64(cells) * cell_area
+}
+
+/// The lake of a terminal depression whose cells, in height order, have the runoff `runoff`
+/// (m³/yr each): the largest `n` with `n·a·(E − P) <= q_out + the runoff of the cells after the
+/// first n`, where `a` is `cell_area` and `net` is `E − P` (positive). The dry cells are land in
+/// the lake's catchment. The left side rises and the right side falls with `n`, so one pass
+/// from `n = 0` finds it. Returns `n` and that land inflow, m³/yr.
+fn terminal_lake(runoff: &[f64], q_out: f64, net: f64, cell_area: f64) -> (usize, f64) {
+    let mut dry = vec![0.0; runoff.len() + 1];
+    for (j, r) in runoff.iter().enumerate().rev() {
+        dry[j] = dry[j + 1] + r;
     }
-    let area = balance.q_land / net;
-    if area >= to_f64(cells) * cell_area {
-        Fill::Spill
-    } else {
-        Fill::Terminal(to_index(area / cell_area, cells))
+    let mut n = 0;
+    while n < runoff.len() && to_f64(n + 1) * cell_area * net <= q_out + dry[n + 1] {
+        n += 1;
     }
+    (n, q_out + dry[n])
+}
+
+/// The balance and the fill of `depression` with the inflow `q_out` from outside its cells and
+/// `runoff` (m³/yr per cell) on its cells.
+fn decide(
+    depression: &Depression,
+    q_out: f64,
+    runoff: &[f64],
+    fields: &ClimateFields,
+    height: &Grid<f64>,
+    cell_area: f64,
+) -> (Balance, Fill) {
+    let (evaporation, precipitation) = means(depression, fields);
+    let net = evaporation - precipitation;
+    let balance = |q_land| Balance {
+        q_land,
+        evaporation,
+        precipitation,
+    };
+    if spills(q_out, net, depression.cells.len(), cell_area) {
+        return (balance(q_out), Fill::Spill);
+    }
+    let mut lowest = depression.cells.clone();
+    lowest.sort_unstable_by_key(|&c| (OrdF64(key(height.as_slice()[c])), c));
+    let in_order: Vec<f64> = lowest.iter().map(|&c| runoff[c]).collect();
+    let (n, q_land) = terminal_lake(&in_order, q_out, net, cell_area);
+    lowest.truncate(n);
+    (balance(q_land), Fill::Terminal(lowest))
 }
 
 /// Routes `runoff` (m³/yr per cell) over the receivers of `filled` in reverse fill order and
 /// settles every depression at its exit, after every depression upstream of it.
 ///
 /// A depression pools what reaches its cells: its own runoff and the inflow from outside its
-/// cells, `Q_land`. At its exit the balance decides: a depression that fills to spill passes the
-/// pool on to the exit's receiver, a terminal one keeps it. Returns the basins in the order of
+/// cells. At its exit the balance decides: a depression that fills to spill passes the pool on
+/// to the exit's receiver, a terminal one keeps it. Returns the basins in the order of
 /// `depressions`, their lakes numbered from 1 in that order.
 pub(crate) fn settle(
     filled: &Drainage,
@@ -243,8 +278,17 @@ pub(crate) fn settle(
             if i != depressions[k].exit {
                 continue;
             }
-            balances[k] = balance(&depressions[k], inflow[k], fields);
-            fills[k] = fill(&balances[k], depressions[k].cells.len(), cell_area);
+            let on_cells = runoff.as_slice();
+            let (balance, fill) = decide(
+                &depressions[k],
+                inflow[k],
+                on_cells,
+                fields,
+                height,
+                cell_area,
+            );
+            balances[k] = balance;
+            fills[k] = fill;
             if fills[k] != Fill::Spill {
                 continue;
             }
@@ -267,10 +311,7 @@ pub(crate) fn settle(
         .map(|((depression, balance), fill)| {
             let (terminal, cells, level) = match fill {
                 Fill::Spill => (false, depression.cells.clone(), depression.spill_level),
-                Fill::Terminal(n) => {
-                    let mut lowest = depression.cells.clone();
-                    lowest.sort_unstable_by_key(|&c| (OrdF64(key(height.as_slice()[c])), c));
-                    lowest.truncate(n);
+                Fill::Terminal(mut lowest) => {
                     let level = lowest.last().map_or(0.0, |&c| height.as_slice()[c]);
                     lowest.sort_unstable();
                     (true, lowest, level)
@@ -292,6 +333,33 @@ pub(crate) fn settle(
             }
         })
         .collect()
+}
+
+/// Sets every cell outside the lakes of `basins` that `surface`, the routing surface, raises by
+/// more than [`RAISED_M`] to that surface in `height`, so river beds never cross dry pits (spec
+/// ruling 32). Only the dry nested pits of terminal depressions are raised there: the second
+/// fill starts at their bottom, so it fills the pits nested in them that the lake does not
+/// cover. Lake cells keep their bottom. Returns the number of cells set.
+pub(crate) fn fill_dry_pits(
+    height: &mut Grid<f64>,
+    surface: &Grid<f64>,
+    basins: &[Basin],
+) -> usize {
+    let mut wet = vec![false; height.len()];
+    for lake in basins.iter().filter_map(|b| b.lake.as_ref()) {
+        for &c in &lake.cells {
+            wet[c] = true;
+        }
+    }
+    let mut set = 0;
+    let cells = height.as_mut_slice().iter_mut().zip(surface.as_slice());
+    for ((h, &z), &is_lake) in cells.zip(&wet) {
+        if !is_lake && z - *h > RAISED_M {
+            *h = z;
+            set += 1;
+        }
+    }
+    set
 }
 
 #[cfg(test)]
@@ -397,44 +465,63 @@ mod tests {
 
     #[test]
     fn a_terminal_depression_passes_nothing_on() {
-        // U is arid: Q_land = 5 cells × 0.1 m³/yr, A = 0.5 m² over E − P = 1 m/yr, below one
-        // cell; D then receives only cell 4's runoff.
+        // U is arid: 5 cells × 0.1 m³/yr come from outside and its 2 dry cells add 0.2 m³/yr;
+        // one lake cell would evaporate 1 m³/yr over E − P = 1 m/yr, more than the 0.6 m³/yr
+        // left without its runoff, so there is no lake. D then receives only cell 4's runoff.
         let arid = basins(&weather(250.0));
         let (lower, upper) = (&arid[0], &arid[1]);
         assert!(upper.terminal && upper.lake.is_none());
-        assert!(close(upper.balance.q_land, 0.5));
+        assert!(close(upper.balance.q_land, 0.7));
         assert!(close(upper.balance.evaporation, 1.25));
         assert!(close(upper.balance.precipitation, 0.25));
-        assert!(close(lower.balance.q_land, 0.1));
+        assert!(close(lower.balance.q_land, 0.1 + 0.2));
         assert!(lower.terminal && lower.lake.is_none());
         // U is wet: it fills to spill and passes its pool of 7 cells on; D receives 8 cells.
         let wet = basins(&weather(2000.0));
         let (lower, upper) = (&wet[0], &wet[1]);
         assert!(!upper.terminal);
-        assert!(close(lower.balance.q_land, 0.8));
+        assert!(
+            close(upper.balance.q_land, 0.5),
+            "a full lake has no dry cells"
+        );
+        assert!(close(lower.balance.q_land, 0.8 + 0.2));
         let lake = upper.lake.as_ref().unwrap();
         assert_eq!((lake.id, lake.cells.as_slice()), (1, [5, 6].as_slice()));
         assert_eq!(lake.level.to_bits(), upper.depression.spill_level.to_bits());
     }
 
     #[test]
-    fn fill_follows_the_equilibrium_area() {
-        let at = |q_land: f64, e: f64, p: f64| Balance {
-            q_land,
-            evaporation: e,
-            precipitation: p,
+    fn a_depression_spills_when_its_whole_area_cannot_evaporate_the_inflow() {
+        assert!(spills(0.0, 0.0, 5, 2.0), "E = P");
+        assert!(spills(0.0, -0.5, 5, 2.0), "E < P");
+        assert!(spills(10.0, 1.0, 5, 2.0), "A is the area");
+        assert!(!spills(9.0, 1.0, 5, 2.0));
+        assert!(!spills(0.0, 1.0, 5, 2.0));
+    }
+
+    #[test]
+    fn a_terminal_lake_counts_its_dry_cells_as_land() {
+        // (n, inflow): the largest n with n·a·(E − P) <= Q_out + the runoff of the cells after
+        // the first n, and that inflow.
+        let lake = |runoff: &[f64], q_out: f64| {
+            let (n, inflow) = terminal_lake(runoff, q_out, 1.0, 1.0);
+            assert!(close(inflow, q_out + runoff[n..].iter().sum::<f64>()));
+            n
         };
-        assert_eq!(fill(&at(0.0, 1.0, 1.0), 5, 2.0), Fill::Spill, "E = P");
-        assert_eq!(fill(&at(0.0, 0.5, 1.0), 5, 2.0), Fill::Spill, "E < P");
+        assert_eq!(lake(&[1.0, 1.0, 1.0, 1.0], 2.0), 3, "3 <= 2 + 1, 4 > 2");
         assert_eq!(
-            fill(&at(10.0, 2.0, 1.0), 5, 2.0),
-            Fill::Spill,
-            "A is the area"
+            lake(&[0.0, 5.0, 0.0], 0.0),
+            1,
+            "the second cell's runoff feeds one"
         );
-        assert_eq!(fill(&at(9.0, 2.0, 1.0), 5, 2.0), Fill::Terminal(4));
-        assert_eq!(fill(&at(5.0, 2.0, 1.0), 5, 2.0), Fill::Terminal(2));
-        assert_eq!(fill(&at(1.9, 2.0, 1.0), 5, 2.0), Fill::Terminal(0));
-        assert_eq!(fill(&at(0.0, 2.0, 1.0), 5, 2.0), Fill::Terminal(0));
+        assert_eq!(lake(&[0.1, 0.1], 0.5), 0, "below one cell");
+        assert_eq!(
+            lake(&[0.0, 0.0, 0.0], 2.5),
+            2,
+            "no dry runoff: whole cells of A"
+        );
+        let (n, inflow) = terminal_lake(&[], 1.0, 1.0, 1.0);
+        assert_eq!((n, inflow.to_bits()), (0, 1.0_f64.to_bits()));
     }
 
     #[test]
