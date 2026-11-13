@@ -4,9 +4,14 @@
 //! the names the folders list), so a change that alters one of these inputs would add or remove
 //! records unjudged. The pipeline refuses such a change before it reads the plan's files. A
 //! moved record that would not be a record at its new path is the verdict's (ruling R16).
+//!
+//! This module holds only the rules, which changes to refuse. The facts they judge by come from
+//! P03's walk ([`walk::is_hidden_entry`], [`walk::disk_spelling`]), so that one place decides
+//! which files are records.
 
-use std::fs;
 use std::path::Path;
+
+use theos_content::walk::{self, DiskSpelling};
 
 use super::{CommandError, FileChange, Plan};
 
@@ -50,53 +55,28 @@ fn gitignore(_root: &Path, change: &FileChange) -> Option<&'static str> {
 /// hidden. On Unix a name that starts with `.` hides, and a write keeps the name.
 #[cfg(windows)]
 fn hidden(root: &Path, change: &FileChange) -> Option<&'static str> {
-    use std::os::windows::fs::MetadataExt;
-    /// `FILE_ATTRIBUTE_HIDDEN` of the Windows API.
-    const HIDDEN: u32 = 0x2;
     let replaced = change.before.is_some() && change.after.is_some();
-    let is_hidden = || {
-        // The file itself, as the walk judges it: a symbolic link by its own attributes.
-        fs::symlink_metadata(root.join(&change.path))
-            .is_ok_and(|metadata| metadata.file_attributes() & HIDDEN != 0)
-    };
-    (replaced && is_hidden()).then_some("is hidden")
+    // The file itself, as the walk judges it: a symbolic link by its own attributes.
+    (replaced && walk::is_hidden_entry(&root.join(&change.path))).then_some("is hidden")
 }
 
-/// A path whose part on disk is not spelled as its folders list it (another case, or a short
-/// name on Windows), or that passes a symbolic link to a folder. The file system still finds the
-/// file, so the write reaches a file that the walk lists under another path, or not at all,
-/// while the preview judges the path as given. The part of the path not yet on disk is created
-/// as spelled.
+/// A path whose part on disk its folders list only under another spelling (another case, or a
+/// short name on Windows), or that passes a symbolic link to a folder. The file system still
+/// finds the file, so the write reaches a file that the walk lists under another path, or not at
+/// all, while the preview judges the path as given. The part of the path not yet on disk is
+/// created as spelled.
 fn spelling(root: &Path, change: &FileChange) -> Option<&'static str> {
-    let parts: Vec<&str> = change.path.split('/').collect();
-    let mut dir = root.to_path_buf();
-    for (depth, part) in parts.iter().enumerate() {
-        let entry = dir.join(part);
-        // Not on disk, or not reachable: the write creates it as spelled, or fails on its own.
-        let Ok(metadata) = fs::symlink_metadata(&entry) else {
-            return None;
-        };
-        if !listed(&dir, part) {
-            return Some("is spelled unlike the file or folder on disk");
-        }
-        if depth + 1 < parts.len() && metadata.file_type().is_symlink() {
-            return Some("passes a symbolic link to a folder");
-        }
-        dir = entry;
+    match walk::disk_spelling(root, &change.path) {
+        DiskSpelling::Exact => None,
+        DiskSpelling::Other => Some("is spelled unlike the file or folder on disk"),
+        DiskSpelling::ThroughLink => Some("passes a symbolic link to a folder"),
     }
-    None
-}
-
-/// Whether the folder `dir` lists an entry named exactly `name`; `true` when it cannot be
-/// listed, since the write then fails with its own error.
-fn listed(dir: &Path, name: &str) -> bool {
-    fs::read_dir(dir).map_or(true, |entries| {
-        entries.flatten().any(|entry| entry.file_name() == name)
-    })
 }
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
     use crate::test_support::{TestResult, change, plan};
 
