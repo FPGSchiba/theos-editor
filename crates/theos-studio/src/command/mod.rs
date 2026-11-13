@@ -52,7 +52,9 @@ pub trait Command {
     fn label(&self) -> String;
     /// What the index must have fresh before [`Command::plan`] runs.
     fn reads(&self) -> Reads;
-    /// The files this command changes, read from the workspace as it is now.
+    /// The files this command changes, read from the workspace as it is now. A plan spells each
+    /// folder its changes share the same way in all of them: two new folders that differ only in
+    /// case land in one folder on a case-insensitive disk (ruling R26).
     ///
     /// # Errors
     ///
@@ -155,7 +157,9 @@ pub(crate) fn read_file(root: &Path, path: &str) -> Result<Option<Vec<u8>>, Comm
 /// One file a command changes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileChange {
-    /// Project-relative, with `/`.
+    /// Project-relative, with `/`. A folder that several changes of a plan share is spelled the
+    /// same way in all of them: two new folders that differ only in case land in one folder on a
+    /// case-insensitive disk (ruling R26).
     pub path: String,
     /// The bytes the file has now; `None` when it does not exist.
     pub before: Option<Vec<u8>>,
