@@ -7,6 +7,8 @@ pub mod geology;
 pub mod grid;
 pub mod hydrology;
 pub mod rocks;
+pub mod settlements;
+
 pub mod tectonics;
 
 #[cfg(test)]
