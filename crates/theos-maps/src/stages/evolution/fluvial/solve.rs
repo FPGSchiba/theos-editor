@@ -21,17 +21,32 @@
 //! N = 11. Its steady slope then rises from N = 1 to N = 2, so a ridge cell that captures a
 //! donor stands higher, loses it again, and the landscape cycles without a steady state.
 //!
+//! **The slope supply** (spec §5.9 "Slope supply"). `slope_limit` removes a thickness `s_i` from a
+//! cell and hands it on; it enters `Qs` at that cell like eroded sediment. `Qs` is a volume flux,
+//! so the supply adds `s_i·area/Δt` to the flux leaving cell `i`, beside its net erosion
+//! `(h*_i − h_i)·area/Δt`. In the deposition term `Δt·G·Qs/Q` that is `G·s_i·area/Q_i = c_i·s_i`
+//! at the cell itself, and downstream it travels with the routed volume `s_i·area`. The step then
+//! reads, with `V_i = s_i·area` the volume taken in,
+//!
+//! ```text
+//! h_i  = (h*_i·(1 + c_i) + Δt·G·(Qs_in(i) + V_i/Δt)/Q_i + Σ_r F_ir · h_r) / (1 + c_i + Σ_r F_ir)
+//! ```
+//!
+//! and `Qs_in` routes `(h*_j − h_j)·area + V_j` from every cell `j` upstream. G thus decides how
+//! much of the supply is laid down and how much passes on; with G = 0 the supply does not enter
+//! the heights and all of it leaves at the outlets (`settle`).
+//!
 //! With G = 0 one sweep solves the step exactly. With G > 0 `Qs_in` couples every cell to its
 //! donors, and Yuan's Gauss–Seidel iterations solve it ([`deposit`]): each iteration routes the
-//! net erosion of the last iterate, `(h*_j − h^k_j)·area`, then sweeps once. Where runoff is low
-//! the lagged sediment makes the iterations oscillate; once they are not on track to reach the
-//! tolerance in time, each one but the last is relaxed by Aitken's factor ([`Relaxation`]).
+//! sediment of the last iterate, `(h*_j − h^k_j)·area + V_j`, then sweeps once. Where runoff is
+//! low the lagged sediment makes the iterations oscillate; once they are not on track to reach
+//! the tolerance in time, each one but the last is relaxed by Aitken's factor ([`Relaxation`]).
 
 use libm::pow;
 
 use super::fill::Traps;
 use super::relax::Relaxation;
-use super::sediment::route;
+use super::sediment::{route, step_sediment};
 use crate::grid::Grid;
 use crate::kernels::num::max;
 use crate::stages::evolution::flow::{FlowWeights, cell_index};
@@ -58,7 +73,8 @@ pub(super) struct Incision<'a> {
 
 /// The deposition terms of one sweep, per cell.
 struct Deposit<'a> {
-    /// `Δt·G·Qs_in/Q`, metres: the sediment from upstream.
+    /// `Δt·G·(Qs_in + V/Δt)/Q`, metres: the sediment from upstream and the slope supply `V`
+    /// taken in at the cell.
     inflow: &'a [f64],
     /// `c = G·area/Q`: the cell's own net erosion, on the diagonal.
     own: &'a [f64],
@@ -120,6 +136,8 @@ pub(super) struct Deposition<'a> {
     pub traps: &'a Traps,
     /// The area of one cell, m².
     pub cell_area: f64,
+    /// Per cell, the volume of slope supply taken in this step, m³ (`s_i × area`).
+    pub supply: &'a [f64],
     /// The iterations stop once no height changes by this much, metres.
     pub tolerance: f64,
     /// The most iterations.
@@ -146,10 +164,12 @@ impl Solution {
 /// Yuan et al.'s Gauss–Seidel iterations (eq. 19–21) from `h⁰ = h*` (`start`), over the weights.
 ///
 /// Each iteration `k`:
-/// 1. routes every cell's net erosion `(h*_j − h^k_j)·area` in reverse stack order, so each cell
-///    gets `Qs_in(i)·Δt`, the volume reaching it from upstream; a routed depression keeps what
-///    reaches it up to its capacity and lets the rest go at its spill cell (`traps`);
-/// 2. sweeps once in stack order with `Δt·G·Qs_in(i)/Q_i` and the cell's own term `c_i`;
+/// 1. routes every cell's sediment `(h*_j − h^k_j)·area + V_j` (its net erosion and the slope
+///    supply it takes in) in reverse stack order, so each cell gets `Qs_in(i)·Δt`, the volume
+///    reaching it from upstream; a routed depression keeps what reaches it up to its capacity and
+///    lets the rest go at its spill cell (`traps`);
+/// 2. sweeps once in stack order with `Δt·G·(Qs_in(i) + V_i/Δt)/Q_i` and the cell's own term
+///    `c_i`;
 /// 3. stops with the sweep's heights when it changed no height by `tolerance` or more, or after
 ///    `max_iterations` (then with the plain sweep of the last iteration); otherwise moves the
 ///    heights toward the sweep's by Aitken's relaxation factor ([`Relaxation`]) and iterates
@@ -171,9 +191,13 @@ pub(super) fn deposit(step: &Incision<'_>, dep: &Deposition<'_>, start: &Grid<f6
     let mut relaxation = Relaxation::new(dep.tolerance, dep.max_iterations);
     while iterations < dep.max_iterations {
         iterations += 1;
-        for ((v, &b), &h) in volume.iter_mut().zip(before).zip(height.as_slice()) {
-            *v = (b - h) * dep.cell_area;
-        }
+        step_sediment(
+            &mut volume,
+            before,
+            height.as_slice(),
+            dep.supply,
+            dep.cell_area,
+        );
         route(
             step.stack,
             step.weights,
@@ -182,8 +206,9 @@ pub(super) fn deposit(step: &Incision<'_>, dep: &Deposition<'_>, start: &Grid<f6
             &mut arriving,
             |n, reached| reached - dep.traps.kept(n, reached),
         );
-        for ((x, &q), &a) in inflow.iter_mut().zip(step.discharge).zip(&arriving) {
-            *x = share(q, a);
+        let reaching = arriving.iter().zip(dep.supply);
+        for ((x, &q), (&a, &s)) in inflow.iter_mut().zip(step.discharge).zip(reaching) {
+            *x = share(q, a + s);
         }
         let terms = Deposit {
             inflow: &inflow,

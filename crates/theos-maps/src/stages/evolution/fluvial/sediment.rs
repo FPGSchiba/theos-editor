@@ -1,12 +1,31 @@
 //! The sediment of one step routed over the flow weights (spec §5.9): each cell passes on what
-//! reaches it plus its own net erosion, split like its water. A routed depression keeps what
+//! reaches it plus its own sediment, split like its water. A cell's own sediment is its net
+//! erosion and the slope supply it takes in ([`step_sediment`]). A routed depression keeps what
 //! reaches it while it is open and lets go what it does not keep when the walk reaches its spill
 //! cell.
 
 use super::fill::Traps;
 use crate::stages::evolution::flow::{FlowWeights, cell_index};
 
-/// Routes `volume` (each cell's net erosion this step, m³; negative where the cell gained) over
+/// Writes each cell's own sediment of the step into `volume`, m³: its net erosion
+/// `(start − height)·cell_area` (negative where it gained), plus `supply`, the volume of slope
+/// supply it takes in this step (spec §5.9 "Slope supply"). The supply enters the sediment flux
+/// at its cell like eroded sediment: `slope_limit` removed it from that cell since `fluvial` last
+/// ran.
+pub(super) fn step_sediment(
+    volume: &mut [f64],
+    start: &[f64],
+    height: &[f64],
+    supply: &[f64],
+    cell_area: f64,
+) {
+    let own = start.iter().zip(height).zip(supply);
+    for (v, ((before, after), added)) in volume.iter_mut().zip(own) {
+        *v = (before - after) * cell_area + added;
+    }
+}
+
+/// Routes `volume` (each cell's own sediment this step, m³; negative where the cell gained) over
 /// `weights` in reverse `stack` order, donors first, and returns the volume that leaves at the
 /// cells without an edge: the drained-edge outlets, or the closed map's sink.
 ///
@@ -58,32 +77,22 @@ pub(super) fn route(
     out
 }
 
-/// Routes the step's net erosion, `(start − height)·cell_area` per cell, once more and fills
-/// every depression with the sediment that reaches it, raising its cells in `height`. Returns
-/// the volume that leaves the map (m³). The volume each depression lets go is exactly what
-/// reached it less what it took, so the sediment's volume is kept.
+/// Routes the step's sediment, `volume` per cell (m³, from [`step_sediment`] on the step's final
+/// heights: the net erosion plus the slope supply taken in), once more and fills every
+/// depression with the sediment that reaches it, raising its cells in `height`. Returns the
+/// volume that leaves the map (m³). The volume each depression lets go is exactly what reached
+/// it less what it took, so the sediment's volume is kept.
 pub(super) fn settle(
     stack: &[u32],
     weights: &FlowWeights,
     traps: &Traps,
-    start: &[f64],
+    volume: &[f64],
     height: &mut [f64],
-    cell_area: f64,
 ) -> f64 {
-    let volume: Vec<f64> = start
-        .iter()
-        .zip(height.iter())
-        .map(|(before, after)| (before - after) * cell_area)
-        .collect();
     let mut arriving = vec![0.0; volume.len()];
-    route(
-        stack,
-        weights,
-        traps,
-        &volume,
-        &mut arriving,
-        |n, inflow| inflow - traps.fill(n, inflow, height),
-    )
+    route(stack, weights, traps, volume, &mut arriving, |n, inflow| {
+        inflow - traps.fill(n, inflow, height)
+    })
 }
 
 #[cfg(test)]

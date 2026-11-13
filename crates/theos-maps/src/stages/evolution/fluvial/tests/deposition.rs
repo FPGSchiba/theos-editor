@@ -19,12 +19,12 @@ use crate::stages::terrain::support::{run_stage, world};
 use crate::world::{Layer, World};
 
 /// The value `name` of `fluvial` in an evolution report.
-fn value(report: &StageReport, name: &str) -> f64 {
+pub(super) fn value(report: &StageReport, name: &str) -> f64 {
     report.values[&format!("fluvial_{name}")]
 }
 
 /// The three routing processes with `exponent`, then `fluvial` with `fluvial`: no uplift.
-fn routed(exponent: &str, fluvial: &str) -> String {
+pub(super) fn routed(exponent: &str, fluvial: &str) -> String {
     format!(
         "[[process]]\nid = \"route_steepest\"\n[[process]]\nid = \"resolve_sinks\"\n\
          [[process]]\nid = \"partition_flow\"\nexponent = \"{exponent}\"\n\
@@ -33,7 +33,7 @@ fn routed(exponent: &str, fluvial: &str) -> String {
 }
 
 /// The volume of `height` over the map, m³.
-fn volume(height: &[f64]) -> f64 {
+pub(super) fn volume(height: &[f64]) -> f64 {
     height.iter().map(|h| h * CELL_AREA).sum()
 }
 
@@ -266,7 +266,7 @@ fn bowl_height(r: usize, c: usize) -> f64 {
 /// - the bowl's northern part (rows 14..=34) uplifts at [`CATCHMENT_UPLIFT`] and erodes with K;
 ///   the rest neither uplifts nor erodes (K = 0), so the only sediment comes from the catchment;
 /// - outside, the land falls 2 m per row to the south edge.
-fn bowl() -> World {
+pub(super) fn bowl() -> World {
     let mut w = world(N, N);
     run_stage(&mut w, &GridStage, r#"edges = ["south"]"#).unwrap();
     let grid = |f: &dyn Fn(usize, usize) -> f64| {
@@ -311,7 +311,7 @@ fn bowl() -> World {
 }
 
 /// The bowl's cells below its spill level at the start.
-fn bowl_cells() -> Vec<usize> {
+pub(super) fn bowl_cells() -> Vec<usize> {
     (0..N * N)
         .filter(|&i| ring(i / N, i % N) <= 18 && bowl_height(i / N, i % N) < NOTCH)
         .collect()

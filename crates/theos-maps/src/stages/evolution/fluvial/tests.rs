@@ -2,6 +2,7 @@
 //! landscapes of 100 m cells. Deposition (G > 0) and depression filling are in `deposition`.
 
 mod deposition;
+mod supply;
 
 use std::f64::consts::SQRT_2;
 
@@ -686,6 +687,7 @@ fn fluvial_declares_its_layers_and_parameters() {
             LayerSpec::value("climate", Climate::NAME),
             LayerSpec::f64("erosion"),
             LayerSpec::f64("deposition"),
+            LayerSpec::f64("slope_supply").optional(),
         ]
     );
     assert_eq!(
@@ -695,15 +697,16 @@ fn fluvial_declares_its_layers_and_parameters() {
             LayerSpec::f64("erosion"),
             LayerSpec::f64("deposition"),
             LayerSpec::f64("drainage_area"),
+            LayerSpec::f64("slope_supply").optional(),
         ]
     );
     // Deposition also reads the routing surface (the depressions' flood order) and the uplift
     // (Yuan et al.'s tolerance), which may be absent.
     let deposits = stage.params(&"g = 1.0".parse().unwrap()).unwrap();
     let reads = stage.reads(deposits.as_ref());
-    assert_eq!(reads[..10], stage.reads(params.as_ref())[..]);
+    assert_eq!(reads[..11], stage.reads(params.as_ref())[..]);
     assert_eq!(
-        reads[10..],
+        reads[11..],
         [
             LayerSpec::f64("routing_surface"),
             LayerSpec::f64("uplift").optional(),

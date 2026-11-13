@@ -21,9 +21,16 @@
 //!   spill. After the iterations one more routing of the step's sediment (`sediment`) fills
 //!   each depression in height order up to its spill level, with an ε slope toward its spill
 //!   cell, and passes the rest on.
+//! - **The slope supply** (spec §5.9 "Slope supply", ruling 51): `slope_supply` holds, per cell,
+//!   the thickness `slope_limit` has removed since `fluvial` last ran. `fluvial` takes it into the
+//!   sediment flux at its cell like eroded sediment, in the iterations and in the routing that
+//!   fills the depressions (`solve` gives the term), and writes the layer back emptied. G decides
+//!   how much of it is laid down; with G = 0 all of it leaves at the outlets. Without the layer
+//!   there is no supply.
 //!
 //! The report holds `sediment_out_m3`, the sediment that left the map in the step at the cells
-//! without an edge (the drained edges, or the closed map's sink), and `iterations`.
+//! without an edge (the drained edges, or the closed map's sink), `iterations`, and `supply_m3`,
+//! the volume of slope supply taken in.
 
 mod fill;
 mod inputs;
@@ -37,7 +44,7 @@ use serde::Deserialize;
 
 use self::fill::Traps;
 use self::inputs::{depressions_misfit, routing_misfit};
-use self::sediment::settle;
+use self::sediment::{settle, step_sediment};
 use self::solve::{Deposition, Incision, deposit, incise};
 use super::booking::book;
 use super::flow::{FlowWeights, accumulate};
@@ -105,6 +112,7 @@ impl TypedStage for Fluvial {
             LayerSpec::value("climate", Climate::NAME),
             LayerSpec::f64("erosion"),
             LayerSpec::f64("deposition"),
+            LayerSpec::f64("slope_supply").optional(),
         ];
         if params.g > 0.0 {
             reads.push(LayerSpec::f64("routing_surface"));
@@ -113,12 +121,14 @@ impl TypedStage for Fluvial {
         reads
     }
 
+    /// The slope supply is written back emptied when the world holds it.
     fn writes(&self, _: &FluvialParams) -> Vec<LayerSpec> {
         vec![
             LayerSpec::f64("height"),
             LayerSpec::f64("erosion"),
             LayerSpec::f64("deposition"),
             LayerSpec::f64("drainage_area"),
+            LayerSpec::f64("slope_supply").optional(),
         ]
     }
 
@@ -145,7 +155,8 @@ impl TypedStage for Fluvial {
             return Err(ctx.fail("runs only as a process of landscape_evolution"));
         };
         let start = ctx.take_f64("height")?;
-        let outcome = erode(ctx, params, step.dt_yr, &start)?;
+        let supply = take_supply(ctx)?;
+        let outcome = erode(ctx, params, step.dt_yr, &start, supply.as_ref())?;
         let mut erosion = ctx.take_f64("erosion")?;
         let mut deposition = ctx.take_f64("deposition")?;
         book(&start, &outcome.height, &mut erosion, &mut deposition);
@@ -153,8 +164,21 @@ impl TypedStage for Fluvial {
         ctx.write("erosion", Layer::F64(erosion))?;
         ctx.write("deposition", Layer::F64(deposition))?;
         ctx.write("drainage_area", Layer::F64(outcome.drainage_area))?;
+        if let Some(mut taken) = supply {
+            taken.as_mut_slice().fill(0.0);
+            ctx.write("slope_supply", Layer::F64(taken))?;
+        }
         Ok(outcome.report)
     }
+}
+
+/// The slope supply, taken out of the world to be written back emptied; `None` when the world
+/// holds none.
+fn take_supply(ctx: &mut StageContext<'_>) -> Result<Option<Grid<f64>>, StageError> {
+    if ctx.f64_opt("slope_supply")?.is_none() {
+        return Ok(None);
+    }
+    ctx.take_f64("slope_supply").map(Some)
 }
 
 /// One step's result besides the cumulative layers.
@@ -163,17 +187,19 @@ struct Outcome {
     height: Grid<f64>,
     /// The plain drainage area (spec §5.10: not weighted by runoff).
     drainage_area: Grid<f64>,
-    /// `sediment_out_m3`, `iterations` and a warning when the iterations did not converge.
+    /// `sediment_out_m3`, `iterations`, `supply_m3` and a warning when the iterations did not
+    /// converge.
     report: StageReport,
 }
 
 /// One implicit step from `start` (`h*`) over the current weights and stack, with deposition
-/// and depression filling when `g > 0`.
+/// and depression filling when `g > 0`, taking in the slope `supply` (thickness per cell) if any.
 fn erode(
     ctx: &StageContext<'_>,
     params: &FluvialParams,
     dt: f64,
     start: &Grid<f64>,
+    supply: Option<&Grid<f64>>,
 ) -> Result<Outcome, StageError> {
     let frame = *ctx.frame();
     let cells = frame.cells();
@@ -198,7 +224,14 @@ fn erode(
     let area = Grid::filled(frame.rows, frame.cols, cell_area);
     let drainage_area = accumulate(stack, weights, &area);
     let (fixed, erodibility) = (ctx.mask("fixed")?.as_slice(), ctx.f64("erodibility")?);
+    let supply: Vec<f64> = supply.map_or_else(
+        || vec![0.0; cells],
+        |s| s.as_slice().iter().map(|t| t * cell_area).collect(),
+    );
     let mut report = StageReport::default();
+    report
+        .values
+        .insert("supply_m3".to_owned(), supply.iter().sum());
     let mut step = Incision {
         weights,
         stack,
@@ -221,6 +254,7 @@ fn erode(
             g: params.g,
             traps: &traps,
             cell_area,
+            supply: &supply,
             tolerance: tolerance(ctx.f64_opt("uplift")?, dt),
             max_iterations: params.max_iterations,
         };
@@ -243,14 +277,15 @@ fn erode(
         report.values.insert("iterations".to_owned(), 1.0);
         (incise(&step, start), Traps::default())
     };
-    let out = settle(
-        stack,
-        weights,
-        &traps,
+    let mut sediment = vec![0.0; cells];
+    step_sediment(
+        &mut sediment,
         start.as_slice(),
-        height.as_mut_slice(),
+        height.as_slice(),
+        &supply,
         cell_area,
     );
+    let out = settle(stack, weights, &traps, &sediment, height.as_mut_slice());
     report.values.insert("sediment_out_m3".to_owned(), out);
     Ok(Outcome {
         height,
