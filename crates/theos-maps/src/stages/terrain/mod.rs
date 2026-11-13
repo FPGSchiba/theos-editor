@@ -1,6 +1,7 @@
 //! The terrain stages of the outdoor floors, one module per stage.
 
 pub mod climate;
+pub mod detuning;
 pub mod ecology;
 pub mod elements;
 pub mod geology;
