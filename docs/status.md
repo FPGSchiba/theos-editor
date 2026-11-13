@@ -55,15 +55,15 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
-- P06's build PR #39 is a draft labelled `needs-jann`. The final review loop reached its cap of
-  five rounds. Round 5 found no Critical or Important issue and left two Minor ones open, listed
-  in the PR:
-  - m5-1: a plan that writes, moves or deletes a `.gitignore`, or on Windows replaces a hidden
-    file, changes which files are records without the verdict judging it;
-  - m5-2: on Unix, a plan path with `\` is checked as `/` but written as written.
-
-  Jann decides on a targeted fix round. `cargo xtask gate` has not run on Windows yet: a
-  background run was stopped for low memory, and it waits for Jann's go.
+- P06's build PR #39 is a draft labelled `needs-jann`.
+  - The final review loop reached its cap of five rounds.
+  - Jann's targeted fix round closed m5-1 and m5-2 (rulings R21–R23), and `cargo xtask gate`
+    passes on Windows.
+  - The targeted review found four new Minor findings, listed in the PR. Three of them (N1–N3)
+    are further variants of one class: a command changes which files are records without the
+    verdict judging it. N4 is two predicates copied from P03.
+  - Jann decides how to go on: merge with them recorded, or a different approach to the class
+    (directive 3).
 - For P49 (umbrella version 6):
   - before its gate PR: Jann creates a GitHub App for release-plz (contents and pull requests
     write), installs it on this repository and stores its id and key as secrets; the tag ruleset
