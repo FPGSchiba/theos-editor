@@ -168,6 +168,12 @@ What later phases build on it:
   removed material goes: "I also think into rivers as sediment makes sense." The same change
   records two findings of the build: the reads of `resolve_sinks` and `fluvial`, and the
   relaxation of Yuan's iterations on dry cells (§5.9).
+- **13 Nov 2026, later findings of the build:** routed depressions are filled before the implicit
+  solve and their cells are then solved like every other cell, as §5.9 already orders it (the
+  build had held them through the step, which drove an oscillation between steps); `skrifa`
+  replaces `ab_glyph`, whose font parser is unmaintained (Jann chose it); loop roads are routed
+  without the merge discount (Jann); a lake's geometry may be a MultiPolygon (Jann). Rulings
+  53–56.
 
 ### 4.2 Research (10 Nov 2026)
 
@@ -216,7 +222,7 @@ Probe sources are in the session scratchpad. Their results, with what P08 takes 
 | ZIP | `zip` 9.5 with `flate2`: a feature enabled by an unrelated crate (`flate2/zlib-rs`) changed the package bytes. `zip`'s default `system` is DOS on Windows and Unix elsewhere, and its `time` feature stamps the current time. With every option set explicitly and miniz_oxide as the backend, two writes are byte-identical. zopfli uses std `log2`. `rawzip` always writes data descriptors | `zip` without default features + `deflate-flate2`; `flate2` with `rust_backend` (miniz_oxide); every header field set explicitly (§5.13); cargo-deny bans on the other backends (gate PR) |
 | FFT | `rustfft` computes its twiddles with std `cos`/`sin`, even in its scalar planner | Own radix-2 FFT with `libm` twiddles: relative difference to rustfft 7e-16; 512² forward + inverse 8.6 ms vs 6.5 ms |
 | Drawing | `tiny-skia` 0.12's `simd` feature uses approximate reciprocals that differ by architecture; `std` brings std trigonometry | `tiny-skia` without default features, with `no-std-float` |
-| Text | `ab_glyph` uses only exact float operations and has a `libm` feature. The design system's fonts are WOFF2 (Inter, JetBrains Mono, Spectral; SIL OFL 1.1). `wuff` (MIT) decodes WOFF2 | `ab_glyph` + `wuff`, fonts from `design/theos-ui/fonts` |
+| Text | `ab_glyph` pulls in `ttf-parser` 0.25.1, which RUSTSEC-2026-0192 marks unmaintained, so `cargo deny` fails (found in the build, 13 Nov 2026). `skrifa` 0.50 is maintained, has a `libm` feature and gives glyph outlines that `tiny-skia` fills like any other path. The design system's fonts are WOFF2 (Inter, JetBrains Mono, Spectral; SIL OFL 1.1). `wuff` (MIT) decodes WOFF2 | `skrifa` (no default features, `libm`) + `wuff`, fonts from `design/theos-ui/fonts` |
 | Rasters | `imageproc` without default features still pulls in nalgebra/matrixmultiply and moxcms, which pick CPU code at runtime; its morphology works on u8 images only | Own raster kernels in f64 with scipy's semantics (§5.8) |
 | Geometry | `kiddo` pulls in `generator` (inline-assembly coroutines); `spade` has exact predicates and nearest-neighbour queries; `petgraph`'s Dijkstra returns a `HashMap` | `spade` for Delaunay and nearest neighbour; own Kruskal and grid Dijkstra |
 | `num-traits/std` | Enabled by the default features of `image`, `kiddo`, `moxcms`, `spade` | `spade` without default features; the plan checks the feature tree (§7) |
@@ -262,7 +268,7 @@ uv) ran seeds 1–8 of the three recipes: about 17 s per hearth-valley seed (§5
 | Lake outlines | marching squares, own code (about 80 lines) | The `contour` crate works on f64 fields but its licence and float use are unchecked; the plan may probe it instead |
 | Drawing | `tiny-skia` (no default features, `no-std-float`) | §4.3 |
 | PNG | `png`, `Compression::Fast` (fdeflate) | Independent of the flate2 backend; renders are outside G20 anyway |
-| Text | `ab_glyph` (`libm`) + `wuff` | §4.3 |
+| Text | `skrifa` (`libm`) + `wuff`; glyph outlines drawn by `tiny-skia` | §4.3 |
 | Errors, logging | `thiserror`, `tracing` | G16 |
 
 ### 5.2 Crates and modules
@@ -702,13 +708,23 @@ rate U, erodibility K and the slope S to the receivers:
      can oscillate: on the dry cells of a rain shadow (p̂ far below 1) a whole patch rises and
      falls between iterations. When the sweeps would not reach the tolerance within the limit,
      successive iterates are combined by Aitken's Δ² relaxation, which converges to the same
-     solution; sweeps that are on track stay unrelaxed (found in the build, 13 Nov 2026).
+     solution; sweeps that are on track stay unrelaxed (found in the build, 13 Nov 2026). The
+     depressions' filled heights move with the heights they belong to, and in the iterations a
+     depression never lets go a negative volume. From the iteration after half the limit, a
+     depression that is full stays full for the rest of the step, so it changes between full and
+     not full a bounded number of times (found in the build, 13 Nov 2026).
 - **Depression filling** (part of step 1, only when G > 0): when the Qs accumulation reaches a
   routed depression, the sediment volume fills the depression's cells in height order, up to its
-  spill level. Filled cells get an ε slope toward the spill node, so they are not pits next step.
-  The excess passes on from the spill node in the same sweep: `resolve_sinks` connects the spill
-  node downstream of the depression in the stack. With G = 0 there is no deposition and no
-  filling.
+  spill level, from their heights at the start of the step. Filled cells get an ε slope toward
+  the spill node, so they are not pits next step. The excess passes on from the spill node in the
+  same sweep: `resolve_sinks` connects the spill node downstream of the depression in the stack.
+  Step 2 then solves the depression's cells like every other cell, from their filled heights;
+  the sediment that reached the depression is in the fill, so their deposition term sees none of
+  it. A depression the sediment does not fill has no receiver below its level and stays; a full
+  one follows the incision of its spill node. When the iterations stop, the step's sediment is
+  routed once more over the final heights; each depression keeps what reaches it up to its
+  capacity, and its cells take the fill of that volume, so the volume balance closes exactly.
+  With G = 0 there is no deposition and no filling.
 - **Slope supply:** `slope_supply` holds, per cell, the thickness `slope_limit` has removed since
   `fluvial` last ran, in metres: `slope_limit` adds to it and `fluvial` empties it, so no supply is
   counted twice or lost when the two run at different `every`. It enters Qs at its cell like
@@ -802,7 +818,9 @@ on the built-in recipes' mountains they hit their 100-pass cap on 236 of 240 ste
   - the MST of those costs, plus each further link whose cost through the current network
     exceeds `loop_detour` × its direct cost, between settlements of class village or higher;
   - links are routed in order of class, then cost, with a discount on cells that already carry a
-    road, so trunks merge;
+    road, so trunks merge; loop links (the further links above) are routed without that
+    discount, so a loop is a new road and not mostly the trunks it was meant to bypass (Jann,
+    13 Nov 2026);
   - road class follows the endpoints' classes, as 0.3.0;
   - trails to ruins;
   - bridges and fords become `site` features.
@@ -829,8 +847,10 @@ Each is a later stage under the same contract.
 - **Water features:**
   - rivers: `water`/`river` LineStrings with (x, y, bed height), `width_m`, `depth_m`,
     `discharge_m3s` per vertex, and `order`;
-  - lakes: `water`/`lake` Polygons with `surface_m`, `terminal`, `outlet` (a point in metres, or
-    none for a terminal lake) and `depth_max_m`.
+  - lakes: one `water`/`lake` feature per lake, a Polygon or, when the lake's cells give several
+    outlines (basins merged at one level, cells that touch only at a corner), a MultiPolygon, with
+    `surface_m`, `terminal`, `outlet` (a point in metres, or none for a terminal lake) and
+    `depth_max_m`.
 - **Roads** carry `class`, `from`, `to`, `length_m`, `width_m` and `grade_max`. Bridges carry
   `span_m` and `deck_m`.
 - **Layers written to the package for terrain** (the standard layers of §4.4 plus this spec's
@@ -860,9 +880,9 @@ Plain styling with every layer and feature kind visible (Jann). All PNG.
 | `inworld` | Paper tone, the known area around settlements and main roads, main roads, settlements with names, lakes, big rivers, simple ridge and forest marks. Texts (title, labels and their positions) only from the recipe's `[renders.inworld]`, never from code; everything is drawn inside the frame |
 | `omega` | ω over hillshade, ruins marked (an extra render, asked for by `hearth-valley-omega`) |
 
-- **Drawing:** `tiny-skia` (scalar), labels with `ab_glyph`. Inter is used for `truth`, legends
-  and the contact sheet, Spectral for `inworld`. Both are read from `design/theos-ui/fonts` with
-  `include_bytes!` and decoded with `wuff` once per process.
+- **Drawing:** `tiny-skia` (scalar); labels are `skrifa` glyph outlines that `tiny-skia` fills.
+  Inter is used for `truth`, legends and the contact sheet, Spectral for `inworld`. Both are read
+  from `design/theos-ui/fonts` with `include_bytes!` and decoded with `wuff` once per process.
 - **Licence:** the fonts are under SIL OFL 1.1. `theos-maps` exposes the licence texts, so the
   binaries that embed it can ship them (Needs Jann, §7).
 - **Contact sheet:** `render::contact_sheet(paths, columns)` tiles the first render of several
@@ -942,7 +962,8 @@ pub fn run(request: &RunRequest, recipe_dirs: &[PathBuf], out_dir: &Path,
    volume − the sediment flux Qs leaving at drained-edge outlets (taken from the routed flux, not
    from the difference of the other terms), to 1e-9 relative.
 5. **Lake filling:** sediment routed into a closed depression fills it up to its spill level and
-   passes on the excess.
+   passes on the excess; the slope that feeds a depression that is not full ends above its level,
+   and a full depression follows the incision of its spill node instead of perching above it.
 6. **Discharge routing:** on a surface without depressions, the runoff accumulated over
    multiple flow directions and leaving over drained edges equals the total runoff put in (the
    routing itself loses nothing; lake evaporation is tested in 8).
@@ -1338,6 +1359,25 @@ Rulings of 13 Nov 2026, from the build:
     iterates — on dry cells (p̂ ≪ 1) G/p̂ ≤ 1 fails and the plain sweeps oscillate (a dominant
     eigenvalue of −1.009 was measured); sweeps that are on track stay unrelaxed — cost if wrong:
     another stabiliser.
+53. Ruling: routed depressions are filled before the implicit solve in every Gauss–Seidel
+    iteration and their cells are then solved like every other cell, as §5.9 orders it; the
+    build had first held them through the step and filled them afterwards — held lakes perched
+    tens to hundreds of metres above their incising spill nodes at the built-in time step and
+    drove a period-2 oscillation between steps (8,162 alternating cells at 384², 15 after the
+    change) — cost if wrong: a lower landscape (mean height 445 → about 200 m, relief 1,817 →
+    about 1,300 m on the 384² budget fixture) and slower convergence on it (about +40 % run time).
+54. Ruling (Jann): `skrifa` replaces `ab_glyph` for text — `ab_glyph` pulls in `ttf-parser`
+    0.25.1, which RUSTSEC-2026-0192 marks unmaintained, and `cargo deny` fails; `skrifa` is
+    maintained, has a `libm` feature, and `tiny-skia` fills its glyph outlines like other paths —
+    cost if wrong: a crate swap back.
+55. Ruling (Jann): loop links of the road network are routed without the merge discount — with
+    the discount (0.35) a loop whose detour lay between `loop_detour` and 1/0.35 ≈ 2.9 times its
+    cost ran mostly along the existing roads (68 % in the build's test), so few loops added a
+    road — cost if wrong: loops cross terrain where a trunk could have served.
+56. Ruling (Jann): a lake is one feature, a MultiPolygon when its cells give several outlines —
+    one feature per outline broke the match between `lake-n` ids and lake numbers; format 1.0 has
+    no released writer or reader yet, so this amends 1.0 instead of adding a capability — cost if
+    wrong: readers must accept both geometries for lakes.
 
 ## 10. Left to the builder
 
