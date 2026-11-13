@@ -201,6 +201,27 @@ fn theos_check_outside_a_project_exits_2() -> TestResult {
         stderr(&output).starts_with("error: no theos.toml"),
         "{output:?}"
     );
+    // It names the folder the search started in, not `.`.
+    assert!(
+        stderr(&output).contains("work` or any folder above it"),
+        "{}",
+        stderr(&output)
+    );
+    Ok(())
+}
+
+// AC: CE-17.1
+#[test]
+fn theos_check_of_a_folder_inside_a_project_exits_2() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let project = sandbox.copy_project(&staged_project(), "clean")?;
+    let output = sandbox.run(&["check", "lore"], &project)?;
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(
+        stderr(&output).contains("is not a content project"),
+        "{}",
+        stderr(&output)
+    );
     Ok(())
 }
 

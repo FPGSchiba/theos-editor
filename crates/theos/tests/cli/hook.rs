@@ -103,6 +103,47 @@ fn theos_hook_install_refuses_a_foreign_hook_with_2() -> TestResult {
     Ok(())
 }
 
+// AC: CE-17.1
+#[test]
+fn theos_hook_install_of_a_folder_inside_a_project_exits_2() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let top = repository(&sandbox)?;
+    let output = sandbox.run(&["hook", "install", "lore"], &top)?;
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(
+        stderr(&output).contains("is not a content project"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(!hook_of(&top).exists());
+    Ok(())
+}
+
+// AC: CE-17.1
+#[test]
+fn theos_hook_install_finds_the_project_above_the_current_folder() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let top = repository(&sandbox)?;
+    let output = sandbox.run(&["hook", "install"], &top.join("lore").join("clues"))?;
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{output:?} {}",
+        stderr(&output)
+    );
+    let text = std::fs::read_to_string(hook_of(&top))?;
+    assert!(
+        text.lines()
+            .any(|line| line == "exec \"$theos\" check --staged '.'"),
+        "{text}"
+    );
+    let given = sandbox.run(&["hook", "install", "--json", "."], &top)?;
+    assert_eq!(given.status.code(), Some(0), "{given:?}");
+    let view: Value = serde_json::from_str(&stdout(&given))?;
+    assert_eq!(view["replaced"], true);
+    Ok(())
+}
+
 #[test]
 fn a_project_in_a_subfolder_names_its_folder() -> TestResult {
     let sandbox = Sandbox::new()?;

@@ -148,6 +148,35 @@ fn theos_schema_of_a_kind_lists_fields_and_body() -> TestResult {
     Ok(())
 }
 
+// AC: CE-17.1
+#[test]
+fn theos_schema_project_names_the_project_folder() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let project = sandbox.copy_project(&content_project("settings"), "settings")?;
+    let path = project.to_str().ok_or("the project path is not UTF-8")?;
+    let output = sandbox.run(&["--json", "schema", "--project", path], &sandbox.work())?;
+    assert!(output.status.success(), "{output:?} {}", stderr(&output));
+    let view: Value = serde_json::from_str(&stdout(&output))?;
+    let rules = view["rules"].as_array().ok_or("rules")?;
+    assert!(rules.iter().all(|rule| rule["configured"].is_string()));
+
+    // A folder without theos.toml is no project, also when one lies above it.
+    let inner = project.join("lore");
+    std::fs::create_dir_all(&inner)?;
+    for folder in [inner, sandbox.work()] {
+        let folder = folder.to_str().ok_or("the folder path is not UTF-8")?;
+        let output = sandbox.run(&["schema", "--project", folder], &sandbox.work())?;
+        assert_eq!(output.status.code(), Some(2), "{output:?}");
+        assert_eq!(stdout(&output), "");
+        assert!(
+            stderr(&output).contains("is not a content project"),
+            "{}",
+            stderr(&output)
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn theos_schema_of_an_unknown_kind_exits_2_and_lists_the_kinds() -> TestResult {
     let sandbox = Sandbox::new()?;

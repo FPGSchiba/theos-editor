@@ -8,18 +8,16 @@ use theos_studio::views::ledger::FormalismView;
 
 use crate::output;
 
-/// Regenerates the mirror of the project at `folder` (the nearest project at or above the
-/// current folder by default) and writes
-/// each path it wrote to `out`, or "nothing to write"; with `json`, one JSON document instead.
+/// Regenerates the mirror of the project at `folder` (the nearest project at or above the current
+/// folder by default, see [`output::project_root`]) and writes each path it wrote to `out`, or
+/// "nothing to write"; with `json`, one JSON document instead.
 ///
 /// # Errors
 ///
-/// Fails when the source is missing or invalid, or when a file or `out` cannot be written.
+/// Fails when there is no project, the source is missing or invalid, or a file or `out` cannot
+/// be written.
 pub(crate) fn run(folder: Option<&Path>, json: bool, out: &mut impl Write) -> anyhow::Result<()> {
-    let root = match folder {
-        Some(folder) => folder.to_path_buf(),
-        None => theos_studio::find_root(&std::env::current_dir().context("no current folder")?)?,
-    };
+    let root = output::project_root(folder)?;
     let regenerated = theos_content::formalism::regenerate(&root)?;
     if json {
         return output::json(out, &FormalismView::new(&regenerated.written));

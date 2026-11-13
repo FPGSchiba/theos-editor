@@ -1,27 +1,40 @@
-//! What every command prints and how: finding lines, one JSON document, the summary and notes.
+//! The project a command works on, and what every command prints and how: finding lines, one
+//! JSON document, the summary and notes.
 
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use serde::Serialize;
-use theos_content::Finding;
-use theos_studio::{StudioError, Workspace};
+use theos_content::{Finding, ProjectError};
+use theos_studio::{StudioError, Workspace, find_root};
 
-/// The workspace of a command: the project in `folder`, else the one above the current folder.
+/// The root of the project a command works on (spec §5.4): a `folder` given is the project root
+/// and must hold `theos.toml`; without one, the nearest folder at or above the current one that
+/// holds `theos.toml`.
+///
+/// # Errors
+///
+/// [`ProjectError::NotAProject`] when `folder` holds no `theos.toml`, and the errors of
+/// [`find_root`] without a folder.
+pub(crate) fn project_root(folder: Option<&Path>) -> Result<PathBuf, StudioError> {
+    match folder {
+        Some(folder) if folder.join("theos.toml").is_file() => Ok(folder.to_path_buf()),
+        Some(folder) => Err(ProjectError::NotAProject {
+            root: folder.to_path_buf(),
+        }
+        .into()),
+        None => find_root(Path::new(".")),
+    }
+}
+
+/// The workspace of a command: the project of [`project_root`], opened.
 ///
 /// # Errors
 ///
 /// Fails when there is no project, or when it cannot be opened.
 pub(crate) fn workspace(folder: Option<&Path>) -> Result<Workspace, StudioError> {
-    if let Some(folder) = folder {
-        return Workspace::open(folder);
-    }
-    let current = std::env::current_dir().map_err(|source| StudioError::Io {
-        path: Path::new(".").to_path_buf(),
-        source,
-    })?;
-    Workspace::find(&current)
+    Workspace::open(&project_root(folder)?)
 }
 
 /// Writes one line per finding.

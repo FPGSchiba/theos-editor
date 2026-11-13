@@ -4,7 +4,6 @@ use std::io::Write;
 use std::path::Path;
 
 use anyhow::Context;
-use theos_studio::find_root;
 use theos_studio::hook::install_hook;
 use theos_studio::views::hook::HookView;
 use theos_vcs::Git;
@@ -12,7 +11,8 @@ use theos_vcs::Git;
 use crate::{Exit, output};
 
 /// Installs the hook of the project at `folder` (the project above the current folder by
-/// default) and prints its path, plus the backup it kept, or one JSON document.
+/// default, see [`output::project_root`]) and prints its path, plus the backup it kept, or one
+/// JSON document.
 ///
 /// # Errors
 ///
@@ -24,11 +24,7 @@ pub(crate) fn run(
     json: bool,
     out: &mut impl Write,
 ) -> anyhow::Result<Exit> {
-    let start = match folder {
-        Some(folder) => folder.to_path_buf(),
-        None => std::env::current_dir().context("no current folder")?,
-    };
-    let root = find_root(&start)?;
+    let root = output::project_root(folder)?;
     let theos = std::env::current_exe().context("cannot find this program")?;
     let installed = install_hook(&root, &Git::find()?, &theos, force)?;
     if json {

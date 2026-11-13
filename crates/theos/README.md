@@ -26,8 +26,9 @@ theos hook install [<folder>] [--force] [--json]
 - `hook install` writes git's `pre-commit` hook, which runs `theos check --staged`. A hook that is
   not ours is refused unless `--force` keeps it as `pre-commit.before-theos`.
 
-Without a `<folder>` or `--project`, the project is the nearest folder at or above the current
-one that holds `theos.toml`.
+A `<folder>` or `--project` given is the project root and must hold `theos.toml` (else exit 2).
+Without one, the project is the nearest folder at or above the current one that holds
+`theos.toml`; `schema` then also runs outside a project, without the configured severities.
 
 ## Output
 

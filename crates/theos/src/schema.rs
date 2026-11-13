@@ -6,9 +6,9 @@ use std::path::Path;
 
 use anyhow::Context;
 use theos_content::parts;
+use theos_studio::StudioError;
 use theos_studio::schema;
 use theos_studio::views::schema::{BodyView, KindView, PlacementView, SchemaView};
-use theos_studio::{StudioError, find_root};
 
 use crate::output;
 
@@ -17,8 +17,8 @@ use crate::output;
 ///
 /// # Errors
 ///
-/// Fails when `kind` is not a kind, when the project's settings cannot be read, or when `out`
-/// cannot be written.
+/// Fails when `kind` is not a kind, when `project` is not a project, when the project's settings
+/// cannot be read, or when `out` cannot be written.
 pub(crate) fn run(
     kind: Option<&str>,
     project: Option<&Path>,
@@ -35,11 +35,10 @@ pub(crate) fn run(
             .write_all(kind_text(&view).as_bytes())
             .context("cannot write the output");
     }
+    // A `--project` must be a project; without one, outside a project is fine.
     let root = match project {
-        Some(folder) => Some(folder.to_path_buf()),
-        None => std::env::current_dir()
-            .ok()
-            .and_then(|current| find_root(&current).ok()),
+        Some(_) => Some(output::project_root(project)?),
+        None => output::project_root(None).ok(),
     };
     let view = schema::overview(&registry, root.as_deref())?;
     if json {
