@@ -113,7 +113,12 @@ pub struct RoadsParams {
     pub bridge_cost: f64,
     /// How much a crossing along the river's flow costs over a perpendicular one, as a share.
     pub angle_penalty: f64,
-    /// Cost per metre the deck rises above the lower bank.
+    /// Cost per metre the deck rises above the lower bank: a bridge pays
+    /// `deck_cost·(deck_m − lower bank)`, which is `deck_cost·(|Δbank| + clearance_m)`. This is
+    /// not the plan's `deck_cost·deck_m`: `deck_m` is a height above the base level, so that term
+    /// would make a bridge dearer the higher its valley lies and change routes when the whole map
+    /// is raised; the rise is the ramp a road climbs onto the deck. The `deck_m` property of a
+    /// `bridge` site stays the spec's value, the higher bank plus `clearance_m`.
     pub deck_cost: f64,
     /// The longest bridge, bank cell to bank cell, m.
     pub max_bridge_span_m: f64,

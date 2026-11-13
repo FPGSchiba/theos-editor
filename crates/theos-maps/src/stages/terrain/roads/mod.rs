@@ -25,9 +25,11 @@
 //! through the links taken so far exceeds `loop_detour` times its own. The links are laid in
 //! order of class (main first), then cost, then their ends' handles; a step on cells that
 //! already carry a road costs `merge_discount` times as much, and so does a bridge already
-//! built, so trunks merge. Then a trail runs to each ruin from the road cell or place it
-//! reaches at the least cost. A place no road reaches, and a ruin no trail reaches, gives one
-//! warning each.
+//! built, so trunks merge. The discount also applies to loops: a loop whose detour lies between
+//! `loop_detour` and `1 / merge_discount` times its own cost (1.7 and about 2.9 by default) is
+//! cheaper along the roads it was added to shortcut, so it is laid mostly along them, as in
+//! 0.3.0. Then a trail runs to each ruin from the road cell or place it reaches at the least
+//! cost. A place no road reaches, and a ruin no trail reaches, gives one warning each.
 //!
 //! **Outputs:** the world value `road_network` ([`RoadNetwork`]); the raster `roads`, 0 for no
 //! road and the class's code 1 to 4 on every cell a road passes, the higher class where roads

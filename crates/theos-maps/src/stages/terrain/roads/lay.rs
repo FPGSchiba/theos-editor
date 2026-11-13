@@ -84,14 +84,12 @@ impl Laid {
             .any(|r| r.from == handle || r.to == handle)
     }
 
-    /// Every cell of every road's path, sorted.
-    pub(super) fn cells(&self) -> Vec<usize> {
-        let set: BTreeSet<usize> = self
-            .roads
+    /// Every cell of every road's path.
+    pub(super) fn cells(&self) -> BTreeSet<usize> {
+        self.roads
             .iter()
             .flat_map(|r| r.cells.iter().map(|&c| super::index(c)))
-            .collect();
-        set.into_iter().collect()
+            .collect()
     }
 }
 

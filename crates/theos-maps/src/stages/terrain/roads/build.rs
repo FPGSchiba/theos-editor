@@ -1,5 +1,7 @@
 //! Building the network: the links, then the trails, with progress, cancel and warnings.
 
+use std::collections::BTreeSet;
+
 use super::lay::Laid;
 use super::network::{Watch, choose, laying_order};
 use super::places::{Place, places, ruins};
@@ -175,20 +177,20 @@ fn trails(
     watch: &mut Counter<'_, '_>,
 ) -> Result<Vec<Finding>, StageError> {
     let mut warnings = Vec::new();
+    let mut sources: BTreeSet<usize> = laid.cells();
+    sources.extend(places.iter().map(|p| p.cell));
     for (ruin, cell, label) in ruins {
-        let mut sources = laid.cells();
-        sources.extend(places.iter().map(|p| p.cell));
-        sources.sort_unstable();
-        sources.dedup();
-        if sources.binary_search(&cell).is_err() {
+        if !sources.contains(&cell) {
+            let starts: Vec<usize> = sources.iter().copied().collect();
             let path = laid
                 .router(cost)
-                .route(&sources, cell, RoadClass::Trail, &|| watch.cancelled())
+                .route(&starts, cell, RoadClass::Trail, &|| watch.cancelled())
                 .map_err(|e| watch.fail(e))?;
             match path {
                 Some(path) => {
                     let from = joined(places, &laid.roads, path[0]).unwrap_or(ruin);
                     laid.add(cost, &path, RoadClass::Trail, from, ruin);
+                    sources.extend(path);
                 }
                 None => warnings.push(Finding::warning(format!(
                     "no trail reaches {label}: it is cut off by water or too steep"
