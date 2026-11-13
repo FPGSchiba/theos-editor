@@ -128,10 +128,12 @@ mod tests {
     }
 
     #[test]
-    fn a_line_of_text_draws_the_same_pixels_twice() {
+    fn a_line_of_text_draws_the_same_pixels_twice_and_matches_the_recorded_hash() {
         let png = sample();
         assert_eq!(sample(), png);
-        // Recorded on Windows x64 (Task 39); text goes through the scalar tiny-skia pipeline.
+        // Recorded on Windows x64 only (Task 39, rustc 1.99.1, dev and release profiles). Linux
+        // CI on every PR and the weekly `platforms` workflow (Windows, macOS) confirm it
+        // elsewhere.
         assert_eq!(
             sha256_hex(&png),
             "c6337f9e9bb3d463ba577fb8dccfa14c425fe2e6fca2e4199ee06d134bd3e419"

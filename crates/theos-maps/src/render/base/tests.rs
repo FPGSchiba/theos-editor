@@ -1,11 +1,12 @@
 use theos_map_format::sha256_hex;
+use tiny_skia::Pixmap;
 
+use super::{Ground, Layers, draw_rivers, fill_lakes, paint_ground};
 use crate::grid::Grid;
 use crate::kernels::num::{to_f64, to_index};
 use crate::progress::CancelToken;
-use crate::render::RenderError;
-use crate::render::palette;
 use crate::render::test_support::{TestResult, TestWorld, decode, pixel};
+use crate::render::{RenderError, canvas, palette};
 use crate::stages::terrain::rocks::Rock;
 use crate::world::Layer;
 
@@ -63,6 +64,76 @@ fn a_render_stops_on_cancel() {
         w.draw("base", &cancel),
         Err(RenderError::Cancelled)
     ));
+}
+
+/// A cancel check that lets `n` rows (or lines) through and then reports a cancel, as the
+/// run's token would when it is set while a pass runs.
+fn cancel_after(n: usize) -> impl FnMut() -> Result<(), RenderError> {
+    let mut passed = 0;
+    move || {
+        if passed < n {
+            passed += 1;
+            Ok(())
+        } else {
+            Err(RenderError::Cancelled)
+        }
+    }
+}
+
+/// Whether each pixel row of `pixmap` has been drawn at column `x`.
+fn drawn_rows(pixmap: &Pixmap, x: u32) -> Vec<bool> {
+    (0..pixmap.height())
+        .map(|y| pixmap.pixel(x, y).is_some_and(|p| p.alpha() > 0))
+        .collect()
+}
+
+#[test]
+fn every_row_and_line_checks_for_cancel() -> TestResult {
+    // 4 x 4 cells of 50 m, 8 x 8 pixels; all lake; rivers along pixel rows 0-1 and 6-7.
+    let mut w = TestWorld::flat(4, 4, 50.0);
+    w.lake(0..4, 0..4);
+    w.river(&[[0.0, 25.0], [200.0, 25.0]], 50.0);
+    w.river(&[[0.0, 175.0], [200.0, 175.0]], 50.0);
+    let cancel = CancelToken::new();
+    let input = w.input(&cancel);
+    let layers = Layers::read(&input)?;
+    let frame = *w.world.frame();
+    let ground = Ground::new(&layers, &frame, &w.features);
+    let cancelled = |r: Result<(), RenderError>| matches!(r, Err(RenderError::Cancelled));
+
+    // The ground pass stops after two rows: they are painted, the rest is still empty.
+    let mut p = canvas::pixmap(&frame)?;
+    assert!(cancelled(paint_ground(&mut p, &ground, cancel_after(2))));
+    let first_two = [true, true, false, false, false, false, false, false];
+    assert_eq!(drawn_rows(&p, 3), first_two);
+
+    // The lake pass stops after three rows.
+    let mut p = canvas::pixmap(&frame)?;
+    assert!(cancelled(fill_lakes(&mut p, layers.lake, cancel_after(3))));
+    let first_three = [true, true, true, false, false, false, false, false];
+    assert_eq!(drawn_rows(&p, 3), first_three);
+
+    // The river pass stops after the first line: the second is not drawn.
+    let mut p = canvas::pixmap(&frame)?;
+    let rivers = &layers.water.rivers;
+    assert!(cancelled(draw_rivers(
+        &mut p,
+        rivers,
+        25.0,
+        cancel_after(1)
+    )));
+    let first_line = [true, true, false, false, false, false, false, false];
+    assert_eq!(drawn_rows(&p, 3), first_line);
+
+    // Without a cancel every pass runs to the end.
+    let mut p = canvas::pixmap(&frame)?;
+    draw_rivers(&mut p, rivers, 25.0, cancel_after(usize::MAX))?;
+    let both_lines = [true, true, false, false, false, false, true, true];
+    assert_eq!(drawn_rows(&p, 3), both_lines);
+    paint_ground(&mut p, &ground, cancel_after(usize::MAX))?;
+    fill_lakes(&mut p, layers.lake, cancel_after(usize::MAX))?;
+    assert_eq!(drawn_rows(&p, 3), [true; 8]);
+    Ok(())
 }
 
 #[test]
@@ -177,11 +248,12 @@ fn every_element() -> TestWorld {
 }
 
 #[test]
-fn base_gives_the_same_bytes_twice_and_on_every_platform() -> TestResult {
+fn base_gives_the_same_bytes_twice_and_matches_the_recorded_hash() -> TestResult {
     let w = every_element();
     let first = w.png("base")?;
     assert_eq!(w.png("base")?, first);
-    // Recorded on Windows x64 (Task 39); the scalar pipeline must give these bytes everywhere.
+    // Recorded on Windows x64 only (Task 39, rustc 1.99.1, dev and release profiles). Linux CI
+    // on every PR and the weekly `platforms` workflow (Windows, macOS) confirm it elsewhere.
     assert_eq!(
         sha256_hex(&first),
         "39d87125346c4e4fc2bea721a7efe0c4426c852fbe805cddcf4a26e91422772b"

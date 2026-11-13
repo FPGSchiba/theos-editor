@@ -11,7 +11,8 @@
 //! 3. **Lakes** from `lake`, per pixel, flat and last: every pixel of a lake cell is exactly the
 //!    lake colour, whatever was drawn under it.
 //!
-//! The run's cancel token is checked before each step and on every pixel row.
+//! The run's cancel token is checked at the start, on every pixel row of the ground and lake
+//! passes and before every river line.
 
 #[cfg(test)]
 mod tests;
@@ -23,10 +24,12 @@ use super::farmland::{self, FarmRow, Farmland};
 use super::palette::{self, Rgb, Unit};
 use super::shade::shading;
 use super::{RenderError, RenderInput};
+use crate::features::FeatureSet;
 use crate::grid::Grid;
 use crate::kernels::diff::slope;
 use crate::kernels::num::{max, smoothstep};
 use crate::stages::terrain::hydrology::{RiverLine, WaterFeatures};
+use crate::world::MapFrame;
 
 /// The narrowest river line, pixels (three quarters of a cell): rivers are a few metres wide,
 /// far below a pixel of a map of 50-100 m cells, and must stay visible.
@@ -105,14 +108,29 @@ fn ground_colour(rock: Unit, slope: f64, vegetation: f64, snow: f64, farm: (f64,
     palette::mix(c, unit(palette::SNOW), snow)
 }
 
-/// Paints every pixel with its ground colour, checking `input`'s cancel token on every row.
+impl<'a> Ground<'a> {
+    /// The ground fields of `layers` on `frame`, with the farmland of `features`.
+    fn new(layers: &Layers<'a>, frame: &MapFrame, features: &FeatureSet) -> Self {
+        Self {
+            rock: layers.rock.map(|code| palette::unit(palette::rock(code))),
+            slope: slope(layers.height, frame.cell_m),
+            shading: shading(layers.height, frame.cell_m),
+            vegetation: layers.vegetation,
+            snow: layers.snow,
+            farmland: Farmland::new(features, canvas::metres_per_px(frame)),
+        }
+    }
+}
+
+/// Paints every pixel with its ground colour, calling `check` before every row; an error from
+/// `check` (the run's cancel) stops the pass.
 fn paint_ground(
     pixmap: &mut Pixmap,
     ground: &Ground<'_>,
-    input: &RenderInput<'_>,
+    mut check: impl FnMut() -> Result<(), RenderError>,
 ) -> Result<(), RenderError> {
     for (y, row) in canvas::rows_mut(pixmap).enumerate() {
-        input.check_cancel()?;
+        check()?;
         let farms = ground.farmland.row(y);
         for (x, px) in row.iter_mut().enumerate() {
             canvas::put(px, ground.colour(y, x, &farms));
@@ -121,16 +139,16 @@ fn paint_ground(
     Ok(())
 }
 
-/// Draws `rivers` (metres) on pixels of `metres_per_px`, checking the cancel token per line.
+/// Draws `rivers` (metres) on pixels of `metres_per_px`, calling `check` before every line.
 fn draw_rivers(
     pixmap: &mut Pixmap,
     rivers: &[RiverLine],
     metres_per_px: f64,
-    input: &RenderInput<'_>,
+    mut check: impl FnMut() -> Result<(), RenderError>,
 ) -> Result<(), RenderError> {
     let px = |p: &[f64; 3]| [p[0] / metres_per_px, p[1] / metres_per_px];
     for line in rivers {
-        input.check_cancel()?;
+        check()?;
         for (ends, widths) in line.points.windows(2).zip(line.width_m.windows(2)) {
             let width = max(
                 f64::midpoint(widths[0], widths[1]) / metres_per_px,
@@ -142,14 +160,14 @@ fn draw_rivers(
     Ok(())
 }
 
-/// Paints every pixel of a `lake` cell in the lake colour, checking the cancel token per row.
+/// Paints every pixel of a `lake` cell in the lake colour, calling `check` before every row.
 fn fill_lakes(
     pixmap: &mut Pixmap,
     lake: &Grid<bool>,
-    input: &RenderInput<'_>,
+    mut check: impl FnMut() -> Result<(), RenderError>,
 ) -> Result<(), RenderError> {
     for (y, row) in canvas::rows_mut(pixmap).enumerate() {
-        input.check_cancel()?;
+        check()?;
         let r = y / PX_PER_CELL;
         for (x, px) in row.iter_mut().enumerate() {
             if lake.get(r, x / PX_PER_CELL) {
@@ -166,17 +184,11 @@ pub(crate) fn base(input: &RenderInput<'_>) -> Result<Pixmap, RenderError> {
     let layers = Layers::read(input)?;
     let frame = *input.world.frame();
     let mut pixmap = canvas::pixmap(&frame)?;
+    let ground = Ground::new(&layers, &frame, input.features);
+    let check = || input.check_cancel();
+    paint_ground(&mut pixmap, &ground, check)?;
     let metres_per_px = canvas::metres_per_px(&frame);
-    let ground = Ground {
-        rock: layers.rock.map(|code| palette::unit(palette::rock(code))),
-        slope: slope(layers.height, frame.cell_m),
-        shading: shading(layers.height, frame.cell_m),
-        vegetation: layers.vegetation,
-        snow: layers.snow,
-        farmland: Farmland::new(input.features, metres_per_px),
-    };
-    paint_ground(&mut pixmap, &ground, input)?;
-    draw_rivers(&mut pixmap, &layers.water.rivers, metres_per_px, input)?;
-    fill_lakes(&mut pixmap, layers.lake, input)?;
+    draw_rivers(&mut pixmap, &layers.water.rivers, metres_per_px, check)?;
+    fill_lakes(&mut pixmap, layers.lake, check)?;
     Ok(pixmap)
 }

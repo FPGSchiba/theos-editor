@@ -114,16 +114,21 @@ impl TestWorld {
         });
     }
 
-    /// Draws the render `name` with `cancel`.
-    pub(crate) fn draw(&self, name: &str, cancel: &CancelToken) -> Result<Pixmap, RenderError> {
-        let draw = render(name).unwrap();
-        draw(&RenderInput {
+    /// The input of a render of this world with `cancel`, no options and no title.
+    pub(crate) fn input<'a>(&'a self, cancel: &'a CancelToken) -> RenderInput<'a> {
+        RenderInput {
             world: &self.world,
             features: &self.features,
             options: None,
             cancel,
             title: String::new(),
-        })
+        }
+    }
+
+    /// Draws the render `name` with `cancel`.
+    pub(crate) fn draw(&self, name: &str, cancel: &CancelToken) -> Result<Pixmap, RenderError> {
+        let draw = render(name).unwrap();
+        draw(&self.input(cancel))
     }
 
     /// The render `name` as PNG bytes.
