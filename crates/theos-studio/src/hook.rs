@@ -1,5 +1,6 @@
-//! Installing git's `pre-commit` hook for a content project (spec §5.8): the hooks folder, whether
-//! it may be written, whether an existing hook is ours, and the backup.
+//! Installing git's `pre-commit` and `pre-merge-commit` hooks for a content project (spec §5.8):
+//! the hooks folder, whether they may be written, whether an existing hook is ours, and the
+//! backups.
 
 use std::path::{Component, Path, PathBuf};
 
@@ -11,12 +12,31 @@ use crate::top::repo_top;
 /// The marker line every hook of ours holds.
 pub const MARKER: &str = "# theos pre-commit hook";
 
-/// The name of a foreign hook that `--force` keeps.
-const BACKUP: &str = "pre-commit.before-theos";
+/// The hook git runs before `git commit` records a commit.
+const PRE_COMMIT: &str = "pre-commit";
 
-/// What an install did.
+/// The hook git runs before `git merge` records a merge commit; `pre-commit` does not run then.
+const PRE_MERGE_COMMIT: &str = "pre-merge-commit";
+
+/// What `--force` appends to the name of a foreign hook it keeps.
+const BACKUP_SUFFIX: &str = ".before-theos";
+
+/// What an install did. The fields of `Installed` itself are those of `pre-commit`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Installed {
+    /// The `pre-commit` file.
+    pub hook: PathBuf,
+    /// Whether an earlier `pre-commit` of ours for the same project was replaced.
+    pub replaced: bool,
+    /// Where the foreign `pre-commit` was kept, with `force`.
+    pub backup: Option<PathBuf>,
+    /// The `pre-merge-commit` file, with the same script.
+    pub pre_merge_commit: HookFile,
+}
+
+/// What an install did to one hook file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HookFile {
     /// The hook file.
     pub hook: PathBuf,
     /// Whether an earlier hook of ours for the same project was replaced.
@@ -43,11 +63,12 @@ pub enum HookError {
         /// The repository's (common) git folder.
         git_folder: PathBuf,
     },
-    /// A `pre-commit` exists that is not ours for this project.
+    /// A hook file exists that is not ours for this project.
     #[error(
-        "`{}` exists and is not theos's hook for this project; --force keeps it as \
-         pre-commit.before-theos",
-        path.display()
+        "`{}` exists and is not theos's hook for this project; --force keeps it as {}{}",
+        path.display(),
+        path.file_name().unwrap_or_default().display(),
+        BACKUP_SUFFIX
     )]
     Foreign {
         /// The existing hook.
@@ -70,13 +91,16 @@ pub enum HookError {
     },
 }
 
-/// Writes the `pre-commit` hook of the project at `project_root`, which checks the staged
-/// snapshot with the `theos` at `theos` and falls back to `theos` on the `PATH`.
+/// Writes the hooks of the project at `project_root`, which check the staged snapshot with the
+/// `theos` at `theos` and fall back to `theos` on the `PATH`: `pre-commit` for `git commit` and
+/// `pre-merge-commit`, with the same script, for the merge commit of `git merge`. Cherry-pick,
+/// rebase and revert run neither hook.
 ///
-/// An existing hook with the marker and the same project folder is replaced. Any other hook, a
-/// symbolic link included whatever it points to, is [`HookError::Foreign`], unless `force` keeps
-/// it as `pre-commit.before-theos`. Nothing is written, and no folder created, when a check
-/// refuses, and nothing is read or written through a link.
+/// Each file is judged on its own. An existing hook with the marker and the same project folder
+/// is replaced. Any other hook, a symbolic link included whatever it points to, is
+/// [`HookError::Foreign`], unless `force` keeps it as `<name>.before-theos`. Both files are
+/// judged before anything is renamed or written, so nothing is written, and no folder created,
+/// when a check refuses either file. Nothing is read or written through a link.
 ///
 /// # Errors
 ///
@@ -104,32 +128,57 @@ pub fn install_hook(
         })?
         .replace('\\', "/");
     let text = script(&theos, folder);
-    let hook = hooks.join("pre-commit");
-    let mut installed = Installed {
-        hook: hook.clone(),
+    let pre_commit = judge(&hooks, PRE_COMMIT, folder, force)?;
+    let pre_merge_commit = judge(&hooks, PRE_MERGE_COMMIT, folder, force)?;
+    std::fs::create_dir_all(&hooks).map_err(|source| io(&hooks, source))?;
+    for file in [&pre_commit, &pre_merge_commit] {
+        write(file, &text)?;
+    }
+    Ok(Installed {
+        hook: pre_commit.hook,
+        replaced: pre_commit.replaced,
+        backup: pre_commit.backup,
+        pre_merge_commit,
+    })
+}
+
+/// Judges the hook file `name` in `hooks` without changing anything: what installing ours for
+/// `folder` does to it, or why it is refused.
+fn judge(hooks: &Path, name: &str, folder: &str, force: bool) -> Result<HookFile, HookError> {
+    let hook = hooks.join(name);
+    let mut file = HookFile {
+        hook,
         replaced: false,
         backup: None,
     };
-    if present(&hook) {
-        // A link is never ours: reading or writing through it would reach the file it points
-        // to, which may be tracked. `force` moves the link itself away.
-        if !is_link(&hook) && is_ours(&hook, folder) {
-            installed.replaced = true;
-        } else if !force {
-            return Err(HookError::Foreign { path: hook }.into());
-        } else {
-            let backup = hooks.join(BACKUP);
-            if present(&backup) {
-                return Err(HookError::BackupExists { path: backup }.into());
-            }
-            std::fs::rename(&hook, &backup).map_err(|source| io(&hook, source))?;
-            installed.backup = Some(backup);
-        }
+    if !present(&file.hook) {
+        return Ok(file);
     }
-    std::fs::create_dir_all(&hooks).map_err(|source| io(&hooks, source))?;
-    std::fs::write(&hook, text).map_err(|source| io(&hook, source))?;
-    make_executable(&hook).map_err(|source| io(&hook, source))?;
-    Ok(installed)
+    // A link is never ours: reading or writing through it would reach the file it points to,
+    // which may be tracked. `force` moves the link itself away.
+    if !is_link(&file.hook) && is_ours(&file.hook, folder) {
+        file.replaced = true;
+    } else if !force {
+        return Err(HookError::Foreign { path: file.hook });
+    } else {
+        let backup = hooks.join(format!("{name}{BACKUP_SUFFIX}"));
+        if present(&backup) {
+            return Err(HookError::BackupExists { path: backup });
+        }
+        file.backup = Some(backup);
+    }
+    Ok(file)
+}
+
+/// Does what [`judge`] decided for `file`: keeps a foreign hook as its backup, then writes
+/// `text` and makes the hook executable.
+fn write(file: &HookFile, text: &str) -> Result<(), StudioError> {
+    let hook = &file.hook;
+    if let Some(backup) = &file.backup {
+        std::fs::rename(hook, backup).map_err(|source| io(hook, source))?;
+    }
+    std::fs::write(hook, text).map_err(|source| io(hook, source))?;
+    make_executable(hook).map_err(|source| io(hook, source))
 }
 
 /// Whether something is at `path`, a dangling symbolic link included.

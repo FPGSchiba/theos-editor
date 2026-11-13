@@ -10,6 +10,7 @@ use crate::common::{Error, Sandbox, TestResult, staged_project, stderr, variant}
 const C901: &str = "lore/clues/C-901.md";
 const C900: &str = "lore/clues/C-900.md";
 const T900: &str = "lore/truths/T-900.md";
+const T901: &str = "lore/truths/T-901.md";
 const SETTINGS: &str = ".theos/settings.toml";
 const NOTES: &str = "notes.txt";
 const SUBFOLDER: &str = "[draft] Inhalt ä";
@@ -122,6 +123,13 @@ impl<'a> Repo<'a> {
         }
         args.extend(["commit", "-q", "-m", message]);
         self.counted(&args, &self.top, &env)
+    }
+
+    /// `git merge --no-edit <branch>` from the project folder.
+    fn merge(&self, branch: &str) -> Result<Committed, Error> {
+        let mut args = IDENTITY.to_vec();
+        args.extend(["merge", "--no-edit", branch]);
+        self.counted(&args, &self.project, &[])
     }
 
     /// Runs git with `args` in `cwd`, with `env` on top of the isolation, and counts the commits
@@ -422,6 +430,60 @@ fn a_project_in_a_subfolder_commits_through_its_hook() -> TestResult {
     repo.stage(C901, &variant("C-901.md")?)?;
     repo.commit(&["-m", "violation"], &[])?
         .assert_refused("lore/never-confirm", C901);
+    Ok(())
+}
+
+/// A repository with the hook, a base commit in which T-901's target is `suspected`, and since
+/// then one commit through the hook on `main` (`on_main`, a path and its text) and one on the
+/// branch `b` (`on_b`). `main` is checked out.
+fn diverged<'a>(
+    sandbox: &'a Sandbox,
+    on_main: (&str, &str),
+    on_b: (&str, &str),
+) -> Result<Repo<'a>, Error> {
+    let repo = Repo::with_hook(sandbox, "")?;
+    let suspected = read(&repo.project.join(T901))?.replace("target: never", "target: suspected");
+    repo.stage(T901, &suspected)?;
+    repo.commit(&["-m", "base"], &[])?.assert_commits();
+    repo.git_ok(&["checkout", "-q", "-b", "b"])?;
+    repo.stage(on_b.0, on_b.1)?;
+    repo.commit(&["-m", "on b"], &[])?.assert_commits();
+    repo.git_ok(&["checkout", "-q", "main"])?;
+    repo.stage(on_main.0, on_main.1)?;
+    repo.commit(&["-m", "on main"], &[])?.assert_commits();
+    Ok(repo)
+}
+
+// `git merge` runs `pre-merge-commit`, not `pre-commit`. `main` sets T-901's target back to
+// `never`, `b` adds C-901, which hints at T-901: each passes the hook, their merge does not.
+// AC: CE-17.2
+#[test]
+fn a_merge_into_a_never_confirm_violation_is_refused() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let never = read(&staged_project().join(T901))?;
+    let repo = diverged(&sandbox, (T901, &never), (C901, &variant("C-901.md")?))?;
+    let merged = repo.merge("b")?;
+    merged.assert_refused("lore/never-confirm", C901);
+    merged.assert_finding(C901, "error lore/never-confirm");
+    Ok(())
+}
+
+// The hook judges the merged snapshot and lets it through with its warnings.
+// AC: CE-17.2
+#[test]
+fn a_clean_merge_commits() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let never = read(&staged_project().join(T901))?;
+    let repo = diverged(&sandbox, (T901, &never), (NOTES, "Synthetic note.\n"))?;
+    let merged = repo.merge("b")?;
+    let text = stderr(&merged.output);
+    assert!(merged.output.status.success(), "{text}");
+    assert_eq!(
+        merged.before + 2,
+        merged.after,
+        "b's commit and the merge: {text}"
+    );
+    merged.assert_finding(T900, "warning lore/three-clue");
     Ok(())
 }
 

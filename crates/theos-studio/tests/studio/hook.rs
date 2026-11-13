@@ -26,6 +26,13 @@ fn pre_commit(repo: &Repo) -> PathBuf {
     repo.top().join(".git").join("hooks").join("pre-commit")
 }
 
+fn pre_merge_commit(repo: &Repo) -> PathBuf {
+    repo.top()
+        .join(".git")
+        .join("hooks")
+        .join("pre-merge-commit")
+}
+
 fn hook_error(
     result: Result<theos_studio::hook::Installed, StudioError>,
 ) -> Result<HookError, Error> {
@@ -49,6 +56,114 @@ fn a_reinstall_replaces_its_own_hook() -> TestResult {
     assert!(again.replaced);
     assert_eq!(again.backup, None);
     assert_eq!(std::fs::read_to_string(&again.hook)?, text);
+    Ok(())
+}
+
+// git runs `pre-commit` for `git commit` and `pre-merge-commit` for the merge commit of
+// `git merge`, so both get the same script.
+#[test]
+fn both_hooks_are_written_with_the_same_script() -> TestResult {
+    let repo = Repo::committed("")?;
+    let installed = install(&repo, "", false)?;
+    assert_eq!(installed.hook, pre_commit(&repo));
+    let merge = &installed.pre_merge_commit;
+    assert_eq!(merge.hook, pre_merge_commit(&repo));
+    assert!(!merge.replaced);
+    assert_eq!(merge.backup, None);
+    let text = std::fs::read_to_string(&installed.hook)?;
+    assert!(text.contains(MARKER));
+    assert_eq!(std::fs::read_to_string(&merge.hook)?, text);
+    Ok(())
+}
+
+#[test]
+fn a_reinstall_replaces_both_hooks() -> TestResult {
+    let repo = Repo::committed("")?;
+    install(&repo, "", false)?;
+    let text = std::fs::read_to_string(pre_merge_commit(&repo))?;
+    let again = install(&repo, "", false)?;
+    assert!(again.replaced);
+    assert!(again.pre_merge_commit.replaced);
+    assert_eq!(again.pre_merge_commit.backup, None);
+    assert_eq!(std::fs::read_to_string(pre_merge_commit(&repo))?, text);
+    assert_eq!(std::fs::read_to_string(pre_commit(&repo))?, text);
+    Ok(())
+}
+
+// Every check runs before anything is written: a refused `pre-merge-commit` leaves `pre-commit`
+// unwritten.
+#[test]
+fn a_foreign_pre_merge_commit_alone_refuses_and_writes_nothing() -> TestResult {
+    let repo = Repo::committed("")?;
+    std::fs::create_dir_all(repo.top().join(".git").join("hooks"))?;
+    std::fs::write(pre_merge_commit(&repo), "#!/bin/sh\necho mine\n")?;
+    let error = hook_error(install(&repo, "", false))?;
+    assert!(
+        matches!(error, HookError::Foreign { ref path } if path.ends_with("pre-merge-commit")),
+        "{error:?}"
+    );
+    assert!(
+        error.to_string().contains("pre-merge-commit.before-theos"),
+        "{error}"
+    );
+    assert!(!pre_commit(&repo).exists(), "half installed");
+    assert_eq!(
+        std::fs::read_to_string(pre_merge_commit(&repo))?,
+        "#!/bin/sh\necho mine\n"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_foreign_pre_commit_alone_leaves_pre_merge_commit_unwritten() -> TestResult {
+    let repo = Repo::committed("")?;
+    std::fs::create_dir_all(repo.top().join(".git").join("hooks"))?;
+    std::fs::write(pre_commit(&repo), "#!/bin/sh\necho mine\n")?;
+    let error = hook_error(install(&repo, "", false))?;
+    assert!(matches!(error, HookError::Foreign { ref path } if path.ends_with("pre-commit")));
+    assert!(!pre_merge_commit(&repo).exists(), "half installed");
+    Ok(())
+}
+
+#[test]
+fn force_keeps_a_foreign_pre_merge_commit_as_a_backup() -> TestResult {
+    let repo = Repo::committed("")?;
+    let hooks = repo.top().join(".git").join("hooks");
+    std::fs::create_dir_all(&hooks)?;
+    std::fs::write(pre_merge_commit(&repo), "#!/bin/sh\necho mine\n")?;
+    let installed = install(&repo, "", true)?;
+    assert_eq!(installed.backup, None);
+    let backup = installed.pre_merge_commit.backup.ok_or("no backup named")?;
+    assert_eq!(backup, hooks.join("pre-merge-commit.before-theos"));
+    assert_eq!(std::fs::read_to_string(&backup)?, "#!/bin/sh\necho mine\n");
+    assert!(std::fs::read_to_string(pre_merge_commit(&repo))?.contains(MARKER));
+    assert!(std::fs::read_to_string(pre_commit(&repo))?.contains(MARKER));
+    Ok(())
+}
+
+// The refused backup of `pre-merge-commit` also keeps `--force` from renaming the foreign
+// `pre-commit`.
+#[test]
+fn an_existing_pre_merge_commit_backup_stops_force() -> TestResult {
+    let repo = Repo::committed("")?;
+    let hooks = repo.top().join(".git").join("hooks");
+    std::fs::create_dir_all(&hooks)?;
+    std::fs::write(pre_commit(&repo), "foreign\n")?;
+    std::fs::write(pre_merge_commit(&repo), "foreign merge\n")?;
+    let kept = hooks.join("pre-merge-commit.before-theos");
+    std::fs::write(&kept, "old backup\n")?;
+    let error = hook_error(install(&repo, "", true))?;
+    assert!(
+        matches!(error, HookError::BackupExists { ref path } if *path == kept),
+        "{error:?}"
+    );
+    assert_eq!(std::fs::read_to_string(pre_commit(&repo))?, "foreign\n");
+    assert!(!hooks.join("pre-commit.before-theos").exists());
+    assert_eq!(
+        std::fs::read_to_string(pre_merge_commit(&repo))?,
+        "foreign merge\n"
+    );
+    assert_eq!(std::fs::read_to_string(&kept)?, "old backup\n");
     Ok(())
 }
 

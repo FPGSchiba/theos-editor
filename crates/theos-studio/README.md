@@ -16,7 +16,7 @@ prints and that later phases serve again. The rest arrives in P06, P07 and later
 | `check_staged` | Judges the snapshot git would commit, read through `theos-vcs`, and returns a `StagedCheck`: `blocks()`, `errors()`, `warnings()`. Paths are judged as git's index spells them, also when the disk spells a file or the project folder otherwise (a case-only rename). The working tree, the cache on disk and the repository stay as they are, and no lock is taken |
 | `introduced` | The error findings a change introduces beyond the counts a `FindingCounts` allows per path and rule; `create` uses it to refuse a record |
 | `create` | Makes a new record from the template of its kind, and writes it only when it introduces no error |
-| `install_hook` | Writes git's pre-commit hook, which runs `theos check --staged` |
+| `install_hook` | Writes git's `pre-commit` hook, which runs `theos check --staged`, and the same script as `pre-merge-commit` for the merge commit of `git merge`; both files are judged before either is written |
 | `user_settings` | Reads where the user settings are and the `binaries_root` they name |
 | `schema` | The kinds and rules as data |
 | `views` | The JSON shapes of check, ledger, new, schema and hook results; every key is always present, an absent value is `null` |

@@ -9,7 +9,8 @@
 //! binaries-folder warnings, [`user_settings`], which reads where that folder is, and the JSON
 //! [`views`] of findings, the [`schema`] of kinds and rules, and
 //! [`create()`](create::create), which makes a new record from its template and writes it only
-//! when it introduces no error, and [`hook::install_hook`], which writes git's pre-commit hook.
+//! when it introduces no error, and [`hook::install_hook`], which writes git's `pre-commit` and
+//! `pre-merge-commit` hooks.
 //! P06 adds the command layer and the repo lock as further `impl` blocks of [`Workspace`]; the
 //! rest arrives in P07 and later phases.
 

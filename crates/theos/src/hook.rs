@@ -1,4 +1,5 @@
-//! `theos hook install`: git's pre-commit hook for the project (spec §5.8).
+//! `theos hook install`: git's `pre-commit` and `pre-merge-commit` hooks for the project (spec
+//! §5.8).
 
 use std::io::Write;
 use std::path::Path;
@@ -10,9 +11,9 @@ use theos_vcs::Git;
 
 use crate::{Exit, output};
 
-/// Installs the hook of the project at `folder` (the project above the current folder by
-/// default, see [`output::project_root`]) and prints its path, plus the backup it kept, or one
-/// JSON document.
+/// Installs the hooks of the project at `folder` (the project above the current folder by
+/// default, see [`output::project_root`]) and prints the path of `pre-commit`, then that of
+/// `pre-merge-commit`, then each backup it kept, or one JSON document.
 ///
 /// # Errors
 ///
@@ -30,8 +31,11 @@ pub(crate) fn run(
     if json {
         output::json(out, &HookView::from(&installed))?;
     } else {
-        writeln!(out, "{}", installed.hook.display()).context("cannot write the output")?;
-        if let Some(backup) = &installed.backup {
+        let merge = &installed.pre_merge_commit;
+        for hook in [&installed.hook, &merge.hook] {
+            writeln!(out, "{}", hook.display()).context("cannot write the output")?;
+        }
+        for backup in [&installed.backup, &merge.backup].into_iter().flatten() {
             writeln!(out, "kept the earlier hook as {}", backup.display())
                 .context("cannot write the output")?;
         }

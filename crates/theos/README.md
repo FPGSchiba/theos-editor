@@ -26,8 +26,11 @@ theos hook install [<folder>] [--force] [--json]
   in the folder where the kind belongs. Without a template it starts from a skeleton: `id`,
   `kind`, `title` and `status: draft` where the kind has them, and an empty body. It writes
   nothing when the record would introduce an error.
-- `hook install` writes git's `pre-commit` hook, which runs `theos check --staged`. A hook that is
-  not ours is refused unless `--force` keeps it as `pre-commit.before-theos`.
+- `hook install` writes git's `pre-commit` hook, which runs `theos check --staged`, and the same
+  script as `pre-merge-commit`, which git runs instead for the merge commit of `git merge`. It
+  prints the path of each, then any backup. A hook that is not ours is refused unless `--force`
+  keeps it as `<hook>.before-theos`; when either file is refused, neither is written.
+  Cherry-pick, rebase and revert run neither hook.
 
 A `<folder>` or `--project` given is the project root and must hold `theos.toml` (else exit 2).
 Without one, the project is the nearest folder at or above the current one that holds
@@ -61,4 +64,4 @@ matcher reads these lines, so the format does not change without it.
 ## Tests
 
 `tests/cli/` runs the binary against the fixture project in `../theos-studio/tests/fixtures/`,
-including commits through the installed hook. `tests/smoke.rs` runs `theos` without arguments.
+including commits and merges through the installed hooks. `tests/smoke.rs` runs `theos` without arguments.

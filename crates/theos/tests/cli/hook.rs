@@ -17,6 +17,83 @@ fn hook_of(top: &std::path::Path) -> PathBuf {
     top.join(".git").join("hooks").join("pre-commit")
 }
 
+fn merge_hook_of(top: &std::path::Path) -> PathBuf {
+    top.join(".git").join("hooks").join("pre-merge-commit")
+}
+
+/// The keys of a JSON object, sorted.
+fn keys(value: &Value) -> Vec<&str> {
+    let mut keys: Vec<&str> = value
+        .as_object()
+        .map(|object| object.keys().map(String::as_str).collect())
+        .unwrap_or_default();
+    keys.sort_unstable();
+    keys
+}
+
+// AC: CE-17.1
+#[test]
+fn theos_hook_install_prints_both_hooks() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let top = repository(&sandbox)?;
+    let output = sandbox.run(&["hook", "install"], &top)?;
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    let printed = stdout(&output);
+    let lines: Vec<&str> = printed.lines().collect();
+    assert_eq!(lines.len(), 2, "{printed}");
+    assert_eq!(
+        std::fs::canonicalize(lines[0])?,
+        std::fs::canonicalize(hook_of(&top))?
+    );
+    assert_eq!(
+        std::fs::canonicalize(lines[1])?,
+        std::fs::canonicalize(merge_hook_of(&top))?
+    );
+    assert_eq!(
+        std::fs::read_to_string(merge_hook_of(&top))?,
+        std::fs::read_to_string(hook_of(&top))?
+    );
+    Ok(())
+}
+
+// AC: CE-17.1
+#[test]
+fn theos_hook_install_json_names_the_merge_hook() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let top = repository(&sandbox)?;
+    std::fs::create_dir_all(top.join(".git").join("hooks"))?;
+    std::fs::write(merge_hook_of(&top), "#!/bin/sh\necho mine\n")?;
+    let output = sandbox.run(&["hook", "install", "--json", "--force"], &top)?;
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    let view: Value = serde_json::from_str(&stdout(&output))?;
+    assert_eq!(
+        keys(&view),
+        ["backup", "hook", "pre_merge_commit", "replaced"]
+    );
+    assert_eq!(view["backup"], Value::Null);
+    let merge = &view["pre_merge_commit"];
+    assert_eq!(keys(merge), ["backup", "hook", "replaced"]);
+    let hook = merge["hook"].as_str().ok_or("no merge hook path")?;
+    assert!(!hook.contains(foreign_separator()), "{hook}");
+    assert_eq!(
+        std::fs::canonicalize(hook)?,
+        std::fs::canonicalize(merge_hook_of(&top))?
+    );
+    assert_eq!(merge["replaced"], false);
+    let backup = merge["backup"].as_str().ok_or("no backup named")?;
+    assert!(
+        backup.ends_with("pre-merge-commit.before-theos"),
+        "{backup}"
+    );
+    assert_eq!(std::fs::read_to_string(backup)?, "#!/bin/sh\necho mine\n");
+
+    let again = sandbox.run(&["hook", "install", "--json"], &top)?;
+    let view: Value = serde_json::from_str(&stdout(&again))?;
+    assert_eq!(view["pre_merge_commit"]["replaced"], true);
+    assert_eq!(view["pre_merge_commit"]["backup"], Value::Null);
+    Ok(())
+}
+
 // AC: CE-17.1
 #[test]
 fn theos_hook_install_writes_the_hook() -> TestResult {
@@ -33,8 +110,9 @@ fn theos_hook_install_writes_the_hook() -> TestResult {
         "{text}"
     );
     let printed = stdout(&output);
+    let first = printed.lines().next().ok_or("nothing printed")?;
     assert_eq!(
-        std::fs::canonicalize(printed.trim_end())?,
+        std::fs::canonicalize(first)?,
         std::fs::canonicalize(hook_of(&top))?
     );
     Ok(())
@@ -59,12 +137,15 @@ fn theos_hook_install_prints_the_path_with_one_separator() -> TestResult {
     assert_eq!(output.status.code(), Some(0), "{output:?}");
     let printed = stdout(&output);
     assert!(!printed.contains(foreign_separator()), "{printed}");
-    assert!(printed.ends_with("pre-commit\n"), "{printed}");
+    assert!(printed.ends_with("pre-merge-commit\n"), "{printed}");
     let again = sandbox.run(&["hook", "install", "--json"], &top)?;
     let view: Value = serde_json::from_str(&stdout(&again))?;
     let hook = view["hook"].as_str().ok_or("no hook path")?;
     assert!(!hook.contains(foreign_separator()), "{hook}");
-    assert_eq!(format!("{hook}\n"), printed);
+    let merge = view["pre_merge_commit"]["hook"]
+        .as_str()
+        .ok_or("no merge hook path")?;
+    assert_eq!(format!("{hook}\n{merge}\n"), printed);
     Ok(())
 }
 
@@ -138,6 +219,7 @@ fn theos_hook_install_force_names_the_backup() -> TestResult {
     let top = repository(&sandbox)?;
     std::fs::create_dir_all(top.join(".git").join("hooks"))?;
     std::fs::write(hook_of(&top), "#!/bin/sh\necho mine\n")?;
+    std::fs::write(merge_hook_of(&top), "#!/bin/sh\necho merge\n")?;
     let output = sandbox.run(&["hook", "install", "--force"], &top)?;
     assert_eq!(
         output.status.code(),
@@ -148,13 +230,27 @@ fn theos_hook_install_force_names_the_backup() -> TestResult {
     let printed = stdout(&output);
     assert!(!printed.contains(foreign_separator()), "{printed}");
     let lines: Vec<&str> = printed.lines().collect();
-    assert_eq!(lines.len(), 2, "{printed}");
+    assert_eq!(lines.len(), 4, "{printed}");
     assert!(lines[0].ends_with("pre-commit"), "{printed}");
-    let backup = lines[1]
-        .strip_prefix("kept the earlier hook as ")
-        .ok_or("the backup is not named")?;
-    assert!(backup.ends_with("pre-commit.before-theos"), "{printed}");
-    assert_eq!(std::fs::read_to_string(backup)?, "#!/bin/sh\necho mine\n");
+    assert!(lines[1].ends_with("pre-merge-commit"), "{printed}");
+    for (line, name, text) in [
+        (
+            lines[2],
+            "pre-commit.before-theos",
+            "#!/bin/sh\necho mine\n",
+        ),
+        (
+            lines[3],
+            "pre-merge-commit.before-theos",
+            "#!/bin/sh\necho merge\n",
+        ),
+    ] {
+        let backup = line
+            .strip_prefix("kept the earlier hook as ")
+            .ok_or("the backup is not named")?;
+        assert!(backup.ends_with(name), "{printed}");
+        assert_eq!(std::fs::read_to_string(backup)?, text);
+    }
     Ok(())
 }
 

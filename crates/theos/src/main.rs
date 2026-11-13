@@ -91,11 +91,12 @@ enum Command {
 /// What `theos hook` does.
 #[derive(Subcommand)]
 enum HookAction {
-    /// Write git's pre-commit hook, which runs `theos check --staged` on the project.
+    /// Write git's pre-commit and pre-merge-commit hooks, which run `theos check --staged` on the
+    /// project.
     Install {
         /// The project folder; the project above the current folder by default.
         folder: Option<PathBuf>,
-        /// Keep a hook that is not ours as `pre-commit.before-theos` and install ours.
+        /// Keep a hook that is not ours as `<hook>.before-theos` and install ours.
         #[arg(long)]
         force: bool,
     },
