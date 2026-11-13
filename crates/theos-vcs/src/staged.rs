@@ -109,7 +109,9 @@ fn query<T>(
 /// repository's [`Folding`] are kept, in git's spelling. A path is in `modified` when it is a
 /// regular tracked file whose work-tree copy differs from its staged version, or is gone; the
 /// bytes are the staged ones. An intent-to-add entry (`git add -N`) is in neither, since a commit
-/// leaves it out. The runner's environment, such as `GIT_INDEX_FILE`, picks the index.
+/// leaves it out, also when its file is gone; the staged changes are read a second time with
+/// `--ita-visible-in-index` to find these entries. The runner's environment, such as
+/// `GIT_INDEX_FILE`, picks the index.
 ///
 /// # Errors
 ///
@@ -119,20 +121,19 @@ pub fn read(git: &Git, folder: &Path) -> Result<Staged, GitError> {
     let top = repo::top(git, folder)?;
     let canonical = repo::place(&top, folder)?;
     let folding = Folding::read(git, &top)?;
-    let changed = query(
-        git,
-        &top,
-        &[
-            "--no-optional-locks",
-            "diff",
-            "--cached",
-            "--name-status",
-            "--no-renames",
-            "-z",
-        ],
-        None,
-        parse::name_status,
-    )?;
+    let cached = [
+        "--no-optional-locks",
+        "diff",
+        "--cached",
+        "--name-status",
+        "--no-renames",
+        "-z",
+    ];
+    let changed = query(git, &top, &cached, None, parse::name_status)?;
+    let mut visible_args = cached.to_vec();
+    visible_args.push("--ita-visible-in-index");
+    let visible = query(git, &top, &visible_args, None, parse::name_status)?;
+    let intent = intent_to_add(&changed, &visible);
     let entries = query(
         git,
         &top,
@@ -153,12 +154,6 @@ pub fn read(git: &Git, folder: &Path) -> Result<Staged, GitError> {
         None,
         parse::name_status,
     )?;
-    // In the work-tree diff only an intent-to-add entry (`git add -N`) is added: its index entry
-    // is an empty placeholder that a commit leaves out, so the snapshot leaves it out too.
-    let (intent, edited): (Vec<StagedPath>, Vec<StagedPath>) = work_tree
-        .into_iter()
-        .partition(|entry| entry.status == Status::Added);
-    let intent: HashSet<Vec<u8>> = intent.into_iter().map(|entry| entry.path).collect();
     let place = git_place(&entries, &canonical, folding);
     let tracked: Vec<Tracked> = entries
         .into_iter()
@@ -166,7 +161,7 @@ pub fn read(git: &Git, folder: &Path) -> Result<Staged, GitError> {
             folding.below(&canonical, &entry.path).is_some() && !intent.contains(&entry.path)
         })
         .collect();
-    let edited = edited.into_iter().map(|entry| entry.path).collect();
+    let edited = work_tree.into_iter().map(|entry| entry.path).collect();
     let modified = staged_bytes(git, &top, &tracked, edited)?;
     Ok(Staged {
         top,
@@ -176,6 +171,27 @@ pub fn read(git: &Git, folder: &Path) -> Result<Staged, GitError> {
         tracked,
         modified,
     })
+}
+
+/// The intent-to-add entries (`git add -N`) among the staged changes `changed` and the same
+/// changes read with `--ita-visible-in-index` (`visible`). Only such an entry tells the two apart:
+/// the default hides its empty placeholder (a new path is not listed, a path in `HEAD` is
+/// deleted), the visible read shows it (added, or modified unless `HEAD` holds an empty file). So
+/// they are the paths that only one of the two lists, or that the two list with another status.
+fn intent_to_add(changed: &[StagedPath], visible: &[StagedPath]) -> HashSet<Vec<u8>> {
+    fn statuses(list: &[StagedPath]) -> HashMap<&[u8], Status> {
+        list.iter()
+            .map(|entry| (entry.path.as_slice(), entry.status))
+            .collect()
+    }
+    let hidden = statuses(changed);
+    let shown = statuses(visible);
+    hidden
+        .keys()
+        .chain(shown.keys())
+        .filter(|path| hidden.get(*path) != shown.get(*path))
+        .map(|path| path.to_vec())
+        .collect()
 }
 
 /// The place `canonical` as the first entry below it spells it, or `canonical` when no entry
@@ -257,6 +273,38 @@ mod tests {
             mode: 0o100_644,
             object: "aaaa".to_owned(),
         }
+    }
+
+    fn change(path: &str, status: Status) -> StagedPath {
+        StagedPath {
+            path: path.as_bytes().to_vec(),
+            status,
+        }
+    }
+
+    #[test]
+    fn intent_to_add_entries_are_the_paths_the_two_reads_disagree_on() {
+        let changed = [
+            change("edited.md", Status::Modified),
+            change("in-head.md", Status::Deleted),
+            change("empty-in-head.md", Status::Deleted),
+        ];
+        let visible = [
+            change("edited.md", Status::Modified),
+            change("in-head.md", Status::Modified),
+            change("new.md", Status::Added),
+        ];
+        let mut intent: Vec<Vec<u8>> = intent_to_add(&changed, &visible).into_iter().collect();
+        intent.sort();
+        assert_eq!(
+            intent,
+            [
+                b"empty-in-head.md".to_vec(),
+                b"in-head.md".to_vec(),
+                b"new.md".to_vec()
+            ]
+        );
+        assert!(intent_to_add(&changed, &changed).is_empty());
     }
 
     #[test]

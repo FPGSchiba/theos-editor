@@ -272,6 +272,29 @@ fn an_intent_to_add_record_is_not_in_the_snapshot() -> Result {
     Ok(())
 }
 
+// The work-tree diff lists an intent-to-add entry whose file is gone as deleted; git still leaves
+// it out of the commit, whether its path is new or in `HEAD`.
+#[test]
+fn an_intent_to_add_record_deleted_on_disk_is_not_in_the_snapshot() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    Sandbox::write(&repo.join("a.md"), "one\n")?;
+    Sandbox::write(&repo.join("h.md"), "one\n")?;
+    sandbox.commit(&repo, "first")?;
+    Sandbox::write(&repo.join("b.md"), "two\n")?;
+    sandbox.run(&repo, &["add", "-N", "b.md"])?;
+    sandbox.run(&repo, &["rm", "-q", "--cached", "h.md"])?;
+    sandbox.run(&repo, &["add", "-N", "h.md"])?;
+    for file in ["b.md", "h.md"] {
+        std::fs::remove_file(repo.join(file))?;
+    }
+    let staged = read(&sandbox, &repo)?;
+    assert_eq!(tracked_paths(&staged), vec![b"a.md".as_slice()]);
+    assert_eq!(staged.modified.len(), 0, "{:?}", staged.modified);
+    assert_eq!(staged.changed, vec![changed("h.md", Status::Deleted)]);
+    Ok(())
+}
+
 #[test]
 fn a_folder_with_glob_characters_and_umlauts_is_read_literally() -> Result {
     let sandbox = Sandbox::new()?;

@@ -230,6 +230,24 @@ fn an_intent_to_add_record_does_not_block_a_clean_commit() -> TestResult {
     Ok(())
 }
 
+// Once the file of an intent-to-add entry is gone, the work tree no longer tells it apart; its
+// empty placeholder is still not a record of the commit.
+#[test]
+fn an_intent_to_add_record_deleted_on_disk_does_not_block_a_clean_commit() -> TestResult {
+    let repo = Repo::committed("")?;
+    write(&repo, "", C901, &variant("C-901.md")?)?;
+    repo.run(&["add", "-N", "--", C901])?;
+    std::fs::remove_file(repo.top().join(C901))?;
+    let result = check(&repo, "")?;
+    assert_checked(&result);
+    assert!(
+        result.findings.iter().all(|finding| finding.path != C901),
+        "{:?}",
+        result.findings
+    );
+    Ok(())
+}
+
 /// Makes git compare paths without case, as `git init` does on Windows and macOS.
 fn ignore_case(repo: &Repo) -> TestResult {
     repo.run(&["config", "core.ignorecase", "true"])?;
