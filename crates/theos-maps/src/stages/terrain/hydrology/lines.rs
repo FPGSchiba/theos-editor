@@ -9,9 +9,10 @@
 //! end of the river. A line needs two cells.
 //!
 //! Rivers end at lake shores and outlets start new lines (spec ruling 34): a line whose receiver
-//! is a lake cell gets a last vertex halfway between its last cell and that lake cell, where
-//! `kernels::contour::rings` puts the shore, and a line that starts where a lake spills gets a
-//! first vertex halfway between the exit cell and its first cell. Both carry the discharge of
+//! is a lake cell gets a last vertex where `kernels::contour::rings` puts the shore between its
+//! last cell and that lake cell, and a line that starts where a lake spills gets a
+//! first vertex where the ring crosses the line between them (halfway for neighbours that share
+//! an edge, see `shore_fraction` for diagonals). Both carry the discharge of
 //! the river cell next to them. A tributary's last vertex is the confluence cell and carries
 //! the confluence's total discharge, as the first vertex of the downstream line does.
 
@@ -148,15 +149,34 @@ fn bilinear(height: &Grid<f64>, x: f64, y: f64, cell_m: f64) -> f64 {
     top * (1.0 - fr) + bottom * fr
 }
 
-/// The cells of the lakes of `water`.
-fn lake_cells(water: &Water, len: usize) -> Vec<bool> {
-    let mut lake = vec![false; len];
+/// The number of the lake of every cell (0 for none).
+fn lake_ids(water: &Water, len: usize) -> Vec<u32> {
+    let mut ids = vec![0; len];
     for l in water.basins.iter().filter_map(|b| b.lake.as_ref()) {
         for &c in &l.cells {
-            lake[c] = true;
+            ids[c] = l.id;
         }
     }
-    lake
+    ids
+}
+
+/// Where the ring of a lake crosses the line from the centre of river cell `river` to the centre
+/// of the lake cell `lake` (cells `(r, c)`, the lake cell's number `id` in `ids` on a grid of
+/// `cols` columns), as the fraction of that line from the river cell. `kernels::contour` cuts a
+/// quad edge between an inside and an outside cell at its midpoint, so for cells that share an
+/// edge it is 0.5. For diagonal neighbours the quad is never a saddle (the two diagonal cells
+/// differ), and the ring crosses the diagonal once: at 0.75 when none of the two shared cells
+/// belongs to the lake (the corner of the lake cell is cut), at 0.5 when one does, and at 0.25
+/// when both do (the corner of the river cell is cut).
+fn shore_fraction(ids: &[u32], cols: usize, river: usize, lake: usize) -> f64 {
+    let (rr, rc) = (river / cols, river % cols);
+    let (lr, lc) = (lake / cols, lake % cols);
+    if rr == lr || rc == lc {
+        return 0.5;
+    }
+    let shared = [rr * cols + lc, lr * cols + rc];
+    let same = shared.iter().filter(|&&c| ids[c] == ids[lake]).count();
+    0.75 - 0.25 * to_f64(same)
 }
 
 /// For every cell, the lake cell where a lake spills into it: the exit of a lake that passes
@@ -189,18 +209,19 @@ pub(crate) fn lines(
     let drainage = &water.routing.drainage;
     let orders = strahler(&drainage.receivers, &drainage.order, river.as_slice());
     let discharge = &water.routing.discharge;
-    let lake = lake_cells(water, river.len());
+    let lake = lake_ids(water, river.len());
     let outlets = outlet_donors(water, river.as_slice(), river.len());
     let centre = |i: usize| {
         let (r, c) = river.cell(i);
         [(to_f64(c) + 0.5) * cell_m, (to_f64(r) + 0.5) * cell_m]
     };
     // The shore vertex between river cell `i` and lake cell `lake`, with `i`'s discharge.
-    let shore = |i: usize, lake: usize| {
-        let (a, b) = (centre(i), centre(lake));
+    let shore = |i: usize, lake_cell: usize| {
+        let (a, b) = (centre(i), centre(lake_cell));
+        let t = shore_fraction(&lake, river.cols(), i, lake_cell);
         [
-            f64::midpoint(a[0], b[0]),
-            f64::midpoint(a[1], b[1]),
+            a[0] + t * (b[0] - a[0]),
+            a[1] + t * (b[1] - a[1]),
             discharge.as_slice()[i],
         ]
     };
@@ -216,7 +237,7 @@ pub(crate) fn lines(
                 [x, y, discharge.as_slice()[i]]
             }));
             let to = water.routing.drainage.receivers[last];
-            if to != last && lake[to] {
+            if to != last && lake[to] != 0 {
                 raw.push(shore(last, to));
             }
             let smooth = chaikin(&chaikin(&raw));
@@ -539,5 +560,87 @@ mod tests {
             }
         }
         assert!(inflows > 0 && outflows == 1, "{inflows} in, {outflows} out");
+    }
+
+    /// A 5 x 5 world with lake 1 on cell (2, 2) and, by `shared`, on the cells (1, 2) and (2, 1)
+    /// next to it. In both cases the river cell (1, 1) touches the lake cell (2, 2) diagonally.
+    /// With `inflow` the river runs (1, 0) -> (1, 1) -> lake; otherwise the lake spills from
+    /// (2, 2) into (1, 1), which flows on to (1, 0).
+    fn diagonal(shared: usize, inflow: bool) -> (Water, Grid<bool>) {
+        use crate::stages::terrain::hydrology::discharge::{Drainage, Routing};
+        use crate::stages::terrain::hydrology::lakes::{Balance, Basin, Depression, Lake};
+        let n = 5;
+        let at = |r: usize, c: usize| r * n + c;
+        let mut cells = vec![at(2, 2)];
+        cells.extend([at(1, 2), at(2, 1)].into_iter().take(shared));
+        cells.sort_unstable();
+        let mut receivers: Vec<usize> = (0..n * n).collect();
+        if inflow {
+            receivers[at(1, 0)] = at(1, 1);
+            receivers[at(1, 1)] = at(2, 2);
+        } else {
+            receivers[at(2, 2)] = at(1, 1);
+            receivers[at(1, 1)] = at(1, 0);
+        }
+        let height = Grid::filled(n, n, 1.0);
+        let basin = Basin {
+            depression: Depression {
+                cells: cells.clone(),
+                spill_level: 2.0,
+                bottom: at(2, 2),
+                exit: at(2, 2),
+            },
+            balance: Balance::default(),
+            terminal: false,
+            lake: Some(Lake {
+                id: 1,
+                cells,
+                level: 2.0,
+            }),
+        };
+        let order = (0..n * n).map(|c| u32::try_from(c).unwrap()).collect();
+        let routing = Routing {
+            drainage: Drainage {
+                surface: height.clone(),
+                order,
+                receivers,
+            },
+            discharge: Grid::filled(n, n, 1.0),
+        };
+        let water = Water {
+            height,
+            basins: vec![basin],
+            filled_pits: 0,
+            filled_nested: 0,
+            routing,
+        };
+        let river = mask_n(n, |r, c| r == 1 && c < 2);
+        (water, river)
+    }
+
+    fn mask_n(n: usize, f: impl Fn(usize, usize) -> bool) -> Grid<bool> {
+        Grid::from_vec(n, n, (0..n * n).map(|i| f(i / n, i % n)).collect()).unwrap()
+    }
+
+    #[test]
+    fn diagonal_shore_vertices_lie_on_the_ring() {
+        for shared in 0..=2 {
+            for inflow in [true, false] {
+                let (water, river) = diagonal(shared, inflow);
+                let shapes = outlines(&water, CELL_M);
+                let found = lines(&water, &river, CELL_M, &GEOMETRY);
+                assert_eq!(found.len(), 1, "k = {shared}");
+                let line = &found[0];
+                let p = if inflow {
+                    line.points[line.points.len() - 1]
+                } else {
+                    line.points[0]
+                };
+                assert!(
+                    on_ring(p, &shapes[0].rings),
+                    "k = {shared}, inflow = {inflow}: {p:?}"
+                );
+            }
+        }
     }
 }
