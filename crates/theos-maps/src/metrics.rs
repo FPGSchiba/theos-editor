@@ -50,7 +50,7 @@ fn extent(grid: &Grid<f64>) -> Option<(f64, f64)> {
 
 /// The precipitation field in mm/yr: `climate.fields.precipitation` when the climate holds it,
 /// else the fields computed from the height and not written (ruling P2, as `elements` does).
-fn precipitation(world: &World) -> Option<Grid<f64>> {
+pub(crate) fn precipitation(world: &World) -> Option<Grid<f64>> {
     let climate = world.value::<Climate>("climate")?;
     if let Some(fields) = &climate.fields {
         return Some(fields.precipitation.clone());

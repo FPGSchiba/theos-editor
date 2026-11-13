@@ -20,6 +20,11 @@ pub mod golden;
 pub mod grid;
 pub mod kernels;
 pub mod metrics;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "wired into the runner by Task 41")
+)]
+mod package;
 pub mod progress;
 pub mod recipe;
 pub mod rng;
