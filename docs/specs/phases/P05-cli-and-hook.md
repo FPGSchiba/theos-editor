@@ -6,9 +6,9 @@ acceptance criteria come from there; this spec decides how.
 Changes: 13 Nov 2026 — the staged read and check judge paths in git's spelling, under git's
 folding (§5.2, §5.7, §9). Why: the build's final review (R1-1) reproduced a false pass when a
 case-only rename or an NFD name hid a record from the snapshot. The final review's later rounds
-(R2-1, R2-2, R3-1, R3-2) add: intent-to-add entries found by two index reads, not by status `A`
-(§5.2); the git environment `Git::find` resolves for a hook (§5.2, §5.8); risks, review focus
-and rulings (§7, §8, §9).
+add: intent-to-add entries found by two index reads, not by status `A` (§5.2; R2-2); the git
+environment `Git::find` resolves for a hook (§5.2, §5.8; R2-1, R3-1); risks, review focus and
+rulings (§7, §8, §9).
 
 ## 1. Goal
 
@@ -815,11 +815,12 @@ the nine variants and checks that each cause appears exactly once.
   are small).
 - Ruling: intent-to-add entries are the paths on which `diff --cached` differs with and without
   `--ita-visible-in-index`, and are not tracked — git does not commit them, and status `A` in the
-  work-tree diff misses an entry deleted on disk or over a path in `HEAD` (final review R2-1) —
+  work-tree diff misses an entry deleted on disk or over a path in `HEAD` (final review R2-2) —
   cost if wrong: one more git call.
 - Ruling: `Git::find` resolves the relative git variables once against the current folder —
   git starts a hook in the work tree's top with relative paths that mean something else in the
-  project folder, and a subfolder project was judged with the wrong top (final review R3-2);
+  project folder, and a subfolder project was judged with the wrong top (final review R2-1,
+  R3-1);
   `GIT_INDEX_FILE` stays, because git resolves it in the top — cost if wrong: a repository
   layout git exports in a way not listed in §5.2.
 - Ruling: a given project folder must hold `theos.toml` and is never searched upward — a typo in
