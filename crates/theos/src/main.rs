@@ -1,5 +1,4 @@
-//! The `theos` command line: `check`, `ledger`, `schema`, `formalism` and `new` today;
-//! `hook install` follows in phase P05.
+//! The `theos` command line: `check`, `ledger`, `schema`, `formalism`, `new` and `hook install`.
 //!
 //! The binary only parses arguments, calls `theos-studio` and prints. Exit codes: 0 when the
 //! command ran without error findings, 1 when `check` found errors, 2 when it could not run or
@@ -7,6 +6,7 @@
 
 mod check;
 mod formalism;
+mod hook;
 mod ledger;
 mod new;
 mod output;
@@ -79,6 +79,24 @@ enum Command {
         #[arg(long)]
         project: Option<PathBuf>,
     },
+    /// Install or manage git's hooks for the project.
+    Hook {
+        #[command(subcommand)]
+        action: HookAction,
+    },
+}
+
+/// What `theos hook` does.
+#[derive(Subcommand)]
+enum HookAction {
+    /// Write git's pre-commit hook, which runs `theos check --staged` on the project.
+    Install {
+        /// The project folder; the project above the current folder by default.
+        folder: Option<PathBuf>,
+        /// Keep a hook that is not ours as `pre-commit.before-theos` and install ours.
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 /// How a command ended.
@@ -146,6 +164,9 @@ fn run(cli: Cli, out: &mut impl Write, err: &mut impl Write) -> anyhow::Result<E
             out,
             err,
         ),
+        Command::Hook {
+            action: HookAction::Install { folder, force },
+        } => hook::run(folder.as_deref(), force, json, out),
     }
 }
 

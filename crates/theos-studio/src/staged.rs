@@ -4,10 +4,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use theos_content::{Change, Finding};
 use theos_vcs::staged::{self, regular_mode};
-use theos_vcs::{Git, GitError, repo};
+use theos_vcs::{Git, repo};
 
 use crate::StudioError;
 use crate::check::counts;
+use crate::top::repo_top;
 use crate::workspace::Workspace;
 
 /// The verdict on a staged snapshot.
@@ -53,12 +54,7 @@ impl StagedCheck {
 /// [`StudioError::Git`] errors when git fails, and [`StudioError::Index`] when the index fails.
 pub fn check_staged(workspace: &mut Workspace, git: &Git) -> Result<StagedCheck, StudioError> {
     let root = workspace.project().root().to_path_buf();
-    repo::top(git, &root).map_err(|error| match error {
-        GitError::Failed { .. } => StudioError::NotInRepository {
-            folder: root.clone(),
-        },
-        other => StudioError::Git(other),
-    })?;
+    repo_top(git, &root)?;
     let staged = staged::read(git, &root)?;
     let place = repo::place(&staged.top, &root)?;
 

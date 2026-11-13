@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use theos_content::{IndexError, KindRegistry, ProjectError, RegistryError};
 
 use crate::create::CreateError;
+use crate::hook::HookError;
 use theos_vcs::GitError;
 
 /// A failure of the studio.
@@ -62,6 +63,9 @@ pub enum StudioError {
     /// `theos new` could not make the record.
     #[error(transparent)]
     Create(#[from] CreateError),
+    /// `theos hook install` refused.
+    #[error(transparent)]
+    Hook(#[from] HookError),
 }
 
 impl StudioError {

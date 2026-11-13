@@ -8,18 +8,21 @@
 //! [`check()`], which adds the binaries-folder warnings, [`user_settings`], which reads where that
 //! folder is, and the JSON [`views`] of findings, the [`schema`] of kinds and rules, and
 //! [`create()`](create::create), which makes a new record from its template and writes it only
-//! when it introduces no error. Later tasks of P05 extend this crate; the rest arrives in P06,
+//! when it introduces no error, and [`hook::install_hook`], which writes git's pre-commit hook.
+//! Later tasks of P05 extend this crate; the rest arrives in P06,
 //! P07 and later phases.
 
 pub mod check;
 pub mod create;
 pub mod error;
+pub mod hook;
 pub mod introduced;
 pub mod report;
 pub mod schema;
 pub mod staged;
 #[cfg(test)]
 mod test_support;
+mod top;
 pub mod user_settings;
 pub mod views;
 pub mod workspace;
