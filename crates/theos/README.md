@@ -6,7 +6,7 @@ lives in `theos-studio`, so the editor and MCP get the same results.
 ## Commands
 
 ```text
-theos check     [<folder>] [--staged] [--binaries <folder>] [--json]
+theos check     [<folder>] [--staged | --binaries <folder>] [--json]
 theos ledger    [<folder>] [--json]
 theos formalism [<folder>] [--json]
 theos schema    [<kind>] [--project <folder>] [--json]
@@ -17,12 +17,15 @@ theos hook install [<folder>] [--force] [--json]
 - `check` prints every finding of the project, with the severities the project configures. With
   `--binaries <folder>`, or a `binaries_root` in the user settings, it also checks the binaries.
   `--staged` checks the snapshot that git would commit, not the working tree; the hook runs it.
+  It checks no binaries, so `--staged` and `--binaries` together are an invalid flag (exit 2).
 - `ledger` prints the reveal ledger of every truth.
 - `formalism` regenerates the Shared Formalism mirror and prints each path it wrote.
 - `schema` lists every kind and rule; `schema <kind>` describes one kind in full. It needs no
   project.
-- `new` makes a record from the template of its kind, in the folder where the kind belongs. It
-  writes nothing when the record would introduce an error.
+- `new` makes a record from the template of its kind (`templates/records/<kind>.template.md`),
+  in the folder where the kind belongs. Without a template it starts from a skeleton: `id`,
+  `kind`, `title` and `status: draft` where the kind has them, and an empty body. It writes
+  nothing when the record would introduce an error.
 - `hook install` writes git's `pre-commit` hook, which runs `theos check --staged`. A hook that is
   not ours is refused unless `--force` keeps it as `pre-commit.before-theos`.
 

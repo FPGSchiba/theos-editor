@@ -107,8 +107,8 @@ fn placement(placement: Placement) -> PlacementView {
     }
 }
 
-/// The text of the project's settings file: none when it is missing or not UTF-8 (`parse(None)`
-/// then reports it), and an empty text for a missing file.
+/// The text of the project's settings file: an empty text when the file is missing, and `None`
+/// when it is not UTF-8 (`parse(None)` then reports it).
 fn read_settings(root: &Path) -> Result<Option<String>, StudioError> {
     let path = root.join(SETTINGS);
     match std::fs::read(&path) {
