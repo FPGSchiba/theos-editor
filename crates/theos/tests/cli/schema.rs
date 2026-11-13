@@ -150,6 +150,31 @@ fn theos_schema_of_a_kind_lists_fields_and_body() -> TestResult {
 
 // AC: CE-17.1
 #[test]
+fn theos_schema_of_a_kind_names_its_note_targets() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let registry = parts::builtin()?;
+    let spec = registry.kind("concept").ok_or("concept")?;
+    let notes: Vec<String> = spec
+        .body
+        .notes
+        .ok_or("concept has no notes")?
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    let output = sandbox.run(&["schema", "concept"], &sandbox.work())?;
+    assert!(output.status.success(), "{output:?} {}", stderr(&output));
+    let text = stdout(&output);
+    let line = format!("  notes link to: {}", notes.join(", "));
+    assert!(text.lines().any(|found| found == line), "{line} in {text}");
+
+    let output = sandbox.run(&["--json", "schema", "concept"], &sandbox.work())?;
+    let view: Value = serde_json::from_str(&stdout(&output))?;
+    assert_eq!(view["body"]["notes"], serde_json::json!(notes));
+    Ok(())
+}
+
+// AC: CE-17.1
+#[test]
 fn theos_schema_project_names_the_project_folder() -> TestResult {
     let sandbox = Sandbox::new()?;
     let project = sandbox.copy_project(&content_project("settings"), "settings")?;

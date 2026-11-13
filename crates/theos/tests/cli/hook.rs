@@ -133,6 +133,33 @@ fn theos_hook_install_refuses_a_foreign_hook_with_2() -> TestResult {
 
 // AC: CE-17.1
 #[test]
+fn theos_hook_install_force_names_the_backup() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let top = repository(&sandbox)?;
+    std::fs::create_dir_all(top.join(".git").join("hooks"))?;
+    std::fs::write(hook_of(&top), "#!/bin/sh\necho mine\n")?;
+    let output = sandbox.run(&["hook", "install", "--force"], &top)?;
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{output:?} {}",
+        stderr(&output)
+    );
+    let printed = stdout(&output);
+    assert!(!printed.contains(foreign_separator()), "{printed}");
+    let lines: Vec<&str> = printed.lines().collect();
+    assert_eq!(lines.len(), 2, "{printed}");
+    assert!(lines[0].ends_with("pre-commit"), "{printed}");
+    let backup = lines[1]
+        .strip_prefix("kept the earlier hook as ")
+        .ok_or("the backup is not named")?;
+    assert!(backup.ends_with("pre-commit.before-theos"), "{printed}");
+    assert_eq!(std::fs::read_to_string(backup)?, "#!/bin/sh\necho mine\n");
+    Ok(())
+}
+
+// AC: CE-17.1
+#[test]
 fn theos_hook_install_of_a_folder_inside_a_project_exits_2() -> TestResult {
     let sandbox = Sandbox::new()?;
     let top = repository(&sandbox)?;
