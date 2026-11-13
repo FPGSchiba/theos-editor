@@ -20,9 +20,9 @@ use super::RoadClass;
 use crate::stage::ParamError;
 
 /// The steepest grade (rise over run) a road of each class may take in one step (spec ruling
-/// 35). A recipe that sets the table names all four classes.
+/// 35). A class a recipe's table leaves out keeps its default.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct MaxGrade {
     /// Main roads.
     pub main: f64,
@@ -58,10 +58,10 @@ impl Default for MaxGrade {
     }
 }
 
-/// The width of a road of each class in metres. A recipe that sets the table names all four
-/// classes.
+/// The width of a road of each class in metres. A class a recipe's table leaves out keeps its
+/// default.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct WidthM {
     /// Main roads.
     pub main: f64,

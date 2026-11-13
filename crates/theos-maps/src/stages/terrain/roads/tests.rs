@@ -578,8 +578,32 @@ fn params_are_validated_and_unknown_keys_refused() {
             .unwrap();
         assert!(err.to_string().contains(key), "{unknown}: {err}");
     }
-    // A per-class table names all four classes.
-    assert!(Roads.params(&table("max_grade = { main = 0.06 }")).is_err());
+    // A class a per-class table leaves out keeps its default.
+    let params = Roads
+        .params(&table(
+            "max_grade = { main = 0.06 }
+width_m = { trail = 1.0 }",
+        ))
+        .unwrap();
+    let p = params
+        .as_any()
+        .downcast_ref::<super::RoadsParams>()
+        .unwrap();
+    let defaults = super::RoadsParams::default();
+    assert_eq!(
+        p.max_grade,
+        super::MaxGrade {
+            main: 0.06,
+            ..defaults.max_grade
+        }
+    );
+    assert_eq!(
+        p.width_m,
+        super::WidthM {
+            trail: 1.0,
+            ..defaults.width_m
+        }
+    );
 }
 
 #[test]
