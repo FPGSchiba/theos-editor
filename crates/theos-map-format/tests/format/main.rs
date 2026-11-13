@@ -1,6 +1,7 @@
 //! Behaviour tests of `theos-map-format` through its public API.
 
 mod deps;
+mod floats;
 mod levels;
 mod reader;
 mod writer;
