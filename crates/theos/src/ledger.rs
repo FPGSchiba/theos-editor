@@ -23,8 +23,8 @@ pub(crate) fn run(
     err: &mut impl Write,
 ) -> anyhow::Result<()> {
     let workspace = output::workspace(folder)?;
-    output::in_memory_note(err, &workspace).context("cannot write the output")?;
     let ledger = workspace.index().ledger().map_err(StudioError::from)?;
+    output::in_memory_note(err, workspace.is_in_memory()).context("cannot write the output")?;
     if json {
         return output::json(out, &LedgerView::from(ledger.as_slice()));
     }

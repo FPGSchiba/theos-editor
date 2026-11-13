@@ -49,7 +49,6 @@ pub(crate) fn run(
     err: &mut impl Write,
 ) -> anyhow::Result<Exit> {
     let mut workspace = output::workspace(options.project.as_deref())?;
-    output::in_memory_note(err, &workspace).context("cannot write the output")?;
     let created = create(
         &mut workspace,
         &NewRequest {
@@ -59,6 +58,7 @@ pub(crate) fn run(
             set: &options.set,
         },
     )?;
+    output::in_memory_note(err, workspace.is_in_memory()).context("cannot write the output")?;
     if options.json {
         output::json(out, &NewView::from(&created))?;
     } else {

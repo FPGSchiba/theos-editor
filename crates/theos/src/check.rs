@@ -33,9 +33,9 @@ pub(crate) fn run(
     err: &mut impl Write,
 ) -> anyhow::Result<Exit> {
     let mut workspace = output::workspace(options.folder.as_deref())?;
-    output::in_memory_note(err, &workspace).context("cannot write the output")?;
     if options.staged {
         let staged = check_staged(&mut workspace, &Git::find()?)?;
+        output::in_memory_note(err, workspace.is_in_memory()).context("cannot write the output")?;
         let blocks = staged.blocks();
         if options.json {
             output::json(out, &StagedView::from(&staged))?;
@@ -57,6 +57,7 @@ pub(crate) fn run(
         return Ok(exit_of(blocks));
     }
     let checked = check(&mut workspace, binaries_folder(options.binaries))?;
+    output::in_memory_note(err, workspace.is_in_memory()).context("cannot write the output")?;
     let view = CheckView::from(&checked);
     let (errors, warnings) = theos_studio::check::counts(&checked.findings);
     if options.json {

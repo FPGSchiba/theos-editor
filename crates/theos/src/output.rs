@@ -87,13 +87,15 @@ pub(crate) fn plural(count: usize, noun: &str) -> String {
     format!("{count} {noun}{s}")
 }
 
-/// Says on `err` that the index lives in memory, when it does.
+/// Says on `err` that the index lives in memory, when `in_memory`
+/// ([`Workspace::is_in_memory`]). A command asks after its last workspace call, since any write
+/// to the index can switch it to memory.
 ///
 /// # Errors
 ///
 /// Fails when `err` cannot be written.
-pub(crate) fn in_memory_note(err: &mut impl Write, workspace: &Workspace) -> io::Result<()> {
-    if workspace.is_in_memory() {
+pub(crate) fn in_memory_note(err: &mut impl Write, in_memory: bool) -> io::Result<()> {
+    if in_memory {
         writeln!(
             err,
             "note: the index cache is in use by another process; working with an index in memory"
@@ -119,6 +121,19 @@ mod tests {
             vec!["aaa".to_owned(), "b".to_owned()],
         ];
         assert_eq!(columns(&rows), "a    bbb  c\naaa  b\n");
+    }
+
+    #[test]
+    fn the_in_memory_note_names_the_cause_only_in_memory() -> anyhow::Result<()> {
+        let mut err = Vec::new();
+        in_memory_note(&mut err, false)?;
+        assert_eq!(String::from_utf8(err.clone())?, "");
+        in_memory_note(&mut err, true)?;
+        assert_eq!(
+            String::from_utf8(err)?,
+            "note: the index cache is in use by another process; working with an index in memory\n"
+        );
+        Ok(())
     }
 
     #[test]
