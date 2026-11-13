@@ -206,8 +206,9 @@ fn spills(q_out: f64, net: f64, cells: usize, cell_area: f64) -> bool {
 }
 
 /// The lake of a terminal depression whose cells, in the order the lake reaches them, have the
-/// runoff `runoff` (m³/yr each): the largest `n` with `n·a·(E − P) <= q_out + the runoff of the cells after the
-/// first n`, where `a` is `cell_area` and `net` is `E − P` (positive). The dry cells are land in
+/// runoff `runoff` (m³/yr each): the largest `n` with
+/// `n·a·(E − P) <= q_out + the runoff of the cells after the first n`, where `a` is `cell_area`
+/// and `net` is `E − P` (positive). The dry cells are land in
 /// the lake's catchment. The left side rises and the right side falls with `n`, so one pass
 /// from `n = 0` finds it. Returns `n` and that land inflow, m³/yr.
 fn terminal_lake(runoff: &[f64], q_out: f64, net: f64, cell_area: f64) -> (usize, f64) {

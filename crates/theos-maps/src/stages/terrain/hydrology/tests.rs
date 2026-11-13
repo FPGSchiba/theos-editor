@@ -1,7 +1,7 @@
 //! `hydrology` on 64 x 64 worlds of 100 m cells, with physics tests 7 and 8 (spec §5.14).
 
 use super::lakes::Limits;
-use super::{Hydrology, Water, WaterThresholds, water};
+use super::{Hydrology, Water, WaterFeatures, WaterThresholds, water};
 use crate::grid::{D8, Grid};
 use crate::kernels::flood::priority_flood;
 use crate::kernels::labels::{Connectivity, labels};
@@ -10,13 +10,13 @@ use crate::recipe::{RecipeError, RecipeOrigin, parse, plan};
 use crate::stage::{LayerSpec, Registry, Stage};
 use crate::stages::terrain::climate::{self, Climate, ClimateFields, ClimateParams};
 use crate::stages::terrain::support::{run_stage, table, world};
-use crate::world::{Layer, World};
+use crate::world::{Layer, World, WorldValue};
 
-const N: usize = 64;
-const CELL_M: f64 = 100.0;
+pub(super) const N: usize = 64;
+pub(super) const CELL_M: f64 = 100.0;
 const CELL_AREA: f64 = CELL_M * CELL_M;
 const SECONDS_PER_YEAR: f64 = 3.156e7;
-const THRESHOLDS: &str = "river_q = 0.01\nbig_river_q = 0.2\n";
+pub(super) const THRESHOLDS: &str = "river_q = 0.01\nbig_river_q = 0.2\n";
 const DEFAULT_LIMITS: Limits = Limits {
     min_depth_m: 2.0,
     min_area_m2: 4.0 * CELL_AREA,
@@ -24,28 +24,28 @@ const DEFAULT_LIMITS: Limits = Limits {
 
 /// Yearly water fields equal on every cell, mm/yr.
 #[derive(Debug, Clone, Copy)]
-struct Weather {
-    precipitation: f64,
-    pet: f64,
-    runoff: f64,
+pub(super) struct Weather {
+    pub(super) precipitation: f64,
+    pub(super) pet: f64,
+    pub(super) runoff: f64,
 }
 
 /// Lake evaporation exceeds precipitation by 1 m/yr.
-const ARID: Weather = Weather {
+pub(super) const ARID: Weather = Weather {
     precipitation: 250.0,
     pet: 1250.0,
     runoff: 20.0,
 };
 
 /// Lake evaporation exceeds precipitation by 0.6 m/yr, with more runoff than `ARID`.
-const SEMI_ARID: Weather = Weather {
+pub(super) const SEMI_ARID: Weather = Weather {
     precipitation: 400.0,
     pet: 1000.0,
     runoff: 50.0,
 };
 
 /// Precipitation exceeds lake evaporation.
-const WET: Weather = Weather {
+pub(super) const WET: Weather = Weather {
     precipitation: 1200.0,
     pet: 600.0,
     runoff: 600.0,
@@ -71,29 +71,29 @@ fn cell_runoff_m3_s(w: Weather) -> f64 {
     cell_runoff_m3_yr(w) / SECONDS_PER_YEAR
 }
 
-fn grid(f: impl Fn(usize, usize) -> f64) -> Grid<f64> {
+pub(super) fn grid(f: impl Fn(usize, usize) -> f64) -> Grid<f64> {
     let data = (0..N * N).map(|i| f(i / N, i % N)).collect();
     Grid::from_vec(N, N, data).unwrap()
 }
 
-fn mask(f: impl Fn(usize, usize) -> bool) -> Grid<bool> {
+pub(super) fn mask(f: impl Fn(usize, usize) -> bool) -> Grid<bool> {
     let data = (0..N * N).map(|i| f(i / N, i % N)).collect();
     Grid::from_vec(N, N, data).unwrap()
 }
 
-fn all_edges() -> Grid<bool> {
+pub(super) fn all_edges() -> Grid<bool> {
     mask(|r, c| r == 0 || c == 0 || r == N - 1 || c == N - 1)
 }
 
-fn south_edge() -> Grid<bool> {
+pub(super) fn south_edge() -> Grid<bool> {
     mask(|r, _| r == N - 1)
 }
 
-fn closed() -> Grid<bool> {
+pub(super) fn closed() -> Grid<bool> {
     mask(|_, _| false)
 }
 
-fn at(r: usize, c: usize) -> usize {
+pub(super) fn at(r: usize, c: usize) -> usize {
     r * N + c
 }
 
@@ -101,7 +101,7 @@ fn at(r: usize, c: usize) -> usize {
 /// away (220 m), falling 5 m per cell beyond the rim to the edges. A channel runs from a pass at
 /// (40, 32), 140 m, steeply down to the south edge, so the cone below 140 m (closer than 8 cells
 /// to the centre) is the one depression.
-fn bowl() -> Grid<f64> {
+pub(super) fn bowl() -> Grid<f64> {
     grid(|r, c| {
         if c == 32 && r >= 40 {
             return if r == 40 {
@@ -121,7 +121,7 @@ fn bowl() -> Grid<f64> {
 }
 
 /// Rolling hills with several closed depressions.
-fn hills() -> Grid<f64> {
+pub(super) fn hills() -> Grid<f64> {
     grid(|r, c| {
         let (y, x) = (to_f64(r), to_f64(c));
         200.0
@@ -132,7 +132,7 @@ fn hills() -> Grid<f64> {
 }
 
 /// A plane falling 1 m per row to the south edge, tilted 0.01 m per column away from column 32.
-fn plane() -> Grid<f64> {
+pub(super) fn plane() -> Grid<f64> {
     grid(|r, c| 63.0 - to_f64(r) + 0.01 * (to_f64(c) - 32.0).abs())
 }
 
@@ -152,12 +152,12 @@ fn lowered(
 }
 
 /// The pure computation behind the stage, with the default limits.
-fn compute(height: &Grid<f64>, fixed: &Grid<bool>, weather: Weather) -> Water {
+pub(super) fn compute(height: &Grid<f64>, fixed: &Grid<bool>, weather: Weather) -> Water {
     water(height, fixed, &fields(weather), CELL_M, &DEFAULT_LIMITS)
 }
 
 /// A world holding `height`, `fixed` and a climate with `weather`'s fields.
-fn setup(height: &Grid<f64>, fixed: &Grid<bool>, weather: Weather) -> World {
+pub(super) fn setup(height: &Grid<f64>, fixed: &Grid<bool>, weather: Weather) -> World {
     let mut w = world(N, N);
     w.insert("height", Layer::F64(height.clone())).unwrap();
     w.insert("fixed", Layer::Mask(fixed.clone())).unwrap();
@@ -176,7 +176,12 @@ fn run(w: &mut World, extra: &str) {
 }
 
 /// The stage's layers on `height`, `fixed` and `weather`.
-fn staged(height: &Grid<f64>, fixed: &Grid<bool>, weather: Weather, extra: &str) -> World {
+pub(super) fn staged(
+    height: &Grid<f64>,
+    fixed: &Grid<bool>,
+    weather: Weather,
+    extra: &str,
+) -> World {
     let mut w = setup(height, fixed, weather);
     run(&mut w, extra);
     w
@@ -913,7 +918,8 @@ fn hydrology_declares_its_layers() {
             "discharge",
             "flow_dir",
             "water_surface",
-            "water_thresholds"
+            "water_thresholds",
+            "water_features"
         ]
     );
 }
@@ -922,4 +928,66 @@ fn hydrology_declares_its_layers() {
 fn the_stage_needs_its_inputs() {
     let mut w = world(8, 8);
     assert!(run_stage(&mut w, &Hydrology, THRESHOLDS).is_err());
+}
+
+#[test]
+fn the_stage_writes_the_water_features() {
+    let w = staged(&bowl(), &all_edges(), WET, "");
+    let features = w.value::<WaterFeatures>("water_features").unwrap();
+    assert_eq!(features.lakes.len(), 1);
+    assert!(features.rivers.len() > 1);
+    let json = features.canonical_json();
+    assert_eq!(json["lakes"][0]["id"], 1);
+    assert_eq!(
+        json["rivers"].as_array().map(Vec::len),
+        Some(features.rivers.len())
+    );
+    assert_eq!(features.type_name(), "water_features");
+    let mut moved = features.clone();
+    assert!(moved.as_any().is::<WaterFeatures>() && moved.as_any_mut().is::<WaterFeatures>());
+    // The lines run over the river raster: their end points are river cells.
+    let river = w.mask("river").unwrap();
+    for line in &features.rivers {
+        for end in [line.points[0], *line.points.last().unwrap()] {
+            let (r, c) = (
+                crate::kernels::num::to_index(end[1] / CELL_M, N),
+                crate::kernels::num::to_index(end[0] / CELL_M, N),
+            );
+            assert!(river.as_slice()[at(r, c)]);
+        }
+    }
+}
+
+#[test]
+fn the_channel_geometry_scales_the_width_and_depth() {
+    let base = staged(&bowl(), &all_edges(), WET, "");
+    let wide = staged(
+        &bowl(),
+        &all_edges(),
+        WET,
+        "width_a = 6.0
+depth_c = 0.6
+",
+    );
+    let a = &base
+        .value::<WaterFeatures>("water_features")
+        .unwrap()
+        .rivers;
+    let b = &wide
+        .value::<WaterFeatures>("water_features")
+        .unwrap()
+        .rivers;
+    assert_eq!(a.len(), b.len());
+    for (x, y) in a.iter().zip(b) {
+        for k in 0..x.points.len() {
+            assert!((y.width_m[k] - 2.0 * x.width_m[k]).abs() < 1e-12 * y.width_m[k]);
+            assert!((y.depth_m[k] - 2.0 * x.depth_m[k]).abs() < 1e-12 * y.depth_m[k]);
+        }
+    }
+    for (bad, parameter) in [("width_a = -1.0", "width_a"), ("depth_c = nan", "depth_c")] {
+        let err = Hydrology
+            .params(&table(&format!("{THRESHOLDS}{bad}")))
+            .unwrap_err();
+        assert_eq!(err.parameter.as_deref(), Some(parameter), "{bad}");
+    }
 }
