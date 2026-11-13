@@ -1,7 +1,7 @@
 //! Statistics with numpy's semantics.
 
 use super::KernelError;
-use super::num::{key, max, min, to_f64, to_index};
+use super::num::{key, max, min, round_half_even, to_f64, to_index};
 
 /// A sorted copy of `values`, ordered by `total_cmp` on `-0.0`-normalised keys.
 fn sorted(values: &[f64]) -> Vec<f64> {
@@ -66,7 +66,7 @@ pub fn mean(values: &[f64]) -> Result<f64, KernelError> {
 /// `max(1, round(m / cell_m))`, rounding halves to even as Python's and numpy's `round` do.
 #[must_use]
 pub fn metres_to_cells(m: f64, cell_m: f64) -> usize {
-    to_index((m / cell_m).round_ties_even(), usize::MAX).max(1)
+    to_index(round_half_even(m / cell_m), usize::MAX).max(1)
 }
 
 #[cfg(test)]

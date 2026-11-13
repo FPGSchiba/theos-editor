@@ -453,6 +453,43 @@ mod tests {
         assert!(dist(ruins[0], summit) < 500.0, "{:?}", ruins[0]);
     }
 
+    /// With the cells farther from the arrival than 0.6 of the diagonal levelled at 0 m (a step
+    /// down has no positive prominence on its low side), the ascent has no cell and only the
+    /// arrival is placed.
+    #[test]
+    fn the_ascent_needs_a_far_cell_with_prominence() {
+        let mut first = setup();
+        run_stage(
+            &mut first,
+            &Pois,
+            "ruins = 0
+chimes = 0
+gates = 1",
+        )
+        .unwrap();
+        let arrival = points(&first, "gate-down")[0];
+        let far = 0.6 * dist([0.0, 0.0], [6400.0, 6400.0]);
+        let mut w = setup();
+        let mut height = w.f64("height").unwrap().clone();
+        for i in 0..N * N {
+            let at = [to_f64(i % N) * 100.0 + 50.0, to_f64(i / N) * 100.0 + 50.0];
+            if dist(at, arrival) > far {
+                height.as_mut_slice()[i] = 0.0;
+            }
+        }
+        w.insert("height", Layer::F64(height)).unwrap();
+        run_stage(
+            &mut w,
+            &Pois,
+            "ruins = 0
+chimes = 0
+gates = 2",
+        )
+        .unwrap();
+        assert_eq!(points(&w, "gate-down"), [arrival]);
+        assert_eq!(points(&w, "gate-up").len(), 0);
+    }
+
     #[test]
     fn ruins_keep_their_spacing() {
         let mut w = setup();

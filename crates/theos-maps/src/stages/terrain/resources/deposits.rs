@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use crate::features::{Feature, Geometry, Prop, interior, pick};
 use crate::grid::Grid;
 use crate::kernels::filters::gaussian;
-use crate::kernels::num::{canonical, max, min, to_index};
+use crate::kernels::num::{canonical, max, min, round_half_even, to_index};
 use crate::rng::StageRng;
 use crate::world::MapFrame;
 
@@ -84,7 +84,7 @@ fn deposit(
     element: &'static str,
 ) -> Feature {
     let mut props = BTreeMap::new();
-    let rounded = canonical((rich * 100.0).round_ties_even() / 100.0);
+    let rounded = canonical(round_half_even(rich * 100.0) / 100.0);
     props.insert("richness".to_owned(), Prop::Num(rounded));
     props.insert("tier".to_owned(), Prop::Text(tier(rich).to_owned()));
     props.insert("element".to_owned(), Prop::Text(element.to_owned()));
@@ -142,6 +142,39 @@ mod tests {
 
     fn near(a: f64, b: f64) -> bool {
         (a - b).abs() < 1e-12
+    }
+
+    /// A narrow tall block against a broad lower one: the smoothing over 93.75 m (about one cell
+    /// here) lets the first win, a wider smoothing the second.
+    #[test]
+    fn the_field_is_smoothed_before_the_pick() {
+        let frame = MapFrame {
+            rows: 64,
+            cols: 64,
+            cell_m: 100.0,
+        };
+        let mut field = Grid::filled(64, 64, 0.0);
+        for r in 10..13 {
+            for c in 10..13 {
+                field.set(r, c, 1.0);
+            }
+        }
+        for r in 30..39 {
+            for c in 30..39 {
+                field.set(r, c, 0.6);
+            }
+        }
+        let zero = Grid::filled(64, 64, 0.0);
+        let elements = [&zero, &zero, &zero, &zero, &zero];
+        let mut params = ResourcesParams::default();
+        params.counts.insert("stone".to_owned(), 1);
+        let mut rng = StageRng::for_key(1, "test");
+        let found = place(&[("stone", field)], &elements, &frame, &params, &mut rng);
+        let Some(Geometry::Point([x, y])) = found.first().map(|f| f.geometry.clone()) else {
+            panic!("one deposit")
+        };
+        let (r, c) = frame.cell_at_m(x, y);
+        assert!((10..13).contains(&r) && (10..13).contains(&c), "{r},{c}");
     }
 
     #[test]

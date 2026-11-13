@@ -30,7 +30,7 @@ use crate::kernels::KernelError;
 use crate::kernels::distance::distance;
 use crate::kernels::filters::{gaussian, maximum, uniform};
 use crate::kernels::morphology::{Structure, dilate};
-use crate::kernels::num::{canonical, max, to_f64, to_index};
+use crate::kernels::num::{canonical, max, round_half_even, to_f64, to_index};
 use crate::kernels::stats::metres_to_cells;
 use crate::rng::StageRng;
 use crate::stage::{
@@ -355,7 +355,7 @@ fn site(
             let pop = population(class, rng.uniform());
             props.insert("population".to_owned(), Prop::Int(pop));
             props.insert("water".to_owned(), Prop::Text(water.to_owned()));
-            let metres = canonical((inputs.height.as_slice()[i] * 10.0).round_ties_even() / 10.0);
+            let metres = canonical(round_half_even(inputs.height.as_slice()[i] * 10.0) / 10.0);
             props.insert("elevation_m".to_owned(), Prop::Num(metres));
             features.push(Feature {
                 kind: "settlement",

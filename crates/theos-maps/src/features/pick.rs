@@ -2,7 +2,7 @@
 //! `_pick`).
 
 use crate::grid::Grid;
-use crate::kernels::num::{to_f64, to_index};
+use crate::kernels::num::{round_half_even, to_f64, to_index};
 use crate::world::MapFrame;
 
 /// The cells at least `edge_margin` of the shorter side away from every edge: the margin is
@@ -10,7 +10,7 @@ use crate::world::MapFrame;
 #[must_use]
 pub fn interior(frame: &MapFrame, edge_margin: f64) -> Grid<bool> {
     let shorter = to_f64(frame.rows.min(frame.cols));
-    let margin = to_index((edge_margin * shorter).round_ties_even(), usize::MAX);
+    let margin = to_index(round_half_even(edge_margin * shorter), usize::MAX);
     let inside = |i: usize, len: usize| i >= margin && i < len.saturating_sub(margin);
     let mut out = Grid::filled(frame.rows, frame.cols, false);
     for (i, cell) in out.as_mut_slice().iter_mut().enumerate() {

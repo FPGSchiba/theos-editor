@@ -52,6 +52,13 @@ pub fn canonical(x: f64) -> f64 {
     x + 0.0
 }
 
+/// `x` rounded to the nearest integer, halves to even, as Python's and numpy's `round`. The
+/// rounding is exact IEEE 754 (no libm), so it is safe for determinism (G20).
+#[must_use]
+pub fn round_half_even(x: f64) -> f64 {
+    x.round_ties_even()
+}
+
 /// A cell count or index as a float.
 #[must_use]
 #[expect(clippy::cast_precision_loss, reason = "indices stay far below 2^53")]
@@ -132,6 +139,20 @@ pub fn smoothstep(e0: f64, e1: f64, x: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn halves_round_to_even() {
+        for (x, want) in [
+            (0.5, 0.0),
+            (1.5, 2.0),
+            (2.5, 2.0),
+            (-0.5, 0.0),
+            (-1.5, -2.0),
+            (2.4, 2.0),
+        ] {
+            assert_eq!(round_half_even(x), want, "{x}");
+        }
+    }
 
     #[test]
     fn max_and_min_return_positive_zero_on_ties() {
