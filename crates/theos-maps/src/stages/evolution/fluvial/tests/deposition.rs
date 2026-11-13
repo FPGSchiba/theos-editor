@@ -47,8 +47,8 @@ pub(super) fn volume(height: &[f64]) -> f64 {
 /// h1·(1 + c1 + F10)       = 10·(1 + c1) + G·Qs_in(1)/Q1 + F10·h0,   Qs_in(1) = 0.25·(h3* − h3)·area
 /// ```
 ///
-/// so `G·Qs_in(1)/Q1 = 0.2·G·(h3* − h3)`. Every receiver here lies below its donor's height
-/// without incision. Returns `(h1, h3)`.
+/// so `G·Qs_in(1)/Q1 = 0.2·G·(h3* − h3)`. Every receiver here lies below its donor's new height.
+/// Returns `(h1, h3)`.
 fn square_by_hand(g: f64, h0: f64, h3: f64) -> (f64, f64) {
     let f10 = K * libm::pow(1.25e4, 0.5) * 1e5 / 100.0;
     let (f31, f30) = (0.25, 0.75 / SQRT_2);

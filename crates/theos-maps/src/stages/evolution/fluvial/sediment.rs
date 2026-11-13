@@ -36,9 +36,10 @@ pub(super) fn step_sediment(
 /// depression's inflow instead, and so does each of its cells' own volume (the slope supply on a
 /// held cell), wherever that cell's edges lead: to the spill cell outside the depression too, or,
 /// at a spill cell inside it, before the depression lets go. When the walk reaches the
-/// depression's spill cell, `close(n, inflow)` returns the volume the depression lets go. It counts as arriving at the spill cell,
-/// so it leaves with the spill cell's own flux over its flow edges (with steepest routing, to
-/// `SpillPoint.to`), as spec §5.9's "passes on from the spill node" says. A spill cell outside
+/// depression's spill cell, `close(n, inflow)` returns the volume the depression lets go. It
+/// counts as arriving at the spill cell, so it leaves with the spill cell's own flux over its
+/// flow edges (with steepest routing, to `SpillPoint.to`), as spec §5.9's "passes on from the
+/// spill node" says. A spill cell outside
 /// its depression (the higher cell of the pass) thus sees the release in its deposition term;
 /// one inside it is held and only passes it on. From then on the depression is closed: what
 /// reaches it later flows through its cells like over any other cell. Every volume either

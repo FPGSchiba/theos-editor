@@ -4,8 +4,9 @@
 //!
 //! For a cell `i` the sweep knows `top = h*_i·(1 + c_i) + Δt·G·(Qs_in + V/Δt)/Q_i` and
 //! `bottom = 1 + c_i` (without deposition `top = h*_i` and `bottom = 1`), so `top / bottom` is
-//! the height the cell reaches without incision. Stream power erodes only downhill: a receiver `r` (share `F_ir`,
-//! height `h_r`) takes a share exactly when it lies below the cell's new height `h`. So `h` solves
+//! the height the cell reaches without incision. Stream power erodes only downhill: a receiver
+//! `r` (share `F_ir`, height `h_r`) takes a share exactly when it lies below the cell's new
+//! height `h`. So `h` solves
 //!
 //! ```text
 //! g(h) = h·bottom − top + Σ over r with h_r < h of F_ir·(h − h_r) = 0.
@@ -13,18 +14,21 @@
 //!
 //! `g` is continuous, piecewise linear and strictly increasing (its slope is at least `bottom`,
 //! above 0), so the solution is unique, and it never lies above `top / bottom`: incision never
-//! raises a cell. [`solve`] finds it from the receivers below `top / bottom`, dropping those that
-//! end above the solution until the two agree; nearly always the first guess holds.
+//! raises a cell. [`solve`] finds it from the receivers below `top / bottom`, dropping those at
+//! or above the solution until the two agree; nearly always the first guess holds.
 //!
 //! **Why the gate is decided at the solved height.** Deciding it at `top / bottom` instead, as
 //! a predictor, counts a receiver that lies between the two: it then pulls the cell *up*. With
 //! several receivers, such a receiver changes the result by `F_ir·(top/bottom − h')/(bottom +
 //! Σ F + F_ir)` as it crosses `top / bottom`, with `h'` the result without it and `Σ F` the
-//! shares of the others, so the sweep jumps. In the Gauss–Seidel
-//! iterations a receiver that hovers there flips in and out and the iterations cycle on that
-//! one cell (Task 27d: every one of the 28 steps of the 384² budget run that stopped at the
-//! iteration limit, with jumps of 0.4 to 8.6 m). At the solved height the step is continuous,
-//! and with one receiver both gates agree.
+//! shares of the others, so the sweep jumps. In the Gauss–Seidel iterations a receiver that
+//! hovers there flips in and out and the iterations cycle on that one cell (Task 27d: every one
+//! of the 28 steps of the 384² budget run that stopped at the iteration limit, with jumps of
+//! 0.4 to 8.6 m). At the solved height the step is continuous. With one receiver both gates
+//! agree up to rounding: they can differ only when the receiver lies within a few ulp of
+//! `top / bottom`, and then by about as little.
+
+use std::cmp::Ordering;
 
 use crate::kernels::num::max;
 
@@ -41,16 +45,20 @@ pub(super) struct Receiver {
 /// receivers below `h`. `bottom` is above 0 and the shares are not negative.
 ///
 /// The first guess takes the receivers below `top / bottom` and solves with them. Where one of
-/// them ends at or above that solution, the next round takes only the receivers below it, and so
-/// on. Each solution is a weighted mean of `top / bottom` and the receivers taken, so dropping
-/// receivers at or above it lowers it: the rounds take ever fewer receivers and stop, after at
-/// most one round per receiver, when the receivers taken are exactly those below the solution.
-/// A round holds when the highest receiver it took lies below its solution: those it left out
-/// lie at or above its limit, which is not below the solution. Nearly always the first guess
-/// holds, and the sums run in the receivers' order, so a cell whose receivers all lie below it or
-/// above `top / bottom` gets the same bits as with the guess alone. (Sorting the receivers by
-/// height and adding them from the lowest finds the same solution, but sorting them in every
-/// cell of every sweep cost the 384² budget run about 9 s more in `fluvial`.)
+/// them lies above that solution, the next round takes only the receivers below it, and so on.
+/// Each solution is a weighted mean of `top / bottom` and the receivers taken, so dropping
+/// receivers above it lowers it: the rounds take ever fewer receivers and stop, after at most one
+/// round more than there are receivers below `top / bottom`, when no receiver taken lies above
+/// the solution. A receiver exactly at the solution may stay: it adds nothing to `g`. Those left
+/// out lie at or above the round's limit, which is not below its solution. Nearly always the
+/// first guess holds, and the sums run in the receivers' order, so a cell whose receivers all lie
+/// below it or above `top / bottom` gets the same bits as with the guess alone. (Sorting the
+/// receivers by height and adding them from the lowest finds the same solution, but sorting
+/// them in every cell of every sweep cost the 384² budget run about 9 s more in `fluvial`.)
+///
+/// A `top` that is NaN or infinite comes back as it is (NaN, or the infinity), so the runner
+/// reports the layer as not finite: a round whose solution is NaN, or no lower than its highest
+/// receiver, ends the loop.
 pub(super) fn solve(top: f64, bottom: f64, receivers: &[Receiver]) -> f64 {
     let mut limit = top / bottom;
     loop {
@@ -61,7 +69,7 @@ pub(super) fn solve(top: f64, bottom: f64, receivers: &[Receiver]) -> f64 {
             highest = max(highest, r.height);
         }
         let solved = t / b;
-        if highest < solved {
+        if highest.partial_cmp(&solved) != Some(Ordering::Greater) {
             return solved;
         }
         limit = solved;
@@ -70,6 +78,10 @@ pub(super) fn solve(top: f64, bottom: f64, receivers: &[Receiver]) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
     use super::{Receiver, solve};
     use crate::kernels::num::{max, min};
     use crate::rng::StageRng;
@@ -117,7 +129,7 @@ mod tests {
                 g.abs() <= 1e-12 * scale * 10.0,
                 "case {case}: g(h) = {g} at h = {h}"
             );
-            // Incision never raises a cell, and a counted receiver lies below it.
+            // Incision never raises a cell, and it never sinks below its lowest receiver.
             assert!(h <= top / bottom, "case {case}");
             let lowest = receivers
                 .iter()
@@ -172,6 +184,41 @@ mod tests {
         );
         assert_eq!(below(12.0).to_bits(), 10.0_f64.to_bits(), "uphill");
         assert_eq!(solve(20.0, 2.0, &[]).to_bits(), 10.0_f64.to_bits());
+    }
+
+    #[test]
+    fn a_height_that_is_not_finite_comes_back_without_hanging() {
+        // A NaN or infinite height upstream reaches `top`. The step hands it on (the runner then
+        // reports the layer as not finite) and does not loop. Each solve runs on its own thread
+        // with a deadline, so a regression fails here instead of hanging the test run.
+        for (top, nan) in [
+            (f64::NAN, true),
+            (f64::NEG_INFINITY, false),
+            (f64::INFINITY, false),
+        ] {
+            let (send, receive) = mpsc::channel();
+            thread::spawn(move || {
+                let receivers = [
+                    Receiver {
+                        height: 0.0,
+                        share: 1.0,
+                    },
+                    Receiver {
+                        height: 5.0,
+                        share: 2.0,
+                    },
+                ];
+                send.send(solve(top, 1.0, &receivers)).ok();
+            });
+            let got = receive
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap_or_else(|_| panic!("the step for top = {top} does not return"));
+            if nan {
+                assert!(got.is_nan(), "{got}");
+            } else {
+                assert_eq!(got.to_bits(), top.to_bits());
+            }
+        }
     }
 
     #[test]

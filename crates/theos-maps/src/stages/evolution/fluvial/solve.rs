@@ -11,8 +11,10 @@
 //! h_i  = (h*_i·(1 + c_i) + Δt·G·Qs_in(i)/Q_i + Σ_r F_ir · h_r) / (1 + c_i + Σ_r F_ir)
 //! ```
 //!
-//! with `h*` the height entering the process (uplift already applied). The cell's own term sits
-//! on the diagonal (`c_i`); `Qs_in` comes from the cells strictly upstream (Yuan's `ups(i)`).
+//! with `h*` the height entering the process (uplift already applied) and `Σ_r` over the
+//! receivers below `h_i`, the cell's new height (see `cell`): stream power erodes only downhill.
+//! The cell's own term sits on the diagonal (`c_i`); `Qs_in` comes from the cells strictly
+//! upstream (Yuan's `ups(i)`).
 //!
 //! **Why the cell's own term is included.** At steady state `Qs = U·A` exactly, so the deposition
 //! term is `G·U` and every cell's slope is `(1 + G)` times its slope at G = 0, as Yuan's eq. 24
@@ -32,9 +34,10 @@
 //! h_i  = (h*_i·(1 + c_i) + Δt·G·(Qs_in(i) + V_i/Δt)/Q_i + Σ_r F_ir · h_r) / (1 + c_i + Σ_r F_ir)
 //! ```
 //!
-//! and `Qs_in` routes `(h*_j − h_j)·area + V_j` from every cell `j` upstream. G thus decides how
-//! much of the supply is laid down and how much passes on; with G = 0 the supply does not enter
-//! the heights and all of it leaves at the outlets (`settle`).
+//! with `Σ_r` again over the receivers below `h_i`, and `Qs_in` routes `(h*_j − h_j)·area + V_j`
+//! from every cell `j` upstream. G thus decides how much of the supply is laid down and how much
+//! passes on; with G = 0 the supply does not enter the heights and all of it leaves at the
+//! outlets (`settle`).
 //!
 //! With G = 0 one sweep solves the step exactly. With G > 0 `Qs_in` couples every cell to its
 //! donors, and Yuan's Gauss–Seidel iterations solve it ([`deposit`]): each iteration routes the
