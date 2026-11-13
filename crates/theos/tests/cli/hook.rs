@@ -40,6 +40,34 @@ fn theos_hook_install_writes_the_hook() -> TestResult {
     Ok(())
 }
 
+/// The separator that is not this platform's: `/` on Windows, `\` elsewhere.
+fn foreign_separator() -> char {
+    if std::path::MAIN_SEPARATOR == '/' {
+        '\\'
+    } else {
+        '/'
+    }
+}
+
+// The path is printed as written, not canonicalized, so git's `C:/…` must not show through.
+// AC: CE-17.1
+#[test]
+fn theos_hook_install_prints_the_path_with_one_separator() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let top = repository(&sandbox)?;
+    let output = sandbox.run(&["hook", "install"], &top)?;
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    let printed = stdout(&output);
+    assert!(!printed.contains(foreign_separator()), "{printed}");
+    assert!(printed.ends_with("pre-commit\n"), "{printed}");
+    let again = sandbox.run(&["hook", "install", "--json"], &top)?;
+    let view: Value = serde_json::from_str(&stdout(&again))?;
+    let hook = view["hook"].as_str().ok_or("no hook path")?;
+    assert!(!hook.contains(foreign_separator()), "{hook}");
+    assert_eq!(format!("{hook}\n"), printed);
+    Ok(())
+}
+
 // AC: CE-17.1
 #[test]
 fn theos_hook_install_json() -> TestResult {

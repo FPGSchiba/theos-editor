@@ -22,14 +22,20 @@ fn rev_parse(git: &Git, cwd: &Path, extra: &[&str]) -> Result<String, GitError> 
     })
 }
 
-/// The top folder of the work tree that holds `folder`.
+/// `path` with the platform's separators: git answers `C:/a/b` on Windows, and joining more to
+/// it would mix `/` and `\`.
+fn native(path: &Path) -> PathBuf {
+    path.components().collect()
+}
+
+/// The top folder of the work tree that holds `folder`, with the platform's separators.
 ///
 /// # Errors
 ///
 /// [`GitError::Failed`] when `folder` is in no repository, [`GitError::Output`] when git's
 /// answer is not UTF-8, and the errors of [`Git::run`].
 pub fn top(git: &Git, folder: &Path) -> Result<PathBuf, GitError> {
-    rev_parse(git, folder, &["--show-toplevel"]).map(PathBuf::from)
+    rev_parse(git, folder, &["--show-toplevel"]).map(|path| native(Path::new(&path)))
 }
 
 /// The place of `folder` in the repository at `top`: empty at the top, `a/b` below it.
@@ -78,21 +84,43 @@ pub fn flag(git: &Git, top: &Path, key: &str) -> Result<bool, GitError> {
     }
 }
 
-/// The folder git runs hooks from for the work tree at `top`, honouring `core.hooksPath`.
+/// The folder git runs hooks from for the work tree at `top`, honouring `core.hooksPath`, with
+/// the platform's separators.
 ///
 /// # Errors
 ///
 /// The errors of [`top`].
 pub fn hooks_dir(git: &Git, top: &Path) -> Result<PathBuf, GitError> {
     let path = rev_parse(git, top, &["--git-path", "hooks"])?;
-    Ok(top.join(path))
+    Ok(native(&top.join(path)))
 }
 
-/// The git folder shared by the main work tree and its linked work trees.
+/// The git folder shared by the main work tree and its linked work trees, with the platform's
+/// separators.
 ///
 /// # Errors
 ///
 /// The errors of [`top`].
 pub fn common_dir(git: &Git, top: &Path) -> Result<PathBuf, GitError> {
-    rev_parse(git, top, &["--path-format=absolute", "--git-common-dir"]).map(PathBuf::from)
+    rev_parse(git, top, &["--path-format=absolute", "--git-common-dir"])
+        .map(|path| native(Path::new(&path)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_paths_use_the_platform_separator() {
+        // Paths compare by components, so the text is compared.
+        let s = std::path::MAIN_SEPARATOR_STR;
+        assert_eq!(
+            native(Path::new("a/b/c")).as_os_str(),
+            format!("a{s}b{s}c").as_str()
+        );
+        assert_eq!(
+            native(&Path::new("top").join(".git/hooks")).as_os_str(),
+            format!("top{s}.git{s}hooks").as_str()
+        );
+    }
 }
