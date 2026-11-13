@@ -652,9 +652,9 @@ design. GPL code is never read.
 | ↳ `route_steepest` | `height`, `fixed` → `receivers` | Steepest-descent receiver per cell (D8 distances), ties by index | Braun & Willett 2013 |
 | ↳ `resolve_sinks` | `height`, `receivers`, `fixed` → `receivers`, `routing_surface`, `depressions` | Connects each closed basin through its lowest pass by the minimum spanning tree of basins; `routing_surface` lifts depression cells to their spill level + ε along the priority-flood order, `height` itself unchanged; `depressions` labels routed depressions with their spill node | MST of basins: Cordonnier, Bovy & Braun 2019; the ε lift: Barnes et al. 2014 |
 | ↳ `partition_flow` | `routing_surface`, `receivers` → `weights`, `stack` | Weights over the lower neighbours of the routing surface for erosion: `exponent = "steepest"` (all to the receiver) or `"slope_adaptive"`, p = 0.5 + 0.6·S with S the steepest slope (FastScape's slope-dependent partition; that S is the steepest slope is this spec's reading). A fresh topological order (`stack`, receivers before donors) of the resulting graph | FastScape documentation; Freeman 1991 |
-| ↳ `fluvial` | `height`, `erodibility`, `receivers`, `weights`, `stack`, `depressions`, `fixed`, `climate`, [`uplift`], [`slope_supply`] → `height`, `erosion`, `deposition`, `drainage_area` | The erosion–deposition law with n = 1 (below), solved implicitly in stack order with Gauss–Seidel iterations; sediment filling routed depressions; cumulative erosion and deposition | Yuan et al. 2019 (eq. 9, 11, 13–21), after Davy & Lague 2009; Braun & Willett 2013. Multiple flow with deposition as in FastScape's documentation (Yuan et al. solve single flow); the depression filling after goSPL's documentation, combined with the MST resolver as our own step |
+| ↳ `fluvial` | `height`, `erodibility`, `receivers`, `weights`, `stack`, `depressions`, `fixed`, `climate`, [`uplift`], [`slope_supply`] → `height`, `erosion`, `deposition`, `drainage_area`, [`slope_supply`] | The erosion–deposition law with n = 1 (below), solved implicitly in stack order with Gauss–Seidel iterations; sediment filling routed depressions; cumulative erosion and deposition | Yuan et al. 2019 (eq. 9, 11, 13–21), after Davy & Lague 2009; Braun & Willett 2013. Multiple flow with deposition as in FastScape's documentation (Yuan et al. solve single flow); the depression filling after goSPL's documentation, combined with the MST resolver as our own step |
 | ↳ `hillslope` | `height`, `diffusivity`, `fixed` → `height`, `erosion`, `deposition` | Linear diffusion, implicit ADI (Thomas algorithm per row and column), after `fluvial` as in Yuan et al.; per cell, a net loss books as erosion and a net gain as deposition | – |
-| ↳ `slope_limit` | `height`, `critical_slope`, `fixed`, `erosion` → `height`, `erosion`, `slope_supply` | An exact threshold limiter in one sweep; the material removed goes to the rivers (algorithm below) | Threshold slopes after Montgomery & Brandon 2002; the sweep is own design (a shortest-path form of a slope-limited fill) |
+| ↳ `slope_limit` | `height`, `critical_slope`, `fixed`, `erosion`, [`slope_supply`] → `height`, `erosion`, `slope_supply` | An exact threshold limiter in one sweep; the material removed goes to the rivers (algorithm below) | Threshold slopes after Montgomery & Brandon 2002; the sweep is own design (a shortest-path form of a slope-limited fill) |
 | ↳ `climate_update` | `height`, `climate` → `climate` | Recomputes precipitation, AET and runoff from the current surface every `every` steps | – |
 | `hydrology` | `height`, `climate` → `height`, `lake`, `lake_id`, `lake_level`, `river`, `big_river`, `discharge`, `flow_dir`, `water_surface`, `water_features` | Lakes by water balance, channel discharge over single flow, rivers, river lines and lake outlines (below) | Barnes et al. 2014; Bracht-Flyr et al. 2013; Quinn et al. 1991 (multiple flow on hillslopes, single flow in channels); Leopold & Maddock 1953; Génevaux et al. 2013 |
 | `ecology` | `height`, `climate`, `drainage_area` → `temperature`, `slope`, `vegetation`, `snow`, `wetness` | Net primary productivity from actual evapotranspiration (the Thornthwaite Memorial model, NPP = 3000·(1 − e^(−0.0009695·(AET − 20))) g dry matter/m²/yr), density = min(NPP / 2000, 1) × a slope factor (1 − smoothstep(0.45, 0.9, slope), as 0.3.0) × (1 + a wetness bonus from ln(a / tan β), capped); snow from temperature and slope as 0.3.0 | Lieth & Box 1972; Lieth 1975; Sørensen et al. 2006 |
@@ -709,9 +709,12 @@ rate U, erodibility K and the slope S to the receivers:
   The excess passes on from the spill node in the same sweep: `resolve_sinks` connects the spill
   node downstream of the depression in the stack. With G = 0 there is no deposition and no
   filling.
-- **Slope supply:** the material `slope_limit` removed in the previous time step (`slope_supply`,
-  m³ per cell) enters Qs at its cell like eroded sediment, so G decides how much of it the rivers
-  lay down and how much they carry on. The supply of the last step leaves the map and is reported.
+- **Slope supply:** `slope_supply` holds, per cell, the thickness `slope_limit` has removed since
+  `fluvial` last ran, in metres: `slope_limit` adds to it and `fluvial` empties it, so no supply is
+  counted twice or lost when the two run at different `every`. It enters Qs at its cell like
+  eroded sediment, so G decides how much of it the rivers lay down and how much they carry on.
+  Supply still pending when the evolution ends leaves the map; the reports show it as the volume
+  `slope_limit` removed minus the volume `fluvial` took in.
 - `erosion` books the thickness removed per cell and step, `deposition` the thickness added
   (deposition and filling); both are cumulative, non-negative and in metres.
 - Deposition alone is not expected to give braided rivers, meanders or deltas: recent work needs
@@ -729,7 +732,7 @@ on the built-in recipes' mountains they hit their 100-pass cap on 236 of 240 ste
 - One sweep finds it: a priority queue starts with every cell at its height and pops the lowest
   (ties by cell index); a popped cell offers each neighbour n the height L + S_c,n × d. Drained
   (fixed) cells keep their height.
-- The material removed, (h_i − L_i) × cell area, books as erosion and goes to the rivers as
+- The material removed, (h_i − L_i) × cell area, books as erosion and is added to
   `slope_supply` (the fluvial law above): a failing slope sends its debris into the drainage
   network, as landslides feed rivers. No material moves to a neighbour, so the limiter never
   raises a cell.
