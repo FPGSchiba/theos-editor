@@ -27,6 +27,11 @@ pub mod metrics;
 mod package;
 pub mod progress;
 pub mod recipe;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, unused_imports, reason = "wired into the runner by Task 41")
+)]
+pub mod render;
 pub mod rng;
 #[cfg_attr(
     not(test),
