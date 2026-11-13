@@ -1,6 +1,7 @@
 //! Helpers of the CLI tests, each in one place: isolated runs of `theos`, fixture copies and an
 //! isolated git repository.
 
+use std::ffi::OsStr;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -60,9 +61,31 @@ impl Sandbox {
 
     /// Runs `theos` in `cwd` with `args` and the isolation.
     pub fn run(&self, args: &[&str], cwd: &Path) -> io::Result<Output> {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_theos"));
+        self.run_binary(Path::new(env!("CARGO_BIN_EXE_theos")), args, cwd)
+    }
+
+    /// Runs the `theos` at `binary`, which may be a copy of the built one, like [`Sandbox::run`].
+    pub fn run_binary(&self, binary: &Path, args: &[&str], cwd: &Path) -> io::Result<Output> {
+        let mut command = Command::new(binary);
         command.args(args).current_dir(cwd);
         self.isolate(&mut command);
+        command.output()
+    }
+
+    /// Runs git in `cwd` with the isolation and returns the whole output, a failure included.
+    /// `path` replaces `PATH` for git and the hooks it runs.
+    pub fn git_output(
+        &self,
+        args: &[&str],
+        cwd: &Path,
+        path: Option<&OsStr>,
+    ) -> io::Result<Output> {
+        let mut command = Command::new("git");
+        command.args(args).current_dir(cwd);
+        self.isolate(&mut command);
+        if let Some(path) = path {
+            command.env("PATH", path);
+        }
         command.output()
     }
 

@@ -1,6 +1,7 @@
 //! Behaviour of the built `theos` binary.
 
 mod check;
+mod commit;
 mod common;
 mod formalism;
 mod hook;
