@@ -1,6 +1,7 @@
 # P08 · Map format and terrain generator — phase spec
 
-Status: approved (#27, 11 Nov 2026) · amended by decision 0004 (12 Nov 2026) · repo of the build:
+Status: approved (#27, 11 Nov 2026) · amended by decision 0004 (12 Nov 2026) and by the slope
+limiter of 13 Nov 2026 (§4.1) · repo of the build:
 `theos-editor`
 Source: `docs/specs/00-umbrella.md` §3 P08, decision 0003
 (`docs/decisions/0003-map-generator-in-rust.md`) and decision 0004
@@ -161,6 +162,11 @@ What later phases build on it:
   - a `requires` list in the manifest and CE-76.5;
   - no size limit in the format; a memory budget instead of a fixed grid limit;
   - `route_potential` leaves P08; the extra metrics and the snapshot export move to P33.
+- **13 Nov 2026, from the build:** the slope limit becomes an exact threshold limiter in one
+  sweep, whose removed material feeds the rivers (§5.9 "Slope limit"). The half-excess passes
+  could not settle the built-in recipes' mountains. Jann: "Lets go with (a)". The same change
+  records two findings of the build: the reads of `resolve_sinks` and `fluvial`, and the
+  relaxation of Yuan's iterations on dry cells (§5.9).
 
 ### 4.2 Research (10 Nov 2026)
 
@@ -643,11 +649,11 @@ design. GPL code is never read.
 | `landscape_evolution` | the union of its processes → `height`, `erosion`, `deposition`, `receivers`, `drainage_area` | Initial surface from spectral noise, then `steps` time steps of its process list (below) | – |
 | ↳ `uplift` | `height`, `uplift`, `sag_rate`, `fixed` → `height` | height += (uplift − sag_rate)·dt; drained edges stay at base level | – |
 | ↳ `route_steepest` | `height`, `fixed` → `receivers` | Steepest-descent receiver per cell (D8 distances), ties by index | Braun & Willett 2013 |
-| ↳ `resolve_sinks` | `height`, `receivers` → `receivers`, `routing_surface`, `depressions` | Connects each closed basin through its lowest pass by the minimum spanning tree of basins; `routing_surface` lifts depression cells to their spill level + ε along the priority-flood order, `height` itself unchanged; `depressions` labels routed depressions with their spill node | MST of basins: Cordonnier, Bovy & Braun 2019; the ε lift: Barnes et al. 2014 |
+| ↳ `resolve_sinks` | `height`, `receivers`, `fixed` → `receivers`, `routing_surface`, `depressions` | Connects each closed basin through its lowest pass by the minimum spanning tree of basins; `routing_surface` lifts depression cells to their spill level + ε along the priority-flood order, `height` itself unchanged; `depressions` labels routed depressions with their spill node | MST of basins: Cordonnier, Bovy & Braun 2019; the ε lift: Barnes et al. 2014 |
 | ↳ `partition_flow` | `routing_surface`, `receivers` → `weights`, `stack` | Weights over the lower neighbours of the routing surface for erosion: `exponent = "steepest"` (all to the receiver) or `"slope_adaptive"`, p = 0.5 + 0.6·S with S the steepest slope (FastScape's slope-dependent partition; that S is the steepest slope is this spec's reading). A fresh topological order (`stack`, receivers before donors) of the resulting graph | FastScape documentation; Freeman 1991 |
-| ↳ `fluvial` | `height`, `erodibility`, `receivers`, `weights`, `stack`, `depressions`, `fixed`, `climate` → `height`, `erosion`, `deposition`, `drainage_area` | The erosion–deposition law with n = 1 (below), solved implicitly in stack order with Gauss–Seidel iterations; sediment filling routed depressions; cumulative erosion and deposition | Yuan et al. 2019 (eq. 9, 11, 13–21), after Davy & Lague 2009; Braun & Willett 2013. Multiple flow with deposition as in FastScape's documentation (Yuan et al. solve single flow); the depression filling after goSPL's documentation, combined with the MST resolver as our own step |
+| ↳ `fluvial` | `height`, `erodibility`, `receivers`, `weights`, `stack`, `depressions`, `fixed`, `climate`, [`uplift`], [`slope_supply`] → `height`, `erosion`, `deposition`, `drainage_area` | The erosion–deposition law with n = 1 (below), solved implicitly in stack order with Gauss–Seidel iterations; sediment filling routed depressions; cumulative erosion and deposition | Yuan et al. 2019 (eq. 9, 11, 13–21), after Davy & Lague 2009; Braun & Willett 2013. Multiple flow with deposition as in FastScape's documentation (Yuan et al. solve single flow); the depression filling after goSPL's documentation, combined with the MST resolver as our own step |
 | ↳ `hillslope` | `height`, `diffusivity`, `fixed` → `height`, `erosion`, `deposition` | Linear diffusion, implicit ADI (Thomas algorithm per row and column), after `fluvial` as in Yuan et al.; per cell, a net loss books as erosion and a net gain as deposition | – |
-| ↳ `slope_limit` | `height`, `critical_slope`, `fixed` → `height`, `erosion`, `deposition` | Thermal step (algorithm below) | The classic thermal erosion step of graphics (Musgrave, Kolb & Mace 1989); threshold slopes after Montgomery & Brandon 2002 |
+| ↳ `slope_limit` | `height`, `critical_slope`, `fixed`, `erosion` → `height`, `erosion`, `slope_supply` | An exact threshold limiter in one sweep; the material removed goes to the rivers (algorithm below) | Threshold slopes after Montgomery & Brandon 2002; the sweep is own design (a shortest-path form of a slope-limited fill) |
 | ↳ `climate_update` | `height`, `climate` → `climate` | Recomputes precipitation, AET and runoff from the current surface every `every` steps | – |
 | `hydrology` | `height`, `climate` → `height`, `lake`, `lake_id`, `lake_level`, `river`, `big_river`, `discharge`, `flow_dir`, `water_surface`, `water_features` | Lakes by water balance, channel discharge over single flow, rivers, river lines and lake outlines (below) | Barnes et al. 2014; Bracht-Flyr et al. 2013; Quinn et al. 1991 (multiple flow on hillslopes, single flow in channels); Leopold & Maddock 1953; Génevaux et al. 2013 |
 | `ecology` | `height`, `climate`, `drainage_area` → `temperature`, `slope`, `vegetation`, `snow`, `wetness` | Net primary productivity from actual evapotranspiration (the Thornthwaite Memorial model, NPP = 3000·(1 − e^(−0.0009695·(AET − 20))) g dry matter/m²/yr), density = min(NPP / 2000, 1) × a slope factor (1 − smoothstep(0.45, 0.9, slope), as 0.3.0) × (1 + a wetness bonus from ln(a / tan β), capped); snow from temperature and slope as 0.3.0 | Lieth & Box 1972; Lieth 1975; Sørensen et al. 2006 |
@@ -691,29 +697,42 @@ rate U, erodibility K and the slope S to the receivers:
   3. Repeat both until the largest height change between iterations is below 10⁻³ × max(U)·Δt
      (Yuan's tolerance; 10⁻⁶ m when no cell uplifts) or 50 iterations have run. Non-convergence is
      a warning finding with the residual; the result stays deterministic. Convergence is proven for
-     G/p̂ ≤ 1 and shown experimentally above it; the iteration count depends on G, not on the grid.
+     G/p̂ ≤ 1; the iteration count depends on G, not on the grid. Above G/p̂ = 1 the plain sweeps
+     can oscillate: on the dry cells of a rain shadow (p̂ far below 1) a whole patch rises and
+     falls between iterations. When the sweeps would not reach the tolerance within the limit,
+     successive iterates are combined by Aitken's Δ² relaxation, which converges to the same
+     solution; sweeps that are on track stay unrelaxed (found in the build, 13 Nov 2026).
 - **Depression filling** (part of step 1, only when G > 0): when the Qs accumulation reaches a
   routed depression, the sediment volume fills the depression's cells in height order, up to its
   spill level. Filled cells get an ε slope toward the spill node, so they are not pits next step.
   The excess passes on from the spill node in the same sweep: `resolve_sinks` connects the spill
   node downstream of the depression in the stack. With G = 0 there is no deposition and no
   filling.
+- **Slope supply:** the material `slope_limit` removed in the previous time step (`slope_supply`,
+  m³ per cell) enters Qs at its cell like eroded sediment, so G decides how much of it the rivers
+  lay down and how much they carry on. The supply of the last step leaves the map and is reported.
 - `erosion` books the thickness removed per cell and step, `deposition` the thickness added
   (deposition and filling); both are cumulative, non-negative and in metres.
 - Deposition alone is not expected to give braided rivers, meanders or deltas: recent work needs
   more than this law for alluvial forms (McDonald & Cordonnier 2026, seen at video level). P08
   promises filled basins and wider valley floors, not those forms.
 
-**Slope limit.**
+**Slope limit** (an exact threshold limiter, decided by Jann on 13 Nov 2026). It replaces passes
+that moved half the excess to the steepest neighbour: they settled by only about 2 % per pass, and
+on the built-in recipes' mountains they hit their 100-pass cap on 236 of 240 steps.
 
-- Slope = the largest downhill gradient to the 8 neighbours (height difference ÷ distance).
-- Passes visit cells from highest to lowest (ties by index). Where a cell's slope to its steepest
-  neighbour exceeds its rock's critical slope, half the excess height difference moves to that
-  neighbour, booked as erosion and deposition.
-- Passes repeat until no slope exceeds critical + 1e-6, or 100 passes (a warning finding if not
-  reached).
-- Drained edges are sinks: material moved onto them leaves the map and is counted in the stage
-  report, so the volume balance holds with that term.
+- A cell i may be at most S_c,i × d_ij above each D8 neighbour j, where S_c,i is its rock's
+  critical slope and d_ij the D8 distance.
+- The limited surface is the highest surface at or below `height` that keeps this rule:
+  L_i = min(h_i, min over j of (L_j + S_c,i × d_ij)).
+- One sweep finds it: a priority queue starts with every cell at its height and pops the lowest
+  (ties by cell index); a popped cell offers each neighbour n the height L + S_c,n × d. Drained
+  (fixed) cells keep their height.
+- The material removed, (h_i − L_i) × cell area, books as erosion and goes to the rivers as
+  `slope_supply` (the fluvial law above): a failing slope sends its debris into the drainage
+  network, as landslides feed rivers. No material moves to a neighbour, so the limiter never
+  raises a cell.
+- The limiter settles exactly in every time step; its stage report carries the volume removed.
 
 **Hydrology.**
 
@@ -929,8 +948,9 @@ pub fn run(request: &RunRequest, recipe_dirs: &[PathBuf], out_dir: &Path,
    share.
 9. **Smith–Barstad:** wind over a symmetric hill gives positive precipitation on the windward
    side and negative on the lee side.
-10. **Slope limit:** after `slope_limit`, no slope exceeds the rock's critical slope + 1e-6;
-    volume is conserved once the material moved onto drained edges is counted.
+10. **Slope limit:** after `slope_limit`, no cell lies more than its critical slope × distance
+    above a neighbour (to 1e-9 m); the volume removed equals the booked erosion and the
+    `slope_supply` handed on; a surface that already keeps the rule is unchanged.
 11. **Orientation:** row 0 is north, column 0 west; a source at a known fraction appears at the
     expected cell.
 12. **Roads:** no road step exceeds `max_grade` except bridge edges; bridges span the water in
@@ -940,7 +960,10 @@ pub fn run(request: &RunRequest, recipe_dirs: &[PathBuf], out_dir: &Path,
     which halves with the cell size) within 25 %.
 14. **Steady state with deposition:** with uniform U, K and runoff, n = 1 and no hillslope
     processes, the steady-state slope at G > 0 is (1 + G) times the slope at G = 0 within 2 %, and
-    so is the relief (Yuan et al. 2019, eq. 24 and 28). Run with both flow partitions.
+    so is the relief (Yuan et al. 2019, eq. 24 and 28). Run with both flow partitions. With
+    `slope_adaptive` the partition depends on the slope, so the G > 0 run cannot keep the G = 0
+    run's network; its slopes and relief are compared with (1 + G) times the G = 0 law on its own
+    flow weights (found in the build, 13 Nov 2026).
 
 **Metrics** (`metrics.rs`), deterministic and reported in every summary: relief, lake share, river
 share, vegetation cover, median precipitation and the Chime-to-Chime walk, as 0.3.0 defined them
@@ -1117,7 +1140,10 @@ renamed the place types, added `requires` and dropped the size note of §4.3.
    - sediment exceeding a depression's volume;
    - very large time steps;
    - no cell uplifting (the tolerance falls back to 10⁻⁶ m);
-   - G/p̂ above 1, where convergence is not proven, up to the 50-iteration limit;
+   - G/p̂ above 1, where convergence is not proven and the relaxation must take over (rain-shadow
+     cells), up to the 50-iteration limit;
+   - a whole over-steep flank: the limiter settles it in one sweep, and its supply reaches the
+     rivers in the next step;
    - `slope_adaptive` erosion on a plain, where channel discharge follows the single steepest
      receiver: river lines, fords and lake outlets must still agree.
 3. **Lakes:**
@@ -1297,6 +1323,17 @@ Rulings of decision 0004 (12 Nov 2026), Claude's calls inside Jann's decisions:
 50. Ruling: feature ids stay assigned after the pipeline although `route_potential` left — P31 or
     P32 may bring promotion back, and the mechanism is already specified — cost if wrong: a little
     unused generality.
+
+Rulings of 13 Nov 2026, from the build:
+
+51. Ruling (Jann): the slope limit is an exact one-sweep threshold limiter, and the material it
+    removes feeds the rivers as `slope_supply` — the half-excess passes needed 600–900 passes per
+    step on the built-in recipes and hit the 100-pass cap on 236 of 240 steps — cost if wrong:
+    debris carried by the rivers instead of piling up at the slope's foot.
+52. Ruling: when Yuan's sweeps would miss the tolerance, Aitken relaxation combines successive
+    iterates — on dry cells (p̂ ≪ 1) G/p̂ ≤ 1 fails and the plain sweeps oscillate (a dominant
+    eigenvalue of −1.009 was measured); sweeps that are on track stay unrelaxed — cost if wrong:
+    another stabiliser.
 
 ## 10. Left to the builder
 
