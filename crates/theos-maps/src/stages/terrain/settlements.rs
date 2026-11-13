@@ -336,6 +336,8 @@ fn site(
         for (r, c) in picks {
             let at = frame.centre_m(r, c);
             let name = generated_name(rng, &mut used, names);
+            // Syllable names are drawn only once every list name is in `used`, so a generated
+            // name never equals a list entry and this test tells the two apart exactly.
             let from_list = names.is_some_and(|l| l.contains(&name));
             let i = quality.index(r, c);
             let water = if shore.as_slice()[i] {
@@ -673,6 +675,48 @@ mod tests {
         assert_eq!(report.values.get("settlements"), Some(&0.0));
         let quality = w.f64("site_quality").unwrap();
         assert!(quality.as_slice().iter().all(|q| *q == 0.0));
+    }
+
+    #[test]
+    fn site_quality_follows_the_formula() {
+        let mut w = setup();
+        w.insert("river", masked(|_, c| c == 20)).unwrap();
+        w.insert("lake", masked(|_, _| false)).unwrap();
+        w.insert("big_river", masked(|_, _| false)).unwrap();
+        w.insert("slope", flat(0.03)).unwrap();
+        let rock = (0..N * N).map(|i| if i % N < 19 { 0 } else { 6 }).collect();
+        w.insert("rock", Layer::U8(Grid::from_vec(N, N, rock).unwrap()))
+            .unwrap();
+        let cold = (0..N * N)
+            .map(|i| if i / N == 10 { 2.9 } else { 12.0 })
+            .collect();
+        w.insert(
+            "temperature",
+            Layer::F64(Grid::from_vec(N, N, cold).unwrap()),
+        )
+        .unwrap();
+        run(&mut w, "");
+        // The noise factor 1 + 0.1 u of the stage's stream, one draw per cell.
+        let mut rng = crate::rng::StageRng::for_key(11, "settlements#0/siting");
+        let noise: Vec<f64> = (0..N * N).map(|_| 1.0 + 0.1 * rng.uniform()).collect();
+        let quality = w.f64("site_quality").unwrap();
+        let flat = libm::exp(-0.03 / 0.06);
+        let water = |km: f64| libm::exp(-((km - 0.2) / 0.45) * ((km - 0.2) / 0.45));
+        // (row, col, distance to the river in km, confluence, soil)
+        let cells = [
+            (32, 23, 0.3, 1.0, 1.0),
+            (32, 17, 0.3, 1.0, 0.0),
+            (32, 40, 2.0, 0.0, 1.0),
+        ];
+        for (r, c, km, confluence, soil) in cells {
+            let want =
+                flat * water(km) * (0.6 + 0.4 * confluence) * (0.7 + 0.3 * soil) * noise[r * N + c];
+            let got = quality.get(r, c);
+            assert!((got - want).abs() < 1e-9 * want, "{r},{c}: {got} vs {want}");
+        }
+        // Too cold: 2.9 degrees is not above 3.
+        assert_eq!(quality.get(10, 23), 0.0);
+        assert!(quality.get(11, 23) > 0.0);
     }
 
     #[test]
