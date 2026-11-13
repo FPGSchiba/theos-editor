@@ -55,15 +55,18 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
-- P06's build PR #39 is a draft labelled `needs-jann`.
-  - The final review loop reached its cap of five rounds.
-  - Jann's targeted fix round closed m5-1 and m5-2 (rulings R21–R23), and `cargo xtask gate`
-    passes on Windows.
-  - The targeted review found four new Minor findings, listed in the PR. Three of them (N1–N3)
-    are further variants of one class: a command changes which files are records without the
-    verdict judging it. N4 is two predicates copied from P03.
-  - Jann decides how to go on: merge with them recorded, or a different approach to the class
-    (directive 3).
+- P06's build PR #39 (labelled `needs-jann`) is ready for Jann's merge.
+  - The final review loop reached its cap.
+  - Jann's targeted fix round closed m5-1 and m5-2.
+  - Jann then chose to fix N4 and to record N1–N3 as rulings R24–R26. A fresh scoped review of
+    that change was clean.
+- Follow-up from P06: the class "a command changes which files are records without the verdict
+  judging it" (m4-4, m5-1, and N1–N3 of PR #39) needs a general design. One option is a check
+  after the write that compares the reindex with the preview and heals the cache; another is a
+  P03 preview over the planned disk state. Rulings R16, R21 and R23 refuse the common cases
+  today. R24–R26 accept the rare rest: a `.gitignore` behind a symbolic link, a hidden file
+  restored visible by a Windows rollback, and new folders that differ only in case. The commit
+  check stops any error those cases leave.
 - For P49 (umbrella version 6):
   - before its gate PR: Jann creates a GitHub App for release-plz (contents and pull requests
     write), installs it on this repository and stores its id and key as secrets; the tag ruleset
