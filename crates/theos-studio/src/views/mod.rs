@@ -3,4 +3,5 @@
 
 pub mod check;
 pub mod ledger;
+pub mod new;
 pub mod schema;

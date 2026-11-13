@@ -2,6 +2,7 @@
 
 mod check;
 mod common;
+mod new;
 mod repo;
 mod staged;
 mod workspace;

@@ -2,7 +2,9 @@
 
 use std::path::PathBuf;
 
-use theos_content::{IndexError, ProjectError, RegistryError};
+use theos_content::{IndexError, KindRegistry, ProjectError, RegistryError};
+
+use crate::create::CreateError;
 use theos_vcs::GitError;
 
 /// A failure of the studio.
@@ -57,4 +59,18 @@ pub enum StudioError {
         /// The registered kinds, in order.
         known: Vec<String>,
     },
+    /// `theos new` could not make the record.
+    #[error(transparent)]
+    Create(#[from] CreateError),
+}
+
+impl StudioError {
+    /// The error for a kind that `registry` does not have, with the kinds it has.
+    #[must_use]
+    pub fn unknown_kind(registry: &KindRegistry, kind: &str) -> StudioError {
+        StudioError::UnknownKind {
+            kind: kind.to_owned(),
+            known: registry.kinds().map(|spec| spec.name.to_owned()).collect(),
+        }
+    }
 }

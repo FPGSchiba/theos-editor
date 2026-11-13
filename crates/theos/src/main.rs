@@ -1,12 +1,13 @@
-//! The `theos` command line: `check`, `ledger`, `schema` and `formalism` today; `new` and
-//! `hook install` follow in phase P05.
+//! The `theos` command line: `check`, `ledger`, `schema`, `formalism` and `new` today;
+//! `hook install` follows in phase P05.
 //!
 //! The binary only parses arguments, calls `theos-studio` and prints. Exit codes: 0 when the
-//! command ran without error findings, 1 when `check` found errors, 2 when it could not run.
+//! command ran without error findings, 1 when `check` found errors, 2 when it could not run or `new` refused.
 
 mod check;
 mod formalism;
 mod ledger;
+mod new;
 mod output;
 mod schema;
 
@@ -61,6 +62,22 @@ enum Command {
         /// The project folder; the project above the current folder by default.
         folder: Option<PathBuf>,
     },
+    /// Make a record of a kind from its template; exit 2 when it would introduce an error.
+    New {
+        /// The kind of the record.
+        kind: String,
+        /// The id; the next number of a numbered kind by default.
+        id: Option<String>,
+        /// The title of the record.
+        #[arg(long)]
+        title: Option<String>,
+        /// A field to set, as `field=value`; a list is written `[a, b]`.
+        #[arg(long = "set", value_parser = new::field_value)]
+        set: Vec<(String, String)>,
+        /// The project folder; the project above the current folder by default.
+        #[arg(long)]
+        project: Option<PathBuf>,
+    },
 }
 
 /// How a command ended.
@@ -110,6 +127,24 @@ fn run(cli: Cli, out: &mut impl Write, err: &mut impl Write) -> anyhow::Result<E
         Command::Formalism { folder } => {
             formalism::run(folder.as_deref(), json, out).map(|()| Exit::Ok)
         }
+        Command::New {
+            kind,
+            id,
+            title,
+            set,
+            project,
+        } => new::run(
+            &new::Options {
+                kind,
+                id,
+                title,
+                set,
+                project,
+                json,
+            },
+            out,
+            err,
+        ),
     }
 }
 

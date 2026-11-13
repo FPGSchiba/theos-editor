@@ -62,10 +62,7 @@ pub fn overview(
 pub fn kind(registry: &KindRegistry, name: &str) -> Result<KindView, StudioError> {
     let spec = registry
         .kind(name)
-        .ok_or_else(|| StudioError::UnknownKind {
-            kind: name.to_owned(),
-            known: registry.kinds().map(|spec| spec.name.to_owned()).collect(),
-        })?;
+        .ok_or_else(|| StudioError::unknown_kind(registry, name))?;
     let body = spec.body;
     Ok(KindView {
         name: spec.name.to_owned(),
