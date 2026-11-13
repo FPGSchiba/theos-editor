@@ -4,9 +4,9 @@
 //! The outline of a lake ([`LakeShape::rings`]) is a list of closed rings: exteriors with a
 //! positive area and holes with a negative one. A `GeoJSON` polygon has one exterior, so a lake of
 //! several parts (a lake and an island's own pond, or two basins that share a level) gives one
-//! polygon per exterior, the parts of its `MultiPolygon`. The orientation is kept: exteriors counter-clockwise and holes
-//! clockwise in the frame's (x, y), which is RFC 7946's right-hand rule taken over the
-//! coordinates as written.
+//! polygon per exterior, the parts of its `MultiPolygon`. The orientation is kept: exteriors
+//! counter-clockwise and holes clockwise in the frame's (x, y), which is RFC 7946's right-hand
+//! rule taken over the coordinates as written.
 
 use super::FeaturesError;
 

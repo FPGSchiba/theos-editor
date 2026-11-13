@@ -3,19 +3,19 @@
 //!
 //! The features come in this order: the [`FeatureSet`] in handle order, then the roads of the
 //! `road_network` in network order, then the river lines, then the lakes of
-//! `water_features`, one per lake. Every feature gets the id `<type>-<n>`, numbered per final type from 1 in
-//! that order, so a stage that changed a type (a promotion) renames no reference. Every
-//! [`Prop::Ref`], [`Prop::Refs`] and [`Prop::Road`] becomes the id or ids of the features it
-//! names; a reference to something that does not exist is an error. Coordinates are metres, and
-//! `-0.0` is written as `0.0`. A world without one of the three values has no features of it.
+//! `water_features`, one per lake. Every feature gets the id `<type>-<n>`, numbered per final
+//! type from 1 in that order, so a stage that changed a type (a promotion) renames no
+//! reference. Every [`Prop::Ref`], [`Prop::Refs`] and [`Prop::Road`] becomes the id or ids of
+//! the features it names; a reference to something that does not exist is an error. Coordinates
+//! are metres, and `-0.0` is written as `0.0`. A world without one of the three values has no features of it.
 //!
 //! Roads are `road`/`<class>` `LineString`s of cell centres with `from`, `to`, `length_m`,
 //! `width_m` (from the parameters of the `roads` stage) and `grade_max`; a bridge is the straight
 //! segment between its banks. Rivers are `water`/`river` `LineString`s of `[x, y, bed height]`
 //! with the per-vertex `width_m`, `depth_m` and `discharge_m3s` and the `order`. Lakes are
-//! `water`/`lake` features ([`lakes`]), one per lake, a `Polygon` or a `MultiPolygon` when the lake has
-//! several outlines, with `surface_m`, `terminal`, `outlet` (when the lake has
-//! one) and `depth_max_m`.
+//! `water`/`lake` features ([`lakes`]), one per lake, a `Polygon` or a `MultiPolygon` when the
+//! lake has several outlines, with `surface_m`, `terminal`, `outlet` (when the lake has one) and
+//! `depth_max_m`.
 
 mod lakes;
 mod roads;
@@ -77,6 +77,12 @@ pub enum FeaturesError {
         /// The layer.
         name: &'static str,
     },
+    /// A lake has no exterior ring.
+    #[error("lake {lake} has no outline")]
+    NoOutline {
+        /// The lake's number.
+        lake: u32,
+    },
     /// A lake outline has a hole that lies inside no exterior ring.
     #[error("lake {lake} has a hole inside no outline")]
     OrphanHole {
@@ -97,8 +103,8 @@ pub(super) struct Named {
     roads: Vec<String>,
     /// The id of each river line.
     rivers: Vec<String>,
-    /// The id of each lake with its polygons; a lake with no outline has none.
-    lakes: Vec<Option<(String, Vec<Polygon>)>>,
+    /// The id of each lake with its polygons.
+    lakes: Vec<(String, Vec<Polygon>)>,
     /// How many features each type has.
     counts: BTreeMap<String, usize>,
 }
@@ -128,8 +134,10 @@ impl Named {
         let mut lake_ids = Vec::new();
         for lake in &water.lakes {
             let polygons = lakes::polygons(lake.id, &lake.rings)?;
-            lake_ids
-                .push((!polygons.is_empty()).then(|| (Self::take(&mut counts, "lake"), polygons)));
+            if polygons.is_empty() {
+                return Err(FeaturesError::NoOutline { lake: lake.id });
+            }
+            lake_ids.push((Self::take(&mut counts, "lake"), polygons));
         }
         Ok(Self {
             set: set_ids,
@@ -274,7 +282,8 @@ fn set_feature(f: &Feature, id: &str, named: &Named) -> Result<Gj, FeaturesError
 ///
 /// # Errors
 /// [`FeaturesError`] for a reference that resolves to nothing, a reserved or non-finite
-/// property, a lake hole outside every outline, or a world with roads but no `height` layer.
+/// property, a lake without an outline, a lake hole outside every outline, or a world with
+/// roads but no `height` layer.
 pub(crate) fn build(
     world: &World,
 ) -> Result<(FeatureCollection, BTreeMap<String, usize>), FeaturesError> {
@@ -306,10 +315,8 @@ pub(crate) fn build(
     for (river, id) in water.rivers.iter().zip(&named.rivers) {
         features.push(water::river(river, id)?);
     }
-    for (lake, named) in water.lakes.iter().zip(&named.lakes) {
-        if let Some((id, polygons)) = named {
-            features.push(water::lake(lake, id, polygons)?);
-        }
+    for (lake, (id, polygons)) in water.lakes.iter().zip(&named.lakes) {
+        features.push(water::lake(lake, id, polygons)?);
     }
     let collection = FeatureCollection {
         bbox: None,

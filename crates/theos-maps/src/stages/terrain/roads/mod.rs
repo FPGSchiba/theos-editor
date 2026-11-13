@@ -28,8 +28,8 @@
 //! built, so trunks merge. Loops are the exception: a loop is routed without the merge discount
 //! (ruling 55), so it is a new road and not a copy of the roads it was added to shortcut (0.3.0
 //! laid it along them whenever its detour was below `1 / merge_discount`). Tree links and trails
-//! keep the discount. Then a trail runs to each ruin from the road cell or place it reaches at the least
-//! cost. A place no road reaches, and a ruin no trail reaches, gives one warning each.
+//! keep the discount. Then a trail runs to each ruin from the road cell or place it reaches at
+//! the least cost. A place no road reaches, and a ruin no trail reaches, gives one warning each.
 //!
 //! **Outputs:** the world value `road_network` ([`RoadNetwork`]); the raster `roads`, 0 for no
 //! road and the class's code 1 to 4 on every cell a road passes, the higher class where roads

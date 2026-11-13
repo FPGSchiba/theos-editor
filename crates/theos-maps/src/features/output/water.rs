@@ -1,4 +1,5 @@
-//! Rivers as `water`/`river` `LineString`s and lakes as `water`/`lake` `Polygon`s or `MultiPolygon`s.
+//! Rivers as `water`/`river` `LineString`s and lakes as `water`/`lake` `Polygon`s or
+//! `MultiPolygon`s.
 
 use geojson::{Feature as Gj, GeometryValue};
 use serde_json::Value;

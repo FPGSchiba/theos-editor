@@ -446,6 +446,18 @@ fn the_lakes_of_a_run_are_polygons_of_closed_rings() -> TestResult {
 }
 
 #[test]
+fn a_lake_without_an_outline_is_an_error() -> TestResult {
+    let mut world = world_with(three_places())?;
+    edit_water(&mut world, |w| w.lakes[0].rings.clear())?;
+    let result = build(&world);
+    assert!(
+        matches!(result, Err(FeaturesError::NoOutline { lake: 1 })),
+        "{result:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_lake_with_several_outlines_is_one_multipolygon_feature() -> TestResult {
     let mut world = world_with(three_places())?;
     edit_water(&mut world, |w| {
