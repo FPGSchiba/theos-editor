@@ -186,7 +186,8 @@ impl<'a> Repo<'a> {
     /// The project in `content/` of a repository laid out as `layout` says, next to the
     /// violating `archive/C-901.md`, which is not part of the project. With `settings`, they are
     /// the project's committed `.theos/settings.toml`. Everything is committed, then the hook of
-    /// `theos hook install content` is installed; the answer is the work tree to commit from.
+    /// `theos hook install content` is installed, for [`Layout::Submodule`] from the submodule's
+    /// work tree; the answer is the work tree to commit from.
     fn in_content(
         sandbox: &'a Sandbox,
         layout: Layout,
@@ -211,11 +212,18 @@ impl<'a> Repo<'a> {
         };
         main.git_ok(&["add", "-A"])?;
         main.commit(&["-m", "fixture"], &[])?.require_success()?;
-        let theos = Path::new(env!("CARGO_BIN_EXE_theos"));
-        let output = sandbox.run_binary(theos, &["hook", "install", "content"], &main.top)?;
-        if !output.status.success() {
-            return Err(format!("hook install failed: {}", stderr(&output)).into());
+        if layout == Layout::Submodule {
+            let sub = main.added_as_submodule()?;
+            sub.install_content()?;
+            let hooks = sandbox.work().join("super/.git/modules/sub/hooks");
+            assert!(
+                hooks.join("pre-commit").is_file(),
+                "no hook in {}",
+                hooks.display()
+            );
+            return Ok(sub);
         }
+        main.install_content()?;
         if layout != Layout::Linked {
             return Ok(main);
         }
@@ -225,6 +233,49 @@ impl<'a> Repo<'a> {
             sandbox,
             project: top.join("content"),
             top,
+        })
+    }
+
+    /// Runs `theos hook install content` in the top folder.
+    fn install_content(&self) -> TestResult {
+        let theos = Path::new(env!("CARGO_BIN_EXE_theos"));
+        let output = self
+            .sandbox
+            .run_binary(theos, &["hook", "install", "content"], &self.top)?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(format!("hook install failed: {}", stderr(&output)).into())
+        }
+    }
+
+    /// A superproject in `super/` that adds this repository as its submodule `sub`. The answer is
+    /// the submodule's work tree, with the project in `content/`.
+    fn added_as_submodule(&self) -> Result<Repo<'a>, Error> {
+        let top = self.sandbox.work().join("super");
+        std::fs::create_dir_all(&top)?;
+        self.sandbox.git(&["init", "-q", "-b", "main"], &top)?;
+        let url = self
+            .top
+            .to_str()
+            .ok_or("the repository's path is not UTF-8")?;
+        // git refuses a local clone of a submodule unless the file protocol is allowed.
+        self.sandbox.git(
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                url,
+                "sub",
+            ],
+            &top,
+        )?;
+        let sub = top.join("sub");
+        Ok(Repo {
+            sandbox: self.sandbox,
+            project: sub.join("content"),
+            top: sub,
         })
     }
 }
@@ -248,6 +299,10 @@ enum Layout {
     /// The work tree of `git init --separate-git-dir`, whose `.git` is a file. git gives its
     /// hooks an absolute `GIT_DIR` and no `GIT_WORK_TREE`.
     Separate,
+    /// The work tree of the submodule `sub` of a superproject, whose `.git` is a file naming
+    /// `super/.git/modules/sub`, where its hooks are. git gives its hooks an absolute `GIT_DIR`
+    /// and no `GIT_WORK_TREE`.
+    Submodule,
 }
 
 /// How `git commit` is told its repository, and the variables git then gives the hook, which
@@ -538,6 +593,18 @@ fn a_separate_git_dir_judges_its_project() -> TestResult {
 #[test]
 fn a_separate_git_dir_applies_the_committed_settings() -> TestResult {
     a_work_tree_applies_the_committed_settings(Layout::Separate, Given::Found)
+}
+
+// AC: CE-17.2
+#[test]
+fn a_submodule_judges_its_project() -> TestResult {
+    a_work_tree_judges_its_project(Layout::Submodule, Given::Found)
+}
+
+// AC: CE-17.2
+#[test]
+fn a_submodule_applies_the_committed_settings() -> TestResult {
+    a_work_tree_applies_the_committed_settings(Layout::Submodule, Given::Found)
 }
 
 // AC: CE-17.2
