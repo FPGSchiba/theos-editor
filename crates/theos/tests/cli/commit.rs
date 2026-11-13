@@ -116,16 +116,19 @@ impl<'a> Repo<'a> {
         })
     }
 
-    /// The number of commits on `HEAD`; 0 only while `HEAD` is unborn. Any other git failure
-    /// fails the test.
+    /// The number of commits on `HEAD`. It is 0 only when `git rev-parse --verify -q HEAD` exits
+    /// with exactly 1, which is an unborn `HEAD`; any other non-zero exit (128 for a fatal error)
+    /// fails the test with git's stderr.
     fn count(&self) -> Result<u32, Error> {
         let head = self.sandbox.git_output(
             &["rev-parse", "--verify", "-q", "HEAD"],
             &self.project,
             None,
         )?;
-        if !head.status.success() {
-            return Ok(0);
+        match head.status.code() {
+            Some(0) => {}
+            Some(1) => return Ok(0),
+            _ => return Err(format!("git rev-parse HEAD failed: {}", stderr(&head)).into()),
         }
         let count = self.git_ok(&["rev-list", "--count", "HEAD"])?;
         Ok(count.trim().parse()?)
