@@ -44,6 +44,7 @@
 
 use libm::pow;
 
+use super::cell::{Receiver, solve};
 use super::fill::Traps;
 use super::relax::Relaxation;
 use super::sediment::{route, step_sediment};
@@ -91,40 +92,36 @@ pub(super) fn incise(step: &Incision<'_>, start: &Grid<f64>) -> Grid<f64> {
 /// any.
 ///
 /// A cell keeps its height when it is held, has no edge (an outlet or the closed map's sink), or
-/// gathers no water (`Q = 0`, so it has no fluvial term). A receiver that is not lower than the
-/// height the cell reaches without incision, `(h*_i·(1 + c_i) + Δt·G·Qs_in/Q_i) / (1 + c_i)`,
-/// takes no share: stream power erodes only downhill, so incision never raises a cell. With a
-/// single receiver this makes the step consistent: the cell erodes toward its receiver exactly
-/// when it ends above it. It happens over a pass link that climbs, inside a routed depression
-/// (whose routing surface stands above the height), and where a receiver's deposit lifts it
-/// above its donor. Without deposition that height is `h*_i`.
+/// gathers no water (`Q = 0`, so it has no fluvial term). Otherwise [`solve`] gives its new
+/// height, at which exactly the receivers below it take a share: stream power erodes only
+/// downhill, so incision never raises a cell above the height it reaches without incision,
+/// `(h*_i·(1 + c_i) + Δt·G·(Qs_in + V/Δt)/Q_i) / (1 + c_i)` (`h*_i` without deposition), and a
+/// receiver above the cell never pulls it up. Receivers lie above their cell over a pass link
+/// that climbs, inside a routed depression (whose routing surface stands above the height), and
+/// where a receiver's deposit lifts it above its donor.
 fn sweep(step: &Incision<'_>, start: &[f64], terms: Option<&Deposit<'_>>, h: &mut [f64]) {
     h.copy_from_slice(start);
+    let mut receivers: Vec<Receiver> = Vec::with_capacity(8);
     for &cell in step.stack {
         let i = cell_index(cell);
         let edges = step.weights.edges(i);
         if step.held[i] || edges.is_empty() || step.discharge[i] <= 0.0 {
             continue;
         }
-        let (mut top, mut bottom, base) = match terms {
-            None => (start[i], 1.0, start[i]),
+        let (top, bottom) = match terms {
+            None => (start[i], 1.0),
             Some(d) => {
                 let diagonal = 1.0 + d.own[i];
-                let top = start[i] * diagonal + d.inflow[i];
-                (top, diagonal, top / diagonal)
+                (start[i] * diagonal + d.inflow[i], diagonal)
             }
         };
         let power = step.erodibility[i] * pow(step.discharge[i], step.m) * step.dt;
-        for e in edges {
-            let receiver = h[cell_index(step.weights.to[e])];
-            if receiver >= base {
-                continue;
-            }
-            let f = power * step.weights.weight[e] / step.weights.dist[e];
-            top += f * receiver;
-            bottom += f;
-        }
-        h[i] = top / bottom;
+        receivers.clear();
+        receivers.extend(edges.map(|e| Receiver {
+            height: h[cell_index(step.weights.to[e])],
+            share: power * step.weights.weight[e] / step.weights.dist[e],
+        }));
+        h[i] = solve(top, bottom, &receivers);
     }
 }
 

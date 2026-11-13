@@ -32,6 +32,7 @@
 //! without an edge (the drained edges, or the closed map's sink), `iterations`, and `supply_m3`,
 //! the volume of slope supply taken in.
 
+mod cell;
 mod fill;
 mod inputs;
 mod relax;

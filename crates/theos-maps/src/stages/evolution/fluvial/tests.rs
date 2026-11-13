@@ -214,6 +214,26 @@ fn a_receiver_not_below_the_cell_takes_no_share() {
 }
 
 #[test]
+fn a_receiver_above_the_solved_height_takes_no_share() {
+    // Cell 3 (30 m) drains to cell 1 (29 m, K = 0 so it stays) and to cell 0 (0 m). Cell 1 lies
+    // below cell 3's height without incision but above the height cell 3 reaches: an uphill
+    // receiver, which must not pull cell 3 up. Only cell 0 takes a share: F30 = 0.75/√2.
+    let mut w = square([0.0, 29.0, 20.0, 30.0], no_fields());
+    let erodibility = Grid::from_vec(2, 2, vec![K, 0.0, K, K]).unwrap();
+    w.insert("erodibility", Layer::F64(erodibility)).unwrap();
+    fluvial_step(&mut w, "g = 0.0").unwrap();
+    let h = layer(&w, "height");
+    assert_eq!(
+        h[1].to_bits(),
+        29.0_f64.to_bits(),
+        "cell 1 keeps its height"
+    );
+    let h3 = 30.0 / (1.0 + 0.75 / SQRT_2);
+    assert!(close(h[3], h3), "{} vs {h3}", h[3]);
+    assert!(h[3] < h[1], "cell 1 lies above cell 3's solved height");
+}
+
+#[test]
 fn fixed_cells_never_change() {
     // Cell 2 of the square is fixed although it has an edge to the lower cell 0.
     let mut w = square([0.0, 10.0, 20.0, 30.0], no_fields());
