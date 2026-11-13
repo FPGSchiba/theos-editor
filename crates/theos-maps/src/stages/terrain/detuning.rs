@@ -127,6 +127,8 @@ impl TypedStage for Detuning {
     ) -> Result<StageReport, StageError> {
         let frame = *ctx.frame();
         let mut rng = ctx.sub_rng("drift");
+        // Only requires the layer: the spec row declares the read; omega does not depend on
+        // height in 0.3.0.
         ctx.f64("height")?;
         let ruins = ctx
             .value_opt::<FeatureSet>("features")?
@@ -165,7 +167,7 @@ impl TypedStage for Detuning {
 mod tests {
     use crate::features::{Feature, FeatureSet, Geometry};
     use crate::grid::Grid;
-    use crate::stage::{Registry, Stage};
+    use crate::stage::{LayerSpec, Registry, Stage};
     use crate::stages::terrain::detuning::{Detuning, DetuningParams};
     use crate::stages::terrain::support::{run_stage, table, world};
     use crate::world::{Layer, World};
@@ -206,7 +208,16 @@ mod tests {
     // AC: CE-28.7
     #[test]
     fn detuning_is_a_registered_stage_that_writes_omega() -> TestResult {
-        assert!(Registry::builtin().get("detuning").is_some());
+        let registry = Registry::builtin();
+        let stage = registry.get("detuning").ok_or("detuning is registered")?;
+        let params = stage.params(&table(""))?;
+        let names = |specs: Vec<LayerSpec>| specs.into_iter().map(|s| s.name).collect::<Vec<_>>();
+        let reads = names(stage.reads(params.as_ref()));
+        assert!(
+            reads.contains(&"height") && reads.contains(&"features"),
+            "{reads:?}"
+        );
+        assert_eq!(names(stage.writes(params.as_ref())), ["omega"]);
         let omega = run_detuning_on_test_world()?;
         assert!(omega.as_slice().iter().all(|v| (0.0..=1.0).contains(v)));
         assert!(omega.get(32, 32) > omega.get(2, 2));
