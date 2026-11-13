@@ -1,8 +1,8 @@
 //! The `resources` stage: harvestable deposits from geology, water and ecology, ported from
 //! 0.3.0's `features.py::resources`.
 //!
-//! [`fields`] computes ten suitability fields (iron ore, copper ore, silver ore, stone, clay,
-//! timber, peat and reeds, salt, resonance crystal, herbs), [`deposits`] places the requested
+//! `fields` computes ten suitability fields (iron ore, copper ore, silver ore, stone, clay,
+//! timber, peat and reeds, salt, resonance crystal, herbs), `deposits` places the requested
 //! number of each. The fields go to the world value `resource_fields` for the `resources` render.
 //! Precipitation comes from `climate.fields` when present, else from the fields computed from
 //! `height` and not written, as in `elements`. `omega` is written by a later stage (`detuning`);
