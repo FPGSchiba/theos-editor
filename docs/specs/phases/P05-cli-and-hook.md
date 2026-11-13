@@ -3,6 +3,9 @@
 Status: waiting for Jann's approval · 12 Nov 2026 · repo of the build: `theos-editor`
 Source: `docs/specs/00-umbrella.md` §3 P05, version 6 (the P05 split, docs PR #34). Scope and
 acceptance criteria come from there; this spec decides how.
+Changes: 13 Nov 2026 — the staged read and check judge paths in git's spelling, under git's
+folding (§5.2, §5.7, §9). Why: the build's final review (R1-1) reproduced a false pass when a
+case-only rename or an NFD name hid a record from the snapshot.
 
 ## 1. Goal
 
@@ -199,30 +202,59 @@ changing them.
 pub struct Staged {
     /// The repository's top folder.
     pub top: PathBuf,
-    /// The commit's paths and how each changes, from `diff --cached`.
+    /// The place of the folder read in the repository, in git's spelling: empty at the top,
+    /// `a/b` below it.
+    pub place: String,
+    /// How the repository compares paths; `tracked` and `modified` are the entries below
+    /// `place` under it.
+    pub folding: Folding,
+    /// The commit's paths and how each changes, from `diff --cached`, for the whole repository.
     pub changed: Vec<StagedPath>,
-    /// Every path in the index under the folder read, with its mode.
+    /// Every index entry below the folder read, at stage 0, without intent-to-add entries.
     pub tracked: Vec<Tracked>,
-    /// The bytes of each tracked regular file whose working copy differs from the index.
+    /// The bytes of each tracked regular file whose working copy differs from the index or is
+    /// gone.
     pub modified: Vec<(Vec<u8>, Vec<u8>)>,   // (path, staged bytes)
 }
 pub struct StagedPath { pub path: Vec<u8>, pub status: Status }   // A, M, D, T, …
-pub struct Tracked { pub path: Vec<u8>, pub mode: u32 }
+pub struct Tracked { pub path: Vec<u8>, pub mode: u32, pub object: String }
+
+/// How git compares paths: `core.ignorecase` and `core.precomposeunicode`.
+pub struct Folding { pub ignore_case: bool, pub precompose: bool }
 
 pub fn read(git: &Git, folder: &Path) -> Result<Staged, GitError>;
+/// The bytes of git objects by object id, in the order asked, with one `cat-file --batch`.
+pub fn blobs(git: &Git, top: &Path, objects: &[&str]) -> Result<Vec<Vec<u8>>, GitError>;
 ```
+
+**Paths are judged in the spelling of git's index.** A file system can hold one entry under
+another spelling than git's index does:
+- on NTFS and APFS (the Windows and macOS defaults) a case-only rename on disk is invisible to
+  git, and `core.ignorecase` is true;
+- on macOS a name stored as NFD canonicalizes to NFD, while git stores NFC
+  (`core.precomposeunicode`).
+
+`Folding` compares paths the way git does: case-folded when `ignore_case`, NFC when `precompose`,
+byte for byte otherwise. The crate `unicode-normalization` does the NFC (directive 2). The index
+decides how a path is spelled, and every path `read` returns is in git's spelling.
 
 `read` runs, in this order:
 1. `git rev-parse --show-toplevel` in `folder`. Every later command runs in that top folder,
-   where git runs hooks, so a relative `GIT_INDEX_FILE` resolves as git meant it.
-2. `git --no-optional-locks diff --cached --name-status --no-renames -z` gives `changed`. Before
+   where git runs hooks, so a relative `GIT_INDEX_FILE` resolves as git meant it. The paths git
+   answers with are rebuilt from their components, so they carry the platform's separators.
+2. `git config --bool --get core.ignorecase` and the same for `core.precomposeunicode` give
+   `folding`. A setting that is not set is false.
+3. `git --no-optional-locks diff --cached --name-status --no-renames -z` gives `changed`. Before
    the first commit it lists every staged file as added (probe §4.3).
-3. `git --no-optional-locks ls-files -s -z -- <folder>` gives `tracked`: every index entry under
-   the folder, with its mode and object id.
-4. `git --no-optional-locks diff --name-only --no-renames -z -- <folder>` gives the tracked paths
-   whose working copy is modified or deleted. For the regular files among them, one
-   `git cat-file --batch` reads the staged bytes by object id, so no path ever goes into the
-   batch input. That gives `modified`.
+4. `git --no-optional-locks ls-files -s -z`, with no pathspec, lists the whole index. The entries
+   whose first components are the folder's place, under `folding`, are `tracked`, with their mode
+   and object id. `place` is the spelling of the first such entry.
+5. `git --no-optional-locks diff --name-status --no-renames -z`, with no pathspec, gives the
+   tracked paths whose working copy is modified or deleted, kept under the place as in step 4.
+   Entries with status `A` here are intent-to-add entries (`git add -N`): their index entry is an
+   empty placeholder that git does not commit, so they are left out of `tracked` and `modified`.
+   For the regular files among the rest, `blobs` reads the staged bytes by object id with one
+   `git cat-file --batch`, so no path ever goes into the batch input. That gives `modified`.
 
 Untracked files need no git call. The cache knows which files the working tree holds, and a path
 that the cache holds but `tracked` does not is not in the snapshot (§5.7). git's own exclude
@@ -267,7 +299,9 @@ impl Workspace {
   same.
 - `StudioError` is a `thiserror` enum. Its variants are `Project`, `Registry`, `Index`, `Git`,
   `Io { path, source }`, `NotAProject { start }` (no `theos.toml` at or above the folder) and
-  `NotInRepository { folder }`. It is `#[non_exhaustive]`.
+  `NotInRepository { folder, source }`. It is `#[non_exhaustive]`. `NotInRepository` keeps git's
+  own error as its source, so the report (§5.12) shows git's reason (dubious ownership, a bare
+  repository, a corrupt `.git`, or no repository) once.
 
 ### 5.4 The `theos` binary: commands, project, output, exit codes
 
@@ -281,10 +315,14 @@ theos hook install [<folder>] [--force] [--json]
 theos formalism [<folder>] [--json]
 ```
 
-- **Project:** a `<folder>` given is the project root, as in P04. Without one, the project is the
-  nearest folder at or above the current one that holds `theos.toml`, like git and cargo
-  (`Workspace::find`). `new` and `schema` take the folder as `--project`, because their
-  positionals are a kind and an id.
+- **Project:** one helper resolves it for every command.
+  - A `<folder>` given (or `--project`) is the project root, as in P04. It must hold
+    `theos.toml`. If not, the command exits 2 with "`X` is not a content project: it has no
+    theos.toml". A given folder is never searched upward.
+  - Without one, the project is the nearest folder at or above the current one that holds
+    `theos.toml`, like git and cargo (`Workspace::find`).
+  - `new` and `schema` take the folder as `--project`, because their positionals are a kind and
+    an id.
 - **Text:** stdout carries only the result. A finding is one line in P03's `Display` form:
   - `path:line:column: severity rule: message` when it has a position;
   - `path: severity rule: message` when it has none.
@@ -351,10 +389,10 @@ pub fn check_staged(workspace: &mut Workspace, git: &Git) -> Result<StagedCheck,
 
 **Steps:**
 1. `staged::read(git, project root)`.
-2. **Map paths:** project path = repository path minus the project's place in the repository.
-   The project's place is its root relative to `Staged::top`, after both are made absolute with
-   `std::fs::canonicalize`. Paths outside the project are dropped. A path that is not UTF-8
-   cannot be a record or an input file, so it is dropped too.
+2. **Map paths:** project path = repository path minus the project's place in the repository,
+   compared by components under `Staged::folding`. The place is `Staged::place`, in git's
+   spelling. The path keeps git's spelling. Paths outside the project are dropped. A path that is
+   not UTF-8 cannot be a record or an input file, so it is dropped too.
 3. **Build the changes** relative to the cache. The cache mirrors the working tree once the
    workspace has synced it. A new `Index::paths()` lists every record and input file it holds.
    - For each `modified` path: `Change::Content(path, staged bytes)`. This covers a file staged
@@ -362,9 +400,21 @@ pub fn check_staged(workspace: &mut Workspace, git: &Git) -> Result<StagedCheck,
    - For each cached path that is not a regular file in `tracked` (mode 100644 or 100755):
      `Change::Removed(path)`. This covers an untracked or locally excluded record, a staged
      deletion, and a symbolic link or submodule entry at a record path.
-   - A tracked path that the cache does not hold and that is not modified gets no change. The
-     walk leaves it out (a project `.gitignore` or a hidden file), so for the index it is not a
-     record, staged or not.
+   - A tracked path that the cache does not hold under any spelling and that is not modified gets
+     no change. The walk leaves it out (a project `.gitignore` or a hidden file), so for the
+     index it is not a record, staged or not.
+   - A tracked regular path that the cache holds only under another spelling (the same under the
+     folding) and that is not modified gets `Change::Content(path, staged bytes)` in git's
+     spelling, besides the `Removed` of the cached spelling. The bytes come from `staged::blobs`.
+   - The order is: the `Content` changes in `modified` order, then these in `tracked` order, then
+     the `Removed` changes in cache order.
+
+   **Why the spelling rule:** on a case-insensitive file system a case-only rename on disk is
+   invisible to git, so the work-tree diff is empty and `modified` does not list the file. The
+   cache holds the disk's spelling, `tracked` holds git's. On macOS a name stored as NFD
+   canonicalizes to NFD while git stores NFC. Without the rule, the cached spelling counts as
+   removed and the tracked one is no record, so a record, or the whole project folder, silently
+   left the snapshot and violations committed (P05 final review R1-1).
 4. **Snapshot preview:** `Index::snapshot(&changes)` runs. It is one of two additions to
    `theos-content`'s index; `paths()` is the other:
    - it applies the changes in a transaction and rolls it back, as `preview` does;
@@ -585,7 +635,8 @@ the nine variants and checks that each cause appears exactly once.
 | AC | Test |
 |---|---|
 | CE-17.1 | **Per command, a binary test** on a fixture project: the text output, and `--json` parsed with `serde_json` and compared field by field:<br>- `check`: findings, counts, binaries checked and not checked, exit 0, 1 and 2;<br>- `ledger`: the P04 ledger as JSON;<br>- `new`: path from both placements, numbering, template and skeleton, a refusal leaves no file;<br>- `schema`: all kinds, one kind, rules with configured severities;<br>- `hook install`: the script, the marker, re-install, foreign hook, `--force` with backup, a repo-local `core.hooksPath`, a refused global one, a project in a subfolder, a linked worktree. |
-| CE-17.2 | **Through git, with the installed hook:**<br>- a staged never-confirm violation is refused, and the message names `lore/never-confirm` and the file;<br>- the same violation with a fix only in the working tree is refused;<br>- a clean snapshot with a violation only in the working tree commits;<br>- `commit -a` and `commit <path>` check their own snapshots;<br>- the lowered target makes a committed clue overshoot and is refused;<br>- a staged settings change that tries to lower never-confirm is refused;<br>- a local record excluded through `.git/info/exclude` with a violation does not block;<br>- a project in a subfolder commits through its hook.<br>**Unit tests:** the path mapping and the change building of §5.7, with a project in a subfolder and files outside it. |
+| CE-17.2 | **Through git, with the installed hook:**<br>- a staged never-confirm violation is refused, and the message names `lore/never-confirm` and the file;<br>- the same violation with a fix only in the working tree is refused;<br>- a clean snapshot with a violation only in the working tree commits;<br>- `commit -a` and `commit <path>` check their own snapshots;<br>- the lowered target makes a committed clue overshoot and is refused;<br>- a staged settings change that tries to lower never-confirm is refused;<br>- a local record excluded through `.git/info/exclude` with a violation does not block;<br>- a project in a subfolder commits through its hook;<br>- a case-only rename of a record, or of the project folder, on disk after staging cannot hide a
+  violation.<br>**Unit tests:** the path mapping and the change building of §5.7, with a project in a subfolder and files outside it. |
 
 ## 6. Interfaces other phases use
 
@@ -610,6 +661,8 @@ the nine variants and checks that each cause appears exactly once.
 | Windows `sh` and paths with spaces or quotes | The hook fails to start | Single-quoted path with `'` escaped. A test path with a space and a `'` on Windows |
 | A cache contended by another build | `IndexError::Contended` | The in-memory fallback (§5.3) |
 | CRLF in staged blobs (`core.autocrlf`) | Positions or findings differ from the working copy's | `theos-content` reads CRLF as LF (P02). A test commits with `autocrlf=true` |
+| Path identity: a case-only rename on disk (NTFS, APFS), or an NFD name on macOS, against git's NFC | The cache and the index spell a path differently, so a record, or the whole project folder, leaves the snapshot and violations commit | Paths are compared under git's folding and kept in git's spelling; a respelled tracked path gets its staged bytes (§5.2, §5.7). Tests rename after staging, with `core.ignorecase=true`, on every OS |
+| Intent-to-add entries (`git add -N`) | An empty placeholder is judged as an empty record, and a commit does not contain it | The work-tree diff is read with `--name-status`; status `A` there marks the entry, which is left out (§5.2) |
 
 ## 8. Review Focus — inputs most likely to break it
 
@@ -630,6 +683,13 @@ the nine variants and checks that each cause appears exactly once.
 - **Paths:** with a space, with non-ASCII letters, or that are not UTF-8; an id that exists in
   another case; a record tracked with `git add -f` although the project's `.gitignore` keeps it
   out.
+- **Path identity:** a case-only rename of a record or of the project folder on disk, after
+  staging; a name in NFD on disk and NFC in git; `core.ignorecase` and `core.precomposeunicode`
+  on and off; a place that no entry lies below.
+- **Intent-to-add:** a file added with `git add -N`, which a commit leaves out.
+- **Project resolution:** a given folder or `--project` without `theos.toml`, for every command.
+- **Git's refusals:** a folder git cannot use (dubious ownership, a bare repository), with git's
+  reason once in the report.
 - **The hook script:** an existing foreign hook, a re-install, `--force`, an install path with a
   space or a `'`.
 - **`theos new`:** a template whose body contains `{{title}}`; a compile template's
@@ -716,6 +776,16 @@ the nine variants and checks that each cause appears exactly once.
   files from links and submodules — cost if wrong: one more git call.
 - Ruling: paths that are not UTF-8 are dropped from the snapshot — records and input files have
   ASCII names (data model §2, §3) — cost if wrong: such a file is not checked.
+- Ruling: paths are compared under git's own folding, and git's index decides the spelling — the
+  file system can hold an entry under another spelling (a case-only rename on NTFS or APFS, NFD
+  on macOS), and a snapshot that trusts the cache's spelling loses records silently; the options
+  were to build the snapshot from the index alone, or to refuse on any mismatch — cost if wrong:
+  one more git config read and whole-repository listings per staged check (content repositories
+  are small).
+- Ruling: intent-to-add entries are not tracked — git does not commit them — cost if wrong: one
+  filter.
+- Ruling: a given project folder must hold `theos.toml` and is never searched upward — a typo in
+  a folder must not check another project — cost if wrong: one error variant.
 - Ruling: `theos formalism` gets `--json` although CE-17.1 does not list it — every command of the
   binary then behaves the same — cost if wrong: a few lines.
 
