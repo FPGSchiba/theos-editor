@@ -99,6 +99,18 @@ mod tests {
             serde_json::json!([{"stage": "travel", "message": "slow"}])
         );
         assert!(s.get("elevation_m.relief").is_none());
+        let keys: Vec<&str> = s.as_object().unwrap().keys().map(String::as_str).collect();
+        assert_eq!(
+            keys,
+            [
+                "elevation_m",
+                "features",
+                "findings",
+                "lake_pct",
+                "precip_mm_yr",
+                "stages"
+            ]
+        );
         // the dotted paths are what constraints read
         let c = BTreeMap::from([("elevation_m.relief".to_owned(), [1000.0, 1200.0])]);
         assert_eq!(crate::constraints::evaluate(&c, &s)["pass"], true);

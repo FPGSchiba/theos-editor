@@ -20,9 +20,13 @@ use crate::stage::Metrics;
 use crate::stages::terrain::climate::{self, Climate};
 use crate::world::World;
 
-/// `x` rounded to one decimal place (`scale` 10) or two (`scale` 100) the way Python's `round(x, n)` does: halves to even on the
-/// scaled value, both steps exact IEEE operations (ruling: the plan said `f64::round`, which
-/// rounds halves away from zero and would differ from 0.3.0).
+/// `x` rounded to one decimal place (`scale` 10) or two (`scale` 100) the way Python's
+/// `round(x, n)` does: halves to even on the scaled value, both steps exact IEEE operations
+/// (ruling: the plan said `f64::round`, which rounds halves away from zero and would differ from
+/// 0.3.0).
+///
+/// Python's `round` is correctly rounded on the decimal value of `x`; this differs only where
+/// `x * scale` itself rounds onto an exact .5, which share-of-cells inputs do not hit.
 fn round_to(x: f64, scale: f64) -> f64 {
     canonical(round_half_even(x * scale) / scale)
 }
@@ -179,6 +183,20 @@ mod tests {
         assert!((num(&m, "vegetation_cover_pct") - 6.2).abs() < 1e-12);
         // int(median): middle values 700 and 803, 751.5 -> truncated.
         assert!((num(&m, "precip_mm_yr.median") - 751.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_share_with_a_third_decimal_rounds_to_two() {
+        let mut w = World::new(MapFrame {
+            rows: 3,
+            cols: 3,
+            cell_m: 100.0,
+        });
+        let cells = (0..9).map(|i| i < 3).collect();
+        w.insert("lake", Layer::Mask(Grid::from_vec(3, 3, cells).unwrap()))
+            .unwrap();
+        // 3 / 9 * 100 = 33.333...
+        assert!((num(&compute(&w, None), "lake_pct") - 33.33).abs() < 1e-12);
     }
 
     #[test]
