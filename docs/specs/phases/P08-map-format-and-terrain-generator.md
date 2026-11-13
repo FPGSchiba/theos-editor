@@ -164,7 +164,8 @@ What later phases build on it:
   - `route_potential` leaves P08; the extra metrics and the snapshot export move to P33.
 - **13 Nov 2026, from the build:** the slope limit becomes an exact threshold limiter in one
   sweep, whose removed material feeds the rivers (§5.9 "Slope limit"). The half-excess passes
-  could not settle the built-in recipes' mountains. Jann: "Lets go with (a)". The same change
+  could not settle the built-in recipes' mountains. Jann: "Lets go with (a)", and on where the
+  removed material goes: "I also think into rivers as sediment makes sense." The same change
   records two findings of the build: the reads of `resolve_sinks` and `fluvial`, and the
   relaxation of Yuan's iterations on dry cells (§5.9).
 
