@@ -9,7 +9,8 @@
 //! folder is, and the JSON [`views`] of findings, the [`schema`] of kinds and rules, and
 //! [`create()`](create::create), which makes a new record from its template and writes it only
 //! when it introduces no error, and [`hook::install_hook`], which writes git's pre-commit hook.
-//! Later tasks of P05 extend this crate; the rest arrives in P06, P07 and later phases.
+//! P06 adds the command layer and the repo lock as further `impl` blocks of [`Workspace`]; the
+//! rest arrives in P07 and later phases.
 
 pub mod check;
 pub mod create;

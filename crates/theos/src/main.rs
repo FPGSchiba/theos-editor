@@ -1,6 +1,8 @@
 //! The `theos` command line: `check`, `ledger`, `schema`, `formalism`, `new` and `hook install`.
 //!
-//! The binary only parses arguments, calls `theos-studio` and prints. Exit codes: 0 when the
+//! The binary only parses arguments, calls `theos-studio` and prints. A finding is one line,
+//! `path:line:column: severity rule: message` (`path: severity rule: message` when it has no
+//! position), which P49's problem matcher reads. Exit codes: 0 when the
 //! command ran without error findings, 1 when `check` found errors, 2 when it could not run or
 //! `new` refused.
 
