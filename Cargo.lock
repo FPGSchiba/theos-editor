@@ -927,6 +927,14 @@ name = "theos-editor"
 version = "0.0.0"
 
 [[package]]
+name = "theos-map-format"
+version = "0.0.0"
+
+[[package]]
+name = "theos-maps"
+version = "0.0.0"
+
+[[package]]
 name = "theos-mcp"
 version = "0.0.0"
 
