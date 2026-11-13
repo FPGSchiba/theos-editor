@@ -144,27 +144,38 @@ mod tests {
         (a - b).abs() < 1e-12
     }
 
-    /// A narrow tall block against a broad lower one: the smoothing over 93.75 m (about one cell
-    /// here) lets the first win, a wider smoothing the second.
+    /// Three candidates whose winner depends on the smoothing width: a single cell of 1.0 (the
+    /// winner unsmoothed), a 9x9 block of 0.6 (the winner at 93.75 m) and a 41x41 plateau of 0.45
+    /// (the winner at about 394 m, where the block has faded).
     #[test]
     fn the_field_is_smoothed_before_the_pick() {
+        const N: usize = 100;
         let frame = MapFrame {
-            rows: 64,
-            cols: 64,
+            rows: N,
+            cols: N,
             cell_m: 100.0,
         };
-        let mut field = Grid::filled(64, 64, 0.0);
-        for r in 10..13 {
-            for c in 10..13 {
-                field.set(r, c, 1.0);
-            }
-        }
-        for r in 30..39 {
-            for c in 30..39 {
+        let mut field = Grid::filled(N, N, 0.0);
+        field.set(30, 30, 1.0);
+        for r in 10..19 {
+            for c in 10..19 {
                 field.set(r, c, 0.6);
             }
         }
-        let zero = Grid::filled(64, 64, 0.0);
+        for r in 50..91 {
+            for c in 50..91 {
+                field.set(r, c, 0.45);
+            }
+        }
+        // The noise factor is at most 1.25, so the block must lead the others by more than that
+        // after the smoothing of the stage.
+        let smooth = gaussian(&field, 93.75, frame.cell_m);
+        let (single, block, plateau) = (smooth.get(30, 30), smooth.get(14, 14), smooth.get(70, 70));
+        assert!(
+            block > 1.25 * single && block > 1.25 * plateau,
+            "{single} {block} {plateau}"
+        );
+        let zero = Grid::filled(N, N, 0.0);
         let elements = [&zero, &zero, &zero, &zero, &zero];
         let mut params = ResourcesParams::default();
         params.counts.insert("stone".to_owned(), 1);
@@ -174,7 +185,7 @@ mod tests {
             panic!("one deposit")
         };
         let (r, c) = frame.cell_at_m(x, y);
-        assert!((10..13).contains(&r) && (10..13).contains(&c), "{r},{c}");
+        assert!((10..19).contains(&r) && (10..19).contains(&c), "{r},{c}");
     }
 
     #[test]
