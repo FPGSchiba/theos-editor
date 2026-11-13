@@ -116,15 +116,30 @@ impl<'a> Repo<'a> {
         })
     }
 
-    /// The number of commits on `HEAD`; 0 before the first commit.
+    /// The number of commits on `HEAD`; 0 only while `HEAD` is unborn. Any other git failure
+    /// fails the test.
     fn count(&self) -> Result<u32, Error> {
-        let output =
-            self.sandbox
-                .git_output(&["rev-list", "--count", "HEAD"], &self.project, None)?;
-        if !output.status.success() {
+        let head = self.sandbox.git_output(
+            &["rev-parse", "--verify", "-q", "HEAD"],
+            &self.project,
+            None,
+        )?;
+        if !head.status.success() {
             return Ok(0);
         }
-        Ok(String::from_utf8(output.stdout)?.trim().parse()?)
+        let count = self.git_ok(&["rev-list", "--count", "HEAD"])?;
+        Ok(count.trim().parse()?)
+    }
+
+    /// `git add -A` with `config` as `-c` options.
+    fn add_all(&self, config: &[&str]) -> TestResult {
+        let mut args = Vec::new();
+        for option in config {
+            args.extend(["-c", option]);
+        }
+        args.extend(["add", "-A"]);
+        self.git_ok(&args)?;
+        Ok(())
     }
 
     /// Stages a clean change, so there is something to commit.
@@ -312,14 +327,12 @@ fn a_commit_with_autocrlf_is_checked() -> TestResult {
         repo.put(path, &text)?;
     }
     repo.put(NOTES, "Synthetic note.\r\n")?;
-    repo.sandbox
-        .git(&["-c", "core.autocrlf=true", "add", "-A"], &repo.project)?;
+    repo.add_all(&autocrlf)?;
     repo.commit(&["-m", "clean"], &autocrlf)?.assert_commits();
 
     let violation = variant("C-901.md")?.replace('\n', "\r\n");
     repo.put(C901, &violation)?;
-    repo.sandbox
-        .git(&["-c", "core.autocrlf=true", "add", "-A"], &repo.project)?;
+    repo.add_all(&autocrlf)?;
     repo.commit(&["-m", "violation"], &autocrlf)?
         .assert_refused("lore/never-confirm", C901);
     Ok(())
@@ -358,6 +371,14 @@ fn a_moved_theos_falls_back_to_the_path() -> TestResult {
     repo.commit(&["-m", "fixture"], &[])?.require_success()?;
     let copy = copy_theos(&sandbox)?;
     repo.install(Some(&copy))?;
+    let hook = read(&repo.top.join(".git").join("hooks").join("pre-commit"))?;
+    let named = copy
+        .to_str()
+        .ok_or("the copy's path is not UTF-8")?
+        .replace('\\', "/")
+        .replace('\'', "'\\''");
+    assert!(hook.contains(&named), "{named} not in {hook}");
+    assert!(named.contains("bin dir/it"), "{named}");
     std::fs::remove_file(&copy)?;
     assert!(!copy.exists());
     repo.stage(C901, &variant("C-901.md")?)?;
