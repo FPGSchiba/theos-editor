@@ -96,7 +96,12 @@ pub fn install_hook(
     check_inside(&hooks, &common)?;
 
     let folder = if place.is_empty() { "." } else { &place };
-    let theos = theos.to_string_lossy().replace('\\', "/");
+    let theos = theos
+        .to_str()
+        .ok_or_else(|| HookError::TheosPath {
+            path: theos.to_path_buf(),
+        })?
+        .replace('\\', "/");
     let text = script(&theos, folder);
     let hook = hooks.join("pre-commit");
     let mut installed = Installed {
