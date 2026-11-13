@@ -59,7 +59,7 @@ mod tests;
 
 use std::any::Any;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use self::discharge::Routing;
 use self::lakes::{Basin, Limits};
@@ -109,7 +109,7 @@ impl ValueType for WaterThresholds {
 }
 
 /// The world value `water_features`: the river lines and the lake outlines, in metres.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct WaterFeatures {
     /// The river lines, in the index order of their first cell.
     pub rivers: Vec<RiverLine>,
@@ -122,34 +122,8 @@ impl WorldValue for WaterFeatures {
         Self::NAME
     }
     fn canonical_json(&self) -> serde_json::Value {
-        let rivers: Vec<_> = self
-            .rivers
-            .iter()
-            .map(|r| {
-                serde_json::json!({
-                    "points": r.points,
-                    "width_m": r.width_m,
-                    "depth_m": r.depth_m,
-                    "discharge_m3s": r.discharge_m3s,
-                    "order": r.order,
-                })
-            })
-            .collect();
-        let lakes: Vec<_> = self
-            .lakes
-            .iter()
-            .map(|l| {
-                serde_json::json!({
-                    "id": l.id,
-                    "rings": l.rings,
-                    "surface_m": l.surface_m,
-                    "terminal": l.terminal,
-                    "outlet": l.outlet,
-                    "depth_max_m": l.depth_max_m,
-                })
-            })
-            .collect();
-        serde_json::json!({"rivers": rivers, "lakes": lakes})
+        // Every field is a number, bool, option or sequence of them: `to_value` cannot fail.
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -347,14 +321,17 @@ impl TypedStage for Hydrology {
         let limits = [
             ("min_lake_depth_m", Some(params.min_lake_depth_m)),
             ("min_lake_area_m2", params.min_lake_area_m2),
-            ("width_a", Some(params.width_a)),
-            ("depth_c", Some(params.depth_c)),
         ];
         for (name, value) in limits {
             if let Some(v) = value
                 && !(v.is_finite() && v >= 0.0)
             {
                 return Err(at(name, "must be finite and not negative"));
+            }
+        }
+        for (name, value) in [("width_a", params.width_a), ("depth_c", params.depth_c)] {
+            if !(value.is_finite() && value > 0.0) {
+                return Err(at(name, "must be positive and finite"));
             }
         }
         params.thresholds = WaterThresholds {

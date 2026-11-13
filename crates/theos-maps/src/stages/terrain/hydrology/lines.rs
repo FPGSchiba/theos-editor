@@ -7,6 +7,15 @@
 //! confluence (two or more river donors) and follows the receivers while they are river cells; it
 //! ends with the confluence it reaches, or with its last river cell before a lake, a seed or the
 //! end of the river. A line needs two cells.
+//!
+//! Rivers end at lake shores and outlets start new lines (spec ruling 34): a line whose receiver
+//! is a lake cell gets a last vertex halfway between its last cell and that lake cell, where
+//! `kernels::contour::rings` puts the shore, and a line that starts where a lake spills gets a
+//! first vertex halfway between the exit cell and its first cell. Both carry the discharge of
+//! the river cell next to them. A tributary's last vertex is the confluence cell and carries
+//! the confluence's total discharge, as the first vertex of the downstream line does.
+
+use serde::Serialize;
 
 use super::Water;
 use crate::grid::Grid;
@@ -28,7 +37,7 @@ const WIDTH_EXPONENT: f64 = 0.5;
 const DEPTH_EXPONENT: f64 = 0.4;
 
 /// A river line: smoothed points with the values at each of them.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct RiverLine {
     /// `[x, y, bed height]` in metres.
     pub points: Vec<[f64; 3]>,
@@ -139,6 +148,36 @@ fn bilinear(height: &Grid<f64>, x: f64, y: f64, cell_m: f64) -> f64 {
     top * (1.0 - fr) + bottom * fr
 }
 
+/// The cells of the lakes of `water`.
+fn lake_cells(water: &Water, len: usize) -> Vec<bool> {
+    let mut lake = vec![false; len];
+    for l in water.basins.iter().filter_map(|b| b.lake.as_ref()) {
+        for &c in &l.cells {
+            lake[c] = true;
+        }
+    }
+    lake
+}
+
+/// For every cell, the lake cell where a lake spills into it: the exit of a lake that passes
+/// water on, when the exit's receiver is a river cell.
+fn outlet_donors(water: &Water, river: &[bool], len: usize) -> Vec<Option<usize>> {
+    let receivers = &water.routing.drainage.receivers;
+    let mut donors = vec![None; len];
+    for basin in water
+        .basins
+        .iter()
+        .filter(|b| !b.terminal && b.lake.is_some())
+    {
+        let exit = basin.depression.exit;
+        let to = receivers[exit];
+        if to != exit && river[to] {
+            donors[to] = Some(exit);
+        }
+    }
+    donors
+}
+
 /// The river lines of `water` over the `river` cells on cells of `cell_m` metres, in the index
 /// order of their first cell.
 pub(crate) fn lines(
@@ -150,20 +189,36 @@ pub(crate) fn lines(
     let drainage = &water.routing.drainage;
     let orders = strahler(&drainage.receivers, &drainage.order, river.as_slice());
     let discharge = &water.routing.discharge;
+    let lake = lake_cells(water, river.len());
+    let outlets = outlet_donors(water, river.as_slice(), river.len());
+    let centre = |i: usize| {
+        let (r, c) = river.cell(i);
+        [(to_f64(c) + 0.5) * cell_m, (to_f64(r) + 0.5) * cell_m]
+    };
+    // The shore vertex between river cell `i` and lake cell `lake`, with `i`'s discharge.
+    let shore = |i: usize, lake: usize| {
+        let (a, b) = (centre(i), centre(lake));
+        [
+            f64::midpoint(a[0], b[0]),
+            f64::midpoint(a[1], b[1]),
+            discharge.as_slice()[i],
+        ]
+    };
     cell_paths(water, river)
         .into_iter()
         .map(|path| {
-            let raw: Vec<[f64; 3]> = path
-                .iter()
-                .map(|&i| {
-                    let (r, c) = river.cell(i);
-                    [
-                        (to_f64(c) + 0.5) * cell_m,
-                        (to_f64(r) + 0.5) * cell_m,
-                        discharge.as_slice()[i],
-                    ]
-                })
-                .collect();
+            let first = path[0];
+            let last = path[path.len() - 1];
+            let mut raw: Vec<[f64; 3]> = Vec::with_capacity(path.len() + 2);
+            raw.extend(outlets[first].map(|exit| shore(first, exit)));
+            raw.extend(path.iter().map(|&i| {
+                let [x, y] = centre(i);
+                [x, y, discharge.as_slice()[i]]
+            }));
+            let to = water.routing.drainage.receivers[last];
+            if to != last && lake[to] {
+                raw.push(shore(last, to));
+            }
             let smooth = chaikin(&chaikin(&raw));
             let mut line = RiverLine {
                 points: Vec::with_capacity(smooth.len()),
@@ -189,6 +244,7 @@ pub(crate) fn lines(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::stages::terrain::hydrology::outlines::outlines;
     use crate::stages::terrain::hydrology::rasters::rasters;
     use crate::stages::terrain::hydrology::tests::{
         CELL_M, N, WET, all_edges, at, bowl, compute, grid, mask, plane, south_edge,
@@ -411,5 +467,77 @@ mod tests {
                 assert!(p[2] >= lo - 1e-9 && p[2] <= hi + 1e-9);
             }
         }
+    }
+
+    /// The distance from `p` to the segment `a`-`b`.
+    fn distance(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
+        let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+        let t = (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
+        let (ex, ey) = (p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+        (ex * ex + ey * ey).sqrt()
+    }
+
+    fn on_ring(p: [f64; 3], rings: &[Vec<[f64; 2]>]) -> bool {
+        rings
+            .iter()
+            .flat_map(|r| r.windows(2))
+            .any(|w| distance([p[0], p[1]], w[0], w[1]) < 1e-9)
+    }
+
+    fn inside_ring(p: [f64; 3], ring: &[[f64; 2]]) -> bool {
+        let mut inside = false;
+        for w in ring.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            if (a[1] > p[1]) != (b[1] > p[1])
+                && p[0] < a[0] + (p[1] - a[1]) / (b[1] - a[1]) * (b[0] - a[0])
+            {
+                inside = !inside;
+            }
+        }
+        inside
+    }
+
+    #[test]
+    fn lines_meet_the_lake_shore_and_start_again_at_its_outlet() {
+        let wet = case(&bowl(), &all_edges());
+        let shapes = outlines(&wet.water, CELL_M);
+        let rings = &shapes[0].rings;
+        let receivers = &wet.water.routing.drainage.receivers;
+        let lake = rasters(&wet.water, &THRESHOLDS).lake;
+        let exit = wet.water.basins[0].depression.exit;
+        let paths = cell_paths(&wet.water, &wet.river);
+        let found = lines(&wet.water, &wet.river, CELL_M, &GEOMETRY);
+        assert_eq!(paths.len(), found.len());
+        let (mut inflows, mut outflows) = (0, 0);
+        for (path, line) in paths.iter().zip(&found) {
+            let (first, last) = (path[0], *path.last().unwrap());
+            let ends_at_lake = lake.as_slice()[receivers[last]];
+            let starts_at_outlet = receivers[exit] == first;
+            let n = line.points.len();
+            if ends_at_lake {
+                inflows += 1;
+                assert!(
+                    on_ring(line.points[n - 1], rings),
+                    "{:?}",
+                    line.points[n - 1]
+                );
+                let q = wet.water.routing.discharge.as_slice()[last];
+                assert_eq!(line.discharge_m3s[n - 1].to_bits(), q.to_bits());
+            }
+            if starts_at_outlet {
+                outflows += 1;
+                assert!(on_ring(line.points[0], rings), "{:?}", line.points[0]);
+            }
+            for (k, p) in line.points.iter().enumerate() {
+                let shore = (ends_at_lake && k == n - 1) || (starts_at_outlet && k == 0);
+                if !shore {
+                    assert!(
+                        rings.iter().all(|r| !inside_ring(*p, r)),
+                        "{p:?} lies in the lake"
+                    );
+                }
+            }
+        }
+        assert!(inflows > 0 && outflows == 1, "{inflows} in, {outflows} out");
     }
 }

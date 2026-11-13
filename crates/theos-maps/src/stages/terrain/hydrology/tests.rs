@@ -945,15 +945,18 @@ fn the_stage_writes_the_water_features() {
     assert_eq!(features.type_name(), "water_features");
     let mut moved = features.clone();
     assert!(moved.as_any().is::<WaterFeatures>() && moved.as_any_mut().is::<WaterFeatures>());
-    // The lines run over the river raster: their end points are river cells.
+    // The lines run over the river raster: their end points are river cells or, at a lake
+    // shore, on the edge of a lake cell.
     let river = w.mask("river").unwrap();
+    let lake = w.mask("lake").unwrap();
     for line in &features.rivers {
         for end in [line.points[0], *line.points.last().unwrap()] {
             let (r, c) = (
                 crate::kernels::num::to_index(end[1] / CELL_M, N),
                 crate::kernels::num::to_index(end[0] / CELL_M, N),
             );
-            assert!(river.as_slice()[at(r, c)]);
+            let wet = lake.as_slice()[at(r, c)];
+            assert!(river.as_slice()[at(r, c)] || wet, "{end:?}");
         }
     }
 }
@@ -984,7 +987,11 @@ depth_c = 0.6
             assert!((y.depth_m[k] - 2.0 * x.depth_m[k]).abs() < 1e-12 * y.depth_m[k]);
         }
     }
-    for (bad, parameter) in [("width_a = -1.0", "width_a"), ("depth_c = nan", "depth_c")] {
+    for (bad, parameter) in [
+        ("width_a = -1.0", "width_a"),
+        ("width_a = 0.0", "width_a"),
+        ("depth_c = nan", "depth_c"),
+    ] {
         let err = Hydrology
             .params(&table(&format!("{THRESHOLDS}{bad}")))
             .unwrap_err();

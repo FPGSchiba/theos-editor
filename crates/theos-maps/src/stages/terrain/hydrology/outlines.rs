@@ -1,13 +1,15 @@
 //! Lake outlines (spec §5.9): the rings of every lake by marching squares, with its level,
 //! whether it is terminal, its outlet and its greatest depth.
 
+use serde::Serialize;
+
 use super::Water;
 use crate::grid::Grid;
 use crate::kernels::contour::rings;
 use crate::kernels::num::{min, to_f64};
 
 /// The outline of one lake.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LakeShape {
     /// The lake's number, as in `lake_id`.
     pub id: u32,
@@ -137,5 +139,19 @@ mod tests {
                 assert_eq!(shape.outlet.is_none(), shape.terminal);
             }
         }
+    }
+
+    #[test]
+    fn lakes_come_in_lake_number_order() {
+        let water = compute(&hills(), &closed(), SEMI_ARID);
+        let shapes = outlines(&water, CELL_M);
+        let ids: Vec<u32> = water
+            .basins
+            .iter()
+            .filter_map(|b| b.lake.as_ref().map(|l| l.id))
+            .collect();
+        assert!(ids.len() >= 2, "{ids:?}");
+        assert_eq!(shapes.iter().map(|s| s.id).collect::<Vec<_>>(), ids);
+        assert!(ids.windows(2).all(|w| w[0] < w[1]));
     }
 }
