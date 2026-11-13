@@ -36,7 +36,10 @@ fn run(seed: u64) -> Result<(World, Plan, LoadedRecipe), Box<dyn std::error::Err
 
 fn package_of(world: &World, plan: &Plan, loaded: &LoadedRecipe) -> Result<Package, PackageError> {
     let features = build_features(world).map(|f| f.0).unwrap_or_default();
-    let inputs = serde_json::Map::new();
+    let inputs = serde_json::json!({"size": "small"})
+        .as_object()
+        .cloned()
+        .unwrap_or_default();
     build(
         world,
         plan,
@@ -44,7 +47,10 @@ fn package_of(world: &World, plan: &Plan, loaded: &LoadedRecipe) -> Result<Packa
             raw_recipe: &loaded.raw,
             seed: 7,
             inputs: &inputs,
-            results: serde_json::Map::new(),
+            results: serde_json::json!({"lakes": 2})
+                .as_object()
+                .cloned()
+                .unwrap_or_default(),
             summary: serde_json::json!({"k": 1}),
             features,
         },
@@ -142,8 +148,10 @@ fn the_manifest_records_recipe_seed_frame_and_empty_requires() -> TestResult {
     assert_eq!(m.recipe["id"], "water-small");
     assert_eq!(m.seed, 7);
     assert_eq!(m.frame.grid, [64, 64]);
-    assert!((m.frame.size_m[0] - 6400.0).abs() < 1e-9);
-    assert!((m.frame.cell_m - 100.0).abs() < 1e-9);
+    assert_eq!(m.frame.size_m, [6400.0, 6400.0]);
+    assert_eq!(m.frame.cell_m, 100.0);
+    assert_eq!(m.inputs["size"], "small");
+    assert_eq!(m.results["lakes"], 2);
     assert_eq!(m.summary["k"], 1);
     let water = m.layers.iter().find(|l| l.name == "water").ok_or("water")?;
     assert_eq!(water.dtype, DType::U8);
@@ -169,16 +177,14 @@ fn the_package_reads_back_with_the_format_crate() -> TestResult {
     let mut bytes = Vec::new();
     theos_map_format::write(&package, Cursor::new(&mut bytes))?;
     let back = theos_map_format::read(Cursor::new(bytes))?;
-    let mut written = theos_map_format::written_manifest(&package)?;
-    let mut read = back.manifest.clone();
-    // The reader's JSON parse can differ from the writer's f64 in the last digit of a range.
-    for (a, b) in written.layers.iter_mut().zip(&mut read.layers) {
-        for (x, y) in [(&mut a.min, &mut b.min), (&mut a.max, &mut b.max)] {
-            let (x, y) = (x.take().ok_or("range")?, y.take().ok_or("range")?);
-            assert!((x - y).abs() <= x.abs() * 1e-15);
-        }
-    }
-    assert_eq!(read, written);
+    let written = theos_map_format::written_manifest(&package)?;
+    assert!(
+        written
+            .layers
+            .iter()
+            .all(|l| l.min.is_some() && l.max.is_some())
+    );
+    assert_eq!(back.manifest, written);
     assert_eq!(back.layers, package.layers);
     assert_eq!(
         back.features.features.len(),
