@@ -3,18 +3,19 @@
 //! and a Strahler order.
 //!
 //! The lines follow the same receivers as `discharge` and the `river` raster, so the three agree
-//! by construction. A line starts at a source (a river cell without a river donor) or at a
-//! confluence (two or more river donors) and follows the receivers while they are river cells; it
-//! ends with the confluence it reaches, or with its last river cell before a lake, a seed or the
-//! end of the river. A line needs two cells.
+//! by construction. A line starts at a source (a river cell without a river donor), at a
+//! confluence (two or more river donors) or where a lake spills into a river cell, and follows
+//! the receivers while they are river cells; it ends with the confluence or lake outlet cell it
+//! reaches, or with its last river cell before a lake, a seed or the end of the river. A line
+//! needs two cells. A second lake spilling into the same cell gets no shore vertex.
 //!
 //! Rivers end at lake shores and outlets start new lines (spec ruling 34): a line whose receiver
 //! is a lake cell gets a last vertex where `kernels::contour::rings` puts the shore between its
 //! last cell and that lake cell, and a line that starts where a lake spills gets a
 //! first vertex where the ring crosses the line between them (halfway for neighbours that share
 //! an edge, see `shore_fraction` for diagonals). Both carry the discharge of
-//! the river cell next to them. A tributary's last vertex is the confluence cell and carries
-//! the confluence's total discharge, as the first vertex of the downstream line does.
+//! the river cell next to them. A tributary's last vertex is the confluence (or outlet) cell and
+//! carries its total discharge, as the first vertex of the downstream line does.
 
 use serde::Serialize;
 
@@ -100,8 +101,11 @@ pub(super) fn cell_paths(water: &Water, river: &Grid<bool>) -> Vec<Vec<usize>> {
     let receivers = &water.routing.drainage.receivers;
     let river = river.as_slice();
     let donors = river_donors(receivers, river);
+    let outlets = outlet_donors(water, river, receivers.len());
     let mut paths = Vec::new();
-    for start in (0..receivers.len()).filter(|&i| river[i] && donors[i] != 1) {
+    for start in
+        (0..receivers.len()).filter(|&i| river[i] && (donors[i] != 1 || outlets[i].is_some()))
+    {
         let mut path = vec![start];
         let mut cell = start;
         loop {
@@ -111,7 +115,7 @@ pub(super) fn cell_paths(water: &Water, river: &Grid<bool>) -> Vec<Vec<usize>> {
             }
             path.push(to);
             cell = to;
-            if donors[cell] >= 2 {
+            if donors[cell] >= 2 || outlets[cell].is_some() {
                 break;
             }
         }
@@ -180,7 +184,9 @@ fn shore_fraction(ids: &[u32], cols: usize, river: usize, lake: usize) -> f64 {
 }
 
 /// For every cell, the lake cell where a lake spills into it: the exit of a lake that passes
-/// water on, when the exit's receiver is a river cell.
+/// water on, when the exit's receiver is a river cell. When two lakes spill into the same cell,
+/// the exit with the larger discharge is kept (ties: the lower cell index); the other lake gets
+/// no shore vertex.
 fn outlet_donors(water: &Water, river: &[bool], len: usize) -> Vec<Option<usize>> {
     let receivers = &water.routing.drainage.receivers;
     let mut donors = vec![None; len];
@@ -191,7 +197,12 @@ fn outlet_donors(water: &Water, river: &[bool], len: usize) -> Vec<Option<usize>
     {
         let exit = basin.depression.exit;
         let to = receivers[exit];
-        if to != exit && river[to] {
+        if to == exit || !river[to] {
+            continue;
+        }
+        let q = |cell: usize| water.routing.discharge.as_slice()[cell];
+        let better = donors[to].is_none_or(|kept| (q(exit), kept) > (q(kept), exit));
+        if better {
             donors[to] = Some(exit);
         }
     }
@@ -565,8 +576,9 @@ mod tests {
     /// A 5 x 5 world with lake 1 on cell (2, 2) and, by `shared`, on the cells (1, 2) and (2, 1)
     /// next to it. In both cases the river cell (1, 1) touches the lake cell (2, 2) diagonally.
     /// With `inflow` the river runs (1, 0) -> (1, 1) -> lake; otherwise the lake spills from
-    /// (2, 2) into (1, 1), which flows on to (1, 0).
-    fn diagonal(shared: usize, inflow: bool) -> (Water, Grid<bool>) {
+    /// (2, 2) into (1, 1), which flows on to (1, 0); with `fed` a river cell (0, 0) also flows
+    /// into (1, 1).
+    fn diagonal(shared: usize, inflow: bool, fed: bool) -> (Water, Grid<bool>) {
         use crate::stages::terrain::hydrology::discharge::{Drainage, Routing};
         use crate::stages::terrain::hydrology::lakes::{Balance, Basin, Depression, Lake};
         let n = 5;
@@ -581,6 +593,9 @@ mod tests {
         } else {
             receivers[at(2, 2)] = at(1, 1);
             receivers[at(1, 1)] = at(1, 0);
+            if fed {
+                receivers[at(0, 0)] = at(1, 1);
+            }
         }
         let height = Grid::filled(n, n, 1.0);
         let basin = Basin {
@@ -614,7 +629,7 @@ mod tests {
             filled_nested: 0,
             routing,
         };
-        let river = mask_n(n, |r, c| r == 1 && c < 2);
+        let river = mask_n(n, |r, c| (r == 1 && c < 2) || (fed && r == 0 && c == 0));
         (water, river)
     }
 
@@ -626,7 +641,7 @@ mod tests {
     fn diagonal_shore_vertices_lie_on_the_ring() {
         for shared in 0..=2 {
             for inflow in [true, false] {
-                let (water, river) = diagonal(shared, inflow);
+                let (water, river) = diagonal(shared, inflow, false);
                 let shapes = outlines(&water, CELL_M);
                 let found = lines(&water, &river, CELL_M, &GEOMETRY);
                 assert_eq!(found.len(), 1, "k = {shared}");
@@ -642,5 +657,54 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn an_outlet_cell_with_one_river_donor_still_starts_a_line() {
+        for shared in 0..=2 {
+            let (water, river) = diagonal(shared, false, true);
+            let shapes = outlines(&water, CELL_M);
+            let found = lines(&water, &river, CELL_M, &GEOMETRY);
+            assert_eq!(found.len(), 2, "k = {shared}");
+            // The inflowing line ends at the centre of the outlet cell (1, 1).
+            let end = found[0].points[found[0].points.len() - 1];
+            assert_eq!(end[..2], [1.5 * CELL_M, 1.5 * CELL_M], "k = {shared}");
+            // The outflowing line starts on the lake's ring.
+            assert!(
+                on_ring(found[1].points[0], &shapes[0].rings),
+                "k = {shared}"
+            );
+        }
+    }
+
+    #[test]
+    fn two_lakes_into_one_cell_keep_the_larger_discharge() {
+        use crate::stages::terrain::hydrology::lakes::{Balance, Basin, Depression, Lake};
+        let (mut water, river) = diagonal(0, false, false);
+        // A second lake whose exit (3, 1) also spills into (1, 1), with more discharge.
+        let exit = 3 * 5 + 1;
+        water.routing.drainage.receivers[exit] = 5 + 1;
+        water.routing.discharge.as_mut_slice()[exit] = 9.0;
+        water.basins.push(Basin {
+            depression: Depression {
+                cells: vec![exit],
+                spill_level: 2.0,
+                bottom: exit,
+                exit,
+            },
+            balance: Balance::default(),
+            terminal: false,
+            lake: Some(Lake {
+                id: 2,
+                cells: vec![exit],
+                level: 2.0,
+            }),
+        });
+        let donors = outlet_donors(&water, river.as_slice(), 25);
+        assert_eq!(donors[6], Some(exit));
+        // On equal discharge the lower exit index wins: (2, 2) is cell 12.
+        water.routing.discharge.as_mut_slice()[exit] = 1.0;
+        let donors = outlet_donors(&water, river.as_slice(), 25);
+        assert_eq!(donors[6], Some(12));
     }
 }

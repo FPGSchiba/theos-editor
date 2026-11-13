@@ -955,6 +955,8 @@ fn the_stage_writes_the_water_features() {
                 crate::kernels::num::to_index(end[1] / CELL_M, N),
                 crate::kernels::num::to_index(end[0] / CELL_M, N),
             );
+            // `wet` only checks that an end point is not on dry land; the exact shore position
+            // is proven by the unit tests of `lines.rs`.
             let wet = lake.as_slice()[at(r, c)];
             assert!(river.as_slice()[at(r, c)] || wet, "{end:?}");
         }
