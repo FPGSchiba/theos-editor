@@ -32,7 +32,36 @@ impl Router<'_> {
         class: RoadClass,
         cancel: &dyn Fn() -> bool,
     ) -> Result<PathTree, KernelError> {
-        let discount = self.cost.params.merge_discount;
+        self.search(sources, class, true, cancel)
+    }
+
+    /// The least costs as [`Router::tree`] gives them, but without the merge discount: roads and
+    /// built bridges cost what new ones would. A loop is routed this way, so it is a new road.
+    ///
+    /// # Errors
+    /// As [`Router::tree`].
+    pub fn tree_fresh(
+        &self,
+        sources: &[usize],
+        class: RoadClass,
+        cancel: &dyn Fn() -> bool,
+    ) -> Result<PathTree, KernelError> {
+        self.search(sources, class, false, cancel)
+    }
+
+    /// The shortest-path search, with or without the merge discount.
+    fn search(
+        &self,
+        sources: &[usize],
+        class: RoadClass,
+        merge: bool,
+        cancel: &dyn Fn() -> bool,
+    ) -> Result<PathTree, KernelError> {
+        let discount = if merge {
+            self.cost.params.merge_discount
+        } else {
+            1.0
+        };
         let roads = self.roads.as_slice();
         let share = |i: usize| if roads[i] > 0 { discount } else { 1.0 };
         let mut step = |a: usize, b: usize| {
@@ -74,6 +103,20 @@ impl Router<'_> {
         cancel: &dyn Fn() -> bool,
     ) -> Result<Option<Vec<usize>>, KernelError> {
         Ok(path_to(&self.tree(sources, class, cancel)?, target))
+    }
+
+    /// As [`Router::route`], without the merge discount ([`Router::tree_fresh`]).
+    ///
+    /// # Errors
+    /// As [`Router::tree`].
+    pub fn route_fresh(
+        &self,
+        sources: &[usize],
+        target: usize,
+        class: RoadClass,
+        cancel: &dyn Fn() -> bool,
+    ) -> Result<Option<Vec<usize>>, KernelError> {
+        Ok(path_to(&self.tree_fresh(sources, class, cancel)?, target))
     }
 }
 
@@ -125,6 +168,28 @@ mod tests {
         };
         assert!(shared(0.35) >= 30, "{}", shared(0.35));
         assert_eq!(shared(1.0), 0);
+    }
+
+    #[test]
+    fn fresh_routes_ignore_the_merge_discount() {
+        let layers = Layers::flat(N);
+        let mut roads = Grid::filled(N, N, 0_u8);
+        for c in 5..59 {
+            roads.set(20, c, 4);
+        }
+        let built = BTreeSet::new();
+        let params = RoadsParams::default();
+        let cost = StepCost::new(layers.terrain(), &params, 100.0);
+        let router = Router {
+            cost: &cost,
+            roads: &roads,
+            built: &built,
+        };
+        let path = router
+            .route_fresh(&[at(28, 5)], at(28, 58), RoadClass::Track, &|| false)
+            .unwrap()
+            .unwrap();
+        assert_eq!(path.iter().filter(|&&i| roads.as_slice()[i] > 0).count(), 0);
     }
 
     #[test]

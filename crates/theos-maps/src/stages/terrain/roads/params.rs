@@ -127,7 +127,8 @@ pub struct RoadsParams {
     /// A further link between villages or larger joins when the way through the network costs
     /// more than this many times its own cost.
     pub loop_detour: f64,
-    /// The share of a step's cost on cells that already carry a road.
+    /// The share of a step's cost on cells that already carry a road, so that tree links and
+    /// trails merge onto existing roads. Loop links are routed without it.
     pub merge_discount: f64,
     /// The width of each class.
     pub width_m: WidthM,

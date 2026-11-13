@@ -307,8 +307,8 @@ fn a_loop_joins_when_the_detour_is_long() {
     assert_eq!(triangle("village", ""), 3);
     // Loops join only settlements of class village or higher.
     assert_eq!(triangle("hamlet", "loop_detour = 1.0"), 2);
-    // The detour is below 1 / merge_discount, so the road laid last runs mostly along the other
-    // two (it cuts the corner at their meeting place); without the discount it takes its own way.
+    // Loops are routed without the merge discount, so the road laid last (the loop) mostly runs
+    // on new cells even with the default discount.
     let last_on_others = |params: &str| {
         let mut w = flat();
         for at in [(12, 32), (50, 10), (50, 54)] {
@@ -324,10 +324,8 @@ fn a_loop_joins_when_the_detour_is_long() {
             .count();
         to_f64(on) / to_f64(last.cells.len())
     };
-    let merged = last_on_others("");
-    assert!(merged > 0.5, "{merged}");
-    let alone = last_on_others("merge_discount = 1.0");
-    assert!(alone < 0.2, "{alone}");
+    let looped = last_on_others("");
+    assert!(looped < 0.3, "{looped}");
 }
 
 #[test]

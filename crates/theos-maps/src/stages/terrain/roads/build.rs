@@ -169,10 +169,14 @@ fn links(
     watch.advance(pairs.len() - chosen.len());
     for link in laying_order(chosen) {
         let (a, b) = (&places[link.a], &places[link.b]);
-        let path = laid
-            .router(cost)
-            .route(&[a.cell], b.cell, link.class, &|| watch.cancelled())
-            .map_err(|e| watch.fail(e))?;
+        let router = laid.router(cost);
+        let cancel = || watch.cancelled();
+        let path = if link.looped {
+            router.route_fresh(&[a.cell], b.cell, link.class, &cancel)
+        } else {
+            router.route(&[a.cell], b.cell, link.class, &cancel)
+        }
+        .map_err(|e| watch.fail(e))?;
         // A link is laid with its own cost or less, so its route always exists.
         if let Some(path) = path {
             laid.add(cost, &path, link.class, a.handle, b.handle);

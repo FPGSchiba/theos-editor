@@ -30,6 +30,9 @@ pub(super) struct Link {
     pub class: RoadClass,
     /// The routed cost from `a` to `b`, without the merge discount.
     pub cost: f64,
+    /// Whether the link is a loop: not in the tree, added for its detour. A loop is routed
+    /// without the merge discount.
+    pub looped: bool,
 }
 
 /// The candidate pairs `(a, b)`, `a < b`: the Delaunay edges over the places' points.
@@ -65,7 +68,13 @@ pub(super) fn cost(
         for &(_, _, b) in group {
             let cost = tree.dist[places[b].cell];
             if cost.is_finite() {
-                links.push(Link { a, b, class, cost });
+                links.push(Link {
+                    a,
+                    b,
+                    class,
+                    cost,
+                    looped: false,
+                });
             }
         }
         watch.advance(group.len());
@@ -76,10 +85,11 @@ pub(super) fn cost(
 
 /// The links to lay: Kruskal's tree of `links` over `n` places, then, in order of cost, each
 /// other link between two places that may loop whose cost through the links taken so far
-/// exceeds `loop_detour` times its own.
+/// exceeds `loop_detour` times its own; those are marked as loops.
 pub(super) fn choose(places: &[Place], links: &[Link], loop_detour: f64) -> Vec<Link> {
     let edges: Vec<(usize, usize, f64)> = links.iter().map(|l| (l.a, l.b, l.cost)).collect();
     let mut taken = vec![false; links.len()];
+    let mut looped = vec![false; links.len()];
     for i in kruskal(places.len(), &edges) {
         taken[i] = true;
     }
@@ -96,12 +106,13 @@ pub(super) fn choose(places: &[Place], links: &[Link], loop_detour: f64) -> Vec<
         let through = network_cost(places.len(), &so_far, links[i].a, links[i].b);
         if through > loop_detour * links[i].cost {
             taken[i] = true;
+            looped[i] = true;
         }
     }
     links
         .iter()
-        .zip(&taken)
-        .filter_map(|(l, &t)| t.then_some(*l))
+        .zip(taken.iter().zip(&looped))
+        .filter_map(|(l, (&t, &lp))| t.then_some(Link { looped: lp, ..*l }))
         .collect()
 }
 
@@ -166,6 +177,7 @@ mod tests {
             b,
             class: RoadClass::Main,
             cost,
+            looped: false,
         }
     }
 
@@ -185,6 +197,8 @@ mod tests {
         // than 1.7 · 10, so it joins; then 0-2 costs 20 through 0-1-2, less than 1.7 · 12.
         let chosen = choose(&towns, &links, 1.7);
         assert_eq!(pairs(&chosen), [(0, 1), (0, 3), (1, 2), (2, 3)]);
+        let flags: Vec<bool> = chosen.iter().map(|l| l.looped).collect();
+        assert_eq!(flags, [false, false, false, true]);
         let tree = [(0, 1), (0, 3), (1, 2)];
         assert_eq!(pairs(&choose(&towns, &links, 3.5)), tree);
         let hamlets: Vec<Place> = (0..4).map(|i| place(i, 1, true)).collect();
