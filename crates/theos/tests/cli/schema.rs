@@ -184,20 +184,28 @@ fn theos_schema_project_names_the_project_folder() -> TestResult {
     let view: Value = serde_json::from_str(&stdout(&output))?;
     let rules = view["rules"].as_array().ok_or("rules")?;
     assert!(rules.iter().all(|rule| rule["configured"].is_string()));
+    let output = sandbox.run(&["schema", "truth", "--project", path], &sandbox.work())?;
+    assert!(output.status.success(), "{output:?} {}", stderr(&output));
 
-    // A folder without theos.toml is no project, also when one lies above it.
+    // A folder without theos.toml is no project, also when one lies above it, with and
+    // without a kind.
     let inner = project.join("lore");
     std::fs::create_dir_all(&inner)?;
     for folder in [inner, sandbox.work()] {
         let folder = folder.to_str().ok_or("the folder path is not UTF-8")?;
-        let output = sandbox.run(&["schema", "--project", folder], &sandbox.work())?;
-        assert_eq!(output.status.code(), Some(2), "{output:?}");
-        assert_eq!(stdout(&output), "");
-        assert!(
-            stderr(&output).contains("is not a content project"),
-            "{}",
-            stderr(&output)
-        );
+        for args in [
+            ["schema", "--project", folder].as_slice(),
+            ["schema", "truth", "--project", folder].as_slice(),
+        ] {
+            let output = sandbox.run(args, &sandbox.work())?;
+            assert_eq!(output.status.code(), Some(2), "{args:?}: {output:?}");
+            assert_eq!(stdout(&output), "");
+            assert!(
+                stderr(&output).contains("is not a content project"),
+                "{}",
+                stderr(&output)
+            );
+        }
     }
     Ok(())
 }

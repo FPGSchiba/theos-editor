@@ -1,4 +1,4 @@
-//! `theos schema`: every kind and rule, or the fields and body of one kind (spec §5.10).
+//! `theos schema`: every kind and rule, or the fields and body of one kind (spec §5.6).
 
 use std::fmt::Write as _;
 use std::io::Write;
@@ -13,7 +13,8 @@ use theos_studio::views::schema::{BodyView, KindView, PlacementView, SchemaView}
 use crate::output;
 
 /// Writes the schema to `out`, as text or as one JSON document. In a project (`project`, else the
-/// one above the current folder) the rules show their configured severity.
+/// one above the current folder) the rules show their configured severity. A `project` given
+/// must be a project, also when only one kind is shown.
 ///
 /// # Errors
 ///
@@ -25,6 +26,10 @@ pub(crate) fn run(
     json: bool,
     out: &mut impl Write,
 ) -> anyhow::Result<()> {
+    // A `--project` must be a project; without one, outside a project is fine.
+    let given = project
+        .map(|folder| output::project_root(Some(folder)))
+        .transpose()?;
     let registry = parts::builtin().map_err(StudioError::from)?;
     if let Some(name) = kind {
         let view = schema::kind(&registry, name)?;
@@ -35,11 +40,7 @@ pub(crate) fn run(
             .write_all(kind_text(&view).as_bytes())
             .context("cannot write the output");
     }
-    // A `--project` must be a project; without one, outside a project is fine.
-    let root = match project {
-        Some(_) => Some(output::project_root(project)?),
-        None => output::project_root(None).ok(),
-    };
+    let root = given.or_else(|| output::project_root(None).ok());
     let view = schema::overview(&registry, root.as_deref())?;
     if json {
         return output::json(out, &view);
