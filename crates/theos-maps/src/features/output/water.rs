@@ -1,4 +1,4 @@
-//! Rivers as `water`/`river` `LineString`s and lakes as `water`/`lake` `Polygon`s.
+//! Rivers as `water`/`river` `LineString`s and lakes as `water`/`lake` `Polygon`s or `MultiPolygon`s.
 
 use geojson::{Feature as Gj, GeometryValue};
 use serde_json::Value;
@@ -34,12 +34,13 @@ pub(super) fn river(river: &RiverLine, id: &str) -> Result<Gj, FeaturesError> {
     Ok(assemble(id, props, GeometryValue::new_line_string(line)))
 }
 
-/// The feature with id `id` of one `polygon` of `lake`: `surface_m`, `terminal`, `outlet` (when
-/// the lake has one) and `depth_max_m`.
+/// The feature with id `id` of `lake`: `surface_m`, `terminal`, `outlet` (when the lake has one)
+/// and `depth_max_m`, once. The geometry is a `Polygon` for one outline and a `MultiPolygon` of
+/// `polygons` (each an exterior followed by its holes) for several.
 ///
 /// # Errors
 /// [`FeaturesError::NonFinite`] for a number that is not finite.
-pub(super) fn lake(lake: &LakeShape, id: &str, polygon: &Polygon) -> Result<Gj, FeaturesError> {
+pub(super) fn lake(lake: &LakeShape, id: &str, polygons: &[Polygon]) -> Result<Gj, FeaturesError> {
     let mut props = base("water", "lake");
     props.insert(
         "surface_m".to_owned(),
@@ -53,9 +54,13 @@ pub(super) fn lake(lake: &LakeShape, id: &str, polygon: &Polygon) -> Result<Gj, 
         "depth_max_m".to_owned(),
         number(lake.depth_max_m, id, "depth_max_m")?,
     );
-    let rings = polygon
+    let parts = polygons
         .iter()
-        .map(|r| ring(r, id))
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(assemble(id, props, GeometryValue::new_polygon(rings)))
+        .map(|polygon| polygon.iter().map(|r| ring(r, id)).collect())
+        .collect::<Result<Vec<Vec<_>>, _>>()?;
+    let geometry = match <[Vec<_>; 1]>::try_from(parts) {
+        Ok([only]) => GeometryValue::new_polygon(only),
+        Err(parts) => GeometryValue::new_multi_polygon(parts),
+    };
+    Ok(assemble(id, props, geometry))
 }

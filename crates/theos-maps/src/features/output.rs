@@ -2,8 +2,8 @@
 //! with their stable ids.
 //!
 //! The features come in this order: the [`FeatureSet`] in handle order, then the roads of the
-//! `road_network` in network order, then the river lines, then the lake polygons of
-//! `water_features`. Every feature gets the id `<type>-<n>`, numbered per final type from 1 in
+//! `road_network` in network order, then the river lines, then the lakes of
+//! `water_features`, one per lake. Every feature gets the id `<type>-<n>`, numbered per final type from 1 in
 //! that order, so a stage that changed a type (a promotion) renames no reference. Every
 //! [`Prop::Ref`], [`Prop::Refs`] and [`Prop::Road`] becomes the id or ids of the features it
 //! names; a reference to something that does not exist is an error. Coordinates are metres, and
@@ -13,7 +13,8 @@
 //! `width_m` (from the parameters of the `roads` stage) and `grade_max`; a bridge is the straight
 //! segment between its banks. Rivers are `water`/`river` `LineString`s of `[x, y, bed height]`
 //! with the per-vertex `width_m`, `depth_m` and `discharge_m3s` and the `order`. Lakes are
-//! `water`/`lake` Polygons ([`lakes`]) with `surface_m`, `terminal`, `outlet` (when the lake has
+//! `water`/`lake` features ([`lakes`]), one per lake, a `Polygon` or a `MultiPolygon` when the lake has
+//! several outlines, with `surface_m`, `terminal`, `outlet` (when the lake has
 //! one) and `depth_max_m`.
 
 mod lakes;
@@ -96,8 +97,8 @@ pub(super) struct Named {
     roads: Vec<String>,
     /// The id of each river line.
     rivers: Vec<String>,
-    /// The polygons of each lake with their ids.
-    lakes: Vec<Vec<(String, Polygon)>>,
+    /// The id of each lake with its polygons; a lake with no outline has none.
+    lakes: Vec<Option<(String, Vec<Polygon>)>>,
     /// How many features each type has.
     counts: BTreeMap<String, usize>,
 }
@@ -127,12 +128,8 @@ impl Named {
         let mut lake_ids = Vec::new();
         for lake in &water.lakes {
             let polygons = lakes::polygons(lake.id, &lake.rings)?;
-            lake_ids.push(
-                polygons
-                    .into_iter()
-                    .map(|p| (Self::take(&mut counts, "lake"), p))
-                    .collect(),
-            );
+            lake_ids
+                .push((!polygons.is_empty()).then(|| (Self::take(&mut counts, "lake"), polygons)));
         }
         Ok(Self {
             set: set_ids,
@@ -309,9 +306,9 @@ pub(crate) fn build(
     for (river, id) in water.rivers.iter().zip(&named.rivers) {
         features.push(water::river(river, id)?);
     }
-    for (lake, polygons) in water.lakes.iter().zip(&named.lakes) {
-        for (id, polygon) in polygons {
-            features.push(water::lake(lake, id, polygon)?);
+    for (lake, named) in water.lakes.iter().zip(&named.lakes) {
+        if let Some((id, polygons)) = named {
+            features.push(water::lake(lake, id, polygons)?);
         }
     }
     let collection = FeatureCollection {

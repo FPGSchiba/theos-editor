@@ -1,9 +1,10 @@
-//! Lakes as `GeoJSON` polygons: one polygon per exterior ring, with the holes inside it.
+//! Lakes as `GeoJSON` polygons: one polygon per exterior ring, with the holes inside it. A lake is
+//! one feature; its polygons make a `MultiPolygon` when there are several.
 //!
 //! The outline of a lake ([`LakeShape::rings`]) is a list of closed rings: exteriors with a
 //! positive area and holes with a negative one. A `GeoJSON` polygon has one exterior, so a lake of
 //! several parts (a lake and an island's own pond, or two basins that share a level) gives one
-//! polygon per exterior. The orientation is kept: exteriors counter-clockwise and holes
+//! polygon per exterior, the parts of its `MultiPolygon`. The orientation is kept: exteriors counter-clockwise and holes
 //! clockwise in the frame's (x, y), which is RFC 7946's right-hand rule taken over the
 //! coordinates as written.
 

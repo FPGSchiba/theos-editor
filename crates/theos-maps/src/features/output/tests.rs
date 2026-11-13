@@ -418,19 +418,77 @@ fn the_value_names_are_the_world_values_names() {
     assert_eq!(WaterFeatures::NAME, "water_features");
 }
 
+/// The polygons of a lake feature: one for a `Polygon`, one per part for a `MultiPolygon`.
+fn lake_polygons(f: &Gj) -> Result<Vec<Vec<Vec<geojson::Position>>>, Box<dyn std::error::Error>> {
+    match f.geometry.as_ref().map(|g| &g.value) {
+        Some(GeometryValue::Polygon { coordinates }) => Ok(vec![coordinates.clone()]),
+        Some(GeometryValue::MultiPolygon { coordinates }) => Ok(coordinates.clone()),
+        _ => Err("a lake is neither a Polygon nor a MultiPolygon".into()),
+    }
+}
+
 #[test]
 fn the_lakes_of_a_run_are_polygons_of_closed_rings() -> TestResult {
     let fc = run_and_build(WATER_SMALL, 1)?;
-    for lake in of(&fc, "water", "lake") {
-        let Some(GeometryValue::Polygon { coordinates }) = lake.geometry.as_ref().map(|g| &g.value)
-        else {
-            return Err("a lake is not a polygon".into());
-        };
-        assert_ne!(coordinates.len(), 0);
-        for ring in coordinates {
-            assert!(ring.len() >= 4 && ring.first() == ring.last());
+    let lakes = of(&fc, "water", "lake");
+    assert!(!lakes.is_empty() && !of(&fc, "water", "river").is_empty());
+    for lake in lakes {
+        let polygons = lake_polygons(lake)?;
+        assert_ne!(polygons.len(), 0);
+        for polygon in polygons {
+            assert_ne!(polygon.len(), 0);
+            for ring in polygon {
+                assert!(ring.len() >= 4 && ring.first() == ring.last());
+            }
         }
     }
+    Ok(())
+}
+
+#[test]
+fn a_lake_with_several_outlines_is_one_multipolygon_feature() -> TestResult {
+    let mut world = world_with(three_places())?;
+    edit_water(&mut world, |w| {
+        let mut hole = square(150.0, 150.0, 100.0);
+        hole.reverse();
+        // Two basins under one lake number (the second touches the first at a corner), the first
+        // with a hole; then a second lake with one outline.
+        w.lakes[0].rings = vec![
+            square(100.0, 100.0, 300.0),
+            hole,
+            square(400.0, 400.0, 100.0),
+        ];
+        w.lakes.push(LakeShape {
+            id: 2,
+            rings: vec![square(600.0, 600.0, 100.0)],
+            surface_m: 9.0,
+            terminal: true,
+            outlet: None,
+            depth_max_m: 0.5,
+        });
+    })?;
+    let (fc, counts) = build(&world)?;
+    let lakes = of(&fc, "water", "lake");
+    assert_eq!(lakes.len(), 2);
+    assert_eq!(counts.get("lake"), Some(&2));
+    assert_eq!(
+        (id(lakes[0]), id(lakes[1])),
+        ("lake-1".into(), "lake-2".into())
+    );
+    let polygons = lake_polygons(lakes[0])?;
+    assert!(matches!(
+        lakes[0].geometry.as_ref().map(|g| &g.value),
+        Some(GeometryValue::MultiPolygon { .. })
+    ));
+    assert_eq!(polygons.iter().map(Vec::len).collect::<Vec<_>>(), [2, 1]);
+    // The properties appear once, on the one feature.
+    assert_eq!(num(lakes[0], "surface_m"), Some(4.0));
+    assert_eq!(num(lakes[1], "surface_m"), Some(9.0));
+    assert_eq!(prop(lakes[1], "terminal"), Some(&Value::from(true)));
+    assert!(matches!(
+        lakes[1].geometry.as_ref().map(|g| &g.value),
+        Some(GeometryValue::Polygon { .. })
+    ));
     Ok(())
 }
 
