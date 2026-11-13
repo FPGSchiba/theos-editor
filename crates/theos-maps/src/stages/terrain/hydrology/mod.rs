@@ -1,0 +1,304 @@
+//! The `hydrology` stage (spec §5.9 "Hydrology"): lakes by water balance, channel discharge over
+//! the single steepest receiver, river masks, `flow_dir` and the water surface.
+//!
+//! 1. **Fill** (`lakes.rs`): priority-flood of `height` with ε = 1e-6 (Barnes et al. 2014) from the
+//!    outlets: the `fixed` cells, or on a closed map the lowest cell (ties by index), the map's
+//!    sink.
+//! 2. **Depressions:** 8-connected cells the fill raised by more than 1e-3 m. A depression's spill
+//!    level is its highest filled value; its exit is its cell the fill reached first.
+//! 3. **Shallow pits:** a depression shallower than `min_lake_depth_m` (spill level − lowest
+//!    height) or smaller than `min_lake_area_m2` is set to the filled surface in `height`, so river
+//!    beds never cross dry pits (spec ruling 32).
+//! 4. **Inflow:** runoff (mm/yr → m³/yr) is routed over the single steepest receivers of the
+//!    filled surface, in reverse flood order, so a depression is settled after every depression
+//!    upstream of it (by the flood order of their spill cells, last first). A depression pools
+//!    what reaches its cells; its `Q_land` is the part that comes from outside them. A terminal
+//!    depression passes nothing on.
+//! 5. **Lake balance** (Bracht-Flyr et al. 2013, with rain on the lake, rearranged for the area):
+//!    with `E` the mean PET and `P` the mean precipitation over the depression (m/yr), the
+//!    equilibrium area is `A = Q_land / (E − P)` when `E > P`. At least the depression's area, or
+//!    `E ≤ P`, fills it to spill. Otherwise the lake is terminal: the depression's cells in height
+//!    order (ties by index) as long as their area stays within `A`, at the height of the last one;
+//!    below one cell there is no lake, but the depression still keeps its water.
+//! 6. **Routing** (`discharge.rs`): a second fill from the outlets and the lowest cell of every
+//!    terminal depression; the steepest receivers on it give `flow_dir`, and runoff accumulated
+//!    over them gives `discharge` in m³/s. A terminal bottom absorbs its inflow; on a closed map so
+//!    does the sink. Single flow in channels after Quinn et al. 1991 (spec ruling 27).
+//! 7. **Rasters** (`rasters.rs`): `river` and `big_river` where the discharge exceeds `river_q` and
+//!    `big_river_q` outside lakes; `lake`, `lake_id` (0 none, else the lake's number in the scan
+//!    order of its depression's first cell), `lake_level` (the level on lake cells, else 0) and
+//!    `water_surface` (the level on lake cells, else `height`).
+
+mod discharge;
+mod lakes;
+mod rasters;
+#[cfg(test)]
+mod tests;
+
+use std::any::Any;
+
+use serde::Deserialize;
+
+use self::discharge::Routing;
+use self::lakes::{Basin, Limits};
+use crate::grid::Grid;
+use crate::kernels::num::to_f64;
+use crate::stage::{
+    LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
+};
+use crate::stages::terrain::climate::{self, Climate, ClimateFields};
+use crate::world::{Layer, ValueType, WorldValue};
+
+/// A depression smaller than this many cells is filled when the recipe sets no
+/// `min_lake_area_m2`.
+const MIN_LAKE_CELLS: f64 = 4.0;
+
+/// The world value `water_thresholds`: the discharges above which a cell outside a lake is a
+/// river or a big river. `hydrology` writes them from its parameters; later stages read them
+/// (a mill needs a multiple of `river_q`).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct WaterThresholds {
+    /// River discharge threshold, m³/s.
+    pub river_q: f64,
+    /// Big-river discharge threshold, m³/s; not below `river_q`.
+    pub big_river_q: f64,
+}
+
+impl WorldValue for WaterThresholds {
+    fn type_name(&self) -> &'static str {
+        Self::NAME
+    }
+    fn canonical_json(&self) -> serde_json::Value {
+        serde_json::json!({"river_q": self.river_q, "big_river_q": self.big_river_q})
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl ValueType for WaterThresholds {
+    const NAME: &'static str = "water_thresholds";
+}
+
+/// The parameters of `hydrology`. `river_q` and `big_river_q` have no default (decision 0004):
+/// a recipe without them fails naming the parameter.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct HydrologyParams {
+    /// Discharge above which a cell outside a lake is a river, m³/s; required.
+    pub river_q: Option<f64>,
+    /// Discharge above which a cell outside a lake is a big river, m³/s; required, not below
+    /// `river_q`.
+    pub big_river_q: Option<f64>,
+    /// A depression shallower than this (spill level − lowest height) is filled, m.
+    pub min_lake_depth_m: f64,
+    /// A depression smaller than this is filled, m²; four cells when absent.
+    pub min_lake_area_m2: Option<f64>,
+    /// The thresholds once `validate` has checked them; not a recipe parameter.
+    #[serde(skip)]
+    pub(crate) thresholds: WaterThresholds,
+}
+
+impl Default for HydrologyParams {
+    fn default() -> Self {
+        Self {
+            river_q: None,
+            big_river_q: None,
+            min_lake_depth_m: 2.0,
+            min_lake_area_m2: None,
+            thresholds: WaterThresholds::default(),
+        }
+    }
+}
+
+impl HydrologyParams {
+    /// The smallest depression that keeps its lake, on cells of `cell_area` m².
+    fn limits(&self, cell_area: f64) -> Limits {
+        Limits {
+            min_depth_m: self.min_lake_depth_m,
+            min_area_m2: self.min_lake_area_m2.unwrap_or(MIN_LAKE_CELLS * cell_area),
+        }
+    }
+}
+
+/// Everything `hydrology` computes from its inputs: the input of the rasters and, later, of the
+/// river lines and lake outlines.
+#[derive(Debug)]
+pub(crate) struct Water {
+    /// `height` with the shallow pits filled.
+    pub height: Grid<f64>,
+    /// The depressions that keep their water, in the scan order of their first cell.
+    pub basins: Vec<Basin>,
+    /// How many shallow pits were filled.
+    pub filled_pits: usize,
+    /// The routing surface, its receivers and the discharge.
+    pub routing: Routing,
+}
+
+/// Steps 1 to 6 of the stage on `height` with the drained cells `fixed`, the water `fields`
+/// (mm/yr) and cells of `cell_m` metres.
+pub(crate) fn water(
+    height: &Grid<f64>,
+    fixed: &Grid<bool>,
+    fields: &ClimateFields,
+    cell_m: f64,
+    limits: &Limits,
+) -> Water {
+    let cell_area = cell_m * cell_m;
+    let runoff = fields.runoff.map(|mm| mm / lakes::MM_PER_M * cell_area);
+    let outlets = lakes::outlets(height, fixed);
+    let filled = discharge::drain(height, &outlets, cell_m);
+    let found = lakes::depressions(height, &filled);
+    let mut height = height.clone();
+    let (kept, filled_pits) =
+        lakes::fill_shallow(&mut height, &filled.surface, found, limits, cell_area);
+    let basins = lakes::settle(&filled, kept, &runoff, fields, &height, cell_area);
+    let mut seeds = outlets;
+    seeds.extend(
+        basins
+            .iter()
+            .filter(|b| b.terminal)
+            .map(|b| b.depression.bottom),
+    );
+    seeds.sort_unstable();
+    seeds.dedup();
+    let routing = discharge::route(&height, &seeds, &runoff, cell_m);
+    Water {
+        height,
+        basins,
+        filled_pits,
+        routing,
+    }
+}
+
+/// The counts of `water` and the balance of its terminal depressions (m³/yr, on cells of
+/// `cell_area` m²) as report values.
+fn report(water: &Water, cell_area: f64) -> StageReport {
+    let lakes = water.basins.iter().filter(|b| b.lake.is_some());
+    let terminal: Vec<&Basin> = water.basins.iter().filter(|b| b.terminal).collect();
+    // Folds from +0.0: an empty f64 sum is -0.0.
+    let evaporated = terminal
+        .iter()
+        .filter_map(|b| {
+            let lake = b.lake.as_ref()?;
+            let net = b.balance.evaporation - b.balance.precipitation;
+            Some(to_f64(lake.cells.len()) * cell_area * net)
+        })
+        .fold(0.0, |sum, v| sum + v);
+    let inflow = terminal.iter().fold(0.0, |sum, b| sum + b.balance.q_land);
+    let mut report = StageReport::default();
+    let mut put = |name: &str, value: f64| {
+        report.values.insert(name.to_owned(), value);
+    };
+    put("lakes", to_f64(lakes.count()));
+    put(
+        "terminal_lakes",
+        to_f64(terminal.iter().filter(|b| b.lake.is_some()).count()),
+    );
+    put("filled_pits", to_f64(water.filled_pits));
+    put("terminal_inflow_m3_yr", inflow);
+    put("terminal_evaporation_m3_yr", evaporated);
+    report
+}
+
+/// The stage `hydrology`.
+pub struct Hydrology;
+
+impl TypedStage for Hydrology {
+    type Params = HydrologyParams;
+    const ID: &'static str = "hydrology";
+    const SUMMARY: &'static str = "Lakes by water balance, channel discharge over the single steepest receiver, rivers, flow directions and the water surface.";
+    const KINDS: &'static [MapKind] = &[MapKind::Terrain];
+
+    fn reads(&self, _: &HydrologyParams) -> Vec<LayerSpec> {
+        vec![
+            LayerSpec::f64("height"),
+            LayerSpec::value("climate", Climate::NAME),
+            LayerSpec::mask("fixed"),
+        ]
+    }
+
+    fn writes(&self, _: &HydrologyParams) -> Vec<LayerSpec> {
+        vec![
+            LayerSpec::f64("height"),
+            LayerSpec::mask("lake"),
+            LayerSpec::u32("lake_id"),
+            LayerSpec::f64("lake_level"),
+            LayerSpec::mask("river"),
+            LayerSpec::mask("big_river"),
+            LayerSpec::f64("discharge"),
+            LayerSpec::u8("flow_dir"),
+            LayerSpec::f64("water_surface"),
+            LayerSpec::value("water_thresholds", WaterThresholds::NAME),
+        ]
+    }
+
+    fn validate(&self, params: &mut HydrologyParams) -> Result<(), ParamError> {
+        let at = |name: &str, message: &str| ParamError::at(Self::ID, name, message);
+        let threshold = |name: &str, value: Option<f64>| {
+            let q = value.ok_or_else(|| at(name, "is required (m³/s); it has no default"))?;
+            if q.is_finite() && q > 0.0 {
+                Ok(q)
+            } else {
+                Err(at(name, "must be positive and finite"))
+            }
+        };
+        let river_q = threshold("river_q", params.river_q)?;
+        let big_river_q = threshold("big_river_q", params.big_river_q)?;
+        if big_river_q < river_q {
+            return Err(at("big_river_q", "must not be below river_q"));
+        }
+        let limits = [
+            ("min_lake_depth_m", Some(params.min_lake_depth_m)),
+            ("min_lake_area_m2", params.min_lake_area_m2),
+        ];
+        for (name, value) in limits {
+            if let Some(v) = value
+                && !(v.is_finite() && v >= 0.0)
+            {
+                return Err(at(name, "must be finite and not negative"));
+            }
+        }
+        params.thresholds = WaterThresholds {
+            river_q,
+            big_river_q,
+        };
+        Ok(())
+    }
+
+    fn run(
+        &self,
+        ctx: &mut StageContext<'_>,
+        params: &HydrologyParams,
+    ) -> Result<StageReport, StageError> {
+        let frame = *ctx.frame();
+        let climate = ctx.value::<Climate>("climate")?;
+        let height = ctx.f64("height")?;
+        let local;
+        let fields = if let Some(fields) = &climate.fields {
+            fields
+        } else {
+            local = climate::fields(height, &frame, &climate.params);
+            &local
+        };
+        let limits = params.limits(frame.cell_area_m2());
+        let water = water(height, ctx.mask("fixed")?, fields, frame.cell_m, &limits);
+        let rasters = rasters::rasters(&water, &params.thresholds);
+        let report = report(&water, frame.cell_area_m2());
+        ctx.write("height", Layer::F64(water.height))?;
+        ctx.write("lake", Layer::Mask(rasters.lake))?;
+        ctx.write("lake_id", Layer::U32(rasters.lake_id))?;
+        ctx.write("lake_level", Layer::F64(rasters.lake_level))?;
+        ctx.write("river", Layer::Mask(rasters.river))?;
+        ctx.write("big_river", Layer::Mask(rasters.big_river))?;
+        ctx.write("discharge", Layer::F64(water.routing.discharge))?;
+        ctx.write("flow_dir", Layer::U8(rasters.flow_dir))?;
+        ctx.write("water_surface", Layer::F64(rasters.water_surface))?;
+        let thresholds = Box::new(params.thresholds);
+        ctx.write("water_thresholds", Layer::Value(thresholds))?;
+        Ok(report)
+    }
+}

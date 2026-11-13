@@ -37,6 +37,7 @@ use std::collections::BTreeSet;
 
 use serde::Deserialize;
 
+pub(crate) use self::flow::{cell_index, steepest_receivers};
 pub(crate) use self::processes::{Constructor, PROCESSES, PlannedProcess};
 use self::steps::Schedule;
 use crate::stage::{

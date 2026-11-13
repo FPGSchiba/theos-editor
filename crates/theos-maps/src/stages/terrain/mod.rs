@@ -3,6 +3,7 @@
 pub mod climate;
 pub mod geology;
 pub mod grid;
+pub mod hydrology;
 pub mod rocks;
 pub mod tectonics;
 

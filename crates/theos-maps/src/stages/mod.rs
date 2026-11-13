@@ -12,6 +12,7 @@ pub fn register(registry: &mut Registry) {
     registry.add(Box::new(terrain::geology::Geology));
     registry.add(Box::new(terrain::climate::ClimateModel));
     registry.add(Box::new(evolution::Evolution::new()));
+    registry.add(Box::new(terrain::hydrology::Hydrology));
 }
 
 #[cfg(test)]
@@ -19,10 +20,11 @@ mod tests {
     use crate::stage::Registry;
 
     /// The smallest parameter table that parses, for stages with required parameters.
-    fn minimal_params(_id: &str) -> toml::Table {
-        // Every stage so far has defaults for all parameters; a stage with required ones
-        // adds a `match _id` here.
-        let text = "";
+    fn minimal_params(id: &str) -> toml::Table {
+        let text = match id {
+            "hydrology" => "river_q = 0.15\nbig_river_q = 2.0",
+            _ => "",
+        };
         toml::from_str(text).unwrap()
     }
 
