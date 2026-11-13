@@ -1,7 +1,7 @@
 //! Real `git commit`s through the hook that `theos hook install` writes (spec §5.7, §5.8): the
 //! staged snapshot is judged, and a refused commit leaves the history as it was.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::Output;
 
@@ -94,21 +94,46 @@ impl<'a> Repo<'a> {
         config: &[&str],
         path: Option<&OsString>,
     ) -> Result<Committed, Error> {
-        let before = self.count()?;
-        let mut args = vec![
-            "-c",
-            "user.name=Synthetic",
-            "-c",
-            "user.email=synthetic@example.invalid",
-        ];
+        let mut args = IDENTITY.to_vec();
         for option in config {
             args.extend(["-c", option]);
         }
         args.extend(["commit", "-q"]);
         args.extend(rest);
-        let output =
-            self.sandbox
-                .git_output(&args, &self.project, path.map(OsString::as_os_str))?;
+        let env: Vec<(&str, &OsStr)> = path
+            .map(|path| ("PATH", path.as_os_str()))
+            .into_iter()
+            .collect();
+        self.counted(&args, &self.project, &env)
+    }
+
+    /// `git commit -q -m <message>`, with its repository given as `given` says.
+    fn commit_given(&self, given: Given, message: &str) -> Result<Committed, Error> {
+        let top = self.top.to_str().ok_or("the top's path is not UTF-8")?;
+        let git_dir = format!("--git-dir={}", Path::new(top).join(".git").display());
+        let work_tree = format!("--work-tree={top}");
+        let mut args = IDENTITY.to_vec();
+        let mut env: Vec<(&str, &OsStr)> = Vec::new();
+        match given {
+            Given::Found => return self.commit(&["-m", message], &[]),
+            Given::Options => args.extend([git_dir.as_str(), work_tree.as_str()]),
+            Given::WorkTreeVariable => env.push(("GIT_WORK_TREE", self.top.as_os_str())),
+            Given::RelativeGitDir => args.push("--git-dir=.git"),
+        }
+        args.extend(["commit", "-q", "-m", message]);
+        self.counted(&args, &self.top, &env)
+    }
+
+    /// Runs git with `args` in `cwd`, with `env` on top of the isolation, and counts the commits
+    /// before and after.
+    fn counted(
+        &self,
+        args: &[&str],
+        cwd: &Path,
+        env: &[(&str, &OsStr)],
+    ) -> Result<Committed, Error> {
+        let before = self.count()?;
+        let output = self.sandbox.git_output(args, cwd, env)?;
         Ok(Committed {
             output,
             before,
@@ -123,7 +148,7 @@ impl<'a> Repo<'a> {
         let head = self.sandbox.git_output(
             &["rev-parse", "--verify", "-q", "HEAD"],
             &self.project,
-            None,
+            &[],
         )?;
         match head.status.code() {
             Some(0) => {}
@@ -150,13 +175,11 @@ impl<'a> Repo<'a> {
         self.stage(NOTES, "Synthetic note.\n")
     }
 
-    /// The project in `content/` of a repository whose `.git` is a file, laid out as `layout`
-    /// says, next to the violating `archive/C-901.md`, which is not part of the project. With
-    /// `settings`, they are the project's committed `.theos/settings.toml`. Everything is
-    /// committed, then the hook of `theos hook install content` is installed; the answer is the
-    /// work tree to commit from. git gives the hooks of such a work tree an absolute `GIT_DIR`
-    /// and no `GIT_WORK_TREE`.
-    fn gitfile(
+    /// The project in `content/` of a repository laid out as `layout` says, next to the
+    /// violating `archive/C-901.md`, which is not part of the project. With `settings`, they are
+    /// the project's committed `.theos/settings.toml`. Everything is committed, then the hook of
+    /// `theos hook install content` is installed; the answer is the work tree to commit from.
+    fn in_content(
         sandbox: &'a Sandbox,
         layout: Layout,
         settings: Option<&str>,
@@ -185,7 +208,7 @@ impl<'a> Repo<'a> {
         if !output.status.success() {
             return Err(format!("hook install failed: {}", stderr(&output)).into());
         }
-        if layout == Layout::Separate {
+        if layout != Layout::Linked {
             return Ok(main);
         }
         sandbox.git(&["worktree", "add", "-q", "../linked"], &main.top)?;
@@ -198,16 +221,44 @@ impl<'a> Repo<'a> {
     }
 }
 
-/// How a work tree's `.git` file finds its repository.
+/// The `-c` options that name the committer.
+const IDENTITY: [&str; 4] = [
+    "-c",
+    "user.name=Synthetic",
+    "-c",
+    "user.email=synthetic@example.invalid",
+];
+
+/// How a work tree finds its repository.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Layout {
-    /// A linked work tree of `git worktree add`.
+    /// The main work tree, whose `.git` is the repository's folder.
+    Main,
+    /// A linked work tree of `git worktree add`, whose `.git` is a file. git gives its hooks an
+    /// absolute `GIT_DIR` and no `GIT_WORK_TREE`.
     Linked,
-    /// The work tree of `git init --separate-git-dir`.
+    /// The work tree of `git init --separate-git-dir`, whose `.git` is a file. git gives its
+    /// hooks an absolute `GIT_DIR` and no `GIT_WORK_TREE`.
     Separate,
 }
 
-/// A record outside the project of [`Repo::gitfile`], which violates never-confirm.
+/// How `git commit` is told its repository, and the variables git then gives the hook, which
+/// starts in the top folder.
+#[derive(Clone, Copy)]
+enum Given {
+    /// Not at all: git finds it from the project folder.
+    Found,
+    /// `git --git-dir=<absolute .git> --work-tree=<absolute top> commit` from the top: the hook
+    /// gets the absolute `GIT_DIR` and `GIT_WORK_TREE=.`.
+    Options,
+    /// `GIT_WORK_TREE=<absolute top> git commit` from the top: the hook gets `GIT_DIR=.git` and
+    /// `GIT_WORK_TREE=.`.
+    WorkTreeVariable,
+    /// `git --git-dir=.git commit` from the top: the hook gets `GIT_DIR=.git` alone.
+    RelativeGitDir,
+}
+
+/// A record outside the project of [`Repo::in_content`], which violates never-confirm.
 const ARCHIVED: &str = "archive/C-901.md";
 
 /// The outcome of a `git commit` and the commit count around it.
@@ -374,28 +425,30 @@ fn a_project_in_a_subfolder_commits_through_its_hook() -> TestResult {
     Ok(())
 }
 
-/// From the work tree of `layout`, a clean change commits, files outside the project are not
-/// judged, and a violation inside it is refused.
-fn a_gitfile_work_tree_judges_its_project(layout: Layout) -> TestResult {
+/// From the work tree of `layout`, with the repository given to `git commit` as `given` says, a
+/// clean change commits, files outside the project are not judged, and a violation inside it is
+/// refused.
+fn a_work_tree_judges_its_project(layout: Layout, given: Given) -> TestResult {
     let sandbox = Sandbox::new()?;
-    let repo = Repo::gitfile(&sandbox, layout, None)?;
+    let repo = Repo::in_content(&sandbox, layout, None)?;
     repo.stage_notes()?;
-    repo.commit(&["-m", "clean"], &[])?.assert_commits();
+    repo.commit_given(given, "clean")?.assert_commits();
     repo.stage(C901, &variant("C-901.md")?)?;
-    let refused = repo.commit(&["-m", "violation"], &[])?;
+    let refused = repo.commit_given(given, "violation")?;
     refused.assert_refused("lore/never-confirm", C901);
     refused.assert_finding(C901, "error lore/never-confirm");
     Ok(())
 }
 
-/// From the work tree of `layout`, the project's committed settings raise the fixture's
-/// three-clue warning to an error, so a change is refused.
-fn a_gitfile_work_tree_applies_the_committed_settings(layout: Layout) -> TestResult {
+/// From the work tree of `layout`, with the repository given to `git commit` as `given` says, the
+/// project's committed settings raise the fixture's three-clue warning to an error, so a change
+/// is refused.
+fn a_work_tree_applies_the_committed_settings(layout: Layout, given: Given) -> TestResult {
     let sandbox = Sandbox::new()?;
     let raising = variant("settings-raising.toml")?;
-    let repo = Repo::gitfile(&sandbox, layout, Some(&raising))?;
+    let repo = Repo::in_content(&sandbox, layout, Some(&raising))?;
     repo.stage_notes()?;
-    let refused = repo.commit(&["-m", "notes"], &[])?;
+    let refused = repo.commit_given(given, "notes")?;
     refused.assert_refused("lore/three-clue", T900);
     refused.assert_finding(T900, "error lore/three-clue");
     Ok(())
@@ -404,25 +457,61 @@ fn a_gitfile_work_tree_applies_the_committed_settings(layout: Layout) -> TestRes
 // AC: CE-17.2
 #[test]
 fn a_linked_work_tree_judges_its_project() -> TestResult {
-    a_gitfile_work_tree_judges_its_project(Layout::Linked)
+    a_work_tree_judges_its_project(Layout::Linked, Given::Found)
 }
 
 // AC: CE-17.2
 #[test]
 fn a_linked_work_tree_applies_the_committed_settings() -> TestResult {
-    a_gitfile_work_tree_applies_the_committed_settings(Layout::Linked)
+    a_work_tree_applies_the_committed_settings(Layout::Linked, Given::Found)
 }
 
 // AC: CE-17.2
 #[test]
 fn a_separate_git_dir_judges_its_project() -> TestResult {
-    a_gitfile_work_tree_judges_its_project(Layout::Separate)
+    a_work_tree_judges_its_project(Layout::Separate, Given::Found)
 }
 
 // AC: CE-17.2
 #[test]
 fn a_separate_git_dir_applies_the_committed_settings() -> TestResult {
-    a_gitfile_work_tree_applies_the_committed_settings(Layout::Separate)
+    a_work_tree_applies_the_committed_settings(Layout::Separate, Given::Found)
+}
+
+// AC: CE-17.2
+#[test]
+fn a_commit_given_git_dir_and_work_tree_options_judges_its_project() -> TestResult {
+    a_work_tree_judges_its_project(Layout::Main, Given::Options)
+}
+
+// AC: CE-17.2
+#[test]
+fn a_commit_given_git_dir_and_work_tree_options_applies_the_committed_settings() -> TestResult {
+    a_work_tree_applies_the_committed_settings(Layout::Main, Given::Options)
+}
+
+// AC: CE-17.2
+#[test]
+fn a_commit_given_a_work_tree_variable_judges_its_project() -> TestResult {
+    a_work_tree_judges_its_project(Layout::Main, Given::WorkTreeVariable)
+}
+
+// AC: CE-17.2
+#[test]
+fn a_commit_given_a_work_tree_variable_applies_the_committed_settings() -> TestResult {
+    a_work_tree_applies_the_committed_settings(Layout::Main, Given::WorkTreeVariable)
+}
+
+// AC: CE-17.2
+#[test]
+fn a_commit_given_a_relative_git_dir_judges_its_project() -> TestResult {
+    a_work_tree_judges_its_project(Layout::Main, Given::RelativeGitDir)
+}
+
+// AC: CE-17.2
+#[test]
+fn a_commit_given_a_relative_git_dir_applies_the_committed_settings() -> TestResult {
+    a_work_tree_applies_the_committed_settings(Layout::Main, Given::RelativeGitDir)
 }
 
 // The cache holds the disk's spelling `c-900.md`, git's index `C-900.md`; the staged bytes at

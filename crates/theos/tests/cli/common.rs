@@ -73,19 +73,18 @@ impl Sandbox {
     }
 
     /// Runs git in `cwd` with the isolation and returns the whole output, a failure included.
-    /// `path` replaces `PATH` for git and the hooks it runs.
+    /// `env` is set after the isolation, for git and the hooks it runs: a test hands git a `PATH`
+    /// or a `GIT_WORK_TREE` this way on purpose.
     pub fn git_output(
         &self,
         args: &[&str],
         cwd: &Path,
-        path: Option<&OsStr>,
+        env: &[(&str, &OsStr)],
     ) -> io::Result<Output> {
         let mut command = Command::new("git");
         command.args(args).current_dir(cwd);
         self.isolate(&mut command);
-        if let Some(path) = path {
-            command.env("PATH", path);
-        }
+        command.envs(env.iter().copied());
         command.output()
     }
 
