@@ -25,7 +25,7 @@
 //! donors, and Yuan's Gauss–Seidel iterations solve it ([`deposit`]): each iteration routes the
 //! net erosion of the last iterate, `(h*_j − h^k_j)·area`, then sweeps once. Where runoff is low
 //! the lagged sediment makes the iterations oscillate; once they are not on track to reach the
-//! tolerance in time, each one is relaxed by Aitken's factor ([`Relaxation`]).
+//! tolerance in time, each one but the last is relaxed by Aitken's factor ([`Relaxation`]).
 
 use libm::pow;
 
@@ -151,8 +151,9 @@ impl Solution {
 ///    reaches it up to its capacity and lets the rest go at its spill cell (`traps`);
 /// 2. sweeps once in stack order with `Δt·G·Qs_in(i)/Q_i` and the cell's own term `c_i`;
 /// 3. stops with the sweep's heights when it changed no height by `tolerance` or more, or after
-///    `max_iterations`; otherwise moves the heights toward the sweep's by Aitken's relaxation
-///    factor ([`Relaxation`]) and iterates again.
+///    `max_iterations` (then with the plain sweep of the last iteration); otherwise moves the
+///    heights toward the sweep's by Aitken's relaxation factor ([`Relaxation`]) and iterates
+///    again.
 pub(super) fn deposit(step: &Incision<'_>, dep: &Deposition<'_>, start: &Grid<f64>) -> Solution {
     let before = start.as_slice();
     let cells = before.len();
@@ -195,7 +196,8 @@ pub(super) fn deposit(step: &Incision<'_>, dep: &Deposition<'_>, start: &Grid<f6
             .zip(height.as_slice())
             .fold(0.0, |most, (a, b)| max(most, (a - b).abs()));
         let converged = residual < dep.tolerance;
-        if !converged {
+        let last = iterations == dep.max_iterations;
+        if !converged && !last {
             relaxation.apply(height.as_slice(), next.as_mut_slice(), residual);
         }
         std::mem::swap(&mut height, &mut next);

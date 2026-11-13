@@ -94,6 +94,38 @@ fn the_gauss_seidel_step_follows_the_scheme() {
     }
 }
 
+/// A step that the iteration limit stops returns the plain sweep of its last iteration, as
+/// `deposit` documents, not a relaxed iterate (a carry-over of Task 27b). With two iterations on
+/// the square world the relaxation is on at the second: its residual would not reach the
+/// tolerance in the iterations left. Both sweeps are solved by hand: the first from `h*`, where no
+/// sediment reaches cell 1 yet, the second with a quarter of what cell 3 lost in the first.
+#[test]
+fn a_step_stopped_by_the_iteration_limit_returns_its_last_plain_sweep() {
+    const G: f64 = 6.0;
+    let mut w = square([0.0, 10.0, 20.0, 200.0], no_fields());
+    let procs = processes(&fluvial_only("g = 6.0\nmax_iterations = 2"));
+    let report = evolve(&mut w, &procs, 1, 1e5, 1).unwrap();
+    let [Finding { message, .. }] = report.findings.as_slice() else {
+        panic!("the limit stops the step: {:?}", report.findings);
+    };
+    assert!(message.contains("after 2 iterations"), "{message}");
+    let f10 = K * libm::pow(1.25e4, 0.5) * 1e5 / 100.0;
+    let (f31, f30) = (0.25, 0.75 / SQRT_2);
+    let (c1, c3) = (G / 1.25, G);
+    // One plain sweep with `inflow` metres of sediment reaching cell 1; cell 0 stays at 0 m.
+    let sweep = |inflow: f64| {
+        let h1 = (10.0 * (1.0 + c1) + inflow) / (1.0 + c1 + f10);
+        let h3 = (200.0 * (1.0 + c3) + f31 * h1) / (1.0 + c3 + f31 + f30);
+        (h1, h3)
+    };
+    let (_, first) = sweep(0.0);
+    // G·Qs_in(1)/Q1 with Qs_in(1) = 0.25·(200 − h3)·area and Q1 = 1.25·area.
+    let (h1, h3) = sweep(0.2 * G * (200.0 - first));
+    let h = layer(&w, "height");
+    assert!((h[1] - h1).abs() < 1e-9, "{} vs {h1}", h[1]);
+    assert!((h[3] - h3).abs() < 1e-9, "{} vs {h3}", h[3]);
+}
+
 #[test]
 fn a_receiver_below_the_deposit_takes_its_share() {
     // Cell 0 (11 m) stands above cell 1's h* (10 m). Cell 3's sediment lifts cell 1 above 11 m,

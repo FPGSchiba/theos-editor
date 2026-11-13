@@ -46,6 +46,9 @@ pub(super) struct Relaxation {
     factor: f64,
     /// The update `r` of the last iteration, empty before the first.
     last: Vec<f64>,
+    /// The update `r` of the running iteration; it trades buffers with `last`, so the
+    /// iterations allocate no new grid each time.
+    update: Vec<f64>,
     /// The largest height change of the last iteration.
     last_residual: f64,
 }
@@ -61,6 +64,7 @@ impl Relaxation {
             on: false,
             factor: 1.0,
             last: Vec::new(),
+            update: Vec::new(),
             last_residual: f64::INFINITY,
         }
     }
@@ -84,12 +88,14 @@ impl Relaxation {
     /// ω·(T(h^k) − h^k)` with the factor updated by Aitken's estimate; with a factor of 1 it is
     /// left as it is.
     pub(super) fn apply(&mut self, height: &[f64], next: &mut [f64], residual: f64) {
-        let update: Vec<f64> = next.iter().zip(height).map(|(t, h)| t - h).collect();
+        self.update.clear();
+        self.update
+            .extend(next.iter().zip(height).map(|(t, h)| t - h));
         self.iterations += 1;
         self.on = self.on || self.off_track(residual);
-        if self.on && self.last.len() == update.len() {
+        if self.on && self.last.len() == self.update.len() {
             let (mut along, mut squared) = (0.0, 0.0);
-            for (now, before) in update.iter().zip(&self.last) {
+            for (now, before) in self.update.iter().zip(&self.last) {
                 let change = now - before;
                 along += before * change;
                 squared += change * change;
@@ -100,11 +106,11 @@ impl Relaxation {
             }
         }
         if self.factor < 1.0 {
-            for ((n, h), r) in next.iter_mut().zip(height).zip(&update) {
+            for ((n, h), r) in next.iter_mut().zip(height).zip(&self.update) {
                 *n = h + self.factor * r;
             }
         }
-        self.last = update;
+        std::mem::swap(&mut self.last, &mut self.update);
         self.last_residual = residual;
     }
 }
