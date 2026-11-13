@@ -5,7 +5,10 @@ Source: `docs/specs/00-umbrella.md` §3 P05, version 6 (the P05 split, docs PR #
 acceptance criteria come from there; this spec decides how.
 Changes: 13 Nov 2026 — the staged read and check judge paths in git's spelling, under git's
 folding (§5.2, §5.7, §9). Why: the build's final review (R1-1) reproduced a false pass when a
-case-only rename or an NFD name hid a record from the snapshot.
+case-only rename or an NFD name hid a record from the snapshot. The final review's later rounds
+(R2-1, R2-2, R3-1, R3-2) add: intent-to-add entries found by two index reads, not by status `A`
+(§5.2); the git environment `Git::find` resolves for a hook (§5.2, §5.8); risks, review focus
+and rulings (§7, §8, §9).
 
 ## 1. Goal
 
@@ -193,6 +196,22 @@ pub enum GitError {
 }
 ```
 
+**The git environment.** git starts a hook in the work tree's top and may export where the
+repository is as relative paths:
+- `GIT_WORK_TREE=.` when the commit was given a work tree (`--work-tree`, `GIT_WORK_TREE`);
+- a relative `GIT_DIR`, with `--git-dir=.git`;
+- an absolute `GIT_DIR` and no `GIT_WORK_TREE`, in a linked worktree, a `--separate-git-dir`
+  repository or a submodule.
+
+theos runs its first `rev-parse` in the project folder, where a relative path means something
+else. So `Git::find` resolves the environment once, against the process's current folder:
+- a relative `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR` or `GIT_OBJECT_DIRECTORY` becomes
+  absolute;
+- with `GIT_DIR` and no `GIT_WORK_TREE`, `GIT_WORK_TREE` is set to the current folder (git's own
+  rule);
+- `GIT_INDEX_FILE` stays as it is, because git resolves it in the top, where every index read
+  runs.
+
 P46 adds `TooOld { found, required }` and a cancel variant, and a cancellable spawn beside `run`.
 The parameter types of `run` are the plan's call, as long as P46 and P47 can add to them without
 changing them.
@@ -251,8 +270,12 @@ decides how a path is spelled, and every path `read` returns is in git's spellin
    and object id. `place` is the spelling of the first such entry.
 5. `git --no-optional-locks diff --name-status --no-renames -z`, with no pathspec, gives the
    tracked paths whose working copy is modified or deleted, kept under the place as in step 4.
-   Entries with status `A` here are intent-to-add entries (`git add -N`): their index entry is an
-   empty placeholder that git does not commit, so they are left out of `tracked` and `modified`.
+   The same step finds the intent-to-add entries (`git add -N`): their index entry is an empty
+   placeholder that git does not commit. `read` runs `git --no-optional-locks diff --cached
+   --name-status --no-renames -z` twice, once as is and once with `--ita-visible-in-index`. The
+   paths on which the two reads disagree are the intent-to-add entries, and they are left out of
+   `tracked` and `modified`. This also covers an intent-to-add file that was deleted on disk (the
+   work-tree diff reports `D` for it) and one over a path that exists in `HEAD`.
    For the regular files among the rest, `blobs` reads the staged bytes by object id with one
    `git cat-file --batch`, so no path ever goes into the batch input. That gives `modified`.
 
@@ -446,7 +469,8 @@ hold an index transaction while git runs the hook (§6).
 
 1. Finds the project as in §5.4 and `Git::find()`, then the repository's top folder
    (`git rev-parse --show-toplevel`). The git commands below run in that top folder, the folder
-   git runs hooks in.
+   git runs hooks in. `Git::find` has resolved the relative paths that git exports to a hook
+   (§5.2), so the hook's call `theos check --staged '.'` finds the same top as git does.
 2. **Finds the hooks folder** with `git rev-parse --git-path hooks`, resolved against the top
    folder. That honours `core.hooksPath`, and a linked worktree shares the common folder's hooks.
    The folder must lie inside the repository's git folder
@@ -662,7 +686,10 @@ the nine variants and checks that each cause appears exactly once.
 | A cache contended by another build | `IndexError::Contended` | The in-memory fallback (§5.3) |
 | CRLF in staged blobs (`core.autocrlf`) | Positions or findings differ from the working copy's | `theos-content` reads CRLF as LF (P02). A test commits with `autocrlf=true` |
 | Path identity: a case-only rename on disk (NTFS, APFS), or an NFD name on macOS, against git's NFC | The cache and the index spell a path differently, so a record, or the whole project folder, leaves the snapshot and violations commit | Paths are compared under git's folding and kept in git's spelling; a respelled tracked path gets its staged bytes (§5.2, §5.7). Tests rename after staging, with `core.ignorecase=true`, on every OS |
-| Intent-to-add entries (`git add -N`) | An empty placeholder is judged as an empty record, and a commit does not contain it | The work-tree diff is read with `--name-status`; status `A` there marks the entry, which is left out (§5.2) |
+| Intent-to-add entries (`git add -N`) | An empty placeholder is judged as an empty record, and a commit does not contain it. Status `A` in the work-tree diff misses an entry deleted on disk or over a path in `HEAD` | `diff --cached` is read twice, with and without `--ita-visible-in-index`; the paths that differ are the entries, which are left out (§5.2) |
+| The git environment of a hook (relative `GIT_DIR`, `GIT_WORK_TREE=.`, an absolute `GIT_DIR` with no work tree) | theos judged a subfolder project with the wrong top: clean commits were refused, and an error the project's settings raise was committed | `Git::find` resolves the relative variables once against the current folder and sets `GIT_WORK_TREE` as git does; `GIT_INDEX_FILE` stays (§5.2). Tests commit with `--git-dir`/`--work-tree`, from a linked worktree, a `--separate-git-dir` repository and a submodule |
+| `Folding` folds case with Unicode lowercasing; git's `core.ignorecase` folds ASCII only (not judged by the build's reviewers; for Jann) | A path that git keeps apart can compare equal | Accepted: it is wider, the safe direction. NTFS and APFS fold Unicode, and the respelling rule only adds a record's staged bytes |
+| A repository with `core.ignorecase=false` on a case-insensitive file system, for example copied from Linux (not judged by the build's reviewers; for Jann) | The spelling rule does not apply, so a case-only rename can still hide a record | Accepted: git itself misjudges such a repository. Not mitigated |
 
 ## 8. Review Focus — inputs most likely to break it
 
@@ -686,7 +713,11 @@ the nine variants and checks that each cause appears exactly once.
 - **Path identity:** a case-only rename of a record or of the project folder on disk, after
   staging; a name in NFD on disk and NFC in git; `core.ignorecase` and `core.precomposeunicode`
   on and off; a place that no entry lies below.
-- **Intent-to-add:** a file added with `git add -N`, which a commit leaves out.
+- **Intent-to-add:** a file added with `git add -N`, which a commit leaves out; one deleted on
+  disk afterwards; one over a path that exists in `HEAD`.
+- **Git environment:** a commit from a linked worktree, a `--separate-git-dir` repository or a
+  submodule, and a commit with `--git-dir` or `--work-tree`, each with the project in a
+  subfolder.
 - **Project resolution:** a given folder or `--project` without `theos.toml`, for every command.
 - **Git's refusals:** a folder git cannot use (dubious ownership, a bare repository), with git's
   reason once in the report.
@@ -782,8 +813,15 @@ the nine variants and checks that each cause appears exactly once.
   were to build the snapshot from the index alone, or to refuse on any mismatch — cost if wrong:
   one more git config read and whole-repository listings per staged check (content repositories
   are small).
-- Ruling: intent-to-add entries are not tracked — git does not commit them — cost if wrong: one
-  filter.
+- Ruling: intent-to-add entries are the paths on which `diff --cached` differs with and without
+  `--ita-visible-in-index`, and are not tracked — git does not commit them, and status `A` in the
+  work-tree diff misses an entry deleted on disk or over a path in `HEAD` (final review R2-1) —
+  cost if wrong: one more git call.
+- Ruling: `Git::find` resolves the relative git variables once against the current folder —
+  git starts a hook in the work tree's top with relative paths that mean something else in the
+  project folder, and a subfolder project was judged with the wrong top (final review R3-2);
+  `GIT_INDEX_FILE` stays, because git resolves it in the top — cost if wrong: a repository
+  layout git exports in a way not listed in §5.2.
 - Ruling: a given project folder must hold `theos.toml` and is never searched upward — a typo in
   a folder must not check another project — cost if wrong: one error variant.
 - Ruling: `theos formalism` gets `--json` although CE-17.1 does not list it — every command of the
