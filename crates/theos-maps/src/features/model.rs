@@ -45,6 +45,9 @@ pub enum Prop {
     Ref(FeatureHandle),
     /// References to other features.
     Refs(Vec<FeatureHandle>),
+    /// A reference to a road: its index in the world value `road_network`. Roads are not in the
+    /// feature list; the features output resolves this to the road's id, like a [`Prop::Ref`].
+    Road(u32),
 }
 
 /// A feature: a kind, a type, a geometry and properties.
