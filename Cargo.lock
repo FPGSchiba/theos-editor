@@ -1070,6 +1070,7 @@ dependencies = [
 name = "theos-maps"
 version = "0.0.0"
 dependencies = [
+ "geojson",
  "libm",
  "rand_core",
  "rand_pcg",
