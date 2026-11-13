@@ -48,7 +48,7 @@ enum Command {
     },
     /// Regenerate the Shared Formalism mirror and print each path written.
     Formalism {
-        /// The project folder; the current folder by default.
+        /// The project folder; the project above the current folder by default.
         folder: Option<PathBuf>,
     },
 }

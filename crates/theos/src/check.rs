@@ -36,11 +36,12 @@ pub(crate) fn run(
     output::in_memory_note(err, &workspace).context("cannot write the output")?;
     if options.staged {
         let staged = check_staged(&mut workspace, &Git::find()?)?;
+        let blocks = staged.blocks();
         if options.json {
             output::json(out, &StagedView::from(&staged))?;
         } else {
             output::findings(out, &staged.findings).context("cannot write the output")?;
-            let line = if staged.blocks() {
+            let line = if blocks {
                 format!(
                     "commit refused: {} in the staged snapshot",
                     output::plural(staged.errors(), "error")
@@ -53,7 +54,7 @@ pub(crate) fn run(
             };
             writeln!(err, "{line}").context("cannot write the output")?;
         }
-        return Ok(exit_of(staged.errors()));
+        return Ok(exit_of(blocks));
     }
     let checked = check(&mut workspace, binaries_folder(options.binaries))?;
     let view = CheckView::from(&checked);
@@ -64,13 +65,13 @@ pub(crate) fn run(
         output::findings(out, &checked.findings).context("cannot write the output")?;
         writeln!(err, "{}", output::summary(errors, warnings))
             .context("cannot write the output")?;
-        if let Binaries::NotChecked { reason } = &checked.binaries {
-            writeln!(err, "binaries not checked: {reason}").context("cannot write the output")?;
-        }
     }
-    Ok(exit_of(errors))
+    if let Binaries::NotChecked { reason } = &checked.binaries {
+        writeln!(err, "binaries not checked: {reason}").context("cannot write the output")?;
+    }
+    Ok(exit_of(errors > 0))
 }
 
-fn exit_of(errors: usize) -> Exit {
-    if errors > 0 { Exit::Errors } else { Exit::Ok }
+fn exit_of(blocks: bool) -> Exit {
+    if blocks { Exit::Errors } else { Exit::Ok }
 }

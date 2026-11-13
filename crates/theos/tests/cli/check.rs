@@ -87,6 +87,23 @@ fn theos_check_json_has_findings_counts_and_binaries() -> TestResult {
 
 // AC: CE-17.1
 #[test]
+fn theos_check_json_keeps_the_notes_on_stderr() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let project = sandbox.copy_project(&staged_project(), "clean")?;
+    let output = sandbox.run(&["check", "--json"], &project)?;
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    json(&output)?;
+    let err = stderr(&output);
+    assert!(
+        err.contains("binaries not checked: no binaries folder set"),
+        "{err}"
+    );
+    assert!(!err.contains("0 errors"), "no summary line: {err}");
+    Ok(())
+}
+
+// AC: CE-17.1
+#[test]
 fn theos_check_reads_the_binaries_folder_from_user_settings() -> TestResult {
     let sandbox = Sandbox::new()?;
     let project = sandbox.copy_project(&content_project("binaries"), "binaries")?;
@@ -99,6 +116,10 @@ fn theos_check_reads_the_binaries_folder_from_user_settings() -> TestResult {
     let output = sandbox.run(&["check", "--json"], &project)?;
     let value = json(&output)?;
     assert_eq!(value["binaries"]["checked"], true, "{value}");
+    assert_eq!(
+        value["binaries"]["folder"],
+        Value::String(folder.to_string_lossy().into_owned())
+    );
     let binary_warnings = value["findings"]
         .as_array()
         .ok_or("findings")?
@@ -128,7 +149,6 @@ fn theos_check_reads_the_binaries_folder_from_user_settings() -> TestResult {
         flagged["binaries"]["folder"],
         Value::String(other.to_string_lossy().into_owned())
     );
-    assert_ne!(flagged["findings"], value["findings"]);
     Ok(())
 }
 

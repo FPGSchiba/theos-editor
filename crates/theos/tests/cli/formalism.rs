@@ -62,3 +62,18 @@ fn a_source_error_is_printed_once() -> TestResult {
     assert_eq!(message.matches(detail).count(), 1, "{message}");
     Ok(())
 }
+
+#[test]
+fn theos_formalism_finds_the_project_above_the_current_folder() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let project = sandbox.copy_project(&content_project("formalism"), "formalism")?;
+    let sub = project.join("canon");
+    let output = sandbox.run(&["formalism"], &sub)?;
+    assert!(output.status.success(), "{output:?} {}", stderr(&output));
+    assert_eq!(stdout(&output).lines().count(), 18);
+    assert!(
+        project.join("canon").join("formalism").is_dir(),
+        "written in the project, not in the subfolder"
+    );
+    Ok(())
+}
