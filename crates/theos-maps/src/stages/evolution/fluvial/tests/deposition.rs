@@ -196,41 +196,59 @@ pub(super) fn pass_strip() -> World {
 /// Spec §5.9: the excess of a depression "passes on from the spill node", whose `Qs` is the
 /// flux leaving it. When the spill cell lies outside the lake (the higher cell of the pass on
 /// the basin's side), what the lake lets go counts in that cell's own deposition term, as it
-/// would at `SpillPoint.to` were the spill cell inside the lake.
+/// would at `SpillPoint.to` were the spill cell inside the lake. The full lake starts each sweep
+/// at its place one ε above the spill level and is then solved like every cell, so it follows
+/// its pass cell down instead of perching above it (physics test 5).
+///
+/// Solved by hand (G = 1, Δt = 1e5, K = 1e-5, m = 0.5, no uplift): `c3 = 1`, `F32 = 1`;
+/// `c2 = 1/2`, `F21 = √2`; `c1 = 1/3`, `F10 = √3`; the lake starts at `s2 = 50 + ε`, full.
+///
+/// ```text
+/// h3 = (200 + h2)/3
+/// h2 = (1.5·s2 + √2·h1)/(1.5 + √2)
+/// h1·(4/3 + √3) = 200/3 + (1/3)·[(100 − h3) + (45 − h2)]
+/// ```
+///
+/// The last line's bracket is the release: what reaches the lake, `(100 − h3) + (s2 − h2)` of
+/// one cell, less what fills it, `5 + ε`. Substituting gives `h1 = 24.7906`, `h2 = 37.7664` and
+/// `h3 = 79.2555`. Holding the lake at its start instead left it at `50 + ε`, 26.8 m above its
+/// pass cell at 23.2 m.
 #[test]
-fn a_lake_spilling_from_its_pass_cell_feeds_that_cells_deposit() {
-    const G: f64 = 1.0;
+fn a_full_lake_follows_its_pass_cell_and_feeds_its_deposit() {
     let mut w = pass_strip();
     let report = evolve(&mut w, &processes(&fluvial_only("g = 1.0")), 1, 1e5, 1).unwrap();
     assert!(report.findings.is_empty(), "{:?}", report.findings);
-    // Cell 3 drains one cell (c = G, F = K·√area·Δt/d = 1) into the lake, held at 45 m.
-    let h3 = (100.0 * (1.0 + G) + 45.0) / (2.0 + G);
-    // The lake keeps what fills it to its place one ε above the spill level.
-    let kept = (50.0 + EPSILON - 45.0) * CELL_AREA;
-    let released = (100.0 - h3) * CELL_AREA - kept;
-    assert!(released > 1e5, "{released}");
-    // Cell 1 drains three cells: c = G/3, F = K·√(3·area)·Δt/d; the release reaches it.
-    let (q1, c1) = (3.0 * CELL_AREA, G / 3.0);
-    let f10 = K * libm::pow(q1, 0.5) * 1e5 / 100.0;
-    let h1 = (50.0 * (1.0 + c1) + G * released / q1) / (1.0 + c1 + f10);
-    let blind = 50.0 * (1.0 + c1) / (1.0 + c1 + f10);
+    let (r2, r3) = (SQRT_2, 3.0_f64.sqrt());
+    let s2 = 50.0 + EPSILON;
+    let h1 = (200.0 / 3.0 + 235.0 / 9.0 - (4.0 / 9.0) * 1.5 * s2 / (1.5 + r2))
+        / (4.0 / 3.0 + r3 + (4.0 / 9.0) * r2 / (1.5 + r2));
+    let h2 = (1.5 * s2 + r2 * h1) / (1.5 + r2);
+    let h3 = (200.0 + h2) / 3.0;
+    assert!((h1 - 24.790_607).abs() < 1e-6, "{h1}");
+    assert!((h2 - 37.766_351).abs() < 1e-6, "{h2}");
+    assert!((h3 - 79.255_450).abs() < 1e-6, "{h3}");
     let h = layer(&w, "height");
     assert!((h[3] - h3).abs() < 1e-6, "{} vs {h3}", h[3]);
+    assert!((h[2] - h2).abs() < 1e-6, "{} vs {h2}", h[2]);
     assert!((h[1] - h1).abs() < 1e-6, "{} vs {h1}", h[1]);
+    // The lake is full: what reaches it fills it to its place one ε above the spill level.
+    let reached = (100.0 - h3) + (s2 - h2);
+    assert!(reached > 5.0 + EPSILON, "{reached} m of one cell");
+    // Without the release cell 1 would reach only the blind height.
+    let blind = 50.0 * (4.0 / 3.0) / (4.0 / 3.0 + r3);
     assert!(
         h[1] > blind + 1.0,
         "{} vs {blind} without the release",
         h[1]
     );
-    assert!(
-        (h[2] - (50.0 + EPSILON)).abs() < 1e-9,
-        "the lake is full: {}",
-        h[2]
-    );
-    // What left is the release plus cell 1's own net erosion.
-    let out = released + (50.0 - h[1]) * CELL_AREA;
+    assert!(h[1] < h[2] && h[2] < 45.0, "the lake follows: {h:?}");
+    // What left is the strip's lost volume: the slope's, the lake's and cell 1's erosion,
+    // 531,875.9 m³ by hand.
+    let out = (100.0 - h[3] + 45.0 - h[2] + 50.0 - h[1]) * CELL_AREA;
     let reported = value(&report, "sediment_out_m3");
     assert!((reported - out).abs() <= 1e-9 * out, "{reported} vs {out}");
+    let by_hand = (100.0 - h3 + 45.0 - h2 + 50.0 - h1) * CELL_AREA;
+    assert!((reported - by_hand).abs() < 3e-6 * CELL_AREA, "{reported}");
 }
 
 /// The Chebyshev distance from `(r, c)` to the bowl's centre (32, 32).
@@ -321,9 +339,11 @@ pub(super) fn bowl_cells() -> Vec<usize> {
 /// level and passes the rest on.
 ///
 /// The bowl's catchment is the only source of sediment. While the bowl fills, nothing leaves the
-/// map (to rounding) and the bowl's cells only rise, by exactly what `deposition` books. In the
-/// step the bowl fills, every cell below the notch reaches the spill level on its ε slope, and
-/// the rest of the step's sediment leaves over the notch; so it does in the steps after.
+/// map (to rounding). Its floor fills; cells above the water may erode first, where the
+/// catchment's river crosses them toward the lake, so each cell's booked deposition less its
+/// booked erosion is its net change. In the step the bowl fills, every cell below the notch
+/// reaches the spill level on its ε slope, and the rest of the step's sediment leaves over the
+/// notch; so it does in the steps after.
 #[test]
 fn sediment_fills_a_closed_depression_and_passes_the_excess() {
     const DT: f64 = 2.5e4;
@@ -380,12 +400,7 @@ fn sediment_fills_a_closed_depression_and_passes_the_excess() {
             );
             let gained = h[c] - start[c];
             assert!(
-                (deposition[c] - gained).abs() <= 1e-9 * gained,
-                "{exponent}: cell {c}"
-            );
-            assert_eq!(
-                erosion[c].to_bits(),
-                0.0_f64.to_bits(),
+                (deposition[c] - erosion[c] - gained).abs() <= 1e-9 * gained,
                 "{exponent}: cell {c}"
             );
         }
@@ -633,13 +648,18 @@ fn flow_slopes(w: &World) -> Vec<f64> {
         .collect()
 }
 
-/// The channel cells of `w`: not fixed, with a drainage area above ten cells.
-fn channel_cells(w: &World) -> Vec<usize> {
+/// The cells of `w` that are not fixed and drain more than `cells` cells.
+fn draining_more_than(w: &World, cells: f64) -> Vec<usize> {
     let area = layer(w, "drainage_area");
     let fixed = w.mask("fixed").unwrap().as_slice().to_vec();
     (0..N * N)
-        .filter(|&i| !fixed[i] && area[i] > 10.0 * CELL_AREA)
+        .filter(|&i| !fixed[i] && area[i] > cells * CELL_AREA)
         .collect()
+}
+
+/// The channel cells of `w`: not fixed, with a drainage area above ten cells.
+fn channel_cells(w: &World) -> Vec<usize> {
+    draining_more_than(w, 10.0)
 }
 
 /// The highest of `heights` less the lowest.
@@ -712,9 +732,10 @@ fn law(area: f64) -> f64 {
 ///   up to 9.5 m per step at Δt = 2.5e5 and 0.47 m at 2.5e4, on cells of 1 to about 20 cells of
 ///   area). The landscape therefore never reaches a full steady state, and this leg runs a
 ///   fixed 1 500 steps, about twice the time its channels take to settle. It still demands a
-///   steady state where the law applies: over the last 50 steps no channel cell (drainage area
-///   above 10 cells) changes by Yuan's tolerance `10⁻³·U·Δt` or more in a step. The steepest
-///   leg requires a full steady state.
+///   steady state beyond the oscillation's reach: over the last 50 steps no channel cell with a
+///   drainage area above 22 cells changes by Yuan's tolerance `10⁻³·U·Δt` or more in a step.
+///   The 2 % law checks cover every channel cell (above 10 cells). The steepest leg requires a
+///   full steady state.
 #[test]
 fn deposition_steepens_steady_state_by_one_plus_g() {
     const G: f64 = 1.0;
@@ -722,6 +743,13 @@ fn deposition_steepens_steady_state_by_one_plus_g() {
     // The slope_adaptive leg: its fixed run, and the steps at its end whose channels are checked.
     const RUN: u32 = 1500;
     const TRACKED: u32 = 50;
+    // The cells the stability check covers drain more than this many cells. Ruling (Jann,
+    // 13 Nov 2026): the check applies to channel cells over 22 cells' area, the edge of the
+    // divide oscillation's zone that Task 25 measured (cells of 1 to 22 cells' area). Filling
+    // the depressions before the solve (Task 27f) picks a network with a stronger case of that
+    // oscillation: 0.33 m on cells of 10 to 13 cells against the 0.25 m bound, 0.17 m over 22
+    // cells. The bound, the window and every 2 % law check stay.
+    const STABLE_AREA_CELLS: f64 = 22.0;
     let deposits = |exponent: &str| recipe(exponent, &format!("g = {G}\nm = 0.5"));
     let mut w = landscape(ALL_EDGES, 1);
     run_to_steady_state(&mut w, &recipe("steepest", "g = 0.0\nm = 0.5"), DT, 2000);
@@ -764,13 +792,14 @@ fn deposition_steepens_steady_state_by_one_plus_g() {
         let before = layer(&w, "height");
         evolve(&mut w, &procs, 1, DT, 1).unwrap();
         let h = layer(&w, "height");
-        wobble = channel_cells(&w)
+        wobble = draining_more_than(&w, STABLE_AREA_CELLS)
             .iter()
             .fold(wobble, |most, &i| max(most, (h[i] - before[i]).abs()));
     }
     assert!(
         wobble < tolerance,
-        "slope_adaptive: a channel cell still changes by {wobble} m per step (tolerance {tolerance} m)"
+        "slope_adaptive: a channel cell over {STABLE_AREA_CELLS} cells still changes by \
+         {wobble} m per step (tolerance {tolerance} m)"
     );
     let (cells, slopes, area) = (
         channel_cells(&w),

@@ -24,6 +24,12 @@
 //! along the oscillating mode, which takes it out. The factor never exceeds 1 and never falls
 //! below [`MIN_FACTOR`]. A fixed point of the relaxed iterations is a fixed point of the plain
 //! ones, so the scheme and its solution stay those of spec §5.9; only the path to it changes.
+//!
+//! **What moves with the heights.** The routed depressions are filled before each sweep, and a
+//! lake cell's own sediment is its incision since its filled start. The relaxation therefore
+//! moves the sweep's start and each depression's filled volume by the same factor as the heights
+//! ([`toward`]): otherwise part of every change of fill would count as sediment, and the lakes
+//! and their outlets would form a loop the factor does not damp.
 
 use libm::pow;
 
@@ -86,8 +92,9 @@ impl Relaxation {
     /// Relaxes one iteration: `next` holds the sweep's result `T(h^k)` for the heights `height`
     /// (`h^k`), and `residual` is the largest `|T(h^k) − h^k|`. Once on, `next` becomes `h^k +
     /// ω·(T(h^k) − h^k)` with the factor updated by Aitken's estimate; with a factor of 1 it is
-    /// left as it is.
-    pub(super) fn apply(&mut self, height: &[f64], next: &mut [f64], residual: f64) {
+    /// left as it is. Returns the factor used, 1 when it changed nothing, so that values that
+    /// belong to the heights can move with them ([`toward`]).
+    pub(super) fn apply(&mut self, height: &[f64], next: &mut [f64], residual: f64) -> f64 {
         self.update.clear();
         self.update
             .extend(next.iter().zip(height).map(|(t, h)| t - h));
@@ -112,12 +119,23 @@ impl Relaxation {
         }
         std::mem::swap(&mut self.last, &mut self.update);
         self.last_residual = residual;
+        self.factor
+    }
+}
+
+/// Moves `next` from `previous` only the part `factor` of the way: `previous + factor·(next −
+/// previous)`, as [`Relaxation::apply`] moves the heights. A factor of 1 leaves `next` as it is.
+pub(super) fn toward(previous: &[f64], next: &mut [f64], factor: f64) {
+    if factor < 1.0 {
+        for (n, p) in next.iter_mut().zip(previous) {
+            *n = p + factor * (*n - p);
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{MIN_FACTOR, Relaxation};
+    use super::{MIN_FACTOR, Relaxation, toward};
     use crate::kernels::num::max;
 
     /// The iterations' stopping rule in the tests: Yuan's tolerance for a 1 m/kyr uplift over
@@ -191,14 +209,36 @@ mod tests {
         // A monotone divergence (each update twice the last) asks for a negative factor.
         let mut relaxation = Relaxation::new(TOLERANCE, LIMIT);
         let mut next = vec![2.0];
-        relaxation.apply(&[1.0], &mut next, 1.0);
+        let used = relaxation.apply(&[1.0], &mut next, 1.0);
+        assert_eq!(used.to_bits(), 1.0_f64.to_bits(), "no estimate yet");
         let mut next = vec![4.0];
-        relaxation.apply(&[2.0], &mut next, 2.0);
+        let used = relaxation.apply(&[2.0], &mut next, 2.0);
         assert_eq!(relaxation.factor().to_bits(), MIN_FACTOR.to_bits());
+        assert_eq!(
+            used.to_bits(),
+            MIN_FACTOR.to_bits(),
+            "it returns the factor"
+        );
         assert!((next[0] - (2.0 + MIN_FACTOR * 2.0)).abs() < 1e-15);
         // The same update again gives no estimate; the factor is kept.
         let mut next = vec![4.0];
         relaxation.apply(&[2.0], &mut next, 2.0);
         assert_eq!(relaxation.factor().to_bits(), MIN_FACTOR.to_bits());
+    }
+
+    #[test]
+    fn toward_moves_part_of_the_way_by_the_factor() {
+        let previous = [1.0, 2.0, -4.0];
+        let mut next = [3.0, 6.0, -4.0];
+        toward(&previous, &mut next, 0.25);
+        assert_eq!(next, [1.5, 3.0, -4.0]);
+        // A factor of 1 leaves the values as they are.
+        let mut same = [3.0, 6.0, -0.0];
+        toward(&previous, &mut same, 1.0);
+        let bits: Vec<u64> = same.iter().map(|x| x.to_bits()).collect();
+        assert_eq!(
+            bits,
+            [3.0_f64.to_bits(), 6.0_f64.to_bits(), (-0.0_f64).to_bits()]
+        );
     }
 }

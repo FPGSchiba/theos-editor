@@ -11,8 +11,15 @@
 //! The fill finds `ℓ` by pouring the volume into the cells in height order (each height less its
 //! `k·ε`, ties by cell index), up to the spill level: `ℓ = min(spill level, the level the volume
 //! reaches)`. What does not fit passes on.
+//!
+//! **The decision of each Gauss–Seidel iteration** lives here too. A depression that the routed
+//! sediment reaches with the volume `I` holds `min(max(I, 0), capacity)` of it and lets go the
+//! rest, never a negative volume ([`Traps::release`]); the volume it holds fills its cells in the
+//! start of the iteration's sweep ([`Traps::start`]). From the iteration after half the limit a
+//! depression whose last start was full stays full ([`Traps::decide`]), so it changes between
+//! full and not full a bounded number of times in a step.
 
-use crate::kernels::num::{OrdF64, key, min, to_f64};
+use crate::kernels::num::{OrdF64, key, max, min, to_f64};
 use crate::stages::evolution::flow::cell_index;
 use crate::stages::evolution::resolve_sinks::Depressions;
 
@@ -127,14 +134,52 @@ impl Traps {
         self.holding(cell).is_some()
     }
 
+    /// The volume (m³) that fills depression `n` to its spill level on the heights it was built
+    /// from; 0 for a depression that does not exist.
+    pub(super) fn capacity(&self, n: usize) -> f64 {
+        self.depressions.get(n).map_or(0.0, |t| t.capacity)
+    }
+
     /// The part of `volume` (m³) that depression `n` keeps on the heights it was built from: all
     /// of it up to its capacity, nothing of a volume that is not positive.
     pub(super) fn kept(&self, n: usize, volume: f64) -> f64 {
-        let capacity = self.depressions.get(n).map_or(0.0, |t| t.capacity);
         if volume > 0.0 {
-            min(volume, capacity)
+            min(volume, self.capacity(n))
         } else {
             0.0
+        }
+    }
+
+    /// What depression `n` does with the volume `reached` (m³) that the routing of one
+    /// Gauss–Seidel iteration brings it: `(kept, released)`. It keeps [`Traps::kept`] and lets
+    /// go the excess over its capacity, never a negative volume. Early iterations can route a
+    /// negative inflow (the cells upstream deposited more than the last iterate routed); at a
+    /// fixed point it is not negative, so holding it back changes only the path to it.
+    pub(super) fn release(&self, n: usize, reached: f64) -> (f64, f64) {
+        let kept = self.kept(n, reached);
+        (kept, max(reached - kept, 0.0))
+    }
+
+    /// The volume (m³) depression `n` holds in the next start, from the volume `target` its
+    /// routing keeps and the volume `previous` the last start held: the target, except that
+    /// `past_half` the iteration limit a depression whose last start was full stays full. After
+    /// half the limit each depression thus changes from not full to full at most once and never
+    /// back, whatever the other cells do.
+    pub(super) fn decide(&self, n: usize, target: f64, previous: f64, past_half: bool) -> f64 {
+        let capacity = self.capacity(n);
+        if past_half && previous >= capacity {
+            capacity
+        } else {
+            target
+        }
+    }
+
+    /// Writes into `start` the heights `height` with each depression `n` filled by the volume
+    /// `kept[n]` (m³), as [`Traps::fill`] fills it: the start of an iteration's sweep.
+    pub(super) fn start(&self, kept: &[f64], height: &[f64], start: &mut [f64]) {
+        start.copy_from_slice(height);
+        for (n, &volume) in kept.iter().enumerate() {
+            self.fill(n, volume, start);
         }
     }
 
@@ -326,6 +371,61 @@ mod tests {
             (none.len(), none.holding(0), none.spilling_at(0)),
             (0, None, None)
         );
+    }
+
+    #[test]
+    fn a_depression_lets_go_only_what_it_does_not_keep() {
+        let (dep, routing, height) = strip();
+        let traps = Traps::new(&dep, &routing, &height, 1.0);
+        let capacity = traps.capacity(0);
+        assert!(close(capacity, 13.0 + 6.0 * EPSILON));
+        // A negative inflow (the cells upstream deposited more than the last iterate routed)
+        // keeps nothing and lets go nothing.
+        let (kept, release) = traps.release(0, -3.0);
+        assert_eq!((kept.to_bits(), release.to_bits()), (0, 0));
+        let (kept, release) = traps.release(0, 1.5);
+        assert!(
+            close(kept, 1.5) && release.to_bits() == 0,
+            "{kept} {release}"
+        );
+        let (kept, release) = traps.release(0, capacity + 5.0);
+        assert!(
+            close(kept, capacity) && close(release, 5.0),
+            "{kept} {release}"
+        );
+        assert_eq!(traps.capacity(7).to_bits(), 0.0_f64.to_bits());
+    }
+
+    #[test]
+    fn a_full_depression_stays_full_past_half_the_limit() {
+        let (dep, routing, height) = strip();
+        let traps = Traps::new(&dep, &routing, &height, 1.0);
+        let capacity = traps.capacity(0);
+        let decide = |target: f64, previous: f64, past_half: bool| {
+            traps.decide(0, target, previous, past_half).to_bits()
+        };
+        // Up to half the limit the start holds the target, whatever the last start held.
+        assert_eq!(decide(2.0, capacity, false), 2.0_f64.to_bits());
+        assert_eq!(decide(capacity, 0.0, false), capacity.to_bits());
+        // Past it a depression whose last start was full stays full when its target drops.
+        assert_eq!(decide(2.0, capacity, true), capacity.to_bits());
+        // One that was not full follows its target, and may become full once.
+        assert_eq!(decide(2.0, 1.0, true), 2.0_f64.to_bits());
+        assert_eq!(decide(capacity, 2.0, true), capacity.to_bits());
+    }
+
+    #[test]
+    fn a_start_is_the_heights_with_each_depression_filled() {
+        let (dep, routing, height) = strip();
+        let traps = Traps::new(&dep, &routing, &height, 1.0);
+        let mut want = height.clone();
+        traps.fill(0, 3.0, &mut want);
+        // Whatever the buffer held, the start is `height` with the depression filled by 3 m³.
+        let mut start = vec![99.0; 6];
+        traps.start(&[3.0], &height, &mut start);
+        assert_eq!(start, want);
+        traps.start(&[0.0], &height, &mut start);
+        assert_eq!(start, height);
     }
 
     #[test]

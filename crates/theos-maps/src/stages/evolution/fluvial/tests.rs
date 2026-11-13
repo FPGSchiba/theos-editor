@@ -1,7 +1,9 @@
 //! `fluvial` on a hand-built 2 x 2 world, and after `uplift` and the routing processes on 64 x 64
-//! landscapes of 100 m cells. Deposition (G > 0) and depression filling are in `deposition`.
+//! landscapes of 100 m cells. Deposition (G > 0) is in `deposition`, the routed depressions'
+//! lakes in `lakes`, the slope supply in `supply`.
 
 mod deposition;
+mod lakes;
 mod supply;
 
 use std::f64::consts::SQRT_2;

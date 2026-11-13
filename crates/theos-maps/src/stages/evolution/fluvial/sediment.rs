@@ -1,17 +1,24 @@
 //! The sediment of one step routed over the flow weights (spec §5.9): each cell passes on what
 //! reaches it plus its own sediment, split like its water. A cell's own sediment is its net
-//! erosion and the slope supply it takes in ([`step_sediment`]). A routed depression keeps what
-//! reaches it while it is open and lets go what it does not keep when the walk reaches its spill
-//! cell.
+//! erosion and the slope supply it takes in ([`step_sediment`]). Everything that reaches a routed
+//! depression before the walk passes its spill cell goes into the depression's inflow; there the
+//! depression decides what it lets go.
+//!
+//! **The books** ([`books`]) close each step: after the Gauss–Seidel iterations they route the
+//! step's sediment once more over the final heights, fill each depression with what reaches it
+//! up to its capacity, and give its cells that fill. The volume balance then closes exactly,
+//! converged or not.
 
 use super::fill::Traps;
+use crate::kernels::num::max;
 use crate::stages::evolution::flow::{FlowWeights, cell_index};
 
 /// Writes each cell's own sediment of the step into `volume`, m³: its net erosion
 /// `(start − height)·cell_area` (negative where it gained), plus `supply`, the volume of slope
 /// supply it takes in this step (spec §5.9 "Slope supply"). The supply enters the sediment flux
 /// at its cell like eroded sediment: `slope_limit` removed it from that cell since `fluvial` last
-/// ran.
+/// ran. On a routed depression's cell `start` is its filled height, so its own sediment is its
+/// incision since the fill: the fill itself is never sediment.
 pub(super) fn step_sediment(
     volume: &mut [f64],
     start: &[f64],
@@ -33,17 +40,17 @@ pub(super) fn step_sediment(
 /// cells of Yuan et al.'s `ups(i)`), plus what a depression lets go at it.
 ///
 /// While depression `n` is open, every share that would reach one of its cells goes into the
-/// depression's inflow instead, and so does each of its cells' own volume (the slope supply on a
-/// held cell), wherever that cell's edges lead: to the spill cell outside the depression too, or,
-/// at a spill cell inside it, before the depression lets go. When the walk reaches the
-/// depression's spill cell, `close(n, inflow)` returns the volume the depression lets go. It
-/// counts as arriving at the spill cell, so it leaves with the spill cell's own flux over its
-/// flow edges (with steepest routing, to `SpillPoint.to`), as spec §5.9's "passes on from the
-/// spill node" says. A spill cell outside
-/// its depression (the higher cell of the pass) thus sees the release in its deposition term;
-/// one inside it is held and only passes it on. From then on the depression is closed: what
-/// reaches it later flows through its cells like over any other cell. Every volume either
-/// leaves the map, stays in a depression, or is in `arriving`, so the walk loses nothing.
+/// depression's inflow instead, and so does each of its cells' own volume (its incision since its
+/// fill and its slope supply), wherever that cell's edges lead: to the spill cell outside the
+/// depression too, or, at a spill cell inside it, before the depression lets go. When the walk
+/// reaches the depression's spill cell, `close(n, inflow)` returns the volume the depression lets
+/// go. It counts as arriving at the spill cell, so it leaves with the spill cell's own flux over
+/// its flow edges (with steepest routing, to `SpillPoint.to`), as spec §5.9's "passes on from the
+/// spill node" says. A spill cell outside its depression (the higher cell of the pass) thus sees
+/// the release in its deposition term; one inside it is a lake cell, whose deposition term sees
+/// nothing, and it passes the release on. From then on the depression is closed: what reaches it
+/// later flows through its cells like over any other cell. Every volume either leaves the map,
+/// stays in a depression, or is in `arriving`, so the walk loses nothing.
 pub(super) fn route(
     stack: &[u32],
     weights: &FlowWeights,
@@ -85,30 +92,82 @@ pub(super) fn route(
     out
 }
 
-/// Routes the step's sediment, `volume` per cell (m³, from [`step_sediment`] on the step's final
-/// heights: the net erosion plus the slope supply taken in), once more and fills every
-/// depression with the sediment that reaches it, raising its cells in `height`. Returns the
-/// volume that leaves the map (m³). The volume each depression lets go is exactly what reached
-/// it less what it took, so the sediment's volume is kept.
-pub(super) fn settle(
+/// What [`books`] reads besides the routing; every slice holds one entry per cell.
+pub(super) struct Ledger<'a> {
+    /// The heights entering the step, `h*`, on which the depressions were built.
+    pub h_star: &'a [f64],
+    /// The start of the sweep that gave the final heights: `h*` with the depressions filled
+    /// (`h*` itself without deposition).
+    pub start: &'a [f64],
+    /// The volume of slope supply each cell takes in this step, m³.
+    pub supply: &'a [f64],
+    /// The area of one cell, m².
+    pub cell_area: f64,
+}
+
+/// The result of [`books`].
+pub(super) struct Books {
+    /// The sediment that left the map at the cells without an edge, m³.
+    pub out: f64,
+    /// The largest move of a depression's cell by the books, metres: how far the fill of the
+    /// final routing lies from the fill the last sweep started from.
+    pub correction: f64,
+}
+
+/// The books of one step. Routes each cell's own sediment against the start of the final sweep,
+/// `(start − height)·cell_area + supply` ([`step_sediment`]), once more. Each depression takes
+/// what reaches it up to its capacity onto a copy of `h*`, as a fill, and lets go the rest with
+/// its sign. Each depression cell then gets that fill in place of the one its sweep started
+/// from, `height += filled − start`, and keeps the incision the sweep gave it.
+///
+/// The volume balance closes exactly, for any final heights and start: outside the depressions
+/// `start = h*`, so a cell's change of volume is its own sediment less its supply; on them the
+/// fill adds what the depression took; and every volume either leaves or is taken. So the map's
+/// volume changes by the supply taken in less [`Books::out`]. A depression that is not full
+/// takes all that reaches it and lets go nothing.
+pub(super) fn books(
     stack: &[u32],
     weights: &FlowWeights,
     traps: &Traps,
-    volume: &[f64],
+    ledger: &Ledger<'_>,
     height: &mut [f64],
-) -> f64 {
-    let mut arriving = vec![0.0; volume.len()];
-    route(stack, weights, traps, volume, &mut arriving, |n, inflow| {
-        inflow - traps.fill(n, inflow, height)
-    })
+) -> Books {
+    let mut volume = vec![0.0; height.len()];
+    step_sediment(
+        &mut volume,
+        ledger.start,
+        height,
+        ledger.supply,
+        ledger.cell_area,
+    );
+    let mut filled = ledger.h_star.to_vec();
+    let mut arriving = vec![0.0; height.len()];
+    let out = route(
+        stack,
+        weights,
+        traps,
+        &volume,
+        &mut arriving,
+        |n, inflow| inflow - traps.fill(n, inflow, &mut filled),
+    );
+    let mut correction = 0.0;
+    let lakes = height.iter_mut().zip(filled.iter().zip(ledger.start));
+    for (i, (h, (&fill, &from))) in lakes.enumerate() {
+        if traps.holds(i) {
+            let moved = fill - from;
+            *h += moved;
+            correction = max(correction, moved.abs());
+        }
+    }
+    Books { out, correction }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::route;
+    use super::{Ledger, books, route};
     use crate::grid::Grid;
     use crate::stages::evolution::flow::FlowWeights;
-    use crate::stages::evolution::fluvial::fill::Traps;
+    use crate::stages::evolution::fluvial::fill::{EPSILON, Traps};
     use crate::stages::evolution::resolve_sinks::{Depressions, SpillPoint};
 
     /// A 1 x 6 strip: cell 0 is the outlet; 1 → 0; 2 → 1; 3 → 2; 4 sends 1/4 to 3 and 3/4 to 2;
@@ -256,6 +315,97 @@ mod tests {
         assert_eq!(calls, [(0, 0.0)]);
         assert_eq!(arriving, [24.0, 24.0, 24.0, 6.0, 16.0, 0.0]);
         assert_eq!(out.to_bits(), 24.0_f64.to_bits());
+    }
+
+    /// The pass strip of 1 m² cells: the outlet 0 at 0 m; cell 1, the pass cell at 50 m and the
+    /// spill cell, outside the lake; cell 2, the lake at 45 m (depression 1, spilling from cell 1
+    /// to cell 0 at 50 m, so it holds `5 + ε` m³); cell 3, a slope at 100 m. Each drains west.
+    fn pass_strip() -> (FlowWeights, Traps, Vec<f64>) {
+        let weights = FlowWeights {
+            start: vec![0, 0, 1, 2, 3],
+            to: vec![0, 1, 2],
+            weight: vec![1.0; 3],
+            dist: vec![1.0; 3],
+        };
+        let depressions = Depressions {
+            label: Grid::from_vec(1, 4, vec![0, 0, 1, 0]).unwrap(),
+            spill: vec![SpillPoint {
+                cell: 1,
+                to: 0,
+                level: 50.0,
+            }],
+        };
+        let h_star = vec![0.0, 50.0, 45.0, 100.0];
+        let routing = [0.0, 50.0, 50.0 + EPSILON, 100.0];
+        let traps = Traps::new(&depressions, &routing, &h_star, 1.0);
+        (weights, traps, h_star)
+    }
+
+    fn close(a: f64, b: f64) -> bool {
+        (a - b).abs() <= 1e-9
+    }
+
+    #[test]
+    fn the_books_fill_each_lake_with_what_the_final_routing_brings_it() {
+        let (weights, traps, h_star) = pass_strip();
+        let stack = [0, 1, 2, 3];
+        let supply = [0.0; 4];
+        // The last sweep started from a full lake (50 + ε) and cut it 2 + ε m down; the slope
+        // lost 1 m and the pass cell 10 m. Only 3 + ε m³ reach the lake: it holds that above h*
+        // and keeps its incision, 2 + ε m below its fill, and it lets go nothing.
+        let full = [0.0, 50.0, 50.0 + EPSILON, 100.0];
+        let mut height = vec![0.0, 40.0, 48.0, 99.0];
+        let ledger = Ledger {
+            h_star: &h_star,
+            start: &full,
+            supply: &supply,
+            cell_area: 1.0,
+        };
+        let booked = books(&stack, &weights, &traps, &ledger, &mut height);
+        assert!(close(height[2], 45.0 + (3.0 + EPSILON) - (2.0 + EPSILON)));
+        assert_eq!(height[..2], [0.0, 40.0]);
+        assert_eq!(height[3].to_bits(), 99.0_f64.to_bits());
+        // Out: every cell's own sediment, 13 + ε, less what the lake took.
+        assert!(close(booked.out, 10.0), "{}", booked.out);
+        assert!(close(booked.correction, 2.0), "{}", booked.correction);
+        // The last sweep started from 1 m of fill and the lake kept its height; the slope lost
+        // 8 m, more than the lake holds. It fills to its place one ε above the spill level and
+        // the rest leaves over the pass.
+        let partly = [0.0, 50.0, 46.0, 100.0];
+        let mut height = vec![0.0, 40.0, 46.0, 92.0];
+        let ledger = Ledger {
+            start: &partly,
+            ..ledger
+        };
+        let booked = books(&stack, &weights, &traps, &ledger, &mut height);
+        assert!(close(height[2], 50.0 + EPSILON), "{}", height[2]);
+        assert!(close(booked.out, 18.0 - (5.0 + EPSILON)), "{}", booked.out);
+        assert!(close(booked.correction, 4.0 + EPSILON));
+    }
+
+    #[test]
+    fn without_traps_the_books_only_route() {
+        // With no depressions the books are the walk of `step_sediment`'s volumes: the slope
+        // supply and the net erosion leave at the outlet and no height moves.
+        let (weights, _, h_star) = pass_strip();
+        let mut height = vec![0.0, 49.0, 44.0, 97.0];
+        let ledger = Ledger {
+            h_star: &h_star,
+            start: &h_star,
+            supply: &[0.0, 0.0, 0.0, 2.0],
+            cell_area: 1.0,
+        };
+        let before = height.clone();
+        let booked = books(
+            &[0, 1, 2, 3],
+            &weights,
+            &Traps::default(),
+            &ledger,
+            &mut height,
+        );
+        assert_eq!(height, before);
+        assert_eq!(booked.out.to_bits(), 7.0_f64.to_bits());
+        assert_eq!(booked.correction.to_bits(), 0.0_f64.to_bits());
     }
 
     #[test]

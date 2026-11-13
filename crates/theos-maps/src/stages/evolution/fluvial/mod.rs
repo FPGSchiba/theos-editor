@@ -15,18 +15,29 @@
 //!   solve it (`solve`), stopping at 10⁻³ × max(U)·Δt, or 10⁻⁶ m without uplift (ruling 43).
 //!   Where dry catchments break Yuan's condition `G/p̂ ≤ 1` they oscillate, and Aitken's
 //!   relaxation (`relax`) damps them once they are not on track to converge in time; the
-//!   solution they converge to is unchanged. Each routed depression is a sediment trap
-//!   (`fill`): while the iterations run, its cells keep their height and the sediment that
-//!   reaches it stays in it up to its capacity, so the cells below see only what passes its
-//!   spill. After the iterations one more routing of the step's sediment (`sediment`) fills
-//!   each depression in height order up to its spill level, with an ε slope toward its spill
-//!   cell, and passes the rest on.
+//!   solution they converge to is unchanged.
+//! - **Depression filling**, in the spec's order: in each iteration the routed sediment first
+//!   fills each routed depression in height order up to its spill level, with an ε slope toward
+//!   its spill cell (`fill`), and passes the excess on from the spill node; then every cell is
+//!   solved, the depressions' cells from their filled heights. A lake that is not full keeps its
+//!   level and the slope that feeds it ends above it; a full lake follows the incision of its
+//!   spill node instead of perching above it. Two consequences: the dry floor cells of a lake
+//!   that is not full erode where their receiver lies lower (their sediment goes into the fill),
+//!   and a spill cell inside its depression is a lake cell, whose deposition term sees no release,
+//!   while one outside it sees the release (`solve` says more). From the iteration after half the
+//!   limit a full depression stays full, so it changes state a bounded number of times.
+//! - **The books** (`sediment`): after the iterations one more routing of the step's sediment
+//!   over the final heights fills each depression with what reaches it up to its capacity, and
+//!   gives its cells that fill in place of the one their last sweep started from. The volume
+//!   balance closes exactly, also at the iteration limit, and a lake that is not full lets
+//!   nothing go. When the iterations ran past half the limit and the books moved a lake cell by
+//!   the tolerance or more, a warning names the move.
 //! - **The slope supply** (spec §5.9 "Slope supply", ruling 51): `slope_supply` holds, per cell,
 //!   the thickness `slope_limit` has removed since `fluvial` last ran. `fluvial` takes it into the
-//!   sediment flux at its cell like eroded sediment, in the iterations and in the routing that
-//!   fills the depressions (`solve` gives the term), and writes the layer back emptied. G decides
-//!   how much of it is laid down; with G = 0 all of it leaves at the outlets. Without the layer
-//!   there is no supply.
+//!   sediment flux at its cell like eroded sediment, in the iterations and in the books (`solve`
+//!   gives the term); on a depression's cell it goes into the fill. It writes the layer back
+//!   emptied. G decides how much of it is laid down; with G = 0 all of it leaves at the outlets.
+//!   Without the layer there is no supply.
 //!
 //! The report holds `sediment_out_m3`, the sediment that left the map in the step at the cells
 //! without an edge (the drained edges, or the closed map's sink), `iterations`, and `supply_m3`,
@@ -45,8 +56,8 @@ use serde::Deserialize;
 
 use self::fill::Traps;
 use self::inputs::{depressions_misfit, routing_misfit};
-use self::sediment::{settle, step_sediment};
-use self::solve::{Deposition, Incision, deposit, incise};
+use self::sediment::{Books, Ledger, books};
+use self::solve::{Deposition, Incision, Solution, deposit, incise};
 use super::booking::book;
 use super::flow::{FlowWeights, accumulate};
 use crate::grid::Grid;
@@ -234,65 +245,127 @@ fn erode(
     report
         .values
         .insert("supply_m3".to_owned(), supply_m3.iter().sum());
-    let mut step = Incision {
+    let step = Incision {
         weights,
         stack,
-        held: fixed,
+        fixed,
         erodibility: erodibility.as_slice(),
         discharge: discharge.as_slice(),
         m: params.m,
         dt,
     };
-    let (mut height, traps) = if params.g > 0.0 {
-        let depressions = ctx.value::<Depressions>("depressions")?;
-        if let Some(problem) = depressions_misfit(depressions, cells) {
-            return Err(ctx.fail(problem));
-        }
-        let routing = ctx.f64("routing_surface")?.as_slice();
-        let traps = Traps::new(depressions, routing, start.as_slice(), cell_area);
-        let held: Vec<bool> = (0..cells).map(|i| fixed[i] || traps.holds(i)).collect();
-        step.held = &held;
-        let dep = Deposition {
-            g: params.g,
-            traps: &traps,
-            cell_area,
-            supply: &supply_m3,
-            tolerance: tolerance(ctx.f64_opt("uplift")?, dt),
-            max_iterations: params.max_iterations,
-        };
-        let solution = deposit(&step, &dep, start);
-        if !solution.converged(dep.tolerance) {
-            report.findings.push(
-                Finding::warning(format!(
-                    "the Gauss–Seidel iterations stopped after {} iterations with the residual \
-                     {:e} m, above the tolerance {:e} m",
-                    solution.iterations, solution.residual, dep.tolerance
-                ))
-                .on_layer("height"),
-            );
-        }
-        report
-            .values
-            .insert("iterations".to_owned(), f64::from(solution.iterations));
-        (solution.height, traps)
+    let (height, out) = if params.g > 0.0 {
+        with_deposition(ctx, params, &step, start, &supply_m3, &mut report)?
     } else {
         report.values.insert("iterations".to_owned(), 1.0);
-        (incise(&step, start), Traps::default())
+        let mut height = incise(&step, start);
+        let ledger = Ledger {
+            h_star: start.as_slice(),
+            start: start.as_slice(),
+            supply: &supply_m3,
+            cell_area,
+        };
+        let books = books(
+            stack,
+            weights,
+            &Traps::default(),
+            &ledger,
+            height.as_mut_slice(),
+        );
+        (height, books.out)
     };
-    let mut sediment = vec![0.0; cells];
-    step_sediment(
-        &mut sediment,
-        start.as_slice(),
-        height.as_slice(),
-        &supply_m3,
-        cell_area,
-    );
-    let out = settle(stack, weights, &traps, &sediment, height.as_mut_slice());
     report.values.insert("sediment_out_m3".to_owned(), out);
     Ok(Outcome {
         height,
         drainage_area,
         report,
+    })
+}
+
+/// The step with deposition (`g > 0`) from `start` (`h*`): the routed depressions as traps,
+/// Yuan's Gauss–Seidel iterations, then the books. Returns the new heights and the sediment
+/// that left the map, m³, and adds `iterations` and the warnings of the iterations and the books
+/// to `report`.
+fn with_deposition(
+    ctx: &StageContext<'_>,
+    params: &FluvialParams,
+    step: &Incision<'_>,
+    start: &Grid<f64>,
+    supply_m3: &[f64],
+    report: &mut StageReport,
+) -> Result<(Grid<f64>, f64), StageError> {
+    let depressions = ctx.value::<Depressions>("depressions")?;
+    if let Some(problem) = depressions_misfit(depressions, start.len()) {
+        return Err(ctx.fail(problem));
+    }
+    let cell_area = ctx.frame().cell_area_m2();
+    let routing = ctx.f64("routing_surface")?.as_slice();
+    let traps = Traps::new(depressions, routing, start.as_slice(), cell_area);
+    let dep = Deposition {
+        g: params.g,
+        traps: &traps,
+        cell_area,
+        supply: supply_m3,
+        tolerance: tolerance(ctx.f64_opt("uplift")?, step.dt),
+        max_iterations: params.max_iterations,
+    };
+    let solution = deposit(step, &dep, start);
+    let converged = solution.converged(dep.tolerance);
+    let Solution {
+        mut height,
+        start: from,
+        iterations,
+        residual,
+        past_half,
+    } = solution;
+    let ledger = Ledger {
+        h_star: start.as_slice(),
+        start: &from,
+        supply: supply_m3,
+        cell_area,
+    };
+    let Books { out, correction } = books(
+        step.stack,
+        step.weights,
+        &traps,
+        &ledger,
+        height.as_mut_slice(),
+    );
+    if !converged {
+        report.findings.push(
+            Finding::warning(format!(
+                "the Gauss–Seidel iterations stopped after {iterations} iterations with the \
+                 residual {residual:e} m, above the tolerance {:e} m",
+                dep.tolerance
+            ))
+            .on_layer("height"),
+        );
+    }
+    if let Some(warning) = books_warning(iterations, past_half, correction, dep.tolerance) {
+        report.findings.push(warning);
+    }
+    report
+        .values
+        .insert("iterations".to_owned(), f64::from(iterations));
+    Ok((height, out))
+}
+
+/// The warning when the books moved a lake cell by `correction` metres, the tolerance or more,
+/// at a step whose `iterations` ran `past_half` the limit: a depression's inflow was still
+/// changing when the iterations stopped. A step that converged before half the limit never
+/// warns; its correction follows only the last iteration's change of inflow.
+fn books_warning(
+    iterations: u32,
+    past_half: bool,
+    correction: f64,
+    tolerance: f64,
+) -> Option<Finding> {
+    (past_half && correction >= tolerance).then(|| {
+        Finding::warning(format!(
+            "after {iterations} iterations the final routing of the sediment moved a lake cell \
+             by {correction:e} m, at or above the tolerance {tolerance:e} m"
+        ))
+        .on_layer("height")
     })
 }
 
@@ -330,8 +403,24 @@ pub fn runoff_weight(climate: &Climate, frame: &MapFrame) -> Option<Grid<f64>> {
 
 #[cfg(test)]
 mod unit_tests {
-    use super::tolerance;
+    use super::{books_warning, tolerance};
     use crate::grid::Grid;
+
+    #[test]
+    fn the_books_warn_only_past_half_the_limit_and_at_the_tolerance() {
+        // A step that converged before half the limit never warns: its correction follows only
+        // the last iteration's change of inflow (Task 27f, R8).
+        assert!(books_warning(20, false, 5.0, 0.1).is_none());
+        // Past half the limit it warns when a lake cell moved by the tolerance or more.
+        assert!(books_warning(30, true, 0.099, 0.1).is_none());
+        for moved in [0.1, 3.5] {
+            let finding = books_warning(30, true, moved, 0.1).unwrap();
+            let message = &finding.message;
+            assert!(message.contains(&format!("{moved:e} m")), "{message}");
+            assert!(message.contains("30 iterations"), "{message}");
+            assert!(message.contains("tolerance 1e-1 m"), "{message}");
+        }
+    }
 
     #[test]
     fn the_tolerance_follows_the_largest_uplift_or_falls_back() {
