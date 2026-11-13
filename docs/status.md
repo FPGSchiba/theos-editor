@@ -55,6 +55,17 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
+- P08 build (13 Nov 2026): the slope limit of spec §5.9 cannot settle on the built-in recipes'
+  mountains. Its passes move half the excess per pass and settle like an explicit diffusion
+  (about 2 % per pass); stream power alone would make slopes of 4–8.5 against a critical 0.84, so
+  settling would take 600–900 passes per step. The 100-pass cap is hit on 236 of 240 steps, and
+  the slope limit is 79 % of a 228 s run at 384². Options:
+  (a) a direct one-sweep threshold limiter (exact in one pass; needs a rule for where the removed
+  material goes) — a change to spec §5.9;
+  (b) another stop rule — a change to spec §5.9;
+  (c) gentler recipes in the tuning task (less uplift per K) — the cap still bites on steep floors;
+  (d) leave it and move the long runs to a slow CI job — does not settle the slopes.
+  The build continues with the tasks that do not depend on it.
 - P06's spec (command layer and repo lock) waits for Jann in its spec PR #36. Its §6.1 holds the
   interfaces agreed with the P05 session, and its §11 the git probes for P46 and P47.
 - For P49 (umbrella version 6):
