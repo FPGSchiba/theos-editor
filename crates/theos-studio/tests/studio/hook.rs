@@ -205,6 +205,39 @@ fn a_dangling_hook_link_is_a_foreign_hook() -> TestResult {
     Ok(())
 }
 
+// A link is never read or written through, also when the file it points to holds the marker and
+// the exact exec line: a re-install would write this machine's `theos` into that file, which may
+// be tracked. `--force` keeps the link itself as the backup.
+#[cfg(unix)]
+#[test]
+fn a_hook_link_to_a_marked_script_is_a_foreign_hook() -> TestResult {
+    let repo = Repo::committed("")?;
+    let hooks = repo.top().join(".git").join("hooks");
+    std::fs::create_dir_all(&hooks)?;
+    let target = repo.top().join("shared-pre-commit");
+    let shared = format!(
+        "#!/bin/sh\n{MARKER}, shared\ntheos='/opt/theos'\n[ -x \"$theos\" ] || theos=theos\n\
+         exec \"$theos\" check --staged '.'\n"
+    );
+    std::fs::write(&target, &shared)?;
+    std::os::unix::fs::symlink(&target, pre_commit(&repo))?;
+    let is_link = |path: &Path| -> std::io::Result<bool> {
+        Ok(std::fs::symlink_metadata(path)?.is_symlink())
+    };
+    let error = hook_error(install(&repo, "", false))?;
+    assert!(matches!(error, HookError::Foreign { .. }), "{error:?}");
+    assert_eq!(std::fs::read_to_string(&target)?, shared);
+    assert!(is_link(&pre_commit(&repo))?);
+
+    let installed = install(&repo, "", true)?;
+    let backup = installed.backup.ok_or("no backup named")?;
+    assert!(is_link(&backup)?);
+    assert!(!is_link(&installed.hook)?);
+    assert!(std::fs::read_to_string(&installed.hook)?.contains(THEOS));
+    assert_eq!(std::fs::read_to_string(&target)?, shared);
+    Ok(())
+}
+
 #[cfg(unix)]
 #[test]
 fn a_non_utf8_theos_path_is_refused() -> TestResult {

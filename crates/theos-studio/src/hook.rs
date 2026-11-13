@@ -73,9 +73,10 @@ pub enum HookError {
 /// Writes the `pre-commit` hook of the project at `project_root`, which checks the staged
 /// snapshot with the `theos` at `theos` and falls back to `theos` on the `PATH`.
 ///
-/// An existing hook with the marker and the same project folder is replaced. Any other hook is
-/// [`HookError::Foreign`], unless `force` keeps it as `pre-commit.before-theos`. Nothing is
-/// written, and no folder created, when a check refuses.
+/// An existing hook with the marker and the same project folder is replaced. Any other hook, a
+/// symbolic link included whatever it points to, is [`HookError::Foreign`], unless `force` keeps
+/// it as `pre-commit.before-theos`. Nothing is written, and no folder created, when a check
+/// refuses, and nothing is read or written through a link.
 ///
 /// # Errors
 ///
@@ -110,7 +111,9 @@ pub fn install_hook(
         backup: None,
     };
     if present(&hook) {
-        if is_ours(&hook, folder) {
+        // A link is never ours: reading or writing through it would reach the file it points
+        // to, which may be tracked. `force` moves the link itself away.
+        if !is_link(&hook) && is_ours(&hook, folder) {
             installed.replaced = true;
         } else if !force {
             return Err(HookError::Foreign { path: hook }.into());
@@ -132,6 +135,11 @@ pub fn install_hook(
 /// Whether something is at `path`, a dangling symbolic link included.
 fn present(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok()
+}
+
+/// Whether `path` is a symbolic link, whatever it points to.
+fn is_link(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_symlink())
 }
 
 fn io(path: &Path, source: std::io::Error) -> StudioError {
