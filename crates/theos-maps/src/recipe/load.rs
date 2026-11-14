@@ -77,7 +77,14 @@ impl Catalog {
         let label = file.display().to_string();
         let raw = match parse_table(text, &label) {
             Ok(raw) => raw,
-            Err(error) => return self.refuse(file, None, &error),
+            Err(error) => {
+                // No id can be read from text that is not TOML: a folder file is taken to mean
+                // the recipe its name says, so a syntax error never leaves the built-in running.
+                let id = matches!(origin, RecipeOrigin::File(_))
+                    .then(|| file_stem(&file))
+                    .flatten();
+                return self.refuse(file, id, inner_message(error));
+            }
         };
         let id = raw
             .get("id")
@@ -87,20 +94,31 @@ impl Catalog {
             Ok(loaded) => {
                 self.recipes.insert(loaded.recipe.id.clone(), loaded);
             }
-            Err(error) => self.refuse(file, id, &error),
+            Err(error) => self.refuse(file, id, inner_message(error)),
         }
     }
 
-    /// Records a problem and removes the recipe of `id`, if the file names one.
-    fn refuse(&mut self, file: PathBuf, id: Option<String>, error: &RecipeError) {
+    /// Records a problem and removes the recipe of `id`, if there is one.
+    fn refuse(&mut self, file: PathBuf, id: Option<String>, message: String) {
         if let Some(id) = &id {
             self.recipes.remove(id);
         }
-        self.problems.push(RecipeProblem {
-            file,
-            id,
-            message: error.to_string(),
-        });
+        self.problems.push(RecipeProblem { file, id, message });
+    }
+}
+
+/// The file name without its extension, as a recipe id.
+fn file_stem(path: &Path) -> Option<String> {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(str::to_owned)
+}
+
+/// What is wrong, without the "cannot parse recipe <file>" prefix: the problem names its file.
+fn inner_message(error: RecipeError) -> String {
+    match error {
+        RecipeError::Parse { message, .. } => message,
+        other => other.to_string(),
     }
 }
 /// The `*.toml` files directly inside `dir`, sorted by file name.

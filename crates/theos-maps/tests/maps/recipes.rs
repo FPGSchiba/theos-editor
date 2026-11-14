@@ -171,7 +171,7 @@ fn a_recipe_input_fails_as_unknown() -> TestResult {
 
 // AC: CE-28.7
 #[test]
-fn hearth_valley_omega_writes_the_omega_layer() -> TestResult {
+fn slow_hearth_valley_omega_writes_the_omega_layer() -> TestResult {
     let out = tempfile::tempdir()?;
     let manifest = run(
         &request("hearth-valley-omega", 1),
@@ -209,8 +209,14 @@ fn a_broken_override_hides_the_built_in() -> TestResult {
 
     let (result, called) = run_from(&request("fixture-small", 1), dir.path())?;
     match result {
-        Err(RunError::Recipe(RecipeError::Parse { origin, .. })) => {
-            assert!(origin.contains("fixture-small.toml"), "{origin}");
+        Err(RunError::Recipe(error @ RecipeError::Parse { .. })) => {
+            let text = error.to_string();
+            let file = dir.path().join("fixture-small.toml").display().to_string();
+            assert!(
+                text.starts_with(&format!("cannot parse recipe {file}: ")),
+                "{text}"
+            );
+            assert_eq!(text.matches("cannot parse recipe").count(), 1, "{text}");
         }
         other => return Err(format!("expected the parse error, got {other:?}").into()),
     }
@@ -229,5 +235,29 @@ fn every_built_in_recipe_plans() -> TestResult {
         recipe::plan(loaded, &registry, &serde_json::Map::new())
             .map_err(|e| format!("{id}: {e}"))?;
     }
+    Ok(())
+}
+
+// Review Focus 5
+#[test]
+fn a_file_that_is_not_toml_hides_the_built_in_of_its_name() -> TestResult {
+    let dir = folder_with(
+        "fixture-small.toml",
+        "id = 
+",
+    )?;
+    let d = describe(&[dir.path().to_owned()])?;
+    assert!(d.recipes.iter().all(|r| r.id != "fixture-small"));
+    assert_eq!(d.problems.len(), 1, "{:?}", d.problems);
+    assert_eq!(d.problems[0].id.as_deref(), Some("fixture-small"));
+
+    let (result, called) = run_from(&request("fixture-small", 1), dir.path())?;
+    match result {
+        Err(RunError::Recipe(RecipeError::Parse { origin, .. })) => {
+            assert!(origin.ends_with("fixture-small.toml"), "{origin}");
+        }
+        other => return Err(format!("expected the parse error, got {other:?}").into()),
+    }
+    assert!(!called);
     Ok(())
 }

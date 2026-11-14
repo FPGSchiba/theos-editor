@@ -72,7 +72,7 @@ fn a_broken_file_is_a_problem_not_an_error() {
     assert_eq!(catalog.recipes.keys().collect::<Vec<_>>(), ["good"]);
     assert_eq!(catalog.problems.len(), 2);
     assert_eq!(catalog.problems[0].file, dir.path().join("bad.toml"));
-    assert_eq!(catalog.problems[0].id, None);
+    assert_eq!(catalog.problems[0].id.as_deref(), Some("bad"));
     assert!(catalog.problems[1].message.contains("bogus"));
 }
 
