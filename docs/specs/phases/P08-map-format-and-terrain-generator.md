@@ -877,7 +877,7 @@ Plain styling with every layer and feature kind visible (Jann). All PNG.
 | `truth` | `base`, plus: roads by class (width, dashes); every feature kind as a plain shape per type (square settlements sized by class, triangle ruins, circle Chimes, star gates, small marks for sites and deposits); settlement names; a legend of what is present; a scale bar; a title (recipe, seed, relief, lakes, Chime walk). It may have margins |
 | `geology` | Rock colours over hillshade, rivers and lakes, legend |
 | `resources` | Grey relief, deposits as circles by type sized by radius, a ring for exceptional tier, legend |
-| `inworld` | Paper tone, the known area around settlements and main roads, main roads, settlements with names, lakes, big rivers, simple ridge and forest marks. Texts (title, labels and their positions) only from the recipe's `[renders.inworld]`, never from code; everything is drawn inside the frame |
+| `inworld` | Paper tone, the known area around settlements and main roads, main roads, settlements with names, lakes, big rivers, simple ridge and forest marks. Texts (title, labels and their positions) only from the recipe's `[render.inworld]`, never from code; everything is drawn inside the frame |
 | `omega` | ω over hillshade, ruins marked (an extra render, asked for by `hearth-valley-omega`) |
 
 - **Drawing:** `tiny-skia` (scalar); labels are `skrifa` glyph outlines that `tiny-skia` fills.
@@ -1232,7 +1232,7 @@ renamed the place types, added `requires` and dropped the size note of §4.3.
 7. Ruling: the parity tolerance is the 0.3.0 range widened by the recipe's wanted range, with a
    floor of 0 for lake share — a better generator should not fail for having fewer lakes than
    0.3.0's least-lake seed — cost if wrong: CE-28.5 stricter in a later phase.
-8. Ruling: built-in recipes carry no in-world texts; `[renders.inworld]` supplies them — no lore
+8. Ruling: built-in recipes carry no in-world texts; `[render.inworld]` supplies them — no lore
    ships inside the editor, and labels stay inside the frame — cost if wrong: texts move from
    recipes to code.
 9. Ruling: generated settlement names keep 0.3.0's syllable lists as defaults, overridable per
