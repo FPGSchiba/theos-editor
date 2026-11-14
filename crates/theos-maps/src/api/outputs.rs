@@ -83,6 +83,11 @@ impl Outputs {
     /// Claims the names of `roles` (and their part names) in the existing folder `dir`, before
     /// anything is written (plan ruling L10).
     ///
+    /// A part file is never removed unless this run created it, so a `.<name>.part` that a
+    /// crashed process left behind (an abort, a killed process, a power loss) makes every later
+    /// run of that seed into this folder fail with [`RunError::OutputExists`] naming it, until
+    /// the user or the caller removes it.
+    ///
     /// # Errors
     /// [`RunError::Io`] when `dir` cannot be read or is not a folder; [`RunError::OutputExists`]
     /// naming the first output name or part name that is already taken.

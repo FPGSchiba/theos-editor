@@ -1,9 +1,14 @@
 //! The steps after the pipeline (spec §5.6, item 4): `constraints`, `features`, `renders` and
 //! `package`. Each turns the finished world into results or into the bytes of one output;
 //! [`super::run`] reports their progress and writes the bytes.
+//!
+//! The progress events name the steps in this order, which is not quite the order of the work:
+//! `constraints` already builds the features, because the `features.<type>` counts come from
+//! their ids; the `features` step then writes them.
 
 use std::collections::BTreeMap;
 use std::io::Cursor;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::Instant;
 
 use geojson::FeatureCollection;
@@ -19,7 +24,7 @@ use crate::package::{self, RunRecord};
 use crate::progress::{CancelToken, Progress};
 use crate::recipe::Plan;
 use crate::render::{self, RenderError, RenderInput};
-use crate::runner::Execution;
+use crate::runner::{Execution, panic_message};
 use crate::summary::summary;
 use crate::world::World;
 
@@ -67,17 +72,25 @@ impl<'a> Steps<'a> {
         Ok(())
     }
 
-    /// Runs `work` as the step `name` and records its wall time under that name.
+    /// Runs `work` as the step `name` with panics caught, as the runner runs a stage (spec
+    /// §5.6): `run` lives inside the editor's process (P09), so a panicking step must end the
+    /// run, not unwind into the caller. Records the step's wall time under `name`.
     ///
     /// # Errors
-    /// The errors of `work`.
+    /// The errors of `work`; [`RunError::StagePanicked`] naming the step, with the panic's
+    /// message, when `work` panics.
     pub(super) fn timed<T>(
         &mut self,
         name: &str,
         work: impl FnOnce(&mut Self) -> Result<T, RunError>,
     ) -> Result<T, RunError> {
         let started = Instant::now();
-        let out = work(self)?;
+        let out = catch_unwind(AssertUnwindSafe(|| work(self))).map_err(|payload| {
+            RunError::StagePanicked {
+                stage: name.to_owned(),
+                message: panic_message(&*payload),
+            }
+        })??;
         self.timing
             .insert(name.to_owned(), started.elapsed().as_secs_f64());
         Ok(out)

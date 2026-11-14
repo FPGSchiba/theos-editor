@@ -61,7 +61,10 @@ pub enum RunError {
         cell: usize,
     },
     /// The output folder already holds a file with the name of one of the run's outputs (or of
-    /// its temporary `.part` file); the run wrote nothing (plan ruling L10).
+    /// its temporary `.part` file); the run wrote nothing (plan ruling L10). A `.part` file left
+    /// by a crashed process makes every later run of that seed into the folder fail this way
+    /// until the user or the caller removes it; the generator never deletes a file it did not
+    /// create in this run.
     #[error("{} already exists", path.display())]
     OutputExists {
         /// The file.

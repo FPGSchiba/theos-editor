@@ -3,8 +3,9 @@
 //! The order: find the recipe in the catalog, refuse `from`, plan with the request's inputs,
 //! claim the output names (nothing is written when one is taken), run the pipeline, then the
 //! steps `constraints`, `features`, `renders` and `package`, each with its own progress event
-//! and cancel check. The outputs get their names only at the end; on any error, on cancel and
-//! while a panic unwinds, the files the run created are removed and nothing else.
+//! and cancel check, and with panics caught like a stage's. The outputs get their names only at
+//! the end; on any error, on cancel and while a panic unwinds, the files the run created are
+//! removed and nothing else.
 
 use std::path::{Path, PathBuf};
 
@@ -28,17 +29,28 @@ use crate::stage::Registry;
 /// `s<seed>.theosmap` (plan ruling L10).
 ///
 /// `progress` gets a `{stage, done, total}` event before every pipeline stage, the events long
-/// stages report themselves, and one before each step after the pipeline (`constraints`,
-/// `features`, one `renders` event per render, `package`). `cancel` stops the run at its next
-/// cancel point. Request notes are ignored: the generator accepts none in P08.
+/// stages report themselves, and one at the start of each step after the pipeline
+/// (`constraints`, `features`, one `renders` event per render, `package`). These events name the
+/// steps in order, not the order of the work inside them: the features are already built in
+/// `constraints` (the `features.<type>` counts come from their ids), and the `features` event
+/// starts the writing of their file. `cancel` stops the run at its next cancel point. Request
+/// notes are ignored: the generator accepts none in P08.
 ///
 /// # Errors
 /// [`RunError::Recipe`] when the recipe is unknown, `from` is set, an input is given or the
 /// recipe is invalid; [`RunError::OutputExists`] when a file in `out_dir` has an output's name;
 /// [`RunError::OverBudget`]; [`RunError::Cancelled`]; the stage errors of the pipeline
 /// ([`RunError::StageFailed`], [`RunError::StagePanicked`], [`RunError::FindingFailed`],
-/// [`RunError::NonFinite`]); [`RunError::Render`], [`RunError::Output`], [`RunError::Format`]
-/// and [`RunError::Io`] from the outputs. On every error the files the run created are removed.
+/// [`RunError::NonFinite`]); [`RunError::StagePanicked`] naming the step (`constraints`,
+/// `features`, `renders` or `package`) when a step after the pipeline panics;
+/// [`RunError::Render`], [`RunError::Output`], [`RunError::Format`] and [`RunError::Io`] from
+/// the outputs. On every error the files the run created are removed.
+///
+/// # Panics
+/// Not on its own: a panic inside a stage or inside a step after the pipeline is caught and
+/// returned as [`RunError::StagePanicked`]. Only a panic of the caller's `progress` closure on
+/// the event the runner reports before a pipeline stage unwinds out of `run`; no output is
+/// written while the pipeline runs, so it leaves no file behind.
 pub fn run(
     request: &RunRequest,
     recipe_dirs: &[PathBuf],

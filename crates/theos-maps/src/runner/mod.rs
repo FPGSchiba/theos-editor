@@ -181,7 +181,7 @@ fn run_stage(
 }
 
 /// The text of a panic payload when it is a `&str` or a `String`.
-fn panic_message(payload: &dyn Any) -> String {
+pub(crate) fn panic_message(payload: &dyn Any) -> String {
     payload
         .downcast_ref::<&str>()
         .map(|s| (*s).to_owned())

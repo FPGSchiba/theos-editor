@@ -79,14 +79,59 @@ fn a_panicking_stage_ends_the_run_with_its_message_and_no_files() -> TestResult 
     Ok(())
 }
 
+/// The folder of the synthetic test recipes.
+fn fixtures() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/recipes")
+}
+
+// Each step after the pipeline reports its progress event inside the step, so a progress
+// closure that panics on that event panics inside the step, with no hook in the library. The
+// `renders` step panics at its third render, after the features and two renders were written
+// as part files; the `package` step after every render was.
+// AC: CE-28.4
+#[test]
+fn a_panic_in_a_step_after_the_pipeline_ends_the_run_with_its_message_and_no_files() -> TestResult {
+    for step in ["constraints", "features", "renders", "package"] {
+        let out = tempfile::tempdir()?;
+        std::fs::write(out.path().join("notes.txt"), b"keep me")?;
+        let result = run_inner(
+            &Registry::builtin(),
+            &request("api-small", 1),
+            &[fixtures()],
+            out.path(),
+            &mut |p| {
+                let fire = p.stage == step && (step != "renders" || p.done == 2);
+                assert!(!fire, "the {step} step blew up");
+            },
+            &CancelToken::new(),
+        );
+        match result {
+            Err(RunError::StagePanicked { stage, message }) => {
+                assert_eq!(stage, step);
+                assert_eq!(message, format!("the {step} step blew up"));
+            }
+            other => {
+                return Err(
+                    format!("{step}: expected a panic, got {:?}", other.map(|_| ())).into(),
+                );
+            }
+        }
+        let left: Vec<_> = std::fs::read_dir(out.path())?
+            .map(|e| e.map(|e| e.file_name()))
+            .collect::<Result<_, _>>()?;
+        assert_eq!(left, ["notes.txt"], "{step}");
+        assert_eq!(std::fs::read(out.path().join("notes.txt"))?, b"keep me");
+    }
+    Ok(())
+}
+
 #[test]
 fn the_golden_record_hashes_the_written_files() -> TestResult {
-    let recipes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/recipes");
     let out = tempfile::tempdir()?;
     let (manifest, golden) = run_inner(
         &Registry::builtin(),
         &request("api-small", 1),
-        &[recipes],
+        &[fixtures()],
         out.path(),
         &mut |_| {},
         &CancelToken::new(),
