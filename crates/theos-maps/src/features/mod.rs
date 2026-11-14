@@ -3,10 +3,6 @@
 
 mod model;
 mod names;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "wired in by the package step, Task 41")
-)]
 pub(crate) mod output;
 mod pick;
 mod types;

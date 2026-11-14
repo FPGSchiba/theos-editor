@@ -47,6 +47,7 @@ use crate::world::{ValueType, World};
 pub(crate) use self::canvas::encode_png;
 pub use self::contact_sheet::contact_sheet;
 pub use self::fonts::{FontError, font_licences};
+pub(crate) use self::title::line as title_line;
 
 /// Why a render failed.
 #[derive(Debug, thiserror::Error)]

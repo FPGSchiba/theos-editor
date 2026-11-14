@@ -11,9 +11,9 @@ pub struct GoldenRun {
     pub recipe: String,
     /// The run seed.
     pub seed: u64,
-    /// The feature set the generator was built with.
+    /// The SHA-256 (hex) of the bytes of the run's `features` output.
     pub features: String,
-    /// The hash of the written package.
+    /// The SHA-256 (hex) of the bytes of the run's `.theosmap` package.
     pub package: String,
     /// The stages in pipeline order.
     #[serde(rename = "stage")]

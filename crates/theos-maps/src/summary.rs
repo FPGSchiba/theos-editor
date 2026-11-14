@@ -29,10 +29,6 @@ fn insert_nested(root: &mut Map<String, Value>, path: &str, value: Value) {
 /// `{"elevation_m": {"relief": ..}}`), then `features` (the count per type), `stages` (each
 /// stage id with its metrics) and `findings` (`{stage, message}` per warning). Constraints read
 /// it by dotted path (spec §5.6).
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "wired into the runner by Task 41")
-)]
 pub(crate) fn summary(
     metrics: Value,
     feature_counts: &BTreeMap<String, usize>,

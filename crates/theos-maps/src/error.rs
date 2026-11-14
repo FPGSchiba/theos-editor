@@ -60,10 +60,11 @@ pub enum RunError {
         /// The flat index of the first offending cell.
         cell: usize,
     },
-    /// The output folder already exists and may not be replaced.
+    /// The output folder already holds a file with the name of one of the run's outputs (or of
+    /// its temporary `.part` file); the run wrote nothing (plan ruling L10).
     #[error("{} already exists", path.display())]
     OutputExists {
-        /// The folder or file.
+        /// The file.
         path: PathBuf,
     },
     /// A file or folder could not be read or written.
@@ -82,6 +83,14 @@ pub enum RunError {
     Render {
         /// The render id.
         render: String,
+        /// What went wrong.
+        message: String,
+    },
+    /// The `features` or `package` output could not be built from the finished world.
+    #[error("output `{role}`: {message}")]
+    Output {
+        /// The output's role.
+        role: String,
         /// What went wrong.
         message: String,
     },
@@ -119,6 +128,11 @@ mod tests {
             message: "no".to_owned(),
         };
         assert_eq!(render.to_string(), "render `base`: no");
+        let output = RunError::Output {
+            role: "features".to_owned(),
+            message: "no".to_owned(),
+        };
+        assert_eq!(output.to_string(), "output `features`: no");
         assert_eq!(RunError::Cancelled.to_string(), "the run was cancelled");
         let panicked = RunError::StagePanicked {
             stage: "s".to_owned(),

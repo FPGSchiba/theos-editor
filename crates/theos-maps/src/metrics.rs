@@ -66,10 +66,6 @@ pub(crate) fn precipitation(world: &World) -> Option<Grid<f64>> {
 /// share of `vegetation > 0.5`, one decimal (line 299); `precip_mm_yr.median` is
 /// `int(median(precipitation))` (line 280); `travel.chime_to_chime_min` is the `travel` stage's
 /// metric, one decimal. A metric whose input is absent is left out, never 0.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "wired into the runner by Task 41")
-)]
 pub(crate) fn compute(world: &World, travel: Option<&Metrics>) -> Value {
     let mut out = Map::new();
     let mut put = |path: &str, value: f64| {

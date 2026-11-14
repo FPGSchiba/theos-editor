@@ -20,23 +20,11 @@ pub mod golden;
 pub mod grid;
 pub mod kernels;
 pub mod metrics;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "wired into the runner by Task 41")
-)]
 mod package;
 pub mod progress;
 pub mod recipe;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, unused_imports, reason = "wired into the runner by Task 41")
-)]
 pub mod render;
 pub mod rng;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "wired into the public `run` by Task 41")
-)]
 pub mod runner;
 pub mod stage;
 pub mod stages;
@@ -45,7 +33,7 @@ pub mod world;
 
 pub use api::{
     Description, GENERATOR, ManifestFrame, Note, RecipeInfo, RunManifest, RunRequest, StageInfo,
-    VERSION,
+    VERSION, run,
 };
 pub use error::RunError;
 pub use progress::{CancelToken, Progress};

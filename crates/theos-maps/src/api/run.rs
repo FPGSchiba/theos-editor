@@ -1,0 +1,172 @@
+//! `run`: one recipe and seed, from the catalog to the files in the output folder (spec §5.6).
+//!
+//! The order: find the recipe in the catalog, refuse `from`, plan with the request's inputs,
+//! claim the output names (nothing is written when one is taken), run the pipeline, then the
+//! steps `constraints`, `features`, `renders` and `package`, each with its own progress event
+//! and cancel check. The outputs get their names only at the end; on any error, on cancel and
+//! while a panic unwinds, the files the run created are removed and nothing else.
+
+use std::path::{Path, PathBuf};
+
+use theos_map_format::sha256_hex;
+
+use super::outputs::{FEATURES, Outputs, PACKAGE};
+use super::steps::{self, Steps};
+use super::{GENERATOR, ManifestFrame, RunManifest, RunRequest, VERSION};
+use crate::error::RunError;
+use crate::golden::GoldenRun;
+use crate::package::RunRecord;
+use crate::progress::{CancelToken, Progress};
+use crate::recipe::{self, EXTRA_RENDERS, LoadedRecipe, Plan, RecipeError, STANDARD_RENDERS};
+use crate::runner::execute;
+use crate::stage::Registry;
+
+/// Runs the recipe `request.recipe` (from the built-ins and `recipe_dirs`, later folders winning
+/// by id) with `request.seed`, and writes its outputs into the existing folder `out_dir`: the
+/// renders `base`, `truth`, `inworld`, `geology` and `resources`, the recipe's extra renders, the
+/// `features` and the `package`, named `s<seed>-<role>.png`, `s<seed>-features.geojson` and
+/// `s<seed>.theosmap` (plan ruling L10).
+///
+/// `progress` gets a `{stage, done, total}` event before every pipeline stage, the events long
+/// stages report themselves, and one before each step after the pipeline (`constraints`,
+/// `features`, one `renders` event per render, `package`). `cancel` stops the run at its next
+/// cancel point. Request notes are ignored: the generator accepts none in P08.
+///
+/// # Errors
+/// [`RunError::Recipe`] when the recipe is unknown, `from` is set, an input is given or the
+/// recipe is invalid; [`RunError::OutputExists`] when a file in `out_dir` has an output's name;
+/// [`RunError::OverBudget`]; [`RunError::Cancelled`]; the stage errors of the pipeline
+/// ([`RunError::StageFailed`], [`RunError::StagePanicked`], [`RunError::FindingFailed`],
+/// [`RunError::NonFinite`]); [`RunError::Render`], [`RunError::Output`], [`RunError::Format`]
+/// and [`RunError::Io`] from the outputs. On every error the files the run created are removed.
+pub fn run(
+    request: &RunRequest,
+    recipe_dirs: &[PathBuf],
+    out_dir: &Path,
+    progress: &mut dyn FnMut(&Progress),
+    cancel: &CancelToken,
+) -> Result<RunManifest, RunError> {
+    run_inner(
+        &Registry::builtin(),
+        request,
+        recipe_dirs,
+        out_dir,
+        progress,
+        cancel,
+    )
+    .map(|(manifest, _)| manifest)
+}
+
+/// [`run`] with the stages of `registry`, also returning the golden record: the stage hashes of
+/// the pipeline, `features` = the SHA-256 of the features file's bytes and `package` = that of
+/// the `.theosmap` (CE-77.1).
+///
+/// # Errors
+/// The errors of [`run`].
+pub(crate) fn run_inner(
+    registry: &Registry,
+    request: &RunRequest,
+    recipe_dirs: &[PathBuf],
+    out_dir: &Path,
+    progress: &mut dyn FnMut(&Progress),
+    cancel: &CancelToken,
+) -> Result<(RunManifest, GoldenRun), RunError> {
+    let loaded = find(request, recipe_dirs)?;
+    let plan = recipe::plan(&loaded, registry, &request.inputs)?;
+    let renders = render_names(&plan);
+    let mut roles: Vec<String> = renders.iter().map(|r| (*r).to_owned()).collect();
+    roles.extend([FEATURES.to_owned(), PACKAGE.to_owned()]);
+    let mut outputs = Outputs::claim(out_dir, request.seed, &roles)?;
+    let seed = request.seed;
+    let execution = execute(&plan, seed, registry, &request.options, progress, cancel)?;
+    let world = &execution.world;
+    let mut post = Steps::new(progress, cancel, execution.timing_s.clone());
+
+    let checked = post.timed("constraints", |s| {
+        s.report("constraints", 0, 1)?;
+        steps::constraints(&execution, &plan, seed)
+    })?;
+    let features_sha = post.timed(FEATURES, |s| {
+        s.report(FEATURES, 0, 1)?;
+        let bytes = steps::features_bytes(&checked.features)?;
+        outputs.write(FEATURES, &bytes)?;
+        Ok(sha256_hex(&bytes))
+    })?;
+    post.timed("renders", |s| {
+        for (done, name) in renders.iter().enumerate() {
+            s.report("renders", done, renders.len())?;
+            let png = steps::draw(name, world, &plan, &checked.title, s.cancel())?;
+            outputs.write(name, &png)?;
+        }
+        Ok(())
+    })?;
+    let record = RunRecord {
+        raw_recipe: &loaded.raw,
+        seed,
+        inputs: &request.inputs,
+        results: checked.results.clone(),
+        summary: checked.summary,
+        features: checked.features,
+    };
+    let package_sha = post.timed(PACKAGE, |s| {
+        s.report(PACKAGE, 0, 1)?;
+        let bytes = steps::package_bytes(world, &plan, record, s.cancel())?;
+        outputs.write(PACKAGE, &bytes)?;
+        Ok(sha256_hex(&bytes))
+    })?;
+    let files = outputs.commit()?;
+
+    let manifest = RunManifest {
+        generator: format!("{GENERATOR}@{VERSION}"),
+        recipe: plan.recipe_id.clone(),
+        seed,
+        inputs: request.inputs.clone(),
+        frame: ManifestFrame {
+            size_m: plan.frame.size_m(),
+        },
+        outputs: files,
+        results: checked.results,
+        timing: post.into_timing(),
+    };
+    let mut golden = execution.golden;
+    golden.features = features_sha;
+    golden.package = package_sha;
+    Ok((manifest, golden))
+}
+
+/// The recipe of `request` from the catalog of the built-ins and `recipe_dirs`, refused when the
+/// request starts from another map.
+fn find(request: &RunRequest, recipe_dirs: &[PathBuf]) -> Result<LoadedRecipe, RecipeError> {
+    let mut catalog = recipe::catalog(recipe_dirs)?;
+    let loaded = catalog
+        .recipes
+        .remove(&request.recipe)
+        .ok_or_else(|| RecipeError::UnknownRecipe(request.recipe.clone()))?;
+    if request.from.is_some() {
+        return Err(RecipeError::Invalid {
+            recipe: loaded.recipe.id.clone(),
+            stage: None,
+            layer: None,
+            parameter: Some("from".to_owned()),
+            message: "a terrain recipe starts from no other map, so `from` must be empty"
+                .to_owned(),
+        });
+    }
+    Ok(loaded)
+}
+
+/// The renders of `plan`: the standard ones, then the recipe's extras in its order, each once.
+fn render_names(plan: &Plan) -> Vec<&str> {
+    let mut names: Vec<&str> = STANDARD_RENDERS.to_vec();
+    for extra in &plan.renders {
+        if let Some(&known) = EXTRA_RENDERS.iter().find(|e| **e == extra.as_str())
+            && !names.contains(&known)
+        {
+            names.push(known);
+        }
+    }
+    names
+}
+
+#[cfg(test)]
+mod tests;
