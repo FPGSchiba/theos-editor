@@ -58,7 +58,7 @@ fn house_px(ty: &str) -> (u8, f32) {
         "city" => (20, 16.0),
         "town" => (16, 14.0),
         "village" => (12, 12.0),
-        _ => (9, 0.0),
+        _ => (9, 10.0),
     }
 }
 
@@ -73,7 +73,7 @@ pub(crate) fn inworld(input: &RenderInput<'_>) -> Result<Pixmap, RenderError> {
         let (r, c) = frame.cell_at_m(p[0], p[1]);
         known.mask.get(r, c)
     };
-    fill_known_lakes(&mut pixmap, input.mask("lake")?, &known.mask);
+    fill_known_lakes(&mut pixmap, input, &known.mask)?;
     draw_big_rivers(&mut pixmap, input, &view, &seen)?;
     draw_nature(&mut pixmap, input, &known, &view)?;
     let ink = |width_px, dash| RoadStyle {
@@ -108,8 +108,14 @@ fn paper(input: &RenderInput<'_>, known: &Known) -> Result<Pixmap, RenderError> 
 }
 
 /// Fills the pixels of known lake cells.
-fn fill_known_lakes(pixmap: &mut Pixmap, lake: &Grid<bool>, known: &Grid<bool>) {
+fn fill_known_lakes(
+    pixmap: &mut Pixmap,
+    input: &RenderInput<'_>,
+    known: &Grid<bool>,
+) -> Result<(), RenderError> {
+    let lake = input.mask("lake")?;
     for (y, row) in canvas::rows_mut(pixmap).enumerate() {
+        input.check_cancel()?;
         let r = y / PX_PER_CELL;
         for (x, px) in row.iter_mut().enumerate() {
             let c = x / PX_PER_CELL;
@@ -118,6 +124,7 @@ fn fill_known_lakes(pixmap: &mut Pixmap, lake: &Grid<bool>, known: &Grid<bool>) 
             }
         }
     }
+    Ok(())
 }
 
 /// Draws the segments of rivers that lie in a big river and in the known area.
@@ -156,13 +163,11 @@ fn draw_nature(
     view: &View,
 ) -> Result<(), RenderError> {
     let frame = input.world.frame();
+    input.check_cancel()?;
+    let peaks = nature::peaks(input.f64("height")?, &known.mask, frame);
+    input.check_cancel()?;
     let marks = [
-        (
-            nature::peaks(input.f64("height")?, &known.mask, frame),
-            Shape::Triangle,
-            8.0,
-            INK,
-        ),
+        (peaks, Shape::Triangle, 8.0, INK),
         (
             nature::trees(input.f64("vegetation")?, &known.mask, frame),
             Shape::Triangle,
@@ -182,7 +187,7 @@ fn draw_nature(
     Ok(())
 }
 
-/// Draws a house mark for every settlement and the names of all but hamlets.
+/// Draws a house mark for every settlement and the name of every settlement that has one.
 fn draw_settlements(
     pixmap: &mut Pixmap,
     input: &RenderInput<'_>,
@@ -207,9 +212,7 @@ fn draw_settlements(
         };
         body.draw(pixmap, [x, y + size * 0.15]);
         roof.draw(pixmap, [x, y - size * 0.3]);
-        if name_px > 0.0
-            && let Some(name) = feats::text(f, "name")
-        {
+        if let Some(name) = feats::text(f, "name") {
             let origin = [x + size * 0.6, y - size * 0.4];
             draw_inside(pixmap, face, name, name_px, origin, DARK_INK)?;
         }

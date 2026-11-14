@@ -18,6 +18,11 @@ const PEOPLE: [&str; 5] = ["truth", "geology", "resources", "inworld", "omega"];
 /// A world (synthetic, not canon) with one of everything the renders draw. The settlement names
 /// are stand-ins for generated names.
 fn world() -> TestWorld {
+    world_with_names(true)
+}
+
+/// [`world`], with or without the names of its settlements.
+fn world_with_names(named: bool) -> TestWorld {
     let mut w = TestWorld::flat(ROWS, COLS, CELL_M);
     w.set("height", |r, c| 500.0 + 8.0 * to_f64(r + 2 * c));
     w.set("vegetation", |r, _| if r > 20 { 0.9 } else { 0.1 });
@@ -25,7 +30,12 @@ fn world() -> TestWorld {
     w.lake(30..34, 36..42);
     w.river(&[[0.0, 1800.0], [2400.0, 1800.0]], 30.0);
     w.big_river(36..37, 0..COLS);
-    let name = |n: &str| [("name", Prop::Text(n.to_owned()))];
+    let name = |n: &str| {
+        named
+            .then(|| ("name", Prop::Text(n.to_owned())))
+            .into_iter()
+            .collect::<Vec<_>>()
+    };
     w.feature("settlement", "village", [600.0, 500.0], &name("Testburg"));
     w.feature("settlement", "hamlet", [1500.0, 700.0], &name("Smallplace"));
     w.feature("poi", "ruin", [1500.0, 1200.0], &[]);
@@ -179,7 +189,7 @@ fn truth_matches_its_recorded_hash() -> TestResult {
     let png = canvas::encode_png(&world().draw_with("truth", None, "Recipe · seed 7")?)?;
     assert_eq!(
         sha256_hex(&png),
-        "7a810fbcc982f36b308d3e152f9731eef2fed4795c45575a4677b5c043a7f5b6"
+        "a67c11e785c7f2842798e21cc9e3058ee044c2a3b8fc397b7a34847f422646bc"
     );
     Ok(())
 }

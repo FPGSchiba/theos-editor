@@ -80,8 +80,10 @@ pub(crate) fn compute(input: &RenderInput<'_>) -> Result<Known, RenderError> {
         }
     }
     input.check_cancel()?;
+    input.check_cancel()?;
     let blurred = gaussian(&raw, EDGE_BLUR_CELLS * frame.cell_m, frame.cell_m);
     let mask = blurred.map(|v| v > THRESHOLD);
+    input.check_cancel()?;
     let soft = gaussian(
         &mask.map(|k| if k { 1.0 } else { 0.0 }),
         PAPER_BLUR_CELLS * frame.cell_m,

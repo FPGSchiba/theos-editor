@@ -14,6 +14,7 @@ use super::styles::{self, INK, road_style};
 use super::view::View;
 use super::{RenderError, RenderInput, base, feats, roads, text};
 use crate::kernels::num::to_f32;
+use crate::stages::terrain::hydrology::WaterFeatures;
 use crate::stages::terrain::roads::RoadClass;
 
 /// The margin above the map, for the title, pixels.
@@ -27,12 +28,12 @@ const MARGIN: Rgb = [0xf4, 0xea, 0xd2];
 const TITLE_PX: f32 = 15.0;
 /// The gap between the canvas edge and the title or the scale bar, pixels.
 const EDGE_PX: f32 = 8.0;
-/// A settlement name's size by class: towns and cities are larger, pixels.
+/// A settlement name's size by class, pixels: larger for towns and cities, smallest for hamlets.
 fn name_px(ty: &str) -> f32 {
-    if matches!(ty, "city" | "town") {
-        13.0
-    } else {
-        11.0
+    match ty {
+        "city" | "town" => 13.0,
+        "village" => 11.0,
+        _ => 9.0,
     }
 }
 /// The opacity of the box behind a name.
@@ -116,9 +117,7 @@ fn draw_features(
             }
         }
         mark.draw(pixmap, [x, y]);
-        if f.ty != "hamlet"
-            && let Some(name) = feats::text(f, "name")
-        {
+        if let Some(name) = feats::text(f, "name") {
             let mark_px = f64::from(mark.size);
             draw_name(pixmap, face, name, name_px(&f.ty), [x, y], mark_px)?;
         }
@@ -246,6 +245,17 @@ fn entries(input: &RenderInput<'_>) -> Vec<Entry> {
         };
         out.push(Entry::new(Swatch::Mark(mark), ty.replace('-', " ")));
     }
+    let has_rivers = input
+        .value::<WaterFeatures>("water_features")
+        .is_ok_and(|w| !w.rivers.is_empty());
+    if has_rivers {
+        let line = LineStyle {
+            width_px: 2.0,
+            colour: palette::RIVER,
+            dash: None,
+        };
+        out.push(Entry::new(Swatch::Line(line), "river"));
+    }
     if input
         .mask("lake")
         .is_ok_and(|l| l.as_slice().iter().any(|&b| b))
@@ -258,6 +268,8 @@ fn entries(input: &RenderInput<'_>) -> Vec<Entry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::progress::CancelToken;
+    use crate::render::test_support::TestWorld;
     use crate::world::MapFrame;
 
     #[test]
@@ -272,5 +284,20 @@ mod tests {
         assert_eq!(scale(&view, 1000.0), (5_000, "5 km".to_owned()));
         assert_eq!(scale(&view, 100.0), (500, "500 m".to_owned()));
         assert_eq!(scale(&view, 1.0), (100, "100 m".to_owned()));
+    }
+
+    #[test]
+    fn the_legend_lists_water_only_when_the_map_has_it() {
+        let labels = |w: &TestWorld| {
+            let cancel = CancelToken::new();
+            let found = entries(&w.input(&cancel));
+            found.into_iter().map(|e| e.label).collect::<Vec<_>>()
+        };
+        let mut w = TestWorld::flat(10, 10, 50.0);
+        assert_eq!(labels(&w), Vec::<String>::new());
+        w.river(&[[0.0, 100.0], [400.0, 100.0]], 20.0);
+        assert_eq!(labels(&w), ["river"]);
+        w.lake(2..4, 2..4);
+        assert_eq!(labels(&w), ["river", "lake"]);
     }
 }
