@@ -1,6 +1,7 @@
 //! The library API types: the run request, the manifest and the description (`docs/generators.md`
 //! section 3, spec 5.12).
 
+mod describe;
 mod outputs;
 mod run;
 mod steps;
@@ -10,6 +11,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+pub use self::describe::describe;
 pub use self::run::run;
 use crate::recipe::RecipeProblem;
 use crate::runner::RunOptions;

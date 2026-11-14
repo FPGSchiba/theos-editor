@@ -177,7 +177,7 @@ fn cancelling_from_an_evolution_event_returns_within_one_second() -> TestResult 
     let trigger = token.clone();
     let mut cancelled_at: Option<Instant> = None;
     let result = run(
-        &request("evolution-384", 1),
+        &request("hearth-valley", 1),
         &recipes(),
         dir.path(),
         &mut |p| {

@@ -150,10 +150,22 @@ pub(crate) fn run_inner(
 /// request starts from another map.
 fn find(request: &RunRequest, recipe_dirs: &[PathBuf]) -> Result<LoadedRecipe, RecipeError> {
     let mut catalog = recipe::catalog(recipe_dirs)?;
-    let loaded = catalog
-        .recipes
-        .remove(&request.recipe)
-        .ok_or_else(|| RecipeError::UnknownRecipe(request.recipe.clone()))?;
+    let Some(loaded) = catalog.recipes.remove(&request.recipe) else {
+        // A broken file that names this id hid the recipe: report its error, not "unknown".
+        return Err(
+            match catalog
+                .problems
+                .into_iter()
+                .find(|p| p.id.as_deref() == Some(request.recipe.as_str()))
+            {
+                Some(problem) => RecipeError::Parse {
+                    origin: problem.file.display().to_string(),
+                    message: problem.message,
+                },
+                None => RecipeError::UnknownRecipe(request.recipe.clone()),
+            },
+        );
+    };
     if request.from.is_some() {
         return Err(RecipeError::Invalid {
             recipe: loaded.recipe.id.clone(),

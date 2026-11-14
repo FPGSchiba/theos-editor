@@ -1,0 +1,114 @@
+# A tiny reference region for engine import tests (4 km, 64 x 64 cells of 62.5 m).
+id      = "fixture-small"
+title   = "Small fixture region"
+kind    = "terrain"
+grid    = [64, 64]
+size_km = [4.0, 4.0]
+renders = []
+
+[[stage]]
+id    = "grid"
+edges = ["south"]
+
+[[stage]]
+id                   = "tectonics"
+background_uplift    = 2.2e-4
+background_variation = 0.9
+background_beta      = 2.8
+  [[stage.source]]
+  type = "orogen"
+  path = [[0.0, 0.15], [1.0, 0.12]]
+  width = 0.15
+  rate = 2.0e-3
+  jitter = 0.03
+
+[[stage]]
+id        = "geology"
+provinces = 3
+  [stage.rock_mix]
+  granite   = 0.3
+  sandstone = 0.4
+  shale     = 0.3
+
+[[stage]]
+id             = "climate_model"
+base_precip_mm = 800.0
+orographic_mm  = 900.0
+
+[[stage]]
+id    = "landscape_evolution"
+steps = 120
+dt_yr = 2.5e4
+  [[stage.process]]
+  id = "uplift"
+  [[stage.process]]
+  id = "route_steepest"
+  [[stage.process]]
+  id = "resolve_sinks"
+  [[stage.process]]
+  id = "partition_flow"
+  exponent = "slope_adaptive"
+  [[stage.process]]
+  id = "fluvial"
+  m = 0.45
+  g = 1.0
+  [[stage.process]]
+  id = "hillslope"
+  [[stage.process]]
+  id = "slope_limit"
+  [[stage.process]]
+  id = "climate_update"
+  every = 25
+
+[[stage]]
+id          = "hydrology"
+river_q     = 0.05
+big_river_q = 0.5
+
+[[stage]]
+id = "ecology"
+
+[[stage]]
+id = "elements"
+
+[[stage]]
+id = "settlements"
+  [stage.counts]
+  town    = 1
+  village = 1
+  [stage.spacing_km]
+  town    = 1.5
+  village = 1.0
+
+[[stage]]
+id                           = "pois"
+ruins                        = 1
+chimes                       = 2
+gates                        = 0
+min_chime_sep_km             = 1.5
+chime_min_km_from_settlement = 0.6
+
+[[stage]]
+id         = "resources"
+spacing_km = 0.8
+  [stage.counts]
+  iron-ore = 1
+  timber   = 1
+  stone    = 1
+
+[[stage]]
+id = "roads"
+
+[[stage]]
+id = "sites"
+  [stage.counts]
+  watchtower = 1
+  cave       = 0
+  camp       = 1
+
+[[stage]]
+id = "travel"
+
+[constraints]
+"features.ruin"  = [1, 1]
+"features.chime" = [2, 2]

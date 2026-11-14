@@ -33,7 +33,7 @@ pub mod world;
 
 pub use api::{
     Description, GENERATOR, ManifestFrame, Note, RecipeInfo, RunManifest, RunRequest, StageInfo,
-    VERSION, run,
+    VERSION, describe, run,
 };
 pub use error::RunError;
 pub use progress::{CancelToken, Progress};

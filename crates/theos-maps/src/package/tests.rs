@@ -246,3 +246,18 @@ fn a_grid_beyond_32_bits_is_refused() -> TestResult {
     assert!(matches!(err, PackageError::GridTooLarge { .. }));
     Ok(())
 }
+
+#[test]
+fn roads_are_all_zero_when_the_recipe_has_no_roads_stage() -> TestResult {
+    let (mut world, planned, loaded) = run(1)?;
+    world.remove("roads");
+    let package = package_of(&world, &planned, &loaded)?;
+    match package.layers.get(&key("roads")) {
+        Some(LayerData::U8(classes)) => {
+            assert_eq!(classes.len(), 64 * 64);
+            assert!(classes.iter().all(|&c| c == 0));
+        }
+        other => return Err(format!("expected a u8 roads layer, got {other:?}").into()),
+    }
+    Ok(())
+}
