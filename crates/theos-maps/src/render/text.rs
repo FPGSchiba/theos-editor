@@ -9,9 +9,11 @@
 use skrifa::instance::{LocationRef, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::{GlyphId, MetadataProvider};
-use tiny_skia::{Path, PathBuilder};
+use tiny_skia::{Path, PathBuilder, Pixmap};
 
 use super::fonts::{Face, FontError};
+use super::palette::Rgb;
+use super::{RenderError, canvas};
 
 /// Collects outlines into a path: font coordinates (pixels, y up) from the pen position
 /// `(x, y)` (pixels, y down).
@@ -101,6 +103,31 @@ pub(crate) fn line(
         pen.x += metrics.advance_width(id).unwrap_or(0.0);
     }
     Ok(pen.path.finish())
+}
+
+/// Draws one line of `text` with its baseline at `origin` (pixels) in `colour`.
+pub(crate) fn draw(
+    pixmap: &mut Pixmap,
+    face: &Face,
+    text: &str,
+    size_px: f32,
+    origin: [f32; 2],
+    colour: Rgb,
+) -> Result<(), RenderError> {
+    if let Some(path) = line(face, text, size_px, origin)? {
+        canvas::fill(pixmap, &path, colour);
+    }
+    Ok(())
+}
+
+/// The largest size up to `max_px` at which `text` is at most `max_width` pixels wide.
+pub(crate) fn fit(face: &Face, text: &str, max_px: f32, max_width: f32) -> f32 {
+    let at_max = width(face, text, max_px);
+    if at_max <= max_width || at_max <= 0.0 {
+        max_px
+    } else {
+        max_px * max_width / at_max
+    }
 }
 
 #[cfg(test)]

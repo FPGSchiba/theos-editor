@@ -66,6 +66,16 @@ pub fn to_f64(i: usize) -> f64 {
     i as f64
 }
 
+/// A feature property integer (a radius, a count) as a float.
+#[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "property integers stay far below 2^53"
+)]
+pub fn to_f64_i64(i: i64) -> f64 {
+    i as f64
+}
+
 /// `floor(x)` as an index, clamped to `0..len` (`0` for NaN or `len == 0`).
 #[must_use]
 #[expect(

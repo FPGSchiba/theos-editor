@@ -6,7 +6,9 @@
 //! pixel centres by bilinear interpolation between cell centres, which at two pixels per cell
 //! always takes the weights 3/4 and 1/4: exact in binary floating point.
 
-use tiny_skia::{FillRule, LineCap, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
+use tiny_skia::{
+    FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Stroke, StrokeDash, Transform,
+};
 
 use super::RenderError;
 use super::palette::Rgb;
@@ -137,10 +139,78 @@ pub(crate) fn fill(pixmap: &mut Pixmap, path: &Path, colour: Rgb) {
     );
 }
 
+/// Fills `path` (pixels) in `colour` with opacity `alpha` (255 is opaque), anti-aliased.
+pub(crate) fn fill_alpha(pixmap: &mut Pixmap, path: &Path, colour: Rgb, alpha: u8) {
+    pixmap.fill_path(
+        path,
+        &paint_alpha(colour, alpha),
+        FillRule::Winding,
+        Transform::identity(),
+        None,
+    );
+}
+
+/// Strokes the outline of `path` (pixels) in `colour`, `width_px` wide, anti-aliased.
+pub(crate) fn outline(pixmap: &mut Pixmap, path: &Path, width_px: f64, colour: Rgb) {
+    let stroke = Stroke {
+        width: to_f32(width_px),
+        ..Stroke::default()
+    };
+    pixmap.stroke_path(path, &paint(colour), &stroke, Transform::identity(), None);
+}
+
+/// How a polyline is stroked.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct LineStyle {
+    /// The width in pixels.
+    pub width_px: f64,
+    /// The colour.
+    pub colour: Rgb,
+    /// The dash pattern `[on, off]` in pixels; `None` is a solid line.
+    pub dash: Option<[f32; 2]>,
+}
+
+/// Strokes the polyline through `points` (pixels) in `style`, with round caps and joins.
+pub(crate) fn polyline(pixmap: &mut Pixmap, points: &[[f64; 2]], style: &LineStyle) {
+    let Some((first, rest)) = points.split_first() else {
+        return;
+    };
+    if rest.is_empty() {
+        return;
+    }
+    let mut path = PathBuilder::new();
+    path.move_to(to_f32(first[0]), to_f32(first[1]));
+    for p in rest {
+        path.line_to(to_f32(p[0]), to_f32(p[1]));
+    }
+    let Some(path) = path.finish() else {
+        return;
+    };
+    let stroke = Stroke {
+        width: to_f32(style.width_px),
+        line_cap: LineCap::Round,
+        line_join: LineJoin::Round,
+        dash: style.dash.and_then(|d| StrokeDash::new(d.to_vec(), 0.0)),
+        ..Stroke::default()
+    };
+    pixmap.stroke_path(
+        &path,
+        &paint(style.colour),
+        &stroke,
+        Transform::identity(),
+        None,
+    );
+}
+
 /// An opaque, anti-aliased paint of `colour`.
 fn paint(colour: Rgb) -> Paint<'static> {
+    paint_alpha(colour, u8::MAX)
+}
+
+/// An anti-aliased paint of `colour` with opacity `alpha`.
+fn paint_alpha(colour: Rgb, alpha: u8) -> Paint<'static> {
     let mut paint = Paint::default();
-    paint.set_color_rgba8(colour[0], colour[1], colour[2], u8::MAX);
+    paint.set_color_rgba8(colour[0], colour[1], colour[2], alpha);
     paint.anti_alias = true;
     paint
 }

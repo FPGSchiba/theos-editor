@@ -7,10 +7,11 @@ use std::ops::Range;
 use tiny_skia::Pixmap;
 
 use super::{RenderError, RenderInput, encode_png, render};
-use crate::features::{Feature, FeatureSet, Geometry};
+use crate::features::{Feature, FeatureSet, Geometry, Prop};
 use crate::grid::Grid;
 use crate::progress::CancelToken;
 use crate::stages::terrain::hydrology::{RiverLine, WaterFeatures};
+use crate::stages::terrain::roads::{Road, RoadClass, RoadNetwork, RoadsParams};
 use crate::stages::terrain::rocks::Rock;
 use crate::world::{Layer, MapFrame, World};
 
@@ -46,9 +47,11 @@ impl TestWorld {
                 Layer::U8(Grid::filled(rows, cols, Rock::Sandstone.code())),
             )
             .unwrap();
-        world
-            .insert("lake", Layer::Mask(Grid::filled(rows, cols, false)))
-            .unwrap();
+        for name in ["lake", "big_river"] {
+            world
+                .insert(name, Layer::Mask(Grid::filled(rows, cols, false)))
+                .unwrap();
+        }
         let mut w = Self {
             world,
             features: FeatureSet::default(),
@@ -114,6 +117,64 @@ impl TestWorld {
         });
     }
 
+    /// Adds a feature of `kind` and `ty` at `at` (metres) with the properties `props`.
+    pub(crate) fn feature(
+        &mut self,
+        kind: &'static str,
+        ty: &str,
+        at: [f64; 2],
+        props: &[(&str, Prop)],
+    ) {
+        self.features.add(Feature {
+            kind,
+            ty: ty.to_owned(),
+            geometry: Geometry::Point(at),
+            props: props
+                .iter()
+                .map(|(k, v)| ((*k).to_owned(), v.clone()))
+                .collect(),
+        });
+    }
+
+    /// Makes the cells in `rows` x `cols` part of a big river.
+    pub(crate) fn big_river(&mut self, rows: Range<usize>, cols: Range<usize>) {
+        let mut mask = self.world.mask("big_river").unwrap().clone();
+        for r in rows {
+            for c in cols.clone() {
+                mask.set(r, c, true);
+            }
+        }
+        self.world.insert("big_river", Layer::Mask(mask)).unwrap();
+    }
+
+    /// Stores the world value `road_network` with roads of the given class over `cells`
+    /// (flat cell numbers), all between the first two features.
+    pub(crate) fn roads(&mut self, roads: &[(RoadClass, Vec<u32>)]) {
+        let handle = |n: u32| crate::features::FeatureHandle(n);
+        let roads = roads
+            .iter()
+            .map(|(class, cells)| Road {
+                class: *class,
+                cells: cells.clone(),
+                from: handle(0),
+                to: handle(1),
+                bridges: Vec::new(),
+            })
+            .collect();
+        let net = RoadNetwork {
+            roads,
+            params: RoadsParams::default(),
+        };
+        self.world
+            .insert("road_network", Layer::Value(Box::new(net)))
+            .unwrap();
+    }
+
+    /// Stores the float raster `omega`, `value(row, col)` everywhere.
+    pub(crate) fn omega(&mut self, value: impl Fn(usize, usize) -> f64) {
+        self.set("omega", value);
+    }
+
     /// The input of a render of this world with `cancel`, no options and no title.
     pub(crate) fn input<'a>(&'a self, cancel: &'a CancelToken) -> RenderInput<'a> {
         RenderInput {
@@ -123,6 +184,20 @@ impl TestWorld {
             cancel,
             title: String::new(),
         }
+    }
+
+    /// Draws the render `name` with the options `options` and the title `title`.
+    pub(crate) fn draw_with(
+        &self,
+        name: &str,
+        options: Option<&toml::Table>,
+        title: &str,
+    ) -> Result<Pixmap, RenderError> {
+        let cancel = CancelToken::new();
+        let mut input = self.input(&cancel);
+        input.options = options;
+        input.title = title.to_owned();
+        render(name).unwrap()(&input)
     }
 
     /// Draws the render `name` with `cancel`.

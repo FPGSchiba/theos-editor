@@ -140,7 +140,7 @@ fn paint_ground(
 }
 
 /// Draws `rivers` (metres) on pixels of `metres_per_px`, calling `check` before every line.
-fn draw_rivers(
+pub(super) fn draw_rivers(
     pixmap: &mut Pixmap,
     rivers: &[RiverLine],
     metres_per_px: f64,
@@ -161,7 +161,7 @@ fn draw_rivers(
 }
 
 /// Paints every pixel of a `lake` cell in the lake colour, calling `check` before every row.
-fn fill_lakes(
+pub(super) fn fill_lakes(
     pixmap: &mut Pixmap,
     lake: &Grid<bool>,
     mut check: impl FnMut() -> Result<(), RenderError>,

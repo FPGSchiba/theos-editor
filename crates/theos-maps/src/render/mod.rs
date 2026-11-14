@@ -13,13 +13,29 @@
 
 mod base;
 mod canvas;
+mod contact_sheet;
 mod farmland;
+mod feats;
 mod fonts;
+mod geology;
+mod inworld;
+mod legend;
+mod marks;
+mod omega;
 mod palette;
+mod relief;
+mod resources;
+mod roads;
 mod shade;
+mod styles;
 #[cfg(test)]
 mod test_support;
+#[cfg(test)]
+mod tests;
 mod text;
+mod title;
+mod truth;
+mod view;
 
 use tiny_skia::Pixmap;
 
@@ -29,6 +45,7 @@ use crate::progress::CancelToken;
 use crate::world::{ValueType, World};
 
 pub(crate) use self::canvas::encode_png;
+pub use self::contact_sheet::contact_sheet;
 pub use self::fonts::{FontError, font_licences};
 
 /// Why a render failed.
@@ -54,6 +71,33 @@ pub enum RenderError {
     /// An embedded font could not be decoded.
     #[error(transparent)]
     Font(#[from] FontError),
+    /// A contact sheet needs at least one tile and one column.
+    #[error("a contact sheet needs at least one tile and one column")]
+    NoTiles,
+    /// A tile of a contact sheet cannot be read.
+    #[error("the tile `{}` cannot be used: {reason}", path.display())]
+    Tile {
+        /// The tile's file.
+        path: std::path::PathBuf,
+        /// What is wrong with it.
+        reason: String,
+    },
+    /// The contact sheet cannot be written.
+    #[error("the contact sheet cannot be written to `{}`: {source}", path.display())]
+    Output {
+        /// The output file.
+        path: std::path::PathBuf,
+        /// The I/O error.
+        source: std::io::Error,
+    },
+    /// A render option of the recipe is not valid.
+    #[error("the option `{key}` of render `{render}` is not valid")]
+    Option {
+        /// The render.
+        render: &'static str,
+        /// The option.
+        key: &'static str,
+    },
     /// The PNG encoder failed.
     #[error("the PNG could not be encoded: {0}")]
     Png(#[from] png::EncodingError),
@@ -67,18 +111,10 @@ pub(crate) struct RenderInput<'a> {
     /// The features of the run.
     pub features: &'a FeatureSet,
     /// The recipe's table for this render, if it has one.
-    #[cfg_attr(
-        test,
-        expect(dead_code, reason = "read by the `inworld` render, Task 40")
-    )]
     pub options: Option<&'a toml::Table>,
     /// The run's cancel token.
     pub cancel: &'a CancelToken,
     /// The title line (recipe, seed, relief, lakes, Chime walk).
-    #[cfg_attr(
-        test,
-        expect(dead_code, reason = "read by the `truth` render, Task 40")
-    )]
     pub title: String,
 }
 
@@ -125,7 +161,14 @@ impl<'a> RenderInput<'a> {
 pub(crate) type RenderFn = fn(&RenderInput<'_>) -> Result<Pixmap, RenderError>;
 
 /// Every render by name. A new render is one module and one line here.
-pub(crate) const RENDERS: &[(&str, RenderFn)] = &[("base", base::base)];
+pub(crate) const RENDERS: &[(&str, RenderFn)] = &[
+    ("base", base::base),
+    ("truth", truth::truth),
+    ("inworld", inworld::inworld),
+    ("geology", geology::geology),
+    ("resources", resources::resources),
+    ("omega", omega::omega),
+];
 
 /// The render `name`, if there is one.
 pub(crate) fn render(name: &str) -> Option<RenderFn> {
