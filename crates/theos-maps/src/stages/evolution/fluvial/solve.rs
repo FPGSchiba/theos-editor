@@ -35,9 +35,10 @@
 //! ```
 //!
 //! with `Σ_r` again over the receivers below `h_i`, and `Qs_in` routes `(h*_j − h_j)·area + V_j`
-//! from every cell `j` upstream. G thus decides how much of the supply is laid down and how much
-//! passes on; with G = 0 the supply does not enter the heights and all of it leaves at the
-//! outlets (`books`).
+//! from every cell `j` upstream. A routed depression's cell routes `(s_j − h_j)·area + V_j` from
+//! its filled start `s_j` instead, and its own inflow term is 0: what reaches it is in its fill
+//! (see below). G thus decides how much of the supply is laid down and how much passes on; with
+//! G = 0 the supply does not enter the heights and all of it leaves at the outlets (`books`).
 //!
 //! With G = 0 one sweep solves the step exactly. With G > 0 `Qs_in` couples every cell to its
 //! donors, and Yuan's Gauss–Seidel iterations solve it ([`deposit`]): each iteration routes the
@@ -93,7 +94,7 @@ pub(super) struct Incision<'a> {
 /// The deposition terms of one sweep, per cell.
 struct Deposit<'a> {
     /// `Δt·G·(Qs_in + V/Δt)/Q`, metres: the sediment from upstream and the slope supply `V`
-    /// taken in at the cell.
+    /// taken in at the cell; 0 on a routed depression's cell, whose sediment is in its fill.
     inflow: &'a [f64],
     /// `c = G·area/Q`: the cell's own net erosion, on the diagonal.
     own: &'a [f64],

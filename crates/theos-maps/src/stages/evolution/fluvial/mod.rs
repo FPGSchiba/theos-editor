@@ -29,9 +29,10 @@
 //! - **The books** (`sediment`): after the iterations one more routing of the step's sediment
 //!   over the final heights fills each depression with what reaches it up to its capacity, and
 //!   gives its cells that fill in place of the one their last sweep started from. The volume
-//!   balance closes exactly, also at the iteration limit, and a lake that is not full lets
-//!   nothing go. When the iterations ran past half the limit and the books moved a lake cell by
-//!   the tolerance or more, a warning names the move.
+//!   balance closes exactly, also at the iteration limit: a lake that is not full keeps all of a
+//!   positive inflow and lets nothing go, and an inflow that is not positive passes on with its
+//!   sign. When the iterations ran past half the limit and the books moved a lake cell by the
+//!   tolerance or more, a warning names the move.
 //! - **The slope supply** (spec §5.9 "Slope supply", ruling 51): `slope_supply` holds, per cell,
 //!   the thickness `slope_limit` has removed since `fluvial` last ran. `fluvial` takes it into the
 //!   sediment flux at its cell like eroded sediment, in the iterations and in the books (`solve`
@@ -199,8 +200,9 @@ struct Outcome {
     height: Grid<f64>,
     /// The plain drainage area (spec §5.10: not weighted by runoff).
     drainage_area: Grid<f64>,
-    /// `sediment_out_m3`, `iterations`, `supply_m3` and a warning when the iterations did not
-    /// converge.
+    /// `sediment_out_m3`, `iterations`, `supply_m3`, a warning when the iterations did not
+    /// converge, and one when the books moved a lake cell by the tolerance or more after the
+    /// iterations ran past half the limit.
     report: StageReport,
 }
 

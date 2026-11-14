@@ -124,7 +124,9 @@ pub(super) struct Books {
 /// `start = h*`, so a cell's change of volume is its own sediment less its supply; on them the
 /// fill adds what the depression took; and every volume either leaves or is taken. So the map's
 /// volume changes by the supply taken in less [`Books::out`]. A depression that is not full
-/// takes all that reaches it and lets go nothing.
+/// takes all of a positive inflow and lets go nothing. An inflow that is not positive (possible
+/// at the iteration limit, where the cells upstream deposited more than the final routing brings)
+/// fills nothing and passes on with its sign, so the balance stays exact.
 pub(super) fn books(
     stack: &[u32],
     weights: &FlowWeights,
@@ -258,7 +260,7 @@ mod tests {
     #[test]
     fn a_depression_keeps_its_own_cells_sediment() {
         // Depression 1 holds cell 3 alone and spills from cell 2, outside it (the higher cell of
-        // the pass). Cell 3's own 5 (slope supply on a held cell) goes into the depression like
+        // the pass). Cell 3's own 5 (slope supply on a lake cell) goes into the depression like
         // cell 4's share of 6, although its edge leads to the spill cell.
         let traps_outside = traps(vec![0, 0, 0, 1, 0, 0], &[(2, 1)]);
         let mut arriving = vec![0.0; 6];
