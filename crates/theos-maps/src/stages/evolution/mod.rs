@@ -115,7 +115,7 @@ impl Default for Evolution {
 impl TypedStage for Evolution {
     type Params = EvolutionParams;
     const ID: &'static str = "landscape_evolution";
-    const SUMMARY: &'static str = "Initial surface from spectral noise, then `steps` time steps of the per-step processes the recipe lists (uplift, flow routing, fluvial erosion and deposition, hillslope, slope limit, climate update).";
+    const SUMMARY: &'static str = "Initial surface from spectral noise, then `steps` time steps of the per-step processes the recipe lists (uplift, hillslope, flow routing, fluvial erosion and deposition, slope limit, climate update).";
     const KINDS: &'static [MapKind] = &[MapKind::Terrain];
 
     fn reads(&self, params: &EvolutionParams) -> Vec<LayerSpec> {

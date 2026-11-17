@@ -20,11 +20,11 @@ pub(crate) type Constructor = fn() -> Box<dyn Stage>;
 /// Every per-step process, one line each. A new process is one module plus one line here.
 pub(crate) const PROCESSES: &[Constructor] = &[
     || Box::new(Uplift),
+    || Box::new(Hillslope),
     || Box::new(RouteSteepest),
     || Box::new(ResolveSinks),
     || Box::new(PartitionFlow),
     || Box::new(Fluvial),
-    || Box::new(Hillslope),
     || Box::new(SlopeLimit),
     || Box::new(ClimateUpdate),
 ];

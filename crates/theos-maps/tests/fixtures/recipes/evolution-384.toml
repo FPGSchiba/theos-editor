@@ -67,6 +67,8 @@ dt_yr  = 2.5e4
   [[stage.process]]
   id = "uplift"
   [[stage.process]]
+  id = "hillslope"
+  [[stage.process]]
   id = "route_steepest"
   [[stage.process]]
   id = "resolve_sinks"
@@ -77,8 +79,6 @@ dt_yr  = 2.5e4
   id = "fluvial"
   m = 0.45
   g = 1.0
-  [[stage.process]]
-  id = "hillslope"
   [[stage.process]]
   id = "slope_limit"
   [[stage.process]]

@@ -238,6 +238,53 @@ fn every_built_in_recipe_plans() -> TestResult {
     Ok(())
 }
 
+/// The order of the per-step processes in a time step (spec §5.3, ruling 58): `hillslope` runs
+/// before the routing, so each step ends on the surface `fluvial` cut.
+const PROCESS_ORDER: [&str; 8] = [
+    "uplift",
+    "hillslope",
+    "route_steepest",
+    "resolve_sinks",
+    "partition_flow",
+    "fluvial",
+    "slope_limit",
+    "climate_update",
+];
+
+/// The process ids of the `landscape_evolution` stage of `loaded`, in the recipe's order.
+fn process_ids(loaded: &recipe::LoadedRecipe) -> Vec<&str> {
+    loaded
+        .recipe
+        .stages
+        .iter()
+        .filter(|s| s.get("id").and_then(toml::Value::as_str) == Some("landscape_evolution"))
+        .filter_map(|s| s.get("process").and_then(toml::Value::as_array))
+        .flatten()
+        .filter_map(|p| p.get("id").and_then(toml::Value::as_str))
+        .collect()
+}
+
+#[test]
+fn every_recipe_runs_its_processes_in_the_order_of_a_time_step() -> TestResult {
+    let catalog = recipe::catalog(&crate::support::recipes())?;
+    assert!(catalog.problems.is_empty(), "{:?}", catalog.problems);
+    for (id, loaded) in &catalog.recipes {
+        let ids = process_ids(loaded);
+        let places: Vec<Option<usize>> = ids
+            .iter()
+            .map(|p| PROCESS_ORDER.iter().position(|o| o == p))
+            .collect();
+        let in_order = places
+            .windows(2)
+            .all(|w| matches!((w[0], w[1]), (Some(a), Some(b)) if a < b));
+        assert!(
+            in_order && places.iter().all(Option::is_some),
+            "{id}: {ids:?} is not in the order {PROCESS_ORDER:?}"
+        );
+    }
+    Ok(())
+}
+
 // Review Focus 5
 #[test]
 fn a_file_that_is_not_toml_hides_the_built_in_of_its_name() -> TestResult {
