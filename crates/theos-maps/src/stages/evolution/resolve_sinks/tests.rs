@@ -248,8 +248,16 @@ fn nested_bowl(r: usize, c: usize) -> f64 {
     }
 }
 
+/// The shallow pit of [`nested_bowl`] spills over the saddle at 200 m into the deep one, which
+/// spills over the notch at 300 m: water stands over both pits in one lake at 300 m. The shallow
+/// pit is part of that lake, not a depression of its own that ends at its saddle: one depression,
+/// which spills over the notch at 300 m, holds both pits, and the shallow pit's cells stand at
+/// the lake's level on the routing surface. Every chain from the shallow pit stays in the lake
+/// until it leaves over the notch. (Counted as a depression of its own, the shallow pit took
+/// sediment only up to its saddle, and the cells between the saddle and the lake's level were
+/// never filled, so the lake passed sediment on while it still had room; Task 43e.)
 #[test]
-fn nested_depressions_spill_in_order() {
+fn a_pit_nested_in_a_lake_is_part_of_the_lake() {
     let mut w = world_with(r#"["south"]"#, surface(nested_bowl));
     route(&mut w);
     let dep = depressions(&w);
@@ -261,30 +269,31 @@ fn nested_depressions_spill_in_order() {
         .collect();
     assert_eq!(
         spill,
-        [
-            (idx(36, 37), notch, 300.0_f64.to_bits()),
-            (idx(24, 31), saddle, 200.0_f64.to_bits()),
-        ],
-        "the outer depression first, then the one spilling into it"
+        [(idx(36, 37), notch, 300.0_f64.to_bits())],
+        "one lake, which spills over the notch"
     );
     let label = |r, c| dep.label.as_slice()[idx(r, c)];
-    assert_eq!((label(25, 38), label(25, 26)), (1, 2));
-    assert_eq!((label(25, 32), label(37, 38)), (1, 0));
+    assert_eq!((label(25, 38), label(25, 26)), (1, 1));
+    assert_eq!((label(24, 31), label(25, 32), label(37, 38)), (1, 1, 0));
     let (rec, fixed, lift) = (receivers(&w), w.mask("fixed").unwrap(), routing(&w));
-    // The inner depression stands at the level of the lake it spills into, not below it.
+    // The shallow pit stands at the level of the lake, not at its saddle.
     let lake = lifted(300.0, cheb(25, 32, (36, 37)));
     assert_eq!(lift.as_slice()[saddle].to_bits(), lake.to_bits());
     assert_eq!(lift.as_slice()[idx(24, 31)].to_bits(), lake.to_bits());
-    for i in (0..N * N).filter(|&i| dep.label.as_slice()[i] > 0) {
+    let shallow = (0..N * N).filter(|&i| {
+        let (r, c) = (i / N, i % N);
+        dep.label.as_slice()[i] > 0 && c < 32 && cheb(r, c, (25, 32)) < 12
+    });
+    for i in shallow {
         let cells = chain(&rec, i).unwrap();
-        let outer = cells.iter().position(|&c| dep.label.as_slice()[c] == 1);
-        let leaves = cells.iter().position(|&c| c == notch);
-        let (Some(outer), Some(leaves)) = (outer, leaves) else {
-            panic!("the chain from {i} misses the outer depression or the notch: {cells:?}");
+        let Some(leaves) = cells.iter().position(|&c| c == notch) else {
+            panic!("the chain from {i} misses the notch: {cells:?}");
         };
         assert!(
-            outer < leaves,
-            "the chain from {i} leaves before the outer depression"
+            cells[..leaves]
+                .iter()
+                .all(|&c| dep.label.as_slice()[c] == 1),
+            "the chain from {i} leaves the lake before the notch: {cells:?}"
         );
         assert!(fixed.as_slice()[*cells.last().unwrap()]);
     }
@@ -324,8 +333,14 @@ fn routing_surface_lifts_only_depressions_and_height_is_unchanged() {
     }
 }
 
+/// Every receiver lies lower on the routing surface than its cell, except over a pass: a lake's
+/// spill cell receives the cell across its pass, and a pit nested in a lake drains over its pass
+/// at the lake's level, so its pass cell stands exactly at its receiver's level, both in the
+/// lake. Steepest descent never picks a neighbour at the cell's own level, so no other cell
+/// stands level with its receiver.
 #[test]
 fn receivers_descend_the_routing_surface_except_over_a_pass() {
+    let (mut nested, mut lakes) = (0, 0);
     for seed in 1..=3 {
         for edges in ["[]", r#"["south"]"#] {
             let height = white(seed);
@@ -334,17 +349,29 @@ fn receivers_descend_the_routing_surface_except_over_a_pass() {
             route(&mut w);
             let (rec, dep) = (receivers(&w), depressions(&w));
             let (r, fixed) = (routing(&w).as_slice(), w.mask("fixed").unwrap().as_slice());
+            let label = dep.label.as_slice();
+            lakes += dep.spill.len();
             for i in 0..N * N {
                 if let Some(s) = dep.spill.iter().find(|s| s.cell as usize == i) {
                     assert_eq!(rec[i], s.to as usize, "spill cell {i}");
                 } else if fixed[i] || (edges == "[]" && i == sink) {
                     assert_eq!(rec[i], i, "outlet {i}");
+                } else if r[rec[i]].to_bits() == r[i].to_bits() {
+                    assert!(
+                        label[i] > 0 && label[rec[i]] == label[i],
+                        "cell {i} is level with its receiver outside a lake"
+                    );
+                    nested += 1;
                 } else {
                     assert!(r[rec[i]] < r[i], "cell {i} does not fall to its receiver");
                 }
             }
         }
     }
+    assert!(
+        nested > 0 && lakes > 0,
+        "no nested pit ({nested}) or lake ({lakes}) to test"
+    );
 }
 
 #[test]

@@ -164,6 +164,57 @@ fn a_lake_not_full_rises_to_what_fills_it_and_its_slope_stays_above() {
     assert!((erosion[3] - f).abs() < 1e-6, "{}", erosion[3]);
 }
 
+/// A synthetic 1 x 7 strip with two pits in one closed basin: the outlet at 0 m, a sill at 50 m,
+/// an outer pit at 10 m, an inner pass at 30 m, an inner pit at 20 m, its slope at 40 m and a
+/// rim at 60 m. The inner pit spills over its pass at 30 m into the outer pit, which spills over
+/// the sill at 50 m, so water stands over both pits in one lake at 50 m, which holds 100 m of one
+/// cell. K = 0: nothing erodes.
+fn nested_strip() -> World {
+    strip(vec![0.0, 50.0, 10.0, 30.0, 20.0, 40.0, 60.0], vec![0.0; 7])
+}
+
+/// Physics test 5 for a pit nested in a lake (spec §5.9 "Depression filling"): sediment that
+/// reaches a closed basin stays in it while the basin has room below its spill level.
+///
+/// On [`nested_strip`], 80 m of one cell of slope supply on the inner slope (cell 5) reach the
+/// lake, which holds 100 m. The lake keeps all of it, and its four cells fill in height order to
+/// one level ℓ (each with its ε slope): (ℓ − 10) + (ℓ − 30) + (ℓ − 20) + (ℓ − 40) = 80, so
+/// ℓ = 45 m. Nothing passes the sill, and the sill keeps its height. When the inner pit counted
+/// as a depression of its own that fills only to its pass at 30 m, its slope at 40 m was never
+/// filled; the outer pit then filled to the sill and let 10 m of one cell over it while 30 m of
+/// the lake's room stayed empty, and the closed basin lost sediment (Task 43e).
+#[test]
+fn a_pit_nested_in_a_lake_fills_with_the_lake_and_keeps_its_sediment() {
+    let mut w = nested_strip();
+    let start = layer(&w, "height");
+    let supply = vec![0.0, 0.0, 0.0, 0.0, 0.0, 80.0, 0.0];
+    w.insert("slope_supply", row(supply)).unwrap();
+    let report = lake_step(&mut w, "");
+    assert!(report.findings.is_empty(), "{:?}", report.findings);
+    let supplied = 80.0 * CELL_AREA;
+    let out = value(&report, "sediment_out_m3");
+    assert!(out.abs() <= 1e-9 * supplied, "{out} m³ passed the sill");
+    let h = layer(&w, "height");
+    let kept: f64 = (2..6).map(|c| (h[c] - start[c]) * CELL_AREA).sum();
+    assert!(
+        (kept - supplied).abs() <= 1e-9 * supplied,
+        "the lake kept {kept} of {supplied} m³"
+    );
+    for (c, lake) in h.iter().enumerate().take(6).skip(2) {
+        assert!(
+            (lake - 45.0).abs() < 1e-5,
+            "cell {c} at {lake}, not at 45 m"
+        );
+    }
+    assert!((h[1] - 50.0).abs() < 1e-9, "the sill at {}", h[1]);
+    let label = &w.value::<Depressions>("depressions").unwrap().label;
+    assert_eq!(
+        label.as_slice(),
+        [0, 0, 1, 1, 1, 1, 0],
+        "one lake over both pits"
+    );
+}
+
 /// Physics test 4's balance with supply (spec §5.14) while lakes fill and follow: over 120 steps
 /// of [`incising_strip`], with 1 m of slope supply on cells 10 to 15 in each of the first 10
 /// steps, the strip's volume changes by the uplifted volume plus the supply taken in, less the

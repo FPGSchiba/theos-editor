@@ -1,7 +1,8 @@
 # synthetic fixture (P08), not canon
 # A 64 x 64 terrain through every terrain stage, tuned so that seed 1 has at least one lake and one
-# river. It exists for the features output (CE-28.6). The basin sinks 1.2 km over the 6 Myr sag
-# duration (2e-4 m/yr, 50 m over the 10 steps), and seed 1's lake lies in it.
+# river. It exists for the features output (CE-28.6). The basin, a quarter of the map's side in
+# radius at its centre, sinks 12 km over the 6 Myr sag duration (2e-3 m/yr, 50 m per step at its
+# centre), faster than the rivers fill it, and seed 1's lake lies in it.
 id      = "water-small"
 title   = "Lakes, rivers and roads, 64 squared"
 kind    = "terrain"
@@ -26,10 +27,10 @@ background_beta      = 2.8
   jitter = 0.06
   [[stage.source]]
   type = "basin"
-  at = [0.40, 0.55]
-  r = 0.12
+  at = [0.50, 0.50]
+  r = 0.25
   rate = 0.0
-  depth_m = 1200.0
+  depth_m = 12000.0
   jitter = 0.08
 
 [[stage]]

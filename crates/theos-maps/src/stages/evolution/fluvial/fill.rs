@@ -2,8 +2,9 @@
 //! level, with an ε slope toward the spill cell (spec §5.9 "Depression filling", after goSPL's
 //! documentation, combined with the MST resolver as this spec's own step).
 //!
-//! A depression's **flood order** is its cells sorted by (routing level, cell index), the order
-//! in which `resolve_sinks`'s priority flood popped them. The spill cell (`SpillPoint.cell`)
+//! A depression is one lake, the pits nested in it included (`resolve_sinks`). Its **flood
+//! order** is its cells sorted by (routing level, cell index), the order of the ε slope
+//! `resolve_sinks`'s priority floods lifted them along. The spill cell (`SpillPoint.cell`)
 //! holds place 0 whether or not it lies in the depression; the other cells follow from place 1.
 //! Filled to level `ℓ`, a cell at place `k` stands at `ℓ + k·ε`, so filled cells slope down
 //! toward the spill cell and are no pits next step.

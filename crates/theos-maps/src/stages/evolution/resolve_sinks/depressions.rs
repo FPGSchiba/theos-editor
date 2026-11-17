@@ -9,13 +9,12 @@ use crate::world::{ValueType, WorldValue};
 /// lies in the basin the depression drains into.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpillPoint {
-    /// The spill node: the depression's basin's cell on the pass.
+    /// The spill node: the lake's cell on the pass it spills over.
     pub cell: u32,
     /// The cell across the pass, downstream.
     pub to: u32,
-    /// The pass height in metres, `max(height[cell], height[to])`. The routing surface at `cell`
-    /// stands at this level, or higher when `to` lies in a lifted depression: then at the level
-    /// of `to` on the routing surface.
+    /// The pass height in metres, `max(height[cell], height[to])`: the level the lake spills
+    /// at. The routing surface at `cell` stands at this level.
     pub level: f64,
 }
 
@@ -23,7 +22,9 @@ pub struct SpillPoint {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Depressions {
     /// Per cell, the number `n` (from 1) of the depression holding it; 0 outside every
-    /// depression. A depression is the set of cells its routing surface lifts above `height`.
+    /// depression. A depression is one lake: the cells its routing surface lifts above `height`
+    /// to the lake's level, the cells of basins nested in it (whose passes lie below that level)
+    /// included.
     pub label: Grid<u32>,
     /// The spill point of depression `n` at index `n − 1`. The cell across its pass,
     /// `label[spill[n − 1].to]`, is 0 (outside every depression) or less than `n`. That does

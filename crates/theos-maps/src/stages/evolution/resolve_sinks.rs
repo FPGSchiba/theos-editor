@@ -16,11 +16,17 @@
 //!    depression with `SpillPoint { cell: a, to: b, level: L }`. `height` is unchanged (`lift`).
 //! 6. **Receivers again:** steepest descent on the routing surface, and each `a` receives `b`.
 //!
-//! Two details keep every route open. A depression whose `b` lies in a lifted depression starts
-//! at `b`'s routing level, not below it (a pit nested in a lake drains at the lake's level). And
+//! Two details keep every route open. A basin whose `b` lies in a lifted depression starts at
+//! `b`'s routing level, not below it (a pit nested in a lake drains at the lake's level). And
 //! a cell just above the spill level next to the lifted cells is lifted too, so it keeps a lower
 //! neighbour. Then every receiver lies lower on the routing surface than its cell, except over
 //! a pass, where `b` is not higher than `a`; so every chain ends at an outlet without a cycle.
+//!
+//! A basin whose pass lies below the lake it spills into is part of that lake: its lifted cells
+//! take the lake's depression and add no spill point. A depression is thus one lake, which
+//! `fluvial` fills as one up to the level it spills at (spec §5.9 "Depression filling"). As a
+//! depression of its own it would take sediment only up to its pass, and the lake's room
+//! between that pass and the lake's level would never fill (found in the build, Task 43e).
 
 mod basins;
 mod depressions;
