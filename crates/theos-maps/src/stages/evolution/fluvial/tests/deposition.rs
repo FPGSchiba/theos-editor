@@ -709,98 +709,61 @@ fn law(area: f64) -> f64 {
     UPLIFT / K * libm::pow(area, -0.5)
 }
 
-/// Physics test 14 (spec §5.14, ruling 44; Yuan et al. 2019, eq. 24 and 28): with uniform U, K
-/// and runoff, n = 1, m = 0.5 and no hillslope processes, deposition with G = 1 steepens the
-/// steady state by (1 + G): its slopes and its relief, within 2 %.
-///
-/// How the two steady states are compared follows the Task 25 ruling on this test:
-/// - **`steepest`:** the G = 0 run goes on, as the same world, with G = 1 to its steady state.
-///   Steepest receivers do not change when every slope doubles, so the network stays: each
-///   channel cell's slope is compared with its own slope at G = 0, and the relief with the
-///   relief at G = 0. On the way a few ridge cells with nearly equal descents change receiver
-///   (10 at Δt = 2.5e5, which moves 6 of 548 channel cells' drainage area). A channel cell whose
-///   drainage area changed has no slope at G = 0 on its new catchment; it is compared with the
-///   G = 0 law at its new area, which physics test 1 shows the G = 0 slopes follow. Nearly every
-///   channel cell must keep its area.
-///
-///   Every flip changes the drainage area of the whole trunk below it, so that condition holds
-///   only on some landscapes: since the noise of Task 43b the test runs on the landscape of
-///   seed 27 (`SEED`), where 542 of 548 channel cells keep their area. Over seeds 1–64 only 27
-///   and 50 keep 98 % (before 43b, only seed 1 of 1–8 did); the law checks pass on all of
-///   seeds 1–8 (worst slope error 0.03 %, relief within 0.6 %).
-/// - **`slope_adaptive`:** the partition exponent `p = 0.5 + 0.6·S` depends on the slope, so
-///   doubling the slopes changes the weights, and two runs cannot share a network. The G = 1
-///   state is compared with the G = 0 law on its own weights: each channel cell's flow-weighted
-///   slope with `(1 + G)·(U/K)·Q^(−m)`, and the relief with the relief of the heights the G = 0
-///   law gives on those weights.
-///
-///   With G > 0 this partition shows a slow divide oscillation: ridge cells of small drainage
-///   area swing by several metres per step, whatever the tolerance or the time step (seed 1:
-///   up to 9.5 m per step at Δt = 2.5e5 and 0.47 m at 2.5e4, on cells of 1 to about 20 cells of
-///   area). The landscape therefore never reaches a full steady state, and this leg runs a
-///   fixed 1 500 steps, about twice the time its channels take to settle. It still demands a
-///   steady state beyond the oscillation's reach: over the last 50 steps no channel cell with a
-///   drainage area above 22 cells changes by Yuan's tolerance `10⁻³·U·Δt` or more in a step.
-///   The 2 % law checks cover every channel cell (above 10 cells). The steepest leg requires a
-///   full steady state.
-#[test]
-fn deposition_steepens_steady_state_by_one_plus_g() {
-    // The landscape both legs start from: the reason is in the doc comment above. On it the
-    // slope_adaptive leg's channels over 22 cells move by at most 0.02 m per step at the end.
-    const SEED: u64 = 27;
-    const G: f64 = 1.0;
-    const DT: f64 = 2.5e5;
-    // The slope_adaptive leg: its fixed run, and the steps at its end whose channels are checked.
+/// The deposition coefficient G of physics test 14.
+const G14: f64 = 1.0;
+
+/// The time step of physics test 14, years.
+const DT14: f64 = 2.5e5;
+
+/// The cells the `slope_adaptive` leg's stability check covers drain more than this many cells.
+/// Ruling (Jann, 13 Nov 2026): the check applies to channel cells over 22 cells' area, the edge
+/// of the divide oscillation's zone that Task 25 measured (cells of 1 to 22 cells' area).
+/// Filling the depressions before the solve (Task 27f) picks a network with a stronger case of
+/// that oscillation: 0.33 m on cells of 10 to 13 cells against the 0.25 m bound, 0.17 m over 22
+/// cells. The bound, the window and every 2 % law check stay.
+const STABLE_AREA_CELLS: f64 = 22.0;
+
+/// Asserts that the steady state of `w` (`what`) is the G = 0 law times (1 + G) on its own flow
+/// weights: every channel cell's flow-weighted slope is `(1 + G)·(U/K)·Q^(−m)`, and the relief is
+/// (1 + G) times the relief of the heights the G = 0 law gives on those weights, within 2 %.
+fn follows_the_law_times_one_plus_g(w: &World, what: &str) {
+    let (cells, slopes, area) = (channel_cells(w), flow_slopes(w), layer(w, "drainage_area"));
+    assert!(cells.len() > 100, "{what}: {} channel cells", cells.len());
+    for &i in &cells {
+        let cell = format!("{what}: cell {i}");
+        within_two_percent(slopes[i], (1.0 + G14) * law(area[i]), &cell);
+    }
+    let predicted = (1.0 + G14) * spread(&law_heights(w));
+    let relief = spread(&layer(w, "height"));
+    within_two_percent(relief, predicted, &format!("{what}: relief"));
+}
+
+/// `uplift`, the routing with `exponent` and `fluvial` with G = [`G14`] and m = 0.5.
+fn deposits(exponent: &str) -> String {
+    recipe(exponent, &format!("g = {G14}\nm = 0.5"))
+}
+
+/// Test 14's `steepest` leg on the landscape of `seed`: the G = 1 run to its full steady state.
+fn steepest_steady_state_is_one_plus_g(seed: u64) {
+    let mut w = landscape(ALL_EDGES, seed);
+    let steps = run_to_steady_state(&mut w, &deposits("steepest"), DT14, 2000);
+    follows_the_law_times_one_plus_g(&w, &format!("steepest, seed {seed}, {steps} steps"));
+}
+
+/// Test 14's `slope_adaptive` leg on the landscape of `seed`: a fixed run whose channels over
+/// [`STABLE_AREA_CELLS`] cells have stopped moving.
+fn slope_adaptive_steady_state_is_one_plus_g(seed: u64) {
+    // The fixed run, and the steps at its end whose channels are checked.
     const RUN: u32 = 1500;
     const TRACKED: u32 = 50;
-    // The cells the stability check covers drain more than this many cells. Ruling (Jann,
-    // 13 Nov 2026): the check applies to channel cells over 22 cells' area, the edge of the
-    // divide oscillation's zone that Task 25 measured (cells of 1 to 22 cells' area). Filling
-    // the depressions before the solve (Task 27f) picks a network with a stronger case of that
-    // oscillation: 0.33 m on cells of 10 to 13 cells against the 0.25 m bound, 0.17 m over 22
-    // cells. The bound, the window and every 2 % law check stay.
-    const STABLE_AREA_CELLS: f64 = 22.0;
-    let deposits = |exponent: &str| recipe(exponent, &format!("g = {G}\nm = 0.5"));
-    let mut w = landscape(ALL_EDGES, SEED);
-    run_to_steady_state(&mut w, &recipe("steepest", "g = 0.0\nm = 0.5"), DT, 2000);
-    let (slopes, area, relief) = (
-        flow_slopes(&w),
-        layer(&w, "drainage_area"),
-        spread(&layer(&w, "height")),
-    );
-    let steps = run_to_steady_state(&mut w, &deposits("steepest"), DT, 2000);
-    let (cells, deposited) = (channel_cells(&w), flow_slopes(&w));
-    let now = layer(&w, "drainage_area");
-    assert!(cells.len() > 100, "{} channel cells", cells.len());
-    let kept = cells
-        .iter()
-        .filter(|&&i| now[i].to_bits() == area[i].to_bits())
-        .count();
-    assert!(
-        50 * kept > 49 * cells.len(),
-        "the network stays: {kept} of {}",
-        cells.len()
-    );
-    for &i in &cells {
-        let before = if now[i].to_bits() == area[i].to_bits() {
-            slopes[i]
-        } else {
-            law(now[i])
-        };
-        let what = format!("steepest, {steps} steps after G = 0: cell {i}");
-        within_two_percent(deposited[i], (1.0 + G) * before, &what);
-    }
-    let raised = spread(&layer(&w, "height"));
-    within_two_percent(raised, (1.0 + G) * relief, "steepest relief");
-
-    let mut w = landscape(ALL_EDGES, SEED);
+    let mut w = landscape(ALL_EDGES, seed);
     let procs = processes(&deposits("slope_adaptive"));
-    evolve(&mut w, &procs, RUN - TRACKED, DT, 1).unwrap();
-    let tolerance = 1e-3 * UPLIFT * DT;
+    evolve(&mut w, &procs, RUN - TRACKED, DT14, 1).unwrap();
+    let tolerance = 1e-3 * UPLIFT * DT14;
     let mut wobble = 0.0;
     for _ in 0..TRACKED {
         let before = layer(&w, "height");
-        evolve(&mut w, &procs, 1, DT, 1).unwrap();
+        evolve(&mut w, &procs, 1, DT14, 1).unwrap();
         let h = layer(&w, "height");
         wobble = draining_more_than(&w, STABLE_AREA_CELLS)
             .iter()
@@ -808,22 +771,43 @@ fn deposition_steepens_steady_state_by_one_plus_g() {
     }
     assert!(
         wobble < tolerance,
-        "slope_adaptive: a channel cell over {STABLE_AREA_CELLS} cells still changes by \
-         {wobble} m per step (tolerance {tolerance} m)"
+        "slope_adaptive, seed {seed}: a channel cell over {STABLE_AREA_CELLS} cells still \
+         changes by {wobble} m per step (tolerance {tolerance} m)"
     );
-    let (cells, slopes, area) = (
-        channel_cells(&w),
-        flow_slopes(&w),
-        layer(&w, "drainage_area"),
-    );
-    assert!(cells.len() > 100, "{} channel cells", cells.len());
-    for &i in &cells {
-        let what = format!("slope_adaptive after {RUN} steps: cell {i}");
-        within_two_percent(slopes[i], (1.0 + G) * law(area[i]), &what);
-    }
-    let predicted = (1.0 + G) * spread(&law_heights(&w));
-    let relief = spread(&layer(&w, "height"));
-    within_two_percent(relief, predicted, "slope_adaptive relief");
+    follows_the_law_times_one_plus_g(&w, &format!("slope_adaptive, seed {seed}, {RUN} steps"));
+}
+
+/// Physics test 14 (spec §5.14, rulings 44 and 59; Yuan et al. 2019, eq. 24 and 28): with
+/// uniform U, K and runoff, n = 1, m = 0.5 and no hillslope processes, deposition with G = 1
+/// steepens the steady state by (1 + G): its slopes and its relief, within 2 %.
+///
+/// Both flow partitions run with G = 1 from the landscape of seed 1, and each run's steady state
+/// is compared with (1 + G) times the G = 0 law on its own flow weights: each channel cell's
+/// flow-weighted slope with `(1 + G)·(U/K)·Q^(−m)`, and the relief with (1 + G) times the relief
+/// of the heights the G = 0 law gives on those weights. A G = 1 run need not keep a G = 0 run's
+/// network (ruling 59, Jann, 17 Nov 2026):
+/// - **`steepest`:** steepest receivers do not change when every slope doubles, but on the way
+///   ridge cells with nearly equal descents change receiver, and every flip moves the drainage
+///   area of the whole trunk below it. A G = 0 run's network survived on only one landscape in
+///   32, so the test compares with the law on the run's own final network. This leg requires a
+///   full steady state.
+/// - **`slope_adaptive`:** the partition exponent `p = 0.5 + 0.6·S` depends on the slope, so
+///   doubling the slopes changes the weights, and two runs cannot share a network.
+///
+///   With G > 0 this partition shows a slow divide oscillation: ridge cells of small drainage
+///   area swing by several metres per step, whatever the tolerance or the time step (seed 1
+///   before Task 43b: up to 9.5 m per step at Δt = 2.5e5 and 0.47 m at 2.5e4, on cells of 1 to
+///   about 20 cells of area). The landscape therefore never reaches a full steady state, and
+///   this leg runs a fixed 1 500 steps, about twice the time its channels take to settle. It
+///   still demands a steady state beyond the oscillation's reach: over the last 50 steps no
+///   channel cell with a drainage area above 22 cells changes by Yuan's tolerance `10⁻³·U·Δt`
+///   or more in a step. The 2 % law checks cover every channel cell (above 10 cells).
+#[test]
+fn deposition_steepens_steady_state_by_one_plus_g() {
+    // A natural seed, not one picked for the test.
+    const SEED: u64 = 1;
+    steepest_steady_state_is_one_plus_g(SEED);
+    slope_adaptive_steady_state_is_one_plus_g(SEED);
 }
 
 /// The Gauss–Seidel iterations check for a cancel before every iteration: a token that turns
