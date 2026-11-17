@@ -3,7 +3,10 @@
 //! Our own, because `num-complex` brings `num-traits` with std float methods (spec 4.3); the
 //! polar form goes through `libm`.
 
+use std::num::NonZeroUsize;
 use std::ops::{Add, Div, Mul, Sub};
+
+use super::num::to_f64;
 
 /// A complex number with `f64` parts.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -28,6 +31,17 @@ impl Complex {
     #[must_use]
     pub fn from_polar(r: f64, theta: f64) -> Self {
         Self::new(r * libm::cos(theta), r * libm::sin(theta))
+    }
+
+    /// `e^(2 pi i num / den)`, the unit number `num / den` turns round. `num` is reduced modulo
+    /// `den` in integers before the angle is formed, so a large `num` costs no precision.
+    #[must_use]
+    pub fn from_turns(num: usize, den: NonZeroUsize) -> Self {
+        let den = den.get();
+        Self::from_polar(
+            1.0,
+            2.0 * core::f64::consts::PI * to_f64(num % den) / to_f64(den),
+        )
     }
 
     /// Both parts multiplied by `s`.
@@ -101,5 +115,18 @@ mod tests {
     fn from_polar_uses_the_angle() {
         let q = Complex::from_polar(2.0, core::f64::consts::FRAC_PI_2);
         assert!(close(q, 0.0, 2.0));
+    }
+
+    #[test]
+    fn from_turns_reduces_whole_turns_first() {
+        let den = |d: usize| NonZeroUsize::new(d).unwrap();
+        assert!(close(Complex::from_turns(0, den(7)), 1.0, 0.0));
+        assert!(close(Complex::from_turns(1, den(4)), 0.0, 1.0));
+        assert!(close(Complex::from_turns(2, den(4)), -1.0, 0.0));
+        let h = core::f64::consts::FRAC_1_SQRT_2;
+        assert!(close(Complex::from_turns(3, den(8)), -h, h));
+        // 10^9 + 1 quarter turns is one quarter turn, to the last bit.
+        let far = Complex::from_turns(4_000_000_001, den(4));
+        assert_eq!(far, Complex::from_turns(1, den(4)));
     }
 }

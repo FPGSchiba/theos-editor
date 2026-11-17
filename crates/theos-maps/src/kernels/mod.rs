@@ -3,6 +3,7 @@
 pub mod complex;
 pub mod contour;
 pub mod curves;
+pub mod czt;
 pub mod diff;
 pub mod distance;
 pub mod fft;

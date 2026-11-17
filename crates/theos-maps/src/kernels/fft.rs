@@ -12,7 +12,7 @@ pub fn next_pow2(n: usize) -> usize {
 }
 
 /// The `n / 2` twiddles `exp(-+2 pi i k / n)` (conjugated for the inverse), computed with `libm`.
-fn twiddles(n: usize, inverse: bool) -> Vec<Complex> {
+pub(super) fn twiddles(n: usize, inverse: bool) -> Vec<Complex> {
     let sign = if inverse { 1.0 } else { -1.0 };
     let step = sign * 2.0 * PI / to_f64(n);
     (0..n / 2)
@@ -28,8 +28,9 @@ fn check_len(len: usize) -> Result<(), KernelError> {
     }
 }
 
-/// Bit-reversal permutation, then butterfly stages of increasing size; no scaling.
-fn transform(data: &mut [Complex], twiddles: &[Complex]) {
+/// Bit-reversal permutation, then butterfly stages of increasing size; no scaling. `data` has a
+/// power-of-two length and `twiddles` are [`twiddles`] of that length.
+pub(super) fn transform(data: &mut [Complex], twiddles: &[Complex]) {
     let n = data.len();
     let mut j = 0;
     for i in 1..n {
