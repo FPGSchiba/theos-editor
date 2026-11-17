@@ -268,7 +268,7 @@ bite. Each has its test in the owning task.
 2. **A 64² or non-power-of-two grid whose metre-sized kernels are larger than the map.**
    Expected: the filters, the FFT and the noise give finite fields of the grid's shape, with
    reflect mode applied more than once where σ exceeds the map. Tests: Task 13
-   (`noise_on_odd_shapes_is_cropped_and_finite`), Task 14
+   (`noise_on_odd_shapes_is_finite`), Task 14
    (`gaussian_wider_than_the_map_reflects_and_stays_finite`).
 3. **−0.0, NaN or a ±0 tie reaching a layer.** Expected:
    - a stored or hashed −0.0 is +0.0;
@@ -1293,14 +1293,22 @@ pub fn warped_coords(rows: usize, cols: usize, rng_x: &mut StageRng, rng_y: &mut
 `Complex` is our own type: `num-complex` would bring `num-traits` with std float methods (spec
 §4.3). The twiddles are `libm::cos`/`libm::sin` of `−2πk/n`, computed once per call.
 
-**Spectral noise** (spec §5.7):
-- Synthesise at `P = next_pow2(rows)` × `Q = next_pow2(cols)`.
-- For index `(i, j)`, `f(i, P) = i` if `i < P/2`, else `i − P`. The wavenumbers in cycles per map
-  are `ky = f(i, P)·rows/P` and `kx = f(j, Q)·cols/Q`, and `k = sqrt(kx² + ky²)`.
-- The amplitude is 0 where `k == 0`, `k < kmin` or `k > kmax`, and `libm::pow(k, −β/2)` elsewhere.
-- The coefficient is `amplitude × (normal, normal)`, drawn in row-major order, real part first.
-- Then: inverse `fft2`, take the real part, crop to `rows × cols`, subtract the mean and divide by
-  the population standard deviation (all zeros when it is 0).
+**Spectral noise** (spec §5.7, §5.8; a lattice sum since Task 43b, so a seed gives the same
+landscape at every grid size):
+- The wavenumbers form a lattice that the map fixes, not the grid: step δ = 3/4 cycle per map
+  along each axis. Point `(a, b)` of ℤ² is `kx = δ·a` cycles per map width and `ky = δ·b` per map
+  height, and `k = sqrt(kx² + ky²)`. A grid of `rows × cols` cells holds the points up to its
+  Nyquist wavenumber, `|a| ≤ ⌊2·cols/3⌋` and `|b| ≤ ⌊2·rows/3⌋`.
+- The amplitude is 0 at `(0, 0)`, where `k < kmin` or `k > kmax`, and `libm::pow(k, −β/2)`
+  elsewhere.
+- A call takes one draw of its stream, `key = rng.next_u64()`. The coefficient of `(a, b)` is
+  counter-based: a SplitMix64 seeded with `key XOR FNV-1a-64(a, b)` (little-endian `i64`) gives
+  two outputs, their top 53 bits give `u₁ ∈ (0, 1]` and `u₂ ∈ [0, 1)`, and Box–Muller on both
+  gives `√(−2 ln u₁)·(cos 2πu₂ + i sin 2πu₂)`.
+- The field at the cell centre `(x, y) = ((c + ½)/cols, (r + ½)/rows)` is the real part of the
+  sum over the band of amplitude × coefficient × `e^(2πi (kx·x + ky·y))`, evaluated along each
+  axis by chirp-z transforms (`kernels::czt`, Bluestein on `fft`). Then subtract the mean and
+  divide by the population standard deviation (all zeros when it is 0).
 
 `warped_coords` follows 0.3.0's `warped_grid` (`common.py`): the normalised `[x, y]` of each cell
 plus `strength` × noise, with x from columns and y from rows (G19). It uses cell centres,
@@ -1315,8 +1323,8 @@ at its centre (`docs/map-package.md` §2).
   - `a_length_that_is_not_a_power_of_two_is_an_error`.
   - `noise_is_zero_mean_unit_variance`: |mean| < 1e-12 and |var − 1| < 1e-9.
   - `noise_is_repeatable_for_a_key`.
-  - `noise_on_odd_shapes_is_cropped_and_finite` (Review Focus 2): shapes `37×64`, `64×5` and `1×1`
-    (all zeros) are finite and have the right shape.
+  - `noise_on_odd_shapes_is_finite` (Review Focus 2): the lattice sum on shapes `37×64`, `64×5`
+    and `1×1` (all zeros) is finite and has the right shape.
   - `higher_beta_is_smoother`: the mean |Laplacian| at β = 4 is below that at β = 2.
   - `fft_sizes_the_recipes_use_round_trip`: 2D at 64², 512² and 1024², within 1e-10 (spec §8:
     the padded sizes of 64², 384² and 1.5 × 384²).

@@ -259,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn noise_on_odd_shapes_is_cropped_and_finite() {
+    fn noise_on_odd_shapes_is_finite() {
         for (rows, cols) in [(37, 64), (64, 5), (1, 1)] {
             let mut rng = StageRng::for_key(4, "odd");
             let g = spectral_noise(rows, cols, &mut rng, 3.0, 0.0, None);
@@ -295,9 +295,8 @@ mod tests {
 
     #[test]
     fn coefficients_follow_the_documented_hash() {
-        // An independent Python of the documented rule (FNV-1a 64 of a and b as little-endian
-        // i64, SplitMix64, top 53 bits, Box-Muller on both outputs), the task-43b scratchpad's
-        // `t43b_coef.py`:
+        // Checked against an independent Python of the documented rule (FNV-1a 64 of a and b as
+        // little-endian i64, SplitMix64, top 53 bits, Box-Muller on both outputs):
         //   coefficient(1, -1, 2)          = 0.4496760737703438, -0.27343984717519293
         //   coefficient(0xDEADBEEF, 5, -3) = 0.7641374117752563, 1.9318543026918396
         let cases = [
