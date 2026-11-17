@@ -16,7 +16,8 @@ All checks are required status checks on `main` (branch protection, administrato
 |---|---|---|
 | `fmt` | `cargo fmt --all --check` | Linux |
 | `clippy` | `cargo clippy --workspace --all-targets --locked -- -D warnings` | Linux |
-| `test` | `cargo nextest run --workspace --locked` (profile `ci` in CI, `default` locally) and `cargo test --doc --workspace --locked` | Linux |
+| `test` | `cargo nextest run --workspace --locked` (profile `ci` in CI, `default` locally; both leave out the slow tests) and `cargo test --doc --workspace --locked` | Linux |
+| `slow-tests` | `cargo xtask slow-tests`: `cargo nextest run --workspace --locked --profile slow --no-tests=warn`, only the slow tests; on a pull request only when it can change their outcome (below) | Linux |
 | `docs` | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked` | Linux |
 | `deny` | `cargo deny --locked check` (licences, advisories, bans, sources) | Linux |
 | `engine-free` | `cargo xtask engine-free`: no engine crate in the tree without feature `engine` | Linux |
@@ -29,11 +30,29 @@ All checks are required status checks on `main` (branch protection, administrato
 | `approval` | fails while the PR touches a protected path and lacks the label `approved` | Linux |
 | `ui` | from P11: `pnpm install --frozen-lockfile`, `svelte-check`, `eslint`, `vitest`, Playwright component tests | Linux |
 
+**Slow tests** are tests that take minutes, such as the map generator's parity and golden runs
+(P08 spec §5.14). A test is slow when a segment of its name, the path nextest shows, starts with
+`slow_`: `maps::parity::slow_recipes_match`, or every test in a module `slow_runs`. The nextest
+profiles in `gate/nextest.toml` split the suite: `default` and `ci` leave the slow tests out, and
+the profile `slow` runs only them, so every test runs in exactly one of `test` and `slow-tests`.
+`coverage` uses the profile `default` and so measures without the slow tests. A test that is not
+slow has no name segment that starts with `slow_`, or `test` would leave it out.
+
+On a pull request, `slow-tests` runs the slow tests only when the pull request changes, since its
+merge base, a file of a workspace crate with slow tests (one of its `.rs` files contains `slow_`),
+of a workspace crate such a crate depends on, or one of `Cargo.toml`, `Cargo.lock`,
+`rust-toolchain.toml`, `.cargo/`, `.config/`, `.github/`, `gate/` and `xtask/`. Otherwise it
+passes with a note that says so, without building anything. The job runs and reports on every
+pull request either way, so the required check is never missing. A push to `main`, a manual run,
+the `platforms` schedule and `cargo xtask gate` always run the slow tests.
+
 **Windows and macOS** are not in the per-PR checks, because their runner minutes cost two and ten
 times as much as Linux on a private repository. Instead the workflow `platforms` runs `clippy`,
-`test`, `lints`, `ac-trace` and (from P11) `ui` on `windows-latest` and `macos-latest`: for `main`
-once a week, on demand, and on a PR when the label `windows` or `macos` is added (each label runs
-its own OS). `release.yml` runs the tests on all three before every release (`docs/release.md`).
+`test`, `slow-tests`, `lints`, `ac-trace` and (from P11) `ui` on `windows-latest` and
+`macos-latest`, and `test` and `slow-tests` also on `macos-15-intel`: for `main` once a week, on
+demand, and on a PR when the label `windows` or `macos` is added (each label runs its own OS). The
+full test suite is `test` and `slow-tests` together; `release.yml` runs both on all three before
+every release (`docs/release.md`).
 These runs are not required checks. A red run is fixed before the next release; it is listed in
 `docs/status.md` under "Needs Jann" until then. `lints` and `ac-trace` run there too because
 they read what the compiler builds on the machine they run on, and code behind `#[cfg(windows)]`
@@ -41,6 +60,7 @@ or `#[cfg(target_os = "macos")]` is only built there.
 
 `cargo xtask gate` runs every check except `pr-body`, `pr-title` and `approval` locally, on
 Windows and Linux, with the same results as CI (`commit-msg` checks the commits since `main`).
+`slow-tests` always runs the slow tests there, so the local gate is never more lenient than CI.
 Claude runs it before claiming a phase is done.
 
 ## 2. Lints (`gate/lints.toml`, mirrored into `Cargo.toml`)

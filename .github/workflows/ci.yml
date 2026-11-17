@@ -59,6 +59,21 @@ jobs:
       - uses: ./.github/actions/setup
       - run: cargo xtask test
 
+  # The slow tests (`slow_…`, docs/gate.md section 1). On a pull request xtask runs them only when
+  # the pull request can change their outcome, which it reads from the changes since the merge
+  # base, so the history is needed. The job always runs and reports, also when it runs no test.
+  slow-tests:
+    name: slow-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: cargo xtask slow-tests
+
   docs:
     name: docs
     runs-on: ubuntu-latest
