@@ -1225,6 +1225,8 @@ dependencies = [
 name = "theos-maps"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "clap",
  "geojson",
  "libm",
  "png",
