@@ -1210,7 +1210,8 @@ renamed the place types, added `requires` and dropped the size note of §4.3.
    - std float methods through a trait (the ban does not see `num_traits::Float`);
    - JSON key order;
    - ZIP headers on Windows;
-   - FFT padding for sizes 64, 384 and 1024.
+   - the noise's chirp-z lengths for sizes 64, 384 and 1024 (FFT lengths 256 to 4096), and the
+     orographic precipitation's padding.
 7. **Runner:**
    - cancel at every stage boundary and inside every long loop;
    - a panic in a per-step process;
@@ -1398,7 +1399,8 @@ Rulings of 13 Nov 2026, from the build:
     grid size — drawn per grid, a seed gave unrelated landscapes at 192² and 384², and physics
     test 13 could not compare them; two 4-seed sets at one size already differed by 28–37 % in
     lake share — cost if wrong: every output changed once (before parity and golden hashes), and
-    the noise costs about twice the FFT work per call.
+    the noise costs 1.35–1.54 times the old FFT work per call at 192, 384 and 768 cells and about
+    3.3 times at 64, 512 and 1024 (+10 ms per call at 384²).
 
 ## 10. Left to the builder
 
