@@ -768,8 +768,10 @@ on the built-in recipes' mountains they hit their 100-pass cap on 236 of 240 ste
   - In Hearth's climate most depressions reach spill. Lake share then depends mostly on deposition
     in `fluvial` and on the shallow-pit rule.
 - **Shallow pits:** depressions shallower than `min_lake_depth_m` (default 2 m) or smaller than
-  `min_lake_area_m2` (default 4 cells) are filled to spill + ε in `height`. That is why
-  `hydrology` writes `height`; river beds then never cross dry pits.
+  `min_lake_area_m2` (default 15,625 m², four cells at 62.5 m) are filled to spill + ε in
+  `height`. That is why `hydrology` writes `height`; river beds then never cross dry pits. The
+  default is an area, not a cell count, so a finer grid does not keep smaller lakes (found in the
+  build, 17 Nov 2026).
 - **Channel discharge:** runoff accumulated over the single steepest receiver on the
   depression-filled surface, as 0.3.0 did and as channels behave (Quinn et al. 1991: multiple flow
   on hillslopes, single flow in channels). The `river` raster, the river lines, `discharge` and the
