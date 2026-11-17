@@ -12,8 +12,10 @@ pub enum Check {
     Fmt,
     /// `cargo clippy` with warnings denied.
     Clippy,
-    /// The tests, through nextest, and the doc tests.
+    /// The tests, through nextest, and the doc tests; the slow tests are left out.
     Test,
+    /// The slow tests (a segment of the name starts with `slow_`), through nextest.
+    SlowTests,
     /// `cargo doc` with warnings denied.
     Docs,
     /// `cargo deny check`.
@@ -48,6 +50,7 @@ impl Check {
             Self::Fmt => "fmt",
             Self::Clippy => "clippy",
             Self::Test => "test",
+            Self::SlowTests => "slow-tests",
             Self::Docs => "docs",
             Self::Deny => "deny",
             Self::EngineFree => "engine-free",
@@ -64,7 +67,7 @@ impl Check {
 }
 
 /// The checks `cargo xtask gate` runs, in order: cheap and local ones first.
-pub const GATE_ORDER: [Check; 11] = [
+pub const GATE_ORDER: [Check; 12] = [
     Check::Tools,
     Check::Fmt,
     Check::Lints,
@@ -76,6 +79,7 @@ pub const GATE_ORDER: [Check; 11] = [
     Check::Deny,
     Check::Test,
     Check::Coverage,
+    Check::SlowTests,
 ];
 
 /// The checks that need a pull request, which the gate leaves out.
@@ -157,11 +161,12 @@ impl Verdict {
 mod tests {
     use super::*;
 
-    const ALL: [Check; 15] = [
+    const ALL: [Check; 16] = [
         Check::Tools,
         Check::Fmt,
         Check::Clippy,
         Check::Test,
+        Check::SlowTests,
         Check::Docs,
         Check::Deny,
         Check::EngineFree,
@@ -216,6 +221,7 @@ mod tests {
                 "fmt",
                 "clippy",
                 "test",
+                "slow-tests",
                 "docs",
                 "deny",
                 "engine-free",
@@ -247,6 +253,7 @@ mod tests {
                 "deny",
                 "test",
                 "coverage",
+                "slow-tests",
             ]
         );
         assert_eq!(names(&PR_ONLY), ["pr-title", "pr-body", "approval"]);

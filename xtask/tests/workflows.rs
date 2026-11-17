@@ -243,7 +243,7 @@ fn step_kind(step: &Yaml) -> TestResult<&'static str> {
 #[test]
 fn ci_builds_and_tests_on_linux() -> TestResult {
     let jobs = jobs(&workflow("ci.yml")?)?;
-    for check in ["clippy", "test"] {
+    for check in ["clippy", "test", "slow-tests"] {
         let job = &jobs[index_of(&jobs, check)?];
         assert_eq!(job.runs_on()?, "ubuntu-latest", "{check}");
         assert_eq!(job.commands()?, [format!("cargo xtask {check}")], "{check}");
@@ -256,7 +256,7 @@ fn ci_builds_and_tests_on_linux() -> TestResult {
 fn platforms_builds_and_tests_on_windows_and_macos() -> TestResult {
     let jobs = jobs(&workflow("platforms.yml")?)?;
     for (os, runner) in [("windows", "windows-latest"), ("macos", "macos-latest")] {
-        for check in ["clippy", "test"] {
+        for check in ["clippy", "test", "slow-tests"] {
             let name = format!("{check} ({os})");
             let job = &jobs[index_of(&jobs, &name)?];
             assert_eq!(job.runs_on()?, runner, "{name}");
@@ -503,9 +503,11 @@ fn no_key_lets_a_step_of_the_setup_action_fail_silently() -> TestResult {
 }
 
 /// The minutes a job may run before GitHub cancels it. The default is six hours. The builds and
-/// the tests of one platform and the coverage run take the longest.
+/// the tests of one platform and the coverage run take the longest, the slow tests longer still:
+/// map-scale generator runs of a minute each, on every OS.
 fn timeout_of(name: &str) -> i64 {
     match name {
+        _ if check_of(name) == "slow-tests" => 120,
         "test" | "coverage" => 60,
         _ if OS_SUFFIXES.iter().any(|suffix| name.ends_with(suffix)) => 60,
         _ => 30,
@@ -578,11 +580,14 @@ fn platforms_runs_weekly_on_demand_and_by_label() -> TestResult {
         set(&[
             "clippy (windows)",
             "test (windows)",
+            "slow-tests (windows)",
             "lints (windows)",
             "ac-trace (windows)",
             "clippy (macos)",
             "test (macos)",
             "test (macos intel)",
+            "slow-tests (macos)",
+            "slow-tests (macos intel)",
             "lints (macos)",
             "ac-trace (macos)",
         ])
@@ -858,20 +863,30 @@ fn no_expressions_in_run_steps() -> TestResult {
     Ok(())
 }
 
+/// The checks that read history: the commits of a pull request, or the merge base with its base.
+/// `slow-tests` reads the changes since the merge base to decide whether its tests run.
+const READ_HISTORY: [&str; 3] = ["commit-msg", "coverage", "slow-tests"];
+
 #[test]
 fn history_is_fetched_where_commits_or_the_merge_base_are_read() -> TestResult {
-    let ci = jobs(&workflow("ci.yml")?)?;
-    for job in &ci {
-        let depth = &job.steps()?[0]["with"]["fetch-depth"];
-        if job.name == "commit-msg" || job.name == "coverage" {
-            assert_eq!(depth.as_i64(), Some(0), "{} reads history", job.name);
-        } else {
-            assert_eq!(
-                *depth,
-                Yaml::BadValue,
-                "{} fetches more than the commit it checks",
-                job.name
-            );
+    for file in ["ci.yml", "platforms.yml"] {
+        for job in jobs(&workflow(file)?)? {
+            let depth = &job.steps()?[0]["with"]["fetch-depth"];
+            if READ_HISTORY.contains(&check_of(&job.name)) {
+                assert_eq!(
+                    depth.as_i64(),
+                    Some(0),
+                    "{file}: {} reads history",
+                    job.name
+                );
+            } else {
+                assert_eq!(
+                    *depth,
+                    Yaml::BadValue,
+                    "{file}: {} fetches more than the commit it checks",
+                    job.name
+                );
+            }
         }
     }
     Ok(())
