@@ -177,7 +177,9 @@ What later phases build on it:
 - **17 Nov 2026, from the build:** physics test 13 showed that a seed gave unrelated landscapes at
   two grid sizes, because the noise was drawn per grid. Jann: spectral noise is drawn per physical
   wavenumber (§5.7), and test 13 compares seeds in pairs on what both grids resolve. The minimum
-  lake area defaults to an area, not a cell count (§5.9). Ruling 57.
+  lake area defaults to an area, not a cell count (§5.9). `hillslope` runs before the routing,
+  because after `fluvial` it dammed the channels and made most lakes (Jann). Physics test 14
+  compares both flow partitions on their own networks (Jann). Rulings 57–59.
 
 ### 4.2 Research (10 Nov 2026)
 
@@ -383,7 +385,7 @@ The world stores them in a `BTreeMap` by name, so iteration order is fixed.
 
 - **The pipeline:** a recipe lists stages in order.
 - **The `landscape_evolution` stage** holds its own list of per-step stages (`uplift`,
-  `route_steepest`, `resolve_sinks`, `partition_flow`, `fluvial`, `hillslope`, `slope_limit`,
+  `hillslope`, `route_steepest`, `resolve_sinks`, `partition_flow`, `fluvial`, `slope_limit`,
   `climate_update`) and runs them in order every time step.
 - **The same rules apply at both levels:** declared layers, typed parameters, checks, metrics.
   The evolution stage's own reads and writes are the union of its processes' (minus what one
@@ -460,6 +462,8 @@ dt_yr  = 2.5e4
   [[stage.process]]
   id = "uplift"
   [[stage.process]]
+  id = "hillslope"
+  [[stage.process]]
   id = "route_steepest"
   [[stage.process]]
   id = "resolve_sinks"
@@ -470,8 +474,6 @@ dt_yr  = 2.5e4
   id = "fluvial"
   m = 0.45
   g = 1.0
-  [[stage.process]]
-  id = "hillslope"
   [[stage.process]]
   id = "slope_limit"
   [[stage.process]]
@@ -672,7 +674,7 @@ design. GPL code is never read.
 | ↳ `resolve_sinks` | `height`, `receivers`, `fixed` → `receivers`, `routing_surface`, `depressions` | Connects each closed basin through its lowest pass by the minimum spanning tree of basins; `routing_surface` lifts depression cells to their spill level + ε along the priority-flood order, `height` itself unchanged; `depressions` labels routed depressions with their spill node | MST of basins: Cordonnier, Bovy & Braun 2019; the ε lift: Barnes et al. 2014 |
 | ↳ `partition_flow` | `routing_surface`, `receivers` → `weights`, `stack` | Weights over the lower neighbours of the routing surface for erosion: `exponent = "steepest"` (all to the receiver) or `"slope_adaptive"`, p = 0.5 + 0.6·S with S the steepest slope (FastScape's slope-dependent partition; that S is the steepest slope is this spec's reading). A fresh topological order (`stack`, receivers before donors) of the resulting graph | FastScape documentation; Freeman 1991 |
 | ↳ `fluvial` | `height`, `erodibility`, `receivers`, `weights`, `stack`, `depressions`, `fixed`, `climate`, [`uplift`], [`slope_supply`] → `height`, `erosion`, `deposition`, `drainage_area`, [`slope_supply`] | The erosion–deposition law with n = 1 (below), solved implicitly in stack order with Gauss–Seidel iterations; sediment filling routed depressions; cumulative erosion and deposition | Yuan et al. 2019 (eq. 9, 11, 13–21), after Davy & Lague 2009; Braun & Willett 2013. Multiple flow with deposition as in FastScape's documentation (Yuan et al. solve single flow); the depression filling after goSPL's documentation, combined with the MST resolver as our own step |
-| ↳ `hillslope` | `height`, `diffusivity`, `fixed` → `height`, `erosion`, `deposition` | Linear diffusion, implicit ADI (Thomas algorithm per row and column), after `fluvial` as in Yuan et al.; per cell, a net loss books as erosion and a net gain as deposition | – |
+| ↳ `hillslope` | `height`, `diffusivity`, `fixed` → `height`, `erosion`, `deposition` | Linear diffusion, implicit ADI (Thomas algorithm per row and column), before the routing, so each step ends on the surface `fluvial` cut (after `fluvial` it dammed one-cell channels by an amount that grew as cells shrank; found in the build, 17 Nov 2026); per cell, a net loss books as erosion and a net gain as deposition | – |
 | ↳ `slope_limit` | `height`, `critical_slope`, `fixed`, `erosion`, [`slope_supply`] → `height`, `erosion`, `slope_supply` | An exact threshold limiter in one sweep; the material removed goes to the rivers (algorithm below) | Threshold slopes after Montgomery & Brandon 2002; the sweep is own design (a shortest-path form of a slope-limited fill) |
 | ↳ `climate_update` | `height`, `climate` → `climate` | Recomputes precipitation, AET and runoff from the current surface every `every` steps | – |
 | `hydrology` | `height`, `climate` → `height`, `lake`, `lake_id`, `lake_level`, `river`, `big_river`, `discharge`, `flow_dir`, `water_surface`, `water_features` | Lakes by water balance, channel discharge over single flow, rivers, river lines and lake outlines (below) | Barnes et al. 2014; Bracht-Flyr et al. 2013; Quinn et al. 1991 (multiple flow on hillslopes, single flow in channels); Leopold & Maddock 1953; Génevaux et al. 2013 |
@@ -995,15 +997,19 @@ pub fn run(request: &RunRequest, recipe_dirs: &[PathBuf], out_dir: &Path,
     expected cell.
 12. **Roads:** no road step exceeds `max_grade` except bridge edges; bridges span the water in
     one edge.
-13. **Resolution independence:** the same recipe at 192² and 384², over seeds 1–4, gives median
-    relief and lake share within 15 % and median river length per km² (not river cell share,
-    which halves with the cell size) within 25 %.
+13. **Resolution independence:** the same recipe at 192² and 384², seed by seed over seeds 1–4 (a
+    seed gives the same landscape at both sizes, §5.7), gives median relief within 15 %, median
+    lake share over lakes of at least 0.25 km² within 15 %, and median river length per km²,
+    counted through lakes (not river cell share, which halves with the cell size), within 25 %.
+    A recipe with a closed basin is compared the same way, so that lakes are present at both
+    sizes.
 14. **Steady state with deposition:** with uniform U, K and runoff, n = 1 and no hillslope
     processes, the steady-state slope at G > 0 is (1 + G) times the slope at G = 0 within 2 %, and
-    so is the relief (Yuan et al. 2019, eq. 24 and 28). Run with both flow partitions. With
-    `slope_adaptive` the partition depends on the slope, so the G > 0 run cannot keep the G = 0
-    run's network; its slopes and relief are compared with (1 + G) times the G = 0 law on its own
-    flow weights (found in the build, 13 Nov 2026).
+    so is the relief (Yuan et al. 2019, eq. 24 and 28). Run with both flow partitions. A G > 0
+    run need not keep the G = 0 run's network (with `slope_adaptive` the partition depends on the
+    slope, and with `steepest` the network may change on most landscapes), so each run's slopes
+    and relief are compared with (1 + G) times the G = 0 law on its own flow weights (found in
+    the build, 13 and 17 Nov 2026).
 
 **Metrics** (`metrics.rs`), deterministic and reported in every summary: relief, lake share, river
 share, vegetation cover, median precipitation and the Chime-to-Chime walk, as 0.3.0 defined them
@@ -1401,6 +1407,16 @@ Rulings of 13 Nov 2026, from the build:
     lake share — cost if wrong: every output changed once (before parity and golden hashes), and
     the noise costs 1.35–1.54 times the old FFT work per call at 192, 384 and 768 cells and about
     3.3 times at 64, 512 and 1024 (+10 ms per call at 384²).
+58. Ruling (Jann): `hillslope` runs after `uplift` and before the routing in every time step —
+    after `fluvial` it diffused the banks of the one-cell channels `fluvial` had cut back into
+    them, so every step ended on dammed channels; the dam grew as cells shrank and as Δt grew
+    (about 3 m on plains, up to 80 m in canyons), passed the 2 m lake depth at 384² and made most
+    of the built-in lake share (hearth-valley seed 4: 9.5 %); with the new order test 13's ratios
+    are 1.00, 1.00 and 0.99 — cost if wrong: fewer lakes; lakes come from closed basins only.
+59. Ruling (Jann): physics test 14 compares both flow partitions with (1 + G) times the G = 0 law
+    on each run's own network — with `steepest` the G > 0 run kept the G = 0 network on only one
+    of 32 landscapes, so the test rested on a hand-picked seed; the slopes held on all 32 —
+    cost if wrong: the test no longer shows that the network stays.
 
 ## 10. Left to the builder
 
