@@ -55,13 +55,20 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
-- P08's spec change PR #40 (13 Nov 2026) waits for Jann's merge: an exact one-sweep slope limiter
-  (Jann chose option (a)) whose removed material feeds the rivers as `slope_supply` (Jann
-  confirmed the mass rule the same day). The supply accumulates until `fluvial` takes it, so no
-  `every` setting counts it twice. The PR also carries the build's errata: the reads of
-  `resolve_sinks` and `fluvial`, Aitken relaxation of Yuan's sweeps on dry cells, and physics
-  test 14 for `slope_adaptive`. The build implements it (Task 27c), and #40 must be on main before
-  P08's build PR merges.
+- P08's spec change PR #40 waits for Jann's merge. It carries every spec and format change of the
+  build (rulings 51–56 and errata):
+  - the exact slope limiter, whose debris feeds the rivers;
+  - fill-first lakes;
+  - `skrifa` for text;
+  - loop roads without the merge discount;
+  - lakes as MultiPolygons;
+  - from 17 Nov, noise drawn per physical wavenumber and test 13 on resolved metrics.
+  #40 must be on main before P08's build PR merges.
+- Gate PR #43 (17 Nov 2026) waits for Jann's merge. It keeps tests named `slow_` out of the
+  default `test` job and runs them in a new `slow-tests` check and job. One 384² run takes about
+  70 s, so 24 parity runs exceed P08 §5.14's five-minute budget. After the merge,
+  `cargo xtask github apply` makes `slow-tests` a required check. The phase branch carries its
+  content as one squashed commit, and #43 must be on main before P08's build PR merges.
 - P06's spec (command layer and repo lock) waits for Jann in its spec PR #36. Its §6.1 holds the
   interfaces agreed with the P05 session, and its §11 the git probes for P46 and P47.
 - For P49 (umbrella version 6):
