@@ -174,6 +174,10 @@ What later phases build on it:
   replaces `ab_glyph`, whose font parser is unmaintained (Jann chose it); loop roads are routed
   without the merge discount (Jann); a lake's geometry may be a MultiPolygon (Jann). Rulings
   53–56.
+- **17 Nov 2026, from the build:** physics test 13 showed that a seed gave unrelated landscapes at
+  two grid sizes, because the noise was drawn per grid. Jann: spectral noise is drawn per physical
+  wavenumber (§5.7), and test 13 compares seeds in pairs on what both grids resolve. The minimum
+  lake area defaults to an area, not a cell count (§5.9). Ruling 57.
 
 ### 4.2 Research (10 Nov 2026)
 
@@ -590,8 +594,16 @@ The rules of decision 0003 §3, made concrete:
   clippy ban on those would flag ordinary code in other crates (engineering directive 4), so this
   is a code-review item (§8) and the golden hashes on four platforms catch what slips through.
 - **FFT:** own iterative radix-2 FFT with `libm` twiddles.
-  - Spectral noise is synthesised at the next power of two of each dimension, with wavenumbers
-    scaled to cycles per map, then cropped.
+  - Spectral noise is a sum over a wavenumber lattice that the map fixes, not the grid: step 3/4
+    cycle per map along each axis, and a grid holds the points up to its Nyquist wavenumber, so a
+    finer grid of the same map holds every point of a coarser one, and more. Each point's
+    coefficient is a counter-based draw keyed by (key, wavenumber): a SplitMix64 seeded with
+    key XOR FNV-1a-64 of the point's two integers gives two outputs for a Box–Muller pair; a call
+    takes exactly one draw (the key) from its stage stream. The sum is evaluated at the cell
+    centres by chirp-z transforms on the radix-2 FFT, every angle reduced modulo one turn in
+    integers before `libm` evaluates it. The field is then normalised per grid (zero mean, unit
+    variance). So a seed gives the same landscape at every grid size, and a finer grid only adds
+    detail (Jann, 17 Nov 2026; physics test 13).
   - The orographic precipitation pads the terrain to the next power of two of 1.5 × its size with
     a linear ramp to zero.
 - **Random numbers:**
@@ -625,7 +637,8 @@ Pure functions with unit tests against known values (scipy semantics where 0.3.0
 | Kernel | Notes |
 |---|---|
 | `fft` | Radix-2, forward and inverse, 1D and 2D |
-| `spectral_noise` | 1/f^β synthesis, kmin/kmax in cycles per map, zero mean, unit variance |
+| `spectral_noise` | 1/f^β synthesis on the map's wavenumber lattice (step 3/4 cycle per map), kmin/kmax in cycles per map; counter-based coefficients keyed by wavenumber; zero mean, unit variance per grid |
+| `czt` | Chirp-z transform (Bluestein) on the radix-2 FFT, rational step, integer-reduced chirp |
 | `warp` | Domain warp of normalised coordinates |
 | `gaussian` | Separable, reflect mode, truncate at 4σ, σ in metres |
 | `uniform`, `maximum` | Box filters, reflect mode |
@@ -1380,6 +1393,12 @@ Rulings of 13 Nov 2026, from the build:
     one feature per outline broke the match between `lake-n` ids and lake numbers; format 1.0 has
     no released writer or reader yet, so this amends 1.0 instead of adding a capability — cost if
     wrong: readers must accept both geometries for lakes.
+57. Ruling (Jann): spectral noise is a sum over a wavenumber lattice fixed by the map, with
+    counter-based coefficients keyed by wavenumber, so a seed gives the same landscape at every
+    grid size — drawn per grid, a seed gave unrelated landscapes at 192² and 384², and physics
+    test 13 could not compare them; two 4-seed sets at one size already differed by 28–37 % in
+    lake share — cost if wrong: every output changed once (before parity and golden hashes), and
+    the noise costs about twice the FFT work per call.
 
 ## 10. Left to the builder
 
