@@ -74,9 +74,10 @@ use crate::stage::{
 use crate::stages::terrain::climate::{self, Climate, ClimateFields};
 use crate::world::{Layer, ValueType, WorldValue};
 
-/// A depression smaller than this many cells is filled when the recipe sets no
-/// `min_lake_area_m2`.
-const MIN_LAKE_CELLS: f64 = 4.0;
+/// A depression smaller than this is filled when the recipe sets no `min_lake_area_m2`, m²:
+/// 0.3.0's four cells, converted at its cell size of 62.5 m (spec §5.5 "Units"), so the smallest
+/// lake is the same at every grid size.
+const MIN_LAKE_AREA_M2: f64 = 4.0 * 62.5 * 62.5;
 
 /// The world value `water_thresholds`: the discharges above which a cell outside a lake is a
 /// river or a big river. `hydrology` writes them from its parameters; later stages read them
@@ -149,7 +150,8 @@ pub struct HydrologyParams {
     pub big_river_q: Option<f64>,
     /// A depression shallower than this (spill level − lowest height) is filled, m.
     pub min_lake_depth_m: f64,
-    /// A depression smaller than this is filled, m²; four cells when absent.
+    /// A depression smaller than this is filled, m²; 15,625 m² (four cells of 62.5 m) when
+    /// absent.
     pub min_lake_area_m2: Option<f64>,
     /// Width of a river of 1 m³/s, `width = width_a·Q^0.5`, m (Leopold and Maddock 1953: about 2
     /// to 5).
@@ -176,11 +178,11 @@ impl Default for HydrologyParams {
 }
 
 impl HydrologyParams {
-    /// The smallest depression that keeps its lake, on cells of `cell_area` m².
-    fn limits(&self, cell_area: f64) -> Limits {
+    /// The smallest depression that keeps its lake.
+    fn limits(&self) -> Limits {
         Limits {
             min_depth_m: self.min_lake_depth_m,
-            min_area_m2: self.min_lake_area_m2.unwrap_or(MIN_LAKE_CELLS * cell_area),
+            min_area_m2: self.min_lake_area_m2.unwrap_or(MIN_LAKE_AREA_M2),
         }
     }
 }
@@ -356,7 +358,7 @@ impl TypedStage for Hydrology {
             local = climate::fields(height, &frame, &climate.params);
             &local
         };
-        let limits = params.limits(frame.cell_area_m2());
+        let limits = params.limits();
         let water = water(height, ctx.mask("fixed")?, fields, frame.cell_m, &limits);
         let rasters = rasters::rasters(&water, &params.thresholds);
         let report = report(&water, frame.cell_area_m2());

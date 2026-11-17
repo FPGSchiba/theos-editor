@@ -1,7 +1,7 @@
 //! `hydrology` on 64 x 64 worlds of 100 m cells, with physics tests 7 and 8 (spec §5.14).
 
 use super::lakes::Limits;
-use super::{Hydrology, Water, WaterFeatures, WaterThresholds, water};
+use super::{Hydrology, HydrologyParams, Water, WaterFeatures, WaterThresholds, water};
 use crate::grid::{D8, Grid};
 use crate::kernels::flood::priority_flood;
 use crate::kernels::labels::{Connectivity, labels};
@@ -533,9 +533,31 @@ fn wet_basins_fill_to_spill_and_route_over_their_outlet() {
 }
 
 #[test]
+fn the_default_minimum_lake_area_is_15_625_m2_on_any_grid() {
+    // Spec §5.5 "Units": 0.3.0's four cells, converted at its cell size of 62.5 m, so the
+    // smallest lake is the same in m² at 384² and at any other grid. On these 100 m cells a
+    // two-cell pit (20,000 m²) keeps its lake and a one-cell pit (10,000 m²) is filled; four
+    // cells of 100 m would fill both.
+    assert_eq!(
+        HydrologyParams::default().limits().min_area_m2.to_bits(),
+        15_625.0_f64.to_bits()
+    );
+    let mut height = lowered(plane(), 20..21, 20..22, 5.0);
+    height = lowered(height, 40..41, 40..41, 5.0);
+    let w = staged(&height, &south_edge(), WET, "");
+    let lake = w.mask("lake").unwrap().as_slice();
+    assert!(
+        lake[at(20, 20)] && lake[at(20, 21)],
+        "the two-cell pit keeps its lake"
+    );
+    assert!(!lake[at(40, 40)], "the one-cell pit is filled");
+    assert_eq!(lake.iter().filter(|l| **l).count(), 2);
+}
+
+#[test]
 fn shallow_pits_are_filled_in_height() {
     // A: 8 cells, about 1.5 m deep; B: one cell 5 m deep; C: 4 cells 5 m deep (kept, the area is
-    // exactly the limit); D: 3 cells 5 m deep.
+    // exactly the limit, 4 cells of 100 m); D: 3 cells 5 m deep.
     let mut height = lowered(plane(), 20..22, 10..14, 2.5);
     height = lowered(height, 30..31, 45..46, 5.0);
     height = lowered(height, 40..42, 20..22, 5.0);
@@ -543,7 +565,7 @@ fn shallow_pits_are_filled_in_height() {
     let fixed = south_edge();
     let outlets: Vec<usize> = (0..N).map(|c| at(N - 1, c)).collect();
     let filled = priority_flood(&height, &outlets, 1e-6).surface;
-    let w = staged(&height, &fixed, WET, "");
+    let w = staged(&height, &fixed, WET, "min_lake_area_m2 = 40000.0\n");
     let out = w.f64("height").unwrap().as_slice();
     let lake = w.mask("lake").unwrap().as_slice();
     let kept: Vec<usize> = vec![at(40, 20), at(40, 21), at(41, 20), at(41, 21)];
