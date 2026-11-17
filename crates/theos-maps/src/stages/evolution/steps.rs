@@ -51,8 +51,8 @@ struct Step {
 }
 
 /// Runs the `planned` processes of `registry` for `schedule.steps` steps inside the stage of
-/// `ctx`. Every step it checks the cancel token, reports progress every [`PROGRESS_EVERY`]
-/// steps, and runs each process that is due (`every`) in a child context keyed
+/// `ctx`. Every step, and before each process, it checks the cancel token; it reports progress
+/// every [`PROGRESS_EVERY`] steps, and runs each process that is due (`every`) in a child context keyed
 /// `<ctx key>/<id>#<occurrence>`, then checks that the process wrote its declared layers. The
 /// findings of a process's own report count every step it runs; its `checks` run at every
 /// multiple of `check_every` and on the last step.
@@ -106,6 +106,7 @@ pub(crate) fn run(
         };
         for one in &mut running {
             if one.process.runs_at(step, steps) {
+                ctx.check_cancel()?;
                 run_process(ctx, one, now, &mut values)?;
             }
         }

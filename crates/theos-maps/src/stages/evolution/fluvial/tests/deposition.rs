@@ -9,9 +9,10 @@ use super::{
 };
 use crate::grid::Grid;
 use crate::kernels::num::{max, min, to_f64};
-use crate::stage::{Finding, StageReport};
+use crate::stage::{Finding, StageError, StageReport};
 use crate::stages::evolution::flow::{FlowWeights, cell_index};
-use crate::stages::evolution::fluvial::fill::EPSILON;
+use crate::stages::evolution::fluvial::fill::{EPSILON, Traps};
+use crate::stages::evolution::fluvial::solve::{Deposition, Incision, deposit};
 use crate::stages::evolution::resolve_sinks::{Depressions, SpillPoint};
 use crate::stages::evolution::test_support::{evolve, processes};
 use crate::stages::terrain::grid::GridStage;
@@ -823,4 +824,80 @@ fn deposition_steepens_steady_state_by_one_plus_g() {
     let predicted = (1.0 + G) * spread(&law_heights(&w));
     let relief = spread(&layer(&w, "height"));
     within_two_percent(relief, predicted, "slope_adaptive relief");
+}
+
+/// The Gauss–Seidel iterations check for a cancel before every iteration: a token that turns
+/// cancelled after two checks stops the solve at the third, with `Cancelled` and no solution,
+/// where the same step runs to its tolerance when nothing cancels.
+#[test]
+fn the_iterations_stop_at_a_cancel() {
+    use std::cell::Cell;
+
+    fn dep<'a>(
+        traps: &'a Traps,
+        supply: &'a [f64],
+        cancel: &'a dyn Fn() -> Result<(), StageError>,
+    ) -> Deposition<'a> {
+        Deposition {
+            g: 6.0,
+            traps,
+            cell_area: CELL_AREA,
+            supply,
+            tolerance: 1e-6,
+            max_iterations: 100,
+            cancel,
+        }
+    }
+
+    let weights = FlowWeights {
+        start: vec![0, 0, 1, 2, 4],
+        to: vec![0, 0, 1, 0],
+        weight: vec![1.0, 1.0, 0.25, 0.75],
+        dist: vec![100.0, 100.0, 100.0, 100.0 * SQRT_2],
+    };
+    let depressions = Depressions {
+        label: Grid::filled(2, 2, 0),
+        spill: Vec::new(),
+    };
+    let start = Grid::from_vec(2, 2, vec![0.0, 10.0, 20.0, 200.0]).unwrap();
+    let traps = Traps::new(&depressions, start.as_slice(), start.as_slice(), CELL_AREA);
+    let step = Incision {
+        weights: &weights,
+        stack: &[0, 1, 2, 3],
+        fixed: &[false, false, true, false],
+        erodibility: &[K; 4],
+        discharge: &[4e4, 1.25e4, 1e4, 1e4],
+        m: 0.5,
+        dt: 1e5,
+    };
+    let supply = [0.0; 4];
+    let calls = Cell::new(0_u32);
+    let after = |ok: u32| {
+        let calls = &calls;
+        move || {
+            calls.set(calls.get() + 1);
+            if calls.get() > ok {
+                Err(StageError::Cancelled)
+            } else {
+                Ok(())
+            }
+        }
+    };
+    let cancelling = after(2);
+    let cancelled = deposit(&step, &dep(&traps, &supply, &cancelling), &start);
+    assert_eq!(cancelled.err(), Some(StageError::Cancelled));
+    assert_eq!(
+        calls.get(),
+        3,
+        "checked before each iteration, stopped at the third"
+    );
+    calls.set(0);
+    let free = after(u32::MAX);
+    let solution = deposit(&step, &dep(&traps, &supply, &free), &start).unwrap();
+    assert!(
+        solution.iterations > 2,
+        "{} iterations",
+        solution.iterations
+    );
+    assert_eq!(calls.get(), solution.iterations, "one check per iteration");
 }

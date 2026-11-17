@@ -70,6 +70,7 @@ use super::relax::{Relaxation, toward};
 use super::sediment::{route, step_sediment};
 use crate::grid::Grid;
 use crate::kernels::num::max;
+use crate::stage::StageError;
 use crate::stages::evolution::flow::{FlowWeights, cell_index};
 
 /// What one implicit step reads besides the starting heights. Every slice holds one entry per
@@ -158,6 +159,8 @@ pub(super) struct Deposition<'a> {
     pub tolerance: f64,
     /// The most iterations.
     pub max_iterations: u32,
+    /// The cancel point, called at the start of every iteration.
+    pub cancel: &'a dyn Fn() -> Result<(), StageError>,
 }
 
 /// The result of the Gauss–Seidel iterations.
@@ -199,7 +202,15 @@ impl Solution {
 ///    moves the heights toward the sweep's by Aitken's relaxation factor ([`Relaxation`]), and
 ///    the start and each depression's held volume by the same factor ([`toward`]), and iterates
 ///    again.
-pub(super) fn deposit(step: &Incision<'_>, dep: &Deposition<'_>, h_star: &Grid<f64>) -> Solution {
+///
+/// # Errors
+/// What `dep.cancel` returns, checked before each iteration ([`StageError::Cancelled`]); nothing
+/// of the iterate escapes.
+pub(super) fn deposit(
+    step: &Incision<'_>,
+    dep: &Deposition<'_>,
+    h_star: &Grid<f64>,
+) -> Result<Solution, StageError> {
     let before = h_star.as_slice();
     let (cells, traps) = (before.len(), dep.traps);
     let lake: Vec<bool> = (0..cells).map(|i| traps.holds(i)).collect();
@@ -225,6 +236,7 @@ pub(super) fn deposit(step: &Incision<'_>, dep: &Deposition<'_>, h_star: &Grid<f
     let (mut iterations, mut residual) = (0, f64::INFINITY);
     let mut relaxation = Relaxation::new(dep.tolerance, dep.max_iterations);
     while iterations < dep.max_iterations {
+        (dep.cancel)()?;
         iterations += 1;
         // Step 1: route the iterate's sediment and fill the depressions.
         step_sediment(
@@ -281,11 +293,11 @@ pub(super) fn deposit(step: &Incision<'_>, dep: &Deposition<'_>, h_star: &Grid<f
             break;
         }
     }
-    Solution {
+    Ok(Solution {
         height,
         start,
         iterations,
         residual,
         past_half: iterations > half,
-    }
+    })
 }

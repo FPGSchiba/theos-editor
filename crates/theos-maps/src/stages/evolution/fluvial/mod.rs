@@ -310,8 +310,9 @@ fn with_deposition(
         supply: supply_m3,
         tolerance: tolerance(ctx.f64_opt("uplift")?, step.dt),
         max_iterations: params.max_iterations,
+        cancel: &|| ctx.check_cancel(),
     };
-    let solution = deposit(step, &dep, start);
+    let solution = deposit(step, &dep, start)?;
     let converged = solution.converged(dep.tolerance);
     let Solution {
         mut height,

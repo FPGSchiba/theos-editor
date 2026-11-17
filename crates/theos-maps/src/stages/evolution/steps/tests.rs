@@ -38,7 +38,7 @@ fn progress_is_reported_every_ten_steps() {
 }
 
 #[test]
-fn cancel_is_checked_every_step() {
+fn cancel_is_checked_every_step_and_before_each_process() {
     let cancel = CancelToken::new();
     let token = cancel.clone();
     let mut world = grid_world();
@@ -70,8 +70,8 @@ fn cancel_is_checked_every_step() {
     assert_eq!(steps_seen, [0, 10]);
     assert_eq!(
         logged(&world),
-        (0..=10).collect::<Vec<u32>>(),
-        "cancelled at step 10's progress event, stopped before step 11"
+        (0..10).collect::<Vec<u32>>(),
+        "cancelled at step 10's progress event, stopped before step 10's process ran"
     );
 
     let cancelled = CancelToken::new();
