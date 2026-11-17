@@ -2,4 +2,5 @@
 
 mod api;
 mod recipes;
+mod resolution;
 mod support;
