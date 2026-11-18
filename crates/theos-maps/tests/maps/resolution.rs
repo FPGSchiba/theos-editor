@@ -1,32 +1,32 @@
 //! Physics test 13 (spec §5.14), resolution independence: each pair is one recipe on 192² cells
 //! of 125 m and on 384² cells of 62.5 m over the same 24 km.
 //! - `hearth-192` and `hearth-384` are `hearth-valley`.
-//! - `basin-192` and `basin-384` hold a closed basin, so that lakes are present at both sizes:
-//!   hearth-valley's lakes are few (most seeds have none at either size), and its lake check
-//!   alone would rest on pairs of zeros. The basin is a sag basin that sinks faster than sediment
-//!   can fill it, under a dry climate, so its lake is terminal and the water balance sets its
-//!   area. Every run of this pair must hold a lake.
+//! - `basin-192` and `basin-384` hold a closed basin, so that lakes are present at both sizes.
+//!   The basin is a sag basin that sinks faster than sediment can fill it, under a dry climate,
+//!   so its lake is terminal and the water balance sets its area. Every run of this pair must
+//!   hold a lake.
 //!
 //! The noise draws its coefficients per wavenumber of the map (spec §5.8), so a seed gives the
-//! same landscape at both sizes and the test compares each seed with itself. For every pair and
-//! metric it takes the ratio of the 192² value to the 384² value (the recipes' own size) per
-//! seed, and the median of the ratios over seeds 1–4 must lie within the metric's tolerance of 1.
-//! Two zeros agree (ratio 1); a zero at 384² against a value at 192² is an infinite ratio.
+//! same landscape at both sizes and the test compares each seed with itself. For every metric it
+//! takes the ratio of the 192² value to the 384² value (the recipes' own size) per seed, and the
+//! median of the ratios over seeds 1–4 must lie within the metric's tolerance of 1. Two zeros
+//! agree (ratio 1); a zero at 384² against a value at 192² is an infinite ratio.
 //!
-//! What the test shows, and what it does not:
-//! - **The hearth pair** (`hearth-valley` itself, 240 steps) now has no lake of at least
-//!   0.25 km² at either size on seeds 1–4, so its lake metric is four pairs of zeros. It carries
-//!   the relief and river metrics for the real recipe.
-//! - **The basin pair carries the lake check.** It is a synthetic closed basin run for 10 steps
-//!   of 2.5e4 yr, with a dry climate and a sag of 4e-3 m/yr at its centre. Its lakes are
-//!   terminal and small (3–6 % of the map).
+//! **Each pair is asserted on what it resolves (Jann's decision of 18 Nov 2026).** Every metric
+//! of both pairs is computed and reported in the failure message, but only these are asserted:
+//! - **The hearth pair** (`hearth-valley` itself, 240 steps): relief and river length through
+//!   lakes. It has no lake of at least 0.25 km² at either size on most seeds (pairs of zeros;
+//!   seed 2 has a small one at 192² only), so its lake share cannot be compared.
+//! - **The basin pair** (a synthetic closed basin, 10 steps of 2.5e4 yr, a dry climate and a sag
+//!   of 4e-3 m/yr at its centre; its lakes are terminal and small, 3–6 % of the map): relief and
+//!   lake share. Its rivers are 0.007–0.044 km/km², a few channel cells, which the two sizes do
+//!   not resolve alike, so its river length cannot be compared.
 //! - **Its run length matters.** At 40 steps (same sag rate, so four times the total sag),
 //!   measured after Task 43e's fix on seeds 1–4, the medians of the ratios are relief 0.798
-//!   (fails the 15 % tolerance), lake share 1.107 and rivers 1.068. The lake share and the
-//!   rivers still pass, but the relief of the two sizes drifts apart as the basin deepens, so
-//!   the test shows resolution independence for 10 steps of this basin, not for a long run.
-//!   The pair's fixtures are tuned to the current model (the equality of the pair's files is
-//!   checked in `fixture_pairs.rs`).
+//!   (fails the 15 % tolerance), lake share 1.107 and rivers 1.068. The relief of the two sizes
+//!   drifts apart as the basin deepens, so the test shows resolution independence for 10 steps
+//!   of this basin, not for a long run. The pair's fixtures are tuned to the current model (the
+//!   equality of the pair's files is checked in `fixture_pairs.rs`).
 //!
 //! The metrics count what both grids resolve:
 //! - **relief** (15 %): `elevation_m.relief` of the summary;
@@ -62,6 +62,9 @@ struct Pair {
     coarse: &'static str,
     /// The recipe on 384² cells of 62.5 m.
     fine: &'static str,
+    /// The metrics this pair resolves at both sizes: only these are asserted, the others are
+    /// reported in the failure message.
+    checked: [&'static str; 2],
     /// Whether every run must hold a lake body of at least [`LAKE_MIN_M2`].
     lakes: bool,
 }
@@ -71,14 +74,22 @@ const PAIRS: [Pair; 2] = [
     Pair {
         coarse: "hearth-192",
         fine: "hearth-384",
+        checked: [RELIEF, RIVERS],
         lakes: false,
     },
     Pair {
         coarse: "basin-192",
         fine: "basin-384",
+        checked: [RELIEF, LAKES],
         lakes: true,
     },
 ];
+/// The name of the relief metric.
+const RELIEF: &str = "relief (m)";
+/// The name of the lake share metric.
+const LAKES: &str = "lake share over 0.25 km² (%)";
+/// The name of the river length metric.
+const RIVERS: &str = "river length through lakes (km/km²)";
 /// The smallest lake body the lake share counts, m²: 0.25 km².
 const LAKE_MIN_M2: f64 = 250_000.0;
 /// The class of a lake cell in the layer `water`.
@@ -104,17 +115,17 @@ struct Metric {
 
 const METRICS: [Metric; 3] = [
     Metric {
-        name: "relief (m)",
+        name: RELIEF,
         of: |l| l.relief_m,
         tolerance: 0.15,
     },
     Metric {
-        name: "lake share over 0.25 km² (%)",
+        name: LAKES,
         of: |l| l.lake_pct,
         tolerance: 0.15,
     },
     Metric {
-        name: "river length through lakes (km/km²)",
+        name: RIVERS,
         of: |l| l.river_km_per_km2,
         tolerance: 0.25,
     },
@@ -293,8 +304,8 @@ fn landscapes() -> Result<Vec<Runs>, Error> {
     })
 }
 
-/// Compares the runs of `pair` metric by metric, writing the numbers to `table` and every
-/// failure to `failures`.
+/// Compares the runs of `pair` metric by metric, writing the numbers of every metric to `table`
+/// and the failures of its checked metrics to `failures`.
 fn compare(
     pair: &Pair,
     runs: &Runs,
@@ -320,7 +331,7 @@ fn compare(
             "  median of the ratios {paired:.3} (tolerance {}); ratio of the medians {of_medians:.3}",
             metric.tolerance
         )?;
-        if (paired - 1.0).abs() > metric.tolerance {
+        if pair.checked.contains(&metric.name) && (paired - 1.0).abs() > metric.tolerance {
             failures.push(format!("{}: {}", pair.coarse, metric.name));
         }
     }

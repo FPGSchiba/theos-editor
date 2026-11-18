@@ -2831,11 +2831,17 @@ cargo run -p theos-maps --release --example run -- <recipe>… --seeds 1..8 --ou
   - river length per km² through lakes: every cell whose `discharge` exceeds `river_q`, lake cells
     included, each with its D8 step to its receiver, tolerance 25 %.
 
+  Each pair is asserted on what it resolves (Jann, 18 Nov 2026): the hearth pair on relief and
+  river length, the basin pair on relief and lake share. All six metrics are computed and
+  reported in the failure message. The basin pair's rivers (0.007–0.044 km/km²) and the hearth
+  pair's lakes (0 against 0 on most seeds) are not resolved well enough at both sizes to be
+  compared.
+
   For every pair and metric, take the ratio 192² / 384² per seed (two zeros agree) and require the
   **median of the per-seed ratios** within the tolerance. The noise draws its coefficients per
   wavenumber of the map, so a seed gives one landscape at both sizes. Every basin run must also
-  hold a lake body of at least 0.25 km². The hearth pair has no lakes at either size, so the basin
-  pair carries the lake check. Fast tests in `fixture_pairs.rs` keep the hearth pair equal to
+  hold a lake body of at least 0.25 km². The hearth pair has no lakes at either size on most seeds,
+  so the basin pair carries the lake check. Fast tests in `fixture_pairs.rs` keep the hearth pair equal to
   `recipes/hearth-valley.toml` and the basin pair equal to each other, apart from `id`, `title`
   and `grid`.
 - [ ] **Step 2: Run.** Expected: FAIL, or PASS if the stages are already right. A pass here
