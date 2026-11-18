@@ -20,6 +20,7 @@ mod declaration;
 mod flow;
 mod fluvial;
 mod hillslope;
+mod hillslope_order;
 mod initial;
 mod partition_flow;
 mod processes;

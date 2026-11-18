@@ -308,3 +308,43 @@ fn a_file_that_is_not_toml_hides_the_built_in_of_its_name() -> TestResult {
     assert!(!called);
     Ok(())
 }
+
+/// A recipe whose `landscape_evolution` runs the `processes` (ids, in order) on a 64² grid.
+fn evolution_recipe(id: &str, processes: &[&str]) -> String {
+    let mut rest =
+        format!("{TECTONICS_FIRST}\n[[stage]]\nid = \"landscape_evolution\"\nsteps = 2\n");
+    for process in processes {
+        let extra = if *process == "fluvial" {
+            "g = 1.0\n"
+        } else {
+            ""
+        };
+        rest.push_str(&format!("[[stage.process]]\nid = \"{process}\"\n{extra}"));
+    }
+    recipe_text(id, id, &rest)
+}
+
+/// The stages before the evolution: grid, then tectonics.
+const TECTONICS_FIRST: &str = "\n[[stage]]\nid = \"grid\"\nedges = [\"south\"]\n\
+                               \n[[stage]]\nid = \"tectonics\"\n";
+
+// AC: CE-28.3
+#[test]
+fn a_hillslope_after_the_routing_fails_before_any_stage_runs() -> TestResult {
+    for order in [
+        ["uplift", "route_steepest", "hillslope"],
+        ["uplift", "fluvial", "hillslope"],
+    ] {
+        let text = evolution_recipe("old-order", &order);
+        let dir = folder_with("old-order.toml", &text)?;
+        let (stage, parameter, message) = invalid(run_from(&request("old-order", 1), dir.path())?)?;
+        assert_eq!(stage.as_deref(), Some("landscape_evolution"), "{order:?}");
+        assert_eq!(
+            parameter.as_deref(),
+            Some("process[2]"),
+            "{order:?}: {message}"
+        );
+        assert!(message.contains("`hillslope`"), "{message}");
+    }
+    Ok(())
+}

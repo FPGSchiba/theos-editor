@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::hillslope_order;
 use super::processes::PlannedProcess;
 use super::{Evolution, initial};
 use crate::stage::{LayerSpec, ParamError, Registry, Stage, TypedStage};
@@ -73,6 +74,7 @@ struct First {
 }
 
 /// Checks the process list before the run:
+/// - `hillslope` is not after `fluvial` or a routing process ([`hillslope_order::check`]);
 /// - every process's required reads are `available` before the stage, written by the initial
 ///   surface or written by an earlier process;
 /// - every layer is declared as one kind throughout: a process that reads or writes a layer as
@@ -86,6 +88,7 @@ pub(super) fn check_order(
     planned: &[PlannedProcess],
     available: &BTreeSet<&str>,
 ) -> Result<(), ParamError> {
+    hillslope_order::check(planned)?;
     let initial = |access: &str, spec: &LayerSpec| {
         let by = format!("the initial surface {access}");
         (
