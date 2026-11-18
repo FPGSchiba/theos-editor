@@ -179,7 +179,8 @@ What later phases build on it:
   wavenumber (§5.7), and test 13 compares seeds in pairs on what both grids resolve. The minimum
   lake area defaults to an area, not a cell count (§5.9). `hillslope` runs before the routing,
   because after `fluvial` it dammed the channels and made most lakes (Jann). Physics test 14
-  compares both flow partitions on their own networks (Jann). Rulings 57–59.
+  compares both flow partitions on their own networks (Jann). A basin nested in a lake fills with
+  the lake. Rulings 57–60.
 
 ### 4.2 Research (10 Nov 2026)
 
@@ -671,7 +672,7 @@ design. GPL code is never read.
 | `landscape_evolution` | the union of its processes → `height`, `erosion`, `deposition`, `receivers`, `drainage_area` | Initial surface from spectral noise, then `steps` time steps of its process list (below) | – |
 | ↳ `uplift` | `height`, `uplift`, `sag_rate`, `fixed` → `height` | height += (uplift − sag_rate)·dt; drained edges stay at base level | – |
 | ↳ `route_steepest` | `height`, `fixed` → `receivers` | Steepest-descent receiver per cell (D8 distances), ties by index | Braun & Willett 2013 |
-| ↳ `resolve_sinks` | `height`, `receivers`, `fixed` → `receivers`, `routing_surface`, `depressions` | Connects each closed basin through its lowest pass by the minimum spanning tree of basins; `routing_surface` lifts depression cells to their spill level + ε along the priority-flood order, `height` itself unchanged; `depressions` labels routed depressions with their spill node | MST of basins: Cordonnier, Bovy & Braun 2019; the ε lift: Barnes et al. 2014 |
+| ↳ `resolve_sinks` | `height`, `receivers`, `fixed` → `receivers`, `routing_surface`, `depressions` | Connects each closed basin through its lowest pass by the minimum spanning tree of basins; `routing_surface` lifts depression cells to their spill level + ε along the priority-flood order, `height` itself unchanged; `depressions` labels routed depressions with their spill node. A basin whose pass lies below the level of the depression it spills into belongs to that depression, so a lake fills as one up to its own spill (found in the build, 17 Nov 2026) | MST of basins: Cordonnier, Bovy & Braun 2019; the ε lift: Barnes et al. 2014 |
 | ↳ `partition_flow` | `routing_surface`, `receivers` → `weights`, `stack` | Weights over the lower neighbours of the routing surface for erosion: `exponent = "steepest"` (all to the receiver) or `"slope_adaptive"`, p = 0.5 + 0.6·S with S the steepest slope (FastScape's slope-dependent partition; that S is the steepest slope is this spec's reading). A fresh topological order (`stack`, receivers before donors) of the resulting graph | FastScape documentation; Freeman 1991 |
 | ↳ `fluvial` | `height`, `erodibility`, `receivers`, `weights`, `stack`, `depressions`, `fixed`, `climate`, [`uplift`], [`slope_supply`] → `height`, `erosion`, `deposition`, `drainage_area`, [`slope_supply`] | The erosion–deposition law with n = 1 (below), solved implicitly in stack order with Gauss–Seidel iterations; sediment filling routed depressions; cumulative erosion and deposition | Yuan et al. 2019 (eq. 9, 11, 13–21), after Davy & Lague 2009; Braun & Willett 2013. Multiple flow with deposition as in FastScape's documentation (Yuan et al. solve single flow); the depression filling after goSPL's documentation, combined with the MST resolver as our own step |
 | ↳ `hillslope` | `height`, `diffusivity`, `fixed` → `height`, `erosion`, `deposition` | Linear diffusion, implicit ADI (Thomas algorithm per row and column), before the routing, so each step ends on the surface `fluvial` cut (after `fluvial` it dammed one-cell channels by an amount that grew as cells shrank; found in the build, 17 Nov 2026); per cell, a net loss books as erosion and a net gain as deposition | – |
@@ -1417,6 +1418,12 @@ Rulings of 13 Nov 2026, from the build:
     on each run's own network — with `steepest` the G > 0 run kept the G = 0 network on only one
     of 32 landscapes, so the test rested on a hand-picked seed; the slopes held on all 32 —
     cost if wrong: the test no longer shows that the network stays.
+60. Ruling: a basin whose pass lies below the level of the lake it spills into is part of that
+    lake's depression, with no spill node of its own — kept as a depression of its own it filled
+    only to its pass, the lake's room above stayed empty, its cells were cut as dry floor and the
+    lake let sediment go while it still had room; closed basins sank below base level, more on
+    finer grids (26.6 % of a 384² test map against 0.3 % at 192², 0 % at both after the change)
+    — cost if wrong: none known; the volume balance is unchanged.
 
 ## 10. Left to the builder
 
