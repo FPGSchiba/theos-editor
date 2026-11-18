@@ -11,6 +11,7 @@ use super::{CELL_AREA, layer, no_fields, recipe};
 use crate::grid::Grid;
 use crate::kernels::num::{max, to_f64};
 use crate::stage::{Finding, StageReport};
+use crate::stages::evolution::flow::cell_index;
 use crate::stages::evolution::resolve_sinks::Depressions;
 use crate::stages::evolution::test_support::{evolve, processes};
 use crate::stages::terrain::grid::GridStage;
@@ -347,4 +348,104 @@ fn g_zero_ignores_depressions_bit_for_bit() {
     let (with, without) = (step(false), step(true));
     assert_eq!(with, without);
     assert!(with.1.iter().any(|&e| e != 0), "the slope erodes");
+}
+
+/// Rows of [`merged_lakes`].
+const MERGED_ROWS: usize = 7;
+
+/// Columns of [`merged_lakes`].
+const MERGED_COLS: usize = 5;
+
+/// A 7 x 5 world of 100 m cells whose south edge drains, at 100 m but for two basins: lake A
+/// (pit at (4,1), 10 m) spills at 50 m over (5,1) to the outlet, and pit C ((1,2), 10 m) drains
+/// over its pass cell (2,2), at 30 m, into A at (3,1), 20 m. C's pass lies below A's level, so C
+/// joins A's lake. The sag and uplift are zero, K is 0, and a thick slope supply on the rim cells
+/// beside each pit fills both.
+fn merged_lakes() -> World {
+    let at = |r: usize, c: usize| r * MERGED_COLS + c;
+    let mut height = vec![100.0; MERGED_ROWS * MERGED_COLS];
+    for (r, c, h) in [
+        (4, 1, 10.0),
+        (5, 1, 50.0),
+        (3, 1, 20.0),
+        (1, 2, 10.0),
+        (2, 2, 30.0),
+    ] {
+        height[at(r, c)] = h;
+    }
+    let mut w = world(MERGED_ROWS, MERGED_COLS);
+    run_stage(&mut w, &GridStage, r#"edges = ["south"]"#).unwrap();
+    let fixed = w.mask("fixed").unwrap().as_slice().to_vec();
+    for (h, &f) in height.iter_mut().zip(&fixed) {
+        if f {
+            *h = 0.0;
+        }
+    }
+    let grid = |data: Vec<f64>| Layer::F64(Grid::from_vec(MERGED_ROWS, MERGED_COLS, data).unwrap());
+    let zeros = || vec![0.0; MERGED_ROWS * MERGED_COLS];
+    let mut supply = zeros();
+    for (r, c) in [(0, 2), (2, 1), (3, 2)] {
+        supply[at(r, c)] = 100.0;
+    }
+    w.insert("height", grid(height)).unwrap();
+    w.insert("uplift", grid(zeros())).unwrap();
+    w.insert("sag_rate", grid(zeros())).unwrap();
+    w.insert("erodibility", grid(zeros())).unwrap();
+    w.insert("erosion", grid(zeros())).unwrap();
+    w.insert("deposition", grid(zeros())).unwrap();
+    w.insert("slope_supply", grid(supply)).unwrap();
+    w.insert("climate", Layer::Value(Box::new(no_fields())))
+        .unwrap();
+    w
+}
+
+/// A basin that spills into a lake standing above its pass joins that lake, and a full fill
+/// leaves no pit: its pass cell `a` lies strictly above the lake's cell `b` it drains into (Task
+/// 43e fix round 1). `a` started exactly at `b`'s level and sorted ahead of `b` and its
+/// neighbours by index, so after the fill it stood about 1e-6 m below all eight neighbours and
+/// was its own receiver in the next routing.
+#[test]
+fn a_basin_merged_into_a_full_lake_leaves_no_pit() {
+    let mut w = merged_lakes();
+    let report = evolve(
+        &mut w,
+        &processes(&routed("steepest", "g = 1.0")),
+        1,
+        2.5e4,
+        1,
+    )
+    .unwrap();
+    assert!(report.findings.is_empty(), "{:?}", report.findings);
+    let label = w.value::<Depressions>("depressions").unwrap().label.clone();
+    let lake = |r: usize, c: usize| label.as_slice()[r * MERGED_COLS + c];
+    assert!(
+        lake(2, 2) > 0 && lake(2, 2) == lake(4, 1),
+        "C joins lake A: {label:?}"
+    );
+    let h = layer(&w, "height");
+    assert!(h[2 * MERGED_COLS + 2] > 50.0, "the lake is full");
+    evolve(
+        &mut w,
+        &processes("[[process]]\nid = \"route_steepest\""),
+        1,
+        2.5e4,
+        1,
+    )
+    .unwrap();
+    let rec = w.u32("receivers").unwrap().as_slice().to_vec();
+    // The lake's spill cell is the one legitimate pit: `resolve_sinks` routes it over its pass.
+    let spill: Vec<usize> = w
+        .value::<Depressions>("depressions")
+        .unwrap()
+        .spill
+        .iter()
+        .map(|s| cell_index(s.cell))
+        .collect();
+    let cells: Vec<usize> = (0..label.as_slice().len())
+        .filter(|&i| label.as_slice()[i] > 0 && !spill.contains(&i))
+        .collect();
+    assert!(cells.len() >= 3, "the lakes hold cells: {cells:?}");
+    for i in cells {
+        assert!(cell_index(rec[i]) != i, "filled cell {i} is a pit");
+    }
 }

@@ -13,11 +13,13 @@
 //!    pass from its cell `a` to the cell `b` of its parent, at the pass height `L` (`tree`).
 //! 5. **Depressions:** from the root outwards, each closed basin is lifted on the
 //!    `routing_surface` by a priority flood with ε = 1e-6 from `a`; the lifted cells form a
-//!    depression with `SpillPoint { cell: a, to: b, level: L }`. `height` is unchanged (`lift`).
+//!    depression with `SpillPoint { cell: a, to: b, level: L }`. When the flood starts above `L`
+//!    (the lake of `b` stands higher), the basin joins the lake of `b` instead and adds no spill
+//!    point. `height` is unchanged (`lift`).
 //! 6. **Receivers again:** steepest descent on the routing surface, and each `a` receives `b`.
 //!
-//! Two details keep every route open. A basin whose `b` lies in a lifted depression starts at
-//! `b`'s routing level, not below it (a pit nested in a lake drains at the lake's level). And
+//! Two details keep every route open. A basin whose `b` lies in a lifted depression starts one ε
+//! above `b`'s routing level, not below it (a pit nested in a lake drains at the lake's level). And
 //! a cell just above the spill level next to the lifted cells is lifted too, so it keeps a lower
 //! neighbour. Then every receiver lies lower on the routing surface than its cell, except over
 //! a pass, where `b` is not higher than `a`; so every chain ends at an outlet without a cycle.

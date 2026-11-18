@@ -6,7 +6,6 @@ use super::depressions::{Depressions, SpillPoint};
 use super::tree::Link;
 use crate::grid::Grid;
 use crate::kernels::flood::priority_flood_where;
-use crate::kernels::num::max;
 use crate::stages::evolution::flow::{cell_index, cell_u32};
 
 /// The rise per flood step on the routing surface, in metres.
@@ -16,8 +15,8 @@ const EPSILON: f64 = 1e-6;
 /// (parents first).
 ///
 /// Each closed basin is flooded from its pass cell `a`, which starts at the pass level `L`, or
-/// at the routing level of `b` when that is higher (a basin spilling into a lake lifted above
-/// `L`). The flood enters only the basin's own cells that it raises, each to the level it was
+/// at one ε above the routing level of `b` when that is higher (a basin spilling into a lake
+/// lifted above `L`). The flood enters only the basin's own cells that it raises, each to the level it was
 /// entered from + ε: the basin's cells below the level that connect to its pit, and any cell
 /// just above it next to them, which keeps a way down. The raised cells (with `a` when it is
 /// raised) form the basin's depression, with its spill point over the pass at `L`. A basin that
@@ -35,7 +34,15 @@ pub(super) fn lift(
     let mut label = Grid::filled(height.rows(), height.cols(), 0_u32);
     let mut spill = Vec::new();
     for link in links {
-        let start = max(link.level, surface.as_slice()[link.b]);
+        // Over a lake of `b` standing above the pass, `a` starts one ε above `b`: level with `b`
+        // it would sort ahead of `b` and its neighbours by index, and a full fill would leave it
+        // a pit.
+        let above = surface.as_slice()[link.b];
+        let start = if above > link.level {
+            above + EPSILON
+        } else {
+            link.level
+        };
         surface.as_mut_slice()[link.a] = start;
         let raises = |j: usize, level: f64| basins.of[j] == link.basin && h[j] < level + EPSILON;
         let order = priority_flood_where(&mut surface, &mut visited, &[link.a], EPSILON, raises);

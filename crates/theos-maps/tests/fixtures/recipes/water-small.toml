@@ -3,6 +3,13 @@
 # river. It exists for the features output (CE-28.6). The basin, a quarter of the map's side in
 # radius at its centre, sinks 12 km over the 6 Myr sag duration (2e-3 m/yr, 50 m per step at its
 # centre), faster than the rivers fill it, and seed 1's lake lies in it.
+# What the retune produces (Task 43e fix round 1), so that a later retune knows what it can move:
+#   seed 1: the lake covers 33.5 % of the map, its floor lies at -29 m, and 74 % of the map lies
+#           below the drained edge's 0 m;
+#   seeds 2 and 4: lakes of 76.1 % and 71.8 % of the map;
+#   seed 3: no lake.
+# The fixture sits near a threshold: the basin drowns most of the map, and a small change in
+# depth, radius or position can drop seed 1's lake (as seed 3's is gone).
 id      = "water-small"
 title   = "Lakes, rivers and roads, 64 squared"
 kind    = "terrain"
