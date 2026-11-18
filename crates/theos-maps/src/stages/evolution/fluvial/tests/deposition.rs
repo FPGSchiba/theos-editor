@@ -802,6 +802,11 @@ fn slope_adaptive_steady_state_is_one_plus_g(seed: u64) {
 ///   still demands a steady state beyond the oscillation's reach: over the last 50 steps no
 ///   channel cell with a drainage area above 22 cells changes by Yuan's tolerance `10⁻³·U·Δt`
 ///   or more in a step. The 2 % law checks cover every channel cell (above 10 cells).
+///
+///   This leg rests on seed 1. Its wobble check does not hold on every landscape: on seed 7
+///   the same run still changes a channel cell over 22 cells by 0.845 m in a step, against the
+///   0.25 m bound (found in the review of Task 43d). The seed is natural, not picked to pass,
+///   but the leg proves the law for one landscape, not for the partition on all of them.
 #[test]
 fn deposition_steepens_steady_state_by_one_plus_g() {
     // A natural seed, not one picked for the test.

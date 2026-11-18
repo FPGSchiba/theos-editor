@@ -13,6 +13,21 @@
 //! seed, and the median of the ratios over seeds 1–4 must lie within the metric's tolerance of 1.
 //! Two zeros agree (ratio 1); a zero at 384² against a value at 192² is an infinite ratio.
 //!
+//! What the test shows, and what it does not:
+//! - **The hearth pair** (`hearth-valley` itself, 240 steps) now has no lake of at least
+//!   0.25 km² at either size on seeds 1–4, so its lake metric is four pairs of zeros. It carries
+//!   the relief and river metrics for the real recipe.
+//! - **The basin pair carries the lake check.** It is a synthetic closed basin run for 10 steps
+//!   of 2.5e4 yr, with a dry climate and a sag of 4e-3 m/yr at its centre. Its lakes are
+//!   terminal and small (3–6 % of the map).
+//! - **Its run length matters.** At 40 steps (same sag rate, so four times the total sag),
+//!   measured after Task 43e's fix on seeds 1–4, the medians of the ratios are relief 0.798
+//!   (fails the 15 % tolerance), lake share 1.107 and rivers 1.068. The lake share and the
+//!   rivers still pass, but the relief of the two sizes drifts apart as the basin deepens, so
+//!   the test shows resolution independence for 10 steps of this basin, not for a long run.
+//!   The pair's fixtures are tuned to the current model (the equality of the pair's files is
+//!   checked in `fixture_pairs.rs`).
+//!
 //! The metrics count what both grids resolve:
 //! - **relief** (15 %): `elevation_m.relief` of the summary;
 //! - **lake share over lakes of at least 0.25 km²** (15 %): the share of the map covered by
