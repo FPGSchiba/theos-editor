@@ -180,7 +180,8 @@ What later phases build on it:
   lake area defaults to an area, not a cell count (§5.9). `hillslope` runs before the routing,
   because after `fluvial` it dammed the channels and made most lakes (Jann). Physics test 14
   compares both flow partitions on their own networks (Jann). A basin nested in a lake fills with
-  the lake. Rulings 57–60.
+  the lake. On 18 Nov Jann decided that test 13 checks each recipe pair on what both grids
+  resolve in it. Rulings 57–61.
 
 ### 4.2 Research (10 Nov 2026)
 
@@ -998,12 +999,13 @@ pub fn run(request: &RunRequest, recipe_dirs: &[PathBuf], out_dir: &Path,
     expected cell.
 12. **Roads:** no road step exceeds `max_grade` except bridge edges; bridges span the water in
     one edge.
-13. **Resolution independence:** the same recipe at 192² and 384², seed by seed over seeds 1–4 (a
-    seed gives the same landscape at both sizes, §5.7), gives median relief within 15 %, median
-    lake share over lakes of at least 0.25 km² within 15 %, and median river length per km²,
-    counted through lakes (not river cell share, which halves with the cell size), within 25 %.
-    A recipe with a closed basin is compared the same way, so that lakes are present at both
-    sizes.
+13. **Resolution independence:** two recipes at 192² and 384², seed by seed over seeds 1–4 (a
+    seed gives the same landscape at both sizes, §5.7), compared by the median of the per-seed
+    ratios. Each recipe is checked on what both grids resolve in it (Jann, 18 Nov 2026):
+    - a hearth-valley copy: relief within 15 % and river length per km², counted through lakes
+      (not river cell share, which halves with the cell size), within 25 %;
+    - a recipe with a closed basin, so that lakes are present at both sizes: relief within 15 %
+      and lake share over lakes of at least 0.25 km² within 15 %.
 14. **Steady state with deposition:** with uniform U, K and runoff, n = 1 and no hillslope
     processes, the steady-state slope at G > 0 is (1 + G) times the slope at G = 0 within 2 %, and
     so is the relief (Yuan et al. 2019, eq. 24 and 28). Run with both flow partitions. A G > 0
@@ -1424,6 +1426,11 @@ Rulings of 13 Nov 2026, from the build:
     lake let sediment go while it still had room; closed basins sank below base level, more on
     finer grids (26.6 % of a 384² test map against 0.3 % at 192², 0 % at both after the change)
     — cost if wrong: none known; the volume balance is unchanged.
+61. Ruling (Jann): physics test 13 checks each recipe pair on what both grids resolve in it —
+    relief and rivers on the hearth-valley copies, relief and lakes on the closed basin — the
+    hearth copies hold no lakes at either size since ruling 58, and the dry basin's rivers
+    (0.007–0.044 km/km²) are a few channel cells whose ratio flipped from 0.92 to 0.72 with a
+    1e-6 m change — cost if wrong: river and lake independence each rest on one recipe.
 
 ## 10. Left to the builder
 
