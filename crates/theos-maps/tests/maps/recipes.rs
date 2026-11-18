@@ -1,6 +1,7 @@
 //! The built-in recipes, `describe` and the refusals of a recipe before any stage runs
 //! (spec §5.5, CE-28.1, CE-28.3, CE-28.7).
 
+use std::fmt::Write as _;
 use std::path::Path;
 
 use theos_maps::recipe::{self, RecipeError};
@@ -319,7 +320,7 @@ fn evolution_recipe(id: &str, processes: &[&str]) -> String {
         } else {
             ""
         };
-        rest.push_str(&format!("[[stage.process]]\nid = \"{process}\"\n{extra}"));
+        let _ = write!(rest, "[[stage.process]]\nid = \"{process}\"\n{extra}");
     }
     recipe_text(id, id, &rest)
 }
