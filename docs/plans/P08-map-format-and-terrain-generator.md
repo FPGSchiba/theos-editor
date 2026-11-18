@@ -1686,6 +1686,13 @@ pub(crate) fn evolve(world: &mut World, processes: &[PlannedProcess], steps: u32
 - **`check_order(available)`:** each process's reads must be in `available`, in the initial
   writes or in an earlier process's writes. A failure names `landscape_evolution`, the process and
   the layer.
+- **The order of a time step** (spec §5.3, ruling 58; Task 43d): the recipes list
+  `uplift → hillslope → route_steepest → resolve_sinks → partition_flow → fluvial → slope_limit →
+  climate_update`, so each step ends on the surface `fluvial` cut. `check_order` also refuses a
+  `hillslope` that comes after `fluvial` or after a routing process (`route_steepest`,
+  `resolve_sinks`, `partition_flow`), at `process[<i>]` of the `hillslope`, naming `hillslope`,
+  the process before it and the rule. It lives in one module, `hillslope_order.rs`. Lists without
+  `hillslope` stay valid.
 - **Initial surface** (port 0.3.0): `relief · noise(β = 3.0) + relief + uniform`, with the noise
   and uniform from `sub_rng("z0")`, and `fixed` cells at 0.
 - **Loop**, for `step in 0..steps`:
@@ -1752,9 +1759,14 @@ and `fixed`, and writes `receivers`, `routing_surface` and `depressions`:
    max cell)`.
 4. **Tree:** run `kruskal` over the basins, then orient the tree to the root. For each non-root
    basin `B`, the pass to its parent is `(a ∈ B, b ∈ parent)` at level `L`.
-5. **Depressions:**
+5. **Depressions** (a depression is one lake, nested pits included; Task 43e):
    - `B`'s cells with `h < L` that are connected (D8) to its pit form depression `n`, with
      `SpillPoint { cell: a, to: b, level: L }`;
+   - nested-pit rule: when `B`'s flood starts above its pass (the lake `B` spills into stands
+     above `L`, so `B` lies in a lifted lake), `B`'s raised cells take the label of that lake and
+     add no spill point. A depression has one spill point, its outlet pass, at whose level its
+     routing surface stands, and `fluvial` fills it as one body up to that level (a per-basin
+     trap at each nested pass let a lake pass sediment on while it had room);
    - `routing_surface` lifts those cells by `priority_flood` restricted to the depression, seeded
      at `a` with `ε = 1e-6`. So it equals `L + k·ε` along the flood order, and `height` is
      unchanged;
@@ -1767,7 +1779,12 @@ and `fixed`, and writes `receivers`, `routing_surface` and `depressions`:
     chain cycles.
   - `a_bowl_drains_through_its_notch`: a bowl with one notch. The depression covers the cells
     below the notch level, and every bowl cell's chain leaves through the notch.
-  - `nested_depressions_spill_in_order`.
+  - `a_pit_nested_in_a_lake_is_part_of_the_lake` (Task 43e; it replaced
+    `nested_depressions_spill_in_order`): one spill point (the lake's notch), the shallow pit
+    labelled with the deep one, its routing level the lake's, and every chain from the shallow
+    pit stays in the lake until the notch. A closed-basin mass-balance test in `fluvial`
+    (`a_pit_nested_in_a_lake_fills_with_the_lake_and_keeps_its_sediment`) keeps the sediment of
+    such a lake.
   - `routing_surface_lifts_only_depressions_and_height_is_unchanged`.
   - `flat_terrain_routes_deterministically`: two runs are identical, and every cell reaches an
     outlet.
@@ -1894,8 +1911,13 @@ on the converged heights:
 
 - [ ] **Step 1: Write the failing tests:**
   - `deposition_steepens_steady_state_by_one_plus_g` (physics test 14): uniform U, K and runoff,
-    m = 0.5, no hillslope. Compare runs with G = 0 and G = 1 until steady: the flow-weighted slope
-    on cells with A > 10 cells, and the relief, are (1 + G) times within 2 %. Both exponents.
+    m = 0.5, no hillslope. Each partition runs with G = 1 from seed 1's landscape and is compared
+    with (1 + G) times the G = 0 law on its own final flow weights (ruling 59: a G = 1 run need
+    not keep a G = 0 run's network): the flow-weighted slope of every channel cell (A > 10
+    cells) and the relief are (1 + G) times the law's within 2 %. Both exponents. `steepest`
+    runs to a full steady state; `slope_adaptive` runs 1 500 steps and also requires that
+    channels over 22 cells' area move less than 1e-3·U·Δt over the last 50 steps (its wobble
+    check fails on seed 7, so the leg rests on seed 1).
   - `mass_balance_holds_with_deposition` (physics test 4): over 50 steps,
     `Σ(h_end − h_start)·area = Σ uplift·dt·area − Σ sediment_out_m3` to 1e-9 relative. Both
     exponents.
@@ -1927,7 +1949,10 @@ climate_update.rs}`; create `src/kernels/tridiagonal.rs` (Thomas algorithm).
   then along columns, each a tridiagonal solve;
 - interface diffusivities are the arithmetic mean of neighbours;
 - fixed cells are Dirichlet; closed edges have no flux;
-- per cell, a net loss books as erosion and a net gain as deposition.
+- per cell, a net loss books as erosion and a net gain as deposition;
+- it runs after `uplift` and before the routing (`route_steepest`, `resolve_sinks`,
+  `partition_flow`) and `fluvial` of its step; the planner refuses it after any of them
+  (Task 21's `check_order`, ruling 58).
 
 **`slope_limit`** (spec §5.9 "Slope limit"):
 - reads `height`, `critical_slope`, `fixed`, `erosion`, `deposition`; writes the same three;
@@ -2778,9 +2803,10 @@ It builds the catalog, plans each recipe with empty inputs, and lists the recipe
 
 **Files:**
 - Modify: `crates/theos-maps/Cargo.toml` (dev: `clap`, `anyhow`).
-- Create: `examples/run.rs`, `tests/maps/resolution.rs`,
-  `tests/fixtures/recipes/{hearth-192.toml, hearth-384.toml}` (synthetic copies of hearth-valley at
-  both sizes; same `size_km`).
+- Create: `examples/run.rs`, `tests/maps/{resolution.rs, fixture_pairs.rs}`,
+  `tests/fixtures/recipes/{hearth-192.toml, hearth-384.toml, basin-192.toml, basin-384.toml}`
+  (synthetic: the hearth pair are copies of hearth-valley at both sizes, the basin pair is a
+  closed basin at both sizes; same `size_km` in each pair).
 
 **`examples/run.rs`:**
 
@@ -2794,11 +2820,24 @@ cargo run -p theos-maps --release --example run -- <recipe>… --seeds 1..8 --ou
 - `<out>/<recipe>/contact-sheet.png` comes from the `truth` renders;
 - errors use `anyhow`.
 
-- [ ] **Step 1: Write the failing test** `resolution_does_not_change_the_landscape` (physics test
-  13; named `slow_…` if Task 27 decided so). Seeds 1–4 at 192² and 384²:
-  - median relief and median lake share within 15 %;
-  - median river length per km² within 25 %. River length is the sum of river `LineString`
-    lengths from `features`, divided by the frame's km².
+- [ ] **Step 1: Write the failing test** `slow_resolution_does_not_change_the_landscape` (physics
+  test 13). Two pairs on seeds 1–4, each recipe at 192² cells of 125 m and 384² cells of 62.5 m
+  over the same 24 km: `hearth-192/384` (hearth-valley) and `basin-192/384` (a closed basin under
+  a dry climate; the basin sinks faster than sediment can fill it, so its lake is terminal and the
+  water balance sets its area). The metrics (O2) count what both grids resolve:
+  - relief (`elevation_m.relief`), tolerance 15 %;
+  - lake share over lake bodies of at least 0.25 km² (8-connected `water` = lake cells; 16 cells
+    at 125 m, 64 at 62.5 m), tolerance 15 %;
+  - river length per km² through lakes: every cell whose `discharge` exceeds `river_q`, lake cells
+    included, each with its D8 step to its receiver, tolerance 25 %.
+
+  For every pair and metric, take the ratio 192² / 384² per seed (two zeros agree) and require the
+  **median of the per-seed ratios** within the tolerance. The noise draws its coefficients per
+  wavenumber of the map, so a seed gives one landscape at both sizes. Every basin run must also
+  hold a lake body of at least 0.25 km². The hearth pair has no lakes at either size, so the basin
+  pair carries the lake check. Fast tests in `fixture_pairs.rs` keep the hearth pair equal to
+  `recipes/hearth-valley.toml` and the basin pair equal to each other, apart from `id`, `title`
+  and `grid`.
 - [ ] **Step 2: Run.** Expected: FAIL, or PASS if the stages are already right. A pass here
   without a code change is fine; this task's code is the example.
 - [ ] **Step 3: Implement the example.** Run it on `fixture-small` with `--seeds 1..2`.
