@@ -8,6 +8,10 @@
 //! step's sediment once more over the final heights, fill each depression with what reaches it
 //! up to its capacity, and give its cells that fill. The volume balance then closes exactly,
 //! converged or not.
+//!
+//! **The supply laid down ahead** ([`lay_down`]) gives the iterations their first iterate: one
+//! walk of the step's slope supply alone, in which every cell keeps its share of what passes
+//! through it, as the law lays it down where nothing incises.
 
 use super::fill::Traps;
 use crate::kernels::num::max;
@@ -57,7 +61,56 @@ pub(super) fn route(
     traps: &Traps,
     volume: &[f64],
     arriving: &mut [f64],
+    close: impl FnMut(usize, f64) -> f64,
+) -> f64 {
+    walk(stack, weights, traps, volume, arriving, close, |_, _| 0.0)
+}
+
+/// Lays the step's slope `supply` (m³ per cell) down along its way, onto `height`: the walk of
+/// [`route`] over the supply alone, in which every cell with an edge keeps the part `keeps[i]`
+/// of what passes through it (what reaches it plus its own supply) and passes the rest on. A
+/// routed depression keeps what reaches it up to its capacity and lets go only the excess, at its
+/// spill cell (`Traps::release`); its cells are not raised here. A cell that keeps a volume rises
+/// by it over `cell_area`; every other height keeps its bits.
+pub(super) fn lay_down(
+    stack: &[u32],
+    weights: &FlowWeights,
+    traps: &Traps,
+    supply: &[f64],
+    keeps: &[f64],
+    height: &mut [f64],
+    cell_area: f64,
+) {
+    let mut arriving = vec![0.0; supply.len()];
+    walk(
+        stack,
+        weights,
+        traps,
+        supply,
+        &mut arriving,
+        |n, reached| traps.release(n, reached).1,
+        |i, through| {
+            let kept = through * keeps[i];
+            if kept != 0.0 {
+                height[i] += kept / cell_area;
+            }
+            kept
+        },
+    );
+}
+
+/// The walk of [`route`] and [`lay_down`]: [`route`]'s walk, in which `keep(i, through)` returns
+/// the part of what passes through cell `i` (a cell with an edge: what reaches it plus its own
+/// volume) that stays on it; the rest leaves over its edges. Returns the volume that leaves at the
+/// cells without an edge.
+fn walk(
+    stack: &[u32],
+    weights: &FlowWeights,
+    traps: &Traps,
+    volume: &[f64],
+    arriving: &mut [f64],
     mut close: impl FnMut(usize, f64) -> f64,
+    mut keep: impl FnMut(usize, f64) -> f64,
 ) -> f64 {
     arriving.fill(0.0);
     let mut inflow = vec![0.0; traps.len()];
@@ -74,12 +127,13 @@ pub(super) fn route(
             open[n] = false;
             arriving[i] += close(n, inflow[n]);
         }
-        let leaving = arriving[i] + own;
+        let through = arriving[i] + own;
         let edges = weights.edges(i);
         if edges.is_empty() {
-            out += leaving;
+            out += through;
             continue;
         }
+        let leaving = through - keep(i, through);
         for e in edges {
             let to = cell_index(weights.to[e]);
             let share = leaving * weights.weight[e];
@@ -166,7 +220,7 @@ pub(super) fn books(
 
 #[cfg(test)]
 mod tests {
-    use super::{Ledger, books, route};
+    use super::{Ledger, books, lay_down, route};
     use crate::grid::Grid;
     use crate::stages::evolution::flow::FlowWeights;
     use crate::stages::evolution::fluvial::fill::{EPSILON, Traps};
@@ -408,6 +462,76 @@ mod tests {
         assert_eq!(height, before);
         assert_eq!(booked.out.to_bits(), 7.0_f64.to_bits());
         assert_eq!(booked.correction.to_bits(), 0.0_f64.to_bits());
+    }
+
+    #[test]
+    fn the_supply_is_laid_down_on_its_way_and_a_depression_keeps_its_share() {
+        // Depression 1 holds cells 2 and 3 and spills from cell 2 (inside it) to cell 1; it holds
+        // 200 + ε m³. Cells 1, 4 and 5 keep half of what passes through them; the lake cells and
+        // the outlet keep nothing.
+        let traps = traps(vec![0, 0, 1, 1, 0, 0], &[(2, 1)]);
+        let keeps = [0.0, 0.5, 0.0, 0.0, 0.5, 0.5];
+        // 300 m³ on cell 5: it keeps 150, cell 4 keeps 75 of the rest and sends 75 into the
+        // depression (a quarter over cell 3, three quarters to cell 2), which keeps all of it.
+        let mut height = vec![0.0; 6];
+        lay_down(
+            &STACK,
+            &strip(),
+            &traps,
+            &[0.0, 0.0, 0.0, 0.0, 0.0, 300.0],
+            &keeps,
+            &mut height,
+            1.0,
+        );
+        assert_eq!(height, [0.0, 0.0, 0.0, 0.0, 75.0, 150.0]);
+        // 1,000 m³: the depression gets 250 and lets go the excess over its capacity at its
+        // spill cell, which passes it on to cell 1; cell 1 keeps half of it.
+        let mut height = vec![0.0; 6];
+        lay_down(
+            &STACK,
+            &strip(),
+            &traps,
+            &[0.0, 0.0, 0.0, 0.0, 0.0, 1000.0],
+            &keeps,
+            &mut height,
+            1.0,
+        );
+        let excess = 250.0 - (200.0 + EPSILON);
+        assert!(close(height[1], excess / 2.0), "{}", height[1]);
+        assert_eq!(height[2..], [0.0, 0.0, 250.0, 500.0]);
+        assert_eq!(height[0].to_bits(), 0.0_f64.to_bits(), "the outlet");
+        // Cells of 4 m² rise by a quarter of the volume they keep.
+        let mut height = vec![0.0; 6];
+        lay_down(
+            &STACK,
+            &strip(),
+            &traps,
+            &[0.0, 0.0, 0.0, 0.0, 0.0, 300.0],
+            &keeps,
+            &mut height,
+            4.0,
+        );
+        assert_eq!(height, [0.0, 0.0, 0.0, 0.0, 18.75, 37.5]);
+    }
+
+    #[test]
+    fn without_supply_nothing_is_laid_down() {
+        // Runs without slope supply stay bit for bit as they were: no height is touched, not
+        // even a negative zero.
+        let traps = traps(vec![0, 0, 1, 1, 0, 0], &[(2, 1)]);
+        let before = [-0.0, 1.0, -0.0, 3.0, 4.0, -0.0];
+        let mut height = before.to_vec();
+        lay_down(
+            &STACK,
+            &strip(),
+            &traps,
+            &[0.0; 6],
+            &[0.0, 0.5, 0.0, 0.0, 0.5, 0.5],
+            &mut height,
+            1.0,
+        );
+        let bits = |h: &[f64]| h.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        assert_eq!(bits(&height), bits(&before));
     }
 
     #[test]

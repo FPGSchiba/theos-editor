@@ -38,7 +38,9 @@
 //!   sediment flux at its cell like eroded sediment, in the iterations and in the books (`solve`
 //!   gives the term); on a depression's cell it goes into the fill. It writes the layer back
 //!   emptied. G decides how much of it is laid down; with G = 0 all of it leaves at the outlets.
-//!   Without the layer there is no supply.
+//!   Without the layer there is no supply. With G > 0 the iterations start from `h*` with the
+//!   supply laid down along its way, as the law lays it down where nothing incises (`solve`), so
+//!   that dry cells do not route it undeposited in the first iteration.
 //!
 //! The report holds `sediment_out_m3`, the sediment that left the map in the step at the cells
 //! without an edge (the drained edges, or the closed map's sink), `iterations`, and `supply_m3`,

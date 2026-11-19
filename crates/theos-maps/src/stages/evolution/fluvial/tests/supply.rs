@@ -3,7 +3,10 @@
 //! rivers lay down and how much they carry on; `fluvial` empties the layer once it took it in.
 
 use super::deposition::{bowl, bowl_cells, pass_strip, routed, value, volume};
-use super::{ALL_EDGES, BOTH, CELL_AREA, N, UPLIFT, fluvial_only, landscape, layer};
+use super::lakes::{row, strip};
+use super::{
+    ALL_EDGES, BOTH, CELL_AREA, N, UPLIFT, fluvial_only, landscape, layer, recipe, with_runoff,
+};
 use crate::grid::Grid;
 use crate::kernels::num::to_f64;
 use crate::stages::evolution::PlannedProcess;
@@ -259,6 +262,90 @@ fn slope_limit_and_fluvial_at_different_every_lose_nothing() {
     assert!(
         (change - (uplifted - out - pending)).abs() <= 1e-9 * uplifted,
         "change {change}, uplifted {uplifted}, out {out}, pending {pending}"
+    );
+}
+
+/// The cells of [`dry_strip`].
+const DRY_CELLS: usize = 32;
+
+/// The wet cells of [`dry_strip`], at its outlet.
+const WET: usize = 4;
+
+/// The slope supply on each dry cell of [`dry_strip`], metres.
+const DRY_SUPPLY: f64 = 500.0;
+
+/// The runoff weight `p̂` of [`dry_strip`]'s dry cells: their runoff over the strip's mean.
+fn dry_weight() -> f64 {
+    1e-3 / ((to_f64(WET) + to_f64(DRY_CELLS - WET) * 1e-3) / to_f64(DRY_CELLS))
+}
+
+/// A synthetic 1 x 32 strip of 100 m cells rising 5 m per cell from its outlet (cell 0, fixed),
+/// with the erodibility `k`, in a rain shadow: the four cells at the outlet are wet, the others
+/// get a thousandth of their runoff. There `p̂` is 0.008 and `G/p̂` about 126 at G = 1, as on the
+/// dry patches of the 384² budget recipe in its dry climate periods (Task 27g: 100 to 200), and
+/// each of them holds [`DRY_SUPPLY`] of slope supply (27g: up to 1.7 km).
+fn dry_strip(k: f64) -> World {
+    let height = (0..DRY_CELLS).map(|i| 5.0 * to_f64(i)).collect();
+    let mut w = strip(height, vec![k; DRY_CELLS]);
+    let dry = |i: usize| i >= WET;
+    let runoff = (0..DRY_CELLS)
+        .map(|i| if dry(i) { 1e-3 } else { 1.0 })
+        .collect();
+    let runoff = Grid::from_vec(1, DRY_CELLS, runoff).unwrap();
+    w.insert("climate", Layer::Value(Box::new(with_runoff(runoff))))
+        .unwrap();
+    let supply = (0..DRY_CELLS)
+        .map(|i| if dry(i) { DRY_SUPPLY } else { 0.0 })
+        .collect();
+    w.insert("slope_supply", row(supply)).unwrap();
+    w
+}
+
+/// Task 27g's cause of the iteration caps at 384²: hundreds of metres of slope supply on dry
+/// cells, where the rivers lay almost all of it down (`c/(1 + c)` with `c = G·area/Q` about 126).
+/// Iterations that start from `h*` route all of it undeposited down the dry slopes in their first
+/// sweep, and the transient that follows dies out too slowly for the iteration limit. On
+/// [`dry_strip`] with K = 1e-5 and uplift they stopped at the limit with a residual of 1.08 m
+/// against a tolerance of 0.025 m. Started from the supply laid down along its way, they
+/// converge in 16 iterations.
+#[test]
+fn dry_slopes_with_much_supply_converge_within_the_limit() {
+    let mut w = dry_strip(1e-5);
+    w.insert("uplift", row(vec![UPLIFT; DRY_CELLS])).unwrap();
+    w.insert("sag_rate", row(vec![0.0; DRY_CELLS])).unwrap();
+    let report = evolve(&mut w, &processes(&recipe("steepest", "g = 1.0")), 1, DT, 1).unwrap();
+    assert!(report.findings.is_empty(), "{:?}", report.findings);
+    let iterations = value(&report, "iterations");
+    assert!(iterations <= 25.0, "{iterations} iterations");
+    assert!(layer(&w, "height").iter().all(|h| h.is_finite()));
+}
+
+/// With K = 0 nothing incises, and outside the depressions the step's solution is the supply
+/// laid down as it passes: each cell keeps `c/(1 + c)` of what passes through it, its own supply
+/// included, and passes the rest on. The iterations start from exactly that, so on
+/// [`dry_strip`] without uplift (tolerance 1e-6 m) the first one finds the solution.
+#[test]
+fn with_no_incision_the_first_iterate_is_the_solution() {
+    let mut w = dry_strip(0.0);
+    let start = layer(&w, "height");
+    let held = total(&supply(&w));
+    let report = evolve(&mut w, &processes(&routed("steepest", "g = 1.0")), 1, DT, 1).unwrap();
+    assert!(report.findings.is_empty(), "{:?}", report.findings);
+    assert_eq!(value(&report, "iterations").to_bits(), 1.0_f64.to_bits());
+    let h = layer(&w, "height");
+    assert!(h.iter().zip(&start).all(|(a, b)| a >= b), "nothing incises");
+    // The top cell drains no other cell, so it keeps c/(1 + c) of its own supply, c = G/p̂.
+    let c = 1.0 / dry_weight();
+    let top = DRY_CELLS - 1;
+    let want = start[top] + DRY_SUPPLY * c / (1.0 + c);
+    assert!((h[top] - want).abs() < 1e-9, "{} vs {want}", h[top]);
+    let (raised, out) = (
+        volume(&h) - volume(&start),
+        value(&report, "sediment_out_m3"),
+    );
+    assert!(
+        (raised + out - held).abs() <= 1e-9 * held,
+        "raised {raised}, out {out}, supply {held}"
     );
 }
 

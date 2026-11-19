@@ -46,6 +46,15 @@
 //! the iterations oscillate; once they are not on track to reach the tolerance in time, each one
 //! but the last is relaxed by Aitken's factor ([`Relaxation`]).
 //!
+//! **Where the iterations start.** Not at `h*` but at `h*` with the step's slope supply laid down
+//! along its way ([`first_iterate`]): every cell that is solved keeps `c_i/(1 + c_i)` of what
+//! passes through it and passes the rest on, as the step above lays it down where nothing
+//! incises (`K = 0`, no receiver taking a share), and the routed depressions keep what reaches
+//! them up to their capacity. From `h*` the first sweep would route all the supply undeposited:
+//! on dry cells, where `c_i` is 100 or more, it then lay hundreds of metres too far downstream,
+//! and the transient that followed outlasted the iteration limit (Task 27g). The step and its
+//! solution are unchanged; only the first iterate is. Without supply it is `h*` bit for bit.
+//!
 //! **Routed depressions** (spec §5.9 "Depression filling") are filled in each iteration's step 1,
 //! before the sweep, in the spec's order. Each one holds the sediment that reaches it up to its
 //! capacity (`fill`), and that fill is the start of its cells for the sweep. The sweep then
@@ -67,7 +76,7 @@ use libm::pow;
 use super::cell::{Receiver, solve};
 use super::fill::Traps;
 use super::relax::{Relaxation, toward};
-use super::sediment::{route, step_sediment};
+use super::sediment::{lay_down, route, step_sediment};
 use crate::grid::Grid;
 use crate::kernels::num::max;
 use crate::stage::StageError;
@@ -184,11 +193,49 @@ impl Solution {
     }
 }
 
-/// Yuan et al.'s Gauss–Seidel iterations (eq. 19–21) from `h⁰ = h*` (`h_star`), over the
-/// weights, with the routed depressions filled first in each iteration (spec §5.9's order).
+/// Lays the step's slope supply down onto `height` (`h*`) along its way, the first iterate of
+/// [`deposit`]: every cell that is not fixed and not in a routed depression keeps `c/(1 + c)` of
+/// what passes through it (`own` holds `c = G·area/Q`, 0 without water), and the depressions
+/// keep what reaches them up to their capacity ([`lay_down`]). Where nothing incises this is the
+/// step's solution outside the depressions. Without supply `height` keeps its bits.
+fn first_iterate(
+    step: &Incision<'_>,
+    dep: &Deposition<'_>,
+    own: &[f64],
+    lake: &[bool],
+    height: &mut [f64],
+) {
+    if dep.supply.iter().all(|&v| v == 0.0) {
+        return;
+    }
+    let keeps: Vec<f64> = own
+        .iter()
+        .zip(lake)
+        .zip(step.fixed)
+        .map(
+            |((&c, &in_lake), &fixed)| {
+                if in_lake || fixed { 0.0 } else { c / (1.0 + c) }
+            },
+        )
+        .collect();
+    lay_down(
+        step.stack,
+        step.weights,
+        dep.traps,
+        dep.supply,
+        &keeps,
+        height,
+        dep.cell_area,
+    );
+}
+
+/// Yuan et al.'s Gauss–Seidel iterations (eq. 19–21) over the weights, with the routed
+/// depressions filled first in each iteration (spec §5.9's order).
 ///
-/// The iterate is the heights `h^k` and the start `s^k` of the sweep that gave them; both begin
-/// at `h*`. Each iteration `k`:
+/// The iterate is the heights `h^k` and the start `s^k` of the sweep that gave them. They begin
+/// at `h⁰`, `h*` (`h_star`) with the step's slope supply laid down along its way
+/// ([`first_iterate`]), and at `s⁰ = h*`, so a cell's own sediment in the first iteration is the
+/// supply it passes on. Each iteration `k`:
 /// 1. routes every cell's own sediment `(s^k_j − h^k_j)·area + V_j` in reverse stack order, so
 ///    each cell gets `Qs_in(i)·Δt`, the volume reaching it from upstream. A routed depression
 ///    gathers what reaches it, its cells' own sediment included, and holds up to its capacity of
@@ -221,6 +268,7 @@ pub(super) fn deposit(
         .map(|&q| share(q, dep.cell_area))
         .collect();
     let (mut height, mut next) = (h_star.clone(), h_star.clone());
+    first_iterate(step, dep, &own, &lake, height.as_mut_slice());
     // The start of the iterate and the next one.
     let (mut start, mut filled) = (before.to_vec(), before.to_vec());
     // Per depression: the volume the routing keeps, the one the start holds, and the next one.

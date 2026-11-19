@@ -19,14 +19,14 @@ use crate::stages::terrain::support::{run_stage, world};
 use crate::world::{Layer, World};
 
 /// A row of `values` over a strip as long as it.
-fn row(values: Vec<f64>) -> Layer {
+pub(super) fn row(values: Vec<f64>) -> Layer {
     let n = values.len();
     Layer::F64(Grid::from_vec(1, n, values).unwrap())
 }
 
 /// A synthetic 1 x n strip of 100 m cells at `height`, with the erodibility `erodibility`, whose
 /// west edge drains (cell 0 is fixed); no erosion or deposition yet and a climate without fields.
-fn strip(height: Vec<f64>, erodibility: Vec<f64>) -> World {
+pub(super) fn strip(height: Vec<f64>, erodibility: Vec<f64>) -> World {
     let mut w = world(1, height.len());
     run_stage(&mut w, &GridStage, r#"edges = ["west"]"#).unwrap();
     let zeros = vec![0.0; height.len()];
