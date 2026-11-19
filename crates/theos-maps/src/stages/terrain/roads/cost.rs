@@ -116,11 +116,17 @@ impl<'a> StepCost<'a> {
 
     /// The offset `(rows, cols)` from `from` to `to` when it is one of the 16 directions.
     pub(super) fn offset(&self, from: usize, to: usize) -> Option<(isize, isize)> {
+        let (dr, dc) = self.delta(from, to)?;
+        D16.contains(&(dr, dc)).then_some((dr, dc))
+    }
+
+    /// The offset `(rows, cols)` from cell `from` to cell `to`; `None` beyond `isize`.
+    pub(super) fn delta(&self, from: usize, to: usize) -> Option<(isize, isize)> {
         let cols = self.grid().cols();
         let signed = |i: usize| isize::try_from(i).ok();
         let dr = signed(to / cols)? - signed(from / cols)?;
         let dc = signed(to % cols)? - signed(from % cols)?;
-        D16.contains(&(dr, dc)).then_some((dr, dc))
+        Some((dr, dc))
     }
 
     /// The cells the segment of the step `offset` from `from` passes strictly between its

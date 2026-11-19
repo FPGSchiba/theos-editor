@@ -34,9 +34,7 @@ impl TypedStage for Uplift {
     }
 
     fn run(&self, ctx: &mut StageContext<'_>, _: &UpliftParams) -> Result<StageReport, StageError> {
-        let Some(step) = ctx.step() else {
-            return Err(ctx.fail("runs only as a process of landscape_evolution"));
-        };
+        let step = ctx.process_step()?;
         let mut height = ctx.take_f64("height")?;
         let (uplift, sag, fixed) = (ctx.f64("uplift")?, ctx.f64("sag_rate")?, ctx.mask("fixed")?);
         let cells = height

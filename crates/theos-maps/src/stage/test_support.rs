@@ -13,7 +13,7 @@ use crate::world::{Layer, MapFrame, ValueType, World, WorldValue};
 pub(crate) const SEED: u64 = 7;
 
 /// A value layer holding a count.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct Counter(pub(crate) u32);
 
 impl WorldValue for Counter {

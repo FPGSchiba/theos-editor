@@ -3,19 +3,20 @@
 //! pass fills the channels' own slopes after the fact (that put dams into the rivers).
 
 use super::Evolution;
+use super::fluvial::Fluvial;
+use super::hillslope::Hillslope;
+use super::partition_flow::PartitionFlow;
 use super::processes::PlannedProcess;
+use super::resolve_sinks::ResolveSinks;
+use super::route_steepest::RouteSteepest;
 use crate::stage::{ParamError, TypedStage};
 
-/// The process id the rule is about.
-const HILLSLOPE: &str = "hillslope";
+/// The process the rule is about.
+const HILLSLOPE: &str = Hillslope::ID;
 
-/// The processes that route flow or move sediment by it. `hillslope` may not follow any of them.
-const ROUTING: [&str; 4] = [
-    "route_steepest",
-    "resolve_sinks",
-    "partition_flow",
-    "fluvial",
-];
+/// The processes that route flow. `hillslope` may not follow any of them, nor `fluvial`, which
+/// moves sediment by the flow.
+const ROUTING: [&str; 3] = [RouteSteepest::ID, ResolveSinks::ID, PartitionFlow::ID];
 
 /// Refuses a list in which `hillslope` comes after `fluvial` or after a routing process
 /// (`route_steepest`, `resolve_sinks`, `partition_flow`). Lists without `hillslope` pass.
@@ -28,11 +29,14 @@ pub(super) fn check(planned: &[PlannedProcess]) -> Result<(), ParamError> {
         if process.id != HILLSLOPE {
             continue;
         }
-        if let Some(before) = planned[..i].iter().find(|p| ROUTING.contains(&p.id)) {
+        let moves_by_flow = |id: &str| ROUTING.contains(&id) || id == Fluvial::ID;
+        if let Some(before) = planned[..i].iter().find(|p| moves_by_flow(p.id)) {
+            let routing = ROUTING.map(|id| format!("`{id}`")).join(", ");
+            let fluvial = Fluvial::ID;
             let message = format!(
                 "process `{HILLSLOPE}` comes after `{}`; `{HILLSLOPE}` must run before every \
-                 routing process (`route_steepest`, `resolve_sinks`, `partition_flow`) and \
-                 before `fluvial`, so that each step ends on the surface `fluvial` cut",
+                 routing process ({routing}) and before `{fluvial}`, so that each step ends on \
+                 the surface `{fluvial}` cut",
                 before.id
             );
             return Err(ParamError::at(

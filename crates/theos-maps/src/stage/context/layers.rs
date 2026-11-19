@@ -238,6 +238,23 @@ impl StageContext<'_> {
             .ok_or_else(|| self.missing(name))
     }
 
+    /// Takes the value `name` out of the world when it holds one, else starts a `T::default()`:
+    /// for a value a stage adds to that an earlier stage may have started, such as the
+    /// `features` of ledger ruling 65.
+    ///
+    /// # Errors
+    /// See [reading and taking layers](StageContext#reading-and-taking-layers).
+    pub fn take_value_or_default<T: ValueType + Default>(
+        &mut self,
+        name: &str,
+    ) -> Result<Box<T>, StageError> {
+        if self.value_opt::<T>(name)?.is_some() {
+            self.take_value(name)
+        } else {
+            Ok(Box::default())
+        }
+    }
+
     /// The raster `name` of cells `T`.
     fn raster<T: Cell>(&self, name: &str) -> Result<&Grid<T>, StageError> {
         self.raster_opt(name)?.ok_or_else(|| self.missing(name))

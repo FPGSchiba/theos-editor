@@ -115,11 +115,7 @@ impl TypedStage for Sites {
         let river_q = ctx.value::<WaterThresholds>("water_thresholds")?.river_q;
         let raster = ctx.u8("roads")?.clone();
         let network = *ctx.take_value::<RoadNetwork>("road_network")?;
-        let mut set = if ctx.value_opt::<FeatureSet>("features")?.is_some() {
-            *ctx.take_value::<FeatureSet>("features")?
-        } else {
-            FeatureSet::default()
-        };
+        let mut set = *ctx.take_value_or_default::<FeatureSet>("features")?;
         let mut rng = ctx.sub_rng("siting");
         let inside = interior(&frame, params.edge_margin);
         let cost = StepCost::new(layers.terrain(), &network.params, frame.cell_m);
@@ -143,10 +139,7 @@ impl TypedStage for Sites {
             let cancel = || ctx.is_cancelled();
             spurs
                 .connect(&mut set, site, class, &cancel)
-                .map_err(|e| match e {
-                    crate::kernels::KernelError::Cancelled => StageError::Cancelled,
-                    other => ctx.fail(other.to_string()),
-                })?;
+                .map_err(|e| ctx.kernel_failed(e))?;
             ctx.progress(to_u32(done + 1), total);
         }
 

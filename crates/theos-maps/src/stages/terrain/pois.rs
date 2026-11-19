@@ -322,7 +322,7 @@ impl TypedStage for Pois {
                 lake: ctx.mask("lake")?,
             };
             place(&inputs, &frame, params, &settlements, &mut rng)
-                .map_err(|e| ctx.fail(e.to_string()))?
+                .map_err(|e| ctx.kernel_failed(e))?
         };
         let mut report = StageReport::default();
         for (name, ty) in METRICS
@@ -332,11 +332,7 @@ impl TypedStage for Pois {
             let n = to_f64(found.iter().filter(|f| f.ty == ty).count());
             report.values.insert(name.to_owned(), n);
         }
-        let mut set = if ctx.value_opt::<FeatureSet>("features")?.is_some() {
-            *ctx.take_value::<FeatureSet>("features")?
-        } else {
-            FeatureSet::default()
-        };
+        let mut set = *ctx.take_value_or_default::<FeatureSet>("features")?;
         for f in found {
             set.add(f);
         }

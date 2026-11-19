@@ -96,10 +96,7 @@ impl StepCost<'_> {
 
     /// The one of the 16 directions whose multiple leads from `from` to `to`.
     fn direction(&self, from: usize, to: usize) -> Option<(isize, isize)> {
-        let cols = self.grid().cols();
-        let signed = |i: usize| isize::try_from(i).ok();
-        let dr = signed(to / cols)? - signed(from / cols)?;
-        let dc = signed(to % cols)? - signed(from % cols)?;
+        let (dr, dc) = self.delta(from, to)?;
         D16.iter().copied().find(|&(r, c)| {
             let k = if r == 0 { dc / c } else { dr / r };
             k > 0 && (r * k, c * k) == (dr, dc)

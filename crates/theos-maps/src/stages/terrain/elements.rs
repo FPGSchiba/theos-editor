@@ -19,6 +19,7 @@ use serde::Deserialize;
 use crate::grid::Grid;
 use crate::kernels::filters::gaussian;
 use crate::kernels::num::{max, min, smoothstep};
+use crate::kernels::stats;
 use crate::stage::{
     Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
     TypedStage,
@@ -113,15 +114,6 @@ pub fn shares(means: [f64; 5]) -> [f64; 5] {
     }
 }
 
-/// The mean of `g` (0 for an empty grid), summed in index order.
-fn mean(g: &Grid<f64>) -> f64 {
-    if g.is_empty() {
-        return 0.0;
-    }
-    let sum = g.as_slice().iter().fold(0.0, |s, v| s + v);
-    sum / crate::kernels::num::to_f64(g.len())
-}
-
 /// The stage `elements`.
 pub struct Elements;
 
@@ -200,7 +192,10 @@ impl TypedStage for Elements {
             }
         }
         let mut report = StageReport::default();
-        let means = out.each_ref().map(mean);
+        // A grid has cells (plan check 1), so the mean exists; 0 stands in for none.
+        let means = out
+            .each_ref()
+            .map(|g| stats::mean(g.as_slice()).unwrap_or(0.0));
         for (name, share) in NAMES.into_iter().zip(shares(means)) {
             report.values.insert(name.to_owned(), share);
         }

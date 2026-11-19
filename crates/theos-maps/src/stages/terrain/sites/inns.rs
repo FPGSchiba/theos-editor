@@ -28,13 +28,12 @@ pub(super) fn inns(
             continue;
         }
         let cell = midpoint(road, frame);
-        let (row, col) = (cell / frame.cols, cell % frame.cols);
-        let at = frame.centre_m(row, col);
+        let at = frame.index_centre_m(cell);
         let alone = settlements.iter().all(|s| {
             let (dx, dy) = (s[0] - at[0], s[1] - at[1]);
             dx * dx + dy * dy > FROM_SETTLEMENT_M * FROM_SETTLEMENT_M
         });
-        if alone && inside.get(row, col) {
+        if alone && inside.as_slice()[cell] {
             let id = to_u32(i);
             out.push(Feature::site("inn", at, [("road", Prop::Road(id))]));
         }

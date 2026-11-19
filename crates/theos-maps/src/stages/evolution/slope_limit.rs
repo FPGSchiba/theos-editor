@@ -59,9 +59,7 @@ impl TypedStage for SlopeLimit {
         ctx: &mut StageContext<'_>,
         _: &SlopeLimitParams,
     ) -> Result<StageReport, StageError> {
-        if ctx.step().is_none() {
-            return Err(ctx.fail("runs only as a process of landscape_evolution"));
-        }
+        ctx.process_step()?;
         let frame = *ctx.frame();
         let critical = ctx.f64("critical_slope")?.as_slice();
         let fixed = ctx.mask("fixed")?.as_slice();

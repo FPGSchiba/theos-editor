@@ -8,6 +8,7 @@ mod tests;
 use std::collections::BTreeSet;
 
 use super::{Access, Finding, LayerSpec, Stage, StageError, StageParams, StageReport};
+use crate::kernels::KernelError;
 use crate::progress::{CancelToken, Progress};
 use crate::rng::StageRng;
 use crate::world::{Layer, LayerKind, MapFrame, World};
@@ -162,6 +163,16 @@ impl<'w> StageContext<'w> {
         self.step
     }
 
+    /// The time step of a per-step process, for a stage that runs only as one.
+    ///
+    /// # Errors
+    /// [`StageError::Failed`] ("runs only as a process of `landscape_evolution`") when the stage
+    /// runs as a pipeline stage.
+    pub fn process_step(&self) -> Result<StepInfo, StageError> {
+        self.step
+            .ok_or_else(|| self.fail("runs only as a process of landscape_evolution"))
+    }
+
     /// The stage's own random stream.
     pub fn rng(&mut self) -> &mut StageRng {
         &mut self.rng
@@ -207,6 +218,16 @@ impl<'w> StageContext<'w> {
         StageError::Failed {
             stage: self.stage.clone(),
             message: message.into(),
+        }
+    }
+
+    /// The stage error for a kernel's `err`: [`KernelError::Cancelled`] stays a cancel, any
+    /// other error fails this stage with the kernel's message.
+    #[must_use]
+    pub fn kernel_failed(&self, err: KernelError) -> StageError {
+        match err {
+            KernelError::Cancelled => StageError::Cancelled,
+            other => self.fail(other.to_string()),
         }
     }
 

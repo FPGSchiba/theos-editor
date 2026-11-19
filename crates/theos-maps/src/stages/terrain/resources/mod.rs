@@ -181,7 +181,7 @@ impl TypedStage for Resources {
             ruins: &ruins,
             omega: ctx.f64_opt("omega")?,
         };
-        let computed = compute(&inputs, &frame).map_err(|e| ctx.fail(e.to_string()))?;
+        let computed = compute(&inputs, &frame).map_err(|e| ctx.kernel_failed(e))?;
         let [water, wood, earth, metal, fire] = ELEMENT_LAYERS;
         let elements = [
             ctx.f64(water)?,
@@ -195,11 +195,7 @@ impl TypedStage for Resources {
         report
             .values
             .insert("deposits".to_owned(), to_f64(found.len()));
-        let mut set = if ctx.value_opt::<FeatureSet>("features")?.is_some() {
-            *ctx.take_value::<FeatureSet>("features")?
-        } else {
-            FeatureSet::default()
-        };
+        let mut set = *ctx.take_value_or_default::<FeatureSet>("features")?;
         for f in found {
             set.add(f);
         }

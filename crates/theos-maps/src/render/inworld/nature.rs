@@ -34,11 +34,6 @@ fn thin(candidates: impl Iterator<Item = (usize, f64)>, cols: usize, block: usiz
     best.values().map(|&(i, _)| i).collect()
 }
 
-/// The centre in metres of the cell with flat index `i`.
-fn centre(frame: &MapFrame, i: usize) -> [f64; 2] {
-    frame.centre_m(i / frame.cols, i % frame.cols)
-}
-
 /// The points in metres where peaks are drawn: known cells in the top share of prominence
 /// (the height above its blurred mean), one per block.
 pub(crate) fn peaks(height: &Grid<f64>, known: &Grid<bool>, frame: &MapFrame) -> Vec<[f64; 2]> {
@@ -62,7 +57,7 @@ pub(crate) fn peaks(height: &Grid<f64>, known: &Grid<bool>, frame: &MapFrame) ->
         .map(|(i, &p)| (i, p));
     thin(candidates, frame.cols, PEAK_BLOCK)
         .into_iter()
-        .map(|i| centre(frame, i))
+        .map(|i| frame.index_centre_m(i))
         .collect()
 }
 
@@ -77,7 +72,7 @@ pub(crate) fn trees(vegetation: &Grid<f64>, known: &Grid<bool>, frame: &MapFrame
         .map(|(i, &v)| (i, v));
     thin(candidates, frame.cols, TREE_BLOCK)
         .into_iter()
-        .map(|i| centre(frame, i))
+        .map(|i| frame.index_centre_m(i))
         .collect()
 }
 

@@ -154,10 +154,7 @@ impl TypedStage for Travel {
                 params,
                 frame,
             );
-            let failed = |e: KernelError| match e {
-                KernelError::Cancelled => StageError::Cancelled,
-                other => ctx.fail(other.to_string()),
-            };
+            let failed = |e: KernelError| ctx.kernel_failed(e);
             let tree = walk.tree(&chimes, &cancel).map_err(failed)?;
             for (out, &d) in reach.as_mut_slice().iter_mut().zip(&tree.dist) {
                 if d.is_finite() {

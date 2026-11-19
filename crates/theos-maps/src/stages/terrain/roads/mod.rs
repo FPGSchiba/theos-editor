@@ -272,11 +272,7 @@ impl TypedStage for Roads {
         params: &RoadsParams,
     ) -> Result<StageReport, StageError> {
         let frame = *ctx.frame();
-        let mut set = if ctx.value_opt::<FeatureSet>("features")?.is_some() {
-            *ctx.take_value::<FeatureSet>("features")?
-        } else {
-            FeatureSet::default()
-        };
+        let mut set = *ctx.take_value_or_default::<FeatureSet>("features")?;
         // The layers are copied so the context stays free for progress events while routing.
         let layers = build::Layers::read(ctx)?;
         let built = build::build(&layers, &set, &frame, params, ctx)?;

@@ -1,5 +1,6 @@
 use super::{StageContext, StepInfo};
 use crate::grid::Grid;
+use crate::kernels::KernelError;
 use crate::progress::Progress;
 use crate::rng::StageRng;
 use crate::stage::test_support::{Counter, Harness, Label, Probe, SEED, Step, Update};
@@ -479,6 +480,64 @@ fn fail_names_the_stage() {
         );
         assert_eq!(err.to_string(), "stage `probe` failed: no land cells");
     });
+}
+
+// Ledger ruling 65: a stage that adds to `features` takes it when an earlier stage started it
+// and starts it otherwise.
+#[test]
+fn take_value_or_default_takes_the_value_or_starts_one() {
+    let mut h = Harness::new();
+    h.with(&Probe, |ctx| {
+        let count = ctx.take_value_or_default::<Counter>("count").unwrap();
+        assert_eq!(*count, Counter(3));
+        ctx.write("count", Layer::Value(count)).unwrap();
+    });
+    h.world.remove("count");
+    h.with(&Probe, |ctx| {
+        let count = ctx.take_value_or_default::<Counter>("count").unwrap();
+        assert_eq!(*count, Counter(0));
+        assert_eq!(
+            ctx.take_value_or_default::<Counter>("rivers").unwrap_err(),
+            undeclared("probe", "rivers", Access::Read)
+        );
+        assert_eq!(
+            ctx.take_value_or_default::<Counter>("omega").unwrap_err(),
+            wrong_kind("omega", LayerKind::F64, LayerKind::Value("counter"))
+        );
+    });
+}
+
+#[test]
+fn a_kernel_error_names_the_stage_and_a_cancel_stays_a_cancel() {
+    let mut h = Harness::new();
+    h.with(&Probe, |ctx| {
+        assert_eq!(
+            ctx.kernel_failed(KernelError::Cancelled),
+            StageError::Cancelled
+        );
+        assert_eq!(
+            ctx.kernel_failed(KernelError::Empty),
+            StageError::Failed {
+                stage: "probe".into(),
+                message: "no values to summarise".into()
+            }
+        );
+    });
+}
+
+#[test]
+fn only_a_process_has_a_step() {
+    let mut h = Harness::new();
+    let err = h.with(&Probe, |ctx| ctx.process_step().unwrap_err());
+    assert_eq!(
+        err,
+        StageError::Failed {
+            stage: "probe".into(),
+            message: "runs only as a process of landscape_evolution".into()
+        }
+    );
+    let step = in_child(&mut h, &Step, "probe#0/step#0", |ctx| ctx.process_step());
+    assert_eq!(step, Ok(STEP));
 }
 
 #[test]

@@ -67,6 +67,12 @@ impl MapFrame {
         )
     }
 
+    /// The centre `[x, y]` in metres of the cell with flat index `i` (`row · cols + col`).
+    #[must_use]
+    pub fn index_centre_m(&self, i: usize) -> [f64; 2] {
+        self.centre_m(i / self.cols, i % self.cols)
+    }
+
     /// The flat index (`row · cols + col`) of the cell containing the point `at` (`[x, y]` in
     /// metres), clamped into the grid.
     #[must_use]
@@ -224,6 +230,9 @@ mod tests {
         assert_eq!(frame.cell_at_fraction(0.0, 0.999), (3, 0));
         assert_eq!(frame.cell_at_m(25.0, 15.0), (1, 2));
         assert_eq!(frame.cell_at_m(1e9, 1e9), (3, 7));
+        // flat index 10 is row 1, column 2
+        assert_eq!(frame.index_centre_m(10), [25.0, 15.0]);
+        assert_eq!(frame.index_at_m(frame.index_centre_m(10)), 10);
     }
 
     fn world() -> World {

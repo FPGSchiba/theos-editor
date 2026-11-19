@@ -92,15 +92,7 @@ impl Watch for Counter<'_, '_> {
 impl Counter<'_, '_> {
     /// The stage error for `err`.
     fn fail(&self, err: KernelError) -> StageError {
-        failure(&*self.ctx, err)
-    }
-}
-
-/// The stage error for a kernel's `err`: a cancel stays a cancel.
-fn failure(ctx: &StageContext<'_>, err: KernelError) -> StageError {
-    match err {
-        KernelError::Cancelled => StageError::Cancelled,
-        other => ctx.fail(other.to_string()),
+        self.ctx.kernel_failed(err)
     }
 }
 
@@ -129,7 +121,7 @@ pub(super) fn build(
         });
     }
     let ruins = ruins(set, frame);
-    let pairs = network::candidates(&places).map_err(|e| failure(ctx, e))?;
+    let pairs = network::candidates(&places).map_err(|e| ctx.kernel_failed(e))?;
     let mut watch = Counter {
         ctx,
         done: 0,

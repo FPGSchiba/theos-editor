@@ -6,7 +6,8 @@ use serde::Serialize;
 use super::Water;
 use crate::grid::Grid;
 use crate::kernels::contour::rings;
-use crate::kernels::num::{min, to_f64};
+use crate::kernels::num::min;
+use crate::world::MapFrame;
 
 /// The outline of one lake.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -42,13 +43,12 @@ pub(crate) fn outlines(water: &Water, cell_m: f64) -> Vec<LakeShape> {
                 cells.as_mut_slice()[c] = true;
                 lowest = min(lowest, height.as_slice()[c]);
             }
-            let outlet = (!basin.terminal).then(|| {
-                let exit = basin.depression.exit;
-                [
-                    (to_f64(exit % cols) + 0.5) * cell_m,
-                    (to_f64(exit / cols) + 0.5) * cell_m,
-                ]
-            });
+            let frame = MapFrame {
+                rows: height.rows(),
+                cols,
+                cell_m,
+            };
+            let outlet = (!basin.terminal).then(|| frame.index_centre_m(basin.depression.exit));
             Some(LakeShape {
                 id: lake.id,
                 rings: rings(&cells, cell_m),
@@ -64,6 +64,7 @@ pub(crate) fn outlines(water: &Water, cell_m: f64) -> Vec<LakeShape> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::kernels::num::to_f64;
     use crate::stages::terrain::hydrology::tests::{
         ARID, CELL_M, N, SEMI_ARID, WET, all_edges, bowl, closed, compute, hills,
     };

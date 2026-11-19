@@ -138,7 +138,7 @@ impl TypedStage for Detuning {
         let values = field.as_slice();
         let n = to_f64(values.len());
         let above = to_f64(values.iter().filter(|&&v| v > 0.5).count());
-        let p95 = percentile(values, 95.0).map_err(|e| ctx.fail(e.to_string()))?;
+        let p95 = percentile(values, 95.0).map_err(|e| ctx.kernel_failed(e))?;
         report
             .values
             .insert("mean".to_owned(), values.iter().sum::<f64>() / n);

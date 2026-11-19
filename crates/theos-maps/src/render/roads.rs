@@ -19,10 +19,7 @@ pub(crate) fn network<'a>(input: &RenderInput<'a>) -> Option<&'a RoadNetwork> {
 fn centres(frame: &MapFrame, road: &Road) -> Vec<[f64; 2]> {
     road.cells
         .iter()
-        .map(|&cell| {
-            let i = to_usize(cell);
-            frame.centre_m(i / frame.cols, i % frame.cols)
-        })
+        .map(|&cell| frame.index_centre_m(to_usize(cell)))
         .collect()
 }
 

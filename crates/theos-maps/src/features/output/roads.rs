@@ -45,10 +45,7 @@ pub(super) fn feature(
     let line = road
         .cells
         .iter()
-        .map(|&cell| {
-            let cell = to_usize(cell);
-            position(&frame.centre_m(cell / frame.cols, cell % frame.cols), id)
-        })
+        .map(|&cell| position(&frame.index_centre_m(to_usize(cell)), id))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(assemble(id, props, GeometryValue::new_line_string(line)))
 }

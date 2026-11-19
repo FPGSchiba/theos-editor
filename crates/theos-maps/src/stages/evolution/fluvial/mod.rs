@@ -182,9 +182,7 @@ impl TypedStage for Fluvial {
         ctx: &mut StageContext<'_>,
         params: &FluvialParams,
     ) -> Result<StageReport, StageError> {
-        let Some(step) = ctx.step() else {
-            return Err(ctx.fail("runs only as a process of landscape_evolution"));
-        };
+        let step = ctx.process_step()?;
         let start = ctx.take_f64("height")?;
         let supply = take_supply(ctx)?;
         let outcome = erode(ctx, params, step.dt_yr, &start, supply.as_ref())?;

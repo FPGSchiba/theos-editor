@@ -445,7 +445,7 @@ impl TypedStage for Settlements {
                 discharge: ctx.f64("discharge")?,
                 rock: ctx.u8("rock")?,
             };
-            site(&inputs, &frame, params, &mut rng).map_err(|e| ctx.fail(e.to_string()))?
+            site(&inputs, &frame, params, &mut rng).map_err(|e| ctx.kernel_failed(e))?
         };
         let mut report = StageReport::default();
         let mut total = 0.0;
@@ -455,11 +455,7 @@ impl TypedStage for Settlements {
             total += n;
         }
         report.values.insert("settlements".to_owned(), total);
-        let mut set = if ctx.value_opt::<FeatureSet>("features")?.is_some() {
-            *ctx.take_value::<FeatureSet>("features")?
-        } else {
-            FeatureSet::default()
-        };
+        let mut set = *ctx.take_value_or_default::<FeatureSet>("features")?;
         for f in found {
             set.add(f);
         }

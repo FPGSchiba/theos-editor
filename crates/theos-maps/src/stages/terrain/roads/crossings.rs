@@ -58,7 +58,7 @@ fn ford(
     }
     if run.iter().all(|c| !forded.contains(c)) {
         let mid = run[run.len() / 2];
-        let at = frame.centre_m(mid / frame.cols, mid % frame.cols);
+        let at = frame.index_centre_m(mid);
         out.push(Feature::site("ford", at, [("road", id.clone())]));
     }
     forded.extend(run.drain(..));
@@ -66,8 +66,8 @@ fn ford(
 
 /// The bridge from bank cell `a` to bank cell `b`.
 fn bridge(cost: &StepCost<'_>, a: usize, b: usize, id: &Prop, frame: &MapFrame) -> Feature {
-    let [xa, ya] = frame.centre_m(a / frame.cols, a % frame.cols);
-    let [xb, yb] = frame.centre_m(b / frame.cols, b % frame.cols);
+    let [xa, ya] = frame.index_centre_m(a);
+    let [xb, yb] = frame.index_centre_m(b);
     let tenth = |m: f64| Prop::Num(canonical(round_half_even(m * 10.0) / 10.0));
     let props = [
         ("road", id.clone()),

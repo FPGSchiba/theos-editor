@@ -54,9 +54,7 @@ impl TypedStage for Hillslope {
         ctx: &mut StageContext<'_>,
         _: &HillslopeParams,
     ) -> Result<StageReport, StageError> {
-        let Some(step) = ctx.step() else {
-            return Err(ctx.fail("runs only as a process of landscape_evolution"));
-        };
+        let step = ctx.process_step()?;
         let cell_m = ctx.frame().cell_m;
         let start = ctx.take_f64("height")?;
         let mut erosion = ctx.take_f64("erosion")?;
