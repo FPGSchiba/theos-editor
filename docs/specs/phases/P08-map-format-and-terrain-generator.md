@@ -186,6 +186,11 @@ What later phases build on it:
   periods, because slope supply cycled between `fluvial` and `slope_limit` on dry cells. Jann:
   the iterations start with the supply laid down (§5.9 "Solution, each time step"), and a recipe
   switch stops the loop (§5.9 "Slope supply"). Rulings 62 and 63.
+- **19 Nov 2026, the tuning:** the built-in recipes meet CE-28.5 (`hearth-valley` passes 5 of 8
+  seeds, `hearth-valley-omega` 4 of 8) with retuned uplift, `fixture-small`'s drier climate and
+  `supply_passes_dry_cells` set; Δt is kept. One constraint range changed, the omega's Chime walk
+  (§5.5), by Jann's ruling that tuning may adjust a range when the evidence shows 0.3.0's does not
+  fit the new physics. Ruling 64.
 
 ### 4.2 Research (10 Nov 2026)
 
@@ -447,12 +452,12 @@ edges = ["south"]
 
 [[stage]]
 id = "tectonics"
-background_uplift = 2.2e-4
+background_uplift = 3.3e-4
   [[stage.source]]
   type = "orogen"
   path = [[0.02, 0.14], [0.40, 0.08], [0.98, 0.20]]   # [x, y] fractions (G19)
   width = 0.10
-  rate = 2.6e-3
+  rate = 1.56e-3
   asymmetry = 0.5
   jitter = 0.06
 
@@ -480,6 +485,7 @@ dt_yr  = 2.5e4
   id = "fluvial"
   m = 0.45
   g = 1.0
+  supply_passes_dry_cells = true
   [[stage.process]]
   id = "slope_limit"
   [[stage.process]]
@@ -529,15 +535,25 @@ labels = []
   reports each broken one as a problem with its file and the error; `run` of a broken recipe fails
   with that error.
 - **Built-in recipes.** `hearth-valley`, `hearth-valley-omega` and `fixture-small` keep 0.3.0's
-  intent: the same sources, rock mixes, climate, feature counts and constraints. Their process
-  parameters are tuned so their seeds pass the recipe's constraints more often than 0.3.0 did
-  (CE-28.5).
+  intent: the same sources, rock mixes, feature counts and constraints. Their uplift rates,
+  process parameters and, for `fixture-small`, the base precipitation are tuned so that they
+  meet CE-28.5 (Jann's ruling of 19 Nov 2026):
+  - relief is the height of the north-rim orogen, and vegetation cover falls with the share of
+    steep ground, which the background uplift sets. So the orogen of `hearth-valley` and
+    `hearth-valley-omega` rises at 1.56e-3 m/yr (0.3.0: 2.6e-3), and every built-in's
+    background uplift is 3.3e-4 m/yr (0.3.0: 2.2e-4);
+  - `fixture-small`'s base precipitation is 450 mm/yr (0.3.0: 800);
+  - every built-in sets `supply_passes_dry_cells` (§5.9);
+  - `hearth-valley-omega`'s Chime walk range is [100, 400] min (0.3.0: [60, 240]). Off roads,
+    P08 walks at 0.6 of Tobler's speed (§5.9), where 0.3.0 walked at full speed, and the omega
+    map has no roads. So the range is 0.3.0's divided by 0.6, which leaves every 0.3.0 seed's
+    verdict unchanged (Appendix A).
   - `hearth-valley-omega` stays as 0.3.0 had it: no settlements, resources, roads or sites. So
     `pois` reads `features` and `travel` reads `road_network` as optional reads; without roads,
     travel uses off-road walking only.
   - Deposition steepens channels at steady state (slope grows by (1 + G/p̂)^(1/n), Yuan et al.'s
-    eq. 24), so G > 0 raises relief at the same uplift. Uplift rates and K are retuned so relief
-    stays inside the recipe's range.
+    eq. 24), so G > 0 raises relief at the same uplift. Uplift rates are retuned (K is 0.3.0's
+    rock table) so relief stays inside the recipe's range.
   - Every recipe sets `river_q` and `big_river_q` on `hydrology`; they have no default. The
     built-in recipes keep 0.3.0's values (0.15 and 2.0 m³/s; `fixture-small` 0.05 and 0.5).
 - **Units.** Lengths in metres or kilometres, positions as fractions of the frame, rates per year.
@@ -1056,7 +1072,8 @@ constrains that metric, the recipe's wanted range is added to it. Lake share alw
 of 0: fewer lakes is the intended fix (§4.2), so hearth-valley-omega, which has no lake
 constraint, may lie anywhere in [0, 31.14]. The number of seeds passing all constraints (the
 placement checks included, §5.5) is at least 0.3.0's. Appendix A holds 0.3.0's per-seed values,
-which the fixture copies.
+which the fixture copies. `hearth-valley-omega`'s walk range is 0.3.0's divided by the off-path
+factor 0.6 (§5.5); under it 0.3.0's walk verdicts are the same, so its count stays 3 of 8.
 
 **Golden hashes (CE-77.1, CE-77.2):**
 
@@ -1459,6 +1476,12 @@ Rulings of 13 Nov 2026, from the build:
     fresh deposit from `slope_limit` only delayed the loop, left cells up to 8.1 km above their
     critical slope and broke physics test 10 — cost if wrong: where a recipe sets it, the debris
     of dry catchments is laid down further downstream or leaves the map.
+64. Ruling (under Jann's ruling of 19 Nov 2026 that tuning may adjust constraint ranges with
+    evidence): `hearth-valley-omega`'s `travel.chime_to_chime_min` range is [100, 400] — P08
+    walks off roads at 0.6 of Tobler's speed and the omega map has no roads, so the same walk
+    takes 1/0.6 as long as in 0.3.0 (0.3.0's median 149.2 min / 0.6 = 248.7; the untuned P08
+    median was 249.35); the scaled range keeps every 0.3.0 verdict, and with the old range only
+    1 seed of 8 passed — cost if wrong: the omega accepts walks up to 400 min.
 
 ## 10. Left to the builder
 
