@@ -39,7 +39,7 @@ mod tree;
 
 use serde::Deserialize;
 
-pub use self::depressions::Depressions;
+pub(crate) use self::depressions::Depressions;
 // The tests of the processes after this one build spill points.
 #[cfg(test)]
 pub(crate) use self::depressions::SpillPoint;

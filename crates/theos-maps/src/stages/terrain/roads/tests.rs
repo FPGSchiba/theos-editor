@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{RoadClass, RoadNetwork, Roads};
+use super::{RoadClass, RoadNetwork, Roads, end_near};
 use crate::features::{Feature, FeatureHandle, FeatureSet, Geometry, Prop};
 use crate::grid::Grid;
 use crate::kernels::mst::UnionFind;
@@ -430,8 +430,8 @@ fn trails_lead_to_ruins_from_the_network() {
         trail.length_m(w.frame())
     );
     assert_eq!(*trail.cells.last().unwrap() as usize, 40 * N + 32);
-    assert_eq!(net.end_near(trail.cells[0]), Some(trail.from));
-    assert_eq!(net.end_near(u32::MAX), None);
+    assert_eq!(end_near(&net.roads, trail.cells[0]), Some(trail.from));
+    assert_eq!(end_near(&net.roads, u32::MAX), None);
 }
 
 #[test]

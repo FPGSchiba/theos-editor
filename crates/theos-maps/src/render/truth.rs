@@ -54,15 +54,14 @@ pub(super) const NEEDS: &[LayerSpec] = base::NEEDS;
 /// Draws `truth`.
 pub(crate) fn truth(input: &RenderInput<'_>) -> Result<Pixmap, RenderError> {
     let ground = base::base(input)?;
-    let size = RenderError::Size {
-        rows: usize::try_from(ground.height()).unwrap_or(0),
-        cols: usize::try_from(ground.width()).unwrap_or(0),
+    let height = ground
+        .height()
+        .saturating_add(TRUTH_TOP_PX + TRUTH_BOTTOM_PX);
+    let size = RenderError::Canvas {
+        width: usize::try_from(ground.width()).unwrap_or(usize::MAX),
+        height: usize::try_from(height).unwrap_or(usize::MAX),
     };
-    let mut pixmap = Pixmap::new(
-        ground.width(),
-        ground.height() + TRUTH_TOP_PX + TRUTH_BOTTOM_PX,
-    )
-    .ok_or(size)?;
+    let mut pixmap = Pixmap::new(ground.width(), height).ok_or(size)?;
     pixmap.fill(Color::from_rgba8(MARGIN[0], MARGIN[1], MARGIN[2], u8::MAX));
     let top = i32::try_from(TRUTH_TOP_PX).unwrap_or(0);
     pixmap.draw_pixmap(

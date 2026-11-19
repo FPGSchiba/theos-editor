@@ -423,7 +423,7 @@ fn tolerance(uplift: Option<&Grid<f64>>, dt: f64) -> f64 {
 /// the climate has no fields yet, and all 0 when the mean runoff is 0 (no water, no stream).
 /// `None` when the climate's runoff does not have the shape of `frame`.
 #[must_use]
-pub fn runoff_weight(climate: &Climate, frame: &MapFrame) -> Option<Grid<f64>> {
+pub(crate) fn runoff_weight(climate: &Climate, frame: &MapFrame) -> Option<Grid<f64>> {
     let Some(fields) = &climate.fields else {
         return Some(Grid::filled(frame.rows, frame.cols, 1.0));
     };

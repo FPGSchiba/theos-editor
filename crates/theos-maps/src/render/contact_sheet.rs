@@ -126,10 +126,7 @@ pub fn contact_sheet(
     let rows = tiles.len().div_ceil(columns);
     let width = columns * (cell_w + PAD_PX) + PAD_PX;
     let height = rows * (LABEL_BAND_PX + cell_h + PAD_PX) + PAD_PX;
-    let size = RenderError::Size {
-        rows: height,
-        cols: width,
-    };
+    let size = RenderError::Canvas { width, height };
     let (w, h) = (u32::try_from(width), u32::try_from(height));
     let mut sheet = match (w, h) {
         (Ok(w), Ok(h)) => Pixmap::new(w, h).ok_or(size)?,

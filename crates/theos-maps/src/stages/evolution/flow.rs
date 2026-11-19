@@ -14,7 +14,7 @@ use crate::world::{ValueType, WorldValue};
 /// The distance in metres to the neighbour at [`D8`] offset `k` of a cell of `cell_m` metres:
 /// `cell_m` along a row or column (even `k`), `cell_m·√2` along a diagonal (odd `k`).
 #[must_use]
-pub fn d8_distance(cell_m: f64, k: usize) -> f64 {
+pub(crate) fn d8_distance(cell_m: f64, k: usize) -> f64 {
     if k % 2 == 1 { cell_m * SQRT_2 } else { cell_m }
 }
 
@@ -85,7 +85,7 @@ pub(crate) fn cell_index(c: u32) -> usize {
 /// `start[i]..start[i + 1]`. A cell that receives itself (an outlet, or the closed map's sink)
 /// has no edge. The weights of a cell with edges sum to 1.
 #[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct FlowWeights {
+pub(crate) struct FlowWeights {
     /// The first edge of each cell; one entry more than there are cells.
     pub start: Vec<u32>,
     /// The receiving cell of each edge.
@@ -136,7 +136,7 @@ impl ValueType for FlowWeights {
 /// reverse `stack` order (donors before receivers), so `out[i] = input[i] + sum of out[d]·w(d→i)`
 /// over the donors `d` of `i`.
 #[must_use]
-pub fn accumulate(stack: &[u32], w: &FlowWeights, input: &Grid<f64>) -> Grid<f64> {
+pub(crate) fn accumulate(stack: &[u32], w: &FlowWeights, input: &Grid<f64>) -> Grid<f64> {
     let mut out = input.clone();
     for &cell in stack.iter().rev() {
         let i = cell_index(cell);
@@ -152,7 +152,12 @@ pub fn accumulate(stack: &[u32], w: &FlowWeights, input: &Grid<f64>) -> Grid<f64
 /// The closed map's sink is not an outlet; its water stays on the map.
 #[must_use]
 #[cfg(test)]
-pub fn outflow(stack: &[u32], w: &FlowWeights, input: &Grid<f64>, outlets: &Grid<bool>) -> f64 {
+pub(crate) fn outflow(
+    stack: &[u32],
+    w: &FlowWeights,
+    input: &Grid<f64>,
+    outlets: &Grid<bool>,
+) -> f64 {
     accumulate(stack, w, input)
         .as_slice()
         .iter()

@@ -401,6 +401,15 @@ fn truth_matches_its_recorded_hash() -> TestResult {
 }
 
 #[test]
+fn a_canvas_error_counts_pixels() {
+    let error = RenderError::Canvas {
+        width: 3,
+        height: 0,
+    };
+    assert_eq!(error.to_string(), "a canvas of 3 x 0 pixels cannot be made");
+}
+
+#[test]
 fn every_render_stops_on_cancel() {
     let w = world();
     let cancel = CancelToken::new();

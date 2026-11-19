@@ -71,6 +71,14 @@ pub enum RenderError {
         /// Columns of the frame.
         cols: usize,
     },
+    /// A canvas of this many pixels cannot be made: it is empty or too large.
+    #[error("a canvas of {width} x {height} pixels cannot be made")]
+    Canvas {
+        /// The width in pixels.
+        width: usize,
+        /// The height in pixels.
+        height: usize,
+    },
     /// An embedded font could not be decoded.
     #[error(transparent)]
     Font(#[from] FontError),

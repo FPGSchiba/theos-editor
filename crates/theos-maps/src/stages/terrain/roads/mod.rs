@@ -1,7 +1,7 @@
 //! The `roads` stage (spec §5.9 "Roads"): a road network between the settlements and gates,
 //! routed over the terrain in 16 directions, with bridges as single spans and fords on streams.
 //!
-//! **Steps** ([`StepCost`]): the 8 neighbours and the 8 knight moves. A step of length `L` and
+//! **Steps** (`StepCost`): the 8 neighbours and the 8 knight moves. A step of length `L` and
 //! grade `|Δh| / L` costs `L·(1 + (grade / comfort_grade)²·6)` while the grade is within its
 //! class's `max_grade`, plus `forest_cost·vegetation·L` on the cell stepped onto, plus
 //! `ford_cost` for each stream cell it passes after its first cell. Every cell the step's
@@ -9,7 +9,7 @@
 //! big-river cell. A diagonal passes the corner of its two side cells, a knight move the two
 //! cells between its ends.
 //!
-//! **Bridges** ([`StepCost::bridges`]): from a land cell, a straight line in each of the 16
+//! **Bridges** (`StepCost::bridges`): from a land cell, a straight line in each of the 16
 //! directions across lake or big-river cells to the first land cell on it, up to
 //! `max_bridge_span_m` between the bank cells. A bridge costs
 //! `span·bridge_cost·(1 + angle_penalty·|cos θ|) + deck_cost·rise`, with θ between the crossing
@@ -64,10 +64,10 @@ use serde::Serialize;
 
 pub(crate) use self::build::Layers;
 pub(crate) use self::cost::between;
-pub use self::cost::{StepCost, Terrain};
+pub(crate) use self::cost::{StepCost, Terrain};
 pub(crate) use self::lay::Laid;
 pub use self::params::{MaxGrade, RoadsParams, WidthM};
-pub use self::route::{Router, bridge_key};
+pub(crate) use self::route::Router;
 use crate::features::{FeatureHandle, FeatureSet};
 use crate::grid::Grid;
 use crate::kernels::num::{max, to_f64};
@@ -170,23 +170,16 @@ impl Road {
 /// was built with, so later stages can route spurs alike and the outputs know the widths.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct RoadNetwork {
-    /// The roads, links first in the order laid, then the trails.
+    /// The roads, links first in the order laid, then the trails; after `sites`, the spurs it
+    /// laid to its sites follow.
     pub roads: Vec<Road>,
     /// The parameters of the `roads` stage that built the network.
     pub params: RoadsParams,
 }
 
-impl RoadNetwork {
-    /// The feature a path joining the network at `cell` meets: a road's end feature, the nearer
-    /// one along the first road through `cell` (`from` in its first half); `None` when no road
-    /// passes `cell`.
-    #[must_use]
-    pub fn end_near(&self, cell: u32) -> Option<FeatureHandle> {
-        end_near(&self.roads, cell)
-    }
-}
-
-/// [`RoadNetwork::end_near`] over `roads`.
+/// The feature a path joining the network of `roads` at `cell` meets: a road's end feature, the
+/// nearer one along the first road through `cell` (`from` in its first half); `None` when no
+/// road passes `cell`.
 pub(crate) fn end_near(roads: &[Road], cell: u32) -> Option<FeatureHandle> {
     roads.iter().find_map(|road| {
         let at = road.cells.iter().position(|&c| c == cell)?;
