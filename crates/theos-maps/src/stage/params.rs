@@ -95,12 +95,18 @@ impl<'a> Check<'a> {
         Self { stage }
     }
 
+    /// The error of `parameter` for a rule of the stage's own, in its own words.
+    #[must_use]
+    pub(crate) fn refuse(self, parameter: &str, message: impl Into<String>) -> ParamError {
+        ParamError::at(self.stage, parameter, message)
+    }
+
     /// `Ok` when `holds`, else the error of `parameter` with `message`.
     fn require(self, holds: bool, parameter: &str, message: String) -> Result<(), ParamError> {
         if holds {
             Ok(())
         } else {
-            Err(ParamError::at(self.stage, parameter, message))
+            Err(self.refuse(parameter, message))
         }
     }
 

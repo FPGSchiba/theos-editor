@@ -8,6 +8,7 @@ use crate::kernels::curves::{dense_curve, signed_distance};
 use crate::kernels::noise::spectral_noise;
 use crate::kernels::num::{max, smoothstep};
 use crate::rng::StageRng;
+use crate::stage::{Check, ParamError};
 
 /// Samples of the dense curve through a path, as in 0.3.0.
 const CURVE_SAMPLES: usize = 600;
@@ -33,6 +34,10 @@ const fn basin_depth() -> f64 {
 
 /// One tectonic feature. Positions are `[x, y]` fractions of the map. The enum carries
 /// `deny_unknown_fields` because `serde_ignored` does not see inside tagged enums.
+///
+/// The domains [`Source::check`] holds them to: positions finite, paths of at least two points,
+/// `width`, `reach` and `r` positive, `rate` finite, `jitter` and `depth_m` at least 0, and
+/// `asymmetry` in [0, 2).
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Source {
@@ -44,7 +49,10 @@ pub enum Source {
         width: f64,
         /// Peak uplift in m/yr.
         rate: f64,
-        /// 0 = symmetric, towards 1 = steeper on the positive side.
+        /// How much the belt leans, in [0, 2): the flank on the positive side of the axis (to
+        /// the right of the path as it runs) is `width·(1 − asymmetry/2)` wide, the other
+        /// `width·(1 + asymmetry/2)`, so the positive flank is the narrower, steeper one; 0 is
+        /// symmetric, and at 2 the positive flank would vanish.
         #[serde(default = "half")]
         asymmetry: f64,
         /// Standard deviation of the control point jitter.
@@ -123,25 +131,103 @@ pub enum Source {
 }
 
 impl Source {
-    /// Why the source is unusable, if it is.
-    pub(super) fn problem(&self) -> Option<String> {
-        let (path, size, label) = match self {
-            Self::Orogen { path, width, .. } | Self::Rift { path, width, .. } => {
-                (Some(path), *width, "width")
+    /// Checks the source's numbers against their domains (see [`Source`]); `at` is the source's
+    /// own path, `source[<k>]`.
+    ///
+    /// # Errors
+    /// [`ParamError`] naming `<at>.<parameter>`, such as `source[0].asymmetry`.
+    pub(super) fn check(&self, at: &str, check: Check<'_>) -> Result<(), ParamError> {
+        let name = |parameter: &str| format!("{at}.{parameter}");
+        let path_of = |path: &[[f64; 2]]| points(path, &name("path"), check);
+        let centre_of = |centre: &[f64; 2]| {
+            for (i, &v) in centre.iter().enumerate() {
+                check.finite(&name(&format!("at[{i}]")), v)?;
             }
-            Self::Fault { path, reach, .. } => (Some(path), *reach, "reach"),
-            Self::Dome { r, .. } | Self::Volcano { r, .. } | Self::Basin { r, .. } => {
-                (None, *r, "r")
-            }
+            Ok(())
         };
-        if path.is_some_and(|p| p.len() < 2) {
-            return Some("path needs at least two points".to_owned());
+        match self {
+            Self::Orogen {
+                path,
+                width,
+                rate,
+                asymmetry,
+                jitter,
+            } => {
+                path_of(path)?;
+                check.positive(&name("width"), *width)?;
+                check.finite(&name("rate"), *rate)?;
+                check.in_closed_open(&name("asymmetry"), *asymmetry, 0.0, 2.0)?;
+                check.at_least(&name("jitter"), *jitter, 0.0)
+            }
+            Self::Fault {
+                path,
+                rate,
+                reach,
+                jitter,
+            } => {
+                path_of(path)?;
+                check.finite(&name("rate"), *rate)?;
+                check.positive(&name("reach"), *reach)?;
+                check.at_least(&name("jitter"), *jitter, 0.0)
+            }
+            Self::Rift {
+                path,
+                width,
+                rate,
+                depth_m,
+                jitter,
+            } => {
+                path_of(path)?;
+                check.positive(&name("width"), *width)?;
+                check.finite(&name("rate"), *rate)?;
+                check.at_least(&name("depth_m"), *depth_m, 0.0)?;
+                check.at_least(&name("jitter"), *jitter, 0.0)
+            }
+            Self::Dome {
+                at: centre,
+                r,
+                rate,
+                jitter,
+            }
+            | Self::Volcano {
+                at: centre,
+                r,
+                rate,
+                jitter,
+            } => {
+                centre_of(centre)?;
+                check.positive(&name("r"), *r)?;
+                check.finite(&name("rate"), *rate)?;
+                check.at_least(&name("jitter"), *jitter, 0.0)
+            }
+            Self::Basin {
+                at: centre,
+                r,
+                rate,
+                depth_m,
+                jitter,
+            } => {
+                centre_of(centre)?;
+                check.positive(&name("r"), *r)?;
+                check.finite(&name("rate"), *rate)?;
+                check.at_least(&name("depth_m"), *depth_m, 0.0)?;
+                check.at_least(&name("jitter"), *jitter, 0.0)
+            }
         }
-        if size.is_nan() || size <= 0.0 {
-            return Some(format!("{label} must be positive"));
-        }
-        None
     }
+}
+
+/// Checks a source's `path` (named `parameter`): at least two points, each coordinate finite.
+fn points(path: &[[f64; 2]], parameter: &str, check: Check<'_>) -> Result<(), ParamError> {
+    if path.len() < 2 {
+        return Err(check.refuse(parameter, "must hold at least two points"));
+    }
+    for (i, point) in path.iter().enumerate() {
+        for (j, &v) in point.iter().enumerate() {
+            check.finite(&format!("{parameter}[{i}][{j}]"), v)?;
+        }
+    }
+    Ok(())
 }
 
 /// What a source reads and adds to.

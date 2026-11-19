@@ -12,7 +12,7 @@ use crate::grid::Grid;
 use crate::kernels::noise::{spectral_noise, warped_coords};
 use crate::kernels::num::max;
 use crate::stage::{
-    LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
+    Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
 use crate::world::{Layer, ValueType, WorldValue};
 
@@ -77,7 +77,9 @@ impl ValueType for Warp {
     const NAME: &'static str = "warp";
 }
 
-/// The parameters of `tectonics`; defaults as 0.3.0 (the sag duration is plan ruling L13).
+/// The parameters of `tectonics`; defaults as 0.3.0 (the sag duration is plan ruling L13). The
+/// background and warp numbers must be finite and `sag_duration_yr` positive and finite; the
+/// sources have the domains of [`Source`].
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct TectonicsParams {
@@ -137,17 +139,19 @@ impl TypedStage for Tectonics {
     }
 
     fn validate(&self, params: &mut TectonicsParams) -> Result<(), ParamError> {
-        if params.sag_duration_yr.is_nan() || params.sag_duration_yr <= 0.0 {
-            return Err(ParamError::at(
-                Self::ID,
-                "sag_duration_yr",
-                "must be positive",
-            ));
+        let check = Check::of(Self::ID);
+        for (name, value) in [
+            ("background_uplift", params.background_uplift),
+            ("background_variation", params.background_variation),
+            ("background_beta", params.background_beta),
+            ("warp", params.warp),
+            ("warp_beta", params.warp_beta),
+        ] {
+            check.finite(name, value)?;
         }
+        check.positive("sag_duration_yr", params.sag_duration_yr)?;
         for (k, source) in params.source.iter().enumerate() {
-            if let Some(problem) = source.problem() {
-                return Err(ParamError::at(Self::ID, format!("source[{k}]"), problem));
-            }
+            source.check(&format!("source[{k}]"), check)?;
         }
         Ok(())
     }
@@ -263,16 +267,32 @@ mod tests {
             "{FLAT}\n[[source]]\ntype = \"basin\"\nat = [0.5, 0.5]\nr = 0.2\ndepth_m = 60.0\njitter = 0.0\n"
         );
         let w = tectonic_world(&toml);
-        let peak = w
-            .f64("sag_rate")
-            .unwrap()
-            .as_slice()
-            .iter()
-            .fold(0.0, |a, &v| max(a, v));
-        assert!((peak - 1.0e-5).abs() < 1.0e-7, "{peak}");
-        // the bowl damps the uplift at its centre
-        let u = w.f64("uplift").unwrap();
-        assert!(u.get(32, 32) < 0.5 * u.get(20, 2) || u.get(32, 32) < 1.0e-4);
+        let (sag, uplift, fixed) = (
+            w.f64("sag_rate").unwrap(),
+            w.f64("uplift").unwrap(),
+            w.mask("fixed").unwrap(),
+        );
+        // 60 m over the default 6.0e6 years.
+        let full = 1.0e-5;
+        let peak = sag.as_slice().iter().fold(0.0, |a, &v| max(a, v));
+        assert!((peak - full).abs() < 1.0e-7, "{peak}");
+        // The bowl `b = exp(-d²/2)`, d the distance in radii, sags at `b·full` and damps the
+        // flat background uplift (1.5e-4 m/yr, no variation) to `1 − 0.7·b` of it, so on every
+        // cell that is not fixed the uplift follows from the sag rate; fixed cells hold 0.
+        let background = 1.5e-4;
+        for (i, (&s, &u)) in sag.as_slice().iter().zip(uplift.as_slice()).enumerate() {
+            if fixed.as_slice()[i] {
+                assert_eq!((s.to_bits(), u.to_bits()), (0, 0), "cell {i}");
+            } else {
+                let expected = background * (1.0 - 0.7 * s / full);
+                assert!(
+                    (u - expected).abs() < 1.0e-15,
+                    "cell {i}: {u} vs {expected}"
+                );
+            }
+        }
+        // The centre cell lies within a few hundredths of a radius of the bowl's centre.
+        assert!(sag.get(32, 32) > 0.99 * full, "{}", sag.get(32, 32));
     }
 
     #[test]
@@ -337,18 +357,40 @@ mod tests {
         let toml = format!(
             "{FLAT}\n[[source]]\ntype = \"orogen\"\npath = [[0.1, 0.5], [0.9, 0.5]]\nwidth = 0.1\nrate = 1.0e-3\nasymmetry = 0.9\njitter = 0.0\n"
         );
-        let w = tectonic_world(&toml);
-        let belt = w
+        let leaning = tectonic_world(&toml);
+        let level = tectonic_world(&toml.replace("asymmetry = 0.9", "asymmetry = 0.0"));
+        let belt = leaning
             .value::<Belts>("belts")
             .unwrap()
             .first_orogen
             .as_ref()
             .unwrap();
-        let uplift = w.f64("uplift").unwrap();
-        // rows 20 and 44 sit at about the same distance above and below the axis (row 32)
-        let (above, below) = (uplift.get(20, 32), uplift.get(44, 32));
-        assert!((belt.get(20, 32) + belt.get(44, 32)).abs() < 0.02);
-        assert!((above - below).abs() > 1.0e-6, "{above} {below}");
+        // Rows 20 and 44 sit at about the same distance on either side of the axis (row 32).
+        let (a, b) = ((20, 32), (44, 32));
+        assert!((belt.get(a.0, a.1) + belt.get(b.0, b.1)).abs() < 0.02);
+        assert!(belt.get(a.0, a.1).abs() > 0.1);
+        let (positive, negative) = if belt.get(a.0, a.1) > 0.0 {
+            (a, b)
+        } else {
+            (b, a)
+        };
+        // The belt's share of the uplift: the flat background of 1.5e-4 m/yr taken off.
+        let belt_uplift =
+            |w: &World, (r, c): (usize, usize)| w.f64("uplift").unwrap().get(r, c) - 1.5e-4;
+        // Both runs draw the same noise from the same streams, so only the lean differs: the
+        // positive side narrows (less uplift at the same distance: the steeper flank) and the
+        // negative side widens.
+        let pos = (
+            belt_uplift(&leaning, positive),
+            belt_uplift(&level, positive),
+        );
+        let neg = (
+            belt_uplift(&leaning, negative),
+            belt_uplift(&level, negative),
+        );
+        assert!(pos.0 < 0.5 * pos.1, "positive side {pos:?}");
+        assert!(neg.0 > 1.5 * neg.1, "negative side {neg:?}");
+        assert!(pos.0 < 0.1 * neg.0, "leaning {pos:?} {neg:?}");
     }
 
     #[test]
@@ -375,29 +417,135 @@ mod tests {
         assert_eq!(err.parameter.as_deref(), Some("bogus"));
     }
 
+    const OROGEN: &str = "[[source]]\ntype = \"orogen\"\npath = [[0.1, 0.5], [0.9, 0.5]]\nwidth = 0.1\nrate = 1.0e-3";
+    const DOME: &str = "[[source]]\ntype = \"dome\"\nat = [0.5, 0.5]\nr = 0.1\nrate = 1.0e-3";
+    const RIFT: &str =
+        "[[source]]\ntype = \"rift\"\npath = [[0.1, 0.5], [0.9, 0.5]]\nrate = 1.0e-3";
+    const FAULT: &str = "[[source]]\ntype = \"fault\"\npath = [[0.1, 0.1], [0.9, 0.1]]\nrate = 1.0";
+    const BASIN: &str = "[[source]]\ntype = \"basin\"\nat = [0.5, 0.5]\nr = 0.1";
+
+    const FINITE: &str = "must be finite";
+    const POSITIVE: &str = "must be positive and finite";
+    const NOT_NEGATIVE: &str = "must be at least 0 and finite";
+
+    /// Each `(toml, parameter, message)` is refused naming exactly that parameter and message.
+    fn refused(cases: &[(String, &str, &str)]) {
+        for (toml, parameter, message) in cases {
+            let err = Tectonics.params(&table(toml)).unwrap_err();
+            assert_eq!(err.parameter.as_deref(), Some(*parameter), "{toml}: {err}");
+            assert_eq!(err.message, *message, "{toml}: {err}");
+        }
+    }
+
+    // Final review round 2, finding 2: every number of the stage has its domain (ruling of
+    // the round), refused naming its path before any stage runs.
     #[test]
     fn bad_values_are_refused() {
-        for (toml, parameter, text) in [
-            ("sag_duration_yr = 0.0", "sag_duration_yr", "positive"),
+        let case = |toml: &str, parameter, message| (toml.to_owned(), parameter, message);
+        refused(&[
+            case("sag_duration_yr = 0.0", "sag_duration_yr", POSITIVE),
+            case("sag_duration_yr = inf", "sag_duration_yr", POSITIVE),
+            case("background_uplift = nan", "background_uplift", FINITE),
+            case("background_variation = inf", "background_variation", FINITE),
+            case("background_beta = nan", "background_beta", FINITE),
+            case("warp = -inf", "warp", FINITE),
+            case("warp_beta = nan", "warp_beta", FINITE),
+        ]);
+    }
+
+    #[test]
+    fn bad_source_values_are_refused() {
+        let lean = "must be in [0, 2)";
+        let two = "must hold at least two points";
+        let with = |source: &str, extra: &str| format!("{source}\n{extra}");
+        let swap = |source: &str, from: &str, to: &str| source.replace(from, to);
+        refused(&[
+            (swap(FAULT, ", [0.9, 0.1]", ""), "source[0].path", two),
             (
-                "[[source]]\ntype = \"fault\"\npath = [[0.1, 0.1]]\nrate = 1.0",
-                "source[0]",
-                "two points",
+                swap(OROGEN, "[0.9, 0.5]", "[inf, 0.5]"),
+                "source[0].path[1][0]",
+                FINITE,
+            ),
+            (with(OROGEN, "asymmetry = 2.0"), "source[0].asymmetry", lean),
+            (
+                with(OROGEN, "asymmetry = -0.1"),
+                "source[0].asymmetry",
+                lean,
+            ),
+            (with(OROGEN, "asymmetry = nan"), "source[0].asymmetry", lean),
+            (
+                swap(OROGEN, "width = 0.1", "width = -1.0"),
+                "source[0].width",
+                POSITIVE,
             ),
             (
-                "[[source]]\ntype = \"dome\"\nat = [0.5, 0.5]\nr = 0.0\nrate = 1.0",
-                "source[0]",
-                "r must be positive",
+                swap(OROGEN, "width = 0.1", "width = inf"),
+                "source[0].width",
+                POSITIVE,
             ),
             (
-                "[[source]]\ntype = \"orogen\"\npath = [[0,0],[1,1]]\nwidth = -1.0\nrate = 1.0",
-                "source[0]",
-                "width",
+                swap(OROGEN, "rate = 1.0e-3", "rate = nan"),
+                "source[0].rate",
+                FINITE,
             ),
+            (
+                with(OROGEN, "jitter = inf"),
+                "source[0].jitter",
+                NOT_NEGATIVE,
+            ),
+            (
+                with(OROGEN, "jitter = -0.1"),
+                "source[0].jitter",
+                NOT_NEGATIVE,
+            ),
+            (swap(DOME, "r = 0.1", "r = 0.0"), "source[0].r", POSITIVE),
+            (
+                swap(DOME, "[0.5, 0.5]", "[0.5, nan]"),
+                "source[0].at[1]",
+                FINITE,
+            ),
+            (
+                swap(DOME, "rate = 1.0e-3", "rate = -inf"),
+                "source[0].rate",
+                FINITE,
+            ),
+            (
+                with(RIFT, "depth_m = -1.0"),
+                "source[0].depth_m",
+                NOT_NEGATIVE,
+            ),
+            (
+                with(RIFT, "depth_m = inf"),
+                "source[0].depth_m",
+                NOT_NEGATIVE,
+            ),
+            (with(RIFT, "width = 0.0"), "source[0].width", POSITIVE),
+            (with(FAULT, "reach = nan"), "source[0].reach", POSITIVE),
+            (
+                with(BASIN, "depth_m = nan"),
+                "source[0].depth_m",
+                NOT_NEGATIVE,
+            ),
+            (with(BASIN, "rate = inf"), "source[0].rate", FINITE),
+            (
+                with(DOME, &swap(OROGEN, "rate = 1.0e-3", "rate = inf")),
+                "source[1].rate",
+                FINITE,
+            ),
+        ]);
+    }
+
+    #[test]
+    fn the_edges_of_the_domains_are_accepted() {
+        for toml in [
+            format!("{OROGEN}\nasymmetry = 0.0\njitter = 0.0"),
+            format!("{OROGEN}\nasymmetry = 1.99"),
+            format!("{RIFT}\ndepth_m = 0.0").replace("rate = 1.0e-3", "rate = -1.0e-3"),
+            format!("{BASIN}\ndepth_m = 0.0"),
+            format!("{DOME}\nat = [-0.2, 1.3]").replace("at = [0.5, 0.5]\n", ""),
+            "background_uplift = -1.0e-4\nwarp = 0.0\nwarp_beta = -1.0".to_owned(),
         ] {
-            let err = Tectonics.params(&table(toml)).unwrap_err();
-            assert_eq!(err.parameter.as_deref(), Some(parameter), "{toml}: {err}");
-            assert!(err.to_string().contains(text), "{toml}: {err}");
+            assert!(Tectonics.params(&table(&toml)).is_ok(), "{toml}");
         }
     }
 
