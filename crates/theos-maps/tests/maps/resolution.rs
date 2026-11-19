@@ -15,8 +15,9 @@
 //! **Each pair is asserted on what it resolves (Jann's decision of 18 Nov 2026).** Every metric
 //! of both pairs is computed and reported in the failure message, but only these are asserted:
 //! - **The hearth pair** (`hearth-valley` itself, 240 steps): relief and river length through
-//!   lakes. It has no lake of at least 0.25 km² at either size on most seeds (pairs of zeros;
-//!   seed 2 has a small one at 192² only), so its lake share cannot be compared.
+//!   lakes. Its lakes are few and small, and the two sizes do not resolve them alike (at the
+//!   final review's measurement, seed 1: a lake share of 0.114 % at 192² and none at 384²;
+//!   seed 2: 1.077 % against 0.987 %), so its lake share cannot be compared.
 //! - **The basin pair** (a synthetic closed basin, 10 steps of 2.5e4 yr, a dry climate and a sag
 //!   of 4e-3 m/yr at its centre; its lakes are terminal and small, 3–6 % of the map): relief and
 //!   lake share. Its rivers are 0.007–0.044 km/km², a few channel cells, which the two sizes do

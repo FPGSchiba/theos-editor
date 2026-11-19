@@ -57,6 +57,11 @@ struct Step {
 /// findings of a process's own report count every step it runs; its `checks` run at every
 /// multiple of `check_every` and on the last step.
 ///
+/// Every run of a process is handed the same `dt_yr`: a run covers one step's time, not the
+/// steps since the process last ran. So `every = n` on a rate process (`uplift`, `hillslope`,
+/// `fluvial`) slows it by about `n`, with an extra run on the last step; `every` is meant for
+/// refreshes such as `climate_update`.
+///
 /// Each process keeps one random stream for the whole run, made once from its key (plan ruling
 /// L12), so `ctx.rng()` in a process continues where the last step left it.
 ///

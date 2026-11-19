@@ -7,7 +7,8 @@
 //! type from 1 in that order, so a stage that changed a type (a promotion) renames no
 //! reference. Every [`Prop::Ref`], [`Prop::Refs`] and [`Prop::Road`] becomes the id or ids of
 //! the features it names; a reference to something that does not exist is an error. Coordinates
-//! are metres, and `-0.0` is written as `0.0`. A world without one of the three values has no features of it.
+//! are metres, and `-0.0` is written as `0.0`. A world without one of the three values has no
+//! features of it.
 //!
 //! Roads are `road`/`<class>` `LineString`s of cell centres with `from`, `to`, `length_m`,
 //! `width_m` (from the parameters of the `roads` stage) and `grade_max`; a bridge is the straight

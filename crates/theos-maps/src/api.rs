@@ -40,7 +40,8 @@ pub struct RunRequest {
     pub options: RunOptions,
 }
 
-/// A note attached to a feature.
+/// One of the parent's open notes about a record, sent with a refinement run when `describe`
+/// says `accepts_notes` (`docs/generators.md` §3); terrain runs accept none in P08.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Note {
     /// The note's id.
@@ -68,7 +69,8 @@ pub struct RunManifest {
     pub outputs: BTreeMap<String, String>,
     /// The run's results.
     pub results: serde_json::Map<String, serde_json::Value>,
-    /// Seconds per stage.
+    /// Seconds per pipeline stage and per step after it (`constraints`, `features`, `renders`,
+    /// `package`).
     pub timing: BTreeMap<String, f64>,
 }
 

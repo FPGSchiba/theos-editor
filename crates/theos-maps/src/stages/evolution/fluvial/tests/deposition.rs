@@ -719,9 +719,10 @@ const DT14: f64 = 2.5e5;
 /// The cells the `slope_adaptive` leg's stability check covers drain more than this many cells.
 /// Ruling (Jann, 13 Nov 2026): the check applies to channel cells over 22 cells' area, the edge
 /// of the divide oscillation's zone that Task 25 measured (cells of 1 to 22 cells' area).
-/// Filling the depressions before the solve (Task 27f) picks a network with a stronger case of
-/// that oscillation: 0.33 m on cells of 10 to 13 cells against the 0.25 m bound, 0.17 m over 22
-/// cells. The bound, the window and every 2 % law check stay.
+/// Filling the depressions before the solve (Task 27f) picked a network with a stronger case of
+/// that oscillation; Task 27f measured 0.33 m on cells of 10 to 13 cells against the 0.25 m
+/// bound and 0.17 m over 22 cells, before Task 43b changed the noise, so today's values differ.
+/// The bound, the window and every 2 % law check stay.
 const STABLE_AREA_CELLS: f64 = 22.0;
 
 /// Asserts that the steady state of `w` (`what`) is the G = 0 law times (1 + G) on its own flow

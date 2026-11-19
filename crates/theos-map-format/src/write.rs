@@ -1,5 +1,5 @@
 //! The package writer: a ZIP with fixed headers, so equal packages give equal bytes
-//! (`docs/map-package.md` §5).
+//! (`docs/map-package.md` §1).
 
 use std::io::{Seek, Write};
 
@@ -15,7 +15,7 @@ pub(crate) const MANIFEST_FILE: &str = "manifest.json";
 /// Name of the feature entry.
 pub(crate) const FEATURES_FILE: &str = "features.geojson";
 
-/// True when an entry of `len` bytes needs ZIP64 fields (above 4 GiB, `docs/map-package.md` §8).
+/// True when an entry of `len` bytes needs ZIP64 fields (above 4 GiB, `docs/map-package.md` §1).
 pub(crate) fn needs_zip64(len: u64) -> bool {
     len > u64::from(u32::MAX)
 }

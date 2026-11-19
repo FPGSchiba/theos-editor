@@ -2,7 +2,7 @@
 //! and the wetness of hollows.
 //!
 //! * **Temperature** is the lapse-rate temperature of `climate::temperature`, **slope** the
-//!   gradient magnitude of `kernels::slope` (a tangent).
+//!   gradient magnitude of `kernels::diff::slope` (a tangent).
 //! * **Vegetation** follows the net primary production of the Thornthwaite Memorial model
 //!   (Lieth 1975), `NPP = 3000 (1 − e^(−0.0009695 (AET − 20)))` in g/m²/yr, scaled by 2000 and
 //!   capped at 1, thinned on steep ground by `1 − smoothstep(0.45, 0.9, slope)`, and raised in

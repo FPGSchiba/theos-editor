@@ -1,4 +1,5 @@
-//! The summary paths that exist whatever stages a recipe holds (spec §5.8).
+//! The parity metrics of a finished world (spec §5.14): [`PATHS`], the summary paths that exist
+//! whatever stages a recipe holds, and their values computed from the world as 0.3.0 did.
 
 /// The summary paths a constraint may name besides `features.<type>` and `stages.<id>.<metric>`.
 /// `travel.chime_to_chime_min` counts only when a `travel` stage is planned.

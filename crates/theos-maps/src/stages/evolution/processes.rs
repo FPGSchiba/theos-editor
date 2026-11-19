@@ -41,6 +41,10 @@ pub(crate) struct PlannedProcess {
     pub params: Box<dyn StageParams>,
     /// Run only at step 0, at every multiple of this and on the last step; `None` runs every
     /// step (plan ruling L27).
+    ///
+    /// Each run of a process covers one `dt_yr`, whatever its `every`: a rate process
+    /// (`uplift`, `hillslope`, `fluvial`) with `every = n` advances about `1/n` of the time,
+    /// plus a run on the last step. `every` is meant for refreshes such as `climate_update`.
     pub every: Option<u32>,
 }
 

@@ -40,14 +40,14 @@ use crate::stage::Registry;
 ///
 /// # Errors
 /// [`RunError::Recipe`] when the recipe is unknown, `from` is set, an input is given, the
-/// recipe is invalid or its stages do not write a layer the package or a render reads; [`RunError::OutputExists`] when a file in `out_dir` has an output's name;
+/// recipe is invalid or its stages do not write a layer the package or a render reads;
+/// [`RunError::OutputExists`] when a file in `out_dir` has an output's name;
 /// [`RunError::OverBudget`]; [`RunError::Cancelled`]; the stage errors of the pipeline
 /// ([`RunError::StageFailed`], [`RunError::StagePanicked`], [`RunError::FindingFailed`],
 /// [`RunError::NonFinite`], [`RunError::NonFiniteValue`]); [`RunError::StagePanicked`] naming the
-/// step (`constraints`,
-/// `features`, `renders` or `package`) when a step after the pipeline panics;
-/// [`RunError::Render`], [`RunError::Output`], [`RunError::Format`] and [`RunError::Io`] from
-/// the outputs. On every error the files the run created are removed.
+/// step (`constraints`, `features`, `renders` or `package`) when a step after the pipeline
+/// panics; [`RunError::Render`], [`RunError::Output`], [`RunError::Format`] and [`RunError::Io`]
+/// from the outputs. On every error the files the run created are removed.
 ///
 /// # Panics
 /// Not on its own: a panic inside a stage or inside a step after the pipeline is caught and

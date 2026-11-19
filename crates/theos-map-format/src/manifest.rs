@@ -52,7 +52,7 @@ pub struct Frame {
     pub size_m: [f64; 2],
     /// Cell edge length in metres.
     pub cell_m: f64,
-    /// Columns and rows.
+    /// Rows and columns, `[rows, columns]`.
     pub grid: [u32; 2],
     /// Origin of a child map in its parent's frame.
     #[serde(default, skip_serializing_if = "Option::is_none")]

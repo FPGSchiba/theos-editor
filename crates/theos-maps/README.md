@@ -1,8 +1,10 @@
 # theos-maps
 
 Library. The deterministic terrain generator for maps, built on `theos-map-format`. A run takes a
-recipe (a TOML list of stages with parameters), a seed and inputs, and writes a map package, the
-standard renders and a `manifest.json`. The same inputs give the same bytes on every platform.
+recipe (a TOML list of stages with parameters), a seed and inputs, writes a map package, the
+standard renders and the features file, and returns the run manifest (`RunManifest`); the
+developer example `run` also saves that manifest as `manifest.json`. The same inputs give the
+same bytes on every platform.
 
 Every step of generation is a `Stage` (`stage`): it declares the world layers it reads and writes
 for its parameters, runs in a `StageContext` that hands out only those layers, and is one line in
