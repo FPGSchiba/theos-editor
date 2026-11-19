@@ -22,7 +22,8 @@ pub struct Plan {
     pub frame: MapFrame,
     /// The stages in order.
     pub stages: Vec<PlannedStage>,
-    /// Constraint ranges by metric path (the paths are checked by the constraints task).
+    /// Constraint ranges by summary path; check 5 has made sure that every path is known and
+    /// every pair of bounds finite and ordered.
     pub constraints: BTreeMap<String, [f64; 2]>,
     /// The extra renders asked for.
     pub renders: Vec<String>,

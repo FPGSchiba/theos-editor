@@ -56,7 +56,7 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 ## Needs Jann
 
 - P08's spec change PR #40 waits for Jann's merge. It carries every spec and format change of the
-  build (rulings 51–64 and errata):
+  build (rulings 51–68 and errata):
   - 51: the exact slope limiter, whose debris feeds the rivers;
   - 52: Aitken relaxation where the sweeps would miss the tolerance;
   - 53: fill-first lakes, filled before the solve in every iteration;
@@ -70,7 +70,11 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
   - 61: physics test 13 on what both grids resolve;
   - 62: the slope-supply pre-pass before `fluvial`'s iterations;
   - 63: the switch `supply_passes_dry_cells`;
-  - 64: the omega's Chime walk range [100, 400] min.
+  - 64: the omega's Chime walk range [100, 400] min;
+  - 65: optional `features` reads;
+  - 66: the §5.9 reads and writes as the stages declare them;
+  - 67: a process run covers one `dt_yr`, also with `every`;
+  - 68: `priority_flood` returns the queue order.
   The built-in recipes and CE-28.5 depend on 57–64. #40 must be on main before P08's build PR
   merges.
 - The SIL OFL 1.1 fonts (Inter, Spectral) that `theos-maps` embeds must ship with their licence

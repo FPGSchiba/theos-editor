@@ -32,7 +32,9 @@ pub struct RunRequest {
     pub seed: u64,
     /// The recipe's inputs.
     pub inputs: serde_json::Map<String, serde_json::Value>,
-    /// A map to start from, when the run is a re-run.
+    /// The path of a source output (`docs/generators.md` §3): the output a refinement run
+    /// refines, or the parent map of a child-map run, whose `feature` input names the feature
+    /// it details; `None` for a fresh run. `run` refuses one for the terrain recipes of P08.
     pub from: Option<PathBuf>,
     /// Notes that steer the run.
     pub notes: Vec<Note>,

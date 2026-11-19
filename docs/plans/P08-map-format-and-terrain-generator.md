@@ -1886,13 +1886,17 @@ applied).
 `fluvial/fill.rs`.
 
 **Gauss–Seidel iterations** (Yuan et al. 2019, eq. 15, 19–21, generalised to the weights; spec
-§5.9). Start with `h⁰ = h*`. For each iteration `k`:
+§5.9). Start with `h⁰` = `h*` with the step's slope supply laid down along its way (spec ruling
+62, the pre-pass: each solved cell keeps `c_i/(1 + c_i)` of what passes it, the routed
+depressions keep what reaches them up to their capacity; without supply `h⁰ = h*` bit for bit).
+For each iteration `k`:
 1. **Sediment:** per cell, `e_j = (h*_j − h^k_j)·area / Δt`. In reverse stack order,
    `Qs_in(i) = Σ_donors w(d→i)·(Qs_in(d) + e_d)`; `Qs` of a cell includes its own term `e_i`
    (ledger ruling of Task 25: spec §5.9 defines Qs as the flux leaving the cell, not the paper's
    strictly upstream `ups(i)`).
-2. **Solve** in stack order:
-   `h^{k+1}_i = (h*_i + Σ_r F_ir·h^{k+1}_r + Δt·G·Qs_in(i)/Q_i) / (1 + Σ_r F_ir)`.
+2. **Solve** in stack order, the cell's own term on the diagonal (`c_i = G·area/Q_i`, Task 25
+   ruling):
+   `h^{k+1}_i = (h*_i·(1 + c_i) + Σ_r F_ir·h^{k+1}_r + Δt·G·Qs_in(i)/Q_i) / (1 + c_i + Σ_r F_ir)`.
 3. **Stop** when `max|h^{k+1} − h^k|` < `tol` = `1e-3 × max(U)·Δt` (`1e-6` m when `max(U) = 0`),
    or after `max_iterations`. Non-convergence is a `Warning` finding with the residual.
 
@@ -2040,7 +2044,8 @@ pub struct WaterThresholds { pub river_q: f64, pub big_river_q: f64 }   // NAME 
 ```
 
 **Params:** `river_q` and `big_river_q` (m³/s, required, no default; decision 0004),
-`min_lake_depth_m` 2.0, `min_lake_area_m2` (optional; 4 cells when absent).
+`min_lake_depth_m` 2.0, `min_lake_area_m2` (optional; 15,625 m² when absent: 0.3.0's four cells of
+62.5 m, Task 43 erratum).
 
 **Reads and writes:**
 - reads `height`, `climate` (with fields), `fixed`;
