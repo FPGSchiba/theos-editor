@@ -1,6 +1,5 @@
 //! `hydrology` on 64 x 64 worlds of 100 m cells, with physics tests 7 and 8 (spec §5.14).
 
-use super::lakes::Limits;
 use super::{Hydrology, HydrologyParams, Water, WaterFeatures, WaterThresholds, water};
 use crate::grid::{D8, Grid};
 use crate::kernels::flood::priority_flood;
@@ -17,10 +16,6 @@ pub(super) const CELL_M: f64 = 100.0;
 const CELL_AREA: f64 = CELL_M * CELL_M;
 const SECONDS_PER_YEAR: f64 = 3.156e7;
 pub(super) const THRESHOLDS: &str = "river_q = 0.01\nbig_river_q = 0.2\n";
-const DEFAULT_LIMITS: Limits = Limits {
-    min_depth_m: 2.0,
-    min_area_m2: 4.0 * CELL_AREA,
-};
 
 /// Yearly water fields equal on every cell, mm/yr.
 #[derive(Debug, Clone, Copy)]
@@ -151,9 +146,11 @@ fn lowered(
     height
 }
 
-/// The pure computation behind the stage, with the default limits.
+/// The pure computation behind the stage, with the limits of the stage's default parameters,
+/// so it agrees with a staged run on every depression.
 pub(super) fn compute(height: &Grid<f64>, fixed: &Grid<bool>, weather: Weather) -> Water {
-    water(height, fixed, &fields(weather), CELL_M, &DEFAULT_LIMITS)
+    let limits = HydrologyParams::default().limits();
+    water(height, fixed, &fields(weather), CELL_M, &limits)
 }
 
 /// A world holding `height`, `fixed` and a climate with `weather`'s fields.

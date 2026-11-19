@@ -501,7 +501,8 @@ chimes = 0",
         )
         .unwrap();
         let ruins = points(&w, "ruin");
-        assert_ne!(ruins.len(), 0);
+        // With one ruin the spacing loop would check nothing.
+        assert!(ruins.len() >= 2, "{ruins:?}");
         for (i, a) in ruins.iter().enumerate() {
             for b in &ruins[i + 1..] {
                 assert!(dist(*a, *b) >= 5000.0, "{a:?} {b:?}");

@@ -72,13 +72,16 @@ mod tests {
 
     #[test]
     fn canonical_json_is_serde_pretty_with_sorted_keys() -> Result<(), Box<dyn std::error::Error>> {
+        // Spec §5.13: canonical JSON is what serde_json's pretty printer writes for the value with
+        // its keys already sorted, plus one LF; the expected text is a literal.
         let v = json!({"b": 1, "a": {"d": [1, 2], "c": 0.5}});
-        let bytes = to_canonical_vec(&v)?;
-        let expected = format!("{}\n", serde_json::to_string_pretty(&canonicalise(&v))?);
-        assert_eq!(bytes, expected.into_bytes());
-        let text = String::from_utf8(bytes)?;
-        assert!(text.starts_with("{\n  \"a\": {\n    \"c\": 0.5,"));
-        assert!(text.ends_with("}\n"));
+        let expected = "{\n  \"a\": {\n    \"c\": 0.5,\n    \"d\": [\n      1,\n      2\n    ]\n  },\n  \"b\": 1\n}\n";
+        assert_eq!(String::from_utf8(to_canonical_vec(&v)?)?, expected);
+        let sorted = json!({"a": {"c": 0.5, "d": [1, 2]}, "b": 1});
+        assert_eq!(
+            format!("{}\n", serde_json::to_string_pretty(&sorted)?),
+            expected
+        );
         Ok(())
     }
 

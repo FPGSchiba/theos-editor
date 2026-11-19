@@ -5,7 +5,7 @@ use crate::features::{Feature, FeatureSet, Geometry, Prop};
 use crate::grid::Grid;
 use crate::kernels::num::to_f64;
 use crate::stage::Stage;
-use crate::stages::terrain::climate::{Climate, ClimateFields, ClimateParams};
+use crate::stages::terrain::climate::{self, Climate, ClimateFields, ClimateParams};
 use crate::stages::terrain::hydrology::{LakeShape, WaterFeatures};
 use crate::stages::terrain::support::{run_stage, table, world};
 use crate::world::{Layer, World};
@@ -378,16 +378,47 @@ fn without_water_the_land_is_dry() {
     );
 }
 
-#[test]
-fn the_precipitation_falls_back_to_the_climate_model() {
+/// [`plain`] with the climate's `fields` replaced, after `resources` ran on it.
+fn run_with_fields(fields: Option<ClimateFields>) -> World {
     let mut w = plain();
     let mut climate = w.value::<Climate>("climate").unwrap().clone();
-    climate.fields = None;
+    climate.fields = fields;
     w.remove("climate");
     w.insert("climate", Layer::Value(Box::new(climate)))
         .unwrap();
     run_stage(&mut w, &Resources, "counts = { timber = 1 }").unwrap();
-    assert_eq!(deposits(&w).len(), 1);
+    w
+}
+
+// Ruling P2: without climate fields the stage computes the precipitation from the height with
+// the climate model. The fields that depend on it (peat-reeds needs > 900 mm/yr, salt < 400)
+// equal those of a run given exactly the model's fields, and differ from those of the setup's
+// own precipitation, so another fallback would not pass.
+#[test]
+fn the_precipitation_falls_back_to_the_climate_model() {
+    let base = plain();
+    let model = climate::fields(
+        base.f64("height").unwrap(),
+        base.frame(),
+        &ClimateParams::default(),
+    );
+    let fallback = run_with_fields(None);
+    let given = run_with_fields(Some(model));
+    let own = run_with_fields(base.value::<Climate>("climate").unwrap().fields.clone());
+    let wet = ["peat-reeds", "salt"];
+    for name in wet {
+        assert_eq!(
+            fields_of(&fallback)[name],
+            fields_of(&given)[name],
+            "{name}"
+        );
+    }
+    assert!(
+        wet.iter()
+            .any(|name| fields_of(&own)[*name] != fields_of(&given)[*name]),
+        "the precipitation changes no field of this world"
+    );
+    assert_eq!(deposits(&fallback).len(), 1);
 }
 
 #[test]

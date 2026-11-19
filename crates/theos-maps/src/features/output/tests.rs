@@ -85,14 +85,21 @@ fn features_carry_ids_kinds_types_and_water_properties() -> TestResult {
     let rivers = of(&fc, "water", "river");
     assert!(!lakes.is_empty() && !rivers.is_empty()); // the test's precondition
     for f in &fc.features {
-        assert!(f.id.is_some());
+        assert!(
+            matches!(&f.id, Some(geojson::feature::Id::String(s)) if !s.is_empty()),
+            "{:?}",
+            f.id
+        );
         assert!(prop(f, "kind").is_some() && prop(f, "type").is_some());
     }
     for l in lakes {
         assert!(prop(l, "surface_m").is_some());
     }
     for r in rivers {
+        // A river is a LineString of at least two vertices; `coords` is empty for any other
+        // geometry, which would make the per-vertex checks vacuous.
         let n = coords(r).len();
+        assert!(n >= 2, "{:?}", r.geometry);
         for key in ["width_m", "discharge_m3s"] {
             assert_eq!(array_len(r, key), n);
         }

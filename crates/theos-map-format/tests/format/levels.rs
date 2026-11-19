@@ -63,59 +63,80 @@ fn a_two_level_package_round_trips() -> TestResult {
     Ok(())
 }
 
-/// Edits of the fixture (given a leveled frame `f1`) that break the levels rules.
+/// An edit of the fixture, on a frame with the one level `f1` where every layer and feature is
+/// on `f1`, that breaks the levels rules in one place.
 type Break = fn(&mut Value, &mut Value);
 
-fn leveled(manifest: &mut Value) {
+/// The refusal a case expects.
+type Expect = fn(&FormatError) -> bool;
+
+/// The fixture on the level `f1`: the frame lists it, every layer and feature is on it.
+fn all_on_f1(manifest: &mut Value, features: &mut Value) {
     manifest["frame"]["levels"] = json!([{"id": "f1", "elevation_m": 0.0}]);
+    for layer in manifest["layers"].as_array_mut().into_iter().flatten() {
+        layer["level"] = json!("f1");
+    }
+    for feature in features["features"].as_array_mut().into_iter().flatten() {
+        feature["properties"]["level"] = json!("f1");
+    }
 }
 
 // AC: CE-76.3
 #[test]
 fn levels_rules_reject_missing_and_unknown_levels() -> TestResult {
-    let cases: [(&str, Break); 4] = [
-        ("a layer without a level", |m, _| leveled(m)),
-        ("a layer with an unknown level", |m, _| {
-            leveled(m);
-            m["layers"][0]["level"] = json!("f9");
-            m["layers"][1]["level"] = json!("f1");
-        }),
-        ("a feature without a level", |m, f| {
-            leveled(m);
-            for layer in m["layers"].as_array_mut().into_iter().flatten() {
-                layer["level"] = json!("f1");
-            }
-            f["features"][0]["properties"]
-                .as_object_mut()
-                .map(|p| p.remove("level"));
-        }),
-        ("a feature with an unknown level", |m, f| {
-            leveled(m);
-            for layer in m["layers"].as_array_mut().into_iter().flatten() {
-                layer["level"] = json!("f1");
-            }
-            f["features"][0]["properties"]["level"] = json!("f9");
-        }),
+    let cases: [(&str, Break, Expect); 4] = [
+        (
+            "a layer without a level",
+            |m, _| {
+                m["layers"][0].as_object_mut().map(|l| l.remove("level"));
+            },
+            |e| matches!(e, FormatError::LevelMissing { owner } if owner == "layer height"),
+        ),
+        (
+            "a layer with an unknown level",
+            |m, _| m["layers"][0]["level"] = json!("f9"),
+            |e| {
+                matches!(e, FormatError::LevelUnknown { owner, level }
+                    if owner == "layer f9/height" && level == "f9")
+            },
+        ),
+        (
+            "a feature without a level",
+            |_, f| {
+                f["features"][0]["properties"]
+                    .as_object_mut()
+                    .map(|p| p.remove("level"));
+            },
+            |e| matches!(e, FormatError::LevelMissing { owner } if owner == "feature 0"),
+        ),
+        (
+            "a feature with an unknown level",
+            |_, f| f["features"][0]["properties"]["level"] = json!("f9"),
+            |e| {
+                matches!(e, FormatError::LevelUnknown { owner, level }
+                    if owner == "feature 0" && level == "f9")
+            },
+        ),
     ];
-    for (label, edit) in cases {
+    let (mut manifest, mut features) = (fixture_manifest()?, fixture_features()?);
+    all_on_f1(&mut manifest, &mut features);
+    let (package, bytes) = build(&manifest, &features)?;
+    write(&package, Cursor::new(Vec::new()))?;
+    read(Cursor::new(bytes))?;
+    for (label, edit, expect) in cases {
         let (mut manifest, mut features) = (fixture_manifest()?, fixture_features()?);
+        all_on_f1(&mut manifest, &mut features);
         edit(&mut manifest, &mut features);
         let (package, bytes) = build(&manifest, &features)?;
-        let written = write(&package, Cursor::new(Vec::new()));
+        let written = write(&package, Cursor::new(Vec::new())).err();
         assert!(
-            matches!(
-                written,
-                Err(FormatError::LevelMissing { .. } | FormatError::LevelUnknown { .. })
-            ),
-            "write accepted {label}"
+            written.as_ref().is_some_and(expect),
+            "write, {label}: {written:?}"
         );
-        let result = read(Cursor::new(bytes));
+        let result = read(Cursor::new(bytes)).err();
         assert!(
-            matches!(
-                result,
-                Err(FormatError::LevelMissing { .. } | FormatError::LevelUnknown { .. })
-            ),
-            "read accepted {label}: {result:?}"
+            result.as_ref().is_some_and(expect),
+            "read, {label}: {result:?}"
         );
     }
     Ok(())

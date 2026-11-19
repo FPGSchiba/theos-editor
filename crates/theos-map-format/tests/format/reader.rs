@@ -250,6 +250,49 @@ fn unknown_fields_entries_layers_and_kinds_are_ignored() -> TestResult {
     Ok(())
 }
 
+// Review Focus 8 (map-package §3: a reader ignores unknown fields at every level): unknown keys
+// in the frame, a layer entry, a level and `parent` read, and the known values stay.
+#[test]
+fn unknown_fields_inside_the_manifest_are_ignored() -> TestResult {
+    let mut manifest = fixture_manifest()?;
+    manifest["frame"]["future"] = json!(1);
+    manifest["frame"]["levels"] = json!([{"id": "f1", "elevation_m": 2.5, "future": [1]}]);
+    manifest["frame"]["parent"] =
+        json!({"package_sha256": "ab", "feature": "town-2", "future": {"x": 1}});
+    for layer in manifest["layers"].as_array_mut().ok_or("layers")? {
+        layer["level"] = json!("f1");
+        layer["future"] = json!("x");
+    }
+    let mut features = fixture_features()?;
+    for feature in features["features"].as_array_mut().ok_or("features")? {
+        feature["properties"]["level"] = json!("f1");
+    }
+    let (_, bytes) = build(&manifest, &features)?;
+    let package = read_bytes(&bytes)?;
+    let frame = &package.manifest.frame;
+    let level = frame
+        .levels
+        .as_ref()
+        .and_then(|l| l.first())
+        .ok_or("no level")?;
+    assert_eq!(
+        (level.id.as_str(), level.elevation_m.to_bits()),
+        ("f1", 2.5_f64.to_bits())
+    );
+    let parent = frame.parent.as_ref().ok_or("no parent")?;
+    assert_eq!(
+        (parent.package_sha256.as_str(), parent.feature.as_str()),
+        ("ab", "town-2")
+    );
+    let layer = &package.manifest.layers[0];
+    assert_eq!(
+        (layer.name.as_str(), layer.level.as_deref()),
+        ("height", Some("f1"))
+    );
+    assert_eq!(layer.units.as_deref(), Some("m"));
+    Ok(())
+}
+
 // AC: CE-76.5
 #[test]
 fn a_required_capability_the_reader_lacks_is_refused() -> TestResult {
