@@ -20,11 +20,11 @@
 //! depression whose last start was full stays full ([`Traps::decide`]), so it changes between
 //! full and not full a bounded number of times in a step.
 
-use crate::kernels::num::{OrdF64, key, max, min, to_f64};
-use crate::stages::evolution::flow::cell_index;
+use crate::kernels::num::{OrdF64, key, max, min, to_f64, to_u32, to_usize};
 // `EPSILON` is the rise of the ε slope per place in a depression's flood order: the lift of
 // one flood step of `resolve_sinks`.
-use crate::stages::evolution::resolve_sinks::{Depressions, EPSILON};
+use crate::kernels::flood::EPSILON;
+use crate::stages::evolution::resolve_sinks::Depressions;
 
 /// One routed depression as a sediment trap.
 #[derive(Debug)]
@@ -64,18 +64,15 @@ impl Traps {
         let label = depressions.label.as_slice().to_vec();
         let mut members: Vec<Vec<usize>> = vec![Vec::new(); depressions.spill.len()];
         for (cell, &n) in label.iter().enumerate() {
-            if let Some(list) = cell_index(n)
-                .checked_sub(1)
-                .and_then(|k| members.get_mut(k))
-            {
+            if let Some(list) = to_usize(n).checked_sub(1).and_then(|k| members.get_mut(k)) {
                 list.push(cell);
             }
         }
         let mut spill_of = vec![0; label.len()];
         let mut traps = Vec::with_capacity(members.len());
         for (n, (mut cells, spill)) in members.into_iter().zip(&depressions.spill).enumerate() {
-            let at = cell_index(spill.cell);
-            spill_of[at] = u32::try_from(n + 1).unwrap_or(u32::MAX);
+            let at = to_usize(spill.cell);
+            spill_of[at] = to_u32(n + 1);
             cells.sort_by_key(|&c| (OrdF64(key(routing[c])), c));
             let places: Vec<(usize, f64)> = cells
                 .iter()
@@ -118,13 +115,13 @@ impl Traps {
 
     /// The depression (from 0) holding `cell`, if one does.
     pub(super) fn holding(&self, cell: usize) -> Option<usize> {
-        let n = cell_index(*self.label.get(cell)?);
+        let n = to_usize(*self.label.get(cell)?);
         n.checked_sub(1)
     }
 
     /// The depression (from 0) whose spill cell `cell` is, if one.
     pub(super) fn spilling_at(&self, cell: usize) -> Option<usize> {
-        let n = cell_index(*self.spill_of.get(cell)?);
+        let n = to_usize(*self.spill_of.get(cell)?);
         n.checked_sub(1)
     }
 

@@ -1,84 +1,14 @@
-//! Flow helpers shared by the routing processes: D8 distances and steepest-descent receivers.
-
-use std::cmp::Ordering;
-use std::f64::consts::SQRT_2;
+//! The flow graph of the routing processes: the world value `weights` and the flow accumulated
+//! over it. The D8 distances and the steepest-descent receivers are in
+//! [`crate::kernels::routing`].
 
 use std::any::Any;
 
 use serde::Serialize;
 
-use crate::grid::{D8, Grid};
-use crate::kernels::num::{OrdF64, key};
+use crate::grid::Grid;
+use crate::kernels::num::to_usize;
 use crate::world::{ValueType, WorldValue};
-
-/// The distance in metres to the neighbour at [`D8`] offset `k` of a cell of `cell_m` metres:
-/// `cell_m` along a row or column (even `k`), `cell_m·√2` along a diagonal (odd `k`).
-#[must_use]
-pub(crate) fn d8_distance(cell_m: f64, k: usize) -> f64 {
-    if k % 2 == 1 { cell_m * SQRT_2 } else { cell_m }
-}
-
-/// The steepest-descent receiver of every cell of `surface` (Braun & Willett 2013): the D8
-/// neighbour with the largest drop ÷ distance, equal slopes going to the lower neighbour index.
-/// A cell with no strictly lower neighbour, or a `fixed` cell, receives itself.
-#[must_use]
-pub(crate) fn steepest_receivers(
-    surface: &Grid<f64>,
-    fixed: &Grid<bool>,
-    cell_m: f64,
-) -> Grid<u32> {
-    let mut receivers = Grid::filled(surface.rows(), surface.cols(), 0_u32);
-    for r in 0..surface.rows() {
-        for c in 0..surface.cols() {
-            let i = surface.index(r, c);
-            let to = if fixed.as_slice()[i] {
-                i
-            } else {
-                steepest(surface, cell_m, r, c)
-            };
-            receivers.set(r, c, cell_u32(to));
-        }
-    }
-    receivers
-}
-
-/// The steepest strictly lower neighbour of the cell at `row`, `col`, or the cell itself when
-/// there is none.
-fn steepest(surface: &Grid<f64>, cell_m: f64, row: usize, col: usize) -> usize {
-    let (heights, cell) = (surface.as_slice(), surface.index(row, col));
-    let mut best: Option<(usize, f64)> = None;
-    for (dir, &offset) in D8.iter().enumerate() {
-        let Some(next) = surface.neighbour_at(row, col, offset) else {
-            continue;
-        };
-        let drop = heights[cell] - heights[next];
-        if drop <= 0.0 {
-            continue;
-        }
-        let slope = drop / d8_distance(cell_m, dir);
-        let steeper = best.is_none_or(|(kept, kept_slope)| {
-            match OrdF64(key(slope)).cmp(&OrdF64(key(kept_slope))) {
-                Ordering::Greater => true,
-                Ordering::Equal => next < kept,
-                Ordering::Less => false,
-            }
-        });
-        if steeper {
-            best = Some((next, slope));
-        }
-    }
-    best.map_or(cell, |(next, _)| next)
-}
-
-/// A cell index as stored in a `u32` raster; grids hold fewer than `u32::MAX` cells.
-pub(crate) fn cell_u32(i: usize) -> u32 {
-    u32::try_from(i).unwrap_or(u32::MAX)
-}
-
-/// A cell index read from a `u32` raster.
-pub(crate) fn cell_index(c: u32) -> usize {
-    usize::try_from(c).unwrap_or(usize::MAX)
-}
 
 /// The world value `weights`: where each cell's water goes, as a compressed-row graph. Cell `i`
 /// sends `weight[e]` of its flow to cell `to[e]`, over `dist[e]` metres, for `e` in
@@ -107,7 +37,7 @@ impl FlowWeights {
     #[must_use]
     pub fn edges(&self, i: usize) -> std::ops::Range<usize> {
         match (self.start.get(i), self.start.get(i + 1)) {
-            (Some(&from), Some(&until)) => cell_index(from)..cell_index(until),
+            (Some(&from), Some(&until)) => to_usize(from)..to_usize(until),
             _ => 0..0,
         }
     }
@@ -139,10 +69,10 @@ impl ValueType for FlowWeights {
 pub(crate) fn accumulate(stack: &[u32], w: &FlowWeights, input: &Grid<f64>) -> Grid<f64> {
     let mut out = input.clone();
     for &cell in stack.iter().rev() {
-        let i = cell_index(cell);
+        let i = to_usize(cell);
         let carried = out.as_slice()[i];
         for e in w.edges(i) {
-            out.as_mut_slice()[cell_index(w.to[e])] += carried * w.weight[e];
+            out.as_mut_slice()[to_usize(w.to[e])] += carried * w.weight[e];
         }
     }
     out
@@ -168,29 +98,8 @@ pub(crate) fn outflow(
 
 #[cfg(test)]
 mod tests {
-    use std::f64::consts::SQRT_2;
-
-    use super::{FlowWeights, accumulate, d8_distance, outflow};
+    use super::{FlowWeights, accumulate, outflow};
     use crate::grid::Grid;
-
-    #[test]
-    fn d8_distance_is_the_cell_or_its_diagonal() {
-        for k in [0, 2, 4, 6] {
-            assert_eq!(
-                d8_distance(62.5, k).to_bits(),
-                62.5_f64.to_bits(),
-                "k = {k}"
-            );
-        }
-        for k in [1, 3, 5, 7] {
-            let diagonal = 62.5 * SQRT_2;
-            assert_eq!(
-                d8_distance(62.5, k).to_bits(),
-                diagonal.to_bits(),
-                "k = {k}"
-            );
-        }
-    }
 
     /// Cell 0 splits 1/4 to cell 1 and 3/4 to cell 2; cell 1 sends all to cell 2; cell 2 is the
     /// outlet. The stack runs receivers first.

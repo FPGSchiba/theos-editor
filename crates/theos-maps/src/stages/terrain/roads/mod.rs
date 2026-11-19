@@ -70,7 +70,7 @@ pub use self::params::{MaxGrade, RoadsParams, WidthM};
 pub(crate) use self::route::Router;
 use crate::features::{FeatureHandle, FeatureSet};
 use crate::grid::Grid;
-use crate::kernels::num::{max, to_f64};
+use crate::kernels::num::{max, to_f64, to_usize};
 use crate::stage::{
     LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
@@ -136,7 +136,7 @@ impl Road {
     pub fn steps(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
         self.cells
             .windows(2)
-            .map(|pair| (index(pair[0]), index(pair[1])))
+            .map(|pair| (to_usize(pair[0]), to_usize(pair[1])))
     }
 
     /// Whether the step from `a` to `b` is one of the road's bridges.
@@ -144,7 +144,7 @@ impl Road {
     pub fn is_bridge(&self, a: usize, b: usize) -> bool {
         self.bridges
             .iter()
-            .any(|&(p, q)| index(p) == a && index(q) == b)
+            .any(|&(p, q)| to_usize(p) == a && to_usize(q) == b)
     }
 
     /// The length along the cell centres in metres, bridges included.
@@ -208,11 +208,6 @@ impl WorldValue for RoadNetwork {
 
 impl ValueType for RoadNetwork {
     const NAME: &'static str = "road_network";
-}
-
-/// A cell number of a road as an index.
-fn index(cell: u32) -> usize {
-    usize::try_from(cell).unwrap_or(usize::MAX)
 }
 
 /// The distance between the centres of cells `a` and `b`, m.

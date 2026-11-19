@@ -9,6 +9,7 @@ use super::{Road, RoadClass, RoadsParams, StepCost, Terrain, end_near, network};
 use crate::features::{FeatureHandle, FeatureSet};
 use crate::grid::Grid;
 use crate::kernels::KernelError;
+use crate::kernels::num::to_u32;
 use crate::stage::{Finding, StageContext, StageError};
 use crate::world::MapFrame;
 
@@ -84,8 +85,7 @@ impl Watch for Counter<'_, '_> {
 
     fn advance(&mut self, links: usize) {
         self.done += links;
-        let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
-        self.ctx.progress(count(self.done), count(self.total));
+        self.ctx.progress(to_u32(self.done), to_u32(self.total));
     }
 }
 

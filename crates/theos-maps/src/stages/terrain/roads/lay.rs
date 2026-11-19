@@ -6,6 +6,7 @@ use super::route::bridge_key;
 use super::{Road, RoadClass, Router, StepCost};
 use crate::features::FeatureHandle;
 use crate::grid::Grid;
+use crate::kernels::num::{to_u32, to_usize};
 
 /// The roads laid so far, the raster of their classes and the bridges built.
 #[derive(Debug, Clone, PartialEq)]
@@ -34,7 +35,7 @@ impl Laid {
         let built = roads
             .iter()
             .flat_map(|r| r.bridges.iter())
-            .map(|&(a, b)| bridge_key(super::index(a), super::index(b)))
+            .map(|&(a, b)| bridge_key(to_usize(a), to_usize(b)))
             .collect();
         Self {
             roads,
@@ -69,7 +70,7 @@ impl Laid {
         for pair in path.windows(2) {
             let (a, b) = (pair[0], pair[1]);
             if cost.is_bridge(a, b) {
-                bridges.push((cell(a), cell(b)));
+                bridges.push((to_u32(a), to_u32(b)));
                 self.built.insert(bridge_key(a, b));
                 marked.extend(cost.under(a, b));
             } else if let Some(offset) = cost.offset(a, b)
@@ -86,7 +87,7 @@ impl Laid {
         }
         self.roads.push(Road {
             class,
-            cells: path.iter().map(|&i| cell(i)).collect(),
+            cells: path.iter().map(|&i| to_u32(i)).collect(),
             from,
             to,
             bridges,
@@ -105,14 +106,9 @@ impl Laid {
     pub(crate) fn cells(&self) -> BTreeSet<usize> {
         self.roads
             .iter()
-            .flat_map(|r| r.cells.iter().map(|&c| super::index(c)))
+            .flat_map(|r| r.cells.iter().map(|&c| to_usize(c)))
             .collect()
     }
-}
-
-/// A cell index as stored in a road.
-fn cell(i: usize) -> u32 {
-    u32::try_from(i).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]
@@ -137,7 +133,7 @@ mod tests {
         laid.add(&cost, &[at(5, 6), at(5, 5)], RoadClass::Main, b, a);
         laid.add(&cost, &[at(5, 5), at(5, 4)], RoadClass::Trail, b, a);
         let road = &laid.roads[0];
-        assert_eq!(road.bridges, [(cell(at(5, 7)), cell(at(5, 9)))]);
+        assert_eq!(road.bridges, [(to_u32(at(5, 7)), to_u32(at(5, 9)))]);
         assert!(laid.built.contains(&bridge_key(at(5, 9), at(5, 7))));
         let marked: Vec<(usize, u8)> = laid
             .raster

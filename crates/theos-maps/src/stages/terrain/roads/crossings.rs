@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use super::route::bridge_key;
 use super::{Road, StepCost, distance_m};
 use crate::features::{Feature, Prop};
-use crate::kernels::num::{canonical, round_half_even};
+use crate::kernels::num::{canonical, round_half_even, to_u32};
 use crate::world::MapFrame;
 
 /// The crossing sites of `roads`, in road order and along each road: a `bridge` at the middle
@@ -18,7 +18,7 @@ pub(super) fn sites(cost: &StepCost<'_>, roads: &[Road], frame: &MapFrame) -> Ve
     let mut bridged = BTreeSet::new();
     let mut forded = BTreeSet::new();
     for (r, road) in roads.iter().enumerate() {
-        let id = Prop::Road(u32::try_from(r).unwrap_or(u32::MAX));
+        let id = Prop::Road(to_u32(r));
         let mut run: Vec<usize> = Vec::new();
         for (a, b) in road.steps() {
             let wet: Vec<usize> = if road.is_bridge(a, b) {

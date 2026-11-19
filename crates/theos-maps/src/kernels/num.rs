@@ -1,7 +1,8 @@
 //! Float and cast helpers shared by every kernel.
 //!
 //! Maxima, minima and sort keys never carry a negative zero, so equal inputs give equal bits on
-//! every platform. The `as` casts between integers and floats live here and nowhere else.
+//! every platform. The `as` casts between integers and floats live here and nowhere else, and so
+//! do the saturating casts between a `usize` and a `u32` index.
 
 /// The larger of two floats; `+0.0` when both are zeros of either sign.
 #[must_use]
@@ -64,6 +65,20 @@ pub fn round_half_even(x: f64) -> f64 {
 #[expect(clippy::cast_precision_loss, reason = "indices stay far below 2^53")]
 pub fn to_f64(i: usize) -> f64 {
     i as f64
+}
+
+/// An index or count as a `u32`, saturating at `u32::MAX`: a cell index for a `u32` raster, a
+/// stack or a feature handle (grids hold fewer cells than that), or a progress count.
+#[must_use]
+pub fn to_u32(i: usize) -> u32 {
+    u32::try_from(i).unwrap_or(u32::MAX)
+}
+
+/// A `u32` index or size (a cell index, a pixel width) as a `usize`; it saturates at
+/// `usize::MAX` only on a target narrower than 32 bits.
+#[must_use]
+pub fn to_usize(i: u32) -> usize {
+    usize::try_from(i).unwrap_or(usize::MAX)
 }
 
 /// A feature property integer (a radius, a count) as a float.
@@ -161,6 +176,13 @@ pub fn smoothstep(e0: f64, e1: f64, x: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn index_casts_keep_the_value_or_saturate() {
+        assert_eq!((to_u32(0), to_u32(70_000)), (0, 70_000));
+        assert_eq!(to_u32(usize::MAX), u32::MAX);
+        assert_eq!((to_usize(0), to_usize(u32::MAX)), (0, 4_294_967_295));
+    }
 
     #[test]
     fn sign_is_numpys() {

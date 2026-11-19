@@ -83,9 +83,9 @@ use super::fill::Traps;
 use super::relax::{Relaxation, toward};
 use super::sediment::{lay_down, route, step_sediment};
 use crate::grid::Grid;
-use crate::kernels::num::max;
+use crate::kernels::num::{max, to_usize};
 use crate::stage::StageError;
-use crate::stages::evolution::flow::{FlowWeights, cell_index};
+use crate::stages::evolution::flow::FlowWeights;
 
 /// What one implicit step reads besides the starting heights. Every slice holds one entry per
 /// cell, and `weights` and `stack` name only cells of the grid.
@@ -138,7 +138,7 @@ fn sweep(step: &Incision<'_>, start: &[f64], terms: Option<&Deposit<'_>>, h: &mu
     h.copy_from_slice(start);
     let mut receivers: Vec<Receiver> = Vec::with_capacity(8);
     for &cell in step.stack {
-        let i = cell_index(cell);
+        let i = to_usize(cell);
         let edges = step.weights.edges(i);
         if step.fixed[i] || edges.is_empty() || step.discharge[i] <= 0.0 {
             continue;
@@ -153,7 +153,7 @@ fn sweep(step: &Incision<'_>, start: &[f64], terms: Option<&Deposit<'_>>, h: &mu
         let power = step.erodibility[i] * pow(step.discharge[i], step.m) * step.dt;
         receivers.clear();
         receivers.extend(edges.map(|e| Receiver {
-            height: h[cell_index(step.weights.to[e])],
+            height: h[to_usize(step.weights.to[e])],
             share: power * step.weights.weight[e] / step.weights.dist[e],
         }));
         h[i] = solve(top, bottom, &receivers);

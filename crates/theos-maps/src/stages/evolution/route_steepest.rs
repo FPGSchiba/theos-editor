@@ -1,8 +1,8 @@
 //! The per-step process `route_steepest`: the D8 steepest-descent receiver of every cell.
 
+use crate::kernels::routing::steepest_receivers;
 use serde::Deserialize;
 
-use super::flow::steepest_receivers;
 use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, TypedStage};
 use crate::world::Layer;
 

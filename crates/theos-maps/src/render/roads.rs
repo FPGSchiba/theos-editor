@@ -6,6 +6,7 @@ use super::canvas::{self, LineStyle};
 use super::styles::{ROAD_EDGE_EXTRA_PX, RoadStyle};
 use super::view::View;
 use super::{RenderError, RenderInput};
+use crate::kernels::num::to_usize;
 use crate::stages::terrain::roads::{Road, RoadClass, RoadNetwork};
 use crate::world::MapFrame;
 
@@ -19,7 +20,7 @@ fn centres(frame: &MapFrame, road: &Road) -> Vec<[f64; 2]> {
     road.cells
         .iter()
         .map(|&cell| {
-            let i = usize::try_from(cell).unwrap_or(usize::MAX);
+            let i = to_usize(cell);
             frame.centre_m(i / frame.cols, i % frame.cols)
         })
         .collect()

@@ -1,5 +1,6 @@
 //! `route_steepest`, `resolve_sinks` then `partition_flow` on worlds of 100 m cells.
 
+use crate::kernels::num::{to_u32, to_usize};
 use libm::pow;
 
 use super::{Exponent, PartitionFlow, PartitionFlowParams};
@@ -7,7 +8,7 @@ use crate::grid::Grid;
 use crate::kernels::noise::spectral_noise;
 use crate::rng::StageRng;
 use crate::stage::{LayerSpec, Stage, StageError};
-use crate::stages::evolution::flow::{FlowWeights, accumulate, cell_index, cell_u32, outflow};
+use crate::stages::evolution::flow::{FlowWeights, accumulate, outflow};
 use crate::stages::evolution::test_support::{evolve, processes};
 use crate::stages::terrain::grid::GridStage;
 use crate::stages::terrain::support::{run_stage, world};
@@ -96,7 +97,7 @@ fn weights_sum_to_one() {
             assert_eq!(weights.cells(), N * N);
             for i in 0..N * N {
                 let edges = weights.edges(i);
-                if cell_index(rec.as_slice()[i]) == i {
+                if to_usize(rec.as_slice()[i]) == i {
                     assert!(edges.is_empty(), "{exponent}: cell {i} receives itself");
                     continue;
                 }
@@ -106,7 +107,7 @@ fn weights_sum_to_one() {
                     "{exponent}: cell {i} sums to {sum}"
                 );
                 for e in edges {
-                    let to = cell_index(weights.to[e]);
+                    let to = to_usize(weights.to[e]);
                     assert!(weights.weight[e] > 0.0 && weights.dist[e] >= 100.0);
                     let apart = to.abs_diff(i);
                     let near = apart == 1 || apart.abs_diff(N) <= 1;
@@ -122,14 +123,14 @@ fn steepest_sends_everything_to_the_receiver() {
     let w = routed(ALL_EDGES, 3, "steepest");
     let (weights, rec) = (weights(&w), w.u32("receivers").unwrap());
     for i in 0..N * N {
-        let to = cell_index(rec.as_slice()[i]);
+        let to = to_usize(rec.as_slice()[i]);
         if to == i {
             assert!(weights.edges(i).is_empty());
         } else {
             let edges = weights.edges(i);
             assert_eq!(edges.len(), 1, "cell {i}");
             let e = edges.start;
-            assert_eq!(cell_index(weights.to[e]), to);
+            assert_eq!(to_usize(weights.to[e]), to);
             assert_eq!(weights.weight[e].to_bits(), 1.0_f64.to_bits());
         }
     }
@@ -183,22 +184,22 @@ fn the_stack_puts_receivers_before_donors_and_covers_every_cell() {
             let (stack, weights) = (stack(&w), weights(&w));
             let mut position = vec![usize::MAX; N * N];
             for (k, &cell) in stack.iter().enumerate() {
-                assert_eq!(position[cell_index(cell)], usize::MAX, "cell listed twice");
-                position[cell_index(cell)] = k;
+                assert_eq!(position[to_usize(cell)], usize::MAX, "cell listed twice");
+                position[to_usize(cell)] = k;
             }
             assert_eq!(stack.len(), N * N);
             assert!(position.iter().all(|&k| k < N * N));
             for i in 0..N * N {
                 for e in weights.edges(i) {
-                    let to = cell_index(weights.to[e]);
+                    let to = to_usize(weights.to[e]);
                     assert!(position[to] < position[i], "{exponent}");
                 }
             }
             // The cells that receive themselves come first, in cell order.
             let rec = w.u32("receivers").unwrap().as_slice();
             let roots: Vec<u32> = (0..N * N)
-                .filter(|&i| cell_index(rec[i]) == i)
-                .map(cell_u32)
+                .filter(|&i| to_usize(rec[i]) == i)
+                .map(to_u32)
                 .collect();
             assert_eq!(stack[..roots.len()], roots[..], "{exponent}");
         }
@@ -231,7 +232,7 @@ fn on_a_closed_map_the_water_gathers_in_the_sink() {
         let (stack, weights) = (stack(&w), weights(&w));
         let out = outflow(&stack, weights, &runoff, w.mask("fixed").unwrap());
         assert_eq!(out.to_bits(), 0.0_f64.to_bits());
-        let sink = cell_index(stack[0]);
+        let sink = to_usize(stack[0]);
         let total = accumulate(&stack, weights, &runoff).as_slice()[sink];
         assert!((total - 4096.0).abs() < 1e-9, "{exponent}: {total}");
     }

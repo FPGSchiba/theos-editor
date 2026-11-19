@@ -8,12 +8,12 @@ use super::{
     run_to_steady_state, square,
 };
 use crate::grid::Grid;
-use crate::kernels::num::{max, min, to_f64};
+use crate::kernels::flood::EPSILON;
+use crate::kernels::num::{max, min, to_f64, to_usize};
 use crate::stage::{Finding, StageError, StageReport};
-use crate::stages::evolution::flow::{FlowWeights, cell_index};
+use crate::stages::evolution::flow::FlowWeights;
 use crate::stages::evolution::fluvial::fill::Traps;
 use crate::stages::evolution::fluvial::solve::{Deposition, Incision, deposit};
-use crate::stages::evolution::resolve_sinks::EPSILON;
 use crate::stages::evolution::resolve_sinks::{Depressions, SpillPoint};
 use crate::stages::evolution::test_support::{evolve, processes};
 use crate::stages::terrain::grid::GridStage;
@@ -642,9 +642,7 @@ fn flow_slopes(w: &World) -> Vec<f64> {
         .map(|i| {
             weights
                 .edges(i)
-                .map(|e| {
-                    weights.weight[e] * (h[i] - h[cell_index(weights.to[e])]) / weights.dist[e]
-                })
+                .map(|e| weights.weight[e] * (h[i] - h[to_usize(weights.to[e])]) / weights.dist[e])
                 .sum()
         })
         .collect()
@@ -682,14 +680,14 @@ fn law_heights(w: &World) -> Vec<f64> {
     let area = layer(w, "drainage_area");
     let mut h = vec![0.0; N * N];
     for &cell in w.u32("stack").unwrap().as_slice() {
-        let i = cell_index(cell);
+        let i = to_usize(cell);
         if weights.edges(i).is_empty() {
             continue;
         }
         let slope = law(area[i]);
         let (mut top, mut bottom) = (slope, 0.0);
         for e in weights.edges(i) {
-            top += weights.weight[e] * h[cell_index(weights.to[e])] / weights.dist[e];
+            top += weights.weight[e] * h[to_usize(weights.to[e])] / weights.dist[e];
             bottom += weights.weight[e] / weights.dist[e];
         }
         h[i] = top / bottom;

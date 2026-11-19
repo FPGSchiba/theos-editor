@@ -37,14 +37,14 @@ mod lift;
 mod tests;
 mod tree;
 
+use crate::kernels::num::to_u32;
+use crate::kernels::routing::steepest_receivers;
 use serde::Deserialize;
 
 pub(crate) use self::depressions::Depressions;
 // The tests of the processes after this one build spill points.
 #[cfg(test)]
 pub(crate) use self::depressions::SpillPoint;
-pub(crate) use self::lift::EPSILON;
-use super::flow::{cell_u32, steepest_receivers};
 use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, TypedStage};
 use crate::world::{Layer, ValueType};
 
@@ -98,7 +98,7 @@ impl TypedStage for ResolveSinks {
         let (surface, depressions) = lift::lift(height, &basins, &links);
         let mut receivers = steepest_receivers(&surface, fixed, ctx.frame().cell_m);
         for link in &links {
-            receivers.as_mut_slice()[link.a] = cell_u32(link.b);
+            receivers.as_mut_slice()[link.a] = to_u32(link.b);
         }
         ctx.write("receivers", Layer::U32(receivers))?;
         ctx.write("routing_surface", Layer::F64(surface))?;

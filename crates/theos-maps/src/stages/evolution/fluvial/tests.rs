@@ -13,10 +13,10 @@ use libm::pow;
 use super::{Fluvial, FluvialParams, runoff_weight};
 use crate::grid::Grid;
 use crate::kernels::noise::spectral_noise;
-use crate::kernels::num::{max, min, to_f64};
+use crate::kernels::num::{max, min, to_f64, to_usize};
 use crate::rng::StageRng;
 use crate::stage::{LayerSpec, Stage, StageError};
-use crate::stages::evolution::flow::{FlowWeights, cell_index};
+use crate::stages::evolution::flow::FlowWeights;
 use crate::stages::evolution::resolve_sinks::{Depressions, SpillPoint};
 use crate::stages::evolution::test_support::{evolve, processes};
 use crate::stages::terrain::climate::{Climate, ClimateFields, ClimateParams};
@@ -410,9 +410,7 @@ fn steady_state_slopes_follow_the_stream_power_law() {
         for i in (0..N * N).filter(|&i| !fixed[i] && area[i] > 10.0 * CELL_AREA) {
             let slope: f64 = weights
                 .edges(i)
-                .map(|e| {
-                    weights.weight[e] * (h[i] - h[cell_index(weights.to[e])]) / weights.dist[e]
-                })
+                .map(|e| weights.weight[e] * (h[i] - h[to_usize(weights.to[e])]) / weights.dist[e])
                 .sum();
             let law = UPLIFT / K * pow(area[i], -0.5);
             let error = (slope / law - 1.0).abs();
@@ -495,7 +493,7 @@ fn stability_at_ten_times_the_time_step() {
             let mut downhill = vec![false; N * N];
             for i in 0..N * N {
                 assert!(after[i].is_finite(), "{edges}, step {step}: cell {i}");
-                let r = cell_index(receivers[i]);
+                let r = to_usize(receivers[i]);
                 if fixed[i] || r == i {
                     continue;
                 }
@@ -521,7 +519,7 @@ fn stability_at_ten_times_the_time_step() {
         for n in 1..STEPS {
             let (then, now) = (&steps[n - 1], &steps[n]);
             for i in (0..N * N).filter(|&i| !fixed[i]) {
-                let r = cell_index(now.receivers[i]);
+                let r = to_usize(now.receivers[i]);
                 cell_steps += 1;
                 if r == i || !now.kept(then, i) {
                     continue;

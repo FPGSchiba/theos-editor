@@ -2,12 +2,10 @@
 //! and 6 of `hydrology`), `flow_dir`, and the discharge accumulated over those receivers.
 
 use crate::grid::{D8, Grid};
-use crate::kernels::flood::priority_flood;
-use crate::stages::evolution::{cell_index, steepest_receivers};
+use crate::kernels::flood::{EPSILON, priority_flood};
+use crate::kernels::num::to_usize;
+use crate::kernels::routing::steepest_receivers;
 use crate::stages::terrain::climate::SECONDS_PER_YEAR;
-
-/// The ε of both fills, m (Barnes et al. 2014).
-pub(crate) const EPSILON: f64 = 1e-6;
 
 /// A surface filled from seeds, with the single steepest receiver of every cell on it.
 ///
@@ -37,7 +35,7 @@ pub(crate) fn drain(height: &Grid<f64>, seeds: &[usize], cell_m: f64) -> Drainag
     let receivers = steepest_receivers(&flooded.surface, &is_seed, cell_m)
         .as_slice()
         .iter()
-        .map(|&r| cell_index(r))
+        .map(|&r| to_usize(r))
         .collect();
     Drainage {
         surface: flooded.surface,
@@ -53,7 +51,7 @@ impl Drainage {
         let mut out = input.clone();
         let flow = out.as_mut_slice();
         for &cell in self.order.iter().rev() {
-            let i = cell_index(cell);
+            let i = to_usize(cell);
             let to = self.receivers[i];
             if to != i {
                 flow[to] += flow[i];

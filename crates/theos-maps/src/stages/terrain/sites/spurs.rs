@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use crate::features::{Feature, FeatureHandle, FeatureSet, Geometry, Prop};
 use crate::kernels::KernelError;
+use crate::kernels::num::to_u32;
 use crate::stage::Finding;
 use crate::stages::terrain::roads::{Laid, RoadClass, StepCost, end_near};
 use crate::world::MapFrame;
@@ -27,7 +28,7 @@ impl<'a> Spurs<'a> {
     pub(super) fn new(cost: StepCost<'a>, frame: MapFrame, laid: Laid) -> Self {
         let mut first_road = BTreeMap::new();
         for (i, road) in laid.roads.iter().enumerate() {
-            let id = u32::try_from(i).unwrap_or(u32::MAX);
+            let id = to_u32(i);
             for &c in &road.cells {
                 first_road.entry(c).or_insert(id);
             }
@@ -55,7 +56,7 @@ impl<'a> Spurs<'a> {
         class: RoadClass,
         cancel: &dyn Fn() -> bool,
     ) -> Result<FeatureHandle, KernelError> {
-        let handle = FeatureHandle(u32::try_from(set.len()).unwrap_or(u32::MAX));
+        let handle = FeatureHandle(to_u32(set.len()));
         if let Geometry::Point(at @ [x, y]) = site.geometry {
             let cell = self.frame.index_at_m(at);
             if let Some(road) = self.road_through(cell) {
@@ -102,7 +103,7 @@ impl<'a> Spurs<'a> {
             .unwrap_or(site);
         let index = self.laid.add(&self.cost, &path, class, joined, site);
         self.count += 1;
-        let id = u32::try_from(index).unwrap_or(u32::MAX);
+        let id = to_u32(index);
         for &c in &self.laid.roads[index].cells {
             self.first_road.entry(c).or_insert(id);
         }

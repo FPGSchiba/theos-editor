@@ -6,7 +6,7 @@ use super::super::roads::network;
 use super::super::{RenderError, RenderInput};
 use crate::grid::Grid;
 use crate::kernels::filters::gaussian;
-use crate::kernels::num::{to_f64, to_index};
+use crate::kernels::num::{to_f64, to_index, to_usize};
 use crate::stages::terrain::roads::RoadClass;
 use crate::world::MapFrame;
 
@@ -69,7 +69,7 @@ pub(crate) fn compute(input: &RenderInput<'_>) -> Result<Known, RenderError> {
         for road in net.roads.iter().filter(|r| r.class >= RoadClass::Road) {
             input.check_cancel()?;
             for &cell in &road.cells {
-                let i = usize::try_from(cell).unwrap_or(usize::MAX);
+                let i = to_usize(cell);
                 stamp(
                     &mut raw,
                     i / frame.cols,

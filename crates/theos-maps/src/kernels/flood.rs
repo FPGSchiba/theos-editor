@@ -9,7 +9,12 @@ use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 
 use crate::grid::{D8, Grid};
-use crate::kernels::num::{OrdF64, key, max};
+use crate::kernels::num::{OrdF64, key, max, to_u32};
+
+/// The ε of every priority flood of the generator, m: the routing surface of `resolve_sinks`,
+/// the ε slope of `fluvial`'s depression filling and the fills of `hydrology`. Small next to any
+/// relief, and well above the rounding of heights of a few kilometres.
+pub const EPSILON: f64 = 1e-6;
 
 /// The result of [`priority_flood`].
 #[derive(Debug, Clone, PartialEq)]
@@ -53,7 +58,7 @@ pub fn priority_flood_where(
     }
     let mut order = Vec::with_capacity(heap.len());
     while let Some(Reverse((OrdF64(level), i))) = heap.pop() {
-        order.push(u32::try_from(i).unwrap_or(u32::MAX));
+        order.push(to_u32(i));
         for &offset in &D8 {
             let Some(j) = surface.neighbour(i, offset) else {
                 continue;

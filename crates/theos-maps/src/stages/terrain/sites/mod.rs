@@ -34,7 +34,7 @@ mod tests;
 use self::scatter::Ground;
 use self::spurs::Spurs;
 use crate::features::{Feature, FeatureSet, interior};
-use crate::kernels::num::to_f64;
+use crate::kernels::num::{to_f64, to_u32};
 use crate::stage::{
     LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
@@ -137,7 +137,7 @@ impl TypedStage for Sites {
             set.add(mill);
         }
         let wanted = industry::deposit_sites(&set, params.min_richness, &inside, &frame);
-        let total = u32::try_from(wanted.len()).unwrap_or(u32::MAX);
+        let total = to_u32(wanted.len());
         for (done, (site, class)) in wanted.into_iter().enumerate() {
             found.push(site.clone());
             let cancel = || ctx.is_cancelled();
@@ -147,7 +147,7 @@ impl TypedStage for Sites {
                     crate::kernels::KernelError::Cancelled => StageError::Cancelled,
                     other => ctx.fail(other.to_string()),
                 })?;
-            ctx.progress(u32::try_from(done + 1).unwrap_or(u32::MAX), total);
+            ctx.progress(to_u32(done + 1), total);
         }
 
         let settlements = set.points("settlement", None);

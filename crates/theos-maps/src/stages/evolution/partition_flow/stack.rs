@@ -1,8 +1,9 @@
 //! The stack of `partition_flow`: the cells in an order with receivers before donors.
 
+use crate::kernels::num::{to_u32, to_usize};
 use std::collections::VecDeque;
 
-use crate::stages::evolution::flow::{FlowWeights, cell_index, cell_u32};
+use crate::stages::evolution::flow::FlowWeights;
 
 /// Kahn's algorithm over the multiple-flow graph, starting from the cells without an edge (the
 /// ones that receive themselves) in cell order, first in, first out. A cell is listed once all its
@@ -13,13 +14,13 @@ pub(super) fn order(w: &FlowWeights) -> Result<Vec<u32>, usize> {
     let mut waiting: Vec<usize> = (0..n).map(|i| w.edges(i).len()).collect();
     for i in 0..n {
         for e in w.edges(i) {
-            donors[cell_index(w.to[e])].push(i);
+            donors[to_usize(w.to[e])].push(i);
         }
     }
     let mut queue: VecDeque<usize> = (0..n).filter(|&i| waiting[i] == 0).collect();
     let mut stack = Vec::with_capacity(n);
     while let Some(i) = queue.pop_front() {
-        stack.push(cell_u32(i));
+        stack.push(to_u32(i));
         for &d in &donors[i] {
             waiting[d] -= 1;
             if waiting[d] == 0 {

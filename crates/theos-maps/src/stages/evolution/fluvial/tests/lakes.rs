@@ -9,9 +9,8 @@
 use super::deposition::{routed, value, volume};
 use super::{CELL_AREA, layer, no_fields, recipe};
 use crate::grid::Grid;
-use crate::kernels::num::{max, to_f64};
+use crate::kernels::num::{max, to_f64, to_usize};
 use crate::stage::{Finding, StageReport};
-use crate::stages::evolution::flow::cell_index;
 use crate::stages::evolution::resolve_sinks::Depressions;
 use crate::stages::evolution::test_support::{evolve, processes};
 use crate::stages::terrain::grid::GridStage;
@@ -439,13 +438,13 @@ fn a_basin_merged_into_a_full_lake_leaves_no_pit() {
         .unwrap()
         .spill
         .iter()
-        .map(|s| cell_index(s.cell))
+        .map(|s| to_usize(s.cell))
         .collect();
     let cells: Vec<usize> = (0..label.as_slice().len())
         .filter(|&i| label.as_slice()[i] > 0 && !spill.contains(&i))
         .collect();
     assert!(cells.len() >= 3, "the lakes hold cells: {cells:?}");
     for i in cells {
-        assert!(cell_index(rec[i]) != i, "filled cell {i} is a pit");
+        assert!(to_usize(rec[i]) != i, "filled cell {i} is a pit");
     }
 }

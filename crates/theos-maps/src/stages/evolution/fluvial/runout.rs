@@ -20,7 +20,8 @@
 //! down changes; what the cells erode is laid down as before, and the books close the volume
 //! balance as before.
 
-use crate::stages::evolution::flow::{FlowWeights, cell_index};
+use crate::kernels::num::to_usize;
+use crate::stages::evolution::flow::FlowWeights;
 
 /// Per cell, the volume of slope supply (m³) that passes it without being laid down: on a cell
 /// with an edge where `dry(i)` holds, its own `supply` plus what reaches it from such cells
@@ -35,7 +36,7 @@ pub(super) fn passing(
     let mut reaching = vec![0.0; supply.len()];
     let mut through = vec![0.0; supply.len()];
     for &cell in stack.iter().rev() {
-        let i = cell_index(cell);
+        let i = to_usize(cell);
         let edges = weights.edges(i);
         if edges.is_empty() || !dry(i) {
             continue;
@@ -43,7 +44,7 @@ pub(super) fn passing(
         let passes = reaching[i] + supply[i];
         through[i] = passes;
         for e in edges {
-            reaching[cell_index(weights.to[e])] += passes * weights.weight[e];
+            reaching[to_usize(weights.to[e])] += passes * weights.weight[e];
         }
     }
     through

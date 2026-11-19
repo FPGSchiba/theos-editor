@@ -8,9 +8,9 @@ use super::{
     ALL_EDGES, BOTH, CELL_AREA, N, UPLIFT, fluvial_only, landscape, layer, recipe, with_runoff,
 };
 use crate::grid::Grid;
+use crate::kernels::flood::EPSILON;
 use crate::kernels::num::to_f64;
 use crate::stages::evolution::PlannedProcess;
-use crate::stages::evolution::resolve_sinks::EPSILON;
 use crate::stages::evolution::test_support::{evolve, processes};
 use crate::world::{Layer, World};
 

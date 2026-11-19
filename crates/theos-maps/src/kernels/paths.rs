@@ -9,7 +9,7 @@ use std::collections::BinaryHeap;
 
 use crate::grid::{D8, D16, Grid};
 use crate::kernels::KernelError;
-use crate::kernels::num::{OrdF64, key};
+use crate::kernels::num::{OrdF64, key, to_u32, to_usize};
 
 /// How many pops pass between two calls of the cancel callback.
 const CANCEL_EVERY: usize = 4096;
@@ -80,7 +80,7 @@ pub fn shortest_paths(
         if d > dist[i] {
             continue;
         }
-        let from = u32::try_from(i).unwrap_or(u32::MAX);
+        let from = to_u32(i);
         let mut relax = |j: usize, step: f64| {
             let nd = key(d + step);
             if nd < dist[j] {
@@ -118,7 +118,7 @@ pub fn path_to(tree: &PathTree, target: usize) -> Option<Vec<usize>> {
         if p == u32::MAX {
             break;
         }
-        at = usize::try_from(p).unwrap_or(usize::MAX);
+        at = to_usize(p);
         path.push(at);
     }
     path.reverse();

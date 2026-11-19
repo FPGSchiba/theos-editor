@@ -5,6 +5,7 @@ use serde_json::Value;
 
 use super::{FeaturesError, Named, assemble, base, number, position};
 use crate::grid::Grid;
+use crate::kernels::num::to_usize;
 use crate::stages::terrain::roads::{Road, RoadNetwork};
 use crate::world::MapFrame;
 
@@ -45,7 +46,7 @@ pub(super) fn feature(
         .cells
         .iter()
         .map(|&cell| {
-            let cell = usize::try_from(cell).unwrap_or(usize::MAX);
+            let cell = to_usize(cell);
             position(&frame.centre_m(cell / frame.cols, cell % frame.cols), id)
         })
         .collect::<Result<Vec<_>, _>>()?;

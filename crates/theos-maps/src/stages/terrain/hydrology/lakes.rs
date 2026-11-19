@@ -3,12 +3,13 @@
 //! (Bracht-Flyr et al. 2013, rain on the lake counted, rearranged for the area); and, after the
 //! routing, the dry nested pits of terminal depressions filled in `height`.
 
-use super::discharge::{Drainage, EPSILON};
+use super::discharge::Drainage;
 use crate::grid::Grid;
+use crate::kernels::flood::EPSILON;
 use crate::kernels::flood::priority_flood_where;
 use crate::kernels::labels::{Connectivity, labels};
-use crate::kernels::num::{OrdF64, key, max, to_f64};
-use crate::stages::evolution::cell_index;
+use crate::kernels::num::{max, to_f64, to_usize};
+use crate::kernels::routing::lowest;
 use crate::stages::terrain::climate::ClimateFields;
 
 /// A cell the fill raised by more than this belongs to a depression, m.
@@ -93,23 +94,6 @@ enum Fill {
     },
 }
 
-/// The lowest of `cells` on `height`, ties by index.
-fn lowest(height: &Grid<f64>, cells: impl Iterator<Item = usize>) -> Option<usize> {
-    let h = height.as_slice();
-    cells.min_by_key(|&i| (OrdF64(key(h[i])), i))
-}
-
-/// The outlets: the `fixed` cells in index order or, on a closed map, the lowest cell (ties by
-/// index), the map's sink.
-pub(crate) fn outlets(height: &Grid<f64>, fixed: &Grid<bool>) -> Vec<usize> {
-    let drained: Vec<usize> = (0..fixed.len()).filter(|&i| fixed.as_slice()[i]).collect();
-    if drained.is_empty() {
-        lowest(height, 0..height.len()).into_iter().collect()
-    } else {
-        drained
-    }
-}
-
 /// The depressions of `filled` over `height`: the 8-connected cells raised by more than
 /// [`RAISED_M`], in the scan order of their first cell.
 pub(crate) fn depressions(height: &Grid<f64>, filled: &Drainage) -> Vec<Depression> {
@@ -124,18 +108,15 @@ pub(crate) fn depressions(height: &Grid<f64>, filled: &Drainage) -> Vec<Depressi
         *cell = z - h > RAISED_M;
     }
     let (label, count) = labels(&raised, Connectivity::Eight);
-    let mut members: Vec<Vec<usize>> = vec![Vec::new(); cell_index(count)];
+    let mut members: Vec<Vec<usize>> = vec![Vec::new(); to_usize(count)];
     for (i, &l) in label.as_slice().iter().enumerate() {
-        if let Some(cells) = cell_index(l)
-            .checked_sub(1)
-            .and_then(|k| members.get_mut(k))
-        {
+        if let Some(cells) = to_usize(l).checked_sub(1).and_then(|k| members.get_mut(k)) {
             cells.push(i);
         }
     }
     let mut rank = vec![usize::MAX; height.len()];
     for (position, &cell) in filled.order.iter().enumerate() {
-        if let Some(r) = rank.get_mut(cell_index(cell)) {
+        if let Some(r) = rank.get_mut(to_usize(cell)) {
             *r = position;
         }
     }
@@ -266,7 +247,7 @@ impl Decider<'_> {
             EPSILON,
             |j, _| of[j] == k,
         );
-        let mut cells: Vec<usize> = order.iter().map(|&c| cell_index(c)).collect();
+        let mut cells: Vec<usize> = order.iter().map(|&c| to_usize(c)).collect();
         let in_order: Vec<f64> = cells.iter().map(|&c| self.runoff[c]).collect();
         let (n, q_land) = terminal_lake(&in_order, q_out, net, self.cell_area);
         cells.truncate(n);
@@ -312,7 +293,7 @@ pub(crate) fn settle(
     let mut balances = vec![Balance::default(); depressions.len()];
     let mut fills = vec![Fill::Spill; depressions.len()];
     for &cell in filled.order.iter().rev() {
-        let i = cell_index(cell);
+        let i = to_usize(cell);
         let k = of[i];
         let carried = if k == NONE {
             flow[i]
@@ -399,7 +380,9 @@ pub(crate) fn fill_dry_pits(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stages::terrain::hydrology::discharge::{EPSILON, drain};
+    use crate::kernels::flood::EPSILON;
+    use crate::kernels::routing::outlets;
+    use crate::stages::terrain::hydrology::discharge::drain;
 
     /// A drained cell 0, a lower depression D (cells 2, 3) and an upper depression U (cells 5,
     /// 6) that spills into D over cell 4; cells 7 to 11 slope into U.
@@ -436,15 +419,6 @@ mod tests {
 
     fn close(a: f64, b: f64) -> bool {
         (a - b).abs() < 1e-12
-    }
-
-    #[test]
-    fn outlets_are_the_fixed_cells_or_the_lowest_cell() {
-        let height = Grid::from_vec(1, 4, vec![3.0, 1.0, 2.0, 1.0]).unwrap();
-        let fixed = Grid::from_vec(1, 4, vec![false, false, true, true]).unwrap();
-        assert_eq!(outlets(&height, &fixed), [2, 3]);
-        let closed = Grid::filled(1, 4, false);
-        assert_eq!(outlets(&height, &closed), [1], "ties go to the lower index");
     }
 
     #[test]

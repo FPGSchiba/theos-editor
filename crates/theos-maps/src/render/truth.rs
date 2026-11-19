@@ -13,7 +13,7 @@ use super::palette::{self, Rgb};
 use super::styles::{self, INK, road_style};
 use super::view::View;
 use super::{RenderError, RenderInput, base, feats, roads, text};
-use crate::kernels::num::to_f32;
+use crate::kernels::num::{to_f32, to_usize};
 use crate::stage::LayerSpec;
 use crate::stages::terrain::hydrology::WaterFeatures;
 use crate::stages::terrain::roads::RoadClass;
@@ -58,8 +58,8 @@ pub(crate) fn truth(input: &RenderInput<'_>) -> Result<Pixmap, RenderError> {
         .height()
         .saturating_add(TRUTH_TOP_PX + TRUTH_BOTTOM_PX);
     let size = RenderError::Canvas {
-        width: usize::try_from(ground.width()).unwrap_or(usize::MAX),
-        height: usize::try_from(height).unwrap_or(usize::MAX),
+        width: to_usize(ground.width()),
+        height: to_usize(height),
     };
     let mut pixmap = Pixmap::new(ground.width(), height).ok_or(size)?;
     pixmap.fill(Color::from_rgba8(MARGIN[0], MARGIN[1], MARGIN[2], u8::MAX));

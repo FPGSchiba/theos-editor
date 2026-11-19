@@ -13,7 +13,7 @@ use tiny_skia::{
 use super::RenderError;
 use super::palette::Rgb;
 use crate::grid::Grid;
-use crate::kernels::num::to_f32;
+use crate::kernels::num::{to_f32, to_usize};
 use crate::world::MapFrame;
 
 /// Pixels per cell edge of the frame-exact renders (spec §5.11).
@@ -99,7 +99,7 @@ pub(crate) fn put(px: &mut Px, colour: Rgb) {
 
 /// The rows of `pixmap`, top to bottom, as pixels.
 pub(crate) fn rows_mut(pixmap: &mut Pixmap) -> std::slice::ChunksMut<'_, Px> {
-    let width = usize::try_from(pixmap.width()).unwrap_or(usize::MAX);
+    let width = to_usize(pixmap.width());
     let (pixels, _) = pixmap.data_mut().as_chunks_mut::<BYTES_PER_PX>();
     pixels.chunks_mut(width.max(1))
 }

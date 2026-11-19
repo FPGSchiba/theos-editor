@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use super::{TravelParams, tobler_ms};
 use crate::grid::Grid;
 use crate::kernels::KernelError;
-use crate::kernels::num::{max, to_f64};
+use crate::kernels::num::{max, to_f64, to_usize};
 use crate::kernels::paths::{Directions, PathTree, shortest_paths};
 use crate::stages::terrain::roads::{RoadNetwork, between, distance_m};
 use crate::world::MapFrame;
@@ -52,12 +52,12 @@ impl<'a> Walk<'a> {
         };
         for road in network.map_or(&[][..], |n| n.roads.as_slice()) {
             for &c in &road.cells {
-                if let Some(on) = walk.on_road.get_mut(to_index(c)) {
+                if let Some(on) = walk.on_road.get_mut(to_usize(c)) {
                     *on = true;
                 }
             }
             for &(a, b) in &road.bridges {
-                let (a, b) = (to_index(a), to_index(b));
+                let (a, b) = (to_usize(a), to_usize(b));
                 let seconds = walk.length_m(a, b) / walk.road_ms(tobler_ms(0.0));
                 walk.bridges.entry(a).or_default().push((b, seconds));
                 walk.bridges.entry(b).or_default().push((a, seconds));
@@ -132,9 +132,4 @@ impl<'a> Walk<'a> {
             cancel,
         )
     }
-}
-
-/// A road's cell number as an index.
-fn to_index(cell: u32) -> usize {
-    usize::try_from(cell).unwrap_or(usize::MAX)
 }

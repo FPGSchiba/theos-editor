@@ -1,7 +1,8 @@
 //! The checks that `fluvial`'s routed inputs fit the grid. Values (`weights`, `depressions`) are
 //! not shape-checked by the world, so these cheap guards keep every index on its slice.
 
-use crate::stages::evolution::flow::{FlowWeights, cell_index};
+use crate::kernels::num::to_usize;
+use crate::stages::evolution::flow::FlowWeights;
 use crate::stages::evolution::resolve_sinks::Depressions;
 
 /// Why `weights` and `stack` do not fit a grid of `cells` cells, or `None` when they do.
@@ -20,17 +21,17 @@ pub(super) fn routing_misfit(weights: &FlowWeights, stack: &[u32], cells: usize)
             weights.dist.len()
         ));
     }
-    if let Some(start) = weights.start.iter().find(|&&s| cell_index(s) > edges) {
+    if let Some(start) = weights.start.iter().find(|&&s| to_usize(s) > edges) {
         return Some(format!(
             "the flow weights start an edge list at {start}, past their {edges} edges"
         ));
     }
-    if let Some(to) = weights.to.iter().find(|&&t| cell_index(t) >= cells) {
+    if let Some(to) = weights.to.iter().find(|&&t| to_usize(t) >= cells) {
         return Some(format!(
             "a flow weight sends water to cell {to}, outside the grid of {cells} cells"
         ));
     }
-    if let Some(cell) = stack.iter().find(|&&c| cell_index(c) >= cells) {
+    if let Some(cell) = stack.iter().find(|&&c| to_usize(c) >= cells) {
         return Some(format!(
             "the stack names cell {cell}, outside the grid of {cells} cells"
         ));
@@ -53,7 +54,7 @@ pub(super) fn depressions_misfit(depressions: &Depressions, cells: usize) -> Opt
     if let Some((cell, n)) = label
         .iter()
         .enumerate()
-        .find(|&(_, &n)| cell_index(n) > count)
+        .find(|&(_, &n)| to_usize(n) > count)
     {
         let spill = if count == 1 {
             "depression spills"
@@ -66,7 +67,7 @@ pub(super) fn depressions_misfit(depressions: &Depressions, cells: usize) -> Opt
     }
     let mut spilling = vec![0; cells];
     for (n, point) in (1..).zip(&depressions.spill) {
-        let at = cell_index(point.cell);
+        let at = to_usize(point.cell);
         let Some(earlier) = spilling.get_mut(at) else {
             return Some(format!(
                 "depression {n} spills from cell {at}, outside the grid of {cells} cells"

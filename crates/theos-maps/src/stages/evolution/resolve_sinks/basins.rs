@@ -1,8 +1,8 @@
 //! Steps 1 and 2 of `resolve_sinks`: the outlets, and the basin every receiver chain ends in.
 
 use crate::grid::Grid;
-use crate::kernels::num::{OrdF64, key};
-use crate::stages::evolution::flow::cell_index;
+use crate::kernels::num::to_usize;
+use crate::kernels::routing::outlets;
 
 /// The basin of every outlet: the root of the basin tree.
 pub(super) const ROOT: usize = 0;
@@ -32,7 +32,7 @@ pub(super) fn bad_receiver(height: &Grid<f64>, receivers: &Grid<u32>) -> Option<
         .iter()
         .enumerate()
         .find(|&(i, &r)| {
-            let j = cell_index(r);
+            let j = to_usize(r);
             j != i && !lower_neighbour(i, j)
         })
         .map(|(i, &r)| (i, r))
@@ -45,17 +45,10 @@ pub(super) fn bad_receiver(height: &Grid<f64>, receivers: &Grid<u32>) -> Option<
 pub(super) fn basins(height: &Grid<f64>, receivers: &Grid<u32>, fixed: &Grid<bool>) -> Basins {
     const UNSET: usize = usize::MAX;
     let mut of = vec![UNSET; height.len()];
-    for (basin, &outlet) in of.iter_mut().zip(fixed.as_slice()) {
-        if outlet {
-            *basin = ROOT;
-        }
+    for outlet in outlets(height, fixed) {
+        of[outlet] = ROOT;
     }
-    if !fixed.as_slice().contains(&true)
-        && let Some(sink) = lowest(height)
-    {
-        of[sink] = ROOT;
-    }
-    let to = |i: usize| cell_index(receivers.as_slice()[i]);
+    let to = |i: usize| to_usize(receivers.as_slice()[i]);
     let mut count = ROOT + 1;
     for (i, basin) in of.iter_mut().enumerate() {
         if *basin == UNSET && to(i) == i {
@@ -76,10 +69,4 @@ pub(super) fn basins(height: &Grid<f64>, receivers: &Grid<u32>, fixed: &Grid<boo
         }
     }
     Basins { of, count }
-}
-
-/// The lowest cell, ties by index; `None` for an empty grid.
-fn lowest(height: &Grid<f64>) -> Option<usize> {
-    let h = height.as_slice();
-    (0..h.len()).min_by_key(|&i| (OrdF64(key(h[i])), i))
 }

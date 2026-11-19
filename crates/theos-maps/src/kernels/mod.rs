@@ -16,6 +16,7 @@ pub mod noise;
 pub mod num;
 pub mod paths;
 pub mod reflect;
+pub mod routing;
 pub mod stats;
 pub mod tridiagonal;
 pub mod voronoi;

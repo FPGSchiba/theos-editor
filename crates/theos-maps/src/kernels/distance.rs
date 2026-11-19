@@ -10,6 +10,7 @@
 //! distances are whole numbers, so every comparison is exact.
 
 use crate::grid::Grid;
+use crate::kernels::num::to_u32;
 
 use super::KernelError;
 use super::num::to_f64;
@@ -119,7 +120,7 @@ pub fn distance(mask: &Grid<bool>, cell_m: f64) -> Result<(Grid<f64>, Grid<u32>)
         );
     }
     let dist = d2.map(|v| v.sqrt() * cell_m);
-    let index = near.map(|i| u32::try_from(i).unwrap_or(u32::MAX));
+    let index = near.map(to_u32);
     Ok((dist, index))
 }
 

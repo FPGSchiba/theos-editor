@@ -14,8 +14,8 @@
 //! through it, as the law lays it down where nothing incises.
 
 use super::fill::Traps;
-use crate::kernels::num::max;
-use crate::stages::evolution::flow::{FlowWeights, cell_index};
+use crate::kernels::num::{max, to_usize};
+use crate::stages::evolution::flow::FlowWeights;
 
 /// Writes each cell's own sediment of the step into `volume`, m³: its net erosion
 /// `(start − height)·cell_area` (negative where it gained), plus `supply`, the volume of slope
@@ -117,7 +117,7 @@ fn walk(
     let mut open = vec![true; traps.len()];
     let mut out = 0.0;
     for &cell in stack.iter().rev() {
-        let i = cell_index(cell);
+        let i = to_usize(cell);
         let mut own = volume[i];
         if let Some(n) = traps.holding(i).filter(|&n| open[n]) {
             inflow[n] += own;
@@ -135,7 +135,7 @@ fn walk(
         }
         let leaving = through - keep(i, through);
         for e in edges {
-            let to = cell_index(weights.to[e]);
+            let to = to_usize(weights.to[e]);
             let share = leaving * weights.weight[e];
             match traps.holding(to) {
                 Some(n) if open[n] => inflow[n] += share,
@@ -222,9 +222,9 @@ pub(super) fn books(
 mod tests {
     use super::{Ledger, books, lay_down, route};
     use crate::grid::Grid;
+    use crate::kernels::flood::EPSILON;
     use crate::stages::evolution::flow::FlowWeights;
     use crate::stages::evolution::fluvial::fill::Traps;
-    use crate::stages::evolution::resolve_sinks::EPSILON;
     use crate::stages::evolution::resolve_sinks::{Depressions, SpillPoint};
 
     /// A 1 x 6 strip: cell 0 is the outlet; 1 → 0; 2 → 1; 3 → 2; 4 sends 1/4 to 3 and 3/4 to 2;

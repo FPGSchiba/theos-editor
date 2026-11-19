@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 pub use self::memory::{DEFAULT_MEMORY_BUDGET, MemoryEstimate, estimate};
 use crate::error::RunError;
 use crate::golden::{GoldenRun, GoldenStage};
+use crate::kernels::num::to_u32;
 use crate::progress::{CancelToken, Progress};
 use crate::recipe::{Plan, PlannedStage};
 use crate::stage::{Metrics, Registry, Severity, Stage, StageContext, StageError, StageReport};
@@ -90,11 +91,11 @@ pub(crate) fn execute(
         },
         timing_s: BTreeMap::new(),
     };
-    let total = count(plan.stages.len());
+    let total = to_u32(plan.stages.len());
     for (index, planned) in plan.stages.iter().enumerate() {
         progress(&Progress {
             stage: planned.id.to_owned(),
-            done: count(index),
+            done: to_u32(index),
             total,
         });
         if cancel.is_cancelled() {
@@ -117,10 +118,6 @@ pub(crate) fn execute(
     }
     out.world = world;
     Ok(out)
-}
-
-fn count(n: usize) -> u32 {
-    u32::try_from(n).unwrap_or(u32::MAX)
 }
 
 /// The id for the first occurrence of a stage, `<id>#<n>` for later ones.

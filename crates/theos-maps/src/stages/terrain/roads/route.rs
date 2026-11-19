@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use super::{RoadClass, StepCost};
 use crate::grid::Grid;
 use crate::kernels::KernelError;
+use crate::kernels::num::to_u32;
 use crate::kernels::paths::{Directions, PathTree, path_to, shortest_paths};
 
 /// Least-cost routing of roads in 16 directions with bridge edges. A step costs
@@ -124,8 +125,7 @@ impl Router<'_> {
 /// crossed.
 #[must_use]
 pub fn bridge_key(a: usize, b: usize) -> (u32, u32) {
-    let cell = |i: usize| u32::try_from(i).unwrap_or(u32::MAX);
-    (cell(a.min(b)), cell(a.max(b)))
+    (to_u32(a.min(b)), to_u32(a.max(b)))
 }
 
 #[cfg(test)]

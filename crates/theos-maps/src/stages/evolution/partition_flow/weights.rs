@@ -1,11 +1,12 @@
 //! The flow weights of `partition_flow`: each cell's edges to its receivers.
 
+use crate::kernels::routing::d8_distance;
 use libm::pow;
 
 use super::Exponent;
 use crate::grid::{D8, Grid};
-use crate::kernels::num::max;
-use crate::stages::evolution::flow::{FlowWeights, cell_index, cell_u32, d8_distance};
+use crate::kernels::num::{max, to_u32, to_usize};
+use crate::stages::evolution::flow::FlowWeights;
 
 /// The weights of every cell of `surface`, or the first cell (and its receiver) whose receiver is
 /// not a D8 neighbour.
@@ -28,9 +29,9 @@ pub(super) fn build(
         dist: Vec::new(),
     };
     for i in 0..surface.len() {
-        out.start.push(cell_u32(out.to.len()));
+        out.start.push(to_u32(out.to.len()));
         let receiver = receivers.as_slice()[i];
-        if cell_index(receiver) == i {
+        if to_usize(receiver) == i {
             continue;
         }
         let (r, c) = surface.cell(i);
@@ -41,7 +42,7 @@ pub(super) fn build(
                 continue;
             };
             let dist = d8_distance(cell_m, dir);
-            if next == cell_index(receiver) {
+            if next == to_usize(receiver) {
                 to_receiver = Some(dist);
             }
             let drop = heights[i] - heights[next];
@@ -64,10 +65,10 @@ pub(super) fn build(
             .collect();
         let total: f64 = shares.iter().sum();
         for (&(next, _, dist), share) in lower.iter().zip(shares) {
-            push(&mut out, cell_u32(next), share / total, dist);
+            push(&mut out, to_u32(next), share / total, dist);
         }
     }
-    out.start.push(cell_u32(out.to.len()));
+    out.start.push(to_u32(out.to.len()));
     Ok(out)
 }
 

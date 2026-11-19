@@ -21,7 +21,7 @@ use serde::Serialize;
 
 use super::Water;
 use crate::grid::Grid;
-use crate::kernels::num::{max, min, to_f64, to_index};
+use crate::kernels::num::{max, min, to_f64, to_index, to_usize};
 
 /// The hydraulic geometry of the channel, `width = a·Q^0.5` and `depth = c·Q^0.4` (Leopold and
 /// Maddock 1953), with `Q` the discharge in m³/s.
@@ -72,7 +72,7 @@ pub(super) fn strahler(receivers: &[usize], fill: &[u32], river: &[bool]) -> Vec
     // The largest inflow order of a cell, and how many inflows have it.
     let mut inflow = vec![(0_u32, 0_u32); receivers.len()];
     for &cell in fill.iter().rev() {
-        let i = crate::stages::evolution::cell_index(cell);
+        let i = to_usize(cell);
         if !river[i] {
             continue;
         }

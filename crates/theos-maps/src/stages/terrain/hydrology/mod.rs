@@ -2,7 +2,7 @@
 //! the single steepest receiver, river masks, `flow_dir` and the water surface.
 //!
 //! 1. **Fill** (`discharge::drain`): priority-flood of `height` with ε = 1e-6 (Barnes et al.
-//!    2014) from the outlets (`lakes::outlets`): the `fixed` cells, or on a closed map the lowest
+//!    2014) from the outlets (`kernels::routing::outlets`): the `fixed` cells, or on a closed map the lowest
 //!    cell (ties by index), the map's sink.
 //! 2. **Depressions** (`lakes.rs`): 8-connected cells the fill raised by more than 1e-3 m. A
 //!    depression's spill level is its highest filled value; its exit is its cell the fill
@@ -68,6 +68,7 @@ pub use self::lines::RiverLine;
 pub use self::outlines::LakeShape;
 use crate::grid::Grid;
 use crate::kernels::num::to_f64;
+use crate::kernels::routing::outlets;
 use crate::stage::{
     Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
@@ -216,7 +217,7 @@ pub(crate) fn water(
 ) -> Water {
     let cell_area = cell_m * cell_m;
     let runoff = fields.runoff.map(|mm| mm / lakes::MM_PER_M * cell_area);
-    let outlets = lakes::outlets(height, fixed);
+    let outlets = outlets(height, fixed);
     let filled = discharge::drain(height, &outlets, cell_m);
     let found = lakes::depressions(height, &filled);
     let mut height = height.clone();

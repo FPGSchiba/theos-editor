@@ -5,12 +5,10 @@ use super::basins::Basins;
 use super::depressions::{Depressions, SpillPoint};
 use super::tree::Link;
 use crate::grid::Grid;
-use crate::kernels::flood::priority_flood_where;
-use crate::stages::evolution::flow::{cell_index, cell_u32};
-
-/// The rise per flood step on the routing surface, in metres; `fluvial`'s depression filling
-/// keeps the same ε slope.
-pub(crate) const EPSILON: f64 = 1e-6;
+use crate::kernels::num::{to_u32, to_usize};
+// The rise per flood step on the routing surface; `fluvial`'s depression filling keeps the
+// same ε slope.
+use crate::kernels::flood::{EPSILON, priority_flood_where};
 
 /// The routing surface of `height` and its depressions, for the basin `links` in tree order
 /// (parents first).
@@ -49,7 +47,7 @@ pub(super) fn lift(
         let order = priority_flood_where(&mut surface, &mut visited, &[link.a], EPSILON, raises);
         let lake: Vec<usize> = order
             .into_iter()
-            .map(cell_index)
+            .map(to_usize)
             .filter(|&c| surface.as_slice()[c] > h[c])
             .collect();
         if lake.is_empty() {
@@ -62,11 +60,11 @@ pub(super) fn lift(
             under
         } else {
             spill.push(SpillPoint {
-                cell: cell_u32(link.a),
-                to: cell_u32(link.b),
+                cell: to_u32(link.a),
+                to: to_u32(link.b),
                 level: link.level,
             });
-            u32::try_from(spill.len()).unwrap_or(u32::MAX)
+            to_u32(spill.len())
         };
         for c in lake {
             label.as_mut_slice()[c] = n;

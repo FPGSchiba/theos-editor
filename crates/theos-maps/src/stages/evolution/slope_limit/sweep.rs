@@ -28,12 +28,12 @@
 //! depend on the order of ties; the order by cell index only makes the sweep itself the same on
 //! every run.
 
+use crate::kernels::routing::d8_distance;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 
 use crate::grid::{D8, Grid};
 use crate::kernels::num::{OrdF64, key};
-use crate::stages::evolution::flow::d8_distance;
 
 /// The highest surface at or below `height` on which no cell that is not `fixed` stands more
 /// than its `critical` slope × the D8 distance above a neighbour; fixed cells keep their height.

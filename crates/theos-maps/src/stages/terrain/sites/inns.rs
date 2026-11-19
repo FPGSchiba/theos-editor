@@ -2,6 +2,7 @@
 
 use crate::features::{Feature, FeatureSet, Prop};
 use crate::grid::Grid;
+use crate::kernels::num::to_u32;
 use crate::stages::terrain::roads::{Road, RoadClass, distance_m};
 use crate::world::MapFrame;
 
@@ -34,7 +35,7 @@ pub(super) fn inns(
             dx * dx + dy * dy > FROM_SETTLEMENT_M * FROM_SETTLEMENT_M
         });
         if alone && inside.get(row, col) {
-            let id = u32::try_from(i).unwrap_or(u32::MAX);
+            let id = to_u32(i);
             out.push(Feature::site("inn", at, [("road", Prop::Road(id))]));
         }
     }

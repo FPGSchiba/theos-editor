@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
+use crate::kernels::num::to_u32;
 use crate::world::{ValueType, WorldValue};
 
 /// A reference to a feature of a [`FeatureSet`]: its position in insertion order.
@@ -87,7 +88,7 @@ impl FeatureSet {
     /// Adds `f` and returns its handle.
     pub fn add(&mut self, f: Feature) -> FeatureHandle {
         // A list never reaches 2^32 features; saturating keeps the call infallible.
-        let handle = FeatureHandle(u32::try_from(self.features.len()).unwrap_or(u32::MAX));
+        let handle = FeatureHandle(to_u32(self.features.len()));
         self.features.push(f);
         handle
     }
@@ -103,7 +104,7 @@ impl FeatureSet {
         self.features
             .iter()
             .enumerate()
-            .map(|(i, f)| (FeatureHandle(u32::try_from(i).unwrap_or(u32::MAX)), f))
+            .map(|(i, f)| (FeatureHandle(to_u32(i)), f))
     }
 
     /// The features of `kind` with their handles, in insertion order.

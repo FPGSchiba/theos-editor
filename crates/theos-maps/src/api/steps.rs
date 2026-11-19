@@ -19,6 +19,7 @@ use crate::constraints;
 use crate::error::RunError;
 use crate::features::FeatureSet;
 use crate::features::output as features;
+use crate::kernels::num::to_u32;
 use crate::metrics;
 use crate::package::{self, RunRecord};
 use crate::progress::{CancelToken, Progress};
@@ -60,11 +61,10 @@ impl<'a> Steps<'a> {
     /// # Errors
     /// [`RunError::Cancelled`] once the token is set.
     pub(super) fn report(&mut self, step: &str, done: usize, total: usize) -> Result<(), RunError> {
-        let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
         (self.progress)(&Progress {
             stage: step.to_owned(),
-            done: count(done),
-            total: count(total),
+            done: to_u32(done),
+            total: to_u32(total),
         });
         if self.cancel.is_cancelled() {
             return Err(RunError::Cancelled);
