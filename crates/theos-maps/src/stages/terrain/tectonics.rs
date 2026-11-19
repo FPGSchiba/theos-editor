@@ -78,8 +78,10 @@ impl ValueType for Warp {
 }
 
 /// The parameters of `tectonics`; defaults as 0.3.0 (the sag duration is plan ruling L13). The
-/// background and warp numbers must be finite and `sag_duration_yr` positive and finite; the
-/// sources have the domains of [`Source`].
+/// background and warp numbers must be finite and `sag_duration_yr` positive and finite. In a
+/// source the positions must be finite, a path must hold at least two points, `width`, `reach`
+/// and `r` must be positive, `rate` finite, `jitter` and `depth_m` at least 0, and `asymmetry`
+/// in [0, 2).
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct TectonicsParams {
