@@ -58,7 +58,10 @@ pub struct EvolutionParams {
     pub check_every: u32,
     /// The relief of the initial surface's noise, in metres.
     pub initial_relief_m: f64,
-    /// The `[[stage.process]]` tables, in order, as the recipe gives them.
+    /// The `[[stage.process]]` tables, in order, as the recipe gives them. A table's `every = n`
+    /// runs its process only at step 0, at every multiple of `n` and on the last step. Each run
+    /// covers one `dt_yr`, so `every` is meant for refreshes such as `climate_update`; on a rate
+    /// process (`uplift`, `hillslope`, `fluvial`) it slows the process by about `n`.
     pub process: Vec<toml::Table>,
     /// The processes of `process`, parsed by `validate`; not a recipe parameter.
     #[serde(skip)]
