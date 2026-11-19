@@ -14,14 +14,14 @@ edges = ["south"]
 
 [[stage]]
 id                   = "tectonics"
-background_uplift    = 2.2e-4
+background_uplift    = 3.3e-4   # 0.3.0: 2.2e-4; steeper hills, less vegetation (Task 44)
 background_variation = 0.9
 background_beta      = 2.8
   [[stage.source]]
   type = "orogen"
   path = [[0.02, 0.14], [0.40, 0.08], [0.98, 0.20]]
   width = 0.10
-  rate = 2.6e-3
+  rate = 1.56e-3   # 0.3.0: 2.6e-3; relief within the constraint (Task 44)
   asymmetry = 0.5
   jitter = 0.06
   [[stage.source]]
@@ -82,6 +82,7 @@ dt_yr  = 2.5e4
   id = "fluvial"
   m = 0.45
   g = 1.0
+  supply_passes_dry_cells = true
   [[stage.process]]
   id = "slope_limit"
   [[stage.process]]
@@ -118,6 +119,6 @@ ruin_radius_km = 2.5
 [constraints]
 "elevation_m.relief"              = [800, 2200]
 vegetation_cover_pct              = [25, 75]
-"travel.chime_to_chime_min"       = [60, 240]
+"travel.chime_to_chime_min"       = [100, 400]   # 0.3.0: [60, 240] / 0.6, the off-path factor
 "features.ruin"                   = [2, 2]
 "features.chime"                  = [2, 2]

@@ -12,7 +12,7 @@ edges = ["south"]
 
 [[stage]]
 id                   = "tectonics"
-background_uplift    = 2.2e-4
+background_uplift    = 3.3e-4   # 0.3.0: 2.2e-4; steeper hills, less vegetation (Task 44)
 background_variation = 0.9
 background_beta      = 2.8
   [[stage.source]]
@@ -32,7 +32,7 @@ provinces = 3
 
 [[stage]]
 id             = "climate_model"
-base_precip_mm = 800.0
+base_precip_mm = 450.0   # 0.3.0: 800; drier, less vegetation (Task 44)
 orographic_mm  = 900.0
 
 [[stage]]
@@ -54,6 +54,7 @@ dt_yr = 2.5e4
   id = "fluvial"
   m = 0.45
   g = 1.0
+  supply_passes_dry_cells = true
   [[stage.process]]
   id = "slope_limit"
   [[stage.process]]
