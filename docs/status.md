@@ -56,14 +56,26 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 ## Needs Jann
 
 - P08's spec change PR #40 waits for Jann's merge. It carries every spec and format change of the
-  build (rulings 51–56 and errata):
-  - the exact slope limiter, whose debris feeds the rivers;
-  - fill-first lakes;
-  - `skrifa` for text;
-  - loop roads without the merge discount;
-  - lakes as MultiPolygons;
-  - from 17 Nov, noise drawn per physical wavenumber and test 13 on resolved metrics.
-  #40 must be on main before P08's build PR merges.
+  build (rulings 51–64 and errata):
+  - 51: the exact slope limiter, whose debris feeds the rivers;
+  - 52: Aitken relaxation where the sweeps would miss the tolerance;
+  - 53: fill-first lakes, filled before the solve in every iteration;
+  - 54: `skrifa` for text;
+  - 55: loop roads without the merge discount;
+  - 56: lakes as MultiPolygons;
+  - 57: noise drawn per physical wavenumber, the same landscape at every grid size;
+  - 58: `hillslope` after `uplift` and before the routing;
+  - 59: physics test 14 on each partition's own network;
+  - 60: a basin below the lake it spills into joins that lake;
+  - 61: physics test 13 on what both grids resolve;
+  - 62: the slope-supply pre-pass before `fluvial`'s iterations;
+  - 63: the switch `supply_passes_dry_cells`;
+  - 64: the omega's Chime walk range [100, 400] min.
+  The built-in recipes and CE-28.5 depend on 57–64. #40 must be on main before P08's build PR
+  merges.
+- The SIL OFL 1.1 fonts (Inter, Spectral) that `theos-maps` embeds must ship with their licence
+  texts (P08 §5.11, §7). `theos_maps::render::font_licences` hands them out; P09 or the release
+  workflow adds them to the releases of the binaries that embed the crate.
 - Gate PR #43 (17 Nov 2026) waits for Jann's merge. It keeps tests named `slow_` out of the
   default `test` job and runs them in a new `slow-tests` check and job. One 384² run takes about
   70 s, so 24 parity runs exceed P08 §5.14's five-minute budget. After the merge,

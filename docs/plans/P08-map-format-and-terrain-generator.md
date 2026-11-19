@@ -41,7 +41,8 @@
   - **Renders:**
     - `tiny-skia` 0.12 without default features, with `no-std-float`;
     - `png` 0.18 without default features;
-    - `ab_glyph` 0.2.32 without default features, with `libm`;
+    - `skrifa` 0.50 without default features, with `libm` (spec ruling 54: it replaces
+      `ab_glyph`, whose `ttf-parser` is unmaintained);
     - `wuff` 0.2.10 without default features, with `brotli`.
 
 **Spec:** `docs/specs/phases/P08-map-format-and-terrain-generator.md` (approved in #27, amended by
@@ -1887,7 +1888,9 @@ applied).
 **Gauss–Seidel iterations** (Yuan et al. 2019, eq. 15, 19–21, generalised to the weights; spec
 §5.9). Start with `h⁰ = h*`. For each iteration `k`:
 1. **Sediment:** per cell, `e_j = (h*_j − h^k_j)·area / Δt`. In reverse stack order,
-   `Qs_in(i) = Σ_donors w(d→i)·(Qs_in(d) + e_d)` (strictly upstream, as the paper's `ups(i)`).
+   `Qs_in(i) = Σ_donors w(d→i)·(Qs_in(d) + e_d)`; `Qs` of a cell includes its own term `e_i`
+   (ledger ruling of Task 25: spec §5.9 defines Qs as the flux leaving the cell, not the paper's
+   strictly upstream `ups(i)`).
 2. **Solve** in stack order:
    `h^{k+1}_i = (h*_i + Σ_r F_ir·h^{k+1}_r + Δt·G·Qs_in(i)/Q_i) / (1 + Σ_r F_ir)`.
 3. **Stop** when `max|h^{k+1} − h^k|` < `tol` = `1e-3 × max(U)·Δt` (`1e-6` m when `max(U) = 0`),
@@ -1895,16 +1898,20 @@ applied).
 
 With `uplift` absent from the world (tests), `max(U)` is 0.
 
-**Depression filling** (`fill.rs`, only when G > 0). It runs once per step after the iterations,
-on the converged heights:
+**Depression filling** (`fill.rs`, only when G > 0). It runs before the implicit solve in every
+Gauss–Seidel iteration, and the filled cells are then solved like every other cell (spec ruling
+53; the build first filled once after the iterations, and held lakes perched above their
+incising spill nodes):
 - Walk the stack in reverse order, carrying `Qs`. When the walk enters a cell of depression `n`
   from outside, add `Qs·Δt` to that depression's inflow volume.
-- After the walk, for each depression in reverse stack order of its spill cell:
+- For each depression in reverse stack order of its spill cell:
   - fill its cells in height order (ties by index) up to `min(spill level, the level its volume
     reaches)`;
   - give the filled cells an ε = 1e-6 slope toward `SpillPoint.cell`, along the depression's
-    flood order;
-  - pass the excess volume on from `SpillPoint.to` into the walk of the depression downstream.
+    flood order (`resolve_sinks`' ε);
+  - pass the excess volume on as arriving `Qs` of the spill cell, which carries it over its own
+    flow edges (ledger ruling of Task 25: spec §5.9 "passes on from the spill node", not from
+    `SpillPoint.to`).
 - Book the deposited thickness in `deposition`.
 - Keep the outflow at drained edges (Qs leaving the map) in the stage report as
   `sediment_out_m3`.
@@ -1954,11 +1961,15 @@ climate_update.rs}`; create `src/kernels/tridiagonal.rs` (Thomas algorithm).
   `partition_flow`) and `fluvial` of its step; the planner refuses it after any of them
   (Task 21's `check_order`, ruling 58).
 
-**`slope_limit`** (spec §5.9 "Slope limit"):
-- reads `height`, `critical_slope`, `fixed`, `erosion`, `deposition`; writes the same three;
-- passes highest to lowest (ties by index), half the excess moves to the steepest neighbour;
-- it stops when no slope exceeds critical + 1e-6, or after 100 passes (then a `Warning`);
-- material onto drained edges leaves the map, reported as `removed_m3`.
+**`slope_limit`** (spec §5.9 "Slope limit", spec ruling 51; the half-excess passes this plan
+first described needed 600–900 passes per step and hit their 100-pass cap):
+- reads `height`, `critical_slope`, `fixed`, `erosion` and, optionally, `slope_supply`; writes
+  `height`, `erosion` and `slope_supply`;
+- an exact threshold limiter in one sweep: every cell falls to the highest surface at or below
+  its height that keeps its rock's critical slope × the D8 distance to each neighbour; fixed
+  cells keep their height, and no cell is raised;
+- what a cell loses is booked as `erosion` and added to `slope_supply`, which the next `fluvial`
+  takes into the sediment flux at that cell; the report holds `removed_m3`.
 
 **`climate_update`:**
 - reads `height`, `climate`; writes `climate`;
@@ -2498,11 +2509,13 @@ pub(crate) fn summary(metrics: serde_json::Value, feature_counts: &BTreeMap<Stri
 ```
 
 **Metrics** (spec §5.14, 0.3.0's definitions and rounding):
-- `elevation_m.relief` = max − min of `height`, rounded to whole metres;
+- `elevation_m.relief` = max − min of `height`, truncated to whole metres (0.3.0's `int`;
+  ledger errata of Task 37);
 - `lake_pct` = lake cells / all cells × 100, 2 decimals;
 - `rivers_pct` (L14), 2 decimals;
 - `vegetation_cover_pct` = the share of `vegetation` > 0.5 × 100, 1 decimal;
-- `precip_mm_yr.median` = the median of `climate.fields.precipitation`, whole mm;
+- `precip_mm_yr.median` = the median of `climate.fields.precipitation`, truncated to whole mm
+  (0.3.0's `int`; ledger errata of Task 37);
 - `travel.chime_to_chime_min` = `travel`'s metric when present, 1 decimal.
 
 Rounding uses `f64::round` (exact). The summary object holds these paths, then `features` (counts
@@ -2578,7 +2591,7 @@ u8 values come from `num::to_u8_unit`, and f32 values from `num::to_f32`.
 ### Task 39: Renders — infrastructure and `base`
 
 **Files:**
-- Modify: `Cargo.toml` (`tiny-skia`, `png`, `ab_glyph`, `wuff`).
+- Modify: `Cargo.toml` (`tiny-skia`, `png`, `skrifa`, `wuff`; spec ruling 54).
 - Create: `crates/theos-maps/src/render/{mod.rs, canvas.rs, fonts.rs, palette.rs, shade.rs,
   base.rs}`.
 
