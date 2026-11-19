@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
 
+use crate::features::TYPES;
 use crate::runner::StageFinding;
 use crate::stage::Metrics;
 
@@ -26,7 +27,8 @@ fn insert_nested(root: &mut Map<String, Value>, path: &str, value: Value) {
 }
 
 /// The run summary: the parity `metrics` (keys are dotted paths, so `elevation_m.relief` becomes
-/// `{"elevation_m": {"relief": ..}}`), then `features` (the count per type), `stages` (each
+/// `{"elevation_m": {"relief": ..}}`), then `features` (the count of every type of
+/// [`TYPES`], 0 included), `stages` (each
 /// stage id with its metrics) and `findings` (`{stage, message}` per warning). Constraints read
 /// it by dotted path (spec §5.6).
 pub(crate) fn summary(
@@ -41,10 +43,14 @@ pub(crate) fn summary(
             insert_nested(&mut out, &path, value);
         }
     }
-    let features: Map<String, Value> = feature_counts
+    // Every type of `TYPES` with 0 first (ledger ruling, Task 11): a count constraint must see 0.
+    let mut features: Map<String, Value> = TYPES
         .iter()
-        .map(|(kind, &n)| (kind.clone(), Value::from(n)))
+        .map(|(_, ty)| ((*ty).to_owned(), Value::from(0)))
         .collect();
+    for (ty, &n) in feature_counts {
+        features.insert(ty.clone(), Value::from(n));
+    }
     out.insert("features".to_owned(), Value::Object(features));
     let stages: Map<String, Value> = stage_metrics
         .iter()
@@ -73,7 +79,7 @@ mod tests {
             "lake_pct": 6.25,
             "precip_mm_yr.median": 751.0,
         });
-        let counts = BTreeMap::from([("settlement".to_owned(), 3), ("chime".to_owned(), 2)]);
+        let counts = BTreeMap::from([("town".to_owned(), 3), ("chime".to_owned(), 2)]);
         let mut hydrology = Metrics::default();
         hydrology.0.insert("lake_count".to_owned(), 2.0);
         let stages = [("hydrology".to_owned(), hydrology)];
@@ -85,10 +91,8 @@ mod tests {
         assert_eq!(s["elevation_m"]["relief"], 1134.0);
         assert_eq!(s["precip_mm_yr"]["median"], 751.0);
         assert_eq!(s["lake_pct"], 6.25);
-        assert_eq!(
-            s["features"],
-            serde_json::json!({"chime": 2, "settlement": 3})
-        );
+        assert_eq!(s["features"]["chime"], 2);
+        assert_eq!(s["features"]["town"], 3);
         assert_eq!(s["stages"]["hydrology"]["lake_count"], 2.0);
         assert_eq!(
             s["findings"],
@@ -110,5 +114,30 @@ mod tests {
         // the dotted paths are what constraints read
         let c = BTreeMap::from([("elevation_m.relief".to_owned(), [1000.0, 1200.0])]);
         assert_eq!(crate::constraints::evaluate(&c, &s)["pass"], true);
+    }
+
+    /// Ledger ruling (Task 11): `features` lists every type of `TYPES`, 0 included, so a count
+    /// constraint sees 0 on a map without that type instead of a missing value.
+    #[test]
+    fn every_feature_type_is_counted_with_zero_included() {
+        let counts = BTreeMap::from([("chime".to_owned(), 2)]);
+        let s = summary(serde_json::json!({}), &counts, &[], &[]);
+        let features = s["features"].as_object().unwrap();
+        let types: Vec<&str> = crate::features::TYPES.iter().map(|(_, t)| *t).collect();
+        let mut sorted = types.clone();
+        sorted.sort_unstable();
+        assert_eq!(
+            features.keys().map(String::as_str).collect::<Vec<_>>(),
+            sorted
+        );
+        for ty in types {
+            let expected = if ty == "chime" { 2 } else { 0 };
+            assert_eq!(features[ty], expected, "{ty}");
+        }
+        let c = BTreeMap::from([("features.gate-up".to_owned(), [0.0, 2.0])]);
+        let results = crate::constraints::evaluate(&c, &s);
+        assert_eq!(results["features_gate_up"], 0.0);
+        assert_eq!(results["features_gate_up_ok"], true);
+        assert_eq!(results["pass"], true);
     }
 }
