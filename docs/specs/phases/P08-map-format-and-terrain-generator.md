@@ -535,9 +535,10 @@ labels = []
   reports each broken one as a problem with its file and the error; `run` of a broken recipe fails
   with that error.
 - **Built-in recipes.** `hearth-valley`, `hearth-valley-omega` and `fixture-small` keep 0.3.0's
-  intent: the same sources, rock mixes, feature counts and constraints. Their uplift rates,
-  process parameters and, for `fixture-small`, the base precipitation are tuned so that they
-  meet CE-28.5 (Jann's ruling of 19 Nov 2026):
+  intent: the same source geometry, rock mixes, feature counts and constraints, except the
+  omega's Chime walk (ruling 64). Their uplift rates, process parameters and, for
+  `fixture-small`, the base precipitation are tuned so that they meet CE-28.5 (Jann's ruling of
+  19 Nov 2026):
   - relief is the height of the north-rim orogen, and vegetation cover falls with the share of
     steep ground, which the background uplift sets. So the orogen of `hearth-valley` and
     `hearth-valley-omega` rises at 1.56e-3 m/yr (0.3.0: 2.6e-3), and every built-in's
