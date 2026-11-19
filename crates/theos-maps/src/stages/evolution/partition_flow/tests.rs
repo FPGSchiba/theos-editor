@@ -308,7 +308,7 @@ fn weights_have_a_canonical_json() {
         dist: vec![100.0],
     };
     assert_eq!(
-        w.canonical_json(),
+        w.canonical_json().unwrap(),
         serde_json::json!({"start": [0, 1, 1], "to": [1], "weight": [1.0], "dist": [100.0]})
     );
     assert_eq!(w.type_name(), "weights");

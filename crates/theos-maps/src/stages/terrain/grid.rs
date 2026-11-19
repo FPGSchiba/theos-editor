@@ -64,11 +64,12 @@ impl WorldValue for FrameValue {
     fn type_name(&self) -> &'static str {
         Self::NAME
     }
-    fn canonical_json(&self) -> serde_json::Value {
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        // Booleans only: nothing to check.
         let d = self.drained;
-        serde_json::json!({"drained": {
+        Ok(serde_json::json!({"drained": {
             "north": d.north, "east": d.east, "south": d.south, "west": d.west,
-        }})
+        }}))
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -195,7 +196,7 @@ mod tests {
             }
         );
         assert_eq!(
-            frame.canonical_json(),
+            frame.canonical_json().unwrap(),
             serde_json::json!({"drained": {"north": false, "east": true, "south": true, "west": false}})
         );
         assert_eq!(frame.type_name(), "frame");

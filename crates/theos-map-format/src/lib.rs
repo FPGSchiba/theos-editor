@@ -6,6 +6,7 @@
 //! the crate error ([`FormatError`]). Equal packages give equal bytes on every platform.
 
 pub mod error;
+mod finite;
 pub mod json;
 pub mod layer;
 pub mod manifest;
@@ -18,4 +19,4 @@ pub use layer::{LayerData, LayerKey, sha256_hex};
 pub use manifest::{DType, FORMAT, FORMAT_VERSION, Frame, LayerEntry, Level, Manifest, Parent};
 pub use package::Package;
 pub use read::{IMPLEMENTED_CAPABILITIES, read};
-pub use write::{write, write_cancellable, written_manifest};
+pub use write::{features_bytes, write, write_cancellable, written_manifest};

@@ -72,6 +72,18 @@ fn complete(package: &Package) -> Result<(Manifest, Vec<PackageFile>), FormatErr
     Ok((manifest, files))
 }
 
+/// The bytes of `features.geojson` as [`fn@write`] stores them: the collection as canonical JSON.
+/// A run that also hands the features out as a file of its own writes them with this, so the
+/// two are the same bytes (`docs/map-package.md` §5).
+///
+/// # Errors
+///
+/// [`FormatError::JsonNotFinite`] when a number of the features is NaN or an infinity;
+/// [`FormatError::Json`] when the collection cannot be turned into JSON.
+pub fn features_bytes(features: &geojson::FeatureCollection) -> Result<Vec<u8>, FormatError> {
+    json::to_canonical_vec(&json::to_checked_value(features)?)
+}
+
 /// The manifest as [`fn@write`] stores it: `format`, `format_version`, `features` and `requires`
 /// set, and every layer entry completed with its file, dtype, shape, hash and range.
 ///
@@ -108,10 +120,7 @@ pub fn write_cancellable<W: Write + Seek>(
             MANIFEST_FILE.to_owned(),
             json::to_canonical_vec(&serde_json::to_value(&manifest)?)?,
         ),
-        (
-            FEATURES_FILE.to_owned(),
-            json::to_canonical_vec(&serde_json::to_value(&package.features)?)?,
-        ),
+        (FEATURES_FILE.to_owned(), features_bytes(&package.features)?),
     ];
     entries.extend(layer_files);
 

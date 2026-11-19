@@ -63,7 +63,8 @@ pub(crate) struct Execution {
 /// # Errors
 /// [`RunError::OverBudget`] before any stage when the memory estimate exceeds the budget;
 /// [`RunError::Cancelled`]; [`RunError::StageFailed`], [`RunError::StagePanicked`],
-/// [`RunError::FindingFailed`] and [`RunError::NonFinite`], each naming the stage.
+/// [`RunError::FindingFailed`], [`RunError::NonFinite`] and [`RunError::NonFiniteValue`], each
+/// naming the stage.
 pub(crate) fn execute(
     plan: &Plan,
     seed: u64,
@@ -258,6 +259,10 @@ fn hash_writes(
                 stage: planned.id.to_owned(),
                 layer: spec.name.to_owned(),
                 cell,
+            },
+            LayerBytesError::ValueNotFinite => RunError::NonFiniteValue {
+                stage: planned.id.to_owned(),
+                layer: spec.name.to_owned(),
             },
             LayerBytesError::Json(source) => RunError::StageFailed {
                 stage: planned.id.to_owned(),

@@ -6,8 +6,8 @@ use std::io::Cursor;
 
 use serde_json::Value;
 use theos_map_format::{
-    DType, FormatError, LayerData, LayerKey, Level, Manifest, Package, json, sha256_hex, write,
-    write_cancellable, written_manifest,
+    DType, FormatError, LayerData, LayerKey, Level, Manifest, Package, features_bytes, json,
+    sha256_hex, write, write_cancellable, written_manifest,
 };
 
 use crate::zip_bytes;
@@ -195,6 +195,7 @@ fn two_writes_are_byte_identical() -> TestResult {
     Ok(())
 }
 
+// AC: CE-76.5
 #[test]
 fn requires_is_written_sorted_and_deduplicated() -> TestResult {
     let mut package = fixture()?;
@@ -216,6 +217,57 @@ fn write_cancellable_stops_between_entries() -> TestResult {
     });
     assert!(matches!(result, Err(FormatError::Cancelled)));
     assert_eq!(calls.get(), 2);
+    Ok(())
+}
+
+// Spec §5.13: the features are written as canonical JSON (-0.0 as +0.0), and `features_bytes`
+// gives exactly the bytes of the package's `features.geojson`.
+#[test]
+fn features_are_written_canonically_and_features_bytes_match() -> TestResult {
+    let mut package = fixture()?;
+    package.features.features[0].geometry = Some(geojson::Geometry::new_point([-0.0, 5.0]));
+    let bytes = write(&package, Cursor::new(Vec::new()))?.into_inner();
+    let written = zip_bytes::parse(&bytes)?.entry("features.geojson")?;
+    assert_eq!(written, features_bytes(&package.features)?);
+    let text = String::from_utf8(written)?;
+    assert!(!text.contains("-0.0"), "{text}");
+    assert!(
+        text.contains(
+            "0.0,
+"
+        ),
+        "{text}"
+    );
+    Ok(())
+}
+
+// Spec §5.13: the writer validates "no NaN or infinity" in the features, `scale` and `offset`.
+#[test]
+fn non_finite_feature_scale_and_offset_numbers_are_not_written() -> TestResult {
+    let mut package = fixture()?;
+    package.features.features[1].geometry = Some(geojson::Geometry::new_point([f64::NAN, 5.0]));
+    let err = write(&package, Cursor::new(Vec::new())).err();
+    assert!(
+        matches!(&err, Some(FormatError::FeatureNotFinite { owner }) if owner == "feature 1"),
+        "{err:?}"
+    );
+    assert!(matches!(
+        features_bytes(&package.features),
+        Err(FormatError::JsonNotFinite)
+    ));
+    for (field, scale, offset) in [
+        ("layers[1].scale", Some(f64::NAN), None),
+        ("layers[1].offset", None, Some(f64::NEG_INFINITY)),
+    ] {
+        let mut package = fixture()?;
+        package.manifest.layers[1].scale = scale;
+        package.manifest.layers[1].offset = offset;
+        let err = write(&package, Cursor::new(Vec::new())).err();
+        assert!(
+            matches!(&err, Some(FormatError::ManifestNotFinite { field: f }) if f == field),
+            "{field}: {err:?}"
+        );
+    }
     Ok(())
 }
 

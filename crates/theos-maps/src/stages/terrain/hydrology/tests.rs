@@ -958,7 +958,7 @@ fn the_stage_writes_the_water_features() {
     let features = w.value::<WaterFeatures>("water_features").unwrap();
     assert_eq!(features.lakes.len(), 1);
     assert!(features.rivers.len() > 1);
-    let json = features.canonical_json();
+    let json = features.canonical_json().unwrap();
     assert_eq!(json["lakes"][0]["id"], 1);
     assert_eq!(
         json["rivers"].as_array().map(Vec::len),

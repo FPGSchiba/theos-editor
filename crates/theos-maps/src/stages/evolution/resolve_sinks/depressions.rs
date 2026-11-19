@@ -2,12 +2,14 @@
 
 use std::any::Any;
 
+use serde::Serialize;
+
 use crate::grid::Grid;
 use crate::world::{ValueType, WorldValue};
 
 /// Where a depression spills: over the pass from its cell `cell` to the neighbour `to`, which
 /// lies in the basin the depression drains into.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct SpillPoint {
     /// The spill node: the lake's cell on the pass it spills over.
     pub cell: u32,
@@ -38,13 +40,9 @@ impl WorldValue for Depressions {
     fn type_name(&self) -> &'static str {
         Self::NAME
     }
-    fn canonical_json(&self) -> serde_json::Value {
-        let spill: Vec<serde_json::Value> = self
-            .spill
-            .iter()
-            .map(|s| serde_json::json!({"cell": s.cell, "to": s.to, "level": s.level}))
-            .collect();
-        serde_json::json!({"label": self.label.as_slice(), "spill": spill})
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        let spill = theos_map_format::json::to_checked_value(&self.spill)?;
+        Ok(serde_json::json!({"label": self.label.as_slice(), "spill": spill}))
     }
     fn as_any(&self) -> &dyn Any {
         self

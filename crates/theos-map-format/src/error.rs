@@ -56,12 +56,23 @@ pub enum FormatError {
         /// Index of the first offending value.
         index: usize,
     },
-    /// A number of the manifest's frame is NaN or an infinity.
+    /// A number of the manifest's frame or of a layer entry is NaN or an infinity.
     #[error("manifest field {field} is not finite")]
     ManifestNotFinite {
-        /// The field, such as `frame.cell_m`.
+        /// The field, such as `frame.cell_m` or `layers[2].scale`.
         field: String,
     },
+    /// A number of the features is NaN or an infinity: JSON cannot hold one, and `serde_json`
+    /// would write it as `null`.
+    #[error("{owner} holds a number that is not finite")]
+    FeatureNotFinite {
+        /// What holds it: `feature 2` or `the feature collection`.
+        owner: String,
+    },
+    /// A number that is to be written as JSON is NaN or an infinity (spec §5.4: values are
+    /// canonicalised before hashing, and a non-finite number is an error).
+    #[error("a number to be written as JSON is not finite (NaN and infinities are not allowed)")]
+    JsonNotFinite,
     /// A map with levels has a layer or feature without a level.
     #[error("{owner} has no level, but the frame lists levels")]
     LevelMissing {

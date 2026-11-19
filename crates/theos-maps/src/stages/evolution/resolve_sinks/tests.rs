@@ -447,7 +447,7 @@ fn depressions_have_a_canonical_json() {
     };
     assert_eq!(dep.type_name(), "depressions");
     assert_eq!(
-        dep.canonical_json(),
+        dep.canonical_json().unwrap(),
         serde_json::json!({
             "label": [0, 1, 1, 0],
             "spill": [{"cell": 1, "to": 0, "level": 2.5}],

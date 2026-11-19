@@ -1,6 +1,6 @@
 //! Canonical bytes and hashes of layers (golden hashes, G20).
 
-use theos_map_format::{json, sha256_hex};
+use theos_map_format::{FormatError, json, sha256_hex};
 
 use super::layer::Layer;
 use crate::kernels::num;
@@ -14,18 +14,31 @@ pub enum LayerBytesError {
         /// The flat index of the first offending cell.
         cell: usize,
     },
+    /// A value layer holds a NaN or an infinity (spec §5.4).
+    #[error("the value holds a number that is not finite")]
+    ValueNotFinite,
     /// The JSON of a value layer could not be written.
     #[error("the value's canonical JSON could not be written")]
-    Json(#[from] theos_map_format::FormatError),
+    Json(#[source] FormatError),
+}
+
+impl From<FormatError> for LayerBytesError {
+    fn from(error: FormatError) -> Self {
+        match error {
+            FormatError::JsonNotFinite => Self::ValueNotFinite,
+            other => Self::Json(other),
+        }
+    }
 }
 
 /// The canonical bytes of `layer`: floats as little-endian with `-0.0` turned into `+0.0`, bytes
-/// raw, masks as 0/1, `u32` as little-endian, values as canonical JSON.
+/// raw, masks as 0/1, `u32` as little-endian, values as canonical JSON (sorted keys, `-0.0` as
+/// `+0.0`), their numbers checked as they are turned into JSON.
 ///
 /// # Errors
 /// [`LayerBytesError::NonFinite`] with the first non-finite cell of a float layer;
-/// [`LayerBytesError::Json`] when a value's JSON cannot be written, which cannot occur for a
-/// `serde_json::Value` today.
+/// [`LayerBytesError::ValueNotFinite`] when a value holds a NaN or an infinity;
+/// [`LayerBytesError::Json`] when a value's JSON cannot be written.
 pub fn canonical_bytes(layer: &Layer) -> Result<Vec<u8>, LayerBytesError> {
     match layer {
         Layer::F64(grid) => {
@@ -45,7 +58,7 @@ pub fn canonical_bytes(layer: &Layer) -> Result<Vec<u8>, LayerBytesError> {
             .iter()
             .flat_map(|v| v.to_le_bytes())
             .collect()),
-        Layer::Value(value) => Ok(json::to_canonical_vec(&value.canonical_json())?),
+        Layer::Value(value) => Ok(json::to_canonical_vec(&value.canonical_json()?)?),
     }
 }
 
@@ -108,8 +121,8 @@ mod tests {
         fn type_name(&self) -> &'static str {
             "json"
         }
-        fn canonical_json(&self) -> serde_json::Value {
-            self.0.clone()
+        fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+            Ok(self.0.clone())
         }
         fn as_any(&self) -> &dyn std::any::Any {
             self
@@ -117,6 +130,59 @@ mod tests {
         fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
             self
         }
+    }
+
+    /// A value of numbers keyed by pairs, which JSON cannot key an object by.
+    #[derive(Debug)]
+    struct Numbers(Vec<((i32, i32), f64)>);
+    impl WorldValue for Numbers {
+        fn type_name(&self) -> &'static str {
+            "numbers"
+        }
+        fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+            let map: std::collections::BTreeMap<(i32, i32), f64> = self.0.iter().copied().collect();
+            json::to_checked_value(&map)
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            self
+        }
+    }
+
+    // Spec §5.4: a NaN or an infinity in a value is an error, as in a float raster.
+    #[test]
+    fn a_non_finite_number_in_a_value_is_reported() {
+        for bad in [f64::NAN, f64::NEG_INFINITY] {
+            let layer = Layer::Value(Box::new(Numbers(vec![((0, 0), bad)])));
+            assert!(matches!(
+                canonical_bytes(&layer),
+                Err(LayerBytesError::ValueNotFinite)
+            ));
+        }
+        let message = LayerBytesError::ValueNotFinite.to_string();
+        assert_eq!(message, "the value holds a number that is not finite");
+    }
+
+    #[test]
+    fn a_value_without_json_is_reported() {
+        let layer = Layer::Value(Box::new(Numbers(vec![((0, 0), 1.0)])));
+        assert!(matches!(
+            canonical_bytes(&layer),
+            Err(LayerBytesError::Json(FormatError::Json(_)))
+        ));
+    }
+
+    // Spec §5.4: values are canonicalised before hashing, -0.0 as +0.0.
+    #[test]
+    fn negative_zero_in_a_value_hashes_as_positive_zero() {
+        let negative = Layer::Value(Box::new(Json(serde_json::json!({"x": [-0.0, 1.0]}))));
+        let positive = Layer::Value(Box::new(Json(serde_json::json!({"x": [0.0, 1.0]}))));
+        assert_eq!(
+            layer_sha256(&negative).unwrap(),
+            layer_sha256(&positive).unwrap()
+        );
     }
 
     #[test]

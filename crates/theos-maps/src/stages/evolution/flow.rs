@@ -5,6 +5,8 @@ use std::f64::consts::SQRT_2;
 
 use std::any::Any;
 
+use serde::Serialize;
+
 use crate::grid::{D8, Grid};
 use crate::kernels::num::{OrdF64, key};
 use crate::world::{ValueType, WorldValue};
@@ -82,7 +84,7 @@ pub(crate) fn cell_index(c: u32) -> usize {
 /// sends `weight[e]` of its flow to cell `to[e]`, over `dist[e]` metres, for `e` in
 /// `start[i]..start[i + 1]`. A cell that receives itself (an outlet, or the closed map's sink)
 /// has no edge. The weights of a cell with edges sum to 1.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct FlowWeights {
     /// The first edge of each cell; one entry more than there are cells.
     pub start: Vec<u32>,
@@ -115,13 +117,8 @@ impl WorldValue for FlowWeights {
     fn type_name(&self) -> &'static str {
         Self::NAME
     }
-    fn canonical_json(&self) -> serde_json::Value {
-        serde_json::json!({
-            "start": self.start,
-            "to": self.to,
-            "weight": self.weight,
-            "dist": self.dist,
-        })
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        theos_map_format::json::to_checked_value(self)
     }
     fn as_any(&self) -> &dyn Any {
         self

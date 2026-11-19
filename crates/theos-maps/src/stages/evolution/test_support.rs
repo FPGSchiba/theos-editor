@@ -110,8 +110,8 @@ impl WorldValue for StepLog {
     fn type_name(&self) -> &'static str {
         Self::NAME
     }
-    fn canonical_json(&self) -> serde_json::Value {
-        serde_json::json!(self.0)
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        Ok(serde_json::json!(self.0))
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -188,8 +188,8 @@ impl WorldValue for Draws {
     fn type_name(&self) -> &'static str {
         Self::NAME
     }
-    fn canonical_json(&self) -> serde_json::Value {
-        serde_json::json!(self.0)
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        Ok(serde_json::json!(self.0))
     }
     fn as_any(&self) -> &dyn Any {
         self

@@ -341,6 +341,68 @@ fn a_nan_in_a_written_layer_names_stage_layer_and_cell() {
     }
 }
 
+/// A value layer holding one number (`x`).
+#[derive(Debug)]
+struct Number(f64);
+
+impl crate::world::WorldValue for Number {
+    fn type_name(&self) -> &'static str {
+        <Self as crate::world::ValueType>::NAME
+    }
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        theos_map_format::json::to_checked_value(&BTreeMap::from([("x", self.0)]))
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::world::ValueType for Number {
+    const NAME: &'static str = "number";
+}
+
+/// Writes the value layer `v` holding its number.
+struct WritesNumber(f64);
+
+impl TypedStage for WritesNumber {
+    type Params = Knob;
+    const ID: &'static str = "number";
+    const SUMMARY: &'static str = "Writes a number value.";
+    const KINDS: &'static [MapKind] = KINDS;
+    fn reads(&self, _: &Knob) -> Vec<LayerSpec> {
+        vec![]
+    }
+    fn writes(&self, _: &Knob) -> Vec<LayerSpec> {
+        vec![LayerSpec::value("v", "number")]
+    }
+    fn run(&self, ctx: &mut StageContext<'_>, _: &Knob) -> Result<StageReport, StageError> {
+        ctx.write("v", Layer::Value(Box::new(Number(self.0))))?;
+        Ok(StageReport::default())
+    }
+}
+
+// Spec §5.4: a NaN or an infinity in a value is an error naming the stage and the layer, as in
+// a float raster; `serde_json` would turn it into `null` and hash that.
+#[test]
+fn a_nan_in_a_written_value_names_stage_and_layer() {
+    for bad in [f64::NAN, f64::INFINITY] {
+        let reg = registry(vec![Box::new(WritesNumber(bad))]);
+        let plan = planned(&reg, 8, &["number"]);
+        let (result, _) = go(&plan, &reg, &RunOptions::default(), &CancelToken::new());
+        match result {
+            Err(error @ RunError::NonFiniteValue { .. }) => {
+                let message = error.to_string();
+                assert!(message.contains("`number`"), "{message}");
+                assert!(message.contains("`v`"), "{message}");
+            }
+            other => panic!("{bad}: {:?}", other.map(|_| ())),
+        }
+    }
+}
+
 #[test]
 fn the_memory_budget_refuses_before_any_stage_runs() {
     let counter = script(Some("big"), Act::Write(0.0));

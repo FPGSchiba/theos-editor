@@ -202,9 +202,8 @@ impl WorldValue for RoadNetwork {
     fn type_name(&self) -> &'static str {
         Self::NAME
     }
-    fn canonical_json(&self) -> serde_json::Value {
-        // Numbers, strings, enums and sequences of them: `to_value` cannot fail.
-        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        theos_map_format::json::to_checked_value(self)
     }
     fn as_any(&self) -> &dyn Any {
         self

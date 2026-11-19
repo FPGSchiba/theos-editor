@@ -148,10 +148,8 @@ impl WorldValue for FeatureSet {
     fn type_name(&self) -> &'static str {
         Self::NAME
     }
-    fn canonical_json(&self) -> serde_json::Value {
-        // The types serialise without error; a failure could only be a bug, and `Null` would
-        // change the hash visibly.
-        serde_json::to_value(&self.features).unwrap_or(serde_json::Value::Null)
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        theos_map_format::json::to_checked_value(&self.features)
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -230,7 +228,7 @@ mod tests {
         set.add(f);
         assert_eq!(set.type_name(), "features");
         assert_eq!(FeatureSet::NAME, "features");
-        let json = set.canonical_json();
+        let json = set.canonical_json().unwrap();
         let first = &json[0];
         assert_eq!(first["kind"], "settlement");
         assert_eq!(first["ty"], "town");

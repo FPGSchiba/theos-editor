@@ -60,6 +60,14 @@ pub enum RunError {
         /// The flat index of the first offending cell.
         cell: usize,
     },
+    /// A stage wrote a NaN or an infinity into a value layer (spec §5.4).
+    #[error("stage `{stage}` wrote a non-finite number into the value `{layer}`")]
+    NonFiniteValue {
+        /// The stage id.
+        stage: String,
+        /// The layer.
+        layer: String,
+    },
     /// The output folder already holds a file with the name of one of the run's outputs (or of
     /// its temporary `.part` file); the run wrote nothing (plan ruling L10). A `.part` file left
     /// by a crashed process makes every later run of that seed into the folder fail this way

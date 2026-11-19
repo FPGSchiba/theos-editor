@@ -246,8 +246,8 @@ mod tests {
         fn type_name(&self) -> &'static str {
             "marker"
         }
-        fn canonical_json(&self) -> serde_json::Value {
-            serde_json::json!({"n": self.0})
+        fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+            Ok(serde_json::json!({"n": self.0}))
         }
         fn as_any(&self) -> &dyn std::any::Any {
             self
@@ -266,8 +266,8 @@ mod tests {
         fn type_name(&self) -> &'static str {
             "other"
         }
-        fn canonical_json(&self) -> serde_json::Value {
-            serde_json::Value::Null
+        fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+            Ok(serde_json::Value::Null)
         }
         fn as_any(&self) -> &dyn std::any::Any {
             self

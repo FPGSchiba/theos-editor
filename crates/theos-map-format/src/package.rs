@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
-use crate::{FormatError, Frame, LayerData, LayerKey, Manifest};
+use crate::{FormatError, Frame, LayerData, LayerEntry, LayerKey, Manifest, finite};
 
 /// A map package: manifest, features and layer data.
 ///
@@ -86,6 +86,37 @@ fn check_frame_numbers(frame: &Frame) -> Result<(), FormatError> {
     }
 }
 
+/// Refuses a NaN or infinity in a layer entry's `scale` or `offset`: it would be written as
+/// `null` and read back as "no scale".
+fn check_entry_numbers(entries: &[LayerEntry]) -> Result<(), FormatError> {
+    for (index, entry) in entries.iter().enumerate() {
+        for (name, value) in [("scale", entry.scale), ("offset", entry.offset)] {
+            if value.is_some_and(|v| !v.is_finite()) {
+                return Err(FormatError::ManifestNotFinite {
+                    field: format!("layers[{index}].{name}"),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Refuses a NaN or infinity anywhere in the features, naming the first feature that holds one,
+/// or the collection when only its own members do.
+fn check_feature_numbers(features: &geojson::FeatureCollection) -> Result<(), FormatError> {
+    if let Some(index) = features.features.iter().position(|f| !finite::is_finite(f)) {
+        return Err(FormatError::FeatureNotFinite {
+            owner: format!("feature {index}"),
+        });
+    }
+    if !finite::is_finite(features) {
+        return Err(FormatError::FeatureNotFinite {
+            owner: "the feature collection".to_owned(),
+        });
+    }
+    Ok(())
+}
+
 /// The level a feature carries in `properties.level`; a value that is not a string is kept as
 /// its JSON text, so that it is reported as an unlisted level.
 fn feature_level(feature: &geojson::Feature) -> Option<String> {
@@ -101,14 +132,17 @@ impl Package {
     ///
     /// # Errors
     ///
-    /// A [`FormatError`] that names the first problem: a non-finite frame number, a layer name or
-    /// level id that cannot be part of an entry path, a duplicate
+    /// A [`FormatError`] that names the first problem: a non-finite frame number, layer `scale` or
+    /// `offset` or feature number, a layer name or level id that cannot be part of an entry
+    /// path, a duplicate
     /// layer, an entry without data or data without an entry, a layer that is not rows ×
     /// columns long or holds NaN or infinities, or a level that is missing, unlisted or not
     /// allowed on a layer or feature.
     pub fn validate(&self) -> Result<(), FormatError> {
         let frame = &self.manifest.frame;
         check_frame_numbers(frame)?;
+        check_entry_numbers(&self.manifest.layers)?;
+        check_feature_numbers(&self.features)?;
         for level in frame.levels.iter().flatten() {
             check_name("level", &level.id)?;
         }
@@ -374,6 +408,50 @@ mod tests {
                 "{field}: {err:?}"
             );
         }
+    }
+
+    type EntryBreaker = fn(&mut LayerEntry);
+
+    // Spec §5.13: the writer validates "no NaN or infinity"; a NaN `scale` would read back as
+    // "no scale".
+    #[test]
+    fn non_finite_scale_and_offset_are_refused_with_their_field() {
+        let cases: [(&str, EntryBreaker); 3] = [
+            ("layers[0].scale", |e| e.scale = Some(f64::NAN)),
+            ("layers[0].offset", |e| e.offset = Some(f64::INFINITY)),
+            ("layers[0].scale", |e| e.scale = Some(f64::NEG_INFINITY)),
+        ];
+        for (field, break_it) in cases {
+            let mut p = package();
+            break_it(&mut p.manifest.layers[0]);
+            let err = p.validate();
+            assert!(
+                matches!(&err, Err(FormatError::ManifestNotFinite { field: f }) if f == field),
+                "{field}: {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_non_finite_feature_number_is_refused_naming_the_feature() {
+        let mut p = package();
+        let point = |x: f64| geojson::Feature {
+            geometry: Some(geojson::Geometry::new_point([x, 1.0])),
+            ..geojson::Feature::default()
+        };
+        p.features.features = vec![point(1.0), point(f64::NAN)];
+        let err = p.validate();
+        assert!(
+            matches!(&err, Err(FormatError::FeatureNotFinite { owner }) if owner == "feature 1"),
+            "{err:?}"
+        );
+        p.features.features = vec![point(1.0)];
+        p.features.bbox = Some(vec![0.0, 0.0, f64::INFINITY, 1.0]);
+        let err = p.validate();
+        assert!(
+            matches!(&err, Err(FormatError::FeatureNotFinite { owner }) if owner == "the feature collection"),
+            "{err:?}"
+        );
     }
 
     #[test]

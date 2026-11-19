@@ -44,13 +44,13 @@ impl WorldValue for ResourceFields {
     fn type_name(&self) -> &'static str {
         Self::NAME
     }
-    fn canonical_json(&self) -> serde_json::Value {
-        let fields = self
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        let fields: BTreeMap<&str, &[f64]> = self
             .fields
             .iter()
-            .map(|(name, grid)| (name.clone(), serde_json::json!(grid.as_slice())))
-            .collect::<serde_json::Map<_, _>>();
-        serde_json::Value::Object(fields)
+            .map(|(name, grid)| (name.as_str(), grid.as_slice()))
+            .collect();
+        theos_map_format::json::to_checked_value(&fields)
     }
     fn as_any(&self) -> &dyn Any {
         self

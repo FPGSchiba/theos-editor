@@ -94,8 +94,11 @@ impl WorldValue for WaterThresholds {
     fn type_name(&self) -> &'static str {
         Self::NAME
     }
-    fn canonical_json(&self) -> serde_json::Value {
-        serde_json::json!({"river_q": self.river_q, "big_river_q": self.big_river_q})
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        theos_map_format::json::to_checked_value(&std::collections::BTreeMap::from([
+            ("river_q", self.river_q),
+            ("big_river_q", self.big_river_q),
+        ]))
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -122,9 +125,8 @@ impl WorldValue for WaterFeatures {
     fn type_name(&self) -> &'static str {
         Self::NAME
     }
-    fn canonical_json(&self) -> serde_json::Value {
-        // Every field is a number, bool, option or sequence of them: `to_value` cannot fail.
-        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        theos_map_format::json::to_checked_value(self)
     }
     fn as_any(&self) -> &dyn Any {
         self

@@ -16,10 +16,6 @@ use crate::stage::{
 };
 use crate::world::{Layer, ValueType, WorldValue};
 
-fn grid_json(grid: &Grid<f64>) -> serde_json::Value {
-    serde_json::json!(grid.as_slice())
-}
-
 /// The world value `belts`: the signed distance (map fractions) to the first orogen's axis.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Belts {
@@ -31,8 +27,12 @@ impl WorldValue for Belts {
     fn type_name(&self) -> &'static str {
         Self::NAME
     }
-    fn canonical_json(&self) -> serde_json::Value {
-        serde_json::json!({"first_orogen": self.first_orogen.as_ref().map(grid_json)})
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        let first = self.first_orogen.as_ref().map(Grid::as_slice);
+        theos_map_format::json::to_checked_value(&std::collections::BTreeMap::from([(
+            "first_orogen",
+            first,
+        )]))
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -59,8 +59,11 @@ impl WorldValue for Warp {
     fn type_name(&self) -> &'static str {
         Self::NAME
     }
-    fn canonical_json(&self) -> serde_json::Value {
-        serde_json::json!({"x": grid_json(&self.x), "y": grid_json(&self.y)})
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        theos_map_format::json::to_checked_value(&std::collections::BTreeMap::from([
+            ("x", self.x.as_slice()),
+            ("y", self.y.as_slice()),
+        ]))
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -311,8 +314,8 @@ mod tests {
         let warp = w.value::<Warp>("warp").unwrap();
         assert_eq!((warp.x.rows(), warp.y.cols()), (64, 64));
         assert_eq!(belts.type_name(), "belts");
-        assert!(belts.canonical_json()["first_orogen"].is_array());
-        assert!(warp.canonical_json()["x"].is_array());
+        assert!(belts.canonical_json().unwrap()["first_orogen"].is_array());
+        assert!(warp.canonical_json().unwrap()["x"].is_array());
         assert_eq!(warp.type_name(), "warp");
     }
 
@@ -321,7 +324,9 @@ mod tests {
         let a = tectonic_world("");
         let b = tectonic_world("");
         assert!(a.value::<Belts>("belts").unwrap().first_orogen.is_none());
-        assert!(a.value::<Belts>("belts").unwrap().canonical_json()["first_orogen"].is_null());
+        assert!(
+            a.value::<Belts>("belts").unwrap().canonical_json().unwrap()["first_orogen"].is_null()
+        );
         assert_eq!(a.f64("uplift"), b.f64("uplift"));
         let u = a.f64("uplift").unwrap();
         assert!(u.get(0, 0) > 0.0 && u.get(0, 0) < 1.0e-3);

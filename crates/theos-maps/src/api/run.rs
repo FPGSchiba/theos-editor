@@ -43,7 +43,8 @@ use crate::stage::Registry;
 /// recipe is invalid or its stages do not write a layer the package or a render reads; [`RunError::OutputExists`] when a file in `out_dir` has an output's name;
 /// [`RunError::OverBudget`]; [`RunError::Cancelled`]; the stage errors of the pipeline
 /// ([`RunError::StageFailed`], [`RunError::StagePanicked`], [`RunError::FindingFailed`],
-/// [`RunError::NonFinite`]); [`RunError::StagePanicked`] naming the step (`constraints`,
+/// [`RunError::NonFinite`], [`RunError::NonFiniteValue`]); [`RunError::StagePanicked`] naming the
+/// step (`constraints`,
 /// `features`, `renders` or `package`) when a step after the pipeline panics;
 /// [`RunError::Render`], [`RunError::Output`], [`RunError::Format`] and [`RunError::Io`] from
 /// the outputs. On every error the files the run created are removed.

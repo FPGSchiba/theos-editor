@@ -151,15 +151,14 @@ pub(super) fn constraints(
     })
 }
 
-/// The `features` output: the collection as canonical JSON, the same bytes the package holds as
-/// `features.geojson`.
+/// The `features` output: the collection as canonical JSON, written by the function the package
+/// writer uses for `features.geojson`, so the two are the same bytes (map-package §5).
 ///
 /// # Errors
 /// [`RunError::Output`] for `features` when the collection cannot be turned into JSON.
 pub(super) fn features_bytes(collection: &FeatureCollection) -> Result<Vec<u8>, RunError> {
-    let failed = |e: &dyn std::fmt::Display| output_error(super::outputs::FEATURES, e);
-    let value = serde_json::to_value(collection).map_err(|e| failed(&e))?;
-    theos_map_format::json::to_canonical_vec(&value).map_err(|e| failed(&e))
+    theos_map_format::features_bytes(collection)
+        .map_err(|e| output_error(super::outputs::FEATURES, &e))
 }
 
 /// The render `name` of `world` as PNG bytes, with the recipe's `[render.<name>]` options

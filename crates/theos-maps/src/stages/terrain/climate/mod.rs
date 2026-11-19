@@ -8,6 +8,7 @@ mod orographic;
 mod water;
 
 use std::any::Any;
+use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
@@ -150,30 +151,24 @@ pub struct Climate {
     pub fields: Option<ClimateFields>,
 }
 
-fn grid_json(grid: &Grid<f64>) -> serde_json::Value {
-    serde_json::json!(grid.as_slice())
-}
-
 impl WorldValue for Climate {
     fn type_name(&self) -> &'static str {
         Self::NAME
     }
-    fn canonical_json(&self) -> serde_json::Value {
-        let params: serde_json::Map<String, serde_json::Value> = self
-            .params
-            .named()
-            .into_iter()
-            .map(|(name, value)| (name.to_owned(), serde_json::json!(value)))
-            .collect();
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        let params: BTreeMap<&str, f64> = self.params.named().into_iter().collect();
         let fields = self.fields.as_ref().map(|f| {
-            serde_json::json!({
-                "precipitation": grid_json(&f.precipitation),
-                "pet": grid_json(&f.pet),
-                "aet": grid_json(&f.aet),
-                "runoff": grid_json(&f.runoff),
-            })
+            BTreeMap::from([
+                ("precipitation", f.precipitation.as_slice()),
+                ("pet", f.pet.as_slice()),
+                ("aet", f.aet.as_slice()),
+                ("runoff", f.runoff.as_slice()),
+            ])
         });
-        serde_json::json!({"params": params, "fields": fields})
+        Ok(serde_json::json!({
+            "params": theos_map_format::json::to_checked_value(&params)?,
+            "fields": theos_map_format::json::to_checked_value(&fields)?,
+        }))
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -406,7 +401,10 @@ t_base_c = 15.0",
             fields: Some(fields(&h, &frame(16), &params)),
             params,
         };
-        let (a, b) = (bare.canonical_json(), full.canonical_json());
+        let (a, b) = (
+            bare.canonical_json().unwrap(),
+            full.canonical_json().unwrap(),
+        );
         assert!(a["fields"].is_null());
         assert_eq!(b["fields"]["runoff"].as_array().map(Vec::len), Some(256));
         assert!((b["params"]["budyko_w"].as_f64().unwrap() - 2.6).abs() < 1e-12);
