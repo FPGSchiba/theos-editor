@@ -226,6 +226,45 @@ fn slope_supply_on_a_depressions_cells_fills_it_up_to_its_capacity() {
     }
 }
 
+/// A lake in a dry catchment holds the supply that reaches it and passes none on as supply that
+/// never arrived. On the strip of `pass_strip` with K = 0 and the switch on, G = 2 and uniform
+/// runoff make every cell dry (`Q = A < 2·A`). The slope (cell 3) passes its 3 m on without laying
+/// it down; the lake (cell 2, 5 m of one cell below its spill) is not dry, whatever its catchment,
+/// since its cells send their supply into the fill: it takes the 3 m and lets nothing go. Cell 1,
+/// below the spill, is dry and receives nothing, so it keeps its height. Were the lake passing
+/// its supply on, cell 1 would count supply that never arrived and be cut down by its negative
+/// deposition term.
+#[test]
+fn a_lake_in_a_dry_catchment_holds_its_supply_and_passes_none_on() {
+    let mut w = pass_strip();
+    let strip = |v: Vec<f64>| Layer::F64(Grid::from_vec(1, 4, v).unwrap());
+    w.insert("erodibility", strip(vec![0.0; 4])).unwrap();
+    w.insert("slope_supply", strip(vec![0.0, 0.0, 0.0, 3.0]))
+        .unwrap();
+    let start = layer(&w, "height");
+    let fluvial = "g = 2.0
+supply_passes_dry_cells = true";
+    let report = evolve(&mut w, &processes(&fluvial_only(fluvial)), 1, 1e5, 1).unwrap();
+    assert!(report.findings.is_empty(), "{:?}", report.findings);
+    let h = layer(&w, "height");
+    assert!(
+        (h[1] - start[1]).abs() < 1e-9,
+        "cell 1 below the spill at {} from {}",
+        h[1],
+        start[1]
+    );
+    assert!((h[2] - 48.0).abs() < 1e-9, "the lake at {}", h[2]);
+    assert!((h[3] - start[3]).abs() < 1e-9, "the slope at {}", h[3]);
+    let held = 3.0 * CELL_AREA;
+    let out = value(&report, "sediment_out_m3");
+    let raised = volume(&h) - volume(&start);
+    assert!(out.abs() < 1e-9 * held, "{out} m³ left");
+    assert!(
+        (raised + out - held).abs() <= 1e-9 * held,
+        "raised {raised}, out {out}, supply {held}"
+    );
+}
+
 /// Plan ruling L27: `slope_limit` every step, `fluvial` every second. Nothing is counted twice or
 /// lost: the evolution's summed values show the supply still pending at the end as
 /// `slope_limit_removed_m3 − fluvial_supply_m3`, and the run's volume changes by the uplift less
@@ -463,14 +502,22 @@ fn with_the_switch_the_supply_loop_on_dry_cells_stops() {
     }
 }
 
-/// With the switch off, as by default, the step is the one without it, bit for bit.
+/// Where no cell is dry the switch changes nothing, bit for bit. On a strip with uniform runoff
+/// and G = 1, `Q` equals `A` exactly on every cell, so `Q < G·A` holds nowhere, and the step with
+/// the switch on is the step with it off: layers and report.
 #[test]
-fn the_switch_off_leaves_the_step_as_it_is() {
+fn the_switch_changes_nothing_where_no_cell_is_dry() {
     let run = |extra: &str| {
-        let mut w = dry_strip(1e-5);
+        let height = (0..DRY_CELLS).map(|i| 5.0 * to_f64(i)).collect();
+        let mut w = strip(height, vec![1e-5; DRY_CELLS]);
         w.insert("uplift", row(vec![UPLIFT; DRY_CELLS])).unwrap();
         w.insert("sag_rate", row(vec![0.0; DRY_CELLS])).unwrap();
-        let fluvial = format!("g = 1.0\n{extra}");
+        let supply = (0..DRY_CELLS).map(|i| 2.0 + to_f64(i % 5)).collect();
+        w.insert("slope_supply", row(supply)).unwrap();
+        let fluvial = format!(
+            "g = 1.0
+{extra}"
+        );
         let report = evolve(&mut w, &processes(&recipe("steepest", &fluvial)), 1, DT, 1).unwrap();
         let layers: Vec<Vec<u64>> = ["height", "erosion", "deposition"]
             .iter()
@@ -478,7 +525,9 @@ fn the_switch_off_leaves_the_step_as_it_is() {
             .collect();
         (layers, report)
     };
-    assert_eq!(run("supply_passes_dry_cells = false"), run(""));
+    let off = run("supply_passes_dry_cells = false");
+    assert!(off.0[0].iter().any(|&b| b != 0), "the strip has heights");
+    assert_eq!(run("supply_passes_dry_cells = true"), off);
 }
 
 #[test]

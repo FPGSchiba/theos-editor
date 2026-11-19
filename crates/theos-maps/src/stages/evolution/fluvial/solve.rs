@@ -191,8 +191,6 @@ pub(super) struct Solution {
     pub iterations: u32,
     /// The largest height change of the last iteration, metres.
     pub residual: f64,
-    /// Whether the iterations ran past half the limit, where full depressions stay full.
-    pub past_half: bool,
 }
 
 impl Solution {
@@ -359,6 +357,5 @@ pub(super) fn deposit(
         start,
         iterations,
         residual,
-        past_half: iterations > half,
     })
 }

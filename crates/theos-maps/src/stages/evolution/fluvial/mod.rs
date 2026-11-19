@@ -31,8 +31,10 @@
 //!   gives its cells that fill in place of the one their last sweep started from. The volume
 //!   balance closes exactly, also at the iteration limit: a lake that is not full keeps all of a
 //!   positive inflow and lets nothing go, and an inflow that is not positive passes on with its
-//!   sign. When the iterations ran past half the limit and the books moved a lake cell by the
-//!   tolerance or more, a warning names the move.
+//!   sign. When the iterations did not converge and the books moved a lake cell by the
+//!   tolerance or more, a warning names the move; at a converged step it stays silent, because a
+//!   lake's fill sums its whole catchment's changes and a correction above the per-cell tolerance
+//!   is expected there.
 //! - **The slope supply** (spec §5.9 "Slope supply", ruling 51): `slope_supply` holds, per cell,
 //!   the thickness `slope_limit` has removed since `fluvial` last ran. `fluvial` takes it into the
 //!   sediment flux at its cell like eroded sediment, in the iterations and in the books (`solve`
@@ -101,8 +103,9 @@ pub struct FluvialParams {
     pub max_iterations: u32,
     /// Whether the slope supply passes dry cells without being laid down (default `false`; Task
     /// 27h). A cell is dry when its catchment's mean runoff weight is below G, `Q < G·A` with `A`
-    /// the plain drainage area: there the law lays down more of the sediment that reaches it
-    /// than it passes on (Yuan et al.'s `G/p̂ ≤ 1` fails). With the switch the supply runs out
+    /// the plain drainage area: a dry catchment keeps about G/p̄ to 1 of the supply (Yuan et
+    /// al.'s `G/p̂ ≤ 1` fails). A locally wet cell can count as dry; with uniform runoff every
+    /// cell is dry when G > 1 and none is when G ≤ 1. With the switch the supply runs out
     /// over dry cells, as debris runs down dry gullies, and joins the sediment at the first cell
     /// that is not dry, a routed depression or an outlet (`runout`). Without it a dry cell keeps
     /// nearly all of its own supply, `slope_limit` cuts it straight back into the supply, and the
@@ -221,8 +224,7 @@ struct Outcome {
     /// The plain drainage area (spec §5.10: not weighted by runoff).
     drainage_area: Grid<f64>,
     /// `sediment_out_m3`, `iterations`, `supply_m3`, a warning when the iterations did not
-    /// converge, and one when the books moved a lake cell by the tolerance or more after the
-    /// iterations ran past half the limit.
+    /// converge, and with it one when the books moved a lake cell by the tolerance or more.
     report: StageReport,
 }
 
@@ -352,7 +354,6 @@ fn with_deposition(
         start: from,
         iterations,
         residual,
-        past_half,
     } = solution;
     let ledger = Ledger {
         h_star: start.as_slice(),
@@ -377,7 +378,7 @@ fn with_deposition(
             .on_layer("height"),
         );
     }
-    if let Some(warning) = books_warning(iterations, past_half, correction, dep.tolerance) {
+    if let Some(warning) = books_warning(iterations, converged, correction, dep.tolerance) {
         report.findings.push(warning);
     }
     report
@@ -387,19 +388,19 @@ fn with_deposition(
 }
 
 /// The warning when the books moved a lake cell by `correction` metres, the tolerance or more,
-/// at a step whose `iterations` ran `past_half` the limit: a depression's inflow was still
-/// changing when the iterations stopped. A step that converged before half the limit never
-/// warns; its correction follows only the last iteration's change of inflow.
+/// at a step whose `iterations` did not converge: a depression's inflow was still changing when
+/// they stopped. A step that converged never warns. The tolerance bounds each cell's last change,
+/// but a lake's fill sums the changes of its whole catchment, so a correction at or above it is
+/// expected at convergence; heights and balance are exact (Task 27h, fix round 1).
 fn books_warning(
     iterations: u32,
-    past_half: bool,
+    converged: bool,
     correction: f64,
     tolerance: f64,
 ) -> Option<Finding> {
-    (past_half && correction >= tolerance).then(|| {
+    (!converged && correction >= tolerance).then(|| {
         Finding::warning(format!(
-            "after {iterations} iterations the final routing of the sediment moved a lake cell \
-             by {correction:e} m, at or above the tolerance {tolerance:e} m"
+            "after {iterations} iterations the final routing of the sediment moved a lake cell              by {correction:e} m, at or above the tolerance {tolerance:e} m"
         ))
         .on_layer("height")
     })
@@ -443,14 +444,15 @@ mod unit_tests {
     use crate::grid::Grid;
 
     #[test]
-    fn the_books_warn_only_past_half_the_limit_and_at_the_tolerance() {
-        // A step that converged before half the limit never warns: its correction follows only
-        // the last iteration's change of inflow (Task 27f, R8).
-        assert!(books_warning(20, false, 5.0, 0.1).is_none());
-        // Past half the limit it warns when a lake cell moved by the tolerance or more.
-        assert!(books_warning(30, true, 0.099, 0.1).is_none());
+    fn the_books_warn_only_when_the_step_did_not_converge_and_at_the_tolerance() {
+        // A converged step never warns, whatever the correction: a lake's fill sums its whole
+        // catchment's changes, so a correction above the per-cell tolerance is expected there.
+        assert!(books_warning(20, true, 5.0, 0.1).is_none());
+        assert!(books_warning(50, true, 5.0, 0.1).is_none());
+        // A capped step warns when a lake cell moved by the tolerance or more.
+        assert!(books_warning(50, false, 0.099, 0.1).is_none());
         for moved in [0.1, 3.5] {
-            let finding = books_warning(30, true, moved, 0.1).unwrap();
+            let finding = books_warning(30, false, moved, 0.1).unwrap();
             let message = &finding.message;
             assert!(message.contains(&format!("{moved:e} m")), "{message}");
             assert!(message.contains("30 iterations"), "{message}");

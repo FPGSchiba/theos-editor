@@ -11,9 +11,10 @@
 //!
 //! **What the switch does.** A cell is *dry* when its catchment's mean runoff weight `Q/A` is
 //! below G, `Q < G·A`, with `A` the plain drainage area: there Yuan et al.'s condition
-//! `G/p̂ ≤ 1` fails, and the law lays down more of the sediment that reaches the cell than it
-//! passes on. The slope supply passes dry cells without being laid down, as debris runs out down
-//! dry gullies, and joins the sediment at the first cell that is not dry, at a routed depression
+//! `G/p̂ ≤ 1` fails, and a dry catchment keeps about G/p̄ to 1 of its supply. A locally wet cell
+//! can count as dry; with uniform runoff every cell is dry when G > 1 and none is when G ≤ 1.
+//! The slope supply passes dry cells without being laid down, as debris runs out down dry
+//! gullies, and joins the sediment at the first cell that is not dry, at a routed depression
 //! (its fill) or at an outlet. [`passing`] gives, per cell, the supply volume `P_i` that passes
 //! it, and the cell's deposition term leaves it out (`solve`). Only where the supply is laid
 //! down changes; what the cells erode is laid down as before, and the books close the volume
