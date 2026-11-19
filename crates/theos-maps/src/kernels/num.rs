@@ -16,10 +16,11 @@ pub fn min(a: f64, b: f64) -> f64 {
     if a < b { a + 0.0 } else { b + 0.0 }
 }
 
-/// `x + 0.0`, which turns `-0.0` into `+0.0`; use it for sort and queue keys.
+/// [`canonical`] under the name of its use: a sort or queue key, where `-0.0` and `+0.0` must
+/// be one value.
 #[must_use]
 pub fn key(x: f64) -> f64 {
-    x + 0.0
+    canonical(x)
 }
 
 /// A float ordered by [`f64::total_cmp`], so it can sit in a `BinaryHeap` or be sorted; build it
