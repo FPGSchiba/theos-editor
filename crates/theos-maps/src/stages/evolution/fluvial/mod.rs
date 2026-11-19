@@ -400,7 +400,8 @@ fn books_warning(
 ) -> Option<Finding> {
     (!converged && correction >= tolerance).then(|| {
         Finding::warning(format!(
-            "after {iterations} iterations the final routing of the sediment moved a lake cell              by {correction:e} m, at or above the tolerance {tolerance:e} m"
+            "after {iterations} iterations the final routing of the sediment moved a lake cell \
+             by {correction:e} m, at or above the tolerance {tolerance:e} m"
         ))
         .on_layer("height")
     })
@@ -457,6 +458,8 @@ mod unit_tests {
             assert!(message.contains(&format!("{moved:e} m")), "{message}");
             assert!(message.contains("30 iterations"), "{message}");
             assert!(message.contains("tolerance 1e-1 m"), "{message}");
+            assert!(message.contains("a lake cell by "), "{message}");
+            assert!(!message.contains("  "), "no run of spaces: {message}");
         }
     }
 
