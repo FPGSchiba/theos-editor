@@ -2,6 +2,7 @@
 
 mod api;
 mod fixture_pairs;
+mod parity;
 mod recipes;
 mod resolution;
 mod support;
