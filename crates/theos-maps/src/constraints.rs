@@ -5,10 +5,11 @@ use std::collections::BTreeMap;
 use serde_json::{Map, Value};
 
 use crate::features::TYPES;
-use crate::metrics::PATHS;
+use crate::metrics::{CHIME_WALK, PATHS};
 use crate::recipe::PlannedStage;
-
-const TRAVEL_PATH: &str = "travel.chime_to_chime_min";
+use crate::stage::TypedStage;
+use crate::stages::terrain::travel::Travel;
+use crate::summary;
 
 /// The result key of a summary path: lower case, every character outside `[a-z0-9]` an `_`.
 #[must_use]
@@ -62,19 +63,20 @@ pub(crate) fn evaluate(
 
 /// Whether a constraint may name `path` in a recipe with these planned stages.
 pub(crate) fn is_known_path(path: &str, stages: &[PlannedStage]) -> bool {
-    if path == TRAVEL_PATH {
-        return stages.iter().any(|s| s.id == "travel");
+    if path == CHIME_WALK {
+        return stages.iter().any(|s| s.id == Travel::ID);
     }
     if PATHS.contains(&path) {
         return true;
     }
-    if let Some(kind) = path.strip_prefix("features.") {
+    let under = |key: &str| {
+        path.strip_prefix(key)
+            .and_then(|rest| rest.strip_prefix('.'))
+    };
+    if let Some(kind) = under(summary::FEATURES) {
         return TYPES.iter().any(|(_, t)| *t == kind);
     }
-    if let Some((id, metric)) = path
-        .strip_prefix("stages.")
-        .and_then(|rest| rest.split_once('.'))
-    {
+    if let Some((id, metric)) = under(summary::STAGES).and_then(|rest| rest.split_once('.')) {
         return stages
             .iter()
             .any(|s| s.id == id && s.metric_names.contains(&metric));

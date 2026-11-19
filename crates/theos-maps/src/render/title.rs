@@ -3,18 +3,20 @@
 
 use serde_json::Value;
 
+use crate::metrics::{CHIME_WALK, LAKE_PCT, RELIEF};
+
 /// `<recipe> · seed <seed> · relief <n> m · <n> % lake · Chime walk <n> min`; a part whose
 /// metric is absent is left out.
 pub(crate) fn line(recipe: &str, seed: u64, metrics: &Value) -> String {
     let number = |path: &str| metrics.get(path).and_then(Value::as_f64);
     let mut parts = vec![recipe.to_owned(), format!("seed {seed}")];
-    if let Some(relief) = number("elevation_m.relief") {
+    if let Some(relief) = number(RELIEF) {
         parts.push(format!("relief {relief} m"));
     }
-    if let Some(lake) = number("lake_pct") {
+    if let Some(lake) = number(LAKE_PCT) {
         parts.push(format!("{lake} % lake"));
     }
-    if let Some(walk) = number("travel.chime_to_chime_min") {
+    if let Some(walk) = number(CHIME_WALK) {
         parts.push(format!("Chime walk {walk} min"));
     }
     parts.join(" \u{b7} ")

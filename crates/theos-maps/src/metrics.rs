@@ -1,15 +1,30 @@
 //! The parity metrics of a finished world (spec §5.14): [`PATHS`], the summary paths that exist
-//! whatever stages a recipe holds, and their values computed from the world as 0.3.0 did.
+//! whatever stages a recipe holds, and their values computed from the world as 0.3.0 did. The
+//! path constants are the one spelling of each path; the constraints, the summary and the title
+//! line of `truth` use them.
+
+/// The relief of `height`, m.
+pub const RELIEF: &str = "elevation_m.relief";
+/// The share of lake cells, percent.
+pub const LAKE_PCT: &str = "lake_pct";
+/// The share of river cells outside lakes, percent.
+pub const RIVERS_PCT: &str = "rivers_pct";
+/// The share of cells with a vegetation density above 0.5, percent.
+pub const VEGETATION_COVER_PCT: &str = "vegetation_cover_pct";
+/// The median precipitation, mm/yr.
+pub const PRECIP_MEDIAN: &str = "precip_mm_yr.median";
+/// The walk from the first Chime to the second, minutes: the `travel` stage's metric.
+pub const CHIME_WALK: &str = "travel.chime_to_chime_min";
 
 /// The summary paths a constraint may name besides `features.<type>` and `stages.<id>.<metric>`.
-/// `travel.chime_to_chime_min` counts only when a `travel` stage is planned.
+/// [`CHIME_WALK`] counts only when a `travel` stage is planned.
 pub const PATHS: &[&str] = &[
-    "elevation_m.relief",
-    "lake_pct",
-    "rivers_pct",
-    "vegetation_cover_pct",
-    "precip_mm_yr.median",
-    "travel.chime_to_chime_min",
+    RELIEF,
+    LAKE_PCT,
+    RIVERS_PCT,
+    VEGETATION_COVER_PCT,
+    PRECIP_MEDIAN,
+    CHIME_WALK,
 ];
 
 use std::collections::BTreeMap;
@@ -23,6 +38,7 @@ use crate::kernels::num::{canonical, round_half_even, to_f64};
 use crate::kernels::stats::median;
 use crate::stage::Metrics;
 use crate::stages::terrain::climate::{self, Climate};
+use crate::stages::terrain::travel::CHIME_TO_CHIME_MIN;
 use crate::world::World;
 
 /// `x` rounded to one decimal place (`scale` 10) or two (`scale` 100) the way Python's
@@ -82,12 +98,12 @@ pub(crate) fn compute(world: &World, travel: Option<&Metrics>) -> Result<Value, 
         out.insert(path, value);
     };
     if let Some((lo, hi)) = world.f64("height").and_then(extent) {
-        put("elevation_m.relief", canonical((hi - lo).trunc()));
+        put(RELIEF, canonical((hi - lo).trunc()));
     }
     let lake = world.mask("lake");
     if let Some(lake) = lake {
         let pct = share_pct(lake.as_slice().iter().copied(), lake.len());
-        put("lake_pct", round_to(pct, 100.0));
+        put(LAKE_PCT, round_to(pct, 100.0));
     }
     if let Some(river) = world.mask("river") {
         let lakes = lake.map(Grid::as_slice);
@@ -96,20 +112,20 @@ pub(crate) fn compute(world: &World, travel: Option<&Metrics>) -> Result<Value, 
             .iter()
             .enumerate()
             .map(|(i, &r)| r && !lakes.is_some_and(|l| l[i]));
-        put("rivers_pct", round_to(share_pct(wet, river.len()), 100.0));
+        put(RIVERS_PCT, round_to(share_pct(wet, river.len()), 100.0));
     }
     if let Some(vegetation) = world.f64("vegetation") {
         let covered = vegetation.as_slice().iter().map(|&v| v > 0.5);
         put(
-            "vegetation_cover_pct",
+            VEGETATION_COVER_PCT,
             round_to(share_pct(covered, vegetation.len()), 10.0),
         );
     }
     if let Some(m) = precipitation(world).and_then(|p| median(p.as_slice()).ok()) {
-        put("precip_mm_yr.median", canonical(m.trunc()));
+        put(PRECIP_MEDIAN, canonical(m.trunc()));
     }
-    if let Some(&minutes) = travel.and_then(|t| t.0.get("chime_to_chime_min")) {
-        put("travel.chime_to_chime_min", round_to(minutes, 10.0));
+    if let Some(&minutes) = travel.and_then(|t| t.0.get(CHIME_TO_CHIME_MIN)) {
+        put(CHIME_WALK, round_to(minutes, 10.0));
     }
     to_checked_value(&out)
 }

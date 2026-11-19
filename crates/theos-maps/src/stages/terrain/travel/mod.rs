@@ -29,6 +29,13 @@
 mod tests;
 mod walk;
 
+/// The metric of the walk from the first Chime to the second, in minutes; the summary also
+/// holds it as the parity path [`crate::metrics::CHIME_WALK`].
+pub(crate) const CHIME_TO_CHIME_MIN: &str = "chime_to_chime_min";
+
+/// The metric of the share of cells within 15 minutes of a Chime, percent.
+const FLOOR_PCT_WITHIN_15_MIN: &str = "floor_pct_within_15_min";
+
 use serde::Deserialize;
 
 use self::walk::Walk;
@@ -114,7 +121,7 @@ impl TypedStage for Travel {
     }
 
     fn metric_names(&self, _: &TravelParams) -> Vec<&'static str> {
-        vec!["chime_to_chime_min", "floor_pct_within_15_min"]
+        vec![CHIME_TO_CHIME_MIN, FLOOR_PCT_WITHIN_15_MIN]
     }
 
     fn validate(&self, params: &mut TravelParams) -> Result<(), ParamError> {
@@ -167,7 +174,7 @@ impl TypedStage for Travel {
                 if seconds.is_finite() {
                     report
                         .values
-                        .insert("chime_to_chime_min".to_owned(), seconds / 60.0);
+                        .insert(CHIME_TO_CHIME_MIN.to_owned(), seconds / 60.0);
                 }
             }
         }
@@ -177,7 +184,7 @@ impl TypedStage for Travel {
             .filter(|&&v| (0.0..=NEAR_MIN).contains(&v))
             .count();
         report.values.insert(
-            "floor_pct_within_15_min".to_owned(),
+            FLOOR_PCT_WITHIN_15_MIN.to_owned(),
             100.0 * to_f64(near) / to_f64(reach.len()),
         );
         ctx.write("reach_min", Layer::F64(reach))?;

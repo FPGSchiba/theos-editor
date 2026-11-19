@@ -26,6 +26,8 @@ use crate::progress::{CancelToken, Progress};
 use crate::recipe::Plan;
 use crate::render::{self, RenderError, RenderInput};
 use crate::runner::{Execution, panic_message};
+use crate::stage::TypedStage;
+use crate::stages::terrain::travel::Travel;
 use crate::summary::summary;
 use crate::world::World;
 
@@ -133,7 +135,7 @@ pub(super) fn constraints(
     let travel = execution
         .stage_metrics
         .iter()
-        .find(|(id, _)| id == "travel")
+        .find(|(id, _)| id == Travel::ID)
         .map(|(_, metrics)| metrics);
     let not_finite =
         |e: FormatError| output_error(super::outputs::PACKAGE, &format!("the run summary: {e}"));

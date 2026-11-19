@@ -11,6 +11,13 @@ use crate::features::TYPES;
 use crate::runner::StageFinding;
 use crate::stage::Metrics;
 
+/// The summary's object of feature counts, `features.<type>` to a constraint.
+pub(crate) const FEATURES: &str = "features";
+/// The summary's object of stage metrics, `stages.<id>.<metric>` to a constraint.
+pub(crate) const STAGES: &str = "stages";
+/// The summary's list of warnings.
+const FINDINGS: &str = "findings";
+
 /// Inserts `value` under the dotted `path` of `root`, creating the objects on the way.
 fn insert_nested(root: &mut Map<String, Value>, path: &str, value: Value) {
     match path.split_once('.') {
@@ -57,17 +64,17 @@ pub(crate) fn summary(
     for (ty, &n) in feature_counts {
         features.insert(ty.clone(), Value::from(n));
     }
-    out.insert("features".to_owned(), Value::Object(features));
+    out.insert(FEATURES.to_owned(), Value::Object(features));
     let stages = stage_metrics
         .iter()
         .map(|(id, m)| Ok((id.clone(), to_checked_value(&m.0)?)))
         .collect::<Result<Map<String, Value>, FormatError>>()?;
-    out.insert("stages".to_owned(), Value::Object(stages));
+    out.insert(STAGES.to_owned(), Value::Object(stages));
     let findings = findings
         .iter()
         .map(|f| serde_json::json!({"stage": f.stage, "message": f.message}))
         .collect();
-    out.insert("findings".to_owned(), Value::Array(findings));
+    out.insert(FINDINGS.to_owned(), Value::Array(findings));
     Ok(Value::Object(out))
 }
 
