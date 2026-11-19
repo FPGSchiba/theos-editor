@@ -431,10 +431,11 @@ fn a_package_layer_no_stage_writes_fails_before_any_stage_runs() -> TestResult {
 }
 
 // Ledger ruling P3 with the Task 42 ruling: `roads` is all zeros without the `roads` stage, so a
-// recipe without roads (and so without `sites` and `travel`, which read them) still describes.
+// recipe without roads (and so without `sites`, which reads them) still describes; `travel`
+// stays, as it reads `road_network` only when present.
 #[test]
 fn a_recipe_without_roads_passes_the_output_check() -> TestResult {
-    let text = api_small_without(&["roads", "sites", "travel"], "no-roads")?;
+    let text = api_small_without(&["roads", "sites"], "no-roads")?;
     let dir = folder_with("no-roads.toml", &text)?;
     let d = describe(&[dir.path().to_owned()])?;
     assert!(d.problems.is_empty(), "{:?}", d.problems);
@@ -442,7 +443,8 @@ fn a_recipe_without_roads_passes_the_output_check() -> TestResult {
     Ok(())
 }
 
-// AC: CE-28.3
+// Spec ruling 58: `hillslope` runs before the routing of its step; a process list with it after
+// a routing process or `fluvial` fails before any stage runs.
 #[test]
 fn a_hillslope_after_the_routing_fails_before_any_stage_runs() -> TestResult {
     for order in [
