@@ -20,9 +20,13 @@ use super::marks::{Mark, Shape};
 use super::palette::{self, Rgb};
 use super::styles::RoadStyle;
 use super::view::View;
-use super::{RenderError, RenderInput, feats, relief, roads, text};
+use super::{
+    HEIGHT_SPEC, LAKE_SPEC, RenderError, RenderInput, WATER_FEATURES_SPEC, feats, relief, roads,
+    text,
+};
 use crate::grid::Grid;
 use crate::kernels::num::{max, min, to_f32};
+use crate::stage::LayerSpec;
 use crate::stages::terrain::hydrology::WaterFeatures;
 use crate::stages::terrain::roads::RoadClass;
 use known::Known;
@@ -61,6 +65,15 @@ fn house_px(ty: &str) -> (u8, f32) {
         _ => (9, 10.0),
     }
 }
+
+/// The layers `inworld` reads (ledger ruling P3).
+pub(in crate::render) const NEEDS: &[LayerSpec] = &[
+    HEIGHT_SPEC,
+    LayerSpec::f64("vegetation"),
+    LAKE_SPEC,
+    LayerSpec::mask("big_river"),
+    WATER_FEATURES_SPEC,
+];
 
 /// Draws `inworld`.
 pub(crate) fn inworld(input: &RenderInput<'_>) -> Result<Pixmap, RenderError> {

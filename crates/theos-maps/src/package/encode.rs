@@ -7,7 +7,9 @@ use super::table::{PackageLayer, Source};
 use crate::grid::Grid;
 use crate::kernels::num::{to_f32, to_u8_unit};
 use crate::metrics::precipitation;
-use crate::world::World;
+use crate::stage::LayerSpec;
+use crate::stages::terrain::climate::Climate;
+use crate::world::{ValueType, World};
 
 /// The class raster that is all zeros when the recipe has no `roads` stage.
 const ROADS: &str = "roads";
@@ -52,6 +54,28 @@ fn floats(world: &World, layer: &PackageLayer) -> Result<Grid<f64>, PackageError
         _ => world.f64(layer.name).cloned(),
     };
     found.ok_or(PackageError::MissingLayer { layer: layer.name })
+}
+
+/// The world layers [`encode`] reads for `layer` (ledger ruling P3): the classes of `water` come
+/// from three masks, `precipitation` from the climate (and the height when it holds no fields),
+/// `roads` from nothing it cannot do without, every other layer from the layer of its name.
+pub(crate) fn needs(layer: &PackageLayer) -> Vec<LayerSpec> {
+    match layer.source {
+        Source::Water => vec![
+            LayerSpec::mask("lake"),
+            LayerSpec::mask("big_river"),
+            LayerSpec::mask("river"),
+        ],
+        Source::Precipitation => vec![
+            LayerSpec::value("climate", Climate::NAME),
+            LayerSpec::f64("height"),
+        ],
+        Source::Raster => match (layer.dtype, layer.scale) {
+            (DType::F32, _) | (_, Some(_)) => vec![LayerSpec::f64(layer.name)],
+            (_, None) if layer.name == ROADS => Vec::new(),
+            (_, None) => vec![LayerSpec::u8(layer.name)],
+        },
+    }
 }
 
 /// The package values of `layer`: `f32` through `to_f32`, a density through `to_u8_unit`, a

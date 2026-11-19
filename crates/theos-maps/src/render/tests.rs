@@ -4,7 +4,7 @@ use theos_map_format::sha256_hex;
 
 use super::test_support::{TestResult, TestWorld, decode};
 use super::truth::{TRUTH_BOTTOM_PX, TRUTH_TOP_PX};
-use super::{RenderError, canvas, render, styles};
+use super::{RENDERS, RenderError, canvas, render, styles};
 use crate::features::{FeatureSet, Prop};
 use crate::kernels::num::to_f64;
 use crate::progress::CancelToken;
@@ -56,6 +56,37 @@ fn world_with_names(named: bool) -> TestWorld {
 
 /// The size of the frame in pixels.
 const FRAME_PX: (u32, u32) = (2 * 48, 2 * 40);
+
+// Ledger ruling P3: each render's `needs` lists exactly the layers it reads, with their kind: it
+// draws from a world that holds only those (features aside; roads are optional), and fails
+// naming the layer without any one of them.
+#[test]
+fn each_render_needs_exactly_the_layers_it_reads() -> TestResult {
+    for r in RENDERS {
+        let mut w = world();
+        let names: Vec<String> = w.world.names().map(str::to_owned).collect();
+        for name in names {
+            if r.needs.iter().all(|spec| spec.name != name) {
+                w.world.remove(&name);
+            }
+        }
+        let cancel = CancelToken::new();
+        (r.draw)(&w.input(&cancel)).map_err(|e| format!("{}: {e}", r.name))?;
+        for spec in r.needs {
+            let layer = w.world.remove(spec.name).ok_or(spec.name)?;
+            assert_eq!(layer.kind(), spec.kind, "{}: {}", r.name, spec.name);
+            let missing = (r.draw)(&w.input(&cancel)).err();
+            assert!(
+                matches!(missing, Some(RenderError::MissingLayer { layer }) if layer == spec.name),
+                "{} without `{}`: {missing:?}",
+                r.name,
+                spec.name
+            );
+            w.world.insert(spec.name, layer)?;
+        }
+    }
+    Ok(())
+}
 
 fn distinct_colours(png: &[u8]) -> usize {
     let image = decode(png);

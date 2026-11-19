@@ -7,8 +7,9 @@ use super::canvas::sample;
 use super::palette::{self, Unit};
 use super::styles::poi_mark;
 use super::view::View;
-use super::{RenderError, RenderInput, feats, relief};
+use super::{HEIGHT_SPEC, RenderError, RenderInput, feats, relief};
 use crate::kernels::num::{max, min, to_u8_unit};
+use crate::stage::LayerSpec;
 
 /// The colours of omega 0, 0.5 and 1: blue, yellow, red.
 const RAMP: [Unit; 3] = [[0.16, 0.23, 0.42], [0.95, 0.82, 0.42], [0.78, 0.19, 0.17]];
@@ -24,6 +25,9 @@ fn ramp(t: f64) -> Unit {
         palette::mix(RAMP[1], RAMP[2], 2.0 * t - 1.0)
     }
 }
+
+/// The layers `omega` reads (ledger ruling P3).
+pub(super) const NEEDS: &[LayerSpec] = &[HEIGHT_SPEC, LayerSpec::f64("omega")];
 
 /// Draws `omega`.
 pub(crate) fn omega(input: &RenderInput<'_>) -> Result<Pixmap, RenderError> {

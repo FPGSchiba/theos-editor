@@ -4,7 +4,6 @@ use serde::Deserialize;
 
 use super::*;
 use crate::api::RunRequest;
-use crate::recipe::test_stages::C;
 use crate::runner::RunOptions;
 use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, TypedStage};
 
@@ -47,17 +46,27 @@ fn is_empty(dir: &Path) -> Result<bool, std::io::Error> {
     Ok(std::fs::read_dir(dir)?.next().is_none())
 }
 
+/// `api-small` under the id `boom` with the stage `boom` second, after `grid`: the recipe writes
+/// every layer of the outputs, so it passes the check before the pipeline (ledger ruling P3).
+fn api_small_with_boom() -> Result<String, Box<dyn std::error::Error>> {
+    let text = std::fs::read_to_string(fixtures().join("api-small.toml"))?;
+    let mut table: toml::Table = text.parse()?;
+    table.insert("id".to_owned(), "boom".into());
+    let stages = table
+        .get_mut("stage")
+        .and_then(toml::Value::as_array_mut)
+        .ok_or("api-small has no stages")?;
+    let boom: toml::Table = "id = \"boom\"".parse()?;
+    stages.insert(1, toml::Value::Table(boom));
+    Ok(toml::to_string(&table)?)
+}
+
 // AC: CE-28.4
 #[test]
 fn a_panicking_stage_ends_the_run_with_its_message_and_no_files() -> TestResult {
     let folder = tempfile::tempdir()?;
-    std::fs::write(
-        folder.path().join("boom.toml"),
-        "id = \"boom\"\ntitle = \"T\"\nkind = \"terrain\"\ngrid = [4, 8]\nsize_km = [1.0, 0.5]\n\
-         [[stage]]\nid = \"c\"\n[[stage]]\nid = \"boom\"\n",
-    )?;
-    let mut registry = Registry::empty();
-    registry.add(Box::new(C));
+    std::fs::write(folder.path().join("boom.toml"), api_small_with_boom()?)?;
+    let mut registry = Registry::builtin();
     registry.add(Box::new(Boom));
     let out = tempfile::tempdir()?;
     let result = run_inner(

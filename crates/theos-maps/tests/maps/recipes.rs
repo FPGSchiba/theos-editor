@@ -96,7 +96,20 @@ fn describe_lists_the_three_built_in_recipes() -> TestResult {
 // AC: CE-28.1
 #[test]
 fn a_folder_recipe_wins_over_the_built_in() -> TestResult {
-    let text = recipe_text("fixture-small", "Folder fixture", GRID);
+    // The built-in with another title and its last stage left out: a recipe is offered only when
+    // its stages write every layer of the outputs (ledger ruling P3), so it keeps the others.
+    let mut table: toml::Table = include_str!("../../recipes/fixture-small.toml").parse()?;
+    table.insert("title".to_owned(), "Folder fixture".into());
+    let stages = table
+        .get_mut("stage")
+        .and_then(toml::Value::as_array_mut)
+        .ok_or("fixture-small has no stages")?;
+    let built_in = stages.len();
+    let last = stages.pop().ok_or("fixture-small has no stages")?;
+    if last.get("id").and_then(toml::Value::as_str) != Some("travel") {
+        return Err(format!("fixture-small ends with {last:?}, not travel").into());
+    }
+    let text = toml::to_string(&table)?;
     let dir = folder_with("fixture-small.toml", &text)?;
     let d = describe(&[dir.path().to_owned()])?;
     let shown: Vec<_> = d
@@ -106,7 +119,7 @@ fn a_folder_recipe_wins_over_the_built_in() -> TestResult {
         .collect();
     assert_eq!(shown.len(), 1);
     assert_eq!(shown[0].title, "Folder fixture");
-    assert_eq!(shown[0].stages.len(), 1);
+    assert_eq!(shown[0].stages.len(), built_in - 1);
     assert_eq!(d.recipes.len(), BUILT_IN.len());
     Ok(())
 }
@@ -328,6 +341,106 @@ fn evolution_recipe(id: &str, processes: &[&str]) -> String {
 /// The stages before the evolution: grid, then tectonics.
 const TECTONICS_FIRST: &str = "\n[[stage]]\nid = \"grid\"\nedges = [\"south\"]\n\
                                \n[[stage]]\nid = \"tectonics\"\n";
+
+/// The fixture `api-small` under the id `id`, without the stages `left_out`.
+fn api_small_without(left_out: &[&str], id: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let text = std::fs::read_to_string(crate::support::recipes()[0].join("api-small.toml"))?;
+    let mut table: toml::Table = text.parse()?;
+    table.insert("id".to_owned(), id.into());
+    let stages = table
+        .get_mut("stage")
+        .and_then(toml::Value::as_array_mut)
+        .ok_or("api-small has no stages")?;
+    let before = stages.len();
+    stages.retain(|s| {
+        s.get("id")
+            .and_then(toml::Value::as_str)
+            .is_none_or(|stage| !left_out.contains(&stage))
+    });
+    if stages.len() + left_out.len() != before {
+        return Err(format!("api-small does not hold every stage of {left_out:?}").into());
+    }
+    Ok(toml::to_string(&table)?)
+}
+
+/// The layer, the message and whether the progress closure was called, for a run that failed
+/// with `Invalid` naming no stage.
+fn refused_layer(
+    outcome: (Result<(), RunError>, bool),
+) -> Result<(Option<String>, String, bool), String> {
+    match outcome {
+        (
+            Err(RunError::Recipe(RecipeError::Invalid {
+                stage: None,
+                layer,
+                message,
+                ..
+            })),
+            called,
+        ) => Ok((layer, message, called)),
+        (other, _) => Err(format!("expected Invalid without a stage, got {other:?}")),
+    }
+}
+
+// Ledger ruling P3: the extra render `omega` reads the layer `omega`, which only `detuning`
+// writes; the run is refused after `plan`, before any stage runs, and `describe` reports it.
+#[test]
+fn an_extra_render_without_its_layer_fails_before_any_stage_runs() -> TestResult {
+    let text = api_small_without(&["detuning"], "no-detuning")?;
+    let dir = folder_with("no-detuning.toml", &text)?;
+    let (layer, message, called) =
+        refused_layer(run_from(&request("no-detuning", 1), dir.path())?)?;
+    assert_eq!(layer.as_deref(), Some("omega"));
+    assert!(message.contains("render `omega`"), "{message}");
+    assert!(!called, "a stage ran");
+
+    let d = describe(&[dir.path().to_owned()])?;
+    assert!(d.recipes.iter().all(|r| r.id != "no-detuning"));
+    assert_eq!(d.problems.len(), 1, "{:?}", d.problems);
+    assert_eq!(d.problems[0].id.as_deref(), Some("no-detuning"));
+    assert!(
+        d.problems[0].message.contains("`omega`"),
+        "{:?}",
+        d.problems
+    );
+    Ok(())
+}
+
+// Ledger ruling P3: the package holds `element_water`, which only `elements` writes; no later
+// stage is left to read it, so `plan` alone would not refuse the recipe.
+#[test]
+fn a_package_layer_no_stage_writes_fails_before_any_stage_runs() -> TestResult {
+    let after_ecology = [
+        "elements",
+        "settlements",
+        "pois",
+        "detuning",
+        "resources",
+        "roads",
+        "sites",
+        "travel",
+    ];
+    let text = api_small_without(&after_ecology, "no-elements")?;
+    let dir = folder_with("no-elements.toml", &text)?;
+    let (layer, message, called) =
+        refused_layer(run_from(&request("no-elements", 1), dir.path())?)?;
+    assert_eq!(layer.as_deref(), Some("element_water"));
+    assert!(message.contains("the package"), "{message}");
+    assert!(!called, "a stage ran");
+    Ok(())
+}
+
+// Ledger ruling P3 with the Task 42 ruling: `roads` is all zeros without the `roads` stage, so a
+// recipe without roads (and so without `sites` and `travel`, which read them) still describes.
+#[test]
+fn a_recipe_without_roads_passes_the_output_check() -> TestResult {
+    let text = api_small_without(&["roads", "sites", "travel"], "no-roads")?;
+    let dir = folder_with("no-roads.toml", &text)?;
+    let d = describe(&[dir.path().to_owned()])?;
+    assert!(d.problems.is_empty(), "{:?}", d.problems);
+    assert!(d.recipes.iter().any(|r| r.id == "no-roads"));
+    Ok(())
+}
 
 // AC: CE-28.3
 #[test]

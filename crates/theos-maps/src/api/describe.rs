@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use super::needs;
 use super::{Description, GENERATOR, RecipeInfo, StageInfo, VERSION};
 use crate::recipe::{self, LoadedRecipe, RecipeError, RecipeOrigin, RecipeProblem};
 use crate::stage::Registry;
@@ -9,7 +10,8 @@ use crate::stage::Registry;
 /// Describes the generator: its name and version, the recipes of the built-ins and
 /// `recipe_dirs` (later folders win by id), and the recipe files that could not be loaded.
 ///
-/// Every recipe is planned with empty inputs. One that does not plan is reported as a problem
+/// Every recipe is planned with empty inputs. One that does not plan, or whose stages do not
+/// write a layer the package or a render reads (ledger ruling P3), is reported as a problem
 /// naming its file and is not offered. Terrain recipes take no inputs, so `inputs` is empty and
 /// every recipe is `seeded`.
 ///
@@ -21,7 +23,9 @@ pub fn describe(recipe_dirs: &[PathBuf]) -> Result<Description, RecipeError> {
     let mut problems = catalog.problems;
     let mut recipes = Vec::new();
     for loaded in catalog.recipes.values() {
-        match recipe::plan(loaded, &registry, &serde_json::Map::new()) {
+        let planned = recipe::plan(loaded, &registry, &serde_json::Map::new())
+            .and_then(|plan| needs::check(&plan).map(|()| plan));
+        match planned {
             Ok(plan) => recipes.push(info(loaded, &plan, &registry)),
             Err(error) => problems.push(RecipeProblem {
                 file: origin_file(loaded),

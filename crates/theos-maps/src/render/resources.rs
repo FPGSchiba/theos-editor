@@ -11,8 +11,12 @@ use super::palette::Rgb;
 use super::roads;
 use super::styles::{RoadStyle, resource_colour};
 use super::view::View;
-use super::{RenderError, RenderInput, feats, fonts::fonts, relief};
+use super::{
+    HEIGHT_SPEC, LAKE_SPEC, RenderError, RenderInput, WATER_FEATURES_SPEC, feats, fonts::fonts,
+    relief,
+};
 use crate::kernels::num::{max, to_f32, to_u8_unit};
+use crate::stage::LayerSpec;
 use crate::stages::terrain::roads::RoadClass;
 
 /// The grey of the relief: `BASE + SPAN · hillshade` (0.3.0).
@@ -31,6 +35,9 @@ const CIRCLE_ALPHA: u8 = 217;
 const GOLD: Rgb = [0xff, 0xd3, 0x4d];
 /// The tier that gets a ring.
 const EXCEPTIONAL: &str = "exceptional";
+
+/// The layers `resources` reads (ledger ruling P3).
+pub(super) const NEEDS: &[LayerSpec] = &[HEIGHT_SPEC, LAKE_SPEC, WATER_FEATURES_SPEC];
 
 /// Draws `resources`.
 pub(crate) fn resources(input: &RenderInput<'_>) -> Result<Pixmap, RenderError> {

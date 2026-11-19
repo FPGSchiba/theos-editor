@@ -6,13 +6,24 @@ use tiny_skia::Pixmap;
 use super::canvas::PX_PER_CELL;
 use super::legend::{self, Entry, Swatch};
 use super::palette::{self, Unit};
-use super::{RenderError, RenderInput, fonts::fonts, relief};
+use super::{
+    HEIGHT_SPEC, LAKE_SPEC, RenderError, RenderInput, WATER_FEATURES_SPEC, fonts::fonts, relief,
+};
+use crate::stage::LayerSpec;
 use crate::stages::terrain::rocks::{self, Rock};
 
 /// The brightness of the hillshade over the rock colour: `AMBIENT + SPAN · hillshade` (0.3.0).
 const AMBIENT: f64 = 0.45;
 /// See [`AMBIENT`].
 const SPAN: f64 = 0.65;
+
+/// The layers `geology` reads (ledger ruling P3).
+pub(super) const NEEDS: &[LayerSpec] = &[
+    HEIGHT_SPEC,
+    LayerSpec::u8("rock"),
+    LAKE_SPEC,
+    WATER_FEATURES_SPEC,
+];
 
 /// Draws `geology`.
 pub(crate) fn geology(input: &RenderInput<'_>) -> Result<Pixmap, RenderError> {

@@ -1,7 +1,8 @@
 //! `run`: one recipe and seed, from the catalog to the files in the output folder (spec §5.6).
 //!
 //! The order: find the recipe in the catalog, refuse `from`, plan with the request's inputs,
-//! claim the output names (nothing is written when one is taken), run the pipeline, then the
+//! check that the stages write every layer the outputs read (ledger ruling P3), claim the output
+//! names (nothing is written when one is taken), run the pipeline, then the
 //! steps `constraints`, `features`, `renders` and `package`, each with its own progress event
 //! and cancel check, and with panics caught like a stage's. The outputs get their names only at
 //! the end; on any error, on cancel and while a panic unwinds, the files the run created are
@@ -11,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 use theos_map_format::sha256_hex;
 
+use super::needs;
 use super::outputs::{FEATURES, Outputs, PACKAGE};
 use super::steps::{self, Steps};
 use super::{GENERATOR, ManifestFrame, RunManifest, RunRequest, VERSION};
@@ -18,7 +20,7 @@ use crate::error::RunError;
 use crate::golden::GoldenRun;
 use crate::package::RunRecord;
 use crate::progress::{CancelToken, Progress};
-use crate::recipe::{self, EXTRA_RENDERS, LoadedRecipe, Plan, RecipeError, STANDARD_RENDERS};
+use crate::recipe::{self, LoadedRecipe, RecipeError};
 use crate::runner::execute;
 use crate::stage::Registry;
 
@@ -37,8 +39,8 @@ use crate::stage::Registry;
 /// notes are ignored: the generator accepts none in P08.
 ///
 /// # Errors
-/// [`RunError::Recipe`] when the recipe is unknown, `from` is set, an input is given or the
-/// recipe is invalid; [`RunError::OutputExists`] when a file in `out_dir` has an output's name;
+/// [`RunError::Recipe`] when the recipe is unknown, `from` is set, an input is given, the
+/// recipe is invalid or its stages do not write a layer the package or a render reads; [`RunError::OutputExists`] when a file in `out_dir` has an output's name;
 /// [`RunError::OverBudget`]; [`RunError::Cancelled`]; the stage errors of the pipeline
 /// ([`RunError::StageFailed`], [`RunError::StagePanicked`], [`RunError::FindingFailed`],
 /// [`RunError::NonFinite`]); [`RunError::StagePanicked`] naming the step (`constraints`,
@@ -85,7 +87,8 @@ pub(crate) fn run_inner(
 ) -> Result<(RunManifest, GoldenRun), RunError> {
     let loaded = find(request, recipe_dirs)?;
     let plan = recipe::plan(&loaded, registry, &request.inputs)?;
-    let renders = render_names(&plan);
+    needs::check(&plan)?;
+    let renders = needs::render_names(&plan);
     let mut roles: Vec<String> = renders.iter().map(|r| (*r).to_owned()).collect();
     roles.extend([FEATURES.to_owned(), PACKAGE.to_owned()]);
     let mut outputs = Outputs::claim(out_dir, request.seed, &roles)?;
@@ -177,19 +180,6 @@ fn find(request: &RunRequest, recipe_dirs: &[PathBuf]) -> Result<LoadedRecipe, R
         });
     }
     Ok(loaded)
-}
-
-/// The renders of `plan`: the standard ones, then the recipe's extras in its order, each once.
-fn render_names(plan: &Plan) -> Vec<&str> {
-    let mut names: Vec<&str> = STANDARD_RENDERS.to_vec();
-    for extra in &plan.renders {
-        if let Some(&known) = EXTRA_RENDERS.iter().find(|e| **e == extra.as_str())
-            && !names.contains(&known)
-        {
-            names.push(known);
-        }
-    }
-    names
 }
 
 #[cfg(test)]

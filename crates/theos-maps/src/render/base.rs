@@ -23,11 +23,12 @@ use super::canvas::{self, PX_PER_CELL, sample};
 use super::farmland::{self, FarmRow, Farmland};
 use super::palette::{self, Rgb, Unit};
 use super::shade::shading;
-use super::{RenderError, RenderInput};
+use super::{HEIGHT_SPEC, LAKE_SPEC, RenderError, RenderInput, WATER_FEATURES_SPEC};
 use crate::features::FeatureSet;
 use crate::grid::Grid;
 use crate::kernels::diff::slope;
 use crate::kernels::num::{max, smoothstep};
+use crate::stage::LayerSpec;
 use crate::stages::terrain::hydrology::{RiverLine, WaterFeatures};
 use crate::world::MapFrame;
 
@@ -177,6 +178,16 @@ pub(super) fn fill_lakes(
     }
     Ok(())
 }
+
+/// The layers `base` reads (ledger ruling P3).
+pub(super) const NEEDS: &[LayerSpec] = &[
+    HEIGHT_SPEC,
+    LayerSpec::u8("rock"),
+    LayerSpec::f64("vegetation"),
+    LayerSpec::f64("snow"),
+    LAKE_SPEC,
+    WATER_FEATURES_SPEC,
+];
 
 /// Draws `base`.
 pub(crate) fn base(input: &RenderInput<'_>) -> Result<Pixmap, RenderError> {

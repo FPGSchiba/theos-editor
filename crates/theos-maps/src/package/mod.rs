@@ -14,6 +14,7 @@ use self::table::OMEGA_LAYER;
 use self::table::{PackageLayer, TERRAIN_LAYERS};
 use crate::api::{GENERATOR, VERSION};
 use crate::recipe::Plan;
+use crate::stage::LayerSpec;
 use crate::world::World;
 
 /// Why a package could not be built.
@@ -77,6 +78,13 @@ fn entry(layer: &PackageLayer, shape: [u32; 2]) -> LayerEntry {
         max: None,
         level: None,
     }
+}
+
+/// The world layers the package reads whatever the recipe (ledger ruling P3): those of every
+/// standard layer; `roads` is all zeros without the `roads` stage (Task 42) and `omega` is
+/// written only when the world holds it, so neither is needed.
+pub(crate) fn needs() -> Vec<LayerSpec> {
+    TERRAIN_LAYERS.iter().flat_map(encode::needs).collect()
 }
 
 /// The package of a finished terrain run: the standard layers in order (`omega` last, when the

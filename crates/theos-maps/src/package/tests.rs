@@ -234,6 +234,32 @@ fn a_missing_layer_is_an_error_naming_it() -> TestResult {
     Ok(())
 }
 
+// Ledger ruling P3: `needs` lists exactly what `build` reads, with the kind it reads: a world
+// holding only those layers builds, and without any one of them it does not.
+#[test]
+fn the_package_needs_exactly_the_layers_it_reads() -> TestResult {
+    let (mut world, planned, loaded) = run(1)?;
+    let needs = super::needs();
+    let names: Vec<String> = world.names().map(str::to_owned).collect();
+    for name in names {
+        if needs.iter().all(|spec| spec.name != name) {
+            world.remove(&name);
+        }
+    }
+    package_of(&world, &planned, &loaded)?;
+    for spec in &needs {
+        let layer = world.remove(spec.name).ok_or(spec.name)?;
+        assert_eq!(layer.kind(), spec.kind, "{}", spec.name);
+        assert!(
+            package_of(&world, &planned, &loaded).is_err(),
+            "the package builds without `{}`",
+            spec.name
+        );
+        world.insert(spec.name, layer)?;
+    }
+    Ok(())
+}
+
 #[test]
 fn a_grid_beyond_32_bits_is_refused() -> TestResult {
     let (_, planned, loaded) = run(1)?;

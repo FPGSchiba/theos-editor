@@ -42,6 +42,8 @@ use tiny_skia::Pixmap;
 use crate::features::FeatureSet;
 use crate::grid::Grid;
 use crate::progress::CancelToken;
+use crate::stage::LayerSpec;
+use crate::stages::terrain::hydrology::WaterFeatures;
 use crate::world::{ValueType, World};
 
 pub(crate) use self::canvas::encode_png;
@@ -161,20 +163,65 @@ impl<'a> RenderInput<'a> {
 /// A render: draws a pixmap from its input.
 pub(crate) type RenderFn = fn(&RenderInput<'_>) -> Result<Pixmap, RenderError>;
 
+/// The height, which the relief of most renders is shaded from.
+const HEIGHT_SPEC: LayerSpec = LayerSpec::f64("height");
+/// The lake cells.
+const LAKE_SPEC: LayerSpec = LayerSpec::mask("lake");
+/// The river lines and lake outlines.
+const WATER_FEATURES_SPEC: LayerSpec =
+    LayerSpec::value("water_features", <WaterFeatures as ValueType>::NAME);
+
+/// A render in the table of renders.
+pub(crate) struct Render {
+    /// Its name.
+    pub name: &'static str,
+    /// How it draws.
+    pub draw: RenderFn,
+    /// The layers it reads: `run` and `describe` refuse a recipe whose stages do not write them
+    /// (ledger ruling P3). Features and roads are optional and not listed.
+    pub needs: &'static [LayerSpec],
+}
+
 /// Every render by name. A new render is one module and one line here.
-pub(crate) const RENDERS: &[(&str, RenderFn)] = &[
-    ("base", base::base),
-    ("truth", truth::truth),
-    ("inworld", inworld::inworld),
-    ("geology", geology::geology),
-    ("resources", resources::resources),
-    ("omega", omega::omega),
+pub(crate) const RENDERS: &[Render] = &[
+    Render {
+        name: "base",
+        draw: base::base,
+        needs: base::NEEDS,
+    },
+    Render {
+        name: "truth",
+        draw: truth::truth,
+        needs: truth::NEEDS,
+    },
+    Render {
+        name: "inworld",
+        draw: inworld::inworld,
+        needs: inworld::NEEDS,
+    },
+    Render {
+        name: "geology",
+        draw: geology::geology,
+        needs: geology::NEEDS,
+    },
+    Render {
+        name: "resources",
+        draw: resources::resources,
+        needs: resources::NEEDS,
+    },
+    Render {
+        name: "omega",
+        draw: omega::omega,
+        needs: omega::NEEDS,
+    },
 ];
 
 /// The render `name`, if there is one.
 pub(crate) fn render(name: &str) -> Option<RenderFn> {
-    RENDERS
-        .iter()
-        .find(|(id, _)| *id == name)
-        .map(|&(_, draw)| draw)
+    RENDERS.iter().find(|r| r.name == name).map(|r| r.draw)
+}
+
+/// The layers the render `name` reads, if there is such a render.
+pub(crate) fn needs(name: &str) -> Option<&'static [LayerSpec]> {
+    RENDERS.iter().find(|r| r.name == name).map(|r| r.needs)
 }

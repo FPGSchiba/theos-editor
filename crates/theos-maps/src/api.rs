@@ -2,6 +2,7 @@
 //! section 3, spec 5.12).
 
 mod describe;
+mod needs;
 mod outputs;
 mod run;
 mod steps;

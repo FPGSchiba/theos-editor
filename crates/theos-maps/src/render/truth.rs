@@ -14,6 +14,7 @@ use super::styles::{self, INK, road_style};
 use super::view::View;
 use super::{RenderError, RenderInput, base, feats, roads, text};
 use crate::kernels::num::to_f32;
+use crate::stage::LayerSpec;
 use crate::stages::terrain::hydrology::WaterFeatures;
 use crate::stages::terrain::roads::RoadClass;
 
@@ -46,6 +47,9 @@ const SCALE_STEPS_M: [u32; 10] = [
 ];
 /// The scale bar takes at most this share of the canvas width.
 const SCALE_MAX_SHARE: f64 = 0.3;
+
+/// The layers `truth` reads (ledger ruling P3): those of `base`, which it draws first.
+pub(super) const NEEDS: &[LayerSpec] = base::NEEDS;
 
 /// Draws `truth`.
 pub(crate) fn truth(input: &RenderInput<'_>) -> Result<Pixmap, RenderError> {

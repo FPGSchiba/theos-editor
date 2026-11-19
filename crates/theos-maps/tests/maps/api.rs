@@ -397,8 +397,9 @@ fn a_missing_output_folder_is_an_io_error() -> TestResult {
 #[test]
 fn the_memory_budget_comes_from_run_options() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let mut small = request("evolution-384", 1);
-    small.options.memory_budget = Some(1024 * 1024);
+    // 64 KiB holds two float layers of api-small's 64² grid; its pipeline needs far more.
+    let mut small = request("api-small", 1);
+    small.options.memory_budget = Some(64 * 1024);
     let mut called = false;
     let result = run(
         &small,
@@ -409,7 +410,7 @@ fn the_memory_budget_comes_from_run_options() -> TestResult {
     );
     match result {
         Err(RunError::OverBudget { budget, needed, .. }) => {
-            assert_eq!(budget, 1024 * 1024);
+            assert_eq!(budget, 64 * 1024);
             assert!(needed > budget);
         }
         other => return Err(format!("expected OverBudget, got {other:?}").into()),
