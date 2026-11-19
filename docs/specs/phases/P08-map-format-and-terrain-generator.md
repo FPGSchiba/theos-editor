@@ -182,6 +182,10 @@ What later phases build on it:
   compares both flow partitions on their own networks (Jann). A basin nested in a lake fills with
   the lake. On 18 Nov Jann decided that test 13 checks each recipe pair on what both grids
   resolve in it. Rulings 57–61.
+- **18–19 Nov 2026, from the build:** `fluvial` hit its iteration limit again on dry climate
+  periods, because slope supply cycled between `fluvial` and `slope_limit` on dry cells. Jann:
+  the iterations start with the supply laid down (§5.9 "Solution, each time step"), and a recipe
+  switch stops the loop (§5.9 "Slope supply"). Rulings 62 and 63.
 
 ### 4.2 Research (10 Nov 2026)
 
@@ -714,7 +718,12 @@ rate U, erodibility K and the slope S to the receivers:
 - At steady state, slope and relief grow by the factor (1 + G/p̂)^(1/n) (Yuan's eq. 24 and 28;
   Davy & Lague's eq. 15). With n = 1 and mean runoff that is 1 + G, so G = 1 doubles slopes at equal
   K and uplift.
-- **Solution, each time step** (Yuan's eq. 20, 21):
+- **Solution, each time step** (Yuan's eq. 20, 21). The iterations start from h* with the step's
+  slope supply laid down along its way: one routing of the supply alone in which every cell
+  outside the routed depressions keeps c/(1 + c) of what passes through it, c = G·area/Q, and each
+  depression keeps what reaches it up to its capacity, letting go only the excess at its spill
+  node. From h* itself the first sweep routed all the supply undeposited down dry slopes and
+  started a transient that outlasted the iteration limit (found in the build; Jann, 18 Nov 2026).
   1. Accumulate Qs from donors to receivers (reverse stack order, split by `weights`) using the
      current heights.
   2. Solve h implicitly from receivers to donors (stack order).
@@ -748,6 +757,13 @@ rate U, erodibility K and the slope S to the receivers:
   eroded sediment, so G decides how much of it the rivers lay down and how much they carry on.
   Supply still pending when the evolution ends leaves the map; the reports show it as the volume
   `slope_limit` removed minus the volume `fluvial` took in.
+  - Without more, a dry cell (G/p̂ ≤ 1 fails) lays nearly all of its own supply back down,
+    `slope_limit` cuts it again, and the supply grows through a dry climate period. `fluvial`'s
+    switch `supply_passes_dry_cells` (off by default; a recipe sets it where it is worth it)
+    breaks that loop: the supply passes the cells whose catchment is dry, Q < G·A with A the
+    drainage area, without being laid down. Their deposition term leaves out the supply passing
+    them, and it joins the sediment at the first cell that is not dry, at a routed depression or
+    at an outlet (Jann, 18–19 Nov 2026).
 - `erosion` books the thickness removed per cell and step, `deposition` the thickness added
   (deposition and filling); both are cumulative, non-negative and in metres.
 - Deposition alone is not expected to give braided rivers, meanders or deltas: recent work needs
@@ -1431,6 +1447,18 @@ Rulings of 13 Nov 2026, from the build:
     hearth copies hold no lakes at either size since ruling 58, and the dry basin's rivers
     (0.007–0.044 km/km²) are a few channel cells whose ratio flipped from 0.92 to 0.72 with a
     1e-6 m change — cost if wrong: river and lake independence each rest on one recipe.
+62. Ruling (Jann): `fluvial`'s iterations start from h* with the step's slope supply laid down
+    by one trap-aware routing of the supply alone (c/(1 + c) kept per cell) — on dry climate
+    periods the supply grew to about 1.7 km per cell, the first sweep routed it undeposited, and
+    18 to 60 of 240 steps hit the iteration limit on the 384² fixture; with the pre-pass none
+    did, runs got faster, and the converged solution is unchanged — cost if wrong: one more
+    routing per step.
+63. Ruling (Jann, form chosen in the build): the switch `supply_passes_dry_cells`, off by
+    default, lets the supply pass cells whose catchment is dry (Q < G·A) — it was the only
+    candidate that stopped the loop (pending supply 137–795 m instead of 316–2,605 m); keeping
+    fresh deposit from `slope_limit` only delayed the loop, left cells up to 8.1 km above their
+    critical slope and broke physics test 10 — cost if wrong: where a recipe sets it, the debris
+    of dry catchments is laid down further downstream or leaves the map.
 
 ## 10. Left to the builder
 
