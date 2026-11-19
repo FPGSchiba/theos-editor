@@ -32,7 +32,8 @@ fn slow_outputs_match_the_golden_hashes_of_this_version() -> TestResult {
         recorded,
         GOLDEN_RUNS,
         "{} holds other runs than GOLDEN_RUNS; before P08 merges, delete it and run \
-         `cargo run -p theos-maps --example bless` (spec ruling 41)",
+         `cargo run -p theos-maps --example bless` (spec ruling 41); once 1.0.0 is on main, \
+         raise `VERSION` instead",
         path.display()
     );
     let mut mismatches = Vec::new();
