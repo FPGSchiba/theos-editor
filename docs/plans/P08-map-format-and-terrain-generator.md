@@ -2937,7 +2937,8 @@ none asked for fixture-small.
 ```rust
 pub const GOLDEN_RUNS: &[(&str, u64)] = &[("fixture-small", 1), ("fixture-small", 2), ("hearth-valley", 1)];
 pub struct GoldenFile { pub generator: String, pub run: Vec<GoldenRun> }      // serde, TOML
-pub fn compute(recipe: &str, seed: u64) -> Result<GoldenRun, RunError>;       // runs into a temp dir
+pub fn compute(recipe: &str, seed: u64, dir: &Path) -> Result<GoldenRun, RunError>;
+    // runs into `dir`, which the caller owns (the library reads no OS values)
 pub fn compare(expected: &GoldenRun, actual: &GoldenRun) -> Result<(), GoldenMismatch>;
     // the first difference in pipeline order: stage key, layer (or "features"/"package"), both hashes
 pub fn record(path: &Path, file: &GoldenFile) -> Result<(), GoldenError>;     // Exists when present
@@ -2961,8 +2962,8 @@ pub fn golden_path(version: &str) -> PathBuf;   // <CARGO_MANIFEST_DIR>/tests/fi
     computed run. `compare` names that stage and layer.
   - `// AC: CE-77.2` `bless_refuses_to_overwrite_an_existing_version`: `record` into a temp path
     twice; the second gives `Exists`, and the file is unchanged.
-  - `two_runs_in_one_process_give_identical_packages` (spec §5.14). Running in two processes is
-    covered by `bless` recording in one process and the golden test comparing in another (L28).
+  - `two_runs_in_one_process_give_identical_packages_and_layers` (spec §5.14). Running in two
+    processes is covered by `bless` recording in one process and the golden test comparing in another (L28).
 - [ ] **Step 2: Run.** Expected: FAIL (no golden file).
 - [ ] **Step 3: Record** with `cargo run -p theos-maps --example bless`. This is the last build
   task that changes outputs (spec §5.14). A later review fix that changes outputs deletes the file

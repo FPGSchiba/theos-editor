@@ -1,8 +1,9 @@
 //! The map package format: manifest, layers and their on-disk encoding.
 //!
-//! This crate holds the manifest types of `docs/map-package.md` §3 ([`manifest`]), the canonical
-//! JSON writer ([`json`]) and the crate error ([`FormatError`]). Layer data ([`layer`]), package validation ([`package`]) and the
-//! ZIP writer ([`mod@write`]) and reader ([`mod@read`]) follow.
+//! The crate holds the manifest types of `docs/map-package.md` §3 ([`manifest`]), the raster
+//! layers and their encoding ([`layer`]), the [`Package`] with its validation ([`package`]), the
+//! ZIP writer ([`mod@write`]) and reader ([`mod@read`]), the canonical JSON writer ([`json`]) and
+//! the crate error ([`FormatError`]). Equal packages give equal bytes on every platform.
 
 pub mod error;
 pub mod json;
