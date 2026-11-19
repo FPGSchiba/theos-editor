@@ -287,3 +287,25 @@ fn roads_are_all_zero_when_the_recipe_has_no_roads_stage() -> TestResult {
     }
     Ok(())
 }
+
+// Spec §5.13: the manifest holds no NaN or infinity. A recipe number no check refuses (a render
+// option, say) would otherwise reach the manifest's `recipe` as `null`.
+#[test]
+fn a_recipe_number_that_is_not_finite_is_refused() -> TestResult {
+    let (world, planned, mut loaded) = run(1)?;
+    for bad in [f64::NAN, f64::INFINITY] {
+        loaded
+            .raw
+            .insert("probe".to_owned(), toml::Value::Float(bad));
+        let err = package_of(&world, &planned, &loaded).err().ok_or("built")?;
+        assert!(
+            matches!(
+                err,
+                PackageError::Recipe(theos_map_format::FormatError::JsonNotFinite)
+            ),
+            "{bad}: {err:?}"
+        );
+        assert!(err.to_string().contains("recipe"), "{err}");
+    }
+    Ok(())
+}

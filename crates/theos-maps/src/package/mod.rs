@@ -34,9 +34,10 @@ pub enum PackageError {
         /// Columns of the frame.
         cols: usize,
     },
-    /// The recipe could not be turned into JSON.
-    #[error("the recipe is not valid JSON: {0}")]
-    Recipe(#[from] serde_json::Error),
+    /// The recipe cannot be written as JSON: it holds a NaN or an infinity (spec §5.13), or a
+    /// value JSON has no form for.
+    #[error("the recipe cannot be written as JSON: {0}")]
+    Recipe(#[from] theos_map_format::FormatError),
 }
 
 /// What a finished run adds to the layers of its world: the manifest's recipe, seed, inputs,
@@ -95,7 +96,7 @@ pub(crate) fn needs() -> Vec<LayerSpec> {
 ///
 /// # Errors
 /// [`PackageError`] when the world lacks a required layer, the grid is too large for the
-/// manifest, or the recipe cannot be turned into JSON.
+/// manifest, or the recipe cannot be written as JSON (a NaN or an infinity in it).
 pub(crate) fn build(
     world: &World,
     plan: &Plan,
@@ -130,7 +131,7 @@ pub(crate) fn build(
         requires: Vec::new(),
         kind: "terrain".to_owned(),
         recipe_id: plan.recipe_id.clone(),
-        recipe: serde_json::to_value(run.raw_recipe)?,
+        recipe: theos_map_format::json::to_checked_value(run.raw_recipe)?,
         seed: run.seed,
         inputs: run.inputs.clone(),
         frame: Frame {

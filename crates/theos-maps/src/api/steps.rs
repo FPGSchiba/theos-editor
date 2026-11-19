@@ -120,7 +120,8 @@ pub(super) struct Checked {
 /// recipe's constraints into the results.
 ///
 /// # Errors
-/// [`RunError::Output`] for `features` when the features cannot be built.
+/// [`RunError::Output`] for `features` when the features cannot be built, and for `package`
+/// when a number of the summary is NaN or an infinity (the summary goes into its manifest).
 pub(super) fn constraints(
     execution: &Execution,
     plan: &Plan,
@@ -134,14 +135,17 @@ pub(super) fn constraints(
         .iter()
         .find(|(id, _)| id == "travel")
         .map(|(_, metrics)| metrics);
-    let metrics = metrics::compute(world, travel);
+    let not_finite =
+        |e: FormatError| output_error(super::outputs::PACKAGE, &format!("the run summary: {e}"));
+    let metrics = metrics::compute(world, travel).map_err(not_finite)?;
     let title = render::title_line(&plan.recipe_id, seed, &metrics);
     let summary = summary(
         metrics,
         &counts,
         &execution.stage_metrics,
         &execution.findings,
-    );
+    )
+    .map_err(not_finite)?;
     let results = constraints::evaluate(&plan.constraints, &summary);
     Ok(Checked {
         features: collection,

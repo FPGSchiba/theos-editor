@@ -34,8 +34,14 @@ fn lookup(summary: &Value, path: &str) -> Option<f64> {
 /// Checks each constraint against the summary. For a path with key `k` the map holds `k` (when
 /// the summary has a number there), `k_min`, `k_max` and `k_ok`; `pass` is true when every
 /// constraint holds. A missing or non-numeric value fails its constraint.
+///
+/// Every number it writes is finite, as JSON needs: `k` comes from a JSON number of the summary,
+/// and the bounds are a plan's, which check 5 of `plan` keeps finite.
 #[must_use]
-pub fn evaluate(constraints: &BTreeMap<String, [f64; 2]>, summary: &Value) -> Map<String, Value> {
+pub(crate) fn evaluate(
+    constraints: &BTreeMap<String, [f64; 2]>,
+    summary: &Value,
+) -> Map<String, Value> {
     let mut out = Map::new();
     let mut pass = true;
     for (path, [min, max]) in constraints {

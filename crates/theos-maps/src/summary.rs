@@ -4,6 +4,8 @@
 use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
+use theos_map_format::FormatError;
+use theos_map_format::json::to_checked_value;
 
 use crate::features::TYPES;
 use crate::runner::StageFinding;
@@ -30,13 +32,17 @@ fn insert_nested(root: &mut Map<String, Value>, path: &str, value: Value) {
 /// `{"elevation_m": {"relief": ..}}`), then `features` (the count of every type of
 /// [`TYPES`], 0 included), `stages` (each
 /// stage id with its metrics) and `findings` (`{stage, message}` per warning). Constraints read
-/// it by dotted path (spec §5.6).
+/// it by dotted path (spec §5.6). The stage metrics go through the checked conversion, as every
+/// number bound for JSON does.
+///
+/// # Errors
+/// [`FormatError::JsonNotFinite`] when a stage metric is NaN or an infinity (spec §5.13).
 pub(crate) fn summary(
     metrics: Value,
     feature_counts: &BTreeMap<String, usize>,
     stage_metrics: &[(String, Metrics)],
     findings: &[StageFinding],
-) -> Value {
+) -> Result<Value, FormatError> {
     let mut out = Map::new();
     if let Value::Object(flat) = metrics {
         for (path, value) in flat {
@@ -52,20 +58,17 @@ pub(crate) fn summary(
         features.insert(ty.clone(), Value::from(n));
     }
     out.insert("features".to_owned(), Value::Object(features));
-    let stages: Map<String, Value> = stage_metrics
+    let stages = stage_metrics
         .iter()
-        .map(|(id, m)| {
-            let values = m.0.iter().map(|(k, &v)| (k.clone(), Value::from(v)));
-            (id.clone(), Value::Object(values.collect()))
-        })
-        .collect();
+        .map(|(id, m)| Ok((id.clone(), to_checked_value(&m.0)?)))
+        .collect::<Result<Map<String, Value>, FormatError>>()?;
     out.insert("stages".to_owned(), Value::Object(stages));
     let findings = findings
         .iter()
         .map(|f| serde_json::json!({"stage": f.stage, "message": f.message}))
         .collect();
     out.insert("findings".to_owned(), Value::Array(findings));
-    Value::Object(out)
+    Ok(Value::Object(out))
 }
 
 #[cfg(test)]
@@ -87,7 +90,7 @@ mod tests {
             stage: "travel".to_owned(),
             message: "slow".to_owned(),
         }];
-        let s = summary(metrics, &counts, &stages, &findings);
+        let s = summary(metrics, &counts, &stages, &findings).unwrap();
         assert_eq!(s["elevation_m"]["relief"], 1134.0);
         assert_eq!(s["precip_mm_yr"]["median"], 751.0);
         assert_eq!(s["lake_pct"], 6.25);
@@ -116,12 +119,36 @@ mod tests {
         assert_eq!(crate::constraints::evaluate(&c, &s)["pass"], true);
     }
 
+    // Spec §5.13: the summary goes into the manifest, which holds no NaN or infinity;
+    // `Value::from` would turn one into `null` without a word.
+    #[test]
+    fn a_non_finite_stage_metric_is_refused() {
+        for bad in [f64::NAN, f64::INFINITY] {
+            let mut m = Metrics::default();
+            m.0.insert("depth".to_owned(), bad);
+            let stages = [("level".to_owned(), m)];
+            let result = summary(serde_json::json!({}), &BTreeMap::new(), &stages, &[]);
+            assert!(
+                matches!(result, Err(FormatError::JsonNotFinite)),
+                "{bad}: {result:?}"
+            );
+        }
+        let mut m = Metrics::default();
+        m.0.insert("depth".to_owned(), -0.0);
+        let stages = [("level".to_owned(), m)];
+        let s = summary(serde_json::json!({}), &BTreeMap::new(), &stages, &[]).unwrap();
+        assert_eq!(
+            serde_json::to_string(&s["stages"]).unwrap(),
+            r#"{"level":{"depth":0.0}}"#
+        );
+    }
+
     /// Ledger ruling (Task 11): `features` lists every type of `TYPES`, 0 included, so a count
     /// constraint sees 0 on a map without that type instead of a missing value.
     #[test]
     fn every_feature_type_is_counted_with_zero_included() {
         let counts = BTreeMap::from([("chime".to_owned(), 2)]);
-        let s = summary(serde_json::json!({}), &counts, &[], &[]);
+        let s = summary(serde_json::json!({}), &counts, &[], &[]).unwrap();
         let features = s["features"].as_object().unwrap();
         let types: Vec<&str> = crate::features::TYPES.iter().map(|(_, t)| *t).collect();
         let mut sorted = types.clone();

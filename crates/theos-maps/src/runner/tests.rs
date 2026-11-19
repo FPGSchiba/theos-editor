@@ -403,6 +403,54 @@ fn a_nan_in_a_written_value_names_stage_and_layer() {
     }
 }
 
+/// Reports the metric `level` with its number; writes nothing.
+struct ReportsLevel(f64);
+
+impl TypedStage for ReportsLevel {
+    type Params = Knob;
+    const ID: &'static str = "level";
+    const SUMMARY: &'static str = "Reports one metric.";
+    const KINDS: &'static [MapKind] = KINDS;
+    fn reads(&self, _: &Knob) -> Vec<LayerSpec> {
+        vec![]
+    }
+    fn writes(&self, _: &Knob) -> Vec<LayerSpec> {
+        vec![]
+    }
+    fn metric_names(&self, _: &Knob) -> Vec<&'static str> {
+        vec!["depth"]
+    }
+    fn run(&self, _: &mut StageContext<'_>, _: &Knob) -> Result<StageReport, StageError> {
+        Ok(StageReport::default())
+    }
+    fn metrics(&self, _: &World, _: &Knob, _: &StageReport) -> Metrics {
+        Metrics(BTreeMap::from([("depth".to_owned(), self.0)]))
+    }
+}
+
+// Spec §5.13 and §5.14: the summary is JSON, which holds no NaN or infinity; `serde_json` would
+// write one as `null` and a constraint on it would fail without naming the stage.
+#[test]
+fn a_non_finite_metric_names_stage_and_metric() {
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let reg = registry(vec![Box::new(ReportsLevel(bad))]);
+        let plan = planned(&reg, 8, &["level"]);
+        let (result, _) = go(&plan, &reg, &RunOptions::default(), &CancelToken::new());
+        match result {
+            Err(error @ RunError::NonFiniteMetric { .. }) => {
+                let message = error.to_string();
+                assert!(message.contains("`level`"), "{message}");
+                assert!(message.contains("`depth`"), "{message}");
+            }
+            other => panic!("{bad}: {:?}", other.map(|_| ())),
+        }
+    }
+    let reg = registry(vec![Box::new(ReportsLevel(-0.0))]);
+    let plan = planned(&reg, 8, &["level"]);
+    let (result, _) = go(&plan, &reg, &RunOptions::default(), &CancelToken::new());
+    assert!(result.is_ok(), "a finite metric passes");
+}
+
 #[test]
 fn the_memory_budget_refuses_before_any_stage_runs() {
     let counter = script(Some("big"), Act::Write(0.0));

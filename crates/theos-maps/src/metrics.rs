@@ -12,7 +12,11 @@ pub const PATHS: &[&str] = &[
     "travel.chime_to_chime_min",
 ];
 
-use serde_json::{Map, Value};
+use std::collections::BTreeMap;
+
+use serde_json::Value;
+use theos_map_format::FormatError;
+use theos_map_format::json::to_checked_value;
 
 use crate::grid::Grid;
 use crate::kernels::num::{canonical, round_half_even, to_f64};
@@ -66,11 +70,16 @@ pub(crate) fn precipitation(world: &World) -> Option<Grid<f64>> {
 /// outside lakes over all cells, two decimals (lines 282 and 284); `vegetation_cover_pct` is the
 /// share of `vegetation > 0.5`, one decimal (line 299); `precip_mm_yr.median` is
 /// `int(median(precipitation))` (line 280); `travel.chime_to_chime_min` is the `travel` stage's
-/// metric, one decimal. A metric whose input is absent is left out, never 0.
-pub(crate) fn compute(world: &World, travel: Option<&Metrics>) -> Value {
-    let mut out = Map::new();
-    let mut put = |path: &str, value: f64| {
-        out.insert(path.to_owned(), Value::from(value));
+/// metric, one decimal. A metric whose input is absent is left out, never 0. The object is built
+/// by the checked conversion, as every number bound for JSON is.
+///
+/// # Errors
+/// [`FormatError::JsonNotFinite`] when a metric is NaN or an infinity (spec §5.13), as a relief
+/// beyond the range of `f64` would be.
+pub(crate) fn compute(world: &World, travel: Option<&Metrics>) -> Result<Value, FormatError> {
+    let mut out: BTreeMap<&'static str, f64> = BTreeMap::new();
+    let mut put = |path: &'static str, value: f64| {
+        out.insert(path, value);
     };
     if let Some((lo, hi)) = world.f64("height").and_then(extent) {
         put("elevation_m.relief", canonical((hi - lo).trunc()));
@@ -102,7 +111,7 @@ pub(crate) fn compute(world: &World, travel: Option<&Metrics>) -> Value {
     if let Some(&minutes) = travel.and_then(|t| t.0.get("chime_to_chime_min")) {
         put("travel.chime_to_chime_min", round_to(minutes, 10.0));
     }
-    Value::Object(out)
+    to_checked_value(&out)
 }
 
 #[cfg(test)]
@@ -172,7 +181,7 @@ mod tests {
 
     #[test]
     fn metrics_follow_0_3_0s_definitions() {
-        let m = compute(&world(true, true), None);
+        let m = compute(&world(true, true), None).unwrap();
         // int(max - min): truncated, not rounded (terrain.py:234).
         assert!((num(&m, "elevation_m.relief") - 1134.0).abs() < 1e-12);
         assert!((num(&m, "lake_pct") - 6.25).abs() < 1e-12);
@@ -193,12 +202,12 @@ mod tests {
         w.insert("lake", Layer::Mask(Grid::from_vec(3, 3, cells).unwrap()))
             .unwrap();
         // 3 / 9 * 100 = 33.333...
-        assert!((num(&compute(&w, None), "lake_pct") - 33.33).abs() < 1e-12);
+        assert!((num(&compute(&w, None).unwrap(), "lake_pct") - 33.33).abs() < 1e-12);
     }
 
     #[test]
     fn river_share_counts_rivers_outside_lakes_over_all_cells() {
-        let m = compute(&world(true, true), None);
+        let m = compute(&world(true, true), None).unwrap();
         // cells 1-4 are river outside the lake: 4 / 16.
         assert!((num(&m, "rivers_pct") - 25.0).abs() < 1e-12);
     }
@@ -208,11 +217,17 @@ mod tests {
         let w = world(true, true);
         let mut travel = Metrics::default();
         travel.0.insert("chime_to_chime_min".to_owned(), 12.34);
-        let m = compute(&w, Some(&travel));
+        let m = compute(&w, Some(&travel)).unwrap();
         assert!((num(&m, "travel.chime_to_chime_min") - 12.3).abs() < 1e-12);
-        assert!(compute(&w, None).get("travel.chime_to_chime_min").is_none());
+        assert!(
+            compute(&w, None)
+                .unwrap()
+                .get("travel.chime_to_chime_min")
+                .is_none()
+        );
         assert!(
             compute(&w, Some(&Metrics::default()))
+                .unwrap()
                 .get("travel.chime_to_chime_min")
                 .is_none()
         );
@@ -220,11 +235,27 @@ mod tests {
 
     #[test]
     fn a_metric_without_its_input_is_omitted() {
-        let m = compute(&world(false, false), None);
+        let m = compute(&world(false, false), None).unwrap();
         assert!(m.get("vegetation_cover_pct").is_none());
         // no climate value: no precipitation; the height still gives its relief.
         assert!(m.get("precip_mm_yr.median").is_none());
         assert!(m.get("elevation_m.relief").is_some());
+    }
+
+    // Spec §5.13: a metric that overflows (a relief beyond f64) is an error, not a `null`.
+    #[test]
+    fn a_metric_that_is_not_finite_is_refused() {
+        let mut w = World::new(MapFrame {
+            rows: 2,
+            cols: 2,
+            cell_m: 100.0,
+        });
+        let height = Grid::from_vec(2, 2, vec![1e308, -1e308, 0.0, 0.0]).unwrap();
+        w.insert("height", Layer::F64(height)).unwrap();
+        assert!(matches!(
+            compute(&w, None),
+            Err(theos_map_format::FormatError::JsonNotFinite)
+        ));
     }
 
     #[test]
@@ -236,7 +267,7 @@ mod tests {
         };
         w.insert("climate", Layer::Value(Box::new(climate)))
             .unwrap();
-        let m = compute(&w, None);
+        let m = compute(&w, None).unwrap();
         assert!(num(&m, "precip_mm_yr.median") >= 120.0);
     }
 }

@@ -136,7 +136,9 @@ fn run_seed(job: usize, recipe: &str, seed: u64, args: &Args) -> Result<Done> {
         &CancelToken::new(),
     )
     .with_context(|| format!("{recipe} seed {seed}"))?;
-    let json = theos_map_format::json::to_canonical_vec(&serde_json::to_value(&manifest)?)?;
+    let json = theos_map_format::json::to_canonical_vec(
+        &theos_map_format::json::to_checked_value(&manifest)?,
+    )?;
     let path = dir.join("manifest.json");
     std::fs::write(&path, json).with_context(|| format!("cannot write {}", path.display()))?;
     let summary = read_summary(&dir, &manifest)?;

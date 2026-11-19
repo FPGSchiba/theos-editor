@@ -1,8 +1,9 @@
 //! The runner: executes a validated [`Plan`] stage by stage over a [`World`] (spec §5.6).
 //!
 //! Per stage it reports progress, honours the cancel token, runs the stage with panics caught,
-//! checks the declared writes, runs the stage's checks, records its metrics and hashes every
-//! layer it wrote (the golden record). Before the first stage it refuses a plan whose memory
+//! checks the declared writes, runs the stage's checks, records its metrics (refusing a NaN or an
+//! infinity, which the JSON summary cannot hold) and hashes every layer it wrote (the golden
+//! record). Before the first stage it refuses a plan whose memory
 //! [`estimate`] is above the budget.
 
 mod memory;
@@ -63,8 +64,8 @@ pub(crate) struct Execution {
 /// # Errors
 /// [`RunError::OverBudget`] before any stage when the memory estimate exceeds the budget;
 /// [`RunError::Cancelled`]; [`RunError::StageFailed`], [`RunError::StagePanicked`],
-/// [`RunError::FindingFailed`], [`RunError::NonFinite`] and [`RunError::NonFiniteValue`], each
-/// naming the stage.
+/// [`RunError::FindingFailed`], [`RunError::NonFinite`], [`RunError::NonFiniteValue`] and
+/// [`RunError::NonFiniteMetric`], each naming the stage.
 pub(crate) fn execute(
     plan: &Plan,
     seed: u64,
@@ -190,7 +191,8 @@ pub(crate) fn panic_message(payload: &dyn Any) -> String {
         .unwrap_or_else(|| "the stage panicked".to_owned())
 }
 
-/// Checks, metrics and hashes of a finished stage go into `out`.
+/// Checks, metrics and hashes of a finished stage go into `out`. A metric that is NaN or an
+/// infinity is refused naming the stage and the metric (spec §5.13: the summary is JSON).
 fn record(
     world: &World,
     stage: &dyn Stage,
@@ -224,6 +226,17 @@ fn record(
                 message: finding.message,
             }),
         }
+    }
+    if let Some(metric) = metrics
+        .0
+        .iter()
+        .find(|(_, v)| !v.is_finite())
+        .map(|(k, _)| k)
+    {
+        return Err(RunError::NonFiniteMetric {
+            stage: planned.id.to_owned(),
+            metric: metric.clone(),
+        });
     }
     out.stage_metrics.push((label.to_owned(), metrics));
     out.golden.stages.push(GoldenStage {

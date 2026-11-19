@@ -50,7 +50,7 @@ fn complete(package: &Package) -> Result<(Manifest, Vec<PackageFile>), FormatErr
     manifest.requires.dedup();
     let grid = manifest.frame.grid;
     let mut files = Vec::with_capacity(manifest.layers.len());
-    for entry in &mut manifest.layers {
+    for (index, entry) in manifest.layers.iter_mut().enumerate() {
         let key = LayerKey {
             level: entry.level.clone(),
             name: entry.name.clone(),
@@ -67,6 +67,14 @@ fn complete(package: &Package) -> Result<(Manifest, Vec<PackageFile>), FormatErr
         let range = data.decoded_range(entry.scale, entry.offset);
         entry.min = range.map(|(lo, _)| lo);
         entry.max = range.map(|(_, hi)| hi);
+        // A finite scale can still decode a value beyond f64.
+        for (name, value) in [("min", entry.min), ("max", entry.max)] {
+            if value.is_some_and(|v| !v.is_finite()) {
+                return Err(FormatError::ManifestNotFinite {
+                    field: format!("layers[{index}].{name}"),
+                });
+            }
+        }
         files.push((entry.file.clone(), bytes));
     }
     Ok((manifest, files))
@@ -89,7 +97,9 @@ pub fn features_bytes(features: &geojson::FeatureCollection) -> Result<Vec<u8>, 
 ///
 /// # Errors
 ///
-/// The errors of [`Package::validate`].
+/// The errors of [`Package::validate`], and [`FormatError::ManifestNotFinite`] naming
+/// `layers[i].min` or `layers[i].max` when a layer's `scale` and `offset` decode a value beyond
+/// the range of `f64`.
 pub fn written_manifest(package: &Package) -> Result<Manifest, FormatError> {
     complete(package).map(|(manifest, _)| manifest)
 }
@@ -118,7 +128,7 @@ pub fn write_cancellable<W: Write + Seek>(
     let mut entries = vec![
         (
             MANIFEST_FILE.to_owned(),
-            json::to_canonical_vec(&serde_json::to_value(&manifest)?)?,
+            json::to_canonical_vec(&json::to_checked_value(&manifest)?)?,
         ),
         (FEATURES_FILE.to_owned(), features_bytes(&package.features)?),
     ];

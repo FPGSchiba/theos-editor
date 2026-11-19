@@ -68,6 +68,15 @@ pub enum RunError {
         /// The layer.
         layer: String,
     },
+    /// A stage reported a NaN or an infinity as a metric: the summary is JSON, which cannot
+    /// hold one (spec §5.13, §5.14).
+    #[error("stage `{stage}` reported a non-finite number for the metric `{metric}`")]
+    NonFiniteMetric {
+        /// The stage id.
+        stage: String,
+        /// The metric's name.
+        metric: String,
+    },
     /// The output folder already holds a file with the name of one of the run's outputs (or of
     /// its temporary `.part` file); the run wrote nothing (plan ruling L10). A `.part` file left
     /// by a crashed process makes every later run of that seed into the folder fail this way

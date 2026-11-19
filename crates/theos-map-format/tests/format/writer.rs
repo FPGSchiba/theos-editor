@@ -271,6 +271,27 @@ fn non_finite_feature_scale_and_offset_numbers_are_not_written() -> TestResult {
     Ok(())
 }
 
+// Spec §5.13: a finite `scale` can still decode a value beyond f64; the range the writer fills
+// in would then be an infinity, which JSON writes as `null`.
+#[test]
+fn a_decoded_range_that_is_not_finite_is_not_written() -> TestResult {
+    let mut package = fixture()?;
+    package.manifest.layers[1].scale = Some(f64::MAX);
+    let err = write(&package, Cursor::new(Vec::new())).err();
+    assert!(
+        matches!(&err, Some(FormatError::ManifestNotFinite { field }) if field == "layers[1].max"),
+        "{err:?}"
+    );
+    package.manifest.layers[1].offset = Some(-f64::MAX);
+    package.manifest.layers[1].scale = Some(-f64::MAX);
+    let err = written_manifest(&package).err();
+    assert!(
+        matches!(&err, Some(FormatError::ManifestNotFinite { field }) if field == "layers[1].min"),
+        "{err:?}"
+    );
+    Ok(())
+}
+
 #[test]
 fn an_invalid_package_is_not_written() -> TestResult {
     let mut package = fixture()?;
