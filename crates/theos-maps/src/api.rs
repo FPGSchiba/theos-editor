@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 
 pub use self::describe::describe;
 pub use self::run::run;
+pub(crate) use self::run::run_inner;
 use crate::recipe::RecipeProblem;
 use crate::runner::RunOptions;
 
