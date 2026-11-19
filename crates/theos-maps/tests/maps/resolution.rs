@@ -41,17 +41,12 @@
 
 use std::f64::consts::SQRT_2;
 use std::fmt::Write as _;
-use std::fs::File;
-use std::io::{BufReader, Write as _};
+use std::io::Write as _;
 use std::thread;
 
 use theos_map_format::{LayerData, LayerKey, Package};
-use theos_maps::{CancelToken, Progress, run};
 
-use crate::support::{recipes, request};
-
-/// An error that can cross from a run's thread to the test.
-type Error = Box<dyn std::error::Error + Send + Sync>;
+use crate::support::{Error, median, recipes, run_package};
 
 /// The seeds of test 13.
 const SEEDS: [u64; 4] = [1, 2, 3, 4];
@@ -231,31 +226,8 @@ fn measure(package: &Package) -> Result<Landscape, Error> {
 
 /// Runs `recipe` with `seed` into a temporary folder and measures its package.
 fn landscape(recipe: &str, seed: u64) -> Result<Landscape, Error> {
-    let dir = tempfile::tempdir()?;
-    let manifest = run(
-        &request(recipe, seed),
-        &recipes(),
-        dir.path(),
-        &mut |_: &Progress| {},
-        &CancelToken::new(),
-    )?;
-    let file = manifest
-        .outputs
-        .get("package")
-        .ok_or("the run wrote no package")?;
-    let package = theos_map_format::read(BufReader::new(File::open(dir.path().join(file))?))?;
+    let (package, _) = run_package(recipe, seed, &recipes())?;
     measure(&package).map_err(|e| format!("{recipe} seed {seed}: {e}").into())
-}
-
-/// numpy's median: the middle value, or the mean of the two middle values.
-fn median(mut values: Vec<f64>) -> f64 {
-    values.sort_by(f64::total_cmp);
-    let n = values.len();
-    if n.is_multiple_of(2) {
-        f64::midpoint(values[n / 2 - 1], values[n / 2])
-    } else {
-        values[n / 2]
-    }
 }
 
 /// The coarse value over the fine one; two zeros agree.
@@ -322,8 +294,8 @@ fn compare(
             ratios.push(r);
         }
         let of_medians = ratio(
-            median(runs.iter().map(|run| (metric.of)(&run.1)).collect()),
-            median(runs.iter().map(|run| (metric.of)(&run.2)).collect()),
+            median(runs.iter().map(|run| (metric.of)(&run.1))),
+            median(runs.iter().map(|run| (metric.of)(&run.2))),
         );
         let paired = median(ratios);
         writeln!(

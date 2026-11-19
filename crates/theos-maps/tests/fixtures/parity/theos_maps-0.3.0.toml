@@ -21,7 +21,7 @@ python = "3.12"
 fastscapelib = "0.3.0"
 numpy = "2.5.4"
 scipy = "1.18.1"
-command = "uv run --no-project --python 3.12 --with fastscapelib==0.3.0 --with numpy==2.5.4 --with scipy==1.18.1 … (do_export=False)"
+command = "uv run --no-project --python 3.12 --with fastscapelib==0.3.0 … (do_export=False)"
 date = "2026-11-10"
 reference = "Jann's export, in no repository"
 

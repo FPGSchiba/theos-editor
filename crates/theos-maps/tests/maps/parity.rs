@@ -18,20 +18,17 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::fs::File;
-use std::io::{BufReader, Write as _};
+use std::io::Write as _;
 use std::path::Path;
 use std::thread;
 
 use serde::Deserialize;
 use serde_json::Value;
 use theos_maps::kernels::num::{max, min};
-use theos_maps::{CancelToken, Progress, recipe, run};
+use theos_maps::recipe;
+use theos_maps::stages::terrain::travel::TravelParams;
 
-use crate::support::request;
-
-/// An error that can cross from a run's thread to the test.
-type Error = Box<dyn std::error::Error + Send + Sync>;
+use crate::support::{Error, median, run_package};
 
 /// The reference file, relative to the crate.
 const FIXTURE: &str = "tests/fixtures/parity/theos_maps-0.3.0.toml";
@@ -186,19 +183,6 @@ impl Reference {
     }
 }
 
-/// numpy's median: the middle value, or the mean of the two middle values.
-fn median(mut values: Vec<f64>) -> f64 {
-    values.sort_by(f64::total_cmp);
-    let n = values.len();
-    if n == 0 {
-        f64::NAN
-    } else if n.is_multiple_of(2) {
-        f64::midpoint(values[n / 2 - 1], values[n / 2])
-    } else {
-        values[n / 2]
-    }
-}
-
 /// What the parity test reads of one run.
 struct Outcome {
     /// The seed.
@@ -222,19 +206,7 @@ impl Outcome {
 /// Runs the built-in `recipe` with `seed` into a temporary folder and reads its summary and
 /// `pass`.
 fn outcome(recipe: &str, seed: u64) -> Result<Outcome, Error> {
-    let dir = tempfile::tempdir()?;
-    let manifest = run(
-        &request(recipe, seed),
-        &[],
-        dir.path(),
-        &mut |_: &Progress| {},
-        &CancelToken::new(),
-    )?;
-    let file = manifest
-        .outputs
-        .get("package")
-        .ok_or("the run wrote no package")?;
-    let package = theos_map_format::read(BufReader::new(File::open(dir.path().join(file))?))?;
+    let (package, manifest) = run_package(recipe, seed, &[])?;
     let pass = manifest
         .results
         .get("pass")
@@ -306,7 +278,7 @@ fn compare(
         let wanted = constraints.get(metric.path).copied();
         let [lo, hi] = reference.allowed(recipe, metric, wanted)?;
         let [ref_lo, ref_hi] = reference.extent(recipe, metric)?;
-        let ref_median = median(reference.rows(recipe).map(metric.of).collect());
+        let ref_median = median(reference.rows(recipe).map(metric.of));
         let m = median(values.clone());
         let ok = (lo..=hi).contains(&m);
         writeln!(
@@ -327,13 +299,8 @@ fn compare(
         }
     }
     let walks: Vec<f64> = runs.iter().filter_map(|r| r.get(WALK).ok()).collect();
-    let ref_walk = median(
-        reference
-            .rows(recipe)
-            .map(|r| r.chime_to_chime_min)
-            .collect(),
-    );
-    let ref_lakes = median(reference.rows(recipe).map(|r| f64::from(r.lakes)).collect());
+    let ref_walk = median(reference.rows(recipe).map(|r| r.chime_to_chime_min));
+    let ref_lakes = median(reference.rows(recipe).map(|r| f64::from(r.lakes)));
     writeln!(
         table,
         "  reported only: {WALK} median {} (0.3.0 {}); 0.3.0's median lake count {ref_lakes}",
@@ -373,6 +340,106 @@ fn slow_built_in_recipes_stay_within_the_0_3_0_range() -> Result<(), Error> {
     }
     std::io::stderr().lock().write_all(table.as_bytes())?;
     assert!(failures.is_empty(), "failed: {failures:#?}\n{table}");
+    Ok(())
+}
+
+/// Whether `row` meets every constraint in `constraints` under today's recipe (spec §5.14,
+/// Appendix A). A metric constraint is a range its 0.3.0 value must lie in; the walk is divided
+/// by the off-path factor first (ruling 64: P08 walks off roads at that fraction of 0.3.0's
+/// speed); the placement checks (`features.*`) count as met, as Appendix A states.
+fn row_meets(row: &Row, constraints: &BTreeMap<String, [f64; 2]>) -> Result<bool, Error> {
+    let off_path = TravelParams::default().off_path_factor;
+    for (path, [lo, hi]) in constraints {
+        let value = if path.starts_with("features.") {
+            continue;
+        } else if path == WALK {
+            row.chime_to_chime_min / off_path
+        } else {
+            let metric = METRICS
+                .iter()
+                .find(|m| m.path == path)
+                .ok_or_else(|| format!("the parity test does not know the constraint {path}"))?;
+            (metric.of)(row)
+        };
+        if !(*lo..=*hi).contains(&value) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// The seeds of `recipe` that 0.3.0's values pass under `constraints`.
+fn reference_passes(
+    reference: &Reference,
+    recipe: &str,
+    constraints: &BTreeMap<String, [f64; 2]>,
+) -> Result<Vec<u64>, Error> {
+    let mut seeds = Vec::new();
+    for row in reference.rows(recipe) {
+        if row_meets(row, constraints)? {
+            seeds.push(row.seed);
+        }
+    }
+    Ok(seeds)
+}
+
+#[test]
+fn the_built_in_constraints_reproduce_every_0_3_0_verdict() -> Result<(), Error> {
+    let reference = Reference::load()?;
+    let catalog = recipe::catalog(&[])?;
+    for recipe in RECIPES {
+        let loaded = catalog
+            .recipes
+            .get(recipe)
+            .ok_or_else(|| format!("{recipe} is not a built-in recipe"))?;
+        for row in reference.rows(recipe) {
+            // A recipe without constraints in 0.3.0 passes by definition.
+            let expected = match row.passes {
+                Passes::Checked(passed) => passed,
+                Passes::Unchecked(_) => true,
+            };
+            assert_eq!(
+                row_meets(row, &loaded.recipe.constraints)?,
+                expected,
+                "{recipe} seed {}: today's constraints change 0.3.0's verdict",
+                row.seed
+            );
+        }
+        let seeds = reference_passes(&reference, recipe, &loaded.recipe.constraints)?;
+        if recipe != "fixture-small" {
+            assert_eq!(seeds.len(), reference.passes(recipe), "{recipe}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn widening_a_constraint_changes_a_verdict_and_the_test_sees_it() -> Result<(), Error> {
+    let reference = Reference::load()?;
+    let catalog = recipe::catalog(&[])?;
+    // Some seeds fail on two constraints, so a case widens every range that seed misses.
+    for (recipe, paths) in [
+        ("hearth-valley", &["elevation_m.relief", "lake_pct"][..]),
+        ("hearth-valley-omega", &[WALK][..]),
+        ("hearth-valley-omega", &["vegetation_cover_pct"][..]),
+    ] {
+        let loaded = catalog
+            .recipes
+            .get(recipe)
+            .ok_or_else(|| format!("{recipe} is not a built-in recipe"))?;
+        let mut widened = loaded.recipe.constraints.clone();
+        for path in paths {
+            *widened
+                .get_mut(*path)
+                .ok_or_else(|| format!("{recipe} does not constrain {path}"))? = [0.0, 1.0e6];
+        }
+        let before = reference_passes(&reference, recipe, &loaded.recipe.constraints)?;
+        let after = reference_passes(&reference, recipe, &widened)?;
+        assert_ne!(
+            before, after,
+            "{recipe} {paths:?}: widening changed no verdict"
+        );
+    }
     Ok(())
 }
 
@@ -439,7 +506,7 @@ fn the_parity_fixture_is_the_spec_s_reference() -> Result<(), Error> {
         assert_eq!(seeds, SEEDS, "{recipe}");
         for (metric, [lo, mid, hi]) in METRICS.iter().zip(summary) {
             let [min, max] = reference.extent(recipe, metric)?;
-            let m = median(rows.iter().map(|r| (metric.of)(r)).collect());
+            let m = median(rows.iter().map(|r| (metric.of)(r)));
             assert!(
                 close(min, lo) && close(m, mid) && close(max, hi),
                 "{recipe} {}: {min} / {m} / {max} against the spec's {lo} / {mid} / {hi}",
