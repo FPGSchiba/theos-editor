@@ -1,7 +1,6 @@
 //! The scattered sites, picked by score: watchtowers over the roads, caves in limestone cliffs
 //! and camps in the wild. Ported from 0.3.0's `features.py::sites`, its lengths in metres.
 
-use super::industry::site;
 use crate::features::{Feature, pick};
 use crate::grid::Grid;
 use crate::kernels::distance::distance;
@@ -126,6 +125,6 @@ fn picks(
 ) -> Vec<Feature> {
     pick(score, n, sep_m, taken, sep_m, &g.frame)
         .into_iter()
-        .map(|(r, c)| site(ty, g.frame.centre_m(r, c), []))
+        .map(|(r, c)| Feature::site(ty, g.frame.centre_m(r, c), []))
         .collect()
 }

@@ -8,8 +8,9 @@ use crate::grid::Grid;
 use crate::kernels::flood::priority_flood_where;
 use crate::stages::evolution::flow::{cell_index, cell_u32};
 
-/// The rise per flood step on the routing surface, in metres.
-const EPSILON: f64 = 1e-6;
+/// The rise per flood step on the routing surface, in metres; `fluvial`'s depression filling
+/// keeps the same ε slope.
+pub(crate) const EPSILON: f64 = 1e-6;
 
 /// The routing surface of `height` and its depressions, for the basin `links` in tree order
 /// (parents first).

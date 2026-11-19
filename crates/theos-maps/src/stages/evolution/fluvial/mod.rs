@@ -73,7 +73,8 @@ use self::solve::{Deposition, Incision, Solution, deposit, incise};
 use super::booking::book;
 use super::flow::{FlowWeights, accumulate};
 use crate::grid::Grid;
-use crate::kernels::num::{max, to_f64};
+use crate::kernels::num::max;
+use crate::kernels::stats;
 use crate::stage::{
     Finding, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
@@ -430,8 +431,7 @@ pub fn runoff_weight(climate: &Climate, frame: &MapFrame) -> Option<Grid<f64>> {
     if (runoff.rows(), runoff.cols()) != (frame.rows, frame.cols) {
         return None;
     }
-    let total: f64 = runoff.as_slice().iter().sum();
-    let mean = total / to_f64(runoff.len());
+    let mean = stats::mean(runoff.as_slice()).unwrap_or(0.0);
     Some(if mean > 0.0 {
         runoff.map(|r| r / mean)
     } else {

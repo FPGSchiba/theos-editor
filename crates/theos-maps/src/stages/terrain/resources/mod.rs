@@ -27,6 +27,7 @@ use crate::stage::{
     LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
 use crate::stages::terrain::climate::{self, Climate};
+use crate::stages::terrain::elements::ELEMENT_LAYERS;
 use crate::stages::terrain::hydrology::WaterFeatures;
 use crate::world::{Layer, ValueType, World, WorldValue};
 
@@ -108,14 +109,14 @@ impl TypedStage for Resources {
             LayerSpec::f64("vegetation"),
             LayerSpec::f64("temperature"),
             LayerSpec::value("climate", Climate::NAME),
-            LayerSpec::f64("element_water"),
-            LayerSpec::f64("element_wood"),
-            LayerSpec::f64("element_earth"),
-            LayerSpec::f64("element_metal"),
-            LayerSpec::f64("element_fire"),
+        ]
+        .into_iter()
+        .chain(ELEMENT_LAYERS.map(LayerSpec::f64))
+        .chain([
             LayerSpec::f64("omega").optional(),
             LayerSpec::value("features", FeatureSet::NAME).optional(),
-        ]
+        ])
+        .collect()
     }
 
     fn writes(&self, _: &ResourcesParams) -> Vec<LayerSpec> {
@@ -182,12 +183,13 @@ impl TypedStage for Resources {
             omega: ctx.f64_opt("omega")?,
         };
         let computed = compute(&inputs, &frame).map_err(|e| ctx.fail(e.to_string()))?;
+        let [water, wood, earth, metal, fire] = ELEMENT_LAYERS;
         let elements = [
-            ctx.f64("element_water")?,
-            ctx.f64("element_wood")?,
-            ctx.f64("element_earth")?,
-            ctx.f64("element_metal")?,
-            ctx.f64("element_fire")?,
+            ctx.f64(water)?,
+            ctx.f64(wood)?,
+            ctx.f64(earth)?,
+            ctx.f64(metal)?,
+            ctx.f64(fire)?,
         ];
         let found = deposits::place(&computed, &elements, &frame, params, &mut rng);
         let mut report = StageReport::default();

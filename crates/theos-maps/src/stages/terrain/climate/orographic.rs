@@ -3,16 +3,13 @@
 //! A port of 0.3.0's `orographic_precip`; rows run north to south, columns west to east, and
 //! the wind direction is meteorological (the direction it blows from).
 
-use super::ClimateParams;
+use super::{ClimateParams, SECONDS_PER_YEAR};
 use crate::grid::Grid;
 use crate::kernels::complex::Complex;
 use crate::kernels::fft::{fft2, next_pow2};
-use crate::kernels::num::{min, to_f64};
+use crate::kernels::num::{min, sign, to_f64};
 use crate::world::MapFrame;
 use core::f64::consts::PI;
-
-/// The factor from mm/s to mm/yr that 0.3.0 uses.
-const SECONDS_PER_YEAR: f64 = 3.156e7;
 
 /// The padded length of an axis of `n` cells: a power of two of at least `1.5 n`.
 fn padded_len(n: usize) -> usize {
@@ -56,17 +53,6 @@ pub(super) fn padded(height: &Grid<f64>) -> (usize, usize, Vec<f64>) {
 /// numpy `fftfreq(n)` times `n`: the signed index of bin `i` of `n` (a power of two).
 fn signed_index(i: usize, n: usize) -> f64 {
     if i < n / 2 { to_f64(i) } else { -to_f64(n - i) }
-}
-
-/// The sign of `x` with `sign(0) = 0`, as numpy's `sign`.
-fn sign(x: f64) -> f64 {
-    if x > 0.0 {
-        1.0
-    } else if x < 0.0 {
-        -1.0
-    } else {
-        0.0
-    }
 }
 
 /// The orographic part of the precipitation in mm/yr, negative in rain shadows.

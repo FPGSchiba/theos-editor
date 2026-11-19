@@ -4,12 +4,10 @@
 use crate::grid::{D8, Grid};
 use crate::kernels::flood::priority_flood;
 use crate::stages::evolution::{cell_index, steepest_receivers};
+use crate::stages::terrain::climate::SECONDS_PER_YEAR;
 
 /// The ε of both fills, m (Barnes et al. 2014).
 pub(crate) const EPSILON: f64 = 1e-6;
-
-/// Seconds in the year 0.3.0 converted runoff with.
-pub(crate) const SECONDS_PER_YEAR: f64 = 3.156e7;
 
 /// A surface filled from seeds, with the single steepest receiver of every cell on it.
 ///

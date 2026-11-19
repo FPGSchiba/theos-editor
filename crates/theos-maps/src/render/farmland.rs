@@ -9,7 +9,7 @@
 
 use super::palette::{self, Unit};
 use crate::features::{FeatureSet, Geometry};
-use crate::kernels::num::{max, smoothstep, to_f64};
+use crate::kernels::num::{max, sign, smoothstep, to_f64};
 
 /// The Gaussian value below which a pixel is no farmland.
 const EDGE_LOW: f64 = 0.35;
@@ -100,17 +100,6 @@ impl FarmRow<'_> {
                 max(g, libm::exp(-(dx * dx + dy * dy) / (2.0 * f.r * f.r)))
             });
         smoothstep(EDGE_LOW, EDGE_HIGH, g)
-    }
-}
-
-/// The sign of `v`, `0` for zero (numpy's `sign`).
-fn sign(v: f64) -> f64 {
-    if v > 0.0 {
-        1.0
-    } else if v < 0.0 {
-        -1.0
-    } else {
-        0.0
     }
 }
 

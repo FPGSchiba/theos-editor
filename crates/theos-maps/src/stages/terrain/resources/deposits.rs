@@ -20,15 +20,13 @@ use crate::grid::Grid;
 use crate::kernels::filters::gaussian;
 use crate::kernels::num::{canonical, max, min, round_half_even, to_index};
 use crate::rng::StageRng;
+use crate::stages::terrain::elements;
 use crate::world::MapFrame;
 
 use super::ResourcesParams;
 
 /// Sigma of the smoothing of a field before the picking, 0.3.0's 1.5 cells of 62.5 m.
 const FIELD_SIGMA_M: f64 = 93.75;
-
-/// The element names, in the order of the element rasters.
-const ELEMENTS: [&str; 5] = ["water", "wood", "earth", "metal", "fire"];
 
 /// The harvest verb of a resource type.
 fn harvest(ty: &str) -> &'static str {
@@ -72,7 +70,7 @@ fn strongest(elements: &[&Grid<f64>; 5], i: usize) -> &'static str {
             best = (k, grid.as_slice()[i]);
         }
     }
-    ELEMENTS[best.0]
+    elements::NAMES[best.0]
 }
 
 /// One deposit of type `ty` at the centre of cell `(row, col)`.

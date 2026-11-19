@@ -63,6 +63,20 @@ pub struct Feature {
     pub props: BTreeMap<String, Prop>,
 }
 
+impl Feature {
+    /// A `site` of type `ty` at the point `at` (metres) with the properties `props`: fords and
+    /// bridges of `roads`, and the sites of `sites`.
+    #[must_use]
+    pub fn site<const K: usize>(ty: &str, at: [f64; 2], props: [(&str, Prop); K]) -> Self {
+        Self {
+            kind: "site",
+            ty: ty.to_owned(),
+            geometry: Geometry::Point(at),
+            props: props.into_iter().map(|(k, v)| (k.to_owned(), v)).collect(),
+        }
+    }
+}
+
 /// The world value `features`: every feature stages have added, in insertion order.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct FeatureSet {

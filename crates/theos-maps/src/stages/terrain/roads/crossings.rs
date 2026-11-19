@@ -1,10 +1,10 @@
 //! The `bridge` and `ford` sites where roads cross water (spec §5.9, `docs/map-package.md` §5).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use super::route::bridge_key;
 use super::{Road, StepCost, distance_m};
-use crate::features::{Feature, Geometry, Prop};
+use crate::features::{Feature, Prop};
 use crate::kernels::num::{canonical, round_half_even};
 use crate::world::MapFrame;
 
@@ -59,7 +59,7 @@ fn ford(
     if run.iter().all(|c| !forded.contains(c)) {
         let mid = run[run.len() / 2];
         let at = frame.centre_m(mid / frame.cols, mid % frame.cols);
-        out.push(site("ford", at, [("road", id.clone())]));
+        out.push(Feature::site("ford", at, [("road", id.clone())]));
     }
     forded.extend(run.drain(..));
 }
@@ -74,24 +74,11 @@ fn bridge(cost: &StepCost<'_>, a: usize, b: usize, id: &Prop, frame: &MapFrame) 
         ("span_m", tenth(distance_m(frame, a, b))),
         ("deck_m", tenth(cost.deck_m(a, b))),
     ];
-    site(
+    Feature::site(
         "bridge",
         [f64::midpoint(xa, xb), f64::midpoint(ya, yb)],
         props,
     )
-}
-
-/// A `site` of type `ty` at `at` with `props`.
-fn site<const K: usize>(ty: &str, at: [f64; 2], props: [(&str, Prop); K]) -> Feature {
-    Feature {
-        kind: "site",
-        ty: ty.to_owned(),
-        geometry: Geometry::Point(at),
-        props: props
-            .into_iter()
-            .map(|(k, v)| (k.to_owned(), v))
-            .collect::<BTreeMap<_, _>>(),
-    }
 }
 
 #[cfg(test)]
@@ -99,7 +86,7 @@ mod tests {
     use super::super::cost::tests::{Layers, N, at};
     use super::super::{RoadClass, RoadsParams};
     use super::*;
-    use crate::features::FeatureHandle;
+    use crate::features::{FeatureHandle, Geometry};
 
     fn road(cells: &[usize], bridges: &[(usize, usize)]) -> Road {
         let cell = |i: usize| u32::try_from(i).unwrap();

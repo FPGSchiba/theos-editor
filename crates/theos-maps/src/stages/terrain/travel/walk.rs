@@ -7,7 +7,8 @@ use crate::grid::Grid;
 use crate::kernels::KernelError;
 use crate::kernels::num::{max, to_f64};
 use crate::kernels::paths::{Directions, PathTree, shortest_paths};
-use crate::stages::terrain::roads::{RoadNetwork, between};
+use crate::stages::terrain::roads::{RoadNetwork, between, distance_m};
+use crate::world::MapFrame;
 
 /// The terrain and roads a walk crosses.
 pub(super) struct Walk<'a> {
@@ -20,7 +21,7 @@ pub(super) struct Walk<'a> {
     /// The bridges as extra edges `(to, seconds)` out of each bank, both ways.
     bridges: BTreeMap<usize, Vec<(usize, f64)>>,
     params: &'a TravelParams,
-    cell_m: f64,
+    frame: MapFrame,
 }
 
 impl<'a> Walk<'a> {
@@ -31,7 +32,7 @@ impl<'a> Walk<'a> {
         lake: &'a Grid<bool>,
         network: Option<&RoadNetwork>,
         params: &'a TravelParams,
-        cell_m: f64,
+        frame: MapFrame,
     ) -> Self {
         let [river, big_river] = water;
         let wet = river
@@ -47,7 +48,7 @@ impl<'a> Walk<'a> {
             on_road: vec![false; height.len()],
             bridges: BTreeMap::new(),
             params,
-            cell_m,
+            frame,
         };
         for road in network.map_or(&[][..], |n| n.roads.as_slice()) {
             for &c in &road.cells {
@@ -67,9 +68,7 @@ impl<'a> Walk<'a> {
 
     /// The distance between the centres of two cells, m.
     fn length_m(&self, a: usize, b: usize) -> f64 {
-        let ((ra, ca), (rb, cb)) = (self.height.cell(a), self.height.cell(b));
-        let (dr, dc) = (to_f64(ra.abs_diff(rb)), to_f64(ca.abs_diff(cb)));
-        self.cell_m * libm::sqrt(dr * dr + dc * dc)
+        distance_m(&self.frame, a, b)
     }
 
     /// The cells the step from `a` to `b` crosses between its ends (see [`between`]).

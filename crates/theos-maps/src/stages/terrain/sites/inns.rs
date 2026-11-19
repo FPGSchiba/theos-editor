@@ -1,6 +1,5 @@
 //! Inns at the midpoint of long main and road links, away from settlements.
 
-use super::industry::site;
 use crate::features::{Feature, FeatureSet, Prop};
 use crate::grid::Grid;
 use crate::stages::terrain::roads::{Road, RoadClass, distance_m};
@@ -36,7 +35,7 @@ pub(super) fn inns(
         });
         if alone && inside.get(row, col) {
             let id = u32::try_from(i).unwrap_or(u32::MAX);
-            out.push(site("inn", at, [("road", Prop::Road(id))]));
+            out.push(Feature::site("inn", at, [("road", Prop::Road(id))]));
         }
     }
     out

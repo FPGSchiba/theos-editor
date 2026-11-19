@@ -43,12 +43,6 @@ pub(super) fn label(f: &Feature, h: FeatureHandle) -> String {
     }
 }
 
-/// The flat index of the cell holding the point `at`.
-pub(super) fn cell_of(frame: &MapFrame, at: [f64; 2]) -> usize {
-    let (r, c) = frame.cell_at_m(at[0], at[1]);
-    r * frame.cols + c
-}
-
 /// The point features of `set` that pass `keep`, with their handles, in handle order.
 fn points<'a>(
     set: &'a FeatureSet,
@@ -66,7 +60,7 @@ pub(super) fn places(set: &FeatureSet, frame: &MapFrame) -> Vec<Place> {
         .map(|(handle, f, at)| Place {
             handle,
             at,
-            cell: cell_of(frame, at),
+            cell: frame.index_at_m(at),
             rank: rank(f).unwrap_or(0),
             settlement: f.kind == "settlement",
             label: label(f, handle),
@@ -77,7 +71,7 @@ pub(super) fn places(set: &FeatureSet, frame: &MapFrame) -> Vec<Place> {
 /// The ruins of `set` with their cells and labels, in handle order.
 pub(super) fn ruins(set: &FeatureSet, frame: &MapFrame) -> Vec<(FeatureHandle, usize, String)> {
     points(set, |f| f.kind == "poi" && f.ty == "ruin")
-        .map(|(h, f, at)| (h, cell_of(frame, at), label(f, h)))
+        .map(|(h, f, at)| (h, frame.index_at_m(at), label(f, h)))
         .collect()
 }
 

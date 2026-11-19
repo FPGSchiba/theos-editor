@@ -67,6 +67,14 @@ impl MapFrame {
         )
     }
 
+    /// The flat index (`row · cols + col`) of the cell containing the point `at` (`[x, y]` in
+    /// metres), clamped into the grid.
+    #[must_use]
+    pub fn index_at_m(&self, at: [f64; 2]) -> usize {
+        let (r, c) = self.cell_at_m(at[0], at[1]);
+        r * self.cols + c
+    }
+
     /// The `(row, col)` at the fractions `(fx, fy)` of the extent (G19: `fx` east, `fy` south),
     /// clamped into the grid.
     #[must_use]

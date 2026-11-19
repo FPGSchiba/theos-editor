@@ -56,9 +56,8 @@ impl<'a> Spurs<'a> {
         cancel: &dyn Fn() -> bool,
     ) -> Result<FeatureHandle, KernelError> {
         let handle = FeatureHandle(u32::try_from(set.len()).unwrap_or(u32::MAX));
-        if let Geometry::Point([x, y]) = site.geometry {
-            let (row, col) = self.frame.cell_at_m(x, y);
-            let cell = row * self.frame.cols + col;
+        if let Geometry::Point(at @ [x, y]) = site.geometry {
+            let cell = self.frame.index_at_m(at);
             if let Some(road) = self.road_through(cell) {
                 site.props.insert("road".to_owned(), Prop::Road(road));
             } else if let Some(road) = self.lay(cell, class, handle, cancel)? {

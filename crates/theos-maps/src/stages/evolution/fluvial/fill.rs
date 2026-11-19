@@ -22,11 +22,9 @@
 
 use crate::kernels::num::{OrdF64, key, max, min, to_f64};
 use crate::stages::evolution::flow::cell_index;
-use crate::stages::evolution::resolve_sinks::Depressions;
-
-/// The rise of the ε slope per place in a depression's flood order, in metres; the lift of one
-/// flood step of `resolve_sinks`.
-pub(super) const EPSILON: f64 = 1e-6;
+// `EPSILON` is the rise of the ε slope per place in a depression's flood order: the lift of
+// one flood step of `resolve_sinks`.
+use crate::stages::evolution::resolve_sinks::{Depressions, EPSILON};
 
 /// One routed depression as a sediment trap.
 #[derive(Debug)]

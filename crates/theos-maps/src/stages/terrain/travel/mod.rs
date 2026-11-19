@@ -148,10 +148,7 @@ impl TypedStage for Travel {
             .value_opt::<FeatureSet>("features")?
             .map_or_else(Vec::new, |set| set.points("poi", Some("chime")))
             .into_iter()
-            .map(|[x, y]| {
-                let (row, col) = frame.cell_at_m(x, y);
-                row * frame.cols + col
-            })
+            .map(|at| frame.index_at_m(at))
             .collect();
         let mut reach = Grid::filled(frame.rows, frame.cols, -1.0);
         let mut report = StageReport::default();
@@ -163,7 +160,7 @@ impl TypedStage for Travel {
                 ctx.mask("lake")?,
                 ctx.value_opt::<RoadNetwork>("road_network")?,
                 params,
-                frame.cell_m,
+                frame,
             );
             let failed = |e: KernelError| match e {
                 KernelError::Cancelled => StageError::Cancelled,

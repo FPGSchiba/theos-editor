@@ -2,7 +2,7 @@
 //! coordinate order `[x, y]`.
 
 use super::KernelError;
-use super::num::to_f64;
+use super::num::{sign, to_f64};
 use super::voronoi::{PointIndex, same_shape};
 use crate::grid::Grid;
 
@@ -56,17 +56,6 @@ pub fn dense_curve(points: &[[f64; 2]], samples: usize) -> Vec<[f64; 2]> {
     }
     out.push(points[n - 1]);
     out
-}
-
-/// `-1`, `0` or `1` by the sign of `v`; `0` for zero and NaN, like `numpy.sign` for zero.
-fn sign(v: f64) -> f64 {
-    if v > 0.0 {
-        1.0
-    } else if v < 0.0 {
-        -1.0
-    } else {
-        0.0
-    }
 }
 
 /// The signed and the unsigned distance of every grid point `(x, y)` to the polyline `curve`.

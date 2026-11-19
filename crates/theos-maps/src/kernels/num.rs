@@ -135,6 +135,18 @@ pub fn unit_from_bits(bits: u64) -> f64 {
     (bits >> 11) as f64 * (1.0 / 9_007_199_254_740_992.0)
 }
 
+/// `-1`, `0` or `1` by the sign of `x`; `0` for zero and NaN, like numpy's `sign` for zero.
+#[must_use]
+pub fn sign(x: f64) -> f64 {
+    if x > 0.0 {
+        1.0
+    } else if x < 0.0 {
+        -1.0
+    } else {
+        0.0
+    }
+}
+
 /// Smoothstep from `e0` to `e1`; for `e0 > e1` it falls from 1 to 0 as in 0.3.0.
 #[must_use]
 pub fn smoothstep(e0: f64, e1: f64, x: f64) -> f64 {
@@ -149,6 +161,13 @@ pub fn smoothstep(e0: f64, e1: f64, x: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sign_is_numpys() {
+        let signs = [2.0, -0.5, 0.0, -0.0, f64::NAN].map(|x| sign(x).to_bits());
+        let want = [1.0_f64, -1.0, 0.0, 0.0, 0.0].map(f64::to_bits);
+        assert_eq!(signs, want);
+    }
 
     #[test]
     fn halves_round_to_even() {

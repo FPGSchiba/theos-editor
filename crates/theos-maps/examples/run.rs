@@ -21,6 +21,7 @@ use std::time::Instant;
 use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
 use serde_json::Value;
+use theos_maps::kernels::stats;
 use theos_maps::metrics::PATHS;
 use theos_maps::{
     CancelToken, Progress, RunManifest, RunOptions, RunRequest, describe, render, run,
@@ -199,17 +200,6 @@ fn metric(summary: &Value, path: &str) -> Option<f64> {
         .as_f64()
 }
 
-/// numpy's median of `values`; `None` when there are none.
-fn median(mut values: Vec<f64>) -> Option<f64> {
-    values.sort_by(f64::total_cmp);
-    let n = values.len();
-    match n {
-        0 => None,
-        _ if n.is_multiple_of(2) => Some(f64::midpoint(values[n / 2 - 1], values[n / 2])),
-        _ => Some(values[n / 2]),
-    }
-}
-
 /// A table cell: the number to two decimals at most (the summary's own precision), or `-`
 /// when the summary has none.
 fn cell(value: Option<f64>) -> String {
@@ -242,9 +232,8 @@ fn write_table(out: &mut impl Write, recipes: &[String], done: &[Done]) -> Resul
         let medians: Vec<String> = PATHS
             .iter()
             .map(|p| {
-                cell(median(
-                    runs.iter().filter_map(|d| metric(&d.summary, p)).collect(),
-                ))
+                let values: Vec<f64> = runs.iter().filter_map(|d| metric(&d.summary, p)).collect();
+                cell(stats::median(&values).ok())
             })
             .collect();
         writeln!(

@@ -10,7 +10,7 @@ use super::{
 use crate::grid::Grid;
 use crate::kernels::num::to_f64;
 use crate::stages::evolution::PlannedProcess;
-use crate::stages::evolution::fluvial::fill::EPSILON;
+use crate::stages::evolution::resolve_sinks::EPSILON;
 use crate::stages::evolution::test_support::{evolve, processes};
 use crate::world::{Layer, World};
 

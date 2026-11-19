@@ -7,14 +7,15 @@ use crate::kernels::labels::{Connectivity, labels};
 use crate::kernels::num::{OrdF64, key, max, min, to_f64};
 use crate::recipe::{RecipeError, RecipeOrigin, parse, plan};
 use crate::stage::{LayerSpec, Registry, Stage};
-use crate::stages::terrain::climate::{self, Climate, ClimateFields, ClimateParams};
+use crate::stages::terrain::climate::{
+    self, Climate, ClimateFields, ClimateParams, SECONDS_PER_YEAR,
+};
 use crate::stages::terrain::support::{run_stage, table, world};
 use crate::world::{Layer, World, WorldValue};
 
 pub(super) const N: usize = 64;
 pub(super) const CELL_M: f64 = 100.0;
 const CELL_AREA: f64 = CELL_M * CELL_M;
-const SECONDS_PER_YEAR: f64 = 3.156e7;
 pub(super) const THRESHOLDS: &str = "river_q = 0.01\nbig_river_q = 0.2\n";
 
 /// Yearly water fields equal on every cell, mm/yr.

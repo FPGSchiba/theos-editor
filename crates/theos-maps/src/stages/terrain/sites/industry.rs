@@ -1,7 +1,7 @@
 //! The sites of work: mills on rivers near towns, and mines, quarries, lumber camps and shrines
 //! on deposits.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use crate::features::{Feature, FeatureSet, Geometry, Prop};
 use crate::grid::Grid;
@@ -10,19 +10,6 @@ use crate::world::MapFrame;
 
 /// How far from a settlement its mill may stand, m (0.3.0's 1.5 km).
 const MILL_REACH_M: f64 = 1500.0;
-
-/// A site of type `ty` at `at` with `props`.
-pub(super) fn site<const K: usize>(ty: &str, at: [f64; 2], props: [(&str, Prop); K]) -> Feature {
-    Feature {
-        kind: "site",
-        ty: ty.to_owned(),
-        geometry: Geometry::Point(at),
-        props: props
-            .into_iter()
-            .map(|(k, v)| (k.to_owned(), v))
-            .collect::<BTreeMap<_, _>>(),
-    }
-}
 
 /// What a mill needs of the map.
 pub(super) struct River<'a> {
@@ -68,7 +55,7 @@ pub(super) fn mills(set: &FeatureSet, water: &River<'_>, frame: &MapFrame) -> Ve
         if let Some((i, _)) = best {
             taken.insert(i);
             let (row, col) = water.cells.cell(i);
-            out.push(site(
+            out.push(Feature::site(
                 "mill",
                 frame.centre_m(row, col),
                 [("serves", Prop::Ref(handle))],
@@ -110,7 +97,12 @@ pub(super) fn deposit_sites(
             };
             let (row, col) = frame.cell_at_m(at[0], at[1]);
             let near = *richness >= min_richness && inside.get(row, col);
-            near.then(|| (site(ty, at, [("deposit", Prop::Ref(handle))]), class))
+            near.then(|| {
+                (
+                    Feature::site(ty, at, [("deposit", Prop::Ref(handle))]),
+                    class,
+                )
+            })
         })
         .collect()
 }

@@ -23,6 +23,10 @@ use crate::stage::{
 };
 use crate::world::{Layer, MapFrame, ValueType, WorldValue};
 
+/// The seconds in the year 0.3.0 converts with: mm/s to mm/yr in the climate, m³/yr to m³/s in
+/// `hydrology`.
+pub(crate) const SECONDS_PER_YEAR: f64 = 3.156e7;
+
 /// The climate parameters; defaults are 0.3.0's, `budyko_w` is the builder's choice.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default)]

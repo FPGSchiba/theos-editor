@@ -223,7 +223,8 @@ mod tests {
     use super::{Ledger, books, lay_down, route};
     use crate::grid::Grid;
     use crate::stages::evolution::flow::FlowWeights;
-    use crate::stages::evolution::fluvial::fill::{EPSILON, Traps};
+    use crate::stages::evolution::fluvial::fill::Traps;
+    use crate::stages::evolution::resolve_sinks::EPSILON;
     use crate::stages::evolution::resolve_sinks::{Depressions, SpillPoint};
 
     /// A 1 x 6 strip: cell 0 is the outlet; 1 → 0; 2 → 1; 3 → 2; 4 sends 1/4 to 3 and 3/4 to 2;

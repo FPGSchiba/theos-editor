@@ -27,10 +27,10 @@ use crate::stages::terrain::rocks::Rock;
 use crate::world::{Layer, ValueType, World};
 
 /// The element names, in the order of [`ELEMENT_LAYERS`].
-const NAMES: [&str; 5] = ["water", "wood", "earth", "metal", "fire"];
+pub(crate) const NAMES: [&str; 5] = ["water", "wood", "earth", "metal", "fire"];
 
 /// The raster of each element (ruling L5), in the order of [`NAMES`].
-const ELEMENT_LAYERS: [&str; 5] = [
+pub(crate) const ELEMENT_LAYERS: [&str; 5] = [
     "element_water",
     "element_wood",
     "element_earth",
