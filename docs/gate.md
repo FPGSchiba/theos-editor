@@ -38,6 +38,14 @@ the profile `slow` runs only them, so every test runs in exactly one of `test` a
 `coverage` uses the profile `default` and so measures without the slow tests. A test that is not
 slow has no name segment that starts with `slow_`, or `test` would leave it out.
 
+`ac-trace` adds a result column to its table when nextest wrote reports: it merges the report of
+the profile `ci` (`default` locally) with that of `slow`, so a criterion proven only by a slow
+test shows `pass` or `FAIL` from the slow run. A report that is missing adds nothing, so a slow
+test that did not run shows `–`; no pass is ever claimed that did not happen. `cargo xtask gate`
+runs `ac-trace` after `test` and `slow-tests` for that reason. The CI job `ac-trace` runs no
+tests and receives no reports from the other jobs, so there the table has no result column; the
+verdict never depends on it, because `test` and `slow-tests` fail for a failing test.
+
 On a pull request, `slow-tests` runs the slow tests only when the pull request changes, since its
 merge base, a file of a workspace crate with slow tests (one of its `.rs` files contains `slow_`),
 of a workspace crate such a crate depends on, or one of `Cargo.toml`, `Cargo.lock`,

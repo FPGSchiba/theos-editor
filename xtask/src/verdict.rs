@@ -66,13 +66,13 @@ impl Check {
     }
 }
 
-/// The checks `cargo xtask gate` runs, in order: cheap and local ones first.
+/// The checks `cargo xtask gate` runs, in order: cheap and local ones first. `ac-trace` is last,
+/// because it reads the reports of `test` and `slow-tests`.
 pub const GATE_ORDER: [Check; 12] = [
     Check::Tools,
     Check::Fmt,
     Check::Lints,
     Check::EngineFree,
-    Check::AcTrace,
     Check::CommitMsg,
     Check::Clippy,
     Check::Docs,
@@ -80,6 +80,7 @@ pub const GATE_ORDER: [Check; 12] = [
     Check::Test,
     Check::Coverage,
     Check::SlowTests,
+    Check::AcTrace,
 ];
 
 /// The checks that need a pull request, which the gate leaves out.
@@ -246,7 +247,6 @@ mod tests {
                 "fmt",
                 "lints",
                 "engine-free",
-                "ac-trace",
                 "commit-msg",
                 "clippy",
                 "docs",
@@ -254,6 +254,7 @@ mod tests {
                 "test",
                 "coverage",
                 "slow-tests",
+                "ac-trace",
             ]
         );
         assert_eq!(names(&PR_ONLY), ["pr-title", "pr-body", "approval"]);
