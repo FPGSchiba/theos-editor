@@ -163,7 +163,11 @@ fn the_package_holds_the_features_output() -> TestResult {
     let output = std::fs::read(dir.path().join(&manifest.outputs["features"]))?;
     let file = std::fs::File::open(dir.path().join(&manifest.outputs["package"]))?;
     let package = theos_map_format::read(std::io::BufReader::new(file))?;
-    assert_ne!(package.features.features.len(), 0, "the run has no features");
+    assert_ne!(
+        package.features.features.len(),
+        0,
+        "the run has no features"
+    );
     let packaged = String::from_utf8(theos_map_format::features_bytes(&package.features)?)?;
     assert_eq!(packaged, String::from_utf8(output)?);
     Ok(())

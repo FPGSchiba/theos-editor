@@ -32,9 +32,9 @@ use crate::stages::terrain::roads::RoadClass;
 use known::Known;
 
 /// The paper inside the known area and outside it (0.3.0).
-const PAPER: Rgb = [0xe8, 0xd9, 0xb5];
+pub(in crate::render) const PAPER: Rgb = [0xe8, 0xd9, 0xb5];
 /// See [`PAPER`].
-const PAPER_FAR: Rgb = [0xcd, 0xb9, 0x8c];
+pub(in crate::render) const PAPER_FAR: Rgb = [0xcd, 0xb9, 0x8c];
 /// The ink of lines and house marks.
 const INK: Rgb = [0x4a, 0x35, 0x20];
 /// The darker ink of settlements and their names.

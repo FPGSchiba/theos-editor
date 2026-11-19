@@ -24,7 +24,7 @@ pub(crate) const TRUTH_TOP_PX: u32 = 30;
 pub(crate) const TRUTH_BOTTOM_PX: u32 = 26;
 
 /// The colour of the margins.
-const MARGIN: Rgb = [0xf4, 0xea, 0xd2];
+pub(crate) const MARGIN: Rgb = [0xf4, 0xea, 0xd2];
 /// The largest title size, pixels.
 const TITLE_PX: f32 = 15.0;
 /// The gap between the canvas edge and the title or the scale bar, pixels.

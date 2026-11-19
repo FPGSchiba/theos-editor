@@ -2,11 +2,14 @@
 
 use theos_map_format::sha256_hex;
 
+use super::inworld::{PAPER, PAPER_FAR};
+use super::palette::Rgb;
+use super::test_support::Image;
 use super::test_support::{TestResult, TestWorld, decode};
-use super::truth::{TRUTH_BOTTOM_PX, TRUTH_TOP_PX};
+use super::truth::{MARGIN, TRUTH_BOTTOM_PX, TRUTH_TOP_PX};
 use super::{RENDERS, RenderError, canvas, render, styles};
 use crate::features::{FeatureSet, Prop};
-use crate::kernels::num::to_f64;
+use crate::kernels::num::{to_f64, to_index};
 use crate::progress::CancelToken;
 use crate::stages::terrain::roads::RoadClass;
 
@@ -18,11 +21,12 @@ const PEOPLE: [&str; 5] = ["truth", "geology", "resources", "inworld", "omega"];
 /// A world (synthetic, not canon) with one of everything the renders draw. The settlement names
 /// are stand-ins for generated names.
 fn world() -> TestWorld {
-    world_with_names(true)
+    world_with_names([true, true])
 }
 
-/// [`world`], with or without the names of its settlements.
-fn world_with_names(named: bool) -> TestWorld {
+/// [`world`], with or without the name of its village (`named[0]`) and of its hamlet
+/// (`named[1]`).
+fn world_with_names(named: [bool; 2]) -> TestWorld {
     let mut w = TestWorld::flat(ROWS, COLS, CELL_M);
     w.set("height", |r, c| 500.0 + 8.0 * to_f64(r + 2 * c));
     w.set("vegetation", |r, _| if r > 20 { 0.9 } else { 0.1 });
@@ -30,14 +34,23 @@ fn world_with_names(named: bool) -> TestWorld {
     w.lake(30..34, 36..42);
     w.river(&[[0.0, 1800.0], [2400.0, 1800.0]], 30.0);
     w.big_river(36..37, 0..COLS);
-    let name = |n: &str| {
-        named
-            .then(|| ("name", Prop::Text(n.to_owned())))
+    let name = |n: &str, on: bool| {
+        on.then(|| ("name", Prop::Text(n.to_owned())))
             .into_iter()
             .collect::<Vec<_>>()
     };
-    w.feature("settlement", "village", [600.0, 500.0], &name("Testburg"));
-    w.feature("settlement", "hamlet", [1500.0, 700.0], &name("Smallplace"));
+    w.feature(
+        "settlement",
+        "village",
+        [600.0, 500.0],
+        &name("Testburg", named[0]),
+    );
+    w.feature(
+        "settlement",
+        "hamlet",
+        [1500.0, 700.0],
+        &name("Smallplace", named[1]),
+    );
     w.feature("poi", "ruin", [1500.0, 1200.0], &[]);
     w.feature("poi", "chime", [900.0, 1400.0], &[]);
     w.feature("site", "mine", [1200.0, 400.0], &[]);
@@ -132,6 +145,168 @@ fn inworld_draws_no_text_without_options() -> TestResult {
     let empty = table("title = \"\"\nlabels = []");
     assert_eq!(inworld(&w, None)?, inworld(&w, Some(&empty))?);
     assert_eq!(inworld(&w, None)?, inworld(&w, Some(&table("")))?);
+    Ok(())
+}
+
+/// A pixel count as an index.
+fn px(n: u32) -> usize {
+    usize::try_from(n).unwrap()
+}
+
+/// Whether `c` is a tone of the `inworld` paper: on the line from [`PAPER_FAR`] to [`PAPER`],
+/// within two levels per channel. Ink drawn over the paper leaves that line.
+fn is_paper(c: Rgb) -> bool {
+    let level = |v: u8| to_f64(usize::from(v));
+    let t = (level(c[0]) - level(PAPER_FAR[0])) / (level(PAPER[0]) - level(PAPER_FAR[0]));
+    (-0.02..=1.02).contains(&t)
+        && (0..3).all(|i| {
+            let expected = level(PAPER_FAR[i]) + t * (level(PAPER[i]) - level(PAPER_FAR[i]));
+            (expected - level(c[i])).abs() <= 2.0
+        })
+}
+
+/// The pixels of `image` that `keep` accepts and that are not a tone of the paper.
+fn off_paper(image: &Image, keep: impl Fn(usize, usize) -> bool) -> Vec<(usize, usize)> {
+    let (w, h) = (px(image.width), px(image.height));
+    (0..h)
+        .flat_map(|y| (0..w).map(move |x| (x, y)))
+        .filter(|&(x, y)| keep(x, y) && !is_paper(image.rgb(x, y)))
+        .collect()
+}
+
+// Spec §5.11: the texts of `inworld` come only from `[render.inworld]`, never from code. On flat,
+// bare ground with two unnamed settlements and no options, everything but the house marks is
+// paper, so no title, label or stand-in name is drawn; the recipe's title leaves the paper in
+// the title zone, which shows that the check sees text.
+#[test]
+fn inworld_draws_no_text_of_its_own() -> TestResult {
+    let mut w = TestWorld::flat(ROWS, COLS, CELL_M);
+    let houses = [("village", [600.0, 500.0]), ("hamlet", [1500.0, 700.0])];
+    for (ty, at) in houses {
+        w.feature("settlement", ty, at, &[]);
+    }
+    // A house mark is at most 12 px wide around its point, its roof reaching 11 px above it
+    // (`house_px`, `draw_settlements`); its name would start 7 px to its right.
+    let in_a_house = |x: usize, y: usize| {
+        houses.iter().any(|(_, at)| {
+            let (dx, dy) = (to_f64(x) - at[0] / 25.0, to_f64(y) - at[1] / 25.0);
+            dx.abs() <= 7.0 && (-12.0..=8.0).contains(&dy)
+        })
+    };
+    let plain = decode(&inworld(&w, None)?);
+    let stray = off_paper(&plain, |x, y| !in_a_house(x, y));
+    assert!(stray.is_empty(), "ink outside the house marks: {stray:?}");
+    assert_ne!(
+        off_paper(&plain, in_a_house).len(),
+        0,
+        "no house mark drawn"
+    );
+    let titled = decode(&inworld(&w, Some(&table("title = \"Heading\"")))?);
+    let title = off_paper(&titled, |x, y| !in_a_house(x, y));
+    assert_ne!(title.len(), 0, "the title drew nothing");
+    assert!(title.iter().all(|&(_, y)| y < 34), "{title:?}");
+    Ok(())
+}
+
+/// The pixels around the point `at` (metres) where a settlement's name lies, up and to the
+/// right of its mark, moved down by `top` pixels.
+fn name_area(at: [f64; 2], top: usize, width: u32) -> Vec<(usize, usize)> {
+    let (x, y) = (
+        to_index(at[0] / 25.0, usize::MAX),
+        to_index(at[1] / 25.0, usize::MAX) + top,
+    );
+    let right = (x + 45).min(px(width));
+    (y - 20..y + 2)
+        .flat_map(|yy| (x + 2..right).map(move |xx| (xx, yy)))
+        .collect()
+}
+
+// Spec §5.11: `truth` and `inworld` draw the generated name of every settlement, hamlets
+// included (0.3.0 skipped them; the spec wins, Task 40). Each name is compared with the same
+// world where only that settlement has no name.
+#[test]
+fn hamlet_names_are_drawn_by_truth_and_inworld() -> TestResult {
+    let named = world_with_names([true, true]);
+    for (render, top) in [("truth", px(TRUTH_TOP_PX)), ("inworld", 0)] {
+        let with = decode(&canvas::encode_png(&named.draw_with(render, None, "")?)?);
+        for (ty, at, only) in [
+            ("village", [600.0, 500.0], [false, true]),
+            ("hamlet", [1500.0, 700.0], [true, false]),
+        ] {
+            let unnamed = world_with_names(only);
+            let without = decode(&canvas::encode_png(&unnamed.draw_with(render, None, "")?)?);
+            let area = name_area(at, top, with.width);
+            let drawn = area
+                .iter()
+                .filter(|&&(x, y)| with.rgb(x, y) != without.rgb(x, y))
+                .count();
+            assert!(
+                drawn > 10,
+                "{render}: the {ty}'s name is missing ({drawn} pixels)"
+            );
+        }
+    }
+    Ok(())
+}
+
+// Spec §5.11: `truth` is `base` with margins: the title in the top margin, the scale bar in the
+// bottom margin, names, and a legend in the lower right corner. A wide map keeps the scale bar
+// (left) and the legend (right) apart.
+#[test]
+fn truth_draws_its_margins_title_scale_bar_names_and_legend() -> TestResult {
+    let world = |named: bool| {
+        let mut w = TestWorld::flat(40, 200, CELL_M);
+        let name = [("name", Prop::Text("Testburg".to_owned()))];
+        w.feature(
+            "settlement",
+            "village",
+            [2500.0, 1000.0],
+            if named { &name } else { &[] },
+        );
+        w.feature("poi", "ruin", [6000.0, 1200.0], &[]);
+        w
+    };
+    let draw = |w: &TestWorld, title: &str| -> Result<Image, RenderError> {
+        Ok(decode(&canvas::encode_png(
+            &w.draw_with("truth", None, title)?,
+        )?))
+    };
+    let bare = draw(&world(true), "")?;
+    let titled = draw(&world(true), "Recipe · seed 7")?;
+    let (w, h) = (px(bare.width), px(bare.height));
+    let (top, bottom) = (px(TRUTH_TOP_PX), px(TRUTH_BOTTOM_PX));
+    let ink = |image: &Image, xs: std::ops::Range<usize>, ys: std::ops::Range<usize>| {
+        ys.flat_map(|y| xs.clone().map(move |x| (x, y)))
+            .filter(|&(x, y)| image.rgb(x, y) != MARGIN)
+            .count()
+    };
+    // Margins: without a title the top margin is bare.
+    assert_eq!((w, h), (400, 80 + top + bottom));
+    assert_eq!(
+        ink(&bare, 0..w, 0..top),
+        0,
+        "text in an empty title's margin"
+    );
+    // Title: only the top margin changes.
+    assert!(ink(&titled, 0..w, 0..top) > 20, "no title");
+    let below: Vec<_> = (top..h).flat_map(|y| (0..w).map(move |x| (x, y))).collect();
+    assert!(
+        below
+            .iter()
+            .all(|&(x, y)| titled.rgb(x, y) == bare.rgb(x, y))
+    );
+    // Scale bar: ink in the left half of the bottom margin.
+    assert!(ink(&bare, 0..w / 2, h - bottom..h) > 40, "no scale bar");
+    // Legend: its panel covers the lower right corner, over the bottom margin.
+    assert!(ink(&bare, w - 40..w - 8, h - 20..h - 8) > 100, "no legend");
+    // Names: the village's name lies up and to the right of its mark.
+    let unnamed = draw(&world(false), "")?;
+    let area = name_area([2500.0, 1000.0], top, bare.width);
+    assert!(
+        area.iter()
+            .any(|&(x, y)| bare.rgb(x, y) != unnamed.rgb(x, y)),
+        "no name"
+    );
     Ok(())
 }
 
