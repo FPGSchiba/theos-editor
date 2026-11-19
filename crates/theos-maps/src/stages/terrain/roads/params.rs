@@ -17,7 +17,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::RoadClass;
-use crate::stage::ParamError;
+use crate::stage::{Check, ParamError};
 
 /// The steepest grade (rise over run) a road of each class may take in one step (spec ruling
 /// 35). A class a recipe's table leaves out keeps its default.
@@ -159,27 +159,16 @@ impl RoadsParams {
     /// # Errors
     /// [`ParamError`] of `stage` naming the first value out of range.
     pub(super) fn check(&self, stage: &str) -> Result<(), ParamError> {
-        let at = |name: &str, message: &str| ParamError::at(stage, name, message);
-        let classes = |table: &str, of: &dyn Fn(RoadClass) -> f64| {
-            RoadClass::ALL.iter().find(|&&c| !positive(of(c))).map(|c| {
-                at(
-                    &format!("{table}.{}", c.name()),
-                    "must be positive and finite",
-                )
-            })
-        };
-        let positives = [
-            ("comfort_grade", self.comfort_grade),
-            ("merge_discount", self.merge_discount),
-        ];
-        if let Some((name, _)) = positives.iter().find(|(_, v)| !positive(*v)) {
-            return Err(at(name, "must be positive and finite"));
+        let check = Check::of(stage);
+        check.positive("comfort_grade", self.comfort_grade)?;
+        check.in_open_closed("merge_discount", self.merge_discount, 0.0, 1.0)?;
+        for class in RoadClass::ALL {
+            let grade = self.max_grade.of(class);
+            check.positive(&format!("max_grade.{}", class.name()), grade)?;
         }
-        if let Some(err) = classes("max_grade", &|c| self.max_grade.of(c)) {
-            return Err(err);
-        }
-        if let Some(err) = classes("width_m", &|c| self.width_m.of(c)) {
-            return Err(err);
+        for class in RoadClass::ALL {
+            let width = self.width_m.of(class);
+            check.positive(&format!("width_m.{}", class.name()), width)?;
         }
         let non_negatives = [
             ("forest_cost", self.forest_cost),
@@ -190,23 +179,9 @@ impl RoadsParams {
             ("max_bridge_span_m", self.max_bridge_span_m),
             ("clearance_m", self.clearance_m),
         ];
-        if let Some((name, _)) = non_negatives
-            .iter()
-            .find(|(_, v)| !(v.is_finite() && *v >= 0.0))
-        {
-            return Err(at(name, "must be finite and not negative"));
+        for (name, value) in non_negatives {
+            check.at_least(name, value, 0.0)?;
         }
-        if self.merge_discount > 1.0 {
-            return Err(at("merge_discount", "must not be above 1"));
-        }
-        if !(self.loop_detour.is_finite() && self.loop_detour >= 1.0) {
-            return Err(at("loop_detour", "must be finite and at least 1"));
-        }
-        Ok(())
+        check.at_least("loop_detour", self.loop_detour, 1.0)
     }
-}
-
-/// Whether `v` is finite and above zero.
-fn positive(v: f64) -> bool {
-    v.is_finite() && v > 0.0
 }

@@ -183,6 +183,17 @@ fn degenerate_frames_are_refused() {
         ("grid = [4, 8]", "grid = [4, 1]", "at least 2"),
         ("size_km = [1.0, 0.5]", "size_km = [0.0, 0.0]", "positive"),
         ("size_km = [1.0, 0.5]", "size_km = [-1.0, 0.5]", "positive"),
+        (
+            "size_km = [1.0, 0.5]",
+            "size_km = [inf, 0.5]",
+            "positive and finite",
+        ),
+        // finite in km, but the cell edge in metres is not
+        (
+            "size_km = [1.0, 0.5]",
+            "size_km = [1e306, 5e305]",
+            "positive and finite",
+        ),
     ] {
         let loaded = parse(&text("", &[]).replace(from, to), RecipeOrigin::Builtin).unwrap();
         let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();

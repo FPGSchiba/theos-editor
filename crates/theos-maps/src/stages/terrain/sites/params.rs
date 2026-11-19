@@ -2,7 +2,7 @@
 
 use serde::Deserialize;
 
-use crate::stage::ParamError;
+use crate::stage::{Check, ParamError};
 
 /// How many of each scattered site; a count a recipe leaves out keeps its default (0.3.0 merged
 /// the table into its defaults).
@@ -60,19 +60,9 @@ impl SitesParams {
     /// # Errors
     /// [`ParamError`] of `stage` naming the first value out of range.
     pub(super) fn check(&self, stage: &str) -> Result<(), ParamError> {
-        let at = |name: &str, message: &str| ParamError::at(stage, name, message);
-        let q = self.mill_q_factor;
-        if !(q.is_finite() && q > 0.0) {
-            return Err(at("mill_q_factor", "must be positive and finite"));
-        }
-        let m = self.edge_margin;
-        if !(m.is_finite() && (0.0..0.5).contains(&m)) {
-            return Err(at("edge_margin", "must be at least 0 and below 0.5"));
-        }
-        let r = self.min_richness;
-        if !(r.is_finite() && (0.0..=1.0).contains(&r)) {
-            return Err(at("min_richness", "must be between 0 and 1"));
-        }
-        Ok(())
+        let check = Check::of(stage);
+        check.positive("mill_q_factor", self.mill_q_factor)?;
+        check.in_closed_open("edge_margin", self.edge_margin, 0.0, 0.5)?;
+        check.in_closed("min_richness", self.min_richness, 0.0, 1.0)
     }
 }

@@ -77,6 +77,123 @@ fn unknown_parameter(stage: &str, first: &str, rest: &[String]) -> ParamError {
     }
 }
 
+/// The domain checks every stage's `validate` shares, each rule with one fixed wording, so the
+/// same rule reads the same in every stage (final review, round 2).
+///
+/// Every float check refuses NaN and both infinities, so each wording says "finite" or names a
+/// bounded interval. A stage's own rules (a relation between two parameters, a set of values)
+/// keep their own words.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Check<'a> {
+    /// The stage whose parameters are checked.
+    stage: &'a str,
+}
+
+impl<'a> Check<'a> {
+    /// The checks of the parameters of `stage`.
+    pub(crate) const fn of(stage: &'a str) -> Self {
+        Self { stage }
+    }
+
+    /// `Ok` when `holds`, else the error of `parameter` with `message`.
+    fn require(self, holds: bool, parameter: &str, message: String) -> Result<(), ParamError> {
+        if holds {
+            Ok(())
+        } else {
+            Err(ParamError::at(self.stage, parameter, message))
+        }
+    }
+
+    /// `value` is neither NaN nor an infinity: "must be finite".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub(crate) fn finite(self, parameter: &str, value: f64) -> Result<(), ParamError> {
+        self.require(value.is_finite(), parameter, "must be finite".to_owned())
+    }
+
+    /// `value` is finite and above 0: "must be positive and finite".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub(crate) fn positive(self, parameter: &str, value: f64) -> Result<(), ParamError> {
+        let holds = value.is_finite() && value > 0.0;
+        self.require(holds, parameter, "must be positive and finite".to_owned())
+    }
+
+    /// `value` is finite and at least `min`: "must be at least `min` and finite".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub(crate) fn at_least(self, parameter: &str, value: f64, min: f64) -> Result<(), ParamError> {
+        let holds = value.is_finite() && value >= min;
+        self.require(
+            holds,
+            parameter,
+            format!("must be at least {min} and finite"),
+        )
+    }
+
+    /// `value` lies in the closed interval `[lo, hi]`: "must be in [`lo`, `hi`]".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub(crate) fn in_closed(
+        self,
+        parameter: &str,
+        value: f64,
+        lo: f64,
+        hi: f64,
+    ) -> Result<(), ParamError> {
+        let holds = (lo..=hi).contains(&value);
+        self.require(holds, parameter, format!("must be in [{lo}, {hi}]"))
+    }
+
+    /// `value` lies in the half-open interval `[lo, hi)`: "must be in [`lo`, `hi`)".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub(crate) fn in_closed_open(
+        self,
+        parameter: &str,
+        value: f64,
+        lo: f64,
+        hi: f64,
+    ) -> Result<(), ParamError> {
+        let holds = (lo..hi).contains(&value);
+        self.require(holds, parameter, format!("must be in [{lo}, {hi})"))
+    }
+
+    /// `value` lies in the half-open interval `(lo, hi]`: "must be in (`lo`, `hi`]".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub(crate) fn in_open_closed(
+        self,
+        parameter: &str,
+        value: f64,
+        lo: f64,
+        hi: f64,
+    ) -> Result<(), ParamError> {
+        let holds = value > lo && value <= hi;
+        self.require(holds, parameter, format!("must be in ({lo}, {hi}]"))
+    }
+
+    /// A whole number of at least `min`: "must be at least `min`".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub(crate) fn count_at_least<T: Copy + PartialOrd + std::fmt::Display>(
+        self,
+        parameter: &str,
+        value: T,
+        min: T,
+    ) -> Result<(), ParamError> {
+        let holds = value >= min;
+        self.require(holds, parameter, format!("must be at least {min}"))
+    }
+}
+
 /// A `serde_ignored` path in the style of `serde_path_to_error`: `source[0].rate`.
 fn path_text(path: &serde_ignored::Path<'_>) -> String {
     use serde_ignored::Path;
@@ -97,7 +214,7 @@ fn path_text(path: &serde_ignored::Path<'_>) -> String {
 mod tests {
     use serde::Deserialize;
 
-    use super::parse;
+    use super::{Check, parse};
     use crate::stage::ParamError;
 
     #[derive(Debug, Deserialize)]
@@ -194,6 +311,78 @@ mod tests {
                 r#"invalid type: string "a", expected f64"#
             )
         );
+    }
+
+    /// The message of `result`, or `"ok"`.
+    fn said(result: Result<(), ParamError>) -> String {
+        match result {
+            Ok(()) => "ok".to_owned(),
+            Err(e) => {
+                assert_eq!((e.stage.as_str(), e.parameter.as_deref()), ("t", Some("p")));
+                e.message
+            }
+        }
+    }
+
+    // Final review round 2: one wording per rule, NaN and the infinities refused by every
+    // bounded rule.
+    #[test]
+    fn each_check_has_one_wording_and_refuses_nan_and_infinities() {
+        let check = Check::of("t");
+        let (nan, inf) = (f64::NAN, f64::INFINITY);
+        for value in [0.0, -2.5] {
+            assert_eq!(said(check.finite("p", value)), "ok");
+        }
+        for value in [nan, inf, -inf] {
+            assert_eq!(said(check.finite("p", value)), "must be finite");
+        }
+        for value in [0.0, -1.0, nan, inf] {
+            assert_eq!(
+                said(check.positive("p", value)),
+                "must be positive and finite"
+            );
+        }
+        assert_eq!(said(check.positive("p", 1e-300)), "ok");
+        for value in [0.99, nan, inf] {
+            assert_eq!(
+                said(check.at_least("p", value, 1.0)),
+                "must be at least 1 and finite"
+            );
+        }
+        assert_eq!(said(check.at_least("p", 1.0, 1.0)), "ok");
+        assert_eq!(said(check.at_least("p", -0.0, 0.0)), "ok");
+        assert_eq!(
+            said(check.at_least("p", -0.1, 0.0)),
+            "must be at least 0 and finite"
+        );
+        for value in [-0.1, 1.1, nan, inf, -inf] {
+            assert_eq!(
+                said(check.in_closed("p", value, 0.0, 1.0)),
+                "must be in [0, 1]"
+            );
+        }
+        for value in [0.0, 1.0] {
+            assert_eq!(said(check.in_closed("p", value, 0.0, 1.0)), "ok");
+        }
+        for value in [-0.1, 0.5, nan, inf] {
+            assert_eq!(
+                said(check.in_closed_open("p", value, 0.0, 0.5)),
+                "must be in [0, 0.5)"
+            );
+        }
+        assert_eq!(said(check.in_closed_open("p", 0.0, 0.0, 0.5)), "ok");
+        for value in [0.0, 1.1, nan, inf] {
+            assert_eq!(
+                said(check.in_open_closed("p", value, 0.0, 1.0)),
+                "must be in (0, 1]"
+            );
+        }
+        assert_eq!(said(check.in_open_closed("p", 1.0, 0.0, 1.0)), "ok");
+        assert_eq!(
+            said(check.count_at_least("p", 0_u32, 1)),
+            "must be at least 1"
+        );
+        assert_eq!(said(check.count_at_least("p", 1_u32, 1)), "ok");
     }
 
     #[test]

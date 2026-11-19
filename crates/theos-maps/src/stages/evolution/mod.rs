@@ -42,7 +42,8 @@ pub(crate) use self::flow::{cell_index, steepest_receivers};
 pub(crate) use self::processes::{Constructor, PROCESSES, PlannedProcess};
 use self::steps::Schedule;
 use crate::stage::{
-    LayerSpec, MapKind, ParamError, Registry, StageContext, StageError, StageReport, TypedStage,
+    Check, LayerSpec, MapKind, ParamError, Registry, StageContext, StageError, StageReport,
+    TypedStage,
 };
 
 /// The parameters of `landscape_evolution`; the defaults are 0.3.0's (`check_every` is plan
@@ -131,19 +132,11 @@ impl TypedStage for Evolution {
     }
 
     fn validate(&self, params: &mut EvolutionParams) -> Result<(), ParamError> {
-        let at = |parameter: &str, message: &str| ParamError::at(Self::ID, parameter, message);
-        if params.steps == 0 {
-            return Err(at("steps", "must be at least 1"));
-        }
-        if !(params.dt_yr.is_finite() && params.dt_yr > 0.0) {
-            return Err(at("dt_yr", "must be positive and finite"));
-        }
-        if params.check_every == 0 {
-            return Err(at("check_every", "must be at least 1"));
-        }
-        if !(params.initial_relief_m.is_finite() && params.initial_relief_m >= 0.0) {
-            return Err(at("initial_relief_m", "must be finite and not negative"));
-        }
+        let check = Check::of(Self::ID);
+        check.count_at_least("steps", params.steps, 1)?;
+        check.positive("dt_yr", params.dt_yr)?;
+        check.count_at_least("check_every", params.check_every, 1)?;
+        check.at_least("initial_relief_m", params.initial_relief_m, 0.0)?;
         params.planned = processes::plan(&self.processes, &params.process)?;
         Ok(())
     }

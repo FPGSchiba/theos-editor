@@ -13,7 +13,7 @@ use crate::kernels::noise::spectral_noise;
 use crate::kernels::num::{max, min};
 use crate::kernels::voronoi::nearest_seed;
 use crate::stage::{
-    LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
+    Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
 use crate::world::{Layer, ValueType};
 
@@ -105,32 +105,23 @@ impl TypedStage for Geology {
     }
 
     fn validate(&self, params: &mut GeologyParams) -> Result<(), ParamError> {
+        let check = Check::of(Self::ID);
         let at = |parameter: &str, message: &str| ParamError::at(Self::ID, parameter, message);
-        if params.provinces == 0 {
-            return Err(at("provinces", "must be at least 1"));
+        check.count_at_least("provinces", params.provinces, 1)?;
+        for (rock, &weight) in &params.rock_mix {
+            check.at_least(&format!("rock_mix.{}", rock.name()), weight, 0.0)?;
         }
-        let weights = params.rock_mix.values();
-        if weights.clone().any(|w| !w.is_finite() || *w < 0.0) {
-            return Err(at("rock_mix", "weights must be finite and not negative"));
-        }
-        if weights.sum::<f64>() <= 0.0 {
+        if params.rock_mix.values().sum::<f64>() <= 0.0 {
             return Err(at("rock_mix", "needs a positive total weight"));
         }
         if params.plutons[0] > params.plutons[1] {
             return Err(at("plutons", "must be [min, max] with min <= max"));
         }
         if let Some(fb) = &params.fold_belt {
-            let sizes = [
-                ("fold_belt.width", fb.width),
-                ("fold_belt.period", fb.period),
-                ("fold_belt.contrast", fb.contrast),
-            ];
-            if let Some((name, _)) = sizes.iter().find(|(_, v)| !(v.is_finite() && *v > 0.0)) {
-                return Err(at(name, "must be positive and finite"));
-            }
-            if !fb.strength.is_finite() {
-                return Err(at("fold_belt.strength", "must be finite"));
-            }
+            check.positive("fold_belt.width", fb.width)?;
+            check.positive("fold_belt.period", fb.period)?;
+            check.positive("fold_belt.contrast", fb.contrast)?;
+            check.finite("fold_belt.strength", fb.strength)?;
         }
         Ok(())
     }
@@ -425,7 +416,16 @@ mod tests {
     fn bad_values_are_refused() {
         for (toml, parameter, text) in [
             ("provinces = 0", "provinces", "at least 1"),
-            ("[rock_mix]\ngranite = -1.0", "rock_mix", "not negative"),
+            (
+                "[rock_mix]\ngranite = -1.0",
+                "rock_mix.granite",
+                "must be at least 0 and finite",
+            ),
+            (
+                "[rock_mix]\nshale = nan",
+                "rock_mix.shale",
+                "must be at least 0",
+            ),
             ("[rock_mix]\ngranite = 0.0", "rock_mix", "positive"),
             ("plutons = [3, 1]", "plutons", "min <= max"),
             ("[fold_belt]\nperiod = 0.0", "fold_belt.period", "positive"),

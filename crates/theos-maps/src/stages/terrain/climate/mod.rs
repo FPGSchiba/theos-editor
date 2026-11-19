@@ -19,7 +19,7 @@ use crate::grid::Grid;
 use crate::kernels::num::max;
 use crate::kernels::stats::percentile;
 use crate::stage::{
-    LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
+    Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
 use crate::world::{Layer, MapFrame, ValueType, WorldValue};
 
@@ -100,16 +100,15 @@ impl ClimateParams {
         ]
     }
 
-    /// Checks that every value is finite and that the ones that must be positive are.
+    /// Checks that every value is finite, that the amounts, rates and timescales are not
+    /// negative and that `budyko_w` is positive.
     ///
     /// # Errors
     /// [`ParamError`] of `climate_model` naming the first offending parameter.
     pub fn validate(&self) -> Result<(), ParamError> {
-        let at = |name: &str, message: &str| ParamError::at(ClimateModel::ID, name, message);
+        let check = Check::of(ClimateModel::ID);
         for (name, value) in self.named() {
-            if !value.is_finite() {
-                return Err(at(name, "must be finite"));
-            }
+            check.finite(name, value)?;
         }
         let non_negative = [
             ("wind_speed", self.wind_speed),
@@ -122,13 +121,10 @@ impl ClimateParams {
             ("tau_c", self.tau_c),
             ("tau_f", self.tau_f),
         ];
-        if let Some((name, _)) = non_negative.iter().find(|(_, v)| *v < 0.0) {
-            return Err(at(name, "must not be negative"));
+        for (name, value) in non_negative {
+            check.at_least(name, value, 0.0)?;
         }
-        if self.budyko_w <= 0.0 {
-            return Err(at("budyko_w", "must be positive"));
-        }
-        Ok(())
+        check.positive("budyko_w", self.budyko_w)
     }
 }
 
@@ -367,10 +363,14 @@ t_base_c = 15.0",
     #[test]
     fn bad_values_and_old_keys_are_refused() {
         for (toml, parameter, text) in [
-            ("nm = nan", "nm", "finite"),
-            ("wind_speed = -1.0", "wind_speed", "not be negative"),
-            ("budyko_w = 0.0", "budyko_w", "positive"),
-            ("hw = inf", "hw", "finite"),
+            ("nm = nan", "nm", "must be finite"),
+            (
+                "wind_speed = -1.0",
+                "wind_speed",
+                "must be at least 0 and finite",
+            ),
+            ("budyko_w = 0.0", "budyko_w", "must be positive and finite"),
+            ("hw = inf", "hw", "must be finite"),
             ("T_base_c = 10.0", "T_base_c", "unknown"),
         ] {
             let err = ClimateModel.params(&table(toml)).unwrap_err();

@@ -20,7 +20,8 @@ use crate::kernels::noise::spectral_noise;
 use crate::kernels::num::{max, min, to_f64};
 use crate::kernels::stats::percentile;
 use crate::stage::{
-    LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport, TypedStage,
+    Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
+    TypedStage,
 };
 use crate::world::{Layer, ValueType, World};
 
@@ -104,20 +105,11 @@ impl TypedStage for Detuning {
     }
 
     fn validate(&self, params: &mut DetuningParams) -> Result<(), ParamError> {
-        let at = |name: &str, message: &str| ParamError::at(Self::ID, name, message);
-        if !(params.baseline.is_finite() && (0.0..=1.0).contains(&params.baseline)) {
-            return Err(at("baseline", "must be in [0, 1]"));
-        }
-        if !(params.ruin_radius_km.is_finite() && params.ruin_radius_km > 0.0) {
-            return Err(at("ruin_radius_km", "must be positive and finite"));
-        }
-        if !(params.ruin_strength.is_finite() && params.ruin_strength >= 0.0) {
-            return Err(at("ruin_strength", "must be at least 0 and finite"));
-        }
-        if !(params.drift_amplitude.is_finite() && params.drift_amplitude >= 0.0) {
-            return Err(at("drift_amplitude", "must be at least 0 and finite"));
-        }
-        Ok(())
+        let check = Check::of(Self::ID);
+        check.in_closed("baseline", params.baseline, 0.0, 1.0)?;
+        check.positive("ruin_radius_km", params.ruin_radius_km)?;
+        check.at_least("ruin_strength", params.ruin_strength, 0.0)?;
+        check.at_least("drift_amplitude", params.drift_amplitude, 0.0)
     }
 
     fn run(

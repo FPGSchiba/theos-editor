@@ -154,11 +154,13 @@ fn check_frame(recipe: &LoadedRecipe) -> Result<MapFrame, RecipeError> {
         ));
     }
     let [width, height] = r.size_km;
-    if !(width.is_finite() && width > 0.0 && height.is_finite() && height > 0.0) {
+    // In metres too: a size beyond f64 there would make the cell edge an infinity.
+    let usable = |km: f64| km > 0.0 && (km * 1000.0).is_finite();
+    if !(usable(width) && usable(height)) {
         return Err(invalid(
             recipe,
             &at_parameter("size_km"),
-            "`size_km` must be positive",
+            "`size_km` must be positive and finite, also in metres",
         ));
     }
     let across = width / num::to_f64(cols);

@@ -21,7 +21,7 @@ use crate::grid::Grid;
 use crate::kernels::diff::slope;
 use crate::kernels::num::{max, min, smoothstep};
 use crate::stage::{
-    LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
+    Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
 use crate::stages::terrain::climate::{self, Climate};
 use crate::world::{Layer, ValueType};
@@ -115,17 +115,10 @@ impl TypedStage for Ecology {
     }
 
     fn validate(&self, params: &mut EcologyParams) -> Result<(), ParamError> {
-        let at = |name: &str, message: &str| ParamError::at(Self::ID, name, message);
-        if !(params.wet_bonus.is_finite() && params.wet_bonus >= 0.0) {
-            return Err(at("wet_bonus", "must be finite and not negative"));
-        }
-        if !params.twi_ref.is_finite() {
-            return Err(at("twi_ref", "must be finite"));
-        }
-        if !(params.twi_span.is_finite() && params.twi_span > 0.0) {
-            return Err(at("twi_span", "must be positive and finite"));
-        }
-        Ok(())
+        let check = Check::of(Self::ID);
+        check.at_least("wet_bonus", params.wet_bonus, 0.0)?;
+        check.finite("twi_ref", params.twi_ref)?;
+        check.positive("twi_span", params.twi_span)
     }
 
     fn run(

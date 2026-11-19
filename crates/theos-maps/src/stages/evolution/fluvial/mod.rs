@@ -76,7 +76,8 @@ use crate::grid::Grid;
 use crate::kernels::num::max;
 use crate::kernels::stats;
 use crate::stage::{
-    Finding, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
+    Check, Finding, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport,
+    TypedStage,
 };
 use crate::stages::evolution::resolve_sinks::Depressions;
 use crate::stages::terrain::climate::Climate;
@@ -170,17 +171,10 @@ impl TypedStage for Fluvial {
     }
 
     fn validate(&self, params: &mut FluvialParams) -> Result<(), ParamError> {
-        let at = |parameter: &str, message: &str| ParamError::at(Self::ID, parameter, message);
-        if !(params.m.is_finite() && params.m >= 0.0) {
-            return Err(at("m", "must be finite and not negative"));
-        }
-        if !(params.g.is_finite() && params.g >= 0.0) {
-            return Err(at("g", "must be finite and not negative"));
-        }
-        if params.max_iterations == 0 {
-            return Err(at("max_iterations", "must be at least 1"));
-        }
-        Ok(())
+        let check = Check::of(Self::ID);
+        check.at_least("m", params.m, 0.0)?;
+        check.at_least("g", params.g, 0.0)?;
+        check.count_at_least("max_iterations", params.max_iterations, 1)
     }
 
     fn run(

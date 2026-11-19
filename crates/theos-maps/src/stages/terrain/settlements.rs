@@ -34,7 +34,8 @@ use crate::kernels::num::{canonical, max, round_half_even, to_f64, to_index};
 use crate::kernels::stats::metres_to_cells;
 use crate::rng::StageRng;
 use crate::stage::{
-    LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport, TypedStage,
+    Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
+    TypedStage,
 };
 use crate::stages::terrain::rocks::Rock;
 use crate::world::{Layer, MapFrame, ValueType, World};
@@ -405,7 +406,7 @@ impl TypedStage for Settlements {
     }
 
     fn validate(&self, params: &mut SettlementsParams) -> Result<(), ParamError> {
-        let at = |name: &str, message: &str| ParamError::at(Self::ID, name, message);
+        let check = Check::of(Self::ID);
         let s = &params.spacing_km;
         for (name, v) in [
             ("spacing_km.city", s.city),
@@ -413,16 +414,15 @@ impl TypedStage for Settlements {
             ("spacing_km.village", s.village),
             ("spacing_km.hamlet", s.hamlet),
         ] {
-            if !(v.is_finite() && v > 0.0) {
-                return Err(at(name, "must be positive and finite"));
-            }
+            check.positive(name, v)?;
         }
-        let m = params.edge_margin;
-        if !(m.is_finite() && (0.0..0.5).contains(&m)) {
-            return Err(at("edge_margin", "must be at least 0 and below 0.5"));
-        }
+        check.in_closed_open("edge_margin", params.edge_margin, 0.0, 0.5)?;
         if params.names.iter().flatten().any(|n| n.trim().is_empty()) {
-            return Err(at("names", "must not hold an empty name"));
+            return Err(ParamError::at(
+                Self::ID,
+                "names",
+                "must not hold an empty name",
+            ));
         }
         Ok(())
     }

@@ -663,12 +663,12 @@ fn missing_thresholds_are_parameter_errors() {
         (
             "river_q = 0.1\nbig_river_q = 2.0\nmin_lake_depth_m = -1.0",
             "min_lake_depth_m",
-            "not negative",
+            "must be at least 0 and finite",
         ),
         (
             "river_q = 0.1\nbig_river_q = 2.0\nmin_lake_area_m2 = nan",
             "min_lake_area_m2",
-            "not negative",
+            "must be at least 0 and finite",
         ),
         (
             "river_q = 0.1\nbig_river_q = 2.0\nmin_lake_cells = 12",

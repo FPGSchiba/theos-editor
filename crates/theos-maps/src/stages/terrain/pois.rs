@@ -33,7 +33,8 @@ use crate::kernels::num::{max, to_f64};
 use crate::kernels::stats::percentile;
 use crate::rng::StageRng;
 use crate::stage::{
-    LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport, TypedStage,
+    Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
+    TypedStage,
 };
 use crate::stages::terrain::rocks::Rock;
 use crate::world::{Layer, MapFrame, ValueType, World};
@@ -291,26 +292,14 @@ impl TypedStage for Pois {
     }
 
     fn validate(&self, params: &mut PoisParams) -> Result<(), ParamError> {
-        let at = |name: &str, message: &str| ParamError::at(Self::ID, name, message);
         if params.gates > 2 {
-            return Err(at("gates", "must be 0, 1 or 2"));
+            return Err(ParamError::at(Self::ID, "gates", "must be 0, 1 or 2"));
         }
-        let sep = params.min_chime_sep_km;
-        if !(sep.is_finite() && sep > 0.0) {
-            return Err(at("min_chime_sep_km", "must be positive and finite"));
-        }
+        let check = Check::of(Self::ID);
+        check.positive("min_chime_sep_km", params.min_chime_sep_km)?;
         let far = params.chime_min_km_from_settlement;
-        if !(far.is_finite() && far >= 0.0) {
-            return Err(at(
-                "chime_min_km_from_settlement",
-                "must be at least 0 and finite",
-            ));
-        }
-        let m = params.edge_margin;
-        if !(m.is_finite() && (0.0..0.5).contains(&m)) {
-            return Err(at("edge_margin", "must be at least 0 and below 0.5"));
-        }
-        Ok(())
+        check.at_least("chime_min_km_from_settlement", far, 0.0)?;
+        check.in_closed_open("edge_margin", params.edge_margin, 0.0, 0.5)
     }
 
     fn run(

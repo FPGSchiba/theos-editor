@@ -37,7 +37,8 @@ use crate::grid::Grid;
 use crate::kernels::KernelError;
 use crate::kernels::num::to_f64;
 use crate::stage::{
-    LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport, TypedStage,
+    Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
+    TypedStage,
 };
 use crate::stages::terrain::roads::RoadNetwork;
 use crate::world::{Layer, ValueType, World};
@@ -117,25 +118,16 @@ impl TypedStage for Travel {
     }
 
     fn validate(&self, params: &mut TravelParams) -> Result<(), ParamError> {
-        let at = |name: &str, message: &str| ParamError::at(Self::ID, name, message);
+        let check = Check::of(Self::ID);
         for (name, v) in [
             ("ford_penalty_s", params.ford_penalty_s),
             ("lake_penalty_s", params.lake_penalty_s),
             ("road_min_speed_ms", params.road_min_speed_ms),
         ] {
-            if !(v.is_finite() && v >= 0.0) {
-                return Err(at(name, "must be finite and not negative"));
-            }
+            check.at_least(name, v, 0.0)?;
         }
-        for (name, v) in [
-            ("road_speedup", params.road_speedup),
-            ("off_path_factor", params.off_path_factor),
-        ] {
-            if !(v.is_finite() && v > 0.0) {
-                return Err(at(name, "must be positive and finite"));
-            }
-        }
-        Ok(())
+        check.positive("road_speedup", params.road_speedup)?;
+        check.positive("off_path_factor", params.off_path_factor)
     }
 
     fn run(

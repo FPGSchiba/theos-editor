@@ -20,7 +20,8 @@ use crate::grid::Grid;
 use crate::kernels::filters::gaussian;
 use crate::kernels::num::{max, min, smoothstep};
 use crate::stage::{
-    LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport, TypedStage,
+    Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
+    TypedStage,
 };
 use crate::stages::terrain::climate::{self, Climate};
 use crate::stages::terrain::rocks::Rock;
@@ -152,15 +153,7 @@ impl TypedStage for Elements {
     }
 
     fn validate(&self, params: &mut ElementsParams) -> Result<(), ParamError> {
-        if params.wet_sigma_m.is_finite() && params.wet_sigma_m > 0.0 {
-            Ok(())
-        } else {
-            Err(ParamError::at(
-                Self::ID,
-                "wet_sigma_m",
-                "must be positive and finite",
-            ))
-        }
+        Check::of(Self::ID).positive("wet_sigma_m", params.wet_sigma_m)
     }
 
     fn run(

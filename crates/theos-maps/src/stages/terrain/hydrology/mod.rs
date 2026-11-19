@@ -69,7 +69,7 @@ pub use self::outlines::LakeShape;
 use crate::grid::Grid;
 use crate::kernels::num::to_f64;
 use crate::stage::{
-    LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
+    Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
 use crate::stages::terrain::climate::{self, Climate, ClimateFields};
 use crate::world::{Layer, ValueType, WorldValue};
@@ -308,14 +308,11 @@ impl TypedStage for Hydrology {
     }
 
     fn validate(&self, params: &mut HydrologyParams) -> Result<(), ParamError> {
+        let check = Check::of(Self::ID);
         let at = |name: &str, message: &str| ParamError::at(Self::ID, name, message);
         let threshold = |name: &str, value: Option<f64>| {
             let q = value.ok_or_else(|| at(name, "is required (m³/s); it has no default"))?;
-            if q.is_finite() && q > 0.0 {
-                Ok(q)
-            } else {
-                Err(at(name, "must be positive and finite"))
-            }
+            check.positive(name, q).map(|()| q)
         };
         let river_q = threshold("river_q", params.river_q)?;
         let big_river_q = threshold("big_river_q", params.big_river_q)?;
@@ -327,17 +324,12 @@ impl TypedStage for Hydrology {
             ("min_lake_area_m2", params.min_lake_area_m2),
         ];
         for (name, value) in limits {
-            if let Some(v) = value
-                && !(v.is_finite() && v >= 0.0)
-            {
-                return Err(at(name, "must be finite and not negative"));
+            if let Some(v) = value {
+                check.at_least(name, v, 0.0)?;
             }
         }
-        for (name, value) in [("width_a", params.width_a), ("depth_c", params.depth_c)] {
-            if !(value.is_finite() && value > 0.0) {
-                return Err(at(name, "must be positive and finite"));
-            }
-        }
+        check.positive("width_a", params.width_a)?;
+        check.positive("depth_c", params.depth_c)?;
         params.thresholds = WaterThresholds {
             river_q,
             big_river_q,

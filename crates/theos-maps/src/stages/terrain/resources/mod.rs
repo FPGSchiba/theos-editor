@@ -24,7 +24,8 @@ use crate::features::FeatureSet;
 use crate::grid::Grid;
 use crate::kernels::num::to_f64;
 use crate::stage::{
-    LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport, TypedStage,
+    Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
+    TypedStage,
 };
 use crate::stages::terrain::climate::{self, Climate};
 use crate::stages::terrain::elements::ELEMENT_LAYERS;
@@ -131,19 +132,17 @@ impl TypedStage for Resources {
     }
 
     fn validate(&self, params: &mut ResourcesParams) -> Result<(), ParamError> {
-        let at = |name: &str, message: &str| ParamError::at(Self::ID, name, message);
         if let Some(name) = params.counts.keys().find(|k| !NAMES.contains(&k.as_str())) {
-            return Err(at(&format!("counts.{name}"), "is not a resource type"));
+            let parameter = format!("counts.{name}");
+            return Err(ParamError::at(
+                Self::ID,
+                parameter,
+                "is not a resource type",
+            ));
         }
-        let spacing = params.spacing_km;
-        if !(spacing.is_finite() && spacing > 0.0) {
-            return Err(at("spacing_km", "must be positive and finite"));
-        }
-        let m = params.edge_margin;
-        if !(m.is_finite() && (0.0..0.5).contains(&m)) {
-            return Err(at("edge_margin", "must be at least 0 and below 0.5"));
-        }
-        Ok(())
+        let check = Check::of(Self::ID);
+        check.positive("spacing_km", params.spacing_km)?;
+        check.in_closed_open("edge_margin", params.edge_margin, 0.0, 0.5)
     }
 
     fn run(
