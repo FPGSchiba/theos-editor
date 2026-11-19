@@ -405,6 +405,11 @@ The world stores them in a `BTreeMap` by name, so iteration order is fixed.
   and "single-flow routing" is `partition_flow` with `exponent = "steepest"`.
 - **Per-step processes are cheap to check:** their `checks` run every `check_every` steps (a
   recipe option, default 10) and on the last step.
+- **A run covers one `dt_yr`.** A process with `every = n` runs at step 0, at every multiple of
+  n and on the last step, and each run advances the world by one `dt_yr`. So `every` on a rate
+  process (`uplift`, `hillslope`, `fluvial`) slows it by about n; it is meant for refreshes
+  such as `climate_update`, and `slope_limit` and `fluvial` may run at different `every`
+  because the slope supply waits for the next `fluvial` run (§5.9; ruling 67).
 
 **The rule for later phases** (`docs/architecture.md` §11, this PR):
 
@@ -677,7 +682,7 @@ Pure functions with unit tests against known values (scipy semantics where 0.3.0
 | `paths` | Grid Dijkstra (single and multiple sources), 16 directions, custom edge cost, total order |
 | `mst` | Kruskal with total order |
 | `marching_squares` | Lake outlines as rings in metres |
-| `priority_flood` | Barnes et al. 2014 with ε; filled surface and labels |
+| `priority_flood` | Barnes et al. 2014 with ε; filled surface and the order in which cells left the queue (ruling 68) |
 
 ### 5.9 Terrain stages
 
@@ -696,20 +701,23 @@ design. GPL code is never read.
 | ↳ `route_steepest` | `height`, `fixed` → `receivers` | Steepest-descent receiver per cell (D8 distances), ties by index | Braun & Willett 2013 |
 | ↳ `resolve_sinks` | `height`, `receivers`, `fixed` → `receivers`, `routing_surface`, `depressions` | Connects each closed basin through its lowest pass by the minimum spanning tree of basins; `routing_surface` lifts depression cells to their spill level + ε along the priority-flood order, `height` itself unchanged; `depressions` labels routed depressions with their spill node. A basin whose pass lies below the level of the depression it spills into belongs to that depression, so a lake fills as one up to its own spill (found in the build, 17 Nov 2026) | MST of basins: Cordonnier, Bovy & Braun 2019; the ε lift: Barnes et al. 2014 |
 | ↳ `partition_flow` | `routing_surface`, `receivers` → `weights`, `stack` | Weights over the lower neighbours of the routing surface for erosion: `exponent = "steepest"` (all to the receiver) or `"slope_adaptive"`, p = 0.5 + 0.6·S with S the steepest slope (FastScape's slope-dependent partition; that S is the steepest slope is this spec's reading). A fresh topological order (`stack`, receivers before donors) of the resulting graph | FastScape documentation; Freeman 1991 |
-| ↳ `fluvial` | `height`, `erodibility`, `receivers`, `weights`, `stack`, `depressions`, `fixed`, `climate`, [`uplift`], [`slope_supply`] → `height`, `erosion`, `deposition`, `drainage_area`, [`slope_supply`] | The erosion–deposition law with n = 1 (below), solved implicitly in stack order with Gauss–Seidel iterations; sediment filling routed depressions; cumulative erosion and deposition | Yuan et al. 2019 (eq. 9, 11, 13–21), after Davy & Lague 2009; Braun & Willett 2013. Multiple flow with deposition as in FastScape's documentation (Yuan et al. solve single flow); the depression filling after goSPL's documentation, combined with the MST resolver as our own step |
-| ↳ `hillslope` | `height`, `diffusivity`, `fixed` → `height`, `erosion`, `deposition` | Linear diffusion, implicit ADI (Thomas algorithm per row and column), before the routing, so each step ends on the surface `fluvial` cut (after `fluvial` it dammed one-cell channels by an amount that grew as cells shrank; found in the build, 17 Nov 2026); per cell, a net loss books as erosion and a net gain as deposition | – |
+| ↳ `fluvial` | `height`, `erodibility`, `receivers`, `weights`, `stack`, `depressions`, `fixed`, `climate`, `erosion`, `deposition`, [`slope_supply`]; with G > 0 also `routing_surface`, [`uplift`] → `height`, `erosion`, `deposition`, `drainage_area`, [`slope_supply`] | The erosion–deposition law with n = 1 (below), solved implicitly in stack order with Gauss–Seidel iterations; sediment filling routed depressions; cumulative erosion and deposition | Yuan et al. 2019 (eq. 9, 11, 13–21), after Davy & Lague 2009; Braun & Willett 2013. Multiple flow with deposition as in FastScape's documentation (Yuan et al. solve single flow); the depression filling after goSPL's documentation, combined with the MST resolver as our own step |
+| ↳ `hillslope` | `height`, `diffusivity`, `fixed`, `erosion`, `deposition` → `height`, `erosion`, `deposition` | Linear diffusion, implicit ADI (Thomas algorithm per row and column), before the routing, so each step ends on the surface `fluvial` cut (after `fluvial` it dammed one-cell channels by an amount that grew as cells shrank; found in the build, 17 Nov 2026); per cell, a net loss books as erosion and a net gain as deposition | – |
 | ↳ `slope_limit` | `height`, `critical_slope`, `fixed`, `erosion`, [`slope_supply`] → `height`, `erosion`, `slope_supply` | An exact threshold limiter in one sweep; the material removed goes to the rivers (algorithm below) | Threshold slopes after Montgomery & Brandon 2002; the sweep is own design (a shortest-path form of a slope-limited fill) |
 | ↳ `climate_update` | `height`, `climate` → `climate` | Recomputes precipitation, AET and runoff from the current surface every `every` steps | – |
-| `hydrology` | `height`, `climate` → `height`, `lake`, `lake_id`, `lake_level`, `river`, `big_river`, `discharge`, `flow_dir`, `water_surface`, `water_features` | Lakes by water balance, channel discharge over single flow, rivers, river lines and lake outlines (below) | Barnes et al. 2014; Bracht-Flyr et al. 2013; Quinn et al. 1991 (multiple flow on hillslopes, single flow in channels); Leopold & Maddock 1953; Génevaux et al. 2013 |
+| `hydrology` | `height`, `climate`, `fixed` → `height`, `lake`, `lake_id`, `lake_level`, `river`, `big_river`, `discharge`, `flow_dir`, `water_surface`, `water_thresholds`, `water_features` | Lakes by water balance, channel discharge over single flow, rivers, river lines and lake outlines (below) | Barnes et al. 2014; Bracht-Flyr et al. 2013; Quinn et al. 1991 (multiple flow on hillslopes, single flow in channels); Leopold & Maddock 1953; Génevaux et al. 2013 |
 | `ecology` | `height`, `climate`, `drainage_area` → `temperature`, `slope`, `vegetation`, `snow`, `wetness` | Net primary productivity from actual evapotranspiration (the Thornthwaite Memorial model, NPP = 3000·(1 − e^(−0.0009695·(AET − 20))) g dry matter/m²/yr), density = min(NPP / 2000, 1) × a slope factor (1 − smoothstep(0.45, 0.9, slope), as 0.3.0) × (1 + a wetness bonus from ln(a / tan β), capped); snow from temperature and slope as 0.3.0 | Lieth & Box 1972; Lieth 1975; Sørensen et al. 2006 |
-| `elements` | `river`, `lake`, `climate`, `vegetation`, `slope`, `rock`, `temperature` → `elements` | 0.3.0's ambient element mix (water, wood, earth, metal, fire) | – |
-| `settlements` | terrain layers → `features` (settlements), `site_quality` | 0.3.0's site quality with hinterland; greedy picking by class with spacing (absolute, set per recipe); names from a recipe list or the built-in syllable lists (generated, not canon) | After Emilien et al. 2012, whose interest maps place buildings inside a village; siting whole settlements with them is 0.3.0's adaptation |
+| `elements` | `height`, `river`, `lake`, `climate`, `vegetation`, `slope`, `rock`, `temperature` → `element_water`, `element_wood`, `element_earth`, `element_metal`, `element_fire` | 0.3.0's ambient element mix (water, wood, earth, metal, fire) | – |
+| `settlements` | terrain layers, [`features`] → `features` (settlements), `site_quality` | 0.3.0's site quality with hinterland; greedy picking by class with spacing (absolute, set per recipe); names from a recipe list or the built-in syllable lists (generated, not canon) | After Emilien et al. 2012, whose interest maps place buildings inside a village; siting whole settlements with them is 0.3.0's adaptation |
 | `pois` | terrain layers, [`features`] → `features` (ruins, Chimes, gates) | 0.3.0's rules: ruins on prominent hard ridges; `chime` where 0.3.0 placed extraction points; `gate-down` and `gate-up` where it placed the arrival and ascent portals. With no settlements, no distance to settlements is enforced | – |
-| `resources` | terrain layers, `features`, [`omega`] → `features` (deposits), `resource_fields` | 0.3.0's suitability fields | – |
-| `roads` | terrain layers, `features` → `road_network`, `roads`, `features` (bridges, fords) | Network and routing on terrain cost (below) | Routing after Galin et al. 2010 (16 directions instead of its 80, no curvature cost); the network construction is own |
-| `sites` | terrain layers, `road_network`, `features` → `features` (sites), `road_network`, `roads` | 0.3.0's mills, mines, quarries, lumber camps, shrines, watchtowers, inns (at the midpoint of long main and road links away from settlements) and camps, with spur tracks routed by the `roads` router. A mill needs discharge of at least `mill_q_factor` × `river_q` (default 2.7, which is 0.3.0's 0.4 m³/s at its 0.15) | – |
-| `travel` | `height`, [`road_network`], water layers, `features` → `reach_min` | Tobler's hiking function on the 16-direction graph, a road speed-up and an off-path factor of 0.6 off roads, ford and lake penalties; multi-source Dijkstra from the Chimes. Unreachable cells, or every cell when there is no Chime, hold −1 (finite, documented); the Chime-to-Chime time goes into the stage report | Tobler 1993 |
-| `detuning` | `height`, `features` → `omega` | 0.3.0's ω field: baseline, hot spots around ruins, slow drift (CE-28.7) | – |
+| `resources` | terrain layers, [`features`], [`omega`] → `features` (deposits), `resource_fields` | 0.3.0's suitability fields | – |
+| `roads` | terrain layers, [`features`] → `road_network`, `roads`, `features` (bridges, fords) | Network and routing on terrain cost (below) | Routing after Galin et al. 2010 (16 directions instead of its 80, no curvature cost); the network construction is own |
+| `sites` | terrain layers, `road_network`, [`features`] → `features` (sites), `road_network`, `roads` | 0.3.0's mills, mines, quarries, lumber camps, shrines, watchtowers, inns (at the midpoint of long main and road links away from settlements) and camps, with spur tracks routed by the `roads` router. A mill needs discharge of at least `mill_q_factor` × `river_q` (default 2.7, which is 0.3.0's 0.4 m³/s at its 0.15) | – |
+| `travel` | `height`, [`road_network`], water layers, [`features`] → `reach_min` | Tobler's hiking function on the 16-direction graph, a road speed-up and an off-path factor of 0.6 off roads, ford and lake penalties; multi-source Dijkstra from the Chimes. Unreachable cells, or every cell when there is no Chime, hold −1 (finite, documented); the Chime-to-Chime time goes into the stage report | Tobler 1993 |
+| `detuning` | `height`, [`features`] → `omega` | 0.3.0's ω field: baseline, hot spots around ruins, slow drift (CE-28.7) | – |
+
+A stage that adds features starts from the world's `features` when an earlier stage wrote it,
+and from an empty set otherwise; a stage that only reads them sees none (ruling 65).
 
 Constraints are evaluated by the runner after the pipeline (§5.6), not by a stage.
 
@@ -1483,6 +1491,30 @@ Rulings of 13 Nov 2026, from the build:
     takes 1/0.6 as long as in 0.3.0 (0.3.0's median 149.2 min / 0.6 = 248.7; the untuned P08
     median was 249.35); the scaled range keeps every 0.3.0 verdict, and with the old range only
     1 seed of 8 passed — cost if wrong: the omega accepts walks up to 400 min.
+65. Ruling: every stage that adds features (`settlements`, `pois`, `resources`, `roads`,
+    `sites`) or reads them (`travel`, `detuning`) reads `features` as optional and starts from
+    an empty set without it — `features` has no single writer: each of these stages adds to
+    what earlier ones placed, so the first of them in a recipe finds none, and a required read
+    would refuse every recipe that leaves one out (the omega has no settlements) — cost if
+    wrong: a recipe that leaves out a stage gets fewer features instead of an error (roads
+    without places connect nothing); the count constraints catch it.
+66. Ruling: §5.9's reads and writes are the stages' declared layers — `fluvial` and
+    `hillslope` read the cumulative `erosion` and `deposition` they add to; `fluvial` reads
+    `routing_surface` only with G > 0; `hydrology` reads `fixed` (the drained edges) and writes
+    `water_thresholds` (the `river_q` and `big_river_q` in force, which `sites`' mill rule
+    reads); `elements` reads `height` and writes one raster per element (plan ruling L5) — the
+    table had left them out, found by the final review — cost if wrong: none; validation
+    checks the declared layers.
+67. Ruling: each run of a per-step process advances the world by one `dt_yr`, also with
+    `every`, so `every = n` on a rate process slows it by about n; `every` is documented as
+    meant for refreshes and is not refused on rate processes — the slope supply is built for
+    `slope_limit` and `fluvial` at different `every`, and refusing it would take that from
+    recipes — cost if wrong: a recipe that sets `every` on `fluvial` cuts its rivers more
+    slowly without a warning.
+68. Ruling: `priority_flood` returns the filled surface and the order in which cells left the
+    queue, not labels — the order, reversed, is a topological order towards the outlets, which
+    `hydrology` walks to sum discharge and fill lakes; labels come from `labels` where a stage
+    needs them — cost if wrong: none; one kernel row of §5.8.
 
 ## 10. Left to the builder
 
