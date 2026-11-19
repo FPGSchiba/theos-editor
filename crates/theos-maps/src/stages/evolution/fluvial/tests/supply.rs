@@ -276,7 +276,17 @@ const DRY_SUPPLY: f64 = 500.0;
 
 /// The runoff weight `p̂` of [`dry_strip`]'s dry cells: their runoff over the strip's mean.
 fn dry_weight() -> f64 {
-    1e-3 / ((to_f64(WET) + to_f64(DRY_CELLS - WET) * 1e-3) / to_f64(DRY_CELLS))
+    1e-3 / mean_runoff()
+}
+
+/// The runoff weight `p̂` of [`dry_strip`]'s wet cells.
+fn wet_weight() -> f64 {
+    1.0 / mean_runoff()
+}
+
+/// The mean runoff of [`dry_strip`]: 1 on the wet cells, 1e-3 on the dry ones.
+fn mean_runoff() -> f64 {
+    (to_f64(WET) + to_f64(DRY_CELLS - WET) * 1e-3) / to_f64(DRY_CELLS)
 }
 
 /// A synthetic 1 x 32 strip of 100 m cells rising 5 m per cell from its outlet (cell 0, fixed),
@@ -347,6 +357,128 @@ fn with_no_incision_the_first_iterate_is_the_solution() {
         (raised + out - held).abs() <= 1e-9 * held,
         "raised {raised}, out {out}, supply {held}"
     );
+}
+
+/// The recipe switch `supply_passes_dry_cells` (Task 27h): the slope supply passes the cells
+/// whose catchment is dry, `Q < G·A` (its mean runoff weight `Q/A` below G, where Yuan et al.'s
+/// condition `G/p̂ ≤ 1` fails), without being laid down, and joins the sediment that the law lays
+/// down at the first cell whose catchment is not. On [`dry_strip`] with K = 0, no uplift and
+/// G = 0.5, cells 3 to 31 are dry (cell 3's catchment has `Q/A` = 0.28) and cells 1 and 2 are not
+/// (0.78 and 0.54). The dry cells keep their height; cell 2 keeps `c/(1 + c)` of all of the
+/// supply and cell 1 of what cell 2 passes on (`c = G·area/Q`); the rest leaves. The first
+/// iterate lays the supply down the same way, so one iteration finds the solution.
+#[test]
+fn with_the_switch_dry_cells_pass_the_supply_on_to_wetter_ones() {
+    let mut w = dry_strip(0.0);
+    let start = layer(&w, "height");
+    let held = total(&supply(&w));
+    let fluvial = "g = 0.5\nsupply_passes_dry_cells = true";
+    let report = evolve(&mut w, &processes(&routed("steepest", fluvial)), 1, DT, 1).unwrap();
+    assert!(report.findings.is_empty(), "{:?}", report.findings);
+    assert_eq!(value(&report, "iterations").to_bits(), 1.0_f64.to_bits());
+    let h = layer(&w, "height");
+    for cell in 3..DRY_CELLS {
+        assert!(
+            (h[cell] - start[cell]).abs() < 1e-9,
+            "cell {cell}: {} from {}",
+            h[cell],
+            start[cell]
+        );
+    }
+    // Q of cells 2 and 1 in cells: the 28 dry cells and the wet cells from 3 down to them.
+    let reaching = to_f64(DRY_CELLS - WET) * DRY_SUPPLY;
+    let c2 = 0.5 / (to_f64(DRY_CELLS - WET) * dry_weight() + 2.0 * wet_weight());
+    let kept2 = reaching * c2 / (1.0 + c2);
+    let c1 = 0.5 / (to_f64(DRY_CELLS - WET) * dry_weight() + 3.0 * wet_weight());
+    let kept1 = (reaching - kept2) * c1 / (1.0 + c1);
+    assert!(
+        (h[2] - (start[2] + kept2)).abs() < 1e-6,
+        "{} vs {kept2}",
+        h[2]
+    );
+    assert!(
+        (h[1] - (start[1] + kept1)).abs() < 1e-6,
+        "{} vs {kept1}",
+        h[1]
+    );
+    let (raised, out) = (
+        volume(&h) - volume(&start),
+        value(&report, "sediment_out_m3"),
+    );
+    assert!(
+        (raised - (kept1 + kept2) * CELL_AREA).abs() <= 1e-9 * held,
+        "raised {raised}"
+    );
+    assert!(
+        (raised + out - held).abs() <= 1e-9 * held,
+        "raised {raised}, out {out}, supply {held}"
+    );
+}
+
+/// The supply loop on dry cells that the switch stops (Task 27g): without it, `fluvial` lays
+/// almost all of a dry cell's own supply back on it (`c/(1 + c)`, `c` about 126 on
+/// [`dry_strip`]), `slope_limit` cuts the deposit straight back into the supply, and the supply
+/// pending on the dry cells grows from step to step by about the uplift it adds. With the switch
+/// the supply passes on, and what is pending on the dry cells after each step is only that step's
+/// cut: at most the uplift of 25 m on each of the 28 dry cells (less what the rivers cut first),
+/// which the critical slope of 0.05, the strip's own slope, takes off again. It does not grow.
+#[test]
+fn with_the_switch_the_supply_loop_on_dry_cells_stops() {
+    let pending = |switch: &str| -> Vec<f64> {
+        let mut w = dry_strip(1e-5);
+        w.insert("slope_supply", row(vec![0.0; DRY_CELLS])).unwrap();
+        w.insert("uplift", row(vec![UPLIFT; DRY_CELLS])).unwrap();
+        w.insert("sag_rate", row(vec![0.0; DRY_CELLS])).unwrap();
+        w.insert("critical_slope", row(vec![0.05; DRY_CELLS]))
+            .unwrap();
+        let fluvial = format!("g = 1.0\n{switch}");
+        let procs = processes(&format!(
+            "{}\n[[process]]\nid = \"slope_limit\"",
+            recipe("steepest", &fluvial)
+        ));
+        (0..10)
+            .map(|step| {
+                let report = evolve(&mut w, &procs, 1, DT, 1).unwrap();
+                assert!(report.findings.is_empty(), "step {step}: {report:?}");
+                supply(&w)[WET..].iter().sum()
+            })
+            .collect()
+    };
+    let cut = to_f64(DRY_CELLS - WET) * UPLIFT * DT;
+    let on = pending("supply_passes_dry_cells = true");
+    for (step, p) in on.iter().enumerate() {
+        assert!(
+            *p <= cut && (p - on[0]).abs() <= 1e-3 * cut,
+            "step {step}: {p} m pending: {on:?}"
+        );
+    }
+    let off = pending("");
+    assert_eq!(
+        off[0].to_bits(),
+        on[0].to_bits(),
+        "no supply before the first cut"
+    );
+    for pair in off.windows(2) {
+        assert!(pair[1] > pair[0] + 0.5 * cut, "{off:?}");
+    }
+}
+
+/// With the switch off, as by default, the step is the one without it, bit for bit.
+#[test]
+fn the_switch_off_leaves_the_step_as_it_is() {
+    let run = |extra: &str| {
+        let mut w = dry_strip(1e-5);
+        w.insert("uplift", row(vec![UPLIFT; DRY_CELLS])).unwrap();
+        w.insert("sag_rate", row(vec![0.0; DRY_CELLS])).unwrap();
+        let fluvial = format!("g = 1.0\n{extra}");
+        let report = evolve(&mut w, &processes(&recipe("steepest", &fluvial)), 1, DT, 1).unwrap();
+        let layers: Vec<Vec<u64>> = ["height", "erosion", "deposition"]
+            .iter()
+            .map(|name| bits(&layer(&w, name)))
+            .collect();
+        (layers, report)
+    };
+    assert_eq!(run("supply_passes_dry_cells = false"), run(""));
 }
 
 #[test]

@@ -67,19 +67,19 @@ pub(super) fn route(
 }
 
 /// Lays the step's slope `supply` (m³ per cell) down along its way, onto `height`: the walk of
-/// [`route`] over the supply alone, in which every cell with an edge keeps the part `keeps[i]`
-/// of what passes through it (what reaches it plus its own supply) and passes the rest on. A
-/// routed depression keeps what reaches it up to its capacity and lets go only the excess, at its
-/// spill cell (`Traps::release`); its cells are not raised here. A cell that keeps a volume rises
-/// by it over `cell_area`; every other height keeps its bits.
+/// [`route`] over the supply alone, in which every cell `i` with an edge keeps the volume
+/// `keep(i, through)` of what passes through it (what reaches it plus its own supply) and passes
+/// the rest on. A routed depression keeps what reaches it up to its capacity and lets go only the
+/// excess, at its spill cell (`Traps::release`); its cells are not raised here. A cell that keeps
+/// a volume rises by it over `cell_area`; every other height keeps its bits.
 pub(super) fn lay_down(
     stack: &[u32],
     weights: &FlowWeights,
     traps: &Traps,
     supply: &[f64],
-    keeps: &[f64],
-    height: &mut [f64],
     cell_area: f64,
+    height: &mut [f64],
+    keep: impl Fn(usize, f64) -> f64,
 ) {
     let mut arriving = vec![0.0; supply.len()];
     walk(
@@ -90,7 +90,7 @@ pub(super) fn lay_down(
         &mut arriving,
         |n, reached| traps.release(n, reached).1,
         |i, through| {
-            let kept = through * keeps[i];
+            let kept = keep(i, through);
             if kept != 0.0 {
                 height[i] += kept / cell_area;
             }
@@ -471,6 +471,7 @@ mod tests {
         // the outlet keep nothing.
         let traps = traps(vec![0, 0, 1, 1, 0, 0], &[(2, 1)]);
         let keeps = [0.0, 0.5, 0.0, 0.0, 0.5, 0.5];
+        let half = |i: usize, through: f64| through * keeps[i];
         // 300 m³ on cell 5: it keeps 150, cell 4 keeps 75 of the rest and sends 75 into the
         // depression (a quarter over cell 3, three quarters to cell 2), which keeps all of it.
         let mut height = vec![0.0; 6];
@@ -479,9 +480,9 @@ mod tests {
             &strip(),
             &traps,
             &[0.0, 0.0, 0.0, 0.0, 0.0, 300.0],
-            &keeps,
-            &mut height,
             1.0,
+            &mut height,
+            half,
         );
         assert_eq!(height, [0.0, 0.0, 0.0, 0.0, 75.0, 150.0]);
         // 1,000 m³: the depression gets 250 and lets go the excess over its capacity at its
@@ -492,9 +493,9 @@ mod tests {
             &strip(),
             &traps,
             &[0.0, 0.0, 0.0, 0.0, 0.0, 1000.0],
-            &keeps,
-            &mut height,
             1.0,
+            &mut height,
+            half,
         );
         let excess = 250.0 - (200.0 + EPSILON);
         assert!(close(height[1], excess / 2.0), "{}", height[1]);
@@ -507,9 +508,9 @@ mod tests {
             &strip(),
             &traps,
             &[0.0, 0.0, 0.0, 0.0, 0.0, 300.0],
-            &keeps,
-            &mut height,
             4.0,
+            &mut height,
+            half,
         );
         assert_eq!(height, [0.0, 0.0, 0.0, 0.0, 18.75, 37.5]);
     }
@@ -526,9 +527,9 @@ mod tests {
             &strip(),
             &traps,
             &[0.0; 6],
-            &[0.0, 0.5, 0.0, 0.0, 0.5, 0.5],
-            &mut height,
             1.0,
+            &mut height,
+            |_, through| through * 0.5,
         );
         let bits = |h: &[f64]| h.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
         assert_eq!(bits(&height), bits(&before));

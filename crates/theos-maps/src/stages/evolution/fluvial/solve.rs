@@ -40,6 +40,11 @@
 //! (see below). G thus decides how much of the supply is laid down and how much passes on; with
 //! G = 0 the supply does not enter the heights and all of it leaves at the outlets (`books`).
 //!
+//! When the recipe lets the supply pass dry cells (`runout`), the volume `P_i` of supply that
+//! passes cell `i` without being laid down leaves its deposition term:
+//! `Δt·G·(Qs_in(i) + V_i/Δt)/Q_i` becomes `G·(Qs_in(i)·Δt + V_i − P_i)/Q_i`. `P_i` is 0 on every
+//! cell whose catchment is not dry, and everywhere without the switch.
+//!
 //! With G = 0 one sweep solves the step exactly. With G > 0 `Qs_in` couples every cell to its
 //! donors, and Yuan's Gauss–Seidel iterations solve it ([`deposit`]): each iteration routes the
 //! sediment of the last iterate, then sweeps once. Where runoff is low the lagged sediment makes
@@ -103,8 +108,9 @@ pub(super) struct Incision<'a> {
 
 /// The deposition terms of one sweep, per cell.
 struct Deposit<'a> {
-    /// `Δt·G·(Qs_in + V/Δt)/Q`, metres: the sediment from upstream and the slope supply `V`
-    /// taken in at the cell; 0 on a routed depression's cell, whose sediment is in its fill.
+    /// `G·(Qs_in·Δt + V − P)/Q`, metres: the sediment from upstream and the slope supply `V`
+    /// taken in at the cell, less the supply `P` that passes it without being laid down; 0 on a
+    /// routed depression's cell, whose sediment is in its fill.
     inflow: &'a [f64],
     /// `c = G·area/Q`: the cell's own net erosion, on the diagonal.
     own: &'a [f64],
@@ -164,6 +170,9 @@ pub(super) struct Deposition<'a> {
     pub cell_area: f64,
     /// Per cell, the volume of slope supply taken in this step, m³ (`s_i × area`).
     pub supply: &'a [f64],
+    /// Per cell, the volume of slope supply that passes it without being laid down, m³
+    /// (`runout`); 0 everywhere unless the recipe lets the supply pass dry cells.
+    pub passing: &'a [f64],
     /// The iterations stop once no height changes by this much, metres.
     pub tolerance: f64,
     /// The most iterations.
@@ -195,9 +204,10 @@ impl Solution {
 
 /// Lays the step's slope supply down onto `height` (`h*`) along its way, the first iterate of
 /// [`deposit`]: every cell that is not fixed and not in a routed depression keeps `c/(1 + c)` of
-/// what passes through it (`own` holds `c = G·area/Q`, 0 without water), and the depressions
-/// keep what reaches them up to their capacity ([`lay_down`]). Where nothing incises this is the
-/// step's solution outside the depressions. Without supply `height` keeps its bits.
+/// what passes through it (`own` holds `c = G·area/Q`, 0 without water), less the supply that
+/// passes it without being laid down (`dep.passing`), and the depressions keep what reaches them
+/// up to their capacity ([`lay_down`]). Where nothing incises this is the step's solution outside
+/// the depressions. Without supply `height` keeps its bits.
 fn first_iterate(
     step: &Incision<'_>,
     dep: &Deposition<'_>,
@@ -223,9 +233,9 @@ fn first_iterate(
         step.weights,
         dep.traps,
         dep.supply,
-        &keeps,
-        height,
         dep.cell_area,
+        height,
+        |i, through| (through - dep.passing[i]) * keeps[i],
     );
 }
 
@@ -242,8 +252,9 @@ fn first_iterate(
 ///    it; it lets go only the excess (`Traps::release`). The volumes held, decided by
 ///    `Traps::decide`, fill a fresh copy of `h*`: the new start `ŝ`;
 /// 2. sweeps once in stack order from `ŝ`, every cell but the fixed ones, with
-///    `Δt·G·(Qs_in(i) + V_i/Δt)/Q_i` and the cell's own term `c_i`; a depression's cell has no
-///    inflow term, since what reached it is in its fill;
+///    `G·(Qs_in(i)·Δt + V_i − P_i)/Q_i` (`P_i` the supply passing it, `dep.passing`) and the
+///    cell's own term `c_i`; a depression's cell has no inflow term, since what reached it is in
+///    its fill;
 /// 3. stops with the sweep's heights and `ŝ` when it changed no height by `tolerance` or more,
 ///    or after `max_iterations` (then with the plain sweep of the last iteration); otherwise
 ///    moves the heights toward the sweep's by Aitken's relaxation factor ([`Relaxation`]), and
@@ -312,9 +323,11 @@ pub(super) fn deposit(
         }
         traps.start(&decided, before, &mut filled);
         // Step 2: solve every cell from the start.
-        let reaching = arriving.iter().zip(dep.supply).zip(&lake);
-        for ((x, &q), ((&a, &s), &in_lake)) in inflow.iter_mut().zip(step.discharge).zip(reaching) {
-            *x = if in_lake { 0.0 } else { share(q, a + s) };
+        let reaching = arriving.iter().zip(dep.supply).zip(dep.passing).zip(&lake);
+        for ((x, &q), (((&a, &s), &p), &in_lake)) in
+            inflow.iter_mut().zip(step.discharge).zip(reaching)
+        {
+            *x = if in_lake { 0.0 } else { share(q, a + s - p) };
         }
         let terms = Deposit {
             inflow: &inflow,

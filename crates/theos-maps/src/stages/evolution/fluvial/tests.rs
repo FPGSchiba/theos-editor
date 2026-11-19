@@ -688,6 +688,14 @@ fn fluvial_declares_its_layers_and_parameters() {
         ("g = 0.0\nm = inf", Some("m")),
         ("g = 0.0\nmax_iterations = 0", Some("max_iterations")),
         ("g = 0.0\nn = 1.0", Some("n")),
+        (
+            "g = 1.0\nsupply_passes_dry_cells = 1",
+            Some("supply_passes_dry_cells"),
+        ),
+        (
+            "g = 1.0\nsupply_passes_dry_cell = true",
+            Some("supply_passes_dry_cell"),
+        ),
     ] {
         let err = stage.params(&bad.parse().unwrap()).unwrap_err();
         assert_eq!(err.parameter.as_deref(), parameter, "{bad}: {err}");
@@ -696,6 +704,10 @@ fn fluvial_declares_its_layers_and_parameters() {
     let typed = params.as_any().downcast_ref::<FluvialParams>().unwrap();
     assert!((typed.m - 0.45).abs() < 1e-12 && typed.max_iterations == 50);
     assert_eq!(typed.g.to_bits(), 0.0_f64.to_bits());
+    assert!(
+        !typed.supply_passes_dry_cells,
+        "the switch is off by default"
+    );
     assert_eq!(
         stage.reads(params.as_ref()),
         [
@@ -736,6 +748,14 @@ fn fluvial_declares_its_layers_and_parameters() {
     );
     assert_eq!(
         stage.writes(deposits.as_ref()),
+        stage.writes(params.as_ref())
+    );
+    // The switch reads and writes no layer of its own.
+    let passing = "g = 1.0\nsupply_passes_dry_cells = true".parse().unwrap();
+    let passing = stage.params(&passing).unwrap();
+    assert_eq!(stage.reads(passing.as_ref()), reads);
+    assert_eq!(
+        stage.writes(passing.as_ref()),
         stage.writes(params.as_ref())
     );
 }

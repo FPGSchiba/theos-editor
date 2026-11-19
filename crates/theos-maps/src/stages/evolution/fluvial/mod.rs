@@ -41,6 +41,11 @@
 //!   Without the layer there is no supply. With G > 0 the iterations start from `h*` with the
 //!   supply laid down along its way, as the law lays it down where nothing incises (`solve`), so
 //!   that dry cells do not route it undeposited in the first iteration.
+//! - **The switch `supply_passes_dry_cells`** (off by default; Task 27h): the slope supply passes
+//!   the cells whose catchment is dry (`Q < G·A`) without being laid down, and joins the sediment
+//!   at the first cell that is not dry (`runout`). Without it, a dry cell keeps nearly all of its
+//!   own supply, `slope_limit` cuts it straight back, and the supply grows through dry climate
+//!   periods.
 //!
 //! The report holds `sediment_out_m3`, the sediment that left the map in the step at the cells
 //! without an edge (the drained edges, or the closed map's sink), `iterations`, and `supply_m3`,
@@ -50,6 +55,7 @@ mod cell;
 mod fill;
 mod inputs;
 mod relax;
+mod runout;
 mod sediment;
 mod solve;
 #[cfg(test)]
@@ -59,6 +65,7 @@ use serde::Deserialize;
 
 use self::fill::Traps;
 use self::inputs::{depressions_misfit, routing_misfit};
+use self::runout::passing;
 use self::sediment::{Books, Ledger, books};
 use self::solve::{Deposition, Incision, Solution, deposit, incise};
 use super::booking::book;
@@ -92,6 +99,17 @@ pub struct FluvialParams {
     /// The most Gauss–Seidel iterations per step while deposition couples the cells (`g > 0`).
     #[serde(default = "default_max_iterations")]
     pub max_iterations: u32,
+    /// Whether the slope supply passes dry cells without being laid down (default `false`; Task
+    /// 27h). A cell is dry when its catchment's mean runoff weight is below G, `Q < G·A` with `A`
+    /// the plain drainage area: there the law lays down more of the sediment that reaches it
+    /// than it passes on (Yuan et al.'s `G/p̂ ≤ 1` fails). With the switch the supply runs out
+    /// over dry cells, as debris runs down dry gullies, and joins the sediment at the first cell
+    /// that is not dry, a routed depression or an outlet (`runout`). Without it a dry cell keeps
+    /// nearly all of its own supply, `slope_limit` cuts it straight back into the supply, and the
+    /// supply grows from step to step through a dry climate period. Only with `g > 0` does it
+    /// change anything.
+    #[serde(default)]
+    pub supply_passes_dry_cells: bool,
 }
 
 /// The default m, 0.45.
@@ -259,7 +277,8 @@ fn erode(
         dt,
     };
     let (height, out) = if params.g > 0.0 {
-        with_deposition(ctx, params, &step, start, &supply_m3, &mut report)?
+        let area = drainage_area.as_slice();
+        with_deposition(ctx, params, &step, start, &supply_m3, area, &mut report)?
     } else {
         report.values.insert("iterations".to_owned(), 1.0);
         let mut height = incise(&step, start);
@@ -286,8 +305,9 @@ fn erode(
     })
 }
 
-/// The step with deposition (`g > 0`) from `start` (`h*`): the routed depressions as traps,
-/// Yuan's Gauss–Seidel iterations, then the books. Returns the new heights and the sediment
+/// The step with deposition (`g > 0`) from `start` (`h*`): the routed depressions as traps, the
+/// slope supply that passes dry cells when the recipe says so (over the plain drainage `area`,
+/// m²), Yuan's Gauss–Seidel iterations, then the books. Returns the new heights and the sediment
 /// that left the map, m³, and adds `iterations` and the warnings of the iterations and the books
 /// to `report`.
 fn with_deposition(
@@ -296,6 +316,7 @@ fn with_deposition(
     step: &Incision<'_>,
     start: &Grid<f64>,
     supply_m3: &[f64],
+    area: &[f64],
     report: &mut StageReport,
 ) -> Result<(Grid<f64>, f64), StageError> {
     let depressions = ctx.value::<Depressions>("depressions")?;
@@ -305,11 +326,21 @@ fn with_deposition(
     let cell_area = ctx.frame().cell_area_m2();
     let routing = ctx.f64("routing_surface")?.as_slice();
     let traps = Traps::new(depressions, routing, start.as_slice(), cell_area);
+    let passes = if params.supply_passes_dry_cells {
+        // A dry catchment: its mean runoff weight `Q/A` below G. A depression's cell sends its
+        // supply into the fill; a fixed cell keeps its height.
+        let dry =
+            |i: usize| !traps.holds(i) && !step.fixed[i] && step.discharge[i] < params.g * area[i];
+        passing(step.stack, step.weights, supply_m3, dry)
+    } else {
+        vec![0.0; start.len()]
+    };
     let dep = Deposition {
         g: params.g,
         traps: &traps,
         cell_area,
         supply: supply_m3,
+        passing: &passes,
         tolerance: tolerance(ctx.f64_opt("uplift")?, step.dt),
         max_iterations: params.max_iterations,
         cancel: &|| ctx.check_cancel(),

@@ -832,6 +832,8 @@ fn the_iterations_stop_at_a_cancel() {
             traps,
             cell_area: CELL_AREA,
             supply,
+            // No supply, so none passes.
+            passing: supply,
             tolerance: 1e-6,
             max_iterations: 100,
             cancel,
