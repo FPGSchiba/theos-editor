@@ -292,7 +292,11 @@ fn a_string_panic_payload_is_read_too() {
 
 #[test]
 fn an_other_panic_payload_gets_a_fixed_text() {
-    assert_eq!(panic_message(&*Box::new(7_u8)), "the stage panicked");
+    let err = panicked("s", &*Box::new(7_u8));
+    assert!(
+        matches!(&err, RunError::StagePanicked { stage, message } if stage == "s" && message == "the stage panicked"),
+        "{err:?}"
+    );
 }
 
 #[test]

@@ -172,20 +172,22 @@ fn run_stage(
             stage: planned.id.to_owned(),
             source,
         }),
-        Err(payload) => Err(RunError::StagePanicked {
-            stage: planned.id.to_owned(),
-            message: panic_message(&*payload),
-        }),
+        Err(payload) => Err(panicked(planned.id, &*payload)),
     }
 }
 
-/// The text of a panic payload when it is a `&str` or a `String`.
-pub(crate) fn panic_message(payload: &dyn Any) -> String {
-    payload
+/// The error of `stage` (a stage, or a step after the pipeline) that panicked with `payload`:
+/// the message is the payload's text when it is a `&str` or a `String`.
+pub(crate) fn panicked(stage: &str, payload: &dyn Any) -> RunError {
+    let message = payload
         .downcast_ref::<&str>()
         .map(|s| (*s).to_owned())
         .or_else(|| payload.downcast_ref::<String>().cloned())
-        .unwrap_or_else(|| "the stage panicked".to_owned())
+        .unwrap_or_else(|| "the stage panicked".to_owned());
+    RunError::StagePanicked {
+        stage: stage.to_owned(),
+        message,
+    }
 }
 
 /// Checks, metrics and hashes of a finished stage go into `out`. A metric that is NaN or an
@@ -205,10 +207,7 @@ fn record(
             stage.metrics(world, params, &report),
         )
     }))
-    .map_err(|payload| RunError::StagePanicked {
-        stage: planned.id.to_owned(),
-        message: panic_message(&*payload),
-    })?;
+    .map_err(|payload| panicked(planned.id, &*payload))?;
     let found = report.findings.iter().cloned().chain(checked);
     for finding in found {
         match finding.severity {

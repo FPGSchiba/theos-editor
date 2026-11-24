@@ -25,7 +25,7 @@ use crate::package::{self, RunRecord};
 use crate::progress::{CancelToken, Progress};
 use crate::recipe::Plan;
 use crate::render::{self, RenderError, RenderInput};
-use crate::runner::{Execution, panic_message};
+use crate::runner::{Execution, panicked};
 use crate::stage::TypedStage;
 use crate::stages::terrain::travel::Travel;
 use crate::summary::summary;
@@ -87,12 +87,8 @@ impl<'a> Steps<'a> {
         work: impl FnOnce(&mut Self) -> Result<T, RunError>,
     ) -> Result<T, RunError> {
         let started = Instant::now();
-        let out = catch_unwind(AssertUnwindSafe(|| work(self))).map_err(|payload| {
-            RunError::StagePanicked {
-                stage: name.to_owned(),
-                message: panic_message(&*payload),
-            }
-        })??;
+        let out =
+            catch_unwind(AssertUnwindSafe(|| work(self))).map_err(|p| panicked(name, &*p))??;
         self.timing
             .insert(name.to_owned(), started.elapsed().as_secs_f64());
         Ok(out)
