@@ -106,15 +106,7 @@ fn run_reports_progress_and_returns_outputs_and_results() -> TestResult {
         on_disk.keys()
     );
 
-    for key in [
-        "features_chime",
-        "features_chime_min",
-        "features_chime_max",
-        "features_chime_ok",
-        "pass",
-    ] {
-        assert!(manifest.results.contains_key(key), "missing {key}");
-    }
+    check_constraint_results(&manifest)?;
     assert_eq!(
         manifest.frame.size_m.map(f64::to_bits),
         [6400.0_f64.to_bits(); 2]
@@ -130,6 +122,68 @@ fn run_reports_progress_and_returns_outputs_and_results() -> TestResult {
     ] {
         assert!(manifest.timing.contains_key(step), "no timing for {step}");
     }
+    Ok(())
+}
+
+/// The result key of a constraint path (`docs/generators.md` §3): lower case, every other
+/// character an `_`. Written here again so the test does not trust the library's own.
+fn result_key(path: &str) -> String {
+    path.chars()
+        .map(|c| {
+            let c = c.to_ascii_lowercase();
+            if c.is_ascii_lowercase() || c.is_ascii_digit() {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// CE-28.2: every constraint of `api-small` is in the results under the four keys of
+/// `docs/generators.md` §3 (`<key>` a number, `<key>_min` and `<key>_max` its range,
+/// `<key>_ok` a boolean that says whether the value lies in it), `pass` is a boolean that says
+/// whether all hold, and there are no other results (final review round 4, finding 4).
+fn check_constraint_results(manifest: &RunManifest) -> TestResult {
+    let recipe: toml::Table =
+        std::fs::read_to_string(recipes()[0].join("api-small.toml"))?.parse()?;
+    let constraints = recipe
+        .get("constraints")
+        .and_then(toml::Value::as_table)
+        .ok_or("api-small has constraints")?;
+    assert_eq!(constraints.len(), 3, "the test covers every constraint");
+    let results = &manifest.results;
+    let mut keys = BTreeSet::from(["pass".to_owned()]);
+    let mut all = true;
+    for (path, range) in constraints {
+        let [min, max]: [f64; 2] = range.clone().try_into()?;
+        let key = result_key(path);
+        let value = results[&key].as_f64().ok_or(format!("{key} is a number"))?;
+        assert_eq!(
+            results[&format!("{key}_min")].as_f64(),
+            Some(min),
+            "{key}_min"
+        );
+        assert_eq!(
+            results[&format!("{key}_max")].as_f64(),
+            Some(max),
+            "{key}_max"
+        );
+        let ok = results[&format!("{key}_ok")]
+            .as_bool()
+            .ok_or(format!("{key}_ok is a boolean"))?;
+        assert_eq!(ok, min <= value && value <= max, "{key}_ok for {value}");
+        all &= ok;
+        keys.extend([
+            key.clone(),
+            format!("{key}_min"),
+            format!("{key}_max"),
+            format!("{key}_ok"),
+        ]);
+    }
+    assert_eq!(results["pass"].as_bool(), Some(all), "pass");
+    let found: BTreeSet<String> = results.keys().cloned().collect();
+    assert_eq!(found, keys);
     Ok(())
 }
 
