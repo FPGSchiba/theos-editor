@@ -536,10 +536,11 @@ labels = []
   - constraint paths name values the metrics module or a stage's `metric_names` reports;
   - the frame is bounded: a cell edge (`size_km` over `grid`) lies in [1 cm, 100 km], and the
     grid's cell count fits the platform's index (ruling 70);
-  - each stage's own domains hold (ruling 71), then every number of a stage table is finite and
-    either 0 or of magnitude 1e-12 to 1e12, and every whole number is at most 1e6 in
-    magnitude (ruling 69). So no arithmetic on recipe numbers can overflow, wrap or panic, and
-    a recipe `describe` accepts never panics `run`.
+  - each stage's own domains hold (ruling 71), then every parameter of a stage, defaults
+    included, is bounded by its type: a float is finite and either 0 or of magnitude 1e-12 to
+    1e12, however the recipe writes it, and an integer (a count) is at most 1e6 in magnitude
+    (ruling 69). So no arithmetic on recipe numbers can overflow, wrap or panic, and a recipe
+    `describe` accepts never panics `run`.
 
   Each error names the stage (and the layer or parameter).
 - **A broken recipe in a folder** does not hide the others: `describe` lists the valid recipes and
@@ -607,7 +608,11 @@ labels = []
    router reports per routed link. Every pipeline stage reports at least its starting event.
 6. **Cancel:**
    - The token is checked between stages, every time step of `landscape_evolution`, every 4,096
-     queue pops of a shortest-path search, every row of a render, and between package entries.
+     units of a kernel's work (queue pops of a search, points inserted into a triangulation,
+     per-cell queries), before each item whose work is a pass over the grid (a feature pick,
+     a mill, an inn, a road's line in a render), per cell where a cell sums over a count, every
+     row of a render, and between package entries — so work sized by a recipe count also
+     stops within a second (ruling 74).
    - On cancel or failure, the runner deletes everything it wrote into the output folder before
      it returns, and only that: files that were there before stay (CE-28.4).
    - Outputs are first written under a temporary name in that folder and renamed at the end, so a
@@ -950,6 +955,8 @@ Plain styling with every layer and feature kind visible (Jann). All PNG.
 | `omega` | ω over hillshade, ruins marked (an extra render, asked for by `hearth-valley-omega`) |
 
 - **Drawing:** `tiny-skia` (scalar); labels are `skrifa` glyph outlines that `tiny-skia` fills.
+  The canvas hands `tiny-skia` only coordinates within one pixmap extent (width plus height)
+  beyond the pixmap and strokes at most four extents wide (ruling 75).
   Inter is used for `truth`, legends and the contact sheet, Spectral for `inworld`. Both are read
   from `design/theos-ui/fonts` with `include_bytes!` and decoded with `wuff` once per process.
 - **Licence:** the fonts are under SIL OFL 1.1. `theos-maps` exposes the licence texts, so the
@@ -1526,13 +1533,16 @@ Rulings of 13 Nov 2026, from the build:
     queue, not labels — the order, reversed, is a topological order towards the outlets, which
     `hydrology` walks to sum discharge and fill lakes; labels come from `labels` where a stage
     needs them — cost if wrong: none; one kernel row of §5.8.
-69. Ruling: every number of a stage table is finite and either 0 or of magnitude 1e-12 to
-    1e12, and every whole number at most 1e6 in magnitude, checked once after each stage's own
-    domains — the final review's audit found about 70 quantities over 22 parameter types that
-    recipe numbers could overflow (cell counts, weight totals, loop and allocation sizes); one
-    rule where numbers come in also covers later stages, where checks per parameter kept
-    leaking — cost if wrong: a recipe that needs a number beyond the bounds is refused (the
-    built-ins span 2.2e-4 to 2.4e4); the bounds are three constants.
+69. Ruling: every float parameter of a stage is finite and either 0 or of magnitude 1e-12 to
+    1e12, and every integer parameter (a count) at most 1e6 in magnitude, checked once on the
+    parsed parameters (defaults included) after each stage's own domains, so the parameter's
+    type decides, not how the recipe writes the number (a float written without a point was
+    taken for a count and refused above 1e6) — the final review's audit found about 70
+    quantities over 22 parameter types that recipe numbers could overflow (cell counts,
+    weight totals, loop and allocation sizes); one rule where numbers come in also covers
+    later stages, where checks per parameter kept leaking — cost if wrong: a recipe that
+    needs a number beyond the bounds is refused (the built-ins span 2.2e-4 to 2.4e4); the
+    bounds are three constants.
 70. Ruling: a cell edge lies in [1 cm, 100 km] and the cell count `rows × columns` must not
     overflow — a grid of 3e9 × 7e9 cells passed `describe` and panicked `run` in the memory
     budget; a size whose cells underflowed to 0 m passed the square-cell check — cost if
@@ -1555,6 +1565,17 @@ Rulings of 13 Nov 2026, from the build:
     layer, a stage metric), each with its stage, and has variants for the memory budget, an
     existing output, the format, renders and the post-pipeline outputs — §5.4 and §5.13 ask
     for those errors, and P09 maps errors by variant — cost if wrong: P09 maps more variants.
+74. Ruling: work that a recipe count sizes reaches a cancel point within a second: kernels
+    check every 4,096 units of work, per-item loops check per item where an item is a pass
+    over the grid, and per-cell sums over a count check per cell — a million Voronoi
+    provinces ran 87 s past a cancel; linear passes over the features (hashing, the features
+    output, the package entry) keep no cancel point inside — cost if wrong: an atomic load per
+    unit of work; the golden runs took as long before as after.
+75. Ruling: the canvas clamps coordinates to one pixmap extent beyond the pixmap and strokes to
+    four extents — `tiny-skia`'s scan converter draws nothing beyond about 5e8 px and panics
+    from about 1.8e9 px (a river width of `width_a = 1e12` panicked the renders); inside the
+    bounds the drawing is unchanged bit for bit — cost if wrong: an absurd stroke or shape is
+    drawn clamped.
 
 ## 10. Left to the builder
 
