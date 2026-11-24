@@ -5,9 +5,17 @@
 //! point in metres lands on the pixel `floor(m / (cell_m / 2))`. Cell rasters are sampled at
 //! pixel centres by bilinear interpolation between cell centres, which at two pixels per cell
 //! always takes the weights 3/4 and 1/4: exact in binary floating point.
+//!
+//! This module is the only one that draws through tiny-skia, and it keeps every coordinate and
+//! stroke width it hands over within [`Bounds`] of the pixmap: tiny-skia rasterises in `f32` and
+//! fixed point, and a stroke tens of billions of pixels wide (a river of `width_a = 1e12`) fails
+//! an assertion inside it (final review round 4, finding 2).
+
+use std::borrow::Cow;
 
 use tiny_skia::{
-    FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Stroke, StrokeDash, Transform,
+    FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, PathSegment, Pixmap, Stroke, StrokeDash,
+    Transform,
 };
 
 use super::RenderError;
@@ -26,6 +34,122 @@ const BYTES_PER_PX: usize = 4;
 const NEAR: f64 = 0.75;
 /// The weight of the farther cell centre.
 const FAR: f64 = 0.25;
+
+/// How far beyond the pixmap a coordinate may lie, in pixmap extents (width plus height, which
+/// is at least the diagonal).
+const REACH: f32 = 1.0;
+/// The widest stroke, in pixmap extents: twice the farthest a point inside [`Bounds`] lies from
+/// a pixel of the pixmap, so a stroke this wide covers every pixel a wider one would cover.
+const WIDEST: f32 = 4.0;
+
+/// The box every coordinate handed to tiny-skia keeps, and the widest stroke.
+///
+/// A coordinate outside the box is moved onto its edge and a wider stroke is drawn at the widest:
+/// both lie far enough outside the pixmap that a drawing within them is unchanged, and anything
+/// beyond them is clamped (final review round 4, ruling on render clamping). NaN passes through,
+/// and tiny-skia draws nothing for it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Bounds {
+    /// The smallest x, pixels.
+    left: f32,
+    /// The smallest y, pixels.
+    top: f32,
+    /// The largest x, pixels.
+    right: f32,
+    /// The largest y, pixels.
+    bottom: f32,
+    /// The widest stroke, pixels.
+    widest: f32,
+}
+
+impl Bounds {
+    /// The bounds of `pixmap`.
+    fn of(pixmap: &Pixmap) -> Self {
+        let (width, height) = (
+            to_f32(f64::from(pixmap.width())),
+            to_f32(f64::from(pixmap.height())),
+        );
+        let extent = width + height;
+        Self {
+            left: -REACH * extent,
+            top: -REACH * extent,
+            right: width + REACH * extent,
+            bottom: height + REACH * extent,
+            widest: WIDEST * extent,
+        }
+    }
+
+    /// `p` (pixels) inside the box.
+    fn point(self, p: [f64; 2]) -> (f32, f32) {
+        (
+            clamp(to_f32(p[0]), self.left, self.right),
+            clamp(to_f32(p[1]), self.top, self.bottom),
+        )
+    }
+
+    /// The stroke width `width_px`, at most [`Bounds::widest`].
+    fn width(self, width_px: f64) -> f32 {
+        let width = to_f32(width_px);
+        if width > self.widest {
+            self.widest
+        } else {
+            width
+        }
+    }
+
+    /// `path` with every point inside the box: `path` itself when it already is, else a copy of
+    /// it with its points clamped; `None` when the copy is no path.
+    fn path(self, path: &Path) -> Option<Cow<'_, Path>> {
+        let rect = path.bounds();
+        let inside = rect.left() >= self.left
+            && rect.top() >= self.top
+            && rect.right() <= self.right
+            && rect.bottom() <= self.bottom;
+        if inside {
+            return Some(Cow::Borrowed(path));
+        }
+        let at = |point: tiny_skia::Point| {
+            (
+                clamp(point.x, self.left, self.right),
+                clamp(point.y, self.top, self.bottom),
+            )
+        };
+        let mut builder = PathBuilder::new();
+        for segment in path.segments() {
+            match segment {
+                PathSegment::MoveTo(end) => {
+                    let (x, y) = at(end);
+                    builder.move_to(x, y);
+                }
+                PathSegment::LineTo(end) => {
+                    let (x, y) = at(end);
+                    builder.line_to(x, y);
+                }
+                PathSegment::QuadTo(control, end) => {
+                    let (control, (x, y)) = (at(control), at(end));
+                    builder.quad_to(control.0, control.1, x, y);
+                }
+                PathSegment::CubicTo(first, second, end) => {
+                    let (first, second, (x, y)) = (at(first), at(second), at(end));
+                    builder.cubic_to(first.0, first.1, second.0, second.1, x, y);
+                }
+                PathSegment::Close => builder.close(),
+            }
+        }
+        builder.finish().map(Cow::Owned)
+    }
+}
+
+/// `x` moved into `[lo, hi]`; `x` itself, bit for bit, when it lies inside, and NaN stays NaN.
+fn clamp(x: f32, lo: f32, hi: f32) -> f32 {
+    if x < lo {
+        lo
+    } else if x > hi {
+        hi
+    } else {
+        x
+    }
+}
 
 /// A transparent pixmap of `frame` at [`PX_PER_CELL`].
 pub(crate) fn pixmap(frame: &MapFrame) -> Result<Pixmap, RenderError> {
@@ -105,7 +229,8 @@ pub(crate) fn rows_mut(pixmap: &mut Pixmap) -> std::slice::ChunksMut<'_, Px> {
 }
 
 /// Strokes the segment `from`–`to` (pixels) `width_px` wide in `colour`, anti-aliased, with
-/// round caps, so consecutive segments of a line join without gaps.
+/// round caps, so consecutive segments of a line join without gaps: a [`polyline`] of two
+/// points.
 pub(crate) fn stroke(
     pixmap: &mut Pixmap,
     from: [f64; 2],
@@ -113,36 +238,27 @@ pub(crate) fn stroke(
     width_px: f64,
     colour: Rgb,
 ) {
-    let mut path = PathBuilder::new();
-    path.move_to(to_f32(from[0]), to_f32(from[1]));
-    path.line_to(to_f32(to[0]), to_f32(to[1]));
-    let Some(path) = path.finish() else {
-        return;
+    let style = LineStyle {
+        width_px,
+        colour,
+        dash: None,
     };
-    let stroke = Stroke {
-        width: to_f32(width_px),
-        line_cap: LineCap::Round,
-        ..Stroke::default()
-    };
-    pixmap.stroke_path(&path, &paint(colour), &stroke, Transform::identity(), None);
+    polyline(pixmap, &[from, to], &style);
 }
 
 /// Fills `path` (pixels) in `colour`, anti-aliased, by the non-zero winding rule: shapes and
 /// glyph outlines alike.
 pub(crate) fn fill(pixmap: &mut Pixmap, path: &Path, colour: Rgb) {
-    pixmap.fill_path(
-        path,
-        &paint(colour),
-        FillRule::Winding,
-        Transform::identity(),
-        None,
-    );
+    fill_alpha(pixmap, path, colour, u8::MAX);
 }
 
 /// Fills `path` (pixels) in `colour` with opacity `alpha` (255 is opaque), anti-aliased.
 pub(crate) fn fill_alpha(pixmap: &mut Pixmap, path: &Path, colour: Rgb, alpha: u8) {
+    let Some(path) = Bounds::of(pixmap).path(path) else {
+        return;
+    };
     pixmap.fill_path(
-        path,
+        &path,
         &paint_alpha(colour, alpha),
         FillRule::Winding,
         Transform::identity(),
@@ -152,11 +268,15 @@ pub(crate) fn fill_alpha(pixmap: &mut Pixmap, path: &Path, colour: Rgb, alpha: u
 
 /// Strokes the outline of `path` (pixels) in `colour`, `width_px` wide, anti-aliased.
 pub(crate) fn outline(pixmap: &mut Pixmap, path: &Path, width_px: f64, colour: Rgb) {
+    let bounds = Bounds::of(pixmap);
+    let Some(path) = bounds.path(path) else {
+        return;
+    };
     let stroke = Stroke {
-        width: to_f32(width_px),
+        width: bounds.width(width_px),
         ..Stroke::default()
     };
-    pixmap.stroke_path(path, &paint(colour), &stroke, Transform::identity(), None);
+    pixmap.stroke_path(&path, &paint(colour), &stroke, Transform::identity(), None);
 }
 
 /// How a polyline is stroked.
@@ -178,16 +298,19 @@ pub(crate) fn polyline(pixmap: &mut Pixmap, points: &[[f64; 2]], style: &LineSty
     if rest.is_empty() {
         return;
     }
+    let bounds = Bounds::of(pixmap);
     let mut path = PathBuilder::new();
-    path.move_to(to_f32(first[0]), to_f32(first[1]));
+    let (x, y) = bounds.point(*first);
+    path.move_to(x, y);
     for p in rest {
-        path.line_to(to_f32(p[0]), to_f32(p[1]));
+        let (x, y) = bounds.point(*p);
+        path.line_to(x, y);
     }
     let Some(path) = path.finish() else {
         return;
     };
     let stroke = Stroke {
-        width: to_f32(style.width_px),
+        width: bounds.width(style.width_px),
         line_cap: LineCap::Round,
         line_join: LineJoin::Round,
         dash: style.dash.and_then(|d| StrokeDash::new(d.to_vec(), 0.0)),
@@ -309,5 +432,76 @@ mod tests {
         assert_eq!(image.rgba(8, 2)[3], 0, "far from the line nothing is drawn");
         // A degenerate segment draws nothing and does not fail.
         stroke(&mut p, [f64::NAN, 0.0], [1.0, 1.0], 1.0, [0, 0, 0]);
+    }
+
+    // Final review round 4, finding 2: what reaches tiny-skia stays within the bounds of the
+    // pixmap, so absurd but finite sizes are drawn clamped instead of failing inside it.
+    #[test]
+    fn the_bounds_leave_a_drawing_inside_them_alone_and_clamp_the_rest() {
+        let p = pixmap(&frame(8, 4)).unwrap();
+        let b = Bounds::of(&p);
+        // 8 x 16 pixels: the box reaches 24 pixels beyond every side, a stroke 96 pixels wide.
+        assert_eq!(
+            b,
+            Bounds {
+                left: -24.0,
+                top: -24.0,
+                right: 32.0,
+                bottom: 40.0,
+                widest: 96.0
+            }
+        );
+        assert_eq!(b.point([-0.0, 3.25]), (-0.0, 3.25));
+        assert!(
+            b.point([-0.0, 0.0]).0.is_sign_negative(),
+            "inside, bit for bit"
+        );
+        assert_eq!(b.point([-1e300, 1e12]), (-24.0, 40.0));
+        assert_eq!(b.point([f64::INFINITY, -50.0]), (32.0, -24.0));
+        assert!(b.point([f64::NAN, 0.0]).0.is_nan());
+        assert_eq!(
+            (b.width(2.5), b.width(96.0), b.width(3e10)),
+            (2.5, 96.0, 96.0)
+        );
+        let mut square = PathBuilder::new();
+        square.move_to(1.0, 1.0);
+        square.line_to(7.0, 1.0);
+        square.quad_to(7.0, 4.0, 7.0, 7.0);
+        square.cubic_to(5.0, 7.0, 3.0, 7.0, 1.0, 7.0);
+        square.close();
+        let square = square.finish().unwrap();
+        assert!(matches!(b.path(&square), Some(Cow::Borrowed(_))));
+        let huge = PathBuilder::from_circle(4.0, 8.0, 1e9).unwrap();
+        let clamped = b.path(&huge).unwrap();
+        let bounds = clamped.bounds();
+        assert_eq!(
+            (bounds.left(), bounds.top(), bounds.right(), bounds.bottom()),
+            (-24.0, -24.0, 32.0, 40.0)
+        );
+    }
+
+    #[test]
+    fn absurd_sizes_are_drawn_clamped_without_failing() {
+        let mut p = pixmap(&frame(8, 8)).unwrap();
+        // A segment 3e10 pixels wide failed an assertion inside tiny-skia; clamped, it covers
+        // every pixel, as the wider stroke would.
+        stroke(&mut p, [2.0, 8.0], [14.0, 8.0], 3e10, [10, 20, 30]);
+        let image = decode(&encode_png(&p).unwrap());
+        assert_eq!(image.rgba(0, 0), [10, 20, 30, 255]);
+        assert_eq!(image.rgba(15, 15), [10, 20, 30, 255]);
+        let mut p = pixmap(&frame(8, 8)).unwrap();
+        let huge = PathBuilder::from_circle(8.0, 8.0, 1e12).unwrap();
+        fill(&mut p, &huge, [40, 50, 60]);
+        outline(&mut p, &huge, 1e12, [70, 80, 90]);
+        let far = PathBuilder::from_circle(1e12, -1e12, 3.0).unwrap();
+        fill_alpha(&mut p, &far, [1, 2, 3], 128);
+        let line = LineStyle {
+            width_px: 2.0,
+            colour: [5, 5, 5],
+            dash: Some([3.0, 2.0]),
+        };
+        polyline(&mut p, &[[1.0, 1.0], [1e15, 1e15], [-1e300, 4.0]], &line);
+        let image = decode(&encode_png(&p).unwrap());
+        assert_eq!(image.width, 16);
     }
 }

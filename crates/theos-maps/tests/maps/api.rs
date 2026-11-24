@@ -473,3 +473,43 @@ fn the_memory_budget_comes_from_run_options() -> TestResult {
     assert!(files(dir.path())?.is_empty());
     Ok(())
 }
+
+/// Runs `api-small` with seed 1, its text changed by `edit`, and returns how the run ended.
+fn run_edited_api_small(
+    edit: impl Fn(String) -> String,
+) -> Result<Result<RunManifest, RunError>, Box<dyn std::error::Error>> {
+    let folder = tempfile::tempdir()?;
+    let text = edit(std::fs::read_to_string(
+        recipes()[0].join("api-small.toml"),
+    )?);
+    std::fs::write(folder.path().join("api-small.toml"), text)?;
+    let dir = tempfile::tempdir()?;
+    Ok(run(
+        &request("api-small", 1),
+        &[folder.path().to_path_buf()],
+        dir.path(),
+        &mut |_| {},
+        &CancelToken::new(),
+    ))
+}
+
+// Final review round 4, finding 2 (spec §5.5: a recipe `describe` accepts never panics `run`):
+// numbers inside the recipe bounds that reach a render as huge pixel sizes are drawn clamped
+// to the canvas; the run never ends in a panic.
+#[test]
+fn extreme_numbers_inside_the_bounds_never_panic_a_render() -> TestResult {
+    let result = run_edited_api_small(|text| {
+        text.replace(
+            "min_lake_area_m2 = 30000.0",
+            "min_lake_area_m2 = 30000.0\nwidth_a = 1e12",
+        )
+    })?;
+    match result {
+        Ok(manifest) => assert!(manifest.outputs.contains_key("base")),
+        Err(RunError::StagePanicked { stage, message }) => {
+            return Err(format!("stage `{stage}` panicked: {message}").into());
+        }
+        Err(other) => return Err(format!("expected a finished run, got {other}").into()),
+    }
+    Ok(())
+}

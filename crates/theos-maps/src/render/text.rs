@@ -120,11 +120,15 @@ pub(crate) fn draw(
     Ok(())
 }
 
-/// The largest size up to `max_px` at which `text` is at most `max_width` pixels wide.
+/// The largest size up to `max_px` at which `text` is at most `max_width` pixels wide; 0 when
+/// there is no room (a frame narrower than its margins), never a negative size, which `skrifa`
+/// would draw mirrored (final review round 4, class H).
 pub(crate) fn fit(face: &Face, text: &str, max_px: f32, max_width: f32) -> f32 {
     let at_max = width(face, text, max_px);
     if at_max <= max_width || at_max <= 0.0 {
         max_px
+    } else if max_width <= 0.0 {
+        0.0
     } else {
         max_px * max_width / at_max
     }
@@ -191,6 +195,21 @@ mod tests {
             line(inter, "\u{4E2D}", 20.0, [0.0, 20.0])
                 .unwrap()
                 .is_some()
+        );
+    }
+
+    // Final review round 4, class H: a frame narrower than its margins leaves no room, and the
+    // size is 0, not negative.
+    #[test]
+    fn a_title_without_room_gets_no_size() {
+        let inter = &fonts().unwrap().inter;
+        let full = width(inter, "Theos", 20.0);
+        assert!((fit(inter, "Theos", 20.0, full) - 20.0).abs() < 1e-6);
+        assert!((fit(inter, "Theos", 20.0, full / 2.0) - 10.0).abs() < 1e-3);
+        assert_eq!(fit(inter, "Theos", 20.0, 0.0).to_bits(), 0.0_f32.to_bits());
+        assert_eq!(
+            fit(inter, "Theos", 20.0, -12.0).to_bits(),
+            0.0_f32.to_bits()
         );
     }
 }
