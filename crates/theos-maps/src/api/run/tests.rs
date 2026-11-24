@@ -96,8 +96,9 @@ fn fixtures() -> PathBuf {
 // Each step after the pipeline reports its progress event inside the step, so a progress
 // closure that panics on that event panics inside the step, with no hook in the library. The
 // `renders` step panics at its third render, after the features and two renders were written
-// as part files; the `package` step after every render was.
-// AC: CE-28.4
+// as part files; the `package` step after every render was. This proves the ledger ruling of
+// Task 41 (no panic of a step after the pipeline leaves `run`), not CE-28.4, whose panicking
+// stage is the test above.
 #[test]
 fn a_panic_in_a_step_after_the_pipeline_ends_the_run_with_its_message_and_no_files() -> TestResult {
     for step in ["constraints", "features", "renders", "package"] {
