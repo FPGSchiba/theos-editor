@@ -72,7 +72,7 @@ use crate::kernels::routing::outlets;
 use crate::stage::{
     Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
-use crate::stages::terrain::climate::{self, Climate, ClimateFields};
+use crate::stages::terrain::climate::{Climate, ClimateFields};
 use crate::world::{Layer, MapFrame, ValueType, WorldValue};
 
 /// A depression smaller than this is filled when the recipe sets no `min_lake_area_m2`, m²:
@@ -260,18 +260,15 @@ fn report(water: &Water, cell_area: f64) -> StageReport {
         .fold(0.0, |sum, v| sum + v);
     let inflow = terminal.iter().fold(0.0, |sum, b| sum + b.balance.q_land);
     let mut report = StageReport::default();
-    let mut put = |name: &str, value: f64| {
-        report.values.insert(name.to_owned(), value);
-    };
-    put("lakes", to_f64(lakes.count()));
-    put(
+    report.put("lakes", to_f64(lakes.count()));
+    report.put(
         "terminal_lakes",
         to_f64(terminal.iter().filter(|b| b.lake.is_some()).count()),
     );
-    put("filled_pits", to_f64(water.filled_pits));
-    put("filled_nested_cells", to_f64(water.filled_nested));
-    put("terminal_inflow_m3_yr", inflow);
-    put("terminal_evaporation_m3_yr", evaporated);
+    report.put("filled_pits", to_f64(water.filled_pits));
+    report.put("filled_nested_cells", to_f64(water.filled_nested));
+    report.put("terminal_inflow_m3_yr", inflow);
+    report.put("terminal_evaporation_m3_yr", evaporated);
     report
 }
 
@@ -346,15 +343,9 @@ impl TypedStage for Hydrology {
         let frame = *ctx.frame();
         let climate = ctx.value::<Climate>("climate")?;
         let height = ctx.f64("height")?;
-        let local;
-        let fields = if let Some(fields) = &climate.fields {
-            fields
-        } else {
-            local = climate::fields(height, &frame, &climate.params);
-            &local
-        };
+        let fields = climate.fields_of(height, &frame);
         let limits = params.limits();
-        let water = water(height, ctx.mask("fixed")?, fields, &frame, &limits);
+        let water = water(height, ctx.mask("fixed")?, &fields, &frame, &limits);
         let rasters = rasters::rasters(&water, &params.thresholds);
         let report = report(&water, frame.cell_area_m2());
         let geometry = Geometry {

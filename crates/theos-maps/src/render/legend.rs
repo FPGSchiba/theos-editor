@@ -9,7 +9,8 @@ use super::fonts::Face;
 use super::marks::Mark;
 use super::palette::Rgb;
 use super::styles::INK;
-use super::text;
+use super::{feats, text};
+use crate::features::FeatureSet;
 use crate::kernels::num::{max, to_f32, to_f64, to_index};
 
 /// The panel's colour.
@@ -84,12 +85,21 @@ fn draw_swatch(pixmap: &mut Pixmap, swatch: &Swatch, at: [f64; 2]) {
                 canvas::outline(pixmap, &path, 0.8, BORDER);
             }
         }
-        Swatch::Ring(colour) => {
-            if let Some(path) = PathBuilder::from_circle(to_f32(at[0]), to_f32(at[1]), 5.0) {
-                canvas::outline(pixmap, &path, 1.6, *colour);
-            }
-        }
+        Swatch::Ring(colour) => canvas::ring(pixmap, at, 5.0, 1.6, *colour),
     }
+}
+
+/// One entry per type of `kind` among `features`, in type order: the mark `mark` gives the type,
+/// and the type's name with spaces for hyphens.
+pub(crate) fn marks_of(
+    features: &FeatureSet,
+    kind: &str,
+    mark: impl Fn(&str) -> Mark,
+) -> Vec<Entry> {
+    feats::types_present(features, kind)
+        .into_iter()
+        .map(|ty| Entry::new(Swatch::Mark(mark(&ty)), ty.replace('-', " ")))
+        .collect()
 }
 
 /// The entries split into columns of as many rows as fit under the height limit.

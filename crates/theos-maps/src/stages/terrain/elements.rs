@@ -21,12 +21,11 @@ use crate::kernels::filters::gaussian;
 use crate::kernels::num::{max, min, smoothstep};
 use crate::kernels::stats;
 use crate::stage::{
-    Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
-    TypedStage,
+    Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
-use crate::stages::terrain::climate::{self, Climate};
+use crate::stages::terrain::climate::Climate;
 use crate::stages::terrain::rocks::Rock;
-use crate::world::{Layer, ValueType, World};
+use crate::world::{Layer, ValueType};
 
 /// The element names, in the order of [`ELEMENT_LAYERS`].
 pub(crate) const NAMES: [&str; 5] = ["water", "wood", "earth", "metal", "fire"];
@@ -156,13 +155,7 @@ impl TypedStage for Elements {
         let frame = *ctx.frame();
         let climate = ctx.value::<Climate>("climate")?;
         let height = ctx.f64("height")?;
-        let local;
-        let fields = if let Some(fields) = &climate.fields {
-            fields
-        } else {
-            local = climate::fields(height, &frame, &climate.params);
-            &local
-        };
+        let fields = climate.fields_of(height, &frame);
         let water = ctx.mask("river")?.map(|r| if r { 1.0 } else { 0.0 });
         let lake = ctx.mask("lake")?;
         let mut source = water;
@@ -197,16 +190,12 @@ impl TypedStage for Elements {
             .each_ref()
             .map(|g| stats::mean(g.as_slice()).unwrap_or(0.0));
         for (name, share) in NAMES.into_iter().zip(shares(means)) {
-            report.values.insert(name.to_owned(), share);
+            report.put(name, share);
         }
         for (name, grid) in ELEMENT_LAYERS.into_iter().zip(out) {
             ctx.write(name, Layer::F64(grid))?;
         }
         Ok(report)
-    }
-
-    fn metrics(&self, _: &World, _: &ElementsParams, report: &StageReport) -> Metrics {
-        Metrics(report.values.clone())
     }
 }
 
@@ -215,8 +204,9 @@ mod tests {
     use super::*;
     use crate::kernels::num::to_f64;
     use crate::stage::Stage;
-    use crate::stages::terrain::climate::ClimateParams;
+    use crate::stages::terrain::climate::{self, ClimateParams};
     use crate::stages::terrain::support::{run_stage, table, world};
+    use crate::world::World;
 
     const N: usize = 16;
     const GRANITE: u8 = 0;

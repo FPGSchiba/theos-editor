@@ -20,10 +20,10 @@ use crate::kernels::noise::spectral_noise;
 use crate::kernels::num::{max, min, to_f64};
 use crate::kernels::stats::percentile;
 use crate::stage::{
-    Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
-    TypedStage,
+    Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
-use crate::world::{Layer, ValueType, World};
+use crate::stages::terrain::feature_points;
+use crate::world::{Layer, ValueType};
 
 /// The spectral exponent of the drift, 0.3.0's 3.4.
 const DRIFT_BETA: f64 = 3.4;
@@ -132,9 +132,7 @@ impl TypedStage for Detuning {
         // Only requires the layer: the spec row declares the read; omega does not depend on
         // height in 0.3.0.
         ctx.f64("height")?;
-        let ruins = ctx
-            .value_opt::<FeatureSet>("features")?
-            .map_or_else(Vec::new, |set| set.points("poi", Some("ruin")));
+        let ruins = feature_points(ctx, "poi", Some("ruin"))?;
         let drift = spectral_noise(frame.rows, frame.cols, &mut rng, DRIFT_BETA, 0.0, None);
         let field = omega(
             frame.rows,
@@ -150,19 +148,11 @@ impl TypedStage for Detuning {
         let n = to_f64(values.len());
         let above = to_f64(values.iter().filter(|&&v| v > 0.5).count());
         let p95 = percentile(values, 95.0).map_err(|e| ctx.kernel_failed(e))?;
-        report
-            .values
-            .insert("mean".to_owned(), values.iter().sum::<f64>() / n);
-        report.values.insert("p95".to_owned(), p95);
-        report
-            .values
-            .insert("pct_above_0_5".to_owned(), above / n * 100.0);
+        report.put("mean", values.iter().sum::<f64>() / n);
+        report.put("p95", p95);
+        report.put("pct_above_0_5", above / n * 100.0);
         ctx.write("omega", Layer::F64(field))?;
         Ok(report)
-    }
-
-    fn metrics(&self, _: &World, _: &DetuningParams, report: &StageReport) -> Metrics {
-        Metrics(report.values.clone())
     }
 }
 

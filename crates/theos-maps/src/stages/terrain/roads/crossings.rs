@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use super::route::bridge_key;
 use super::{Road, StepCost};
 use crate::features::{Feature, Prop};
-use crate::kernels::num::{canonical, round_half_even, to_u32};
+use crate::kernels::num::{round_to, to_u32};
 use crate::world::MapFrame;
 
 /// The crossing sites of `roads`, in road order and along each road: a `bridge` at the middle
@@ -68,7 +68,7 @@ fn ford(
 fn bridge(cost: &StepCost<'_>, a: usize, b: usize, id: &Prop, frame: &MapFrame) -> Feature {
     let [xa, ya] = frame.index_centre_m(a);
     let [xb, yb] = frame.index_centre_m(b);
-    let tenth = |m: f64| Prop::Num(canonical(round_half_even(m * 10.0) / 10.0));
+    let tenth = |m: f64| Prop::Num(round_to(m, 10.0));
     let props = [
         ("road", id.clone()),
         ("span_m", tenth(frame.distance_m(a, b))),

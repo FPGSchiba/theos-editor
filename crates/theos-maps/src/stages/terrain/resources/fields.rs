@@ -33,13 +33,13 @@ use std::collections::BTreeSet;
 use crate::grid::Grid;
 use crate::kernels::KernelError;
 use crate::kernels::diff::laplace;
-use crate::kernels::distance::distance;
 use crate::kernels::filters::gaussian;
 use crate::kernels::morphology::{Structure, dilate};
 use crate::kernels::num::{max, min};
 use crate::kernels::stats::percentile;
 use crate::stages::terrain::hydrology::WaterFeatures;
 use crate::stages::terrain::rocks::Rock;
+use crate::stages::terrain::water_distance_m;
 use crate::world::MapFrame;
 
 /// The resource types in the order 0.3.0 placed them.
@@ -143,15 +143,11 @@ fn ruins_near(
 
 /// Whether each cell is less than 0.6 km from a river or lake; all false without water.
 fn near_water(inputs: &Inputs<'_>, frame: &MapFrame) -> Result<Grid<bool>, KernelError> {
-    let mut water = inputs.river.clone();
-    for (w, &l) in water.as_mut_slice().iter_mut().zip(inputs.lake.as_slice()) {
-        *w = *w || l;
-    }
-    if !water.as_slice().iter().any(|&w| w) {
-        return Ok(Grid::filled(frame.rows, frame.cols, false));
-    }
-    let (dist, _) = distance(&water, frame.cell_m)?;
-    Ok(dist.map(|m| m < NEAR_WATER_M))
+    let dist = water_distance_m(inputs.river, inputs.lake, frame.cell_m)?;
+    Ok(dist.map_or_else(
+        || Grid::filled(frame.rows, frame.cols, false),
+        |d| d.map(|m| m < NEAR_WATER_M),
+    ))
 }
 
 /// Soft rock next to granite: the granite dilated, without granite, on limestone, sandstone or

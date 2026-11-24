@@ -8,7 +8,6 @@ use tiny_skia::{Color, PathBuilder, Pixmap, PixmapPaint, Rect, Transform};
 use super::canvas::{self, LineStyle};
 use super::fonts::{Face, fonts};
 use super::legend::{self, Entry, Swatch};
-use super::marks::{Mark, Shape};
 use super::palette::{self, Rgb};
 use super::styles::{self, INK, road_style};
 use super::view::View;
@@ -100,13 +99,7 @@ fn draw_features(
     }
     for (f, at) in feats::points(features, "resource") {
         input.check_cancel()?;
-        let mark = Mark {
-            shape: Shape::Circle,
-            size: 5,
-            face: styles::resource_colour(&f.ty),
-            edge: [0; 3],
-        };
-        mark.draw(pixmap, view.px(at));
+        styles::resource_mark(&f.ty, 5).draw(pixmap, view.px(at));
     }
     for (f, at) in feats::points(features, "settlement") {
         input.check_cancel()?;
@@ -114,10 +107,7 @@ fn draw_features(
         let [x, y] = view.px(at);
         if f.ty == "city" {
             let radius = f64::from(mark.size) / 2.0 + 4.0;
-            let centre = (to_f32(x), to_f32(y));
-            if let Some(ring) = PathBuilder::from_circle(centre.0, centre.1, to_f32(radius)) {
-                canvas::outline(pixmap, &ring, 1.5, styles::SETTLEMENT_EDGE);
-            }
+            canvas::ring(pixmap, [x, y], radius, 1.5, styles::SETTLEMENT_EDGE);
         }
         mark.draw(pixmap, [x, y]);
         if let Some(name) = feats::text(f, "name") {
@@ -227,27 +217,11 @@ fn entries(input: &RenderInput<'_>) -> Vec<Entry> {
             out.push(Entry::new(Swatch::Mark(styles::settlement_mark(ty)), ty));
         }
     }
-    for ty in feats::types_present(features, "poi") {
-        out.push(Entry::new(
-            Swatch::Mark(styles::poi_mark(&ty)),
-            ty.replace('-', " "),
-        ));
-    }
-    for ty in feats::types_present(features, "site") {
-        out.push(Entry::new(
-            Swatch::Mark(styles::site_mark(&ty)),
-            ty.replace('-', " "),
-        ));
-    }
-    for ty in feats::types_present(features, "resource") {
-        let mark = Mark {
-            shape: Shape::Circle,
-            size: 5,
-            face: styles::resource_colour(&ty),
-            edge: [0; 3],
-        };
-        out.push(Entry::new(Swatch::Mark(mark), ty.replace('-', " ")));
-    }
+    out.extend(legend::marks_of(features, "poi", styles::poi_mark));
+    out.extend(legend::marks_of(features, "site", styles::site_mark));
+    out.extend(legend::marks_of(features, "resource", |ty| {
+        styles::resource_mark(ty, 5)
+    }));
     let has_rivers = input
         .value::<WaterFeatures>("water_features")
         .is_ok_and(|w| !w.rivers.is_empty());

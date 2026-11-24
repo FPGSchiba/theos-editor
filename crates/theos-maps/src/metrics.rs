@@ -34,23 +34,12 @@ use theos_map_format::FormatError;
 use theos_map_format::json::to_checked_value;
 
 use crate::grid::Grid;
-use crate::kernels::num::{canonical, round_half_even, to_f64};
+use crate::kernels::num::{canonical, round_to, to_f64};
 use crate::kernels::stats::median;
 use crate::stage::Metrics;
-use crate::stages::terrain::climate::{self, Climate};
+use crate::stages::terrain::climate::Climate;
 use crate::stages::terrain::travel::CHIME_TO_CHIME_MIN;
 use crate::world::World;
-
-/// `x` rounded to one decimal place (`scale` 10) or two (`scale` 100) the way Python's
-/// `round(x, n)` does: halves to even on the scaled value, both steps exact IEEE operations
-/// (ruling: the plan said `f64::round`, which rounds halves away from zero and would differ from
-/// 0.3.0).
-///
-/// Python's `round` is correctly rounded on the decimal value of `x`; this differs only where
-/// `x * scale` itself rounds onto an exact .5, which share-of-cells inputs do not hit.
-fn round_to(x: f64, scale: f64) -> f64 {
-    canonical(round_half_even(x * scale) / scale)
-}
 
 /// The share of `true` cells in percent: `count / cells * 100`, as numpy's `mean() * 100`.
 fn share_pct(cells: impl Iterator<Item = bool>, total: usize) -> f64 {
@@ -73,11 +62,13 @@ fn extent(grid: &Grid<f64>) -> Option<(f64, f64)> {
 /// else the fields computed from the height and not written (ruling P2, as `elements` does).
 pub(crate) fn precipitation(world: &World) -> Option<Grid<f64>> {
     let climate = world.value::<Climate>("climate")?;
-    if let Some(fields) = &climate.fields {
-        return Some(fields.precipitation.clone());
-    }
     let height = world.f64("height")?;
-    Some(climate::fields(height, world.frame(), &climate.params).precipitation)
+    Some(
+        climate
+            .fields_of(height, world.frame())
+            .into_owned()
+            .precipitation,
+    )
 }
 
 /// The parity metrics of a finished world, as an object keyed by dotted summary path (0.3.0's

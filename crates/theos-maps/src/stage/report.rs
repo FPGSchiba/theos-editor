@@ -12,6 +12,13 @@ pub struct StageReport {
     pub findings: Vec<Finding>,
 }
 
+impl StageReport {
+    /// Sets the value `name` to `value`.
+    pub fn put(&mut self, name: &str, value: f64) {
+        self.values.insert(name.to_owned(), value);
+    }
+}
+
 /// How bad a finding is: a warning goes into the summary, an error fails the run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Severity {

@@ -2,14 +2,11 @@
 
 use std::collections::BTreeSet;
 
-use crate::features::{Feature, FeatureSet, Geometry, Prop};
+use crate::features::{Feature, FeatureSet, Prop};
 
 /// The point of a point feature, in metres.
 pub(crate) fn point(f: &Feature) -> Option<[f64; 2]> {
-    match f.geometry {
-        Geometry::Point(p) => Some(p),
-        _ => None,
-    }
+    f.point_at()
 }
 
 /// The text property `key`.

@@ -95,9 +95,19 @@ pub trait TypedStage: Send + Sync + 'static {
         Vec::new()
     }
 
-    /// The numbers the stage reports, under the names of [`TypedStage::metric_names`].
-    fn metrics(&self, _world: &World, _params: &Self::Params, _report: &StageReport) -> Metrics {
-        Metrics::default()
+    /// The numbers the stage reports, under the names of [`TypedStage::metric_names`]: by
+    /// default the values of `report` under those names, so a stage that reports its metrics
+    /// as values needs no override.
+    fn metrics(&self, _world: &World, params: &Self::Params, report: &StageReport) -> Metrics {
+        let names = self.metric_names(params);
+        Metrics(
+            report
+                .values
+                .iter()
+                .filter(|(name, _)| names.contains(&name.as_str()))
+                .map(|(name, value)| (name.clone(), *value))
+                .collect(),
+        )
     }
 }
 

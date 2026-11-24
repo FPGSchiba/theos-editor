@@ -8,6 +8,7 @@ mod orographic;
 mod water;
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -180,6 +181,19 @@ impl WorldValue for Climate {
 
 impl ValueType for Climate {
     const NAME: &'static str = "climate";
+}
+
+impl Climate {
+    /// The fields of `height`: the ones the climate holds once `climate_update` has filled them,
+    /// else computed from `height` on `frame` and not stored (ruling P2). Every reader of the
+    /// fields goes through here.
+    #[must_use]
+    pub fn fields_of(&self, height: &Grid<f64>, frame: &MapFrame) -> Cow<'_, ClimateFields> {
+        match &self.fields {
+            Some(held) => Cow::Borrowed(held),
+            None => Cow::Owned(fields(height, frame, &self.params)),
+        }
+    }
 }
 
 /// The precipitation of a height in mm/yr: the base plus the orographic part scaled so that its
@@ -423,5 +437,31 @@ t_base_c = 15.0",
         let a = fields(&h, &frame(32), &ClimateParams::default());
         let b = fields(&h, &frame(32), &ClimateParams::default());
         assert_eq!(a, b);
+    }
+
+    // Final review round 4, finding 5: one place answers "the fields of this height".
+    #[test]
+    fn the_fields_are_the_held_ones_or_those_of_the_height() {
+        let h = orographic::tests::hill(32, 5.0, 900.0);
+        let flat = Grid::filled(32, 32, 100.0);
+        let params = ClimateParams::default();
+        let held = Climate {
+            params: params.clone(),
+            fields: Some(fields(&flat, &frame(32), &params)),
+        };
+        let given = held.fields_of(&h, &frame(32));
+        assert!(
+            matches!(given, Cow::Borrowed(_)),
+            "the held fields, not the height's"
+        );
+        assert_eq!(*given, fields(&flat, &frame(32), &params));
+        let bare = Climate {
+            params: params.clone(),
+            fields: None,
+        };
+        assert_eq!(
+            *bare.fields_of(&h, &frame(32)),
+            fields(&h, &frame(32), &params)
+        );
     }
 }

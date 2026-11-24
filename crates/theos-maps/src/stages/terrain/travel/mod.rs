@@ -45,11 +45,11 @@ use crate::grid::Grid;
 use crate::kernels::KernelError;
 use crate::kernels::num::to_f64;
 use crate::stage::{
-    Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
-    TypedStage,
+    Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
+use crate::stages::terrain::feature_points;
 use crate::stages::terrain::roads::RoadNetwork;
-use crate::world::{Layer, ValueType, World};
+use crate::world::{Layer, ValueType};
 
 /// Tobler's speed on flat ground at the peak, km/h.
 const PEAK_KMH: f64 = 6.0;
@@ -144,9 +144,7 @@ impl TypedStage for Travel {
         params: &TravelParams,
     ) -> Result<StageReport, StageError> {
         let frame = *ctx.frame();
-        let chimes: Vec<usize> = ctx
-            .value_opt::<FeatureSet>("features")?
-            .map_or_else(Vec::new, |set| set.points("poi", Some("chime")))
+        let chimes: Vec<usize> = feature_points(ctx, "poi", Some("chime"))?
             .into_iter()
             .map(|at| frame.index_at_m(at))
             .collect();
@@ -173,9 +171,7 @@ impl TypedStage for Travel {
                 let from_first = walk.tree(&[first], &cancel).map_err(failed)?;
                 let seconds = from_first.dist[second];
                 if seconds.is_finite() {
-                    report
-                        .values
-                        .insert(CHIME_TO_CHIME_MIN.to_owned(), seconds / 60.0);
+                    report.put(CHIME_TO_CHIME_MIN, seconds / 60.0);
                 }
             }
         }
@@ -184,15 +180,11 @@ impl TypedStage for Travel {
             .iter()
             .filter(|&&v| (0.0..=NEAR_MIN).contains(&v))
             .count();
-        report.values.insert(
-            FLOOR_PCT_WITHIN_15_MIN.to_owned(),
+        report.put(
+            FLOOR_PCT_WITHIN_15_MIN,
             100.0 * to_f64(near) / to_f64(reach.len()),
         );
         ctx.write("reach_min", Layer::F64(reach))?;
         Ok(report)
-    }
-
-    fn metrics(&self, _: &World, _: &TravelParams, report: &StageReport) -> Metrics {
-        Metrics(report.values.clone())
     }
 }

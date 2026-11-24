@@ -8,6 +8,7 @@ mod tests;
 use std::collections::BTreeSet;
 
 use super::{Access, Finding, LayerSpec, Stage, StageError, StageParams, StageReport};
+use crate::grid::Grid;
 use crate::kernels::KernelError;
 use crate::progress::{CancelToken, Progress};
 use crate::rng::StageRng;
@@ -226,6 +227,18 @@ impl<'w> StageContext<'w> {
             stage: self.stage.clone(),
             message: message.into(),
         }
+    }
+
+    /// The optional `f64` layer `name`, taken out of the world to be written back; `None` when
+    /// the world holds none.
+    ///
+    /// # Errors
+    /// [`StageError`] as [`StageContext::f64_opt`] and [`StageContext::take_f64`].
+    pub fn take_f64_opt(&mut self, name: &str) -> Result<Option<Grid<f64>>, StageError> {
+        if self.f64_opt(name)?.is_none() {
+            return Ok(None);
+        }
+        self.take_f64(name).map(Some)
     }
 
     /// The stage error for a kernel's `err`: [`KernelError::Cancelled`] stays a cancel, any

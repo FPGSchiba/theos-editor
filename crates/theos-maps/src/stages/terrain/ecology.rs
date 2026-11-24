@@ -130,13 +130,7 @@ impl TypedStage for Ecology {
         let climate = ctx.value::<Climate>("climate")?;
         let height = ctx.f64("height")?;
         let area = ctx.f64("drainage_area")?;
-        let local;
-        let fields = if let Some(fields) = &climate.fields {
-            fields
-        } else {
-            local = climate::fields(height, &frame, &climate.params);
-            &local
-        };
+        let fields = climate.fields_of(height, &frame);
         let temperature = height.map(|h| climate::temperature(h, &climate.params));
         let tan_beta = slope(height, frame.cell_m);
         let (rows, cols) = (height.rows(), height.cols());

@@ -9,7 +9,7 @@ use super::legend::{self, Entry, Swatch};
 use super::marks::{Mark, Shape};
 use super::palette::Rgb;
 use super::roads;
-use super::styles::{RoadStyle, resource_colour};
+use super::styles::{RoadStyle, resource_colour, resource_mark};
 use super::view::View;
 use super::{
     HEIGHT_SPEC, LAKE_SPEC, RenderError, RenderInput, WATER_FEATURES_SPEC, feats, fonts::fonts,
@@ -82,24 +82,10 @@ pub(crate) fn resources(input: &RenderInput<'_>) -> Result<Pixmap, RenderError> 
         }
         if feats::text(f, "tier") == Some(EXCEPTIONAL) {
             exceptional = true;
-            let ring = to_f32(radius + RING_GAP_PX);
-            if let Some(path) = PathBuilder::from_circle(to_f32(x), to_f32(y), ring) {
-                canvas::outline(&mut pixmap, &path, 1.4, GOLD);
-            }
+            canvas::ring(&mut pixmap, [x, y], radius + RING_GAP_PX, 1.4, GOLD);
         }
     }
-    let mut entries: Vec<Entry> = feats::types_present(input.features, "resource")
-        .into_iter()
-        .map(|ty| {
-            let mark = Mark {
-                shape: Shape::Circle,
-                size: 9,
-                face: resource_colour(&ty),
-                edge: [0; 3],
-            };
-            Entry::new(Swatch::Mark(mark), ty.replace('-', " "))
-        })
-        .collect();
+    let mut entries = legend::marks_of(input.features, "resource", |ty| resource_mark(ty, 9));
     if exceptional {
         entries.push(Entry::new(Swatch::Ring(GOLD), "exceptional tier"));
     }

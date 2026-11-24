@@ -9,9 +9,8 @@ use zip::ZipArchive;
 use zip::result::ZipError;
 
 use crate::manifest::FORMAT;
-use crate::package::check_name;
 use crate::write::{MANIFEST_FILE, layer_path};
-use crate::{DType, FormatError, LayerData, LayerEntry, LayerKey, Manifest, Package, sha256_hex};
+use crate::{FormatError, LayerData, LayerEntry, LayerKey, Manifest, Package, sha256_hex};
 
 /// The capabilities this reader implements; format 1.0 defines none.
 pub const IMPLEMENTED_CAPABILITIES: &[&str] = &[];
@@ -103,14 +102,8 @@ fn read_layer<R: Read + Seek>(
     grid: [u32; 2],
     entry: &LayerEntry,
 ) -> Result<(LayerKey, LayerData), FormatError> {
-    check_name("layer", &entry.name)?;
-    if let Some(level) = &entry.level {
-        check_name("level", level)?;
-    }
-    let key = LayerKey {
-        level: entry.level.clone(),
-        name: entry.name.clone(),
-    };
+    entry.check_names()?;
+    let key = entry.key();
     let expected = layer_path(&key, entry.dtype);
     if entry.file != expected {
         return Err(FormatError::LayerFile {
@@ -125,11 +118,7 @@ fn read_layer<R: Read + Seek>(
         });
     }
     let cells = u64::from(entry.shape[0]) * u64::from(entry.shape[1]);
-    let width = match entry.dtype {
-        DType::F32 => 4,
-        DType::U8 => 1,
-        DType::U16 => 2,
-    };
+    let width = u64::try_from(entry.dtype.width()).unwrap_or(u64::MAX);
     let bytes = read_entry(archive, &entry.file, cells.saturating_mul(width))?;
     let cells = usize::try_from(cells).unwrap_or(usize::MAX);
     let data = LayerData::from_bytes(entry.dtype, &bytes, cells)?;

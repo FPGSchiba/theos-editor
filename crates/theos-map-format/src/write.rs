@@ -8,7 +8,7 @@ use zip::{CompressionMethod, DateTime, System, ZipWriter};
 
 use crate::manifest::{FORMAT, FORMAT_VERSION};
 use crate::package::label;
-use crate::{DType, FormatError, LayerKey, Manifest, Package, json, sha256_hex};
+use crate::{DType, FormatError, LayerEntry, LayerKey, Manifest, Package, json, sha256_hex};
 
 /// Name of the manifest entry.
 pub(crate) const MANIFEST_FILE: &str = "manifest.json";
@@ -51,10 +51,7 @@ fn complete(package: &Package) -> Result<(Manifest, Vec<PackageFile>), FormatErr
     let grid = manifest.frame.grid;
     let mut files = Vec::with_capacity(manifest.layers.len());
     for (index, entry) in manifest.layers.iter_mut().enumerate() {
-        let key = LayerKey {
-            level: entry.level.clone(),
-            name: entry.name.clone(),
-        };
+        let key = entry.key();
         let data = package
             .layers
             .get(&key)
@@ -68,13 +65,7 @@ fn complete(package: &Package) -> Result<(Manifest, Vec<PackageFile>), FormatErr
         entry.min = range.map(|(lo, _)| lo);
         entry.max = range.map(|(_, hi)| hi);
         // A finite scale can still decode a value beyond f64.
-        for (name, value) in [("min", entry.min), ("max", entry.max)] {
-            if value.is_some_and(|v| !v.is_finite()) {
-                return Err(FormatError::ManifestNotFinite {
-                    field: format!("layers[{index}].{name}"),
-                });
-            }
-        }
+        LayerEntry::check_finite(index, [("min", entry.min), ("max", entry.max)])?;
         files.push((entry.file.clone(), bytes));
     }
     Ok((manifest, files))

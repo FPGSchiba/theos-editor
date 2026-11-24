@@ -25,13 +25,13 @@ use crate::features::FeatureSet;
 use crate::grid::Grid;
 use crate::kernels::num::to_f64;
 use crate::stage::{
-    Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
-    TypedStage,
+    Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
-use crate::stages::terrain::climate::{self, Climate};
+use crate::stages::terrain::climate::Climate;
 use crate::stages::terrain::elements::ELEMENT_LAYERS;
 use crate::stages::terrain::hydrology::WaterFeatures;
-use crate::world::{Layer, ValueType, World, WorldValue};
+use crate::stages::terrain::{add_features, feature_points};
+use crate::world::{Layer, ValueType, WorldValue};
 
 use self::fields::{Inputs, NAMES, compute, terminal_mask};
 
@@ -153,22 +153,14 @@ impl TypedStage for Resources {
     ) -> Result<StageReport, StageError> {
         let frame = *ctx.frame();
         let mut rng = ctx.sub_rng("deposits");
-        let ruins = ctx
-            .value_opt::<FeatureSet>("features")?
-            .map_or_else(Vec::new, |set| set.points("poi", Some("ruin")));
+        let ruins = feature_points(ctx, "poi", Some("ruin"))?;
         let terminal = terminal_mask(
             ctx.u32("lake_id")?,
             ctx.value::<WaterFeatures>("water_features")?,
         );
         let height = ctx.f64("height")?;
         let climate = ctx.value::<Climate>("climate")?;
-        let local;
-        let precipitation = if let Some(f) = &climate.fields {
-            &f.precipitation
-        } else {
-            local = climate::fields(height, &frame, &climate.params).precipitation;
-            &local
-        };
+        let fields = climate.fields_of(height, &frame);
         let inputs = Inputs {
             height,
             slope: ctx.f64("slope")?,
@@ -178,7 +170,7 @@ impl TypedStage for Resources {
             terminal: &terminal,
             vegetation: ctx.f64("vegetation")?,
             temperature: ctx.f64("temperature")?,
-            precipitation,
+            precipitation: &fields.precipitation,
             ruins: &ruins,
             omega: ctx.f64_opt("omega")?,
             cancel: &|| ctx.is_cancelled(),
@@ -197,26 +189,16 @@ impl TypedStage for Resources {
         })
         .map_err(|e| ctx.kernel_failed(e))?;
         let mut report = StageReport::default();
-        report
-            .values
-            .insert("deposits".to_owned(), to_f64(found.len()));
-        let mut set = *ctx.take_value_or_default::<FeatureSet>("features")?;
-        for f in found {
-            set.add(f);
-        }
+        report.put("deposits", to_f64(found.len()));
+        add_features(ctx, found)?;
         let fields = computed
             .into_iter()
             .map(|(name, grid)| (name.to_owned(), grid))
             .collect();
-        ctx.write("features", Layer::Value(Box::new(set)))?;
         ctx.write(
             "resource_fields",
             Layer::Value(Box::new(ResourceFields { fields })),
         )?;
         Ok(report)
-    }
-
-    fn metrics(&self, _: &World, _: &ResourcesParams, report: &StageReport) -> Metrics {
-        Metrics(report.values.clone())
     }
 }

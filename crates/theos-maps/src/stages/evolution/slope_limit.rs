@@ -69,11 +69,9 @@ impl TypedStage for SlopeLimit {
         let lower = limited(ctx.f64("height")?, critical, fixed, frame.cell_m);
         let height = ctx.take_f64("height")?;
         let mut erosion = ctx.take_f64("erosion")?;
-        let mut supply = if ctx.f64_opt("slope_supply")?.is_some() {
-            ctx.take_f64("slope_supply")?
-        } else {
-            Grid::filled(frame.rows, frame.cols, 0.0)
-        };
+        let mut supply = ctx
+            .take_f64_opt("slope_supply")?
+            .unwrap_or_else(|| Grid::filled(frame.rows, frame.cols, 0.0));
         let mut removed_m = 0.0;
         let books = erosion.as_mut_slice().iter_mut().zip(supply.as_mut_slice());
         for ((&before, &after), (eroded, handed)) in
@@ -87,9 +85,7 @@ impl TypedStage for SlopeLimit {
             }
         }
         let mut report = StageReport::default();
-        report
-            .values
-            .insert("removed_m3".to_owned(), removed_m * frame.cell_area_m2());
+        report.put("removed_m3", removed_m * frame.cell_area_m2());
         ctx.write("height", Layer::F64(lower))?;
         ctx.write("erosion", Layer::F64(erosion))?;
         ctx.write("slope_supply", Layer::F64(supply))?;

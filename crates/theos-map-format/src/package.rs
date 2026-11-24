@@ -90,13 +90,7 @@ fn check_frame_numbers(frame: &Frame) -> Result<(), FormatError> {
 /// `null` and read back as "no scale".
 fn check_entry_numbers(entries: &[LayerEntry]) -> Result<(), FormatError> {
     for (index, entry) in entries.iter().enumerate() {
-        for (name, value) in [("scale", entry.scale), ("offset", entry.offset)] {
-            if value.is_some_and(|v| !v.is_finite()) {
-                return Err(FormatError::ManifestNotFinite {
-                    field: format!("layers[{index}].{name}"),
-                });
-            }
-        }
+        LayerEntry::check_finite(index, [("scale", entry.scale), ("offset", entry.offset)])?;
     }
     Ok(())
 }
@@ -147,10 +141,7 @@ impl Package {
             check_name("level", &level.id)?;
         }
         for entry in &self.manifest.layers {
-            check_name("layer", &entry.name)?;
-            if let Some(level) = &entry.level {
-                check_name("level", level)?;
-            }
+            entry.check_names()?;
         }
         let ids: Option<BTreeSet<&str>> = frame
             .levels
@@ -161,10 +152,7 @@ impl Package {
 
         let mut seen = BTreeSet::new();
         for entry in &self.manifest.layers {
-            let key = LayerKey {
-                level: entry.level.clone(),
-                name: entry.name.clone(),
-            };
+            let key = entry.key();
             let layer = label(&key);
             check_level(
                 &format!("layer {layer}"),

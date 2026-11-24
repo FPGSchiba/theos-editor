@@ -25,7 +25,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::features::{Feature, FeatureSet, Geometry, interior, pick};
+use crate::features::{Feature, FeatureSet, interior, pick};
 use crate::grid::Grid;
 use crate::kernels::KernelError;
 use crate::kernels::filters::gaussian;
@@ -33,11 +33,11 @@ use crate::kernels::num::{max, to_f64};
 use crate::kernels::stats::percentile;
 use crate::rng::StageRng;
 use crate::stage::{
-    Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
-    TypedStage,
+    Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
 use crate::stages::terrain::rocks::Rock;
-use crate::world::{Layer, MapFrame, ValueType, World};
+use crate::stages::terrain::{add_features, feature_points};
+use crate::world::{MapFrame, ValueType};
 use std::collections::BTreeMap;
 
 /// Sigma of the smoothing the prominence is measured against, 0.3.0's 6 cells of 62.5 m.
@@ -100,12 +100,7 @@ struct Inputs<'a> {
 
 /// A point of interest of type `ty` at `at`.
 fn poi(ty: &str, at: [f64; 2]) -> Feature {
-    Feature {
-        kind: "poi",
-        ty: ty.to_owned(),
-        geometry: Geometry::Point(at),
-        props: BTreeMap::new(),
-    }
+    Feature::point("poi", ty, at, BTreeMap::new())
 }
 
 /// The scores the picks share.
@@ -330,9 +325,7 @@ impl TypedStage for Pois {
     ) -> Result<StageReport, StageError> {
         let frame = *ctx.frame();
         let mut rng = ctx.sub_rng("placing");
-        let settlements = ctx
-            .value_opt::<FeatureSet>("features")?
-            .map_or_else(Vec::new, |set| set.points("settlement", None));
+        let settlements = feature_points(ctx, "settlement", None)?;
         let found = {
             let inputs = Inputs {
                 height: ctx.f64("height")?,
@@ -352,19 +345,10 @@ impl TypedStage for Pois {
             .into_iter()
             .zip(["ruin", "chime", "gate-down", "gate-up"])
         {
-            let n = to_f64(found.iter().filter(|f| f.ty == ty).count());
-            report.values.insert(name.to_owned(), n);
+            report.put(name, to_f64(Feature::count_of(&found, ty)));
         }
-        let mut set = *ctx.take_value_or_default::<FeatureSet>("features")?;
-        for f in found {
-            set.add(f);
-        }
-        ctx.write("features", Layer::Value(Box::new(set)))?;
+        add_features(ctx, found)?;
         Ok(report)
-    }
-
-    fn metrics(&self, _: &World, _: &PoisParams, report: &StageReport) -> Metrics {
-        Metrics(report.values.clone())
     }
 }
 

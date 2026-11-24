@@ -24,20 +24,19 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::features::{Feature, FeatureSet, Geometry, Prop, generated_name, interior, pick};
+use crate::features::{Feature, FeatureSet, Prop, generated_name, interior, pick};
 use crate::grid::Grid;
 use crate::kernels::KernelError;
-use crate::kernels::distance::distance;
 use crate::kernels::filters::{gaussian, maximum, uniform};
 use crate::kernels::morphology::{Structure, dilate};
-use crate::kernels::num::{canonical, max, round_half_even, to_f64, to_index};
+use crate::kernels::num::{max, round_to, to_f64, to_index};
 use crate::rng::StageRng;
 use crate::stage::{
-    Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
-    TypedStage,
+    Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
 use crate::stages::terrain::rocks::Rock;
-use crate::world::{Layer, MapFrame, ValueType, World};
+use crate::stages::terrain::{add_features, water_distance_m};
+use crate::world::{Layer, MapFrame, ValueType};
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
@@ -217,15 +216,11 @@ fn is_soil(code: u8) -> bool {
 
 /// The distance of every cell to the nearest river or lake cell, km; infinite when there is none.
 fn water_distance_km(inputs: &Inputs<'_>, frame: &MapFrame) -> Result<Grid<f64>, KernelError> {
-    let mut water = inputs.river.clone();
-    for (w, &l) in water.as_mut_slice().iter_mut().zip(inputs.lake.as_slice()) {
-        *w = *w || l;
-    }
-    if !water.as_slice().iter().any(|&w| w) {
-        return Ok(Grid::filled(water.rows(), water.cols(), f64::INFINITY));
-    }
-    let (dist, _) = distance(&water, frame.cell_m)?;
-    Ok(dist.map(|m| m / 1000.0))
+    let dist = water_distance_m(inputs.river, inputs.lake, frame.cell_m)?;
+    Ok(dist.map_or_else(
+        || Grid::filled(frame.rows, frame.cols, f64::INFINITY),
+        |d| d.map(|m| m / 1000.0),
+    ))
 }
 
 /// The site quality before the noise: see the module docs.
@@ -367,14 +362,9 @@ fn site(
             let pop = population(class, rng.uniform());
             props.insert("population".to_owned(), Prop::Int(pop));
             props.insert("water".to_owned(), Prop::Text(water.to_owned()));
-            let metres = canonical(round_half_even(inputs.height.as_slice()[i] * 10.0) / 10.0);
+            let metres = round_to(inputs.height.as_slice()[i], 10.0);
             props.insert("elevation_m".to_owned(), Prop::Num(metres));
-            features.push(Feature {
-                kind: "settlement",
-                ty: class.ty.to_owned(),
-                geometry: Geometry::Point(at),
-                props,
-            });
+            features.push(Feature::point("settlement", class.ty, at, props));
             taken.push(at);
         }
     }
@@ -462,22 +452,14 @@ impl TypedStage for Settlements {
         let mut report = StageReport::default();
         let mut total = 0.0;
         for class in &CLASSES {
-            let n = to_f64(found.iter().filter(|f| f.ty == class.ty).count());
-            report.values.insert(class.ty.to_owned(), n);
+            let n = to_f64(Feature::count_of(&found, class.ty));
+            report.put(class.ty, n);
             total += n;
         }
-        report.values.insert("settlements".to_owned(), total);
-        let mut set = *ctx.take_value_or_default::<FeatureSet>("features")?;
-        for f in found {
-            set.add(f);
-        }
-        ctx.write("features", Layer::Value(Box::new(set)))?;
+        report.put("settlements", total);
+        add_features(ctx, found)?;
         ctx.write("site_quality", Layer::F64(quality))?;
         Ok(report)
-    }
-
-    fn metrics(&self, _: &World, _: &SettlementsParams, report: &StageReport) -> Metrics {
-        Metrics(report.values.clone())
     }
 }
 

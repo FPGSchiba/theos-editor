@@ -68,13 +68,13 @@ pub(crate) use self::cost::{StepCost, Terrain};
 pub(crate) use self::lay::Laid;
 pub use self::params::{MaxGrade, RoadsParams, WidthM};
 pub(crate) use self::route::Router;
-use crate::features::{FeatureHandle, FeatureSet};
+use crate::features::{Feature, FeatureHandle, FeatureSet};
 use crate::grid::Grid;
 use crate::kernels::num::{max, to_f64, to_usize};
 use crate::stage::{
-    LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport, TypedStage,
+    LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
-use crate::world::{Layer, MapFrame, ValueType, World, WorldValue};
+use crate::world::{Layer, MapFrame, ValueType, WorldValue};
 
 /// The class of a road, from the smallest; its code is its value in the `roads` raster.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -271,25 +271,20 @@ impl TypedStage for Roads {
         let cost = StepCost::new(layers.terrain(), params, &frame);
         let found = crossings::sites(&cost, &built.roads, &frame);
         let mut report = StageReport::default();
-        let mut put = |name: &str, value: f64| {
-            report.values.insert(name.to_owned(), value);
-        };
         for class in RoadClass::ALL {
             let metres = built
                 .roads
                 .iter()
                 .filter(|r| r.class == class)
                 .fold(0.0, |sum, r| sum + r.length_m(&frame));
-            put(&format!("{}_km", class.name()), metres / 1000.0);
+            report.put(&format!("{}_km", class.name()), metres / 1000.0);
         }
-        let count = |ty: &str| to_f64(found.iter().filter(|f| f.ty == ty).count());
-        put("bridges", count("bridge"));
-        put("fords", count("ford"));
-        put("unreached", to_f64(built.unreached));
+        let count = |ty: &str| to_f64(Feature::count_of(&found, ty));
+        report.put("bridges", count("bridge"));
+        report.put("fords", count("ford"));
+        report.put("unreached", to_f64(built.unreached));
         report.findings = built.warnings;
-        for f in found {
-            set.add(f);
-        }
+        set.extend(found);
         let net = RoadNetwork {
             roads: built.roads,
             params: params.clone(),
@@ -298,9 +293,5 @@ impl TypedStage for Roads {
         ctx.write("roads", Layer::U8(built.raster))?;
         ctx.write("features", Layer::Value(Box::new(set)))?;
         Ok(report)
-    }
-
-    fn metrics(&self, _: &World, _: &RoadsParams, report: &StageReport) -> Metrics {
-        Metrics(report.values.clone())
     }
 }

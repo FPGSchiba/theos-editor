@@ -37,11 +37,11 @@ use crate::features::{Feature, FeatureSet, interior};
 use crate::kernels::KernelError;
 use crate::kernels::num::{to_f64, to_u32};
 use crate::stage::{
-    LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport, TypedStage,
+    LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
 use crate::stages::terrain::hydrology::WaterThresholds;
 use crate::stages::terrain::roads::{Laid, Layers, RoadNetwork, StepCost};
-use crate::world::{Layer, ValueType, World};
+use crate::world::{Layer, ValueType};
 
 pub use self::params::{Counts, SitesParams};
 
@@ -171,12 +171,10 @@ impl TypedStage for Sites {
 
         let mut report = StageReport::default();
         for (ty, metric) in TYPES {
-            let n = found.iter().filter(|f| f.ty == ty).count();
-            report.values.insert(metric.to_owned(), to_f64(n));
+            let n = Feature::count_of(&found, ty);
+            report.put(metric, to_f64(n));
         }
-        report
-            .values
-            .insert("spurs".to_owned(), to_f64(spurs.count));
+        report.put("spurs", to_f64(spurs.count));
         report.findings = std::mem::take(&mut spurs.warnings);
         let laid = spurs.laid;
         ctx.write("features", Layer::Value(Box::new(set)))?;
@@ -189,9 +187,5 @@ impl TypedStage for Sites {
         )?;
         ctx.write("roads", Layer::U8(laid.raster))?;
         Ok(report)
-    }
-
-    fn metrics(&self, _: &World, _: &SitesParams, report: &StageReport) -> Metrics {
-        Metrics(report.values.clone())
     }
 }

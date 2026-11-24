@@ -15,11 +15,11 @@
 
 use std::collections::BTreeMap;
 
-use crate::features::{Feature, Geometry, Prop, interior, pick};
+use crate::features::{Feature, Prop, interior, pick};
 use crate::grid::Grid;
 use crate::kernels::KernelError;
 use crate::kernels::filters::gaussian;
-use crate::kernels::num::{canonical, max, min, round_half_even, to_index};
+use crate::kernels::num::{max, min, round_to, to_index};
 use crate::rng::StageRng;
 use crate::stages::terrain::elements;
 use crate::world::MapFrame;
@@ -83,7 +83,7 @@ fn deposit(
     element: &'static str,
 ) -> Feature {
     let mut props = BTreeMap::new();
-    let rounded = canonical(round_half_even(rich * 100.0) / 100.0);
+    let rounded = round_to(rich, 100.0);
     props.insert("richness".to_owned(), Prop::Num(rounded));
     props.insert("tier".to_owned(), Prop::Text(tier(rich).to_owned()));
     props.insert("element".to_owned(), Prop::Text(element.to_owned()));
@@ -93,12 +93,7 @@ fn deposit(
         "radius_m".to_owned(),
         Prop::Int(i64::try_from(radius).unwrap_or(i64::MAX)),
     );
-    Feature {
-        kind: "resource",
-        ty: ty.to_owned(),
-        geometry: Geometry::Point(frame.centre_m(cell.0, cell.1)),
-        props,
-    }
+    Feature::point("resource", ty, frame.centre_m(cell.0, cell.1), props)
 }
 
 /// The deposits to add: for each field with a count, its picks.
@@ -192,7 +187,7 @@ mod tests {
             &|| false,
         )
         .unwrap();
-        let Some(Geometry::Point([x, y])) = found.first().map(|f| f.geometry.clone()) else {
+        let Some([x, y]) = found.first().and_then(Feature::point_at) else {
             panic!("one deposit")
         };
         let (r, c) = frame.cell_at_m(x, y);

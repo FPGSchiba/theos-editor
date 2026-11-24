@@ -2,7 +2,7 @@
 
 use sha2::{Digest, Sha256};
 
-use crate::{DType, FormatError};
+use crate::{DType, FormatError, LayerEntry};
 
 /// The raw values of one layer, row by row from north to south.
 #[derive(Debug, Clone, PartialEq)]
@@ -22,6 +22,48 @@ pub struct LayerKey {
     pub level: Option<String>,
     /// The layer name.
     pub name: String,
+}
+
+impl LayerEntry {
+    /// The key of the layer this entry indexes: its level and name.
+    #[must_use]
+    pub fn key(&self) -> LayerKey {
+        LayerKey {
+            level: self.level.clone(),
+            name: self.name.clone(),
+        }
+    }
+
+    /// Refuses a NaN or infinity in the optional numbers `fields` of the entry at `index` of
+    /// the layer index: JSON would write it as `null`, read back as no number.
+    ///
+    /// # Errors
+    /// [`FormatError::ManifestNotFinite`] naming `layers[<index>].<field>`.
+    pub(crate) fn check_finite(
+        index: usize,
+        fields: [(&str, Option<f64>); 2],
+    ) -> Result<(), FormatError> {
+        for (name, value) in fields {
+            if value.is_some_and(|v| !v.is_finite()) {
+                return Err(FormatError::ManifestNotFinite {
+                    field: format!("layers[{index}].{name}"),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Checks the layer name and, when there is one, the level id against the name rule.
+    ///
+    /// # Errors
+    /// [`FormatError`] of the name rule naming the field at fault.
+    pub(crate) fn check_names(&self) -> Result<(), FormatError> {
+        crate::package::check_name("layer", &self.name)?;
+        if let Some(level) = &self.level {
+            crate::package::check_name("level", level)?;
+        }
+        Ok(())
+    }
 }
 
 impl LayerData {
@@ -81,12 +123,7 @@ impl LayerData {
     /// [`FormatError::LayerSize`] when `bytes` is not `cells` values long, and
     /// [`FormatError::NonFinite`] when a float value is NaN or an infinity.
     pub fn from_bytes(dtype: DType, bytes: &[u8], cells: usize) -> Result<Self, FormatError> {
-        let size = match dtype {
-            DType::F32 => 4,
-            DType::U8 => 1,
-            DType::U16 => 2,
-        };
-        let expected = cells.saturating_mul(size);
+        let expected = cells.saturating_mul(dtype.width());
         if bytes.len() != expected {
             return Err(FormatError::LayerSize {
                 expected,

@@ -279,6 +279,15 @@ pub(crate) fn outline(pixmap: &mut Pixmap, path: &Path, width_px: f64, colour: R
     pixmap.stroke_path(&path, &paint(colour), &stroke, Transform::identity(), None);
 }
 
+/// Strokes a circle of `radius` (pixels) round `centre` (pixels) in `colour`, `width_px` wide,
+/// anti-aliased; nothing for a radius that is no circle.
+pub(crate) fn ring(pixmap: &mut Pixmap, centre: [f64; 2], radius: f64, width_px: f64, colour: Rgb) {
+    let (x, y, r) = (to_f32(centre[0]), to_f32(centre[1]), to_f32(radius));
+    if let Some(path) = PathBuilder::from_circle(x, y, r) {
+        outline(pixmap, &path, width_px, colour);
+    }
+}
+
 /// How a polyline is stroked.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LineStyle {

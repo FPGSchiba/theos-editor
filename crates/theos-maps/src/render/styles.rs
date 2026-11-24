@@ -82,6 +82,11 @@ pub(crate) fn poi_mark(ty: &str) -> Mark {
     }
 }
 
+/// The mark of a deposit of type `ty`: a circle of `size` pixels in its colour, edged black.
+pub(crate) fn resource_mark(ty: &str, size: u8) -> Mark {
+    mark(Shape::Circle, size, resource_colour(ty), [0, 0, 0])
+}
+
 /// The colour of a deposit of type `ty`.
 pub(crate) fn resource_colour(ty: &str) -> Rgb {
     match ty {

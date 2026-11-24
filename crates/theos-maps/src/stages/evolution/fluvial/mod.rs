@@ -189,7 +189,7 @@ impl TypedStage for Fluvial {
     ) -> Result<StageReport, StageError> {
         let step = ctx.process_step()?;
         let start = ctx.take_f64("height")?;
-        let supply = take_supply(ctx)?;
+        let supply = ctx.take_f64_opt("slope_supply")?;
         let outcome = erode(ctx, params, step.dt_yr, &start, supply.as_ref())?;
         let mut erosion = ctx.take_f64("erosion")?;
         let mut deposition = ctx.take_f64("deposition")?;
@@ -204,15 +204,6 @@ impl TypedStage for Fluvial {
         }
         Ok(outcome.report)
     }
-}
-
-/// The slope supply, taken out of the world to be written back emptied; `None` when the world
-/// holds none.
-fn take_supply(ctx: &mut StageContext<'_>) -> Result<Option<Grid<f64>>, StageError> {
-    if ctx.f64_opt("slope_supply")?.is_none() {
-        return Ok(None);
-    }
-    ctx.take_f64("slope_supply").map(Some)
 }
 
 /// One step's result besides the cumulative layers.
@@ -264,9 +255,7 @@ fn erode(
         |s| s.as_slice().iter().map(|t| t * cell_area).collect(),
     );
     let mut report = StageReport::default();
-    report
-        .values
-        .insert("supply_m3".to_owned(), supply_m3.iter().sum());
+    report.put("supply_m3", supply_m3.iter().sum());
     let step = Incision {
         weights,
         stack,
@@ -280,7 +269,7 @@ fn erode(
         let area = drainage_area.as_slice();
         with_deposition(ctx, params, &step, start, &supply_m3, area, &mut report)?
     } else {
-        report.values.insert("iterations".to_owned(), 1.0);
+        report.put("iterations", 1.0);
         let mut height = incise(&step, start);
         let ledger = Ledger {
             h_star: start.as_slice(),
@@ -297,7 +286,7 @@ fn erode(
         );
         (height, books.out)
     };
-    report.values.insert("sediment_out_m3".to_owned(), out);
+    report.put("sediment_out_m3", out);
     Ok(Outcome {
         height,
         drainage_area,
@@ -379,9 +368,7 @@ fn with_deposition(
     if let Some(warning) = books_warning(iterations, converged, correction, dep.tolerance) {
         report.findings.push(warning);
     }
-    report
-        .values
-        .insert("iterations".to_owned(), f64::from(iterations));
+    report.put("iterations", f64::from(iterations));
     Ok((height, out))
 }
 

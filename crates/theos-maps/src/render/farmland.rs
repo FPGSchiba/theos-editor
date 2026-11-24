@@ -8,7 +8,7 @@
 //! edge here is round (the slope term of the caller still bends it to the terrain).
 
 use super::palette::{self, Unit};
-use crate::features::{FeatureSet, Geometry};
+use crate::features::FeatureSet;
 use crate::kernels::num::{max, sign, smoothstep, to_f64};
 
 /// The Gaussian value below which a pixel is no farmland.
@@ -62,9 +62,7 @@ impl Farmland {
             .of_kind("settlement")
             .filter_map(|(_, f)| {
                 let r = radius_m(&f.ty)?;
-                let Geometry::Point([x, y]) = f.geometry else {
-                    return None;
-                };
+                let [x, y] = f.point_at()?;
                 Some(Farm {
                     x: x / metres_per_px,
                     y: y / metres_per_px,
@@ -125,7 +123,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::features::Feature;
+    use crate::features::{Feature, Geometry};
 
     fn settlement(ty: &str, geometry: Geometry) -> Feature {
         Feature {

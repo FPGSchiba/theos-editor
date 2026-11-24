@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::features::{Feature, FeatureSet, Geometry, Prop};
+use crate::features::{Feature, FeatureSet, Prop};
 use crate::grid::Grid;
 use crate::kernels::KernelError;
 use crate::stages::terrain::roads::RoadClass;
@@ -45,7 +45,7 @@ pub(super) fn mills(
         if cancel() {
             return Err(KernelError::Cancelled);
         }
-        let Geometry::Point([x, y]) = s.geometry else {
+        let Some([x, y]) = s.point_at() else {
             continue;
         };
         if !matches!(s.ty.as_str(), "town" | "village" | "city") {
@@ -107,9 +107,7 @@ pub(super) fn deposit_sites(
             let Some(Prop::Num(richness)) = f.props.get("richness") else {
                 return None;
             };
-            let Geometry::Point(at) = f.geometry else {
-                return None;
-            };
+            let at = f.point_at()?;
             let (row, col) = frame.cell_at_m(at[0], at[1]);
             let near = *richness >= min_richness && inside.get(row, col);
             near.then(|| {

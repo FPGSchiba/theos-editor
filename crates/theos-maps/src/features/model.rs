@@ -65,15 +65,51 @@ pub struct Feature {
 }
 
 impl Feature {
+    /// A point feature of `kind` and type `ty` at `at` (metres) with the properties `props`.
+    #[must_use]
+    pub fn point(
+        kind: &'static str,
+        ty: &str,
+        at: [f64; 2],
+        props: BTreeMap<String, Prop>,
+    ) -> Self {
+        Self {
+            kind,
+            ty: ty.to_owned(),
+            geometry: Geometry::Point(at),
+            props,
+        }
+    }
+
     /// A `site` of type `ty` at the point `at` (metres) with the properties `props`: fords and
     /// bridges of `roads`, and the sites of `sites`.
     #[must_use]
     pub fn site<const K: usize>(ty: &str, at: [f64; 2], props: [(&str, Prop); K]) -> Self {
-        Self {
-            kind: "site",
-            ty: ty.to_owned(),
-            geometry: Geometry::Point(at),
-            props: props.into_iter().map(|(k, v)| (k.to_owned(), v)).collect(),
+        let props = props.into_iter().map(|(k, v)| (k.to_owned(), v)).collect();
+        Self::point("site", ty, at, props)
+    }
+
+    /// The point of a point feature, in metres; `None` for a line or a polygon.
+    #[must_use]
+    pub fn point_at(&self) -> Option<[f64; 2]> {
+        match self.geometry {
+            Geometry::Point(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// How many of `features` have the type `ty`.
+    #[must_use]
+    pub fn count_of(features: &[Self], ty: &str) -> usize {
+        features.iter().filter(|f| f.ty == ty).count()
+    }
+}
+
+/// Adds every feature in order, as [`FeatureSet::add`] does.
+impl Extend<Feature> for FeatureSet {
+    fn extend<I: IntoIterator<Item = Feature>>(&mut self, features: I) {
+        for f in features {
+            self.add(f);
         }
     }
 }
@@ -121,17 +157,14 @@ impl FeatureSet {
     pub fn points(&self, kind: &str, ty: Option<&str>) -> Vec<[f64; 2]> {
         self.of_kind(kind)
             .filter(|(_, f)| ty.is_none_or(|t| f.ty == t))
-            .filter_map(|(_, f)| match f.geometry {
-                Geometry::Point(p) => Some(p),
-                _ => None,
-            })
+            .filter_map(|(_, f)| f.point_at())
             .collect()
     }
 
     /// How many features have the type `ty`.
     #[must_use]
     pub fn count_type(&self, ty: &str) -> usize {
-        self.features.iter().filter(|f| f.ty == ty).count()
+        Feature::count_of(&self.features, ty)
     }
 
     /// Changes the type of `h`; `false` when no such handle was issued.

@@ -24,6 +24,18 @@ pub enum DType {
     U16,
 }
 
+impl DType {
+    /// The bytes of one value.
+    #[must_use]
+    pub const fn width(self) -> usize {
+        match self {
+            Self::F32 => 4,
+            Self::U8 => 1,
+            Self::U16 => 2,
+        }
+    }
+}
+
 /// The parent a child map was made from.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Parent {
