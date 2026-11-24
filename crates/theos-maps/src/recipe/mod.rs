@@ -16,7 +16,7 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 
 pub use load::{Catalog, RecipeProblem, catalog};
-pub use plan::{Plan, PlannedStage, plan};
+pub use plan::{MAX_CELL_M, MIN_CELL_M, Plan, PlannedStage, plan};
 pub use schema::{LoadedRecipe, Recipe, RecipeOrigin, parse};
 
 /// The renders every run produces (spec §5.11).

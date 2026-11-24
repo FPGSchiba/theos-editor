@@ -44,9 +44,16 @@ pub trait TypedStage: Send + Sync + 'static {
     /// does not set (`#[serde(skip)]`), such as the parsed per-step processes of
     /// `landscape_evolution`.
     ///
+    /// Domains go through [`Check`](super::Check) (`Check::of(Self::ID)`), one wording per
+    /// rule: `finite`, `positive`, `at_least`, the intervals and `count_at_least`, and `refuse`
+    /// for a rule of the stage's own. After `validate`, every number of the stage table must also
+    /// keep the bounds of every recipe number (a float 0 or of a magnitude from 1e-12 to 1e12, a
+    /// whole number at most a million), so a domain needs no upper bound of its own unless the
+    /// stage raises a parameter to a power or sizes something by it.
+    ///
     /// # Errors
     /// [`ParamError`] naming the stage and, where one is to blame, the parameter
-    /// ([`ParamError::at`]).
+    /// ([`ParamError::at`], [`Check::refuse`](super::Check::refuse)).
     fn validate(&self, _params: &mut Self::Params) -> Result<(), ParamError> {
         Ok(())
     }
@@ -116,6 +123,7 @@ impl<T: TypedStage> Stage for T {
     fn params(&self, table: &toml::Table) -> Result<Box<dyn StageParams>, ParamError> {
         let mut parsed: T::Params = params::parse(T::ID, table)?;
         TypedStage::validate(self, &mut parsed)?;
+        params::check_numbers(T::ID, table)?;
         Ok(Box::new(parsed))
     }
 

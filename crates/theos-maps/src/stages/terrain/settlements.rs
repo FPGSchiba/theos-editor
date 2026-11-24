@@ -31,7 +31,6 @@ use crate::kernels::distance::distance;
 use crate::kernels::filters::{gaussian, maximum, uniform};
 use crate::kernels::morphology::{Structure, dilate};
 use crate::kernels::num::{canonical, max, round_half_even, to_f64, to_index};
-use crate::kernels::stats::metres_to_cells;
 use crate::rng::StageRng;
 use crate::stage::{
     Check, LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport,
@@ -256,7 +255,7 @@ fn base_quality(
             *v = 0.0;
         }
     }
-    let window = metres_to_cells(CONFLUENCE_M, frame.cell_m);
+    let window = frame.cells_of_m(CONFLUENCE_M);
     let confluence = maximum(&on_river, window);
     let inside = interior(frame, edge_margin);
     let mut out = Grid::filled(frame.rows, frame.cols, 0.0);
@@ -300,13 +299,13 @@ fn site(
         inputs.lake,
         Structure::Cross,
         frame.cell_m,
-        metres_to_cells(SHORE_M, frame.cell_m),
+        frame.cells_of_m(SHORE_M),
     );
     let mut quality = base_quality(inputs, frame, &d_km, &shore, params.edge_margin);
     for q in quality.as_mut_slice() {
         *q *= 1.0 + 0.1 * rng.uniform();
     }
-    let window = metres_to_cells(HINTERLAND_M, frame.cell_m);
+    let window = frame.cells_of_m(HINTERLAND_M);
     let catchment = uniform(&quality, window).map(|v| max(v, 0.0));
     let catch_max = max(
         catchment.as_slice().iter().fold(0.0, |m, &v| max(m, v)),

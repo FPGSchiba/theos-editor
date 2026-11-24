@@ -59,6 +59,16 @@ impl MapFrame {
         ]
     }
 
+    /// A length of `m` metres in whole cells, `max(1, round(m / cell_m))` with halves to even as
+    /// Python's and numpy's `round`, and at most twice the longer side: a dilation by that many
+    /// steps and a window that wide already reach every cell, so a longer length (a map of
+    /// centimetre cells, say) costs no more.
+    #[must_use]
+    pub fn cells_of_m(&self, m: f64) -> usize {
+        let most = 2 * self.rows.max(self.cols);
+        num::to_index(num::round_half_even(m / self.cell_m), most + 1).clamp(1, most)
+    }
+
     /// The position `m` metres along either axis in cells, with the centre of cell `i` at `i`:
     /// `m / cell_m − 0.5`, the inverse of [`MapFrame::centre_m`] on one axis (for interpolating
     /// between cell centres).
@@ -262,10 +272,37 @@ mod tests {
         assert_eq!(frame.centre_coord(15.0).to_bits(), 1.0_f64.to_bits());
         assert_eq!(frame.centre_coord(0.0).to_bits(), (-0.5_f64).to_bits());
         // a knight's move (2, 1) and the same cells as flat indices 10 and 27 (row 3, column 3)
-        assert_eq!(frame.offset_m(2, 1).to_bits(), (10.0 * libm::sqrt(5.0)).to_bits());
-        assert_eq!(frame.distance_m(10, 27).to_bits(), frame.offset_m(2, 1).to_bits());
-        assert_eq!(frame.distance_m(27, 10).to_bits(), frame.offset_m(2, 1).to_bits());
+        assert_eq!(
+            frame.offset_m(2, 1).to_bits(),
+            (10.0 * libm::sqrt(5.0)).to_bits()
+        );
+        assert_eq!(
+            frame.distance_m(10, 27).to_bits(),
+            frame.offset_m(2, 1).to_bits()
+        );
+        assert_eq!(
+            frame.distance_m(27, 10).to_bits(),
+            frame.offset_m(2, 1).to_bits()
+        );
         assert_eq!(frame.distance_m(5, 5).to_bits(), 0.0_f64.to_bits());
+    }
+
+    #[test]
+    fn a_length_in_cells_rounds_is_at_least_one_and_at_most_twice_the_longer_side() {
+        let frame = MapFrame {
+            rows: 40,
+            cols: 80,
+            cell_m: 30.0,
+        };
+        assert_eq!(frame.cells_of_m(100.0), 3);
+        assert_eq!(frame.cells_of_m(1.0), 1);
+        assert_eq!(frame.cells_of_m(0.0), 1);
+        assert_eq!(frame.cells_of_m(75.0), 2); // 2.5 rounds to even, as Python's round
+        assert_eq!(frame.cells_of_m(105.0), 4); // 3.5
+        // Final review round 3, class B: a length of a billion cells is cut at 160.
+        assert_eq!(frame.cells_of_m(4790.0), 160);
+        assert_eq!(frame.cells_of_m(4830.0), 160);
+        assert_eq!(frame.cells_of_m(3e10), 160);
     }
 
     fn world() -> World {

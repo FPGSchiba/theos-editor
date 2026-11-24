@@ -62,6 +62,59 @@ pub(crate) fn parse<P: DeserializeOwned>(
     })
 }
 
+/// The largest magnitude of a number in a stage table.
+pub const MAX_MAGNITUDE: f64 = 1e12;
+
+/// The smallest magnitude of a float other than 0 in a stage table.
+pub const MIN_MAGNITUDE: f64 = 1e-12;
+
+/// The largest magnitude of a whole number in a stage table.
+pub const MAX_COUNT: i64 = 1_000_000;
+
+/// Refuses a number of the stage table `table` (its `id` key aside) outside the bounds every
+/// recipe number keeps (final review, round 3): a float is finite, and 0 or of a magnitude in
+/// [`MIN_MAGNITUDE`, `MAX_MAGNITUDE`]; a whole number is at most [`MAX_COUNT`] in magnitude.
+///
+/// Parameters are lengths, rates, times, weights and counts of a map, so no product of a few of
+/// them, nor a quotient, leaves the range of `f64`, and no count sizes an allocation or a loop
+/// beyond a million. A stage's own domains are checked first by its `validate`; this rule catches
+/// what they leave open, in every stage and process alike.
+///
+/// # Errors
+/// [`ParamError`] naming `stage` and the path of the first number out of bounds, in key order.
+pub(crate) fn check_numbers(stage: &str, table: &toml::Table) -> Result<(), ParamError> {
+    table
+        .iter()
+        .filter(|(key, _)| key.as_str() != "id")
+        .try_for_each(|(key, value)| check_number(stage, key, value))
+}
+
+/// [`check_numbers`] for `value` at `path`.
+fn check_number(stage: &str, path: &str, value: &toml::Value) -> Result<(), ParamError> {
+    let refuse = |message: String| Err(ParamError::at(stage, path, message));
+    match value {
+        toml::Value::Float(x) if !x.is_finite() => refuse("must be finite".to_owned()),
+        toml::Value::Float(x)
+            if *x != 0.0 && !(MIN_MAGNITUDE..=MAX_MAGNITUDE).contains(&x.abs()) =>
+        {
+            refuse(format!(
+                "must be 0 or of a magnitude from {MIN_MAGNITUDE:e} to {MAX_MAGNITUDE:e}"
+            ))
+        }
+        toml::Value::Integer(n) if n.unsigned_abs() > MAX_COUNT.unsigned_abs() => {
+            refuse(format!("must be at most {MAX_COUNT} in magnitude"))
+        }
+        toml::Value::Array(items) => items
+            .iter()
+            .enumerate()
+            .try_for_each(|(i, item)| check_number(stage, &format!("{path}[{i}]"), item)),
+        toml::Value::Table(inner) => inner
+            .iter()
+            .try_for_each(|(key, item)| check_number(stage, &format!("{path}.{key}"), item)),
+        _ => Ok(()),
+    }
+}
+
 /// The error for the unknown keys `first` and `rest`.
 fn unknown_parameter(stage: &str, first: &str, rest: &[String]) -> ParamError {
     let mut message = "unknown parameter".to_owned();
@@ -84,20 +137,21 @@ fn unknown_parameter(stage: &str, first: &str, rest: &[String]) -> ParamError {
 /// bounded interval. A stage's own rules (a relation between two parameters, a set of values)
 /// keep their own words.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Check<'a> {
+pub struct Check<'a> {
     /// The stage whose parameters are checked.
     stage: &'a str,
 }
 
 impl<'a> Check<'a> {
     /// The checks of the parameters of `stage`.
-    pub(crate) const fn of(stage: &'a str) -> Self {
+    #[must_use]
+    pub const fn of(stage: &'a str) -> Self {
         Self { stage }
     }
 
     /// The error of `parameter` for a rule of the stage's own, in its own words.
     #[must_use]
-    pub(crate) fn refuse(self, parameter: &str, message: impl Into<String>) -> ParamError {
+    pub fn refuse(self, parameter: &str, message: impl Into<String>) -> ParamError {
         ParamError::at(self.stage, parameter, message)
     }
 
@@ -114,7 +168,7 @@ impl<'a> Check<'a> {
     ///
     /// # Errors
     /// [`ParamError`] naming the stage and `parameter`.
-    pub(crate) fn finite(self, parameter: &str, value: f64) -> Result<(), ParamError> {
+    pub fn finite(self, parameter: &str, value: f64) -> Result<(), ParamError> {
         self.require(value.is_finite(), parameter, "must be finite".to_owned())
     }
 
@@ -122,7 +176,7 @@ impl<'a> Check<'a> {
     ///
     /// # Errors
     /// [`ParamError`] naming the stage and `parameter`.
-    pub(crate) fn positive(self, parameter: &str, value: f64) -> Result<(), ParamError> {
+    pub fn positive(self, parameter: &str, value: f64) -> Result<(), ParamError> {
         let holds = value.is_finite() && value > 0.0;
         self.require(holds, parameter, "must be positive and finite".to_owned())
     }
@@ -131,7 +185,7 @@ impl<'a> Check<'a> {
     ///
     /// # Errors
     /// [`ParamError`] naming the stage and `parameter`.
-    pub(crate) fn at_least(self, parameter: &str, value: f64, min: f64) -> Result<(), ParamError> {
+    pub fn at_least(self, parameter: &str, value: f64, min: f64) -> Result<(), ParamError> {
         let holds = value.is_finite() && value >= min;
         self.require(
             holds,
@@ -144,7 +198,7 @@ impl<'a> Check<'a> {
     ///
     /// # Errors
     /// [`ParamError`] naming the stage and `parameter`.
-    pub(crate) fn in_closed(
+    pub fn in_closed(
         self,
         parameter: &str,
         value: f64,
@@ -159,7 +213,7 @@ impl<'a> Check<'a> {
     ///
     /// # Errors
     /// [`ParamError`] naming the stage and `parameter`.
-    pub(crate) fn in_closed_open(
+    pub fn in_closed_open(
         self,
         parameter: &str,
         value: f64,
@@ -174,7 +228,7 @@ impl<'a> Check<'a> {
     ///
     /// # Errors
     /// [`ParamError`] naming the stage and `parameter`.
-    pub(crate) fn in_open_closed(
+    pub fn in_open_closed(
         self,
         parameter: &str,
         value: f64,
@@ -189,7 +243,7 @@ impl<'a> Check<'a> {
     ///
     /// # Errors
     /// [`ParamError`] naming the stage and `parameter`.
-    pub(crate) fn count_at_least<T: Copy + PartialOrd + std::fmt::Display>(
+    pub fn count_at_least<T: Copy + PartialOrd + std::fmt::Display>(
         self,
         parameter: &str,
         value: T,
@@ -220,7 +274,7 @@ fn path_text(path: &serde_ignored::Path<'_>) -> String {
 mod tests {
     use serde::Deserialize;
 
-    use super::{Check, parse};
+    use super::{Check, check_numbers, parse};
     use crate::stage::ParamError;
 
     #[derive(Debug, Deserialize)]
@@ -389,6 +443,37 @@ mod tests {
             "must be at least 1"
         );
         assert_eq!(said(check.count_at_least("p", 1_u32, 1)), "ok");
+    }
+
+    // Final review round 3, class B: one bound for every number of a stage table, named by its
+    // path, NaN and the infinities included (for a field no `validate` checks).
+    #[test]
+    fn numbers_out_of_bounds_are_refused_with_their_path() {
+        let magnitude = "must be 0 or of a magnitude from 1e-12 to 1e12";
+        let count = "must be at most 1000000 in magnitude";
+        for (text, path, message) in [
+            ("rate = 1.1e12", "rate", magnitude),
+            ("rate = -1e13", "rate", magnitude),
+            ("rate = 9e-13", "rate", magnitude),
+            ("rate = 5e-324", "rate", magnitude),
+            ("inner = [{x = 1.0}, {x = 2e300}]", "inner[1].x", magnitude),
+            ("opt = {x = -1e-300}", "opt.x", magnitude),
+            ("rate = nan", "rate", "must be finite"),
+            ("rate = -inf", "rate", "must be finite"),
+            ("n = 1000001", "n", count),
+            ("deep = [[1, -2000000]]", "deep[0][1]", count),
+        ] {
+            let err = check_numbers("t", &table(text)).unwrap_err();
+            assert_eq!(err, error("t", Some(path), message), "{text}");
+        }
+        for text in [
+            "rate = 0.0\nzero = -0.0",
+            "rate = 1e12\nsmall = -1e-12",
+            "n = -1000000\nm = 1000000",
+            "id = \"t\"\nname = \"x\"\nflag = true\nlist = [\"a\"]",
+        ] {
+            assert!(check_numbers("t", &table(text)).is_ok(), "{text}");
+        }
     }
 
     #[test]

@@ -74,7 +74,12 @@ runs only them. Every test that proves an AC carries `// AC: <id>` on the line a
 ## How to add a stage
 
 1. Add a module under `src/stages/terrain/` that implements `TypedStage`: `ID`, `SUMMARY`, `KINDS`, a
-   `Params` type, `reads`, `writes`, `run` and, when it reports metrics, `metric_names`.
+   `Params` type, `reads`, `writes`, `run` and, when it reports metrics, `metric_names`. Check the
+   parameters' domains in `validate` with `stage::Check` (one wording per rule); every number of a
+   stage table also keeps the bounds `stage::MAX_MAGNITUDE`, `MIN_MAGNITUDE` and `MAX_COUNT`, and
+   the frame's cell edge lies between `recipe::MIN_CELL_M` and `MAX_CELL_M`. Lengths in metres
+   become cells through `MapFrame` (`cells_of_m`, `centre_m`, `index_centre_m`, ...), never by
+   hand.
 2. Add one line to `stages::register` in `src/stages/mod.rs`:
    `registry.add(Box::new(terrain::my_stage::MyStage));`.
 3. Name it in a recipe's `[[stage]]` list. The runner checks the declared reads and writes, and

@@ -1,7 +1,7 @@
 //! Statistics with numpy's semantics.
 
 use super::KernelError;
-use super::num::{key, max, min, round_half_even, to_f64, to_index};
+use super::num::{key, max, min, to_f64, to_index};
 
 /// A sorted copy of `values`, ordered by `total_cmp` on `-0.0`-normalised keys.
 fn sorted(values: &[f64]) -> Vec<f64> {
@@ -63,12 +63,6 @@ pub fn mean(values: &[f64]) -> Result<f64, KernelError> {
     Ok(values.iter().sum::<f64>() / to_f64(values.len()))
 }
 
-/// `max(1, round(m / cell_m))`, rounding halves to even as Python's and numpy's `round` do.
-#[must_use]
-pub fn metres_to_cells(m: f64, cell_m: f64) -> usize {
-    to_index(round_half_even(m / cell_m), usize::MAX).max(1)
-}
-
 #[cfg(test)]
 mod tests {
     use super::super::test_data::*;
@@ -98,14 +92,5 @@ mod tests {
         assert_eq!(percentile(&[], 50.0), Err(KernelError::Empty));
         assert_eq!(median(&[]), Err(KernelError::Empty));
         assert_eq!(mean(&[]), Err(KernelError::Empty));
-    }
-
-    #[test]
-    fn metres_to_cells_rounds_and_is_at_least_one() {
-        assert_eq!(metres_to_cells(100.0, 30.0), 3);
-        assert_eq!(metres_to_cells(1.0, 30.0), 1);
-        assert_eq!(metres_to_cells(0.0, 30.0), 1);
-        assert_eq!(metres_to_cells(75.0, 30.0), 2); // 2.5 rounds to even, as Python's round
-        assert_eq!(metres_to_cells(105.0, 30.0), 4); // 3.5
     }
 }

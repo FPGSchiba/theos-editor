@@ -86,6 +86,10 @@ use crate::world::{Layer, MapFrame, ValueType};
 /// Yuan et al.'s tolerance as a share of the largest uplift per step, max(U)·Δt (ruling 43).
 const TOLERANCE_SHARE: f64 = 1e-3;
 
+/// The largest drainage-area exponent m: the stream-power literature uses about 0.3 to 0.7, and
+/// `Q^m` must stay far from overflow for any discharge a map can carry.
+const MAX_M: f64 = 2.0;
+
 /// The tolerance when no cell uplifts, metres (ruling 43).
 const FALLBACK_TOLERANCE_M: f64 = 1e-6;
 
@@ -93,7 +97,7 @@ const FALLBACK_TOLERANCE_M: f64 = 1e-6;
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FluvialParams {
-    /// The drainage-area exponent m of `K·Q^m·S`; n is 1 (spec ruling 3).
+    /// The drainage-area exponent m of `K·Q^m·S`, in [0, 2]; n is 1 (spec ruling 3).
     #[serde(default = "default_m")]
     pub m: f64,
     /// The dimensionless deposition coefficient `G = d*·v_s / r̄` (Yuan et al. 2019, eq. 9); 0 is
@@ -172,7 +176,8 @@ impl TypedStage for Fluvial {
 
     fn validate(&self, params: &mut FluvialParams) -> Result<(), ParamError> {
         let check = Check::of(Self::ID);
-        check.at_least("m", params.m, 0.0)?;
+        // Final review round 3, class B: `Q^m` overflows for an exponent of hundreds.
+        check.in_closed("m", params.m, 0.0, MAX_M)?;
         check.at_least("g", params.g, 0.0)?;
         check.count_at_least("max_iterations", params.max_iterations, 1)
     }

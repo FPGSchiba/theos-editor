@@ -77,8 +77,13 @@ impl ValueType for Warp {
     const NAME: &'static str = "warp";
 }
 
+/// The largest magnitude of a spectral slope: terrain spectra lie between about 1 and 4 (the
+/// built-ins use 2.8 to 3.6), and `k^(-beta/2)` must stay far from overflow on any grid.
+const MAX_BETA: f64 = 8.0;
+
 /// The parameters of `tectonics`; defaults as 0.3.0 (the sag duration is plan ruling L13). The
-/// background and warp numbers must be finite and `sag_duration_yr` positive and finite. In a
+/// background and warp numbers must be finite, the two spectral slopes in [-8, 8] (the noise's
+/// amplitudes are `k^(-beta/2)`), and `sag_duration_yr` positive and finite. In a
 /// source the positions must be finite, a path must hold at least two points, `width`, `reach`
 /// and `r` must be positive, `rate` finite, `jitter` and `depth_m` at least 0, and `asymmetry`
 /// in [0, 2).
@@ -89,11 +94,11 @@ pub struct TectonicsParams {
     pub background_uplift: f64,
     /// Relative strength of the noise on the background uplift.
     pub background_variation: f64,
-    /// Spectral slope of the background noise.
+    /// Spectral slope of the background noise, in [-8, 8].
     pub background_beta: f64,
     /// Strength of the domain warp, map fractions.
     pub warp: f64,
-    /// Spectral slope of the warp noise.
+    /// Spectral slope of the warp noise, in [-8, 8].
     pub warp_beta: f64,
     /// Years a `depth_m` of sag is spread over: `sag_rate = depth_m / sag_duration_yr`.
     pub sag_duration_yr: f64,
@@ -145,11 +150,16 @@ impl TypedStage for Tectonics {
         for (name, value) in [
             ("background_uplift", params.background_uplift),
             ("background_variation", params.background_variation),
-            ("background_beta", params.background_beta),
             ("warp", params.warp),
-            ("warp_beta", params.warp_beta),
         ] {
             check.finite(name, value)?;
+        }
+        // Final review round 3, class B: `k^(-beta/2)` overflows for a slope of thousands.
+        for (name, value) in [
+            ("background_beta", params.background_beta),
+            ("warp_beta", params.warp_beta),
+        ] {
+            check.in_closed(name, value, -MAX_BETA, MAX_BETA)?;
         }
         check.positive("sag_duration_yr", params.sag_duration_yr)?;
         for (k, source) in params.source.iter().enumerate() {
@@ -429,6 +439,7 @@ mod tests {
     const FINITE: &str = "must be finite";
     const POSITIVE: &str = "must be positive and finite";
     const NOT_NEGATIVE: &str = "must be at least 0 and finite";
+    const BETA: &str = "must be in [-8, 8]";
 
     /// Each `(toml, parameter, message)` is refused naming exactly that parameter and message.
     fn refused(cases: &[(String, &str, &str)]) {
@@ -449,9 +460,12 @@ mod tests {
             case("sag_duration_yr = inf", "sag_duration_yr", POSITIVE),
             case("background_uplift = nan", "background_uplift", FINITE),
             case("background_variation = inf", "background_variation", FINITE),
-            case("background_beta = nan", "background_beta", FINITE),
+            case("background_beta = nan", "background_beta", BETA),
+            case("background_beta = 8.5", "background_beta", BETA),
+            case("background_beta = -1e4", "background_beta", BETA),
             case("warp = -inf", "warp", FINITE),
-            case("warp_beta = nan", "warp_beta", FINITE),
+            case("warp_beta = nan", "warp_beta", BETA),
+            case("warp_beta = 1e4", "warp_beta", BETA),
         ]);
     }
 

@@ -11,6 +11,12 @@ use crate::world::{LayerKind, MapFrame};
 /// How far two cell edges may differ, relative, and still count as square.
 const SQUARE_TOLERANCE: f64 = 1e-9;
 
+/// The smallest cell edge of a map, m: a centimetre, below any floor plan's need.
+pub const MIN_CELL_M: f64 = 0.01;
+
+/// The largest cell edge of a map, m: 100 km, beyond any world map's need.
+pub const MAX_CELL_M: f64 = 100_000.0;
+
 /// A validated recipe: the frame and the stages with their parsed parameters.
 #[derive(Debug)]
 pub struct Plan {
@@ -143,7 +149,8 @@ fn check_constraints(recipe: &LoadedRecipe, stages: &[PlannedStage]) -> Result<(
     Ok(())
 }
 
-/// Check 1: the grid (at least 2 x 2, a cell count that fits a `usize`), the size and square cells.
+/// Check 1: the grid (at least 2 x 2, a cell count that fits a `usize`), the size, square cells
+/// and a cell edge from [`MIN_CELL_M`] to [`MAX_CELL_M`].
 fn check_frame(recipe: &LoadedRecipe) -> Result<MapFrame, RecipeError> {
     let r = &recipe.recipe;
     let [rows, cols] = r.grid;
@@ -186,11 +193,21 @@ fn check_frame(recipe: &LoadedRecipe) -> Result<MapFrame, RecipeError> {
             ),
         ));
     }
-    Ok(MapFrame {
-        rows,
-        cols,
-        cell_m: width * 1000.0 / num::to_f64(cols),
-    })
+    // Final review round 3, class B: every metre of a stage becomes cells, areas and slopes
+    // through the cell edge, so its range keeps them finite and its conversions bounded. It also
+    // refuses a size whose cells underflow to 0, which the square check above cannot see.
+    let cell_m = width * 1000.0 / num::to_f64(cols);
+    if !(MIN_CELL_M..=MAX_CELL_M).contains(&cell_m) {
+        return Err(invalid(
+            recipe,
+            &at_parameter("size_km"),
+            format!(
+                "`size_km` over `grid` gives cells of {cell_m} m; the edge must be from \
+                 {MIN_CELL_M} m to {MAX_CELL_M} m"
+            ),
+        ));
+    }
+    Ok(MapFrame { rows, cols, cell_m })
 }
 
 /// Check 2: the extra renders and the render options.

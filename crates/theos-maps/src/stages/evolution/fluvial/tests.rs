@@ -684,6 +684,7 @@ fn fluvial_declares_its_layers_and_parameters() {
         ("g = nan", Some("g")),
         ("g = 0.0\nm = -1.0", Some("m")),
         ("g = 0.0\nm = inf", Some("m")),
+        ("g = 0.0\nm = 2.5", Some("m")),
         ("g = 0.0\nmax_iterations = 0", Some("max_iterations")),
         ("g = 0.0\nn = 1.0", Some("n")),
         (

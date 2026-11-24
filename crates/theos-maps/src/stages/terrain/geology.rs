@@ -141,7 +141,7 @@ impl TypedStage for Geology {
         if let (Some(fb), Some(sd)) = (&params.fold_belt, &belt) {
             modifier = fold_belt(ctx, fb, sd, &mut rock);
         }
-        add_plutons(ctx, params, &warp, &mut rock);
+        add_plutons(ctx, params, &warp, &mut rock)?;
         fill_basins(&sag, &mut rock);
 
         let (kmin, kmax) = k_range();
@@ -262,10 +262,20 @@ fn fold_belt(ctx: &StageContext<'_>, fb: &FoldBelt, sd: &Grid<f64>, rock: &mut [
 }
 
 /// Granite plutons: noisy discs at random places on the warped coordinates.
-fn add_plutons(ctx: &mut StageContext<'_>, params: &GeologyParams, warp: &Warp, rock: &mut [u8]) {
+///
+/// # Errors
+/// [`StageError::Cancelled`], checked before each pluton: each costs a noise field of the whole
+/// grid, and a recipe may ask for up to a million.
+fn add_plutons(
+    ctx: &mut StageContext<'_>,
+    params: &GeologyParams,
+    warp: &Warp,
+    rock: &mut [u8],
+) -> Result<(), StageError> {
     let [lo, hi] = params.plutons;
     let count = u64::from(lo) + ctx.rng().below(u64::from(hi - lo) + 1);
     for i in 0..count {
+        ctx.check_cancel()?;
         let rng = ctx.rng();
         let cx = rng.uniform() * 0.8 + 0.1;
         let cy = rng.uniform() * 0.8 + 0.1;
@@ -280,6 +290,7 @@ fn add_plutons(ctx: &mut StageContext<'_>, params: &GeologyParams, warp: &Warp, 
             }
         }
     }
+    Ok(())
 }
 
 /// Alluvium on basin floors: where the sag rate exceeds 0.3 of its maximum (0.3.0's rule).
@@ -446,6 +457,39 @@ mod tests {
             assert_eq!(err.parameter.as_deref(), Some(parameter), "{toml}: {err}");
             assert!(err.to_string().contains(text), "{toml}: {err}");
         }
+    }
+
+    // Final review round 3, class B: a million plutons (the most a recipe may ask for) are a
+    // million noise fields; the loop now stops at a cancel instead of running for many minutes.
+    #[test]
+    fn a_cancel_stops_the_plutons() {
+        let mut w = world(64, 64);
+        run_stage(&mut w, &GridStage, "").unwrap();
+        run_stage(&mut w, &Tectonics, "").unwrap();
+        let params = Geology
+            .params(&table("plutons = [1000000, 1000000]"))
+            .unwrap();
+        let cancel = crate::progress::CancelToken::new();
+        let trigger = cancel.clone();
+        let started = std::time::Instant::now();
+        let stopper = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            trigger.cancel();
+        });
+        let mut sink = |_: &crate::progress::Progress| {};
+        let mut ctx = StageContext::new(
+            &mut w,
+            &Geology,
+            params.as_ref(),
+            "geology#0",
+            11,
+            &cancel,
+            &mut sink,
+        );
+        let result = Stage::run(&Geology, &mut ctx, params.as_ref());
+        stopper.join().unwrap();
+        assert!(matches!(result, Err(StageError::Cancelled)), "{result:?}");
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
     }
 
     #[test]

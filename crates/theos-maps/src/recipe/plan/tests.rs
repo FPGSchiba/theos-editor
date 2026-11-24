@@ -215,8 +215,43 @@ fn a_grid_whose_cell_count_overflows_is_refused() {
         let loaded = parse(&edited, RecipeOrigin::Builtin).unwrap();
         let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
         let (stage, layer, parameter, message) = fields(&err);
-        assert_eq!((stage, layer, parameter), (None, None, Some("grid")), "{err}");
+        assert_eq!(
+            (stage, layer, parameter),
+            (None, None, Some("grid")),
+            "{err}"
+        );
         assert!(message.contains("cell count"), "{message}");
+    }
+}
+
+// Final review round 3, class B: a cell edge of 0 (the size underflows over 2048 columns, and
+// the square check compares 0 with 0), of nanometres or of 1e160 m planned.
+#[test]
+fn a_cell_edge_out_of_range_is_refused() {
+    for (grid, size) in [
+        ("[2048, 2048]", "[5e-324, 5e-324]"),
+        ("[4, 8]", "[8e-9, 4e-9]"),
+        ("[4, 8]", "[8e160, 4e160]"),
+        ("[4, 8]", "[0.00007, 0.000035]"),
+        ("[4, 8]", "[808.0, 404.0]"),
+    ] {
+        let edited = text("", &[])
+            .replace("grid = [4, 8]", &format!("grid = {grid}"))
+            .replace("size_km = [1.0, 0.5]", &format!("size_km = {size}"));
+        let loaded = parse(&edited, RecipeOrigin::Builtin).unwrap();
+        let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+        let (_, _, parameter, message) = fields(&err);
+        assert_eq!(parameter, Some("size_km"), "{err}");
+        assert!(
+            message.contains("the edge must be from 0.01 m to 100000 m"),
+            "{message}"
+        );
+    }
+    for size in ["[0.0000801, 0.00004005]", "[800.0, 400.0]"] {
+        let edited = text("", &[]).replace("size_km = [1.0, 0.5]", &format!("size_km = {size}"));
+        let loaded = parse(&edited, RecipeOrigin::Builtin).unwrap();
+        let planned = plan(&loaded, &registry(), &no_inputs()).unwrap();
+        assert!((0.01..=100_000.0).contains(&planned.frame.cell_m), "{size}");
     }
 }
 

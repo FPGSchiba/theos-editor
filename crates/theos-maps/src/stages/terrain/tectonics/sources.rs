@@ -13,6 +13,9 @@ use crate::stage::{Check, ParamError};
 /// Samples of the dense curve through a path, as in 0.3.0.
 const CURVE_SAMPLES: usize = 600;
 
+/// The least flank width and radius a jittered source keeps, map fractions.
+const MIN_SIZE: f64 = 1e-9;
+
 const fn half() -> f64 {
     0.5
 }
@@ -277,7 +280,9 @@ fn jittered_path(path: &[[f64; 2]], jit: f64, rng: &mut StageRng) -> Vec<[f64; 2
 fn centre(at: &[f64; 2], r: f64, jit: f64, rng: &mut StageRng) -> (f64, f64, f64) {
     let dx = jit * rng.normal();
     let dy = jit * rng.normal();
-    let radius = r * (1.0 + 0.2 * rng.normal());
+    // A draw below −5 would make the radius negative (a volcano's `pow` then NaN everywhere);
+    // the floor keeps it a tiny source, as `orogen` floors its flanks.
+    let radius = max(r * (1.0 + 0.2 * rng.normal()), MIN_SIZE);
     (at[0] + dx, at[1] + dy, radius)
 }
 
@@ -397,7 +402,7 @@ fn orogen(env: &mut Env<'_>, sd: &Grid<f64>, rate: f64, width: f64, asymmetry: f
         } else {
             0.5 * asymmetry
         };
-        let side = max(w * (1.0 + lean), 1e-9);
+        let side = max(w * (1.0 + lean), MIN_SIZE);
         let a = max(1.0 + 0.45 * along.get(r, c), 0.2);
         rate * a * libm::exp(-0.5 * square(s / side))
     });

@@ -26,7 +26,7 @@
 //! The lengths of 0.3.0 (cells of 62.5 m) are metres here: curvature smoothing 125 m (2 cells),
 //! prominence smoothing 500 m (8 cells), contact distance 350 m (0.35 km, at least 2 cells), timber
 //! smoothing 187.5 m (3 cells), salt shore 125 m (2 cells). A distance in cells is
-//! [`metres_to_cells`], which rounds where 0.3.0 truncated.
+//! [`MapFrame::cells_of_m`], which rounds where 0.3.0 truncated.
 
 use std::collections::BTreeSet;
 
@@ -37,7 +37,7 @@ use crate::kernels::distance::distance;
 use crate::kernels::filters::gaussian;
 use crate::kernels::morphology::{Structure, dilate};
 use crate::kernels::num::{max, min};
-use crate::kernels::stats::{metres_to_cells, percentile};
+use crate::kernels::stats::percentile;
 use crate::stages::terrain::hydrology::WaterFeatures;
 use crate::stages::terrain::rocks::Rock;
 use crate::world::MapFrame;
@@ -146,7 +146,7 @@ fn near_water(inputs: &Inputs<'_>, frame: &MapFrame) -> Result<Grid<bool>, Kerne
 fn contact_zone(rock: &Grid<u8>, frame: &MapFrame) -> Grid<bool> {
     let is = |code: u8| Rock::from_code(code);
     let granite = rock.map(|c| is(c) == Some(Rock::Granite));
-    let steps = metres_to_cells(CONTACT_M, frame.cell_m).max(CONTACT_MIN_CELLS);
+    let steps = frame.cells_of_m(CONTACT_M).max(CONTACT_MIN_CELLS);
     let mut zone = dilate(&granite, Structure::Cross, frame.cell_m, steps);
     for (i, z) in zone.as_mut_slice().iter_mut().enumerate() {
         let soft = matches!(
@@ -206,7 +206,7 @@ pub fn compute(
         inputs.terminal,
         Structure::Cross,
         frame.cell_m,
-        metres_to_cells(SALT_SHORE_M, frame.cell_m),
+        frame.cells_of_m(SALT_SHORE_M),
     );
     let mut out: Vec<Grid<f64>> = (0..NAMES.len())
         .map(|_| Grid::filled(frame.rows, frame.cols, 0.0))

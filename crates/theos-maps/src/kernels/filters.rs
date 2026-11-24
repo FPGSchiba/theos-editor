@@ -5,9 +5,17 @@ use crate::grid::Grid;
 use super::num::{max, to_f64, to_index};
 use super::reflect::{map_lines, reflect_offset};
 
-/// Kernel radius scipy uses: `int(truncate * sigma + 0.5)` with `truncate = 4.0`.
-fn gaussian_radius(sigma_cells: f64) -> usize {
-    to_index(4.0 * sigma_cells + 0.5, usize::MAX)
+/// How many times the longer side of the grid a Gaussian kernel may reach.
+const MAX_REACH_SIDES: usize = 16;
+
+/// Kernel radius scipy uses, `int(truncate * sigma + 0.5)` with `truncate = 4.0`, cut at
+/// [`MAX_REACH_SIDES`] times the longer side `side` (final review round 3, class B).
+///
+/// The reflected line repeats every two lengths, so a kernel that reaches 16 lengths already
+/// averages it eight times over; a wider one (a sigma of kilometres on centimetre cells) would only
+/// cost memory and time. Up to the cut the filter is scipy's.
+fn gaussian_radius(sigma_cells: f64, side: usize) -> usize {
+    to_index(4.0 * sigma_cells + 0.5, usize::MAX).min(MAX_REACH_SIDES.saturating_mul(side))
 }
 
 /// Normalised half kernel `w[0..=radius]` of `exp(-0.5 x^2 / sigma^2)`.
@@ -28,14 +36,15 @@ fn gaussian_weights(sigma_cells: f64, radius: usize) -> Vec<f64> {
 
 /// scipy `gaussian_filter(g, sigma_m / cell_m, mode='reflect', truncate=4.0)`.
 ///
-/// Separable: axis 0, then axis 1. A sigma of zero (or less, or NaN) returns the input unchanged.
+/// Separable: axis 0, then axis 1. A sigma of zero (or less, or NaN) returns the input unchanged,
+/// and the radius is cut at 16 times the longer side (see `gaussian_radius`).
 #[must_use]
 pub fn gaussian(g: &Grid<f64>, sigma_m: f64, cell_m: f64) -> Grid<f64> {
     let sigma = sigma_m / cell_m;
     if sigma.is_nan() || sigma <= 0.0 {
         return g.clone();
     }
-    let radius = gaussian_radius(sigma);
+    let radius = gaussian_radius(sigma, g.rows().max(g.cols()));
     let w = gaussian_weights(sigma, radius);
     let pass = |line: &[f64], out: &mut [f64]| {
         let n = line.len();
@@ -122,6 +131,29 @@ mod tests {
         let out = gaussian(&grid(4, 4, &S), 10.0, 1.0);
         assert!(out.as_slice().iter().all(|v| v.is_finite()));
         assert_close(out.as_slice(), &GAUSS_S_10, 1e-12);
+    }
+
+    // Final review round 3, class B: a radius beyond `usize` ("capacity overflow") or of
+    // petabytes is cut at 16 sides, and a radius up to the cut is unchanged. A kernel that wide
+    // is flat over the reflected line, so every value is the mean, up to the part period the
+    // window holds beyond its whole periods (5 of 225 taps down the rows here).
+    #[test]
+    fn a_gaussian_wider_than_sixteen_sides_is_cut_and_gives_about_the_mean() {
+        assert_eq!(gaussian_radius(10.0, 4), 40);
+        assert_eq!(gaussian_radius(16.0, 4), 64);
+        assert_eq!(gaussian_radius(1e14, 4), 64);
+        assert_eq!(gaussian_radius(f64::INFINITY, 5), 80);
+        let g = grid(5, 7, &H);
+        let mean = H.iter().sum::<f64>() / 35.0;
+        let high = H.iter().fold(H[0], |m, &v| max(m, v));
+        let low = H.iter().fold(H[0], |m, &v| crate::kernels::num::min(m, v));
+        let range = high - low;
+        for sigma_m in [1e300, f64::INFINITY] {
+            let out = gaussian(&g, sigma_m, 1.0);
+            for v in out.as_slice() {
+                assert!((v - mean).abs() < 0.03 * range, "{v} vs {mean}");
+            }
+        }
     }
 
     #[test]

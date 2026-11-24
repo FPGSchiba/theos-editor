@@ -14,7 +14,7 @@ use super::fonts::fonts;
 use super::palette::Rgb;
 use super::styles::INK;
 use super::{RenderError, canvas, text};
-use crate::kernels::num::{max, to_f32, to_f64};
+use crate::kernels::num::{max, to_f32, to_f64, to_usize};
 
 /// The widest or tallest a tile gets on the sheet, pixels.
 const TILE_MAX_PX: usize = 512;
@@ -75,25 +75,23 @@ fn read_tile(path: &Path) -> Result<Tile, RenderError> {
             }
         })
         .collect();
-    let (width, height) = (
-        usize::try_from(info.width).unwrap_or(0),
-        usize::try_from(info.height).unwrap_or(0),
-    );
+    let (width, height) = (to_usize(info.width), to_usize(info.height));
     Ok(Tile { width, height, rgb })
 }
 
-/// The mean colour of the `factor` x `factor` block of `tile` at `(x, y)`.
+/// The mean colour of the `factor` x `factor` block of `tile` at `(x, y)`. The sums are `u64`: a
+/// tile of two million pixels a side shrinks by a factor whose block overflows a `u32` sum.
 fn block_mean(tile: &Tile, x: usize, y: usize, factor: usize) -> Rgb {
-    let mut sum = [0_u32; 3];
+    let mut sum = [0_u64; 3];
     for dy in 0..factor {
         for dx in 0..factor {
             let px = tile.rgb[(y * factor + dy) * tile.width + x * factor + dx];
             for (s, v) in sum.iter_mut().zip(px) {
-                *s += u32::from(v);
+                *s += u64::from(v);
             }
         }
     }
-    let n = u32::try_from(factor * factor).unwrap_or(1);
+    let n = u64::try_from(factor.saturating_mul(factor)).unwrap_or(u64::MAX);
     sum.map(|s| u8::try_from(s / n).unwrap_or(u8::MAX))
 }
 
@@ -102,7 +100,10 @@ fn block_mean(tile: &Tile, x: usize, y: usize, factor: usize) -> Rgb {
 ///
 /// # Errors
 /// [`RenderError::NoTiles`] for no tiles or no columns; [`RenderError::Tile`] naming the file
-/// of a tile that cannot be read; [`RenderError::Output`] when `out` cannot be written.
+/// of a tile that cannot be read; [`RenderError::Canvas`] when the sheet is too large for a
+/// pixmap; [`RenderError::Font`] when an embedded font cannot be decoded or a glyph drawn;
+/// [`RenderError::Png`] when the encoder fails; [`RenderError::Output`] when `out` cannot be
+/// written.
 pub fn contact_sheet(
     tiles: &[(String, PathBuf)],
     columns: usize,
@@ -124,8 +125,13 @@ pub fn contact_sheet(
     let cell_w = images.iter().map(|t| t.width / factor).max().unwrap_or(0);
     let cell_h = images.iter().map(|t| t.height / factor).max().unwrap_or(0);
     let rows = tiles.len().div_ceil(columns);
-    let width = columns * (cell_w + PAD_PX) + PAD_PX;
-    let height = rows * (LABEL_BAND_PX + cell_h + PAD_PX) + PAD_PX;
+    // Saturating: a sheet too wide for `usize` is too wide for a pixmap, refused below.
+    let width = columns
+        .saturating_mul(cell_w + PAD_PX)
+        .saturating_add(PAD_PX);
+    let height = rows
+        .saturating_mul(LABEL_BAND_PX + cell_h + PAD_PX)
+        .saturating_add(PAD_PX);
     let size = RenderError::Canvas { width, height };
     let (w, h) = (u32::try_from(width), u32::try_from(height));
     let mut sheet = match (w, h) {
@@ -233,6 +239,20 @@ mod tests {
             sheet.rgb(PAD_PX + 5, PAD_PX + LABEL_BAND_PX + 5),
             [10, 20, 30]
         );
+    }
+
+    // Final review round 3, class B: `columns * (cell_w + PAD_PX)` overflowed `usize` (a panic in
+    // a debug build) before the size check could refuse the sheet.
+    #[test]
+    fn a_sheet_too_wide_for_a_pixmap_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("sheet.png");
+        let tiles = [tile(dir.path(), "t", 8, 8, [1, 2, 3])];
+        for columns in [usize::MAX, 1 << 40] {
+            let err = contact_sheet(&tiles, columns, &out).unwrap_err();
+            assert!(matches!(err, RenderError::Canvas { .. }), "{err}");
+        }
+        assert!(!out.exists());
     }
 
     #[test]
