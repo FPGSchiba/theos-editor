@@ -123,8 +123,9 @@ impl<'a> Ground<'a> {
     }
 }
 
-/// Paints every pixel with its ground colour, calling `check` before every row; an error from
-/// `check` (the run's cancel) stops the pass.
+/// Paints every pixel with its ground colour, calling `check` before every row and, in a row
+/// that farms reach, before every pixel (a pixel sums over the farms in reach, whose number
+/// follows the settlement counts); an error from `check` (the run's cancel) stops the pass.
 fn paint_ground(
     pixmap: &mut Pixmap,
     ground: &Ground<'_>,
@@ -133,7 +134,11 @@ fn paint_ground(
     for (y, row) in canvas::rows_mut(pixmap).enumerate() {
         check()?;
         let farms = ground.farmland.row(y);
+        let farmed = !farms.is_empty();
         for (x, px) in row.iter_mut().enumerate() {
+            if farmed {
+                check()?;
+            }
             canvas::put(px, ground.colour(y, x, &farms));
         }
     }

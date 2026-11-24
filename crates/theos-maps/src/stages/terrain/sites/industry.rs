@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 use crate::features::{Feature, FeatureSet, Geometry, Prop};
 use crate::grid::Grid;
+use crate::kernels::KernelError;
 use crate::stages::terrain::roads::RoadClass;
 use crate::world::MapFrame;
 
@@ -26,10 +27,24 @@ pub(super) struct River<'a> {
 /// The mills: for each town, village or city in handle order, the river cell with enough
 /// discharge nearest to it within [`MILL_REACH_M`], ties to the lowest index; no two mills on a
 /// cell.
-pub(super) fn mills(set: &FeatureSet, water: &River<'_>, frame: &MapFrame) -> Vec<Feature> {
+///
+/// Each settlement costs a pass over the grid, and their number is a recipe count, so `cancel`
+/// is called before every settlement.
+///
+/// # Errors
+/// [`KernelError::Cancelled`] when `cancel` returns `true`.
+pub(super) fn mills(
+    set: &FeatureSet,
+    water: &River<'_>,
+    frame: &MapFrame,
+    cancel: &dyn Fn() -> bool,
+) -> Result<Vec<Feature>, KernelError> {
     let mut taken = BTreeSet::new();
     let mut out = Vec::new();
     for (handle, s) in set.of_kind("settlement") {
+        if cancel() {
+            return Err(KernelError::Cancelled);
+        }
         let Geometry::Point([x, y]) = s.geometry else {
             continue;
         };
@@ -62,7 +77,7 @@ pub(super) fn mills(set: &FeatureSet, water: &River<'_>, frame: &MapFrame) -> Ve
             ));
         }
     }
-    out
+    Ok(out)
 }
 
 /// The site type of a deposit type and the class of the spur to it (0.3.0: a track, a trail to a

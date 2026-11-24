@@ -97,6 +97,9 @@ pub struct Inputs<'a> {
     pub ruins: &'a [[f64; 2]],
     /// The detuning field; absent counts as 0.
     pub omega: Option<&'a Grid<f64>>,
+    /// The run's cancel callback: every cell sums over the ruins, whose number is a recipe
+    /// count.
+    pub cancel: &'a dyn Fn() -> bool,
 }
 
 /// The cells of the lakes of `water` that are terminal, from the raster of lake numbers (0 is no
@@ -113,10 +116,20 @@ pub fn terminal_mask(lake_id: &Grid<u32>, water: &WaterFeatures) -> Grid<bool> {
 }
 
 /// The largest `exp(-d^2 / (2 s^2))` over `ruins`, per cell; 0 without ruins.
-fn ruins_near(frame: &MapFrame, ruins: &[[f64; 2]]) -> Grid<f64> {
+///
+/// # Errors
+/// [`KernelError::Cancelled`] when `cancel` returns `true`, asked before every cell.
+fn ruins_near(
+    frame: &MapFrame,
+    ruins: &[[f64; 2]],
+    cancel: &dyn Fn() -> bool,
+) -> Result<Grid<f64>, KernelError> {
     let mut near = Grid::filled(frame.rows, frame.cols, 0.0);
     let two_s2 = 2.0 * RUINS_SIGMA_M * RUINS_SIGMA_M;
     for i in 0..near.len() {
+        if cancel() {
+            return Err(KernelError::Cancelled);
+        }
         let (r, c) = near.cell(i);
         let [x, y] = frame.centre_m(r, c);
         for at in ruins {
@@ -125,7 +138,7 @@ fn ruins_near(frame: &MapFrame, ruins: &[[f64; 2]]) -> Grid<f64> {
                 max(near.as_slice()[i], libm::exp(-(dx * dx + dy * dy) / two_s2));
         }
     }
-    near
+    Ok(near)
 }
 
 /// Whether each cell is less than 0.6 km from a river or lake; all false without water.
@@ -186,7 +199,8 @@ fn flag(b: bool) -> f64 {
 /// The ten fields in the order of [`NAMES`].
 ///
 /// # Errors
-/// A kernel error when the height is empty.
+/// A kernel error when the height is empty; [`KernelError::Cancelled`] when the inputs' cancel
+/// callback returns `true`.
 pub fn compute(
     inputs: &Inputs<'_>,
     frame: &MapFrame,
@@ -195,7 +209,7 @@ pub fn compute(
     let ridge = ridge(inputs.height, frame)?;
     let prominence = prominence(inputs.height, frame);
     let near = near_water(inputs, frame)?;
-    let ruins = ruins_near(frame, inputs.ruins);
+    let ruins = ruins_near(frame, inputs.ruins, inputs.cancel)?;
     let high = percentile(inputs.height.as_slice(), 70.0)?;
     let timber = gaussian(
         &inputs.vegetation.map(|v| flag(v > 0.75)),

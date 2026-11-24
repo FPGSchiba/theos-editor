@@ -88,6 +88,11 @@ impl Farmland {
 }
 
 impl FarmRow<'_> {
+    /// Whether no farm reaches the row.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.farms.is_empty()
+    }
+
     /// How much of the pixel in column `x` is farmland, in `[0, 1]`.
     pub(crate) fn share(&self, x: usize) -> f64 {
         let centre = to_f64(x) + 0.5;

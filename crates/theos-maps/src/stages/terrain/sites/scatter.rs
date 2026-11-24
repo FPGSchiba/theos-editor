@@ -3,6 +3,7 @@
 
 use crate::features::{Feature, pick};
 use crate::grid::Grid;
+use crate::kernels::KernelError;
 use crate::kernels::distance::distance;
 use crate::kernels::filters::gaussian;
 use crate::kernels::num::max;
@@ -53,14 +54,20 @@ pub(super) struct Ground<'a> {
     pub inside: &'a Grid<bool>,
     /// The frame.
     pub frame: MapFrame,
+    /// The run's cancel callback: the counts are a recipe's, and every pick is a pass over the
+    /// grid.
+    pub cancel: &'a dyn Fn() -> bool,
 }
 
 /// Up to `n` watchtowers: the best cells of the prominence `max(height − gauss(height), 0)`
 /// where the nearest road of class road or main is between 150 and 900 m away.
-pub(super) fn watchtowers(g: &Ground<'_>, n: usize) -> Vec<Feature> {
+///
+/// # Errors
+/// [`KernelError::Cancelled`] when the ground's cancel callback returns `true`.
+pub(super) fn watchtowers(g: &Ground<'_>, n: usize) -> Result<Vec<Feature>, KernelError> {
     let main = g.roads.map(|c| c >= TOWER_CLASS_MIN);
     let Ok((away, _)) = distance(&main, g.frame.cell_m) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let smooth = gaussian(g.height, PROMINENCE_SIGMA_M, g.frame.cell_m);
     let mut score = Grid::filled(g.frame.rows, g.frame.cols, 0.0);
@@ -74,7 +81,10 @@ pub(super) fn watchtowers(g: &Ground<'_>, n: usize) -> Vec<Feature> {
 }
 
 /// Up to `n` caves: the steepest limestone, by `max(slope − 0.3, 0)`.
-pub(super) fn caves(g: &Ground<'_>, n: usize) -> Vec<Feature> {
+///
+/// # Errors
+/// [`KernelError::Cancelled`] when the ground's cancel callback returns `true`.
+pub(super) fn caves(g: &Ground<'_>, n: usize) -> Result<Vec<Feature>, KernelError> {
     let limestone = Rock::Limestone.code();
     let mut score = Grid::filled(g.frame.rows, g.frame.cols, 0.0);
     for i in 0..score.len() {
@@ -88,14 +98,17 @@ pub(super) fn caves(g: &Ground<'_>, n: usize) -> Vec<Feature> {
 /// Up to `n` camps: remote ground under cover and gentle, at least 600 m from every road
 /// (9 km with no road), 3 km from each other and from every settlement in `settlements` (metres).
 /// Draws one noise value per cell in index order.
+///
+/// # Errors
+/// [`KernelError::Cancelled`] when the ground's cancel callback returns `true`.
 pub(super) fn camps(
     g: &Ground<'_>,
     n: usize,
     settlements: &[[f64; 2]],
     rng: &mut StageRng,
-) -> Vec<Feature> {
+) -> Result<Vec<Feature>, KernelError> {
     if n == 0 {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let from_road = distance(&g.roads.map(|c| c > 0), g.frame.cell_m).map_or_else(
         |_| Grid::filled(g.frame.rows, g.frame.cols, NO_ROAD_M),
@@ -115,6 +128,9 @@ pub(super) fn camps(
 
 /// The sites of type `ty` at the best `n` cells of `score`, `sep_m` apart and from the points
 /// `taken`.
+///
+/// # Errors
+/// [`KernelError::Cancelled`] when the ground's cancel callback returns `true`.
 fn picks(
     ty: &str,
     score: &Grid<f64>,
@@ -122,9 +138,10 @@ fn picks(
     sep_m: f64,
     taken: &[[f64; 2]],
     g: &Ground<'_>,
-) -> Vec<Feature> {
-    pick(score, n, sep_m, taken, sep_m, &g.frame)
+) -> Result<Vec<Feature>, KernelError> {
+    let cells = pick(score, n, sep_m, taken, sep_m, &g.frame, g.cancel)?;
+    Ok(cells
         .into_iter()
         .map(|(r, c)| Feature::site(ty, g.frame.centre_m(r, c), []))
-        .collect()
+        .collect())
 }

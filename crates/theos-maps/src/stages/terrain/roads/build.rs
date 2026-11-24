@@ -122,14 +122,19 @@ pub(super) fn build(
         });
     }
     let ruins = ruins(set, frame);
-    let pairs = network::candidates(&places).map_err(|e| ctx.kernel_failed(e))?;
+    let pairs =
+        network::candidates(&places, &|| ctx.is_cancelled()).map_err(|e| ctx.kernel_failed(e))?;
     let mut watch = Counter {
         ctx,
         done: 0,
         total: 2 * pairs.len() + ruins.len(),
     };
     links(&mut laid, &cost, &places, &pairs, &mut watch)?;
-    let unreached: Vec<&Place> = places.iter().filter(|p| !laid.reaches(p.handle)).collect();
+    let reached = laid.reached();
+    let unreached: Vec<&Place> = places
+        .iter()
+        .filter(|p| !reached.contains(&p.handle))
+        .collect();
     let mut warnings: Vec<Finding> = unreached
         .iter()
         .map(|p| {
@@ -158,7 +163,10 @@ fn links(
 ) -> Result<(), StageError> {
     let links =
         network::cost(&laid.router(cost), places, pairs, watch).map_err(|e| watch.fail(e))?;
-    let chosen = choose(places, &links, cost.params.loop_detour);
+    let chosen = choose(places, &links, cost.params.loop_detour, &|| {
+        watch.cancelled()
+    })
+    .map_err(|e| watch.fail(e))?;
     watch.advance(pairs.len() - chosen.len());
     for link in laying_order(chosen) {
         let (a, b) = (&places[link.a], &places[link.b]);

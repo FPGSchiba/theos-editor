@@ -247,6 +247,8 @@ pub(super) struct Env<'a> {
     pub along: StageRng,
     /// The `wid<k>` stream.
     pub wid: StageRng,
+    /// The run's cancel callback, for the distance to a path.
+    pub cancel: &'a dyn Fn() -> bool,
 }
 
 /// Adds `f(r, c)` to every cell of `field`.
@@ -300,7 +302,7 @@ fn along_path(
     jit: f64,
 ) -> Result<(Grid<f64>, Grid<f64>), KernelError> {
     let curve = dense_curve(&jittered_path(path, jit, env.rng), CURVE_SAMPLES);
-    signed_distance(&curve, env.xx, env.yy)
+    signed_distance(&curve, env.xx, env.yy, env.cancel)
 }
 
 /// The draw every source makes first: its rate with 15 % scatter.

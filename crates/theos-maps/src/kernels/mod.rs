@@ -28,6 +28,23 @@ pub mod voronoi;
 )]
 mod test_data;
 
+/// How many units of work (queue pops, inserts, queries) pass between two calls of a kernel's
+/// cancel callback: often enough to stop well within a second, rarely enough to cost nothing.
+pub(crate) const CANCEL_EVERY: usize = 4096;
+
+/// A kernel's cancel point after `done` units of work: calls `cancel` when `done` is a multiple
+/// of [`CANCEL_EVERY`].
+///
+/// # Errors
+/// [`KernelError::Cancelled`] when `cancel` is called and returns `true`.
+pub(crate) fn cancel_point(done: usize, cancel: &dyn Fn() -> bool) -> Result<(), KernelError> {
+    if done.is_multiple_of(CANCEL_EVERY) && cancel() {
+        Err(KernelError::Cancelled)
+    } else {
+        Ok(())
+    }
+}
+
 /// Errors of the numeric kernels.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum KernelError {

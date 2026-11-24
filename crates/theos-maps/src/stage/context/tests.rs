@@ -522,6 +522,18 @@ fn a_kernel_error_names_the_stage_and_a_cancel_stays_a_cancel() {
                 message: "no values to summarise".into()
             }
         );
+        assert_eq!(
+            ctx.kernel_failed_in("provinces", KernelError::Cancelled),
+            StageError::Cancelled
+        );
+        assert_eq!(
+            ctx.kernel_failed_in("provinces", KernelError::Empty),
+            StageError::Failed {
+                stage: "probe".into(),
+                message: "provinces: no values to summarise".into()
+            }
+        );
+        assert!(!ctx.cancel_token().is_cancelled());
     });
 }
 

@@ -191,6 +191,8 @@ impl TypedStage for Tectonics {
             .map(|n| params.background_uplift * max(1.0 + params.background_variation * n, 0.05));
         let mut sag_rate = Grid::filled(rows, cols, 0.0);
         let mut first_orogen = None;
+        let token = ctx.cancel_token();
+        let cancel = move || token.is_cancelled();
         for (k, source) in params.source.iter().enumerate() {
             ctx.check_cancel()?;
             let (along, wid) = (
@@ -206,10 +208,11 @@ impl TypedStage for Tectonics {
                 rng: ctx.rng(),
                 along,
                 wid,
+                cancel: &cancel,
             };
             let belt = source
                 .apply(&mut env)
-                .map_err(|e| ctx.fail(format!("source[{k}]: {e}")))?;
+                .map_err(|e| ctx.kernel_failed_in(&format!("source[{k}]"), e))?;
             if first_orogen.is_none() {
                 first_orogen = belt;
             }

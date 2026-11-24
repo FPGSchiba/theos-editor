@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 
 use crate::features::{Feature, Geometry, Prop, interior, pick};
 use crate::grid::Grid;
+use crate::kernels::KernelError;
 use crate::kernels::filters::gaussian;
 use crate::kernels::num::{canonical, max, min, round_half_even, to_index};
 use crate::rng::StageRng;
@@ -101,13 +102,17 @@ fn deposit(
 }
 
 /// The deposits to add: for each field with a count, its picks.
+///
+/// # Errors
+/// [`KernelError::Cancelled`] when `cancel` returns `true` while picking.
 pub fn place(
     fields: &[(&'static str, Grid<f64>)],
     elements: &[&Grid<f64>; 5],
     frame: &MapFrame,
     params: &ResourcesParams,
     rng: &mut StageRng,
-) -> Vec<Feature> {
+    cancel: &dyn Fn() -> bool,
+) -> Result<Vec<Feature>, KernelError> {
     let inside = interior(frame, params.edge_margin);
     let spacing_m = params.spacing_km * 1000.0;
     let mut out = Vec::new();
@@ -125,13 +130,13 @@ pub fn place(
             .as_slice()
             .iter()
             .fold(f64::NEG_INFINITY, |m, &v| max(m, v));
-        for (row, col) in pick(&f, n, spacing_m, &[], 0.0, frame) {
+        for (row, col) in pick(&f, n, spacing_m, &[], 0.0, frame, cancel)? {
             let i = f.index(row, col);
             let rich = richness(f.as_slice()[i], top, rng.uniform());
             out.push(deposit(ty, (row, col), frame, rich, strongest(elements, i)));
         }
     }
-    out
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -178,7 +183,15 @@ mod tests {
         let mut params = ResourcesParams::default();
         params.counts.insert("stone".to_owned(), 1);
         let mut rng = StageRng::for_key(1, "test");
-        let found = place(&[("stone", field)], &elements, &frame, &params, &mut rng);
+        let found = place(
+            &[("stone", field)],
+            &elements,
+            &frame,
+            &params,
+            &mut rng,
+            &|| false,
+        )
+        .unwrap();
         let Some(Geometry::Point([x, y])) = found.first().map(|f| f.geometry.clone()) else {
             panic!("one deposit")
         };

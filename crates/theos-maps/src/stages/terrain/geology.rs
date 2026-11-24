@@ -216,8 +216,8 @@ fn province_rocks(
             Rock::ALL[i].code()
         })
         .collect();
-    let labels =
-        nearest_seed(&seeds, &warp.x, &warp.y).map_err(|e| ctx.fail(format!("provinces: {e}")))?;
+    let labels = nearest_seed(&seeds, &warp.x, &warp.y, &|| ctx.is_cancelled())
+        .map_err(|e| ctx.kernel_failed_in("provinces", e))?;
     Ok(labels
         .as_slice()
         .iter()
@@ -490,6 +490,46 @@ mod tests {
         stopper.join().unwrap();
         assert!(matches!(result, Err(StageError::Cancelled)), "{result:?}");
         assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    }
+
+    // Final review round 4, finding 3 (CE-28.4: a cancel stops the run at its next cancel point,
+    // within one second): a million provinces (the most a recipe may ask for) are a million
+    // inserts into the triangulation; they stop at a cancel instead of running for minutes.
+    // AC: CE-28.4
+    #[test]
+    fn a_cancel_stops_a_million_provinces_within_a_second() {
+        let mut w = world(64, 64);
+        run_stage(&mut w, &GridStage, "").unwrap();
+        run_stage(&mut w, &Tectonics, "").unwrap();
+        let params = Geology
+            .params(&table("provinces = 1000000\nplutons = [0, 0]"))
+            .unwrap();
+        let cancel = crate::progress::CancelToken::new();
+        let trigger = cancel.clone();
+        let stopper = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            trigger.cancel();
+            std::time::Instant::now()
+        });
+        let mut sink = |_: &crate::progress::Progress| {};
+        let mut ctx = StageContext::new(
+            &mut w,
+            &Geology,
+            params.as_ref(),
+            "geology#0",
+            11,
+            &cancel,
+            &mut sink,
+        );
+        let result = Stage::run(&Geology, &mut ctx, params.as_ref());
+        let returned = std::time::Instant::now();
+        let cancelled = stopper.join().unwrap();
+        assert!(matches!(result, Err(StageError::Cancelled)), "{result:?}");
+        let late = returned.saturating_duration_since(cancelled);
+        assert!(
+            late < std::time::Duration::from_secs(1),
+            "stopped {late:?} after the cancel"
+        );
     }
 
     #[test]

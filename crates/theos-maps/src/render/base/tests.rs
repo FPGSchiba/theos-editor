@@ -136,6 +136,31 @@ fn every_row_and_line_checks_for_cancel() -> TestResult {
     Ok(())
 }
 
+// Final review round 4, class I: a pixel of a farmed row sums over the farms in reach, whose
+// number follows the settlement counts, so the ground pass checks before every such pixel.
+#[test]
+fn a_farmed_row_checks_for_cancel_before_every_pixel() -> TestResult {
+    let mut w = TestWorld::flat(4, 4, 50.0);
+    w.settlement("town", [100.0, 100.0]);
+    let cancel = CancelToken::new();
+    let input = w.input(&cancel);
+    let layers = Layers::read(&input)?;
+    let frame = *w.world.frame();
+    let ground = Ground::new(&layers, &frame, &w.features);
+    let mut p = canvas::pixmap(&frame)?;
+    // The row check and three pixel checks pass: three pixels of row 0 are painted.
+    let result = paint_ground(&mut p, &ground, cancel_after(4));
+    assert!(matches!(result, Err(RenderError::Cancelled)));
+    let painted: Vec<bool> = (0..8)
+        .map(|x| p.pixel(x, 0).is_some_and(|px| px.alpha() > 0))
+        .collect();
+    assert_eq!(
+        painted,
+        [true, true, true, false, false, false, false, false]
+    );
+    Ok(())
+}
+
 #[test]
 fn a_missing_layer_is_named() {
     for layer in [

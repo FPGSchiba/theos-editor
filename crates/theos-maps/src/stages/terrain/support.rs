@@ -28,19 +28,32 @@ pub(crate) fn run_stage(
     stage: &dyn Stage,
     toml: &str,
 ) -> Result<StageReport, StageError> {
+    run_with(world, stage, toml, &CancelToken::new())
+}
+
+/// [`run_stage`] in a run that was cancelled before the stage started: a stage whose work a
+/// recipe count sizes must stop at one of its own cancel points.
+pub(crate) fn run_cancelled(
+    world: &mut World,
+    stage: &dyn Stage,
+    toml: &str,
+) -> Result<StageReport, StageError> {
+    let cancel = CancelToken::new();
+    cancel.cancel();
+    run_with(world, stage, toml, &cancel)
+}
+
+/// [`run_stage`] with the cancel token `cancel`.
+fn run_with(
+    world: &mut World,
+    stage: &dyn Stage,
+    toml: &str,
+    cancel: &CancelToken,
+) -> Result<StageReport, StageError> {
     let params = stage.params(&table(toml)).unwrap();
     let key = format!("{}#0", stage.id());
-    let cancel = CancelToken::new();
     let mut sink = |_: &Progress| {};
-    let mut ctx = StageContext::new(
-        world,
-        stage,
-        params.as_ref(),
-        &key,
-        SEED,
-        &cancel,
-        &mut sink,
-    );
+    let mut ctx = StageContext::new(world, stage, params.as_ref(), &key, SEED, cancel, &mut sink);
     let report = stage.run(&mut ctx, params.as_ref())?;
     ctx.finish()?;
     Ok(report)

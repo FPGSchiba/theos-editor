@@ -191,6 +191,13 @@ impl<'w> StageContext<'w> {
         self.cancel.is_cancelled()
     }
 
+    /// The run's cancel token, for a kernel's cancel callback while the context itself is
+    /// borrowed (by [`StageContext::rng`], say).
+    #[must_use]
+    pub fn cancel_token(&self) -> CancelToken {
+        self.cancel.clone()
+    }
+
     /// A cancel point.
     ///
     /// # Errors
@@ -225,9 +232,17 @@ impl<'w> StageContext<'w> {
     /// other error fails this stage with the kernel's message.
     #[must_use]
     pub fn kernel_failed(&self, err: KernelError) -> StageError {
+        self.kernel_failed_in("", err)
+    }
+
+    /// [`StageContext::kernel_failed`] for a kernel that worked on `what` (`provinces`,
+    /// `source[2]`): the message reads `<what>: <kernel message>`; an empty `what` adds nothing.
+    #[must_use]
+    pub fn kernel_failed_in(&self, what: &str, err: KernelError) -> StageError {
         match err {
             KernelError::Cancelled => StageError::Cancelled,
-            other => self.fail(other.to_string()),
+            other if what.is_empty() => self.fail(other.to_string()),
+            other => self.fail(format!("{what}: {other}")),
         }
     }
 

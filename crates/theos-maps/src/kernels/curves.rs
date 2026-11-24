@@ -65,21 +65,23 @@ pub fn dense_curve(points: &[[f64; 2]], samples: usize) -> Vec<[f64; 2]> {
 ///
 /// # Errors
 /// [`KernelError::Empty`] for an empty curve, [`KernelError::Shape`] when the grids differ in
-/// shape, [`KernelError::InvalidPoint`] for a curve point or grid cell that is not finite.
+/// shape, [`KernelError::InvalidPoint`] for a curve point or grid cell that is not finite,
+/// [`KernelError::Cancelled`] when `cancel` returns `true` (called every 4,096 curve points
+/// and every 4,096 cells).
 pub fn signed_distance(
     curve: &[[f64; 2]],
     x: &Grid<f64>,
     y: &Grid<f64>,
+    cancel: &dyn Fn() -> bool,
 ) -> Result<(Grid<f64>, Grid<f64>), KernelError> {
     same_shape(x, y)?;
-    let index = PointIndex::new(curve)?;
+    let index = PointIndex::new(curve, cancel)?;
+    let nearest_points = index.nearest_per_cell(x, y, cancel)?;
     let last = curve.len() - 1;
     let mut signed = Vec::with_capacity(x.len());
     let mut unsigned = Vec::with_capacity(x.len());
-    for (cell, (&qx, &qy)) in x.as_slice().iter().zip(y.as_slice()).enumerate() {
-        let nearest = index
-            .nearest([qx, qy])
-            .ok_or(KernelError::InvalidPoint { index: cell })?;
+    let cells = x.as_slice().iter().zip(y.as_slice()).zip(nearest_points);
+    for ((&qx, &qy), nearest) in cells {
         let (dx, dy) = (qx - curve[nearest][0], qy - curve[nearest][1]);
         let distance = (dx * dx + dy * dy).sqrt();
         let i = if last >= 2 {
@@ -141,7 +143,7 @@ mod tests {
         let curve = dense_curve(&[[0.0, 0.0], [10.0, 0.0]], 50);
         let x = grid(1, 3, vec![5.0, 5.0, 5.0]);
         let y = grid(1, 3, vec![1.0, -1.0, 0.0]);
-        let (signed, unsigned) = signed_distance(&curve, &x, &y)?;
+        let (signed, unsigned) = signed_distance(&curve, &x, &y, &|| false)?;
         assert!((signed.get(0, 0) - 1.0).abs() < 0.01);
         assert!((signed.get(0, 1) + 1.0).abs() < 0.01);
         assert!((unsigned.get(0, 0) - 1.0).abs() < 0.01);
@@ -155,18 +157,21 @@ mod tests {
         let one = grid(1, 1, vec![0.0]);
         let two = grid(1, 2, vec![0.0, 0.0]);
         let curve = [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]];
-        assert_eq!(signed_distance(&[], &one, &one), Err(KernelError::Empty));
+        assert_eq!(
+            signed_distance(&[], &one, &one, &|| false),
+            Err(KernelError::Empty)
+        );
         assert!(matches!(
-            signed_distance(&curve, &one, &two),
+            signed_distance(&curve, &one, &two, &|| false),
             Err(KernelError::Shape { .. })
         ));
         let nan = grid(1, 1, vec![f64::NAN]);
         assert_eq!(
-            signed_distance(&curve, &nan, &one),
+            signed_distance(&curve, &nan, &one, &|| false),
             Err(KernelError::InvalidPoint { index: 0 })
         );
         assert_eq!(
-            signed_distance(&[[f64::NAN, 0.0]], &one, &one),
+            signed_distance(&[[f64::NAN, 0.0]], &one, &one, &|| false),
             Err(KernelError::InvalidPoint { index: 0 })
         );
     }
@@ -175,9 +180,9 @@ mod tests {
     fn signed_distance_of_a_short_curve_uses_its_chord() -> Result<(), KernelError> {
         let x = grid(1, 1, vec![0.5]);
         let y = grid(1, 1, vec![2.0]);
-        let (signed, _) = signed_distance(&[[0.0, 0.0], [1.0, 0.0]], &x, &y)?;
+        let (signed, _) = signed_distance(&[[0.0, 0.0], [1.0, 0.0]], &x, &y, &|| false)?;
         assert!(signed.get(0, 0) > 0.0);
-        let (single, _) = signed_distance(&[[0.0, 0.0]], &x, &y)?;
+        let (single, _) = signed_distance(&[[0.0, 0.0]], &x, &y, &|| false)?;
         assert!(single.get(0, 0).abs() < 1e-12);
         Ok(())
     }

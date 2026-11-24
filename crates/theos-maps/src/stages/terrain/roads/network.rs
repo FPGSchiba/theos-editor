@@ -38,10 +38,14 @@ pub(super) struct Link {
 /// The candidate pairs `(a, b)`, `a < b`: the Delaunay edges over the places' points.
 ///
 /// # Errors
-/// [`KernelError::InvalidPoint`] for a point the triangulation refuses.
-pub(super) fn candidates(places: &[Place]) -> Result<Vec<(usize, usize)>, KernelError> {
+/// [`KernelError::InvalidPoint`] for a point the triangulation refuses;
+/// [`KernelError::Cancelled`] when `cancel` returns `true` (every 4,096 places).
+pub(super) fn candidates(
+    places: &[Place],
+    cancel: &dyn Fn() -> bool,
+) -> Result<Vec<(usize, usize)>, KernelError> {
     let points: Vec<[f64; 2]> = places.iter().map(|p| p.at).collect();
-    delaunay_edges(&points)
+    delaunay_edges(&points, cancel)
 }
 
 /// Routes every candidate pair from its first place to its second with the class its ends give,
@@ -87,7 +91,18 @@ pub(super) fn cost(
 /// The links to lay: Kruskal's tree of `links` over `n` places, then, in order of cost, each
 /// other link between two places that may loop whose cost through the links taken so far
 /// exceeds `loop_detour` times its own; those are marked as loops.
-pub(super) fn choose(places: &[Place], links: &[Link], loop_detour: f64) -> Vec<Link> {
+///
+/// Each candidate loop is a search over the places, whose number follows recipe counts, so
+/// `cancel` is called before every candidate and every place the search settles.
+///
+/// # Errors
+/// [`KernelError::Cancelled`] when `cancel` returns `true`.
+pub(super) fn choose(
+    places: &[Place],
+    links: &[Link],
+    loop_detour: f64,
+    cancel: &dyn Fn() -> bool,
+) -> Result<Vec<Link>, KernelError> {
     let edges: Vec<(usize, usize, f64)> = links.iter().map(|l| (l.a, l.b, l.cost)).collect();
     let mut taken = vec![false; links.len()];
     let mut looped = vec![false; links.len()];
@@ -99,22 +114,25 @@ pub(super) fn choose(places: &[Place], links: &[Link], loop_detour: f64) -> Vec<
         .collect();
     others.sort_unstable_by_key(|&i| (OrdF64(key(links[i].cost)), links[i].a, links[i].b));
     for i in others {
+        if cancel() {
+            return Err(KernelError::Cancelled);
+        }
         let so_far: Vec<&Link> = links
             .iter()
             .zip(&taken)
             .filter_map(|(l, &t)| t.then_some(l))
             .collect();
-        let through = network_cost(places.len(), &so_far, links[i].a, links[i].b);
+        let through = network_cost(places.len(), &so_far, links[i].a, links[i].b, cancel)?;
         if through > loop_detour * links[i].cost {
             taken[i] = true;
             looped[i] = true;
         }
     }
-    links
+    Ok(links
         .iter()
         .zip(taken.iter().zip(&looped))
         .filter_map(|(l, (&t, &lp))| t.then_some(Link { looped: lp, ..*l }))
-        .collect()
+        .collect())
 }
 
 /// `links` in the order they are laid: by class, main first, then by cost, then by their
@@ -126,7 +144,16 @@ pub(super) fn laying_order(mut links: Vec<Link>) -> Vec<Link> {
 
 /// The least cost from place `a` to place `b` over `links` among `n` places; infinite when no
 /// links join them.
-fn network_cost(n: usize, links: &[&Link], a: usize, b: usize) -> f64 {
+///
+/// # Errors
+/// [`KernelError::Cancelled`] when `cancel` returns `true`, asked before every settled place.
+fn network_cost(
+    n: usize,
+    links: &[&Link],
+    a: usize,
+    b: usize,
+    cancel: &dyn Fn() -> bool,
+) -> Result<f64, KernelError> {
     let mut dist = vec![f64::INFINITY; n];
     let mut done = vec![false; n];
     dist[a] = 0.0;
@@ -137,6 +164,9 @@ fn network_cost(n: usize, links: &[&Link], a: usize, b: usize) -> f64 {
     {
         if at == b {
             break;
+        }
+        if cancel() {
+            return Err(KernelError::Cancelled);
         }
         done[at] = true;
         for l in links {
@@ -153,7 +183,7 @@ fn network_cost(n: usize, links: &[&Link], a: usize, b: usize) -> f64 {
             }
         }
     }
-    dist[b]
+    Ok(dist[b])
 }
 
 #[cfg(test)]
@@ -196,16 +226,28 @@ mod tests {
         let pairs = |chosen: &[Link]| chosen.iter().map(|l| (l.a, l.b)).collect::<Vec<_>>();
         // The tree is 0-1, 0-3, 1-2 (equal costs tie by ends). Through it 2-3 costs 30, more
         // than 1.7 · 10, so it joins; then 0-2 costs 20 through 0-1-2, less than 1.7 · 12.
-        let chosen = choose(&towns, &links, 1.7);
+        let never = || false;
+        let chosen = choose(&towns, &links, 1.7, &never).unwrap();
         assert_eq!(pairs(&chosen), [(0, 1), (0, 3), (1, 2), (2, 3)]);
         let flags: Vec<bool> = chosen.iter().map(|l| l.looped).collect();
         assert_eq!(flags, [false, false, false, true]);
         let tree = [(0, 1), (0, 3), (1, 2)];
-        assert_eq!(pairs(&choose(&towns, &links, 3.5)), tree);
+        assert_eq!(pairs(&choose(&towns, &links, 3.5, &never).unwrap()), tree);
         let hamlets: Vec<Place> = (0..4).map(|i| place(i, 1, true)).collect();
-        assert_eq!(pairs(&choose(&hamlets, &links, 1.0)), tree);
+        assert_eq!(pairs(&choose(&hamlets, &links, 1.0, &never).unwrap()), tree);
         let gates: Vec<Place> = (0..4).map(|i| place(i, 3, false)).collect();
-        assert_eq!(pairs(&choose(&gates, &links, 1.0)), tree);
+        assert_eq!(pairs(&choose(&gates, &links, 1.0, &never).unwrap()), tree);
+        // Final review round 4, class I: the candidate loops stop at a cancel.
+        let stop = || true;
+        assert_eq!(
+            choose(&towns, &links, 1.7, &stop),
+            Err(KernelError::Cancelled)
+        );
+        let refs: Vec<&Link> = links.iter().collect();
+        assert_eq!(
+            network_cost(4, &refs, 0, 2, &stop),
+            Err(KernelError::Cancelled)
+        );
     }
 
     #[test]
@@ -226,17 +268,18 @@ mod tests {
     fn network_costs_follow_the_cheapest_way() {
         let links = [link(0, 1, 2.0), link(1, 2, 2.0), link(0, 2, 5.0)];
         let refs: Vec<&Link> = links.iter().collect();
-        assert!((network_cost(4, &refs, 0, 2) - 4.0).abs() < 1e-12);
-        assert!((network_cost(4, &refs, 2, 0) - 4.0).abs() < 1e-12);
-        assert!(network_cost(4, &refs, 0, 3).is_infinite());
+        let cost = |a, b| network_cost(4, &refs, a, b, &|| false).unwrap();
+        assert!((cost(0, 2) - 4.0).abs() < 1e-12);
+        assert!((cost(2, 0) - 4.0).abs() < 1e-12);
+        assert!(cost(0, 3).is_infinite());
     }
 
     #[test]
     fn two_places_are_one_candidate() -> Result<(), KernelError> {
         let two = [place(1, 3, true), place(2, 3, true)];
-        assert_eq!(candidates(&two)?, [(0, 1)]);
+        assert_eq!(candidates(&two, &|| false)?, [(0, 1)]);
         let three = [place(1, 3, true), place(2, 3, true), place(3, 1, true)];
-        assert_eq!(candidates(&three)?, [(0, 1), (0, 2), (1, 2)]);
+        assert_eq!(candidates(&three, &|| false)?, [(0, 1), (0, 2), (1, 2)]);
         Ok(())
     }
 }

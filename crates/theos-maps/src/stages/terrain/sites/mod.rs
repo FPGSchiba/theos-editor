@@ -34,6 +34,7 @@ mod tests;
 use self::scatter::Ground;
 use self::spurs::Spurs;
 use crate::features::{Feature, FeatureSet, interior};
+use crate::kernels::KernelError;
 use crate::kernels::num::{to_f64, to_u32};
 use crate::stage::{
     LayerSpec, MapKind, Metrics, ParamError, StageContext, StageError, StageReport, TypedStage,
@@ -128,7 +129,8 @@ impl TypedStage for Sites {
             min_discharge: params.mill_q_factor * river_q,
             inside: &inside,
         };
-        for mill in industry::mills(&set, &water, &frame) {
+        let mills = industry::mills(&set, &water, &frame, &|| ctx.is_cancelled());
+        for mill in mills.map_err(|e| ctx.kernel_failed(e))? {
             found.push(mill.clone());
             set.add(mill);
         }
@@ -152,16 +154,16 @@ impl TypedStage for Sites {
             roads: &spurs.laid.raster,
             inside: &inside,
             frame,
+            cancel: &|| ctx.is_cancelled(),
         };
-        let mut scattered = scatter::watchtowers(&ground, params.counts.watchtower);
-        scattered.extend(inns::inns(&spurs.laid.roads, &set, &inside, &frame));
-        scattered.extend(scatter::caves(&ground, params.counts.cave));
-        scattered.extend(scatter::camps(
-            &ground,
-            params.counts.camp,
-            &settlements,
-            &mut rng,
-        ));
+        let failed = |e: KernelError| ctx.kernel_failed(e);
+        let mut scattered =
+            scatter::watchtowers(&ground, params.counts.watchtower).map_err(failed)?;
+        let inns = inns::inns(&spurs.laid.roads, &set, &inside, &frame, ground.cancel);
+        scattered.extend(inns.map_err(failed)?);
+        scattered.extend(scatter::caves(&ground, params.counts.cave).map_err(failed)?);
+        let camps = scatter::camps(&ground, params.counts.camp, &settlements, &mut rng);
+        scattered.extend(camps.map_err(failed)?);
         for site in scattered {
             found.push(site.clone());
             set.add(site);

@@ -2,6 +2,7 @@
 //! `_pick`).
 
 use crate::grid::Grid;
+use crate::kernels::KernelError;
 use crate::kernels::num::{round_half_even, to_f64, to_index};
 use crate::world::MapFrame;
 
@@ -37,7 +38,12 @@ fn clear_near(score: &mut Grid<f64>, frame: &MapFrame, at: [f64; 2], sep_m: f64)
 /// Cells with a score of 0 or less, or a non-finite one, are never picked. A pick clears the
 /// cells within `min_sep_m` of its centre (strictly, as 0.3.0), and the cells within
 /// `taken_sep_m` of a point of `taken` (metres) are cleared before the first pick.
-#[must_use]
+///
+/// Each pick and each point of `taken` costs a pass over the grid, and `n` is a recipe count, so
+/// `cancel` is called before every one of them.
+///
+/// # Errors
+/// [`KernelError::Cancelled`] when `cancel` returns `true`.
 pub fn pick(
     score: &Grid<f64>,
     n: usize,
@@ -45,13 +51,23 @@ pub fn pick(
     taken: &[[f64; 2]],
     taken_sep_m: f64,
     frame: &MapFrame,
-) -> Vec<(usize, usize)> {
+    cancel: &dyn Fn() -> bool,
+) -> Result<Vec<(usize, usize)>, KernelError> {
+    let stop = || {
+        if cancel() {
+            Err(KernelError::Cancelled)
+        } else {
+            Ok(())
+        }
+    };
     let mut left = score.map(|v| if v.is_finite() { v } else { 0.0 });
     for &at in taken {
+        stop()?;
         clear_near(&mut left, frame, at, taken_sep_m);
     }
     let mut picks = Vec::new();
     while picks.len() < n {
+        stop()?;
         let mut best: Option<(usize, f64)> = None;
         for (index, &v) in left.as_slice().iter().enumerate() {
             if v > 0.0 && best.is_none_or(|(_, b)| v > b) {
@@ -64,7 +80,7 @@ pub fn pick(
         left.as_mut_slice()[index] = 0.0;
         clear_near(&mut left, frame, frame.centre_m(row, col), min_sep_m);
     }
-    picks
+    Ok(picks)
 }
 
 #[cfg(test)]
@@ -105,15 +121,18 @@ mod tests {
             ((9, 9), f64::INFINITY),
         ]);
         // Infinity is finite-checked like NaN: it counts as 0 (0.3.0 `isfinite`).
-        let picks = pick(&g, 10, 350.0, &[], 0.0, &FRAME);
+        let picks = pick(&g, 10, 350.0, &[], 0.0, &FRAME, &|| false).unwrap();
         assert_eq!(picks, [(2, 2), (2, 8), (8, 5)]);
         for (i, a) in picks.iter().enumerate() {
             for b in &picks[i + 1..] {
                 assert!(dist(*a, *b) >= 350.0, "{a:?} {b:?}");
             }
         }
-        assert_eq!(pick(&g, 2, 350.0, &[], 0.0, &FRAME), [(2, 2), (2, 8)]);
-        assert_eq!(pick(&g, 0, 350.0, &[], 0.0, &FRAME), []);
+        assert_eq!(
+            pick(&g, 2, 350.0, &[], 0.0, &FRAME, &|| false).unwrap(),
+            [(2, 2), (2, 8)]
+        );
+        assert_eq!(pick(&g, 0, 350.0, &[], 0.0, &FRAME, &|| false).unwrap(), []);
     }
 
     #[test]
@@ -121,7 +140,7 @@ mod tests {
         let g = scores(&[((2, 2), 5.0), ((2, 8), 3.0), ((8, 5), 2.0)]);
         // The centre of cell (2, 8).
         let taken = [FRAME.centre_m(2, 8)];
-        let picks = pick(&g, 10, 350.0, &taken, 200.0, &FRAME);
+        let picks = pick(&g, 10, 350.0, &taken, 200.0, &FRAME, &|| false).unwrap();
         assert_eq!(picks, [(2, 2), (8, 5)]);
     }
 
@@ -129,14 +148,26 @@ mod tests {
     fn pick_separation_is_strict_and_ties_go_to_the_lowest_index() {
         // Two cells exactly 300 m apart both stand with a separation of 300 m.
         let g = scores(&[((4, 1), 1.0), ((4, 4), 1.0)]);
-        assert_eq!(pick(&g, 5, 300.0, &[], 0.0, &FRAME), [(4, 1), (4, 4)]);
-        assert_eq!(pick(&g, 5, 300.1, &[], 0.0, &FRAME), [(4, 1)]);
+        assert_eq!(
+            pick(&g, 5, 300.0, &[], 0.0, &FRAME, &|| false).unwrap(),
+            [(4, 1), (4, 4)]
+        );
+        assert_eq!(
+            pick(&g, 5, 300.1, &[], 0.0, &FRAME, &|| false).unwrap(),
+            [(4, 1)]
+        );
         // Equal scores: the lowest index first.
         let flat = Grid::filled(10, 10, 1.0);
-        assert_eq!(pick(&flat, 1, 100.0, &[], 0.0, &FRAME), [(0, 0)]);
+        assert_eq!(
+            pick(&flat, 1, 100.0, &[], 0.0, &FRAME, &|| false).unwrap(),
+            [(0, 0)]
+        );
         // A zero separation still never picks a cell twice.
         let two = scores(&[((3, 3), 1.0), ((3, 4), 0.5)]);
-        assert_eq!(pick(&two, 5, 0.0, &[], 0.0, &FRAME), [(3, 3), (3, 4)]);
+        assert_eq!(
+            pick(&two, 5, 0.0, &[], 0.0, &FRAME, &|| false).unwrap(),
+            [(3, 3), (3, 4)]
+        );
     }
 
     #[test]
@@ -171,5 +202,30 @@ mod tests {
         assert!(all.as_slice().iter().all(|b| *b));
         let none = interior(&frame, 0.5);
         assert!(none.as_slice().iter().all(|b| !*b));
+    }
+
+    // Final review round 4, finding 3: every pick and every taken point is a pass over the grid,
+    // and the count is a recipe's, so a cancel stops the picking before the next pass.
+    #[test]
+    fn pick_stops_at_a_cancel() {
+        let flat = Grid::filled(10, 10, 1.0);
+        let calls = std::cell::Cell::new(0_usize);
+        let third = || {
+            calls.set(calls.get() + 1);
+            calls.get() == 3
+        };
+        let taken = [FRAME.centre_m(9, 9)];
+        assert_eq!(
+            pick(&flat, 100, 0.0, &taken, 0.0, &FRAME, &third),
+            Err(KernelError::Cancelled),
+            "one call for the taken point, one per pick"
+        );
+        calls.set(0);
+        let count = || {
+            calls.set(calls.get() + 1);
+            false
+        };
+        let picks = pick(&flat, 2, 0.0, &taken, 0.0, &FRAME, &count).unwrap();
+        assert_eq!((picks.len(), calls.get()), (2, 3));
     }
 }

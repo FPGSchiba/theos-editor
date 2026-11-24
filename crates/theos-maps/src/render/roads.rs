@@ -73,10 +73,12 @@ pub(crate) fn draw(
                 dash: None,
             };
             for line in &lines {
+                input.check_cancel()?;
                 canvas::polyline(pixmap, line, &wide);
             }
         }
         for line in &lines {
+            input.check_cancel()?;
             canvas::polyline(pixmap, line, &style.line);
         }
     }

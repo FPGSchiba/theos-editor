@@ -181,6 +181,7 @@ impl TypedStage for Resources {
             precipitation,
             ruins: &ruins,
             omega: ctx.f64_opt("omega")?,
+            cancel: &|| ctx.is_cancelled(),
         };
         let computed = compute(&inputs, &frame).map_err(|e| ctx.kernel_failed(e))?;
         let [water, wood, earth, metal, fire] = ELEMENT_LAYERS;
@@ -191,7 +192,10 @@ impl TypedStage for Resources {
             ctx.f64(metal)?,
             ctx.f64(fire)?,
         ];
-        let found = deposits::place(&computed, &elements, &frame, params, &mut rng);
+        let found = deposits::place(&computed, &elements, &frame, params, &mut rng, &|| {
+            ctx.is_cancelled()
+        })
+        .map_err(|e| ctx.kernel_failed(e))?;
         let mut report = StageReport::default();
         report
             .values

@@ -54,6 +54,12 @@ impl Default for DetuningParams {
 }
 
 /// Omega of every cell: baseline, ruin hot spots and drift, clipped to `[0, 1]`.
+///
+/// Every cell sums over every ruin, whose number a recipe count sets, so `cancel` is called
+/// before every cell.
+///
+/// # Errors
+/// [`StageError::Cancelled`] when `cancel` returns `true`.
 fn omega(
     rows: usize,
     cols: usize,
@@ -61,11 +67,15 @@ fn omega(
     ruins: &[[f64; 2]],
     drift: &Grid<f64>,
     params: &DetuningParams,
-) -> Grid<f64> {
+    cancel: &dyn Fn() -> bool,
+) -> Result<Grid<f64>, StageError> {
     let radius_m = params.ruin_radius_km * 1000.0;
     let mut out = Grid::filled(rows, cols, 0.0);
     for r in 0..rows {
         for c in 0..cols {
+            if cancel() {
+                return Err(StageError::Cancelled);
+            }
             let [x, y] = centre(r, c);
             let mut v = params.baseline;
             for ruin in ruins {
@@ -76,7 +86,7 @@ fn omega(
             out.as_mut_slice()[r * cols + c] = min(max(v, 0.0), 1.0);
         }
     }
-    out
+    Ok(out)
 }
 
 /// The stage `detuning`.
@@ -133,7 +143,8 @@ impl TypedStage for Detuning {
             &ruins,
             &drift,
             params,
-        );
+            &|| ctx.is_cancelled(),
+        )?;
         let mut report = StageReport::default();
         let values = field.as_slice();
         let n = to_f64(values.len());
@@ -159,9 +170,9 @@ impl TypedStage for Detuning {
 mod tests {
     use crate::features::{Feature, FeatureSet, Geometry};
     use crate::grid::Grid;
-    use crate::stage::{LayerSpec, Registry, Stage};
+    use crate::stage::{LayerSpec, Registry, Stage, StageError};
     use crate::stages::terrain::detuning::{Detuning, DetuningParams};
-    use crate::stages::terrain::support::{run_stage, table, world};
+    use crate::stages::terrain::support::{run_cancelled, run_stage, table, world};
     use crate::world::{Layer, World};
     use std::collections::BTreeMap;
 
@@ -308,6 +319,15 @@ mod tests {
             .err()
             .ok_or("baseline 2.0 is refused")?;
         assert_eq!(err.parameter.as_deref(), Some("baseline"));
+        Ok(())
+    }
+
+    // Final review round 4, class I: work a recipe count sizes reaches a cancel point (CE-28.4).
+    #[test]
+    fn a_cancel_stops_the_sum_over_the_ruins() -> TestResult {
+        let mut w = setup(true)?;
+        let result = run_cancelled(&mut w, &Detuning, "");
+        assert!(matches!(result, Err(StageError::Cancelled)), "{result:?}");
         Ok(())
     }
 }

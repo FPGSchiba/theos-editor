@@ -8,11 +8,8 @@ use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 
 use crate::grid::{D8, D16, Grid};
-use crate::kernels::KernelError;
 use crate::kernels::num::{OrdF64, key, to_u32, to_usize};
-
-/// How many pops pass between two calls of the cancel callback.
-const CANCEL_EVERY: usize = 4096;
+use crate::kernels::{KernelError, cancel_point};
 
 /// Which neighbour table a search walks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,9 +71,7 @@ pub fn shortest_paths(
     let mut pops = 0_usize;
     while let Some(Reverse((OrdF64(d), i))) = heap.pop() {
         pops += 1;
-        if pops.is_multiple_of(CANCEL_EVERY) && cancel() {
-            return Err(KernelError::Cancelled);
-        }
+        cancel_point(pops, cancel)?;
         if d > dist[i] {
             continue;
         }

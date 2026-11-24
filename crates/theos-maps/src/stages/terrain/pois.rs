@@ -170,15 +170,19 @@ fn scores(
 }
 
 /// The gates: the arrival, and with `gates = 2` the ascent far from it.
+///
+/// # Errors
+/// [`KernelError::Cancelled`] when `cancel` returns `true` while picking.
 fn gates(
     scores: &Scores,
     frame: &MapFrame,
     params: &PoisParams,
     settlements: &[[f64; 2]],
-) -> Vec<Feature> {
+    cancel: &dyn Fn() -> bool,
+) -> Result<Vec<Feature>, KernelError> {
     let mut out = Vec::new();
     if params.gates == 0 {
-        return out;
+        return Ok(out);
     }
     let mut arrival = scores.base.clone();
     for (v, &p) in arrival
@@ -198,14 +202,15 @@ fn gates(
         settlements,
         GATE_FROM_SETTLEMENT_M,
         frame,
-    );
+        cancel,
+    )?;
     let Some(&(row, col)) = down.first() else {
-        return out;
+        return Ok(out);
     };
     let from = frame.centre_m(row, col);
     out.push(poi("gate-down", from));
     if params.gates < 2 {
-        return out;
+        return Ok(out);
     }
     let [width, height] = frame.size_m();
     let far_m = FAR_SHARE * libm::sqrt(width * width + height * height);
@@ -226,24 +231,39 @@ fn gates(
         settlements,
         GATE_FROM_SETTLEMENT_M,
         frame,
-    );
+        cancel,
+    )?;
     if let Some(&(row, col)) = up.first() {
         out.push(poi("gate-up", frame.centre_m(row, col)));
     }
-    out
+    Ok(out)
 }
 
 /// Every point of interest to add, in the order ruins, Chimes, gates.
+///
+/// # Errors
+/// [`KernelError`] from the scores; [`KernelError::Cancelled`] when `cancel` returns `true`
+/// while picking.
 fn place(
     inputs: &Inputs<'_>,
     frame: &MapFrame,
     params: &PoisParams,
     settlements: &[[f64; 2]],
     rng: &mut StageRng,
+    cancel: &dyn Fn() -> bool,
 ) -> Result<Vec<Feature>, KernelError> {
     let s = scores(inputs, frame, params, rng)?;
     let mut out = Vec::new();
-    for (r, c) in pick(&s.ruin, params.ruins, RUIN_SPACING_M, &[], 0.0, frame) {
+    let ruins = pick(
+        &s.ruin,
+        params.ruins,
+        RUIN_SPACING_M,
+        &[],
+        0.0,
+        frame,
+        cancel,
+    )?;
+    for (r, c) in ruins {
         out.push(poi("ruin", frame.centre_m(r, c)));
     }
     let chimes = pick(
@@ -253,11 +273,12 @@ fn place(
         settlements,
         params.chime_min_km_from_settlement * 1000.0,
         frame,
-    );
+        cancel,
+    )?;
     for (r, c) in chimes {
         out.push(poi("chime", frame.centre_m(r, c)));
     }
-    out.extend(gates(&s, frame, params, settlements));
+    out.extend(gates(&s, frame, params, settlements, cancel)?);
     Ok(out)
 }
 
@@ -321,8 +342,10 @@ impl TypedStage for Pois {
                 river: ctx.mask("river")?,
                 lake: ctx.mask("lake")?,
             };
-            place(&inputs, &frame, params, &settlements, &mut rng)
-                .map_err(|e| ctx.kernel_failed(e))?
+            place(&inputs, &frame, params, &settlements, &mut rng, &|| {
+                ctx.is_cancelled()
+            })
+            .map_err(|e| ctx.kernel_failed(e))?
         };
         let mut report = StageReport::default();
         for (name, ty) in METRICS
@@ -350,9 +373,9 @@ mod tests {
     use crate::features::{Feature, FeatureSet, Geometry};
     use crate::grid::Grid;
     use crate::kernels::num::to_f64;
-    use crate::stage::Stage;
+    use crate::stage::{Stage, StageError};
     use crate::stages::terrain::pois::{Pois, PoisParams};
-    use crate::stages::terrain::support::{run_stage, table, world};
+    use crate::stages::terrain::support::{run_cancelled, run_stage, table, world};
     use crate::world::{Layer, World};
 
     const N: usize = 64;
@@ -710,5 +733,13 @@ min_chime_sep_km = 1.0",
         assert_eq!(metrics.0.get("chime"), Some(&2.0));
         assert_eq!(metrics.0.get("gate_down"), Some(&1.0));
         assert_eq!(metrics.0.get("gate_up"), Some(&1.0));
+    }
+
+    // Final review round 4, class I: work a recipe count sizes reaches a cancel point (CE-28.4).
+    #[test]
+    fn a_cancel_stops_the_picking() {
+        let mut w = setup();
+        let result = run_cancelled(&mut w, &Pois, "");
+        assert!(matches!(result, Err(StageError::Cancelled)), "{result:?}");
     }
 }

@@ -2,6 +2,7 @@
 
 use crate::features::{Feature, FeatureSet, Prop};
 use crate::grid::Grid;
+use crate::kernels::KernelError;
 use crate::kernels::num::{to_u32, to_usize};
 use crate::stages::terrain::roads::{Road, RoadClass};
 use crate::world::MapFrame;
@@ -14,15 +15,25 @@ const FROM_SETTLEMENT_M: f64 = 2000.0;
 /// The inns of the roads of class main and road longer than 6 km, in road order: one at the
 /// path cell nearest to half the road's length (ties to the earlier cell), when it is inside the
 /// margin and more than 2 km from every settlement. Its `road` is the road's index.
+///
+/// Each road scans every settlement, and both numbers follow recipe counts, so `cancel` is
+/// called before every road.
+///
+/// # Errors
+/// [`KernelError::Cancelled`] when `cancel` returns `true`.
 pub(super) fn inns(
     roads: &[Road],
     set: &FeatureSet,
     inside: &Grid<bool>,
     frame: &MapFrame,
-) -> Vec<Feature> {
+    cancel: &dyn Fn() -> bool,
+) -> Result<Vec<Feature>, KernelError> {
     let settlements = set.points("settlement", None);
     let mut out = Vec::new();
     for (i, road) in roads.iter().enumerate() {
+        if cancel() {
+            return Err(KernelError::Cancelled);
+        }
         let link = matches!(road.class, RoadClass::Main | RoadClass::Road);
         if !link || road.length_m(frame) <= MIN_LINK_M {
             continue;
@@ -38,7 +49,7 @@ pub(super) fn inns(
             out.push(Feature::site("inn", at, [("road", Prop::Road(id))]));
         }
     }
-    out
+    Ok(out)
 }
 
 /// The path cell of `road` whose distance along the road is nearest to half its length.

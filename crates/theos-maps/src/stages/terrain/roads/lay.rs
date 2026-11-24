@@ -95,11 +95,9 @@ impl Laid {
         self.roads.len() - 1
     }
 
-    /// Whether some road starts or ends at `handle`.
-    pub(crate) fn reaches(&self, handle: FeatureHandle) -> bool {
-        self.roads
-            .iter()
-            .any(|r| r.from == handle || r.to == handle)
+    /// Every place some road starts or ends at, in one pass over the roads.
+    pub(crate) fn reached(&self) -> BTreeSet<FeatureHandle> {
+        self.roads.iter().flat_map(|r| [r.from, r.to]).collect()
     }
 
     /// Every cell of every road's path.
@@ -155,7 +153,7 @@ mod tests {
             (at(6, 10), 3),
         ];
         assert_eq!(marked, want);
-        assert!(laid.reaches(a) && !laid.reaches(FeatureHandle(3)));
+        assert!(laid.reached().contains(&a) && !laid.reached().contains(&FeatureHandle(3)));
         assert_eq!(laid.cells().len(), 7);
     }
 }

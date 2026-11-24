@@ -288,11 +288,19 @@ fn population(class: &Class, u: f64) -> i64 {
 }
 
 /// The settlements to add, in the order they are picked, and the site quality.
+///
+/// The counts are a recipe's, and a name drawn from a recipe's list costs a pass over it, so
+/// `cancel` is called while picking and before every settlement.
+///
+/// # Errors
+/// [`KernelError`] from the distance and filter kernels; [`KernelError::Cancelled`] when
+/// `cancel` returns `true`.
 fn site(
     inputs: &Inputs<'_>,
     frame: &MapFrame,
     params: &SettlementsParams,
     rng: &mut StageRng,
+    cancel: &dyn Fn() -> bool,
 ) -> Result<(Vec<Feature>, Grid<f64>), KernelError> {
     let d_km = water_distance_km(inputs, frame)?;
     let shore = dilate(
@@ -332,8 +340,12 @@ fn site(
             &taken,
             TAKEN_SHARE * spacing_m,
             frame,
-        );
+            cancel,
+        )?;
         for (r, c) in picks {
+            if cancel() {
+                return Err(KernelError::Cancelled);
+            }
             let at = frame.centre_m(r, c);
             let name = generated_name(rng, &mut used, names);
             // Syllable names are drawn only once every list name is in `used`, so a generated
@@ -444,7 +456,8 @@ impl TypedStage for Settlements {
                 discharge: ctx.f64("discharge")?,
                 rock: ctx.u8("rock")?,
             };
-            site(&inputs, &frame, params, &mut rng).map_err(|e| ctx.kernel_failed(e))?
+            site(&inputs, &frame, params, &mut rng, &|| ctx.is_cancelled())
+                .map_err(|e| ctx.kernel_failed(e))?
         };
         let mut report = StageReport::default();
         let mut total = 0.0;
@@ -473,8 +486,8 @@ mod tests {
     use super::*;
     use crate::features::{Feature, Geometry, Prop};
     use crate::kernels::num::to_f64;
-    use crate::stage::Stage;
-    use crate::stages::terrain::support::{run_stage, table, world};
+    use crate::stage::{Stage, StageError};
+    use crate::stages::terrain::support::{run_cancelled, run_stage, table, world};
     use crate::world::{Layer, World};
 
     const N: usize = 64;
@@ -794,5 +807,13 @@ mod tests {
         assert_eq!(names, keys);
         assert_eq!(metrics.0.get("town"), Some(&2.0));
         assert_eq!(metrics.0.get("settlements"), Some(&3.0));
+    }
+
+    // Final review round 4, class I: work a recipe count sizes reaches a cancel point (CE-28.4).
+    #[test]
+    fn a_cancel_stops_the_picking() {
+        let mut w = setup();
+        let result = run_cancelled(&mut w, &Settlements, "");
+        assert!(matches!(result, Err(StageError::Cancelled)), "{result:?}");
     }
 }

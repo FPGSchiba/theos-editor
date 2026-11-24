@@ -9,7 +9,7 @@ use crate::kernels::num::to_f64;
 use crate::stage::{Severity, Stage, StageReport};
 use crate::stages::terrain::hydrology::WaterThresholds;
 use crate::stages::terrain::roads::{Road, RoadClass, RoadNetwork, RoadsParams};
-use crate::stages::terrain::support::{run_stage, table, world};
+use crate::stages::terrain::support::{run_cancelled, run_stage, table, world};
 use crate::world::{Layer, World};
 
 const N: usize = 64;
@@ -535,4 +535,17 @@ fn the_stage_is_registered_with_its_layers() {
         .map(|l| l.name)
         .collect();
     assert_eq!(writes, ["features", "road_network", "roads"]);
+}
+
+// Final review round 4, class I: work a recipe count sizes reaches a cancel point (CE-28.4).
+#[test]
+fn a_cancel_stops_the_mills_and_the_picking() {
+    for params in [NO_SCATTER, ""] {
+        let mut w = mill_world(2.8);
+        let result = run_cancelled(&mut w, &Sites, params);
+        assert!(
+            matches!(result, Err(crate::stage::StageError::Cancelled)),
+            "{params}: {result:?}"
+        );
+    }
 }

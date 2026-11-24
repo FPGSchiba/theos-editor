@@ -7,7 +7,7 @@ use crate::kernels::num::to_f64;
 use crate::stage::Stage;
 use crate::stages::terrain::climate::{self, Climate, ClimateFields, ClimateParams};
 use crate::stages::terrain::hydrology::{LakeShape, WaterFeatures};
-use crate::stages::terrain::support::{run_stage, table, world};
+use crate::stages::terrain::support::{run_cancelled, run_stage, table, world};
 use crate::world::{Layer, World};
 
 const N: usize = 64;
@@ -492,4 +492,15 @@ fn the_stage_reports_its_counts_under_declared_names() {
     let keys: Vec<&str> = metrics.0.keys().map(String::as_str).collect();
     assert_eq!(names, keys);
     assert_eq!(metrics.0.get("deposits"), Some(&3.0));
+}
+
+// Final review round 4, class I: work a recipe count sizes reaches a cancel point (CE-28.4).
+#[test]
+fn a_cancel_stops_the_picking() {
+    let mut w = setup([0.2; 5]);
+    let result = run_cancelled(&mut w, &Resources, "");
+    assert!(
+        matches!(result, Err(crate::stage::StageError::Cancelled)),
+        "{result:?}"
+    );
 }
