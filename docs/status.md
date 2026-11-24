@@ -14,7 +14,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P05 | CLI and hook | theos-editor | spec-approved | #35 | |
 | P06 | Command layer and repo lock | theos-editor | spec-pr | #36 | |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
-| P08 | Map format and terrain generator | theos-editor | in-progress | #27 | |
+| P08 | Map format and terrain generator | theos-editor | pr-open | #27 | #44 |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
 | P10 | Prose editor research | theos-editor | done | #3 | #11 |
 | P11 | Editor shell and Codex | theos-editor | todo | | |
@@ -55,6 +55,9 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
+- P08's build PR #44 is a draft labelled `needs-jann`. The final review loop reached its cap of
+  five rounds; round 5 left 6 Minor findings open, listed in the PR with their fixes. It merges
+  after #40 and #43. macOS is unverified while CI cannot run.
 - P08's spec change PR #40 waits for Jann's merge. It carries every spec and format change of the
   build (rulings 51–75 and errata):
   - 51: the exact slope limiter, whose debris feeds the rivers;
