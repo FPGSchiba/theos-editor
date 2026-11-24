@@ -73,7 +73,8 @@ struct Step {
 /// # Errors
 /// [`StageError::Cancelled`]; any error of a process (named `<stage>/<process id>` by its child
 /// context); [`StageError::Failed`] naming `<stage>/<process id>` and the step for an error
-/// finding, or for a process `registry` does not hold.
+/// finding; [`StageError::Failed`] naming `<stage>` ("unknown process `<id>`") before the first
+/// step for a process `registry` does not hold.
 pub(crate) fn run(
     ctx: &mut StageContext<'_>,
     registry: &Registry,

@@ -101,7 +101,8 @@ impl Counter<'_, '_> {
 ///
 /// # Errors
 /// [`StageError::Cancelled`] when the run is cancelled during a search;
-/// [`StageError::Failed`] when the places cannot be triangulated.
+/// [`StageError::Failed`] when the places cannot be triangulated or the grid has more cells than
+/// a search can number (`u32`).
 pub(super) fn build(
     layers: &Layers,
     set: &FeatureSet,

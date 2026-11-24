@@ -144,8 +144,9 @@ fn read_layer<R: Read + Seek>(
 /// Reads a map package.
 ///
 /// Refuses a package of another format or major version, one that requires a capability this
-/// reader lacks, a layer whose size or SHA-256 differs from the manifest, and the rules of
-/// [`Package::validate`]. Ignores unknown manifest fields, entries the index does not list, layers
+/// reader lacks, an index entry whose file, shape or name is wrong, a missing file, a layer whose
+/// size or SHA-256 differs from the manifest, a float layer value that is not finite
+/// ([`FormatError::NonFinite`], before the rules), and the rules of [`Package::validate`]. Ignores unknown manifest fields, entries the index does not list, layers
 /// with an unknown dtype (they are left out of the result) and unknown feature kinds (kept as
 /// they are).
 ///

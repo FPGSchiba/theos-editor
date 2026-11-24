@@ -243,7 +243,9 @@ impl StageContext<'_> {
     /// `features` of ledger ruling 65.
     ///
     /// # Errors
-    /// See [reading and taking layers](StageContext#reading-and-taking-layers).
+    /// See [reading and taking layers](StageContext#reading-and-taking-layers). When the world
+    /// holds no value `name`, only the read is checked against the declaration; a later
+    /// [`StageContext::write`] of `name` refuses an undeclared write.
     pub fn take_value_or_default<T: ValueType + Default>(
         &mut self,
         name: &str,

@@ -78,7 +78,9 @@ pub trait Stage: Send + Sync {
     /// Checks the order of nested steps against the layers `available` before this stage.
     ///
     /// # Errors
-    /// [`ParamError`] naming the step and the layer it lacks.
+    /// [`ParamError`] naming the step and what is wrong: a layer no earlier step writes, a layer
+    /// declared as two kinds, or a step out of its allowed order; also, with no parameter, when
+    /// `params` are the parameters of another stage.
     fn check_order(
         &self,
         params: &dyn StageParams,

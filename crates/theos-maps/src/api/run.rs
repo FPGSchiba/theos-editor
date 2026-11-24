@@ -39,15 +39,17 @@ use crate::stage::Registry;
 /// notes are ignored: the generator accepts none in P08.
 ///
 /// # Errors
-/// [`RunError::Recipe`] when the recipe is unknown, `from` is set, an input is given, the
-/// recipe is invalid or its stages do not write a layer the package or a render reads;
-/// [`RunError::OutputExists`] when a file in `out_dir` has an output's name;
-/// [`RunError::OverBudget`]; [`RunError::Cancelled`]; the stage errors of the pipeline
-/// ([`RunError::StageFailed`], [`RunError::StagePanicked`], [`RunError::FindingFailed`],
-/// [`RunError::NonFinite`], [`RunError::NonFiniteValue`]); [`RunError::StagePanicked`] naming the
-/// step (`constraints`, `features`, `renders` or `package`) when a step after the pipeline
-/// panics; [`RunError::Render`], [`RunError::Output`], [`RunError::Format`] and [`RunError::Io`]
-/// from the outputs. On every error the files the run created are removed.
+/// [`RunError::Recipe`] when a recipe folder or file cannot be read, the recipe is unknown or a
+/// broken file with its id hides it, `from` is set, an input is given, the recipe is invalid, or
+/// its stages do not write a layer the package or a render reads (or write it as another kind);
+/// [`RunError::OutputExists`] when an output's name or its `.part` name is taken in `out_dir`,
+/// at the claim or before the final rename; [`RunError::OverBudget`]; [`RunError::Cancelled`];
+/// the stage errors of the pipeline ([`RunError::StageFailed`], [`RunError::StagePanicked`],
+/// [`RunError::FindingFailed`], [`RunError::NonFinite`], [`RunError::NonFiniteValue`],
+/// [`RunError::NonFiniteMetric`]); [`RunError::StagePanicked`] naming the step (`constraints`,
+/// `features`, `renders` or `package`) when a step after the pipeline panics;
+/// [`RunError::Render`], [`RunError::Output`], [`RunError::Format`] and [`RunError::Io`] from the
+/// outputs. On every error the files the run created are removed.
 ///
 /// # Panics
 /// Not on its own: a panic inside a stage or inside a step after the pipeline is caught and

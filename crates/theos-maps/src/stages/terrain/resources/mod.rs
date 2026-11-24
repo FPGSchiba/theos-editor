@@ -5,8 +5,9 @@
 //! timber, peat and reeds, salt, resonance crystal, herbs), `deposits` places the requested
 //! number of each. The fields go to the world value `resource_fields` for the `resources` render.
 //! Precipitation comes from `climate.fields` when present, else from the fields computed from
-//! `height` and not written, as in `elements`. `omega` is written by a later stage (`detuning`);
-//! absent it counts as 0. 0.3.0's lore strings are not in the code; the types are hyphenated.
+//! `height` and not written, as in `elements`. `omega` comes from `detuning` when the recipe runs
+//! it before `resources` (a later stage's layer is never visible); absent it counts as 0. 0.3.0's
+//! lore strings are not in the code; the types are hyphenated.
 //!
 //! The metric is `deposits`, the number of deposits placed.
 

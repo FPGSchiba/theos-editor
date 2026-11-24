@@ -49,7 +49,8 @@ pub(super) fn candidates(places: &[Place]) -> Result<Vec<(usize, usize)>, Kernel
 /// `watch` advances by the pairs each search costs.
 ///
 /// # Errors
-/// [`KernelError::Cancelled`] when `watch` says so during a search.
+/// [`KernelError::Cancelled`] when `watch` says so during a search; [`KernelError::TooMany`]
+/// for a grid of more cells than a `u32` numbers (as [`Router::tree`]).
 pub(super) fn cost(
     router: &Router<'_>,
     places: &[Place],

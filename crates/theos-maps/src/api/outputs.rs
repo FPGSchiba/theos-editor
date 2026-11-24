@@ -89,8 +89,9 @@ impl Outputs {
     /// the user or the caller removes it.
     ///
     /// # Errors
-    /// [`RunError::Io`] when `dir` cannot be read or is not a folder; [`RunError::OutputExists`]
-    /// naming the first output name or part name that is already taken.
+    /// [`RunError::Io`] when `dir` cannot be read or is not a folder, or an output name cannot
+    /// be checked; [`RunError::OutputExists`] naming the first output name or part name that is
+    /// already taken.
     pub(crate) fn claim(dir: &Path, seed: u64, roles: &[String]) -> Result<Self, RunError> {
         let meta = std::fs::metadata(dir).map_err(io(dir))?;
         if !meta.is_dir() {
@@ -152,9 +153,9 @@ impl Outputs {
     /// in the folder during the run is refused rather than replaced.
     ///
     /// # Errors
-    /// [`RunError::Io`] when an output was never written or a rename fails;
-    /// [`RunError::OutputExists`] when a name was taken during the run. Every file of the run is
-    /// then removed.
+    /// [`RunError::Io`] when an output was never written, or a name cannot be checked or
+    /// renamed; [`RunError::OutputExists`] when a name was taken during the run. Every file of the
+    /// run is then removed.
     pub(crate) fn commit(mut self) -> Result<BTreeMap<String, String>, RunError> {
         if let Some(missing) = self.entries.iter().find(|o| o.state != State::Part) {
             let source =

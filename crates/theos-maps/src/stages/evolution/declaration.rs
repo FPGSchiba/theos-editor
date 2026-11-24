@@ -82,7 +82,8 @@ struct First {
 ///
 /// # Errors
 /// [`ParamError`] of `landscape_evolution` at `process[<i>]`, naming the process and the layer
-/// (and, for a kind conflict, both kinds and who declared the first).
+/// (and, for a kind conflict, both kinds and who declared the first), or, for a misplaced
+/// `hillslope`, the process it follows ([`hillslope_order::check`]).
 pub(super) fn check_order(
     registry: &Registry,
     planned: &[PlannedProcess],

@@ -48,7 +48,8 @@ impl<'a> Spurs<'a> {
     /// no road, or a site no road can reach (a warning), gets no `road`.
     ///
     /// # Errors
-    /// [`KernelError::Cancelled`] when `cancel` returns `true` during the search.
+    /// [`KernelError::Cancelled`] when `cancel` returns `true` during the search;
+    /// [`KernelError::TooMany`] for a grid of more cells than a `u32` numbers.
     pub(super) fn connect(
         &mut self,
         set: &mut FeatureSet,

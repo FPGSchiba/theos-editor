@@ -10,8 +10,9 @@ use super::ParamError;
 /// The parsed parameters of one stage, held by the runner as a trait object.
 ///
 /// Every `DeserializeOwned + Debug + Send + Sync + 'static` type is one, so a stage's own
-/// `Params` type needs no impl. `Box<dyn StageParams>` is not one, so `&boxed` dereferences to
-/// the parameters inside instead of wrapping the box.
+/// `Params` type needs no impl. `Box<dyn StageParams>` is not one (it does not deserialise), so
+/// `&boxed` is no `&dyn StageParams`: pass `boxed.as_ref()`, which borrows the parameters inside
+/// the box.
 pub trait StageParams: Any + Debug + Send + Sync {
     /// The parameters as [`Any`], for the downcast to the stage's own type.
     fn as_any(&self) -> &dyn Any;
@@ -33,9 +34,16 @@ impl<T: DeserializeOwned + Debug + Send + Sync + 'static> StageParams for T {
 /// fields, because serde buffers their content first; such types carry
 /// `#[serde(deny_unknown_fields)]`.
 ///
+/// Deserialising stops at the first error, and the keys of a table are visited in name order,
+/// so only the unknown keys visited before it are found. A missing required key is noticed at
+/// the end of its table, after every key of it was visited, so a misspelt required key reads as
+/// unknown rather than missing; an unknown key that sorts after a value of the wrong type is not
+/// reported, the type error is.
+///
 /// # Errors
-/// [`ParamError`] naming `stage` and the unknown or invalid parameter. Unknown keys win over
-/// other errors, so a misspelt required key reads as unknown rather than missing.
+/// [`ParamError`] naming `stage` and the unknown or invalid parameter: the unknown keys found
+/// before the first other error when there are any, else that error. Its parameter is `None`
+/// when the error lies in the table itself (a missing key at the top level).
 pub(crate) fn parse<P: DeserializeOwned>(
     stage: &str,
     table: &toml::Table,
@@ -349,6 +357,37 @@ mod tests {
     fn a_misspelt_required_key_is_reported_as_unknown() {
         let err = parse::<Inner>("t", &table("y = 1")).unwrap_err();
         assert_eq!(err, error("t", Some("y"), "unknown parameter"));
+    }
+
+    // Final review round 3, finding 4: the keys are visited in name order and deserialising
+    // stops at the first error, so an unknown key wins only when it sorts before the error.
+    #[test]
+    fn an_unknown_key_wins_only_before_the_first_other_error() {
+        let err = parse::<Params>(
+            "t",
+            &table(
+                "rate = \"x\"
+zzz = 1",
+            ),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err,
+            error(
+                "t",
+                Some("rate"),
+                r#"invalid type: string "x", expected f64"#
+            )
+        );
+        let err = parse::<Params>(
+            "t",
+            &table(
+                "aaa = 1
+rate = \"x\"",
+            ),
+        )
+        .unwrap_err();
+        assert_eq!(err, error("t", Some("aaa"), "unknown parameter"));
     }
 
     #[test]

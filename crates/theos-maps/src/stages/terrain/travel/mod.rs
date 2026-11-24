@@ -21,8 +21,9 @@
 //! **Outputs:** `reach_min`, a raster of minutes from the nearest Chime (multi-source Dijkstra),
 //! −1 where a cell cannot be reached and everywhere when the map has no Chime (spec ruling 36:
 //! layers are finite). The metrics are `chime_to_chime_min`, the walk from the first Chime to the
-//! second by handle (only with two or more Chimes, and omitted should the second be unreachable,
-//! which finite step costs rule out: a guard), and `floor_pct_within_15_min`, the percent
+//! second by handle (only with two or more Chimes, and omitted should the second be unreachable:
+//! a step costs infinite time only where Tobler's speed underflows to 0, on a slope of more than
+//! about 200), and `floor_pct_within_15_min`, the percent
 //! of cells with `0 ≤ reach_min ≤ 15`.
 
 #[cfg(test)]
