@@ -2,7 +2,7 @@
 
 use std::any::Any;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::{LayerSpec, MapKind, Stage, StageContext, StageError, StageReport, TypedStage};
 use crate::grid::Grid;
@@ -59,7 +59,7 @@ impl ValueType for Label {
 }
 
 /// The parameters of a stage that takes none.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct NoParams {}
 
 /// A stage declaring one layer of every kind. It reads `height`, `class`, `fixed`, `receivers`,

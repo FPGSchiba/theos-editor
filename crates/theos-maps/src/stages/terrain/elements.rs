@@ -14,7 +14,7 @@
 //! The metrics `water`, `wood`, `earth`, `metal` and `fire` are each element's share of the
 //! mix: its mean over the sum of the five means (all 0 when that sum is 0).
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::grid::Grid;
 use crate::kernels::filters::gaussian;
@@ -41,7 +41,7 @@ pub(crate) const ELEMENT_LAYERS: [&str; 5] = [
 ];
 
 /// The parameters of `elements`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct ElementsParams {
     /// Sigma of the Gaussian that spreads river and lake water to the land around, m.

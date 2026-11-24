@@ -4,7 +4,7 @@ mod sources;
 
 use std::any::Any;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use self::sources::{Env, Source};
 use super::grid::FrameValue;
@@ -87,7 +87,7 @@ const MAX_BETA: f64 = 8.0;
 /// source the positions must be finite, a path must hold at least two points, `width`, `reach`
 /// and `r` must be positive, `rate` finite (a basin has none), `jitter` and `depth_m` at least
 /// 0, and `asymmetry` in [0, 2).
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct TectonicsParams {
     /// Uplift everywhere, m/yr.

@@ -143,7 +143,7 @@ impl ValueType for WaterFeatures {
 
 /// The parameters of `hydrology`. `river_q` and `big_river_q` have no default (decision 0004):
 /// a recipe without them fails naming the parameter.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct HydrologyParams {
     /// Discharge above which a cell outside a lake is a river, m³/s; required.

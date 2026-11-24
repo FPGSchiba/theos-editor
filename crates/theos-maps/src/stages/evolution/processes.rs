@@ -12,7 +12,9 @@ use super::resolve_sinks::ResolveSinks;
 use super::route_steepest::RouteSteepest;
 use super::slope_limit::SlopeLimit;
 use super::uplift::Uplift;
-use crate::stage::{ParamError, Registry, Stage, StageParams, TypedStage};
+use crate::stage::{
+    MAX_COUNT, ParamError, Registry, Stage, StageParams, TypedStage, too_large_count,
+};
 
 /// Builds one per-step process.
 pub(crate) type Constructor = fn() -> Box<dyn Stage>;
@@ -86,7 +88,7 @@ pub(crate) fn plan(
         let mut table = table.clone();
         let every = table
             .remove("every")
-            .map(|value| every(&value).ok_or_else(|| bad_every(&at, &value)))
+            .map(|value| every(&at, &value))
             .transpose()?;
         let params = stage.params(&table).map_err(|e| inside(&at, id, e))?;
         let occurrence = seen.entry(stage.id()).or_insert(0);
@@ -102,19 +104,26 @@ pub(crate) fn plan(
     Ok(planned)
 }
 
-/// `value` as a step count of at least 1.
-fn every(value: &toml::Value) -> Option<u32> {
-    value
+/// `value`, the `every` of the process table at `at`, as a step count of at least 1 that keeps
+/// the count bound of every integer parameter ([`MAX_COUNT`]).
+///
+/// # Errors
+/// [`ParamError`] naming `<at>.every` for anything else.
+fn every(at: &str, value: &toml::Value) -> Result<u32, ParamError> {
+    let parameter = format!("{at}.every");
+    let n = value
         .as_integer()
         .and_then(|n| u32::try_from(n).ok())
         .filter(|n| *n >= 1)
-}
-
-fn bad_every(at: &str, value: &toml::Value) -> ParamError {
-    error(
-        format!("{at}.every"),
-        format!("`every` must be a whole number of steps, at least 1, not {value}"),
-    )
+        .ok_or_else(|| {
+            let message =
+                format!("`every` must be a whole number of steps, at least 1, not {value}");
+            error(parameter.clone(), message)
+        })?;
+    if i64::from(n) > MAX_COUNT {
+        return Err(error(parameter, too_large_count()));
+    }
+    Ok(n)
 }
 
 /// A [`ParamError`] of `landscape_evolution` at `parameter`.

@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::{LoadedRecipe, RecipeOrigin, parse};
 use crate::stage::{
@@ -13,7 +13,7 @@ use crate::stage::{
 };
 
 /// Parameters of a stage that takes none.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct Knob {}
 
 macro_rules! test_stage {

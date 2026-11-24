@@ -1,6 +1,6 @@
 //! The tectonic source types and how each adds to the uplift and sag fields.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::grid::Grid;
 use crate::kernels::KernelError;
@@ -41,7 +41,7 @@ const fn basin_depth() -> f64 {
 /// The domains [`Source::check`] holds them to: positions finite, paths of at least two points,
 /// `width`, `reach` and `r` positive, `rate` finite, `jitter` and `depth_m` at least 0, and
 /// `asymmetry` in [0, 2).
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Source {
     /// A mountain belt along a path, with a gaussian profile that can lean to one side.

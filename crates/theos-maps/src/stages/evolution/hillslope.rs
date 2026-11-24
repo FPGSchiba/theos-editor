@@ -9,7 +9,7 @@
 //! height; the map's edges are closed (no flux). Per cell, a net loss over the step is booked
 //! as erosion and a net gain as deposition.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::booking::book;
 use crate::grid::Grid;
@@ -19,7 +19,7 @@ use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, Ty
 use crate::world::Layer;
 
 /// The parameters of `hillslope`: none; the diffusivity is the layer `diffusivity`.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct HillslopeParams {}
 
 /// The process `hillslope`.

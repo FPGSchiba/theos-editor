@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::grid::FrameValue;
 use super::rocks::{Rock, props};
@@ -18,7 +18,7 @@ use crate::stage::{
 use crate::world::{Layer, ValueType};
 
 /// The fold belt around the first orogen: alternating hard and weak strata.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct FoldBelt {
     /// Width of the belt, map fractions.
@@ -43,7 +43,7 @@ impl Default for FoldBelt {
 }
 
 /// The parameters of `geology`; defaults as 0.3.0 where it had them.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct GeologyParams {
     /// Number of Voronoi rock provinces.

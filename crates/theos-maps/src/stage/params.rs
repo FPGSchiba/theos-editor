@@ -3,6 +3,7 @@
 use std::any::Any;
 use std::fmt::Debug;
 
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use super::ParamError;
@@ -79,8 +80,8 @@ pub const MIN_MAGNITUDE: f64 = 1e-12;
 /// The largest magnitude of a whole number in a stage table.
 pub const MAX_COUNT: i64 = 1_000_000;
 
-/// Refuses a number of the stage table `table` (its `id` key aside) outside the bounds every
-/// recipe number keeps (final review, round 3): a float is finite, and 0 or of a magnitude in
+/// Refuses a number of the parsed parameters `params` outside the bounds every recipe number
+/// keeps (final review, rounds 3 and 4): a float is finite, and 0 or of a magnitude in
 /// [`MIN_MAGNITUDE`, `MAX_MAGNITUDE`]; a whole number is at most [`MAX_COUNT`] in magnitude.
 ///
 /// Parameters are lengths, rates, times, weights and counts of a map, so no product of a few of
@@ -88,18 +89,40 @@ pub const MAX_COUNT: i64 = 1_000_000;
 /// beyond a million. A stage's own domains are checked first by its `validate`; this rule catches
 /// what they leave open, in every stage and process alike.
 ///
+/// The rule follows each parameter's type, not how the recipe spells it: `params` is serialised
+/// into a [`toml::Value`], where an integer field (`u32`, `usize`, …) becomes an integer and a
+/// float field a float, so `6000000` given for a float takes the float rule. Fields filled by
+/// `validate` (`#[serde(skip)]`) are not recipe numbers and are skipped; so are the defaults the
+/// recipe leaves alone, which keep the bounds anyway.
+///
 /// # Errors
-/// [`ParamError`] naming `stage` and the path of the first number out of bounds, in key order.
-pub(crate) fn check_numbers(stage: &str, table: &toml::Table) -> Result<(), ParamError> {
-    table
-        .iter()
-        .filter(|(key, _)| key.as_str() != "id")
-        .try_for_each(|(key, value)| check_number(stage, key, value))
+/// [`ParamError`] naming `stage` and the path of the first number out of bounds, in key order;
+/// without a parameter when `params` cannot be serialised (an integer above `i64::MAX`, which no
+/// TOML number parses into).
+pub(crate) fn check_numbers<P: Serialize>(stage: &str, params: &P) -> Result<(), ParamError> {
+    let value = toml::Value::try_from(params).map_err(|e| ParamError {
+        stage: stage.to_owned(),
+        parameter: None,
+        message: format!("the parameters cannot be checked: {e}"),
+    })?;
+    check_number(stage, "", &value)
 }
 
-/// [`check_numbers`] for `value` at `path`.
+/// The message of a whole number beyond [`MAX_COUNT`].
+pub(crate) fn too_large_count() -> String {
+    format!("must be at most {MAX_COUNT} in magnitude")
+}
+
+/// [`check_numbers`] for `value` at `path`; the empty path is the table of the parameters.
 fn check_number(stage: &str, path: &str, value: &toml::Value) -> Result<(), ParamError> {
     let refuse = |message: String| Err(ParamError::at(stage, path, message));
+    let join = |key: &str| {
+        if path.is_empty() {
+            key.to_owned()
+        } else {
+            format!("{path}.{key}")
+        }
+    };
     match value {
         toml::Value::Float(x) if !x.is_finite() => refuse("must be finite".to_owned()),
         toml::Value::Float(x)
@@ -110,7 +133,7 @@ fn check_number(stage: &str, path: &str, value: &toml::Value) -> Result<(), Para
             ))
         }
         toml::Value::Integer(n) if n.unsigned_abs() > MAX_COUNT.unsigned_abs() => {
-            refuse(format!("must be at most {MAX_COUNT} in magnitude"))
+            refuse(too_large_count())
         }
         toml::Value::Array(items) => items
             .iter()
@@ -118,7 +141,7 @@ fn check_number(stage: &str, path: &str, value: &toml::Value) -> Result<(), Para
             .try_for_each(|(i, item)| check_number(stage, &format!("{path}[{i}]"), item)),
         toml::Value::Table(inner) => inner
             .iter()
-            .try_for_each(|(key, item)| check_number(stage, &format!("{path}.{key}"), item)),
+            .try_for_each(|(key, item)| check_number(stage, &join(key), item)),
         _ => Ok(()),
     }
 }
@@ -513,6 +536,60 @@ rate = \"x\"",
         ] {
             assert!(check_numbers("t", &table(text)).is_ok(), "{text}");
         }
+    }
+
+    #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+    #[serde(default)]
+    struct Typed {
+        rate: f64,
+        count: u32,
+        rates: Vec<f64>,
+        /// Filled by a `validate`; not a recipe number.
+        #[serde(skip)]
+        derived: f64,
+    }
+
+    /// A count no TOML number parses into.
+    #[derive(serde::Serialize)]
+    struct Huge {
+        n: u64,
+    }
+
+    // Final review round 4, finding 1: the rule follows each field's type, not the spelling of
+    // the number, and skips the fields `validate` fills.
+    #[test]
+    fn the_number_rule_follows_the_field_type() {
+        let checked = |text: &str| {
+            let mut p: Typed = parse("t", &table(text)).unwrap();
+            p.derived = 1e300;
+            check_numbers("t", &p)
+        };
+        for text in [
+            "rate = 6000000",
+            "rate = 1000000000000\nrates = [2000000, -3000000]",
+            "count = 1000000",
+        ] {
+            assert!(checked(text).is_ok(), "{text}");
+        }
+        let count = "must be at most 1000000 in magnitude";
+        let magnitude = "must be 0 or of a magnitude from 1e-12 to 1e12";
+        for (text, path, message) in [
+            ("count = 1000001", "count", count),
+            ("rate = 2000000000000", "rate", magnitude),
+            ("rates = [1, 2000000000000]", "rates[1]", magnitude),
+        ] {
+            assert_eq!(
+                checked(text).unwrap_err(),
+                error("t", Some(path), message),
+                "{text}"
+            );
+        }
+        let err = check_numbers("t", &Huge { n: u64::MAX }).unwrap_err();
+        assert_eq!((err.stage.as_str(), err.parameter.as_deref()), ("t", None));
+        assert!(
+            err.message.starts_with("the parameters cannot be checked"),
+            "{err}"
+        );
     }
 
     #[test]

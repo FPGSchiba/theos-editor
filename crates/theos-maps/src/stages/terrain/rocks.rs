@@ -1,9 +1,9 @@
 //! The rock table: erodibility, diffusivity, critical slope and map colour of every rock.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// The rocks of the geology stage; the discriminant is the value in the `rock` raster.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 #[repr(u8)]
 pub enum Rock {

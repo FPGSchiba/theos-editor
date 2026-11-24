@@ -23,7 +23,7 @@
 //! Draws from the stage's stream `placing`: one noise value per cell in index order, nothing
 //! else. The metrics are the numbers of `ruin`, `chime`, `gate_down` and `gate_up`.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::features::{Feature, FeatureSet, Geometry, interior, pick};
 use crate::grid::Grid;
@@ -58,7 +58,7 @@ const LOW_HEIGHT_PERCENTILE: f64 = 75.0;
 const METRICS: [&str; 4] = ["ruin", "chime", "gate_down", "gate_up"];
 
 /// The parameters of `pois`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct PoisParams {
     /// How many ruins.

@@ -1,12 +1,12 @@
 //! The per-step process `uplift`: rock uplift less subsidence over one time step.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, TypedStage};
 use crate::world::Layer;
 
 /// The parameters of `uplift`: none.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct UpliftParams {}
 
 /// The process `uplift`: `height += (uplift − sag_rate)·dt` on every cell that is not fixed;

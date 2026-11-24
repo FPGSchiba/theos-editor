@@ -39,7 +39,7 @@ mod tree;
 
 use crate::kernels::num::to_u32;
 use crate::kernels::routing::steepest_receivers;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub(crate) use self::depressions::Depressions;
 // The tests of the processes after this one build spill points.
@@ -49,7 +49,7 @@ use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, Ty
 use crate::world::{Layer, ValueType};
 
 /// The parameters of `resolve_sinks`: none.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct ResolveSinksParams {}
 
 /// The process `resolve_sinks`: connects every closed basin through its lowest pass and writes

@@ -87,6 +87,58 @@ mod tests {
         }
     }
 
+    // Final review round 4, finding 1: the number rule follows the parameter's type, not how the
+    // recipe spells the number. A float written as a TOML integer takes the float rule (the
+    // stages' own defaults, such as `sag_duration_yr = 6.0e6`, may be written without a point);
+    // a whole-number parameter keeps the count bound.
+    #[test]
+    fn the_number_rule_follows_the_parameter_type() {
+        let registry = Registry::builtin();
+        for (id, text) in [
+            ("tectonics", "sag_duration_yr = 6000000"),
+            ("landscape_evolution", "dt_yr = 2000000"),
+            (
+                "hydrology",
+                "river_q = 0.15\nbig_river_q = 2.0\nmin_lake_area_m2 = 2000000",
+            ),
+            ("hydrology", "river_q = 1\nbig_river_q = 1000000000000"),
+        ] {
+            let stage = registry.get(id).unwrap();
+            let params = stage.params(&toml::from_str(text).unwrap());
+            assert!(params.is_ok(), "{id}: {text}: {:?}", params.err());
+        }
+        for (id, text, path) in [
+            ("geology", "provinces = 2000000", "provinces"),
+            ("landscape_evolution", "steps = 2000000", "steps"),
+            ("pois", "chimes = 2000000", "chimes"),
+            ("settlements", "[counts]\nhamlet = 2000000", "counts.hamlet"),
+            ("resources", "[counts]\nstone = 2000000", "counts.stone"),
+            (
+                "landscape_evolution",
+                "[[process]]\nid = \"fluvial\"\ng = 1.0\nmax_iterations = 2000000",
+                "process[0].max_iterations",
+            ),
+            (
+                "landscape_evolution",
+                "[[process]]\nid = \"uplift\"\nevery = 2000000",
+                "process[0].every",
+            ),
+            (
+                "tectonics",
+                "sag_duration_yr = 2000000000000",
+                "sag_duration_yr",
+            ),
+        ] {
+            let stage = registry.get(id).unwrap();
+            let err = stage.params(&toml::from_str(text).unwrap()).unwrap_err();
+            assert_eq!(
+                (err.stage.as_str(), err.parameter.as_deref()),
+                (id, Some(path)),
+                "{text}: {err}"
+            );
+        }
+    }
+
     #[test]
     fn every_metric_name_of_every_stage_is_snake_case() {
         let registry = Registry::builtin();

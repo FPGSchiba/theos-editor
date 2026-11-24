@@ -12,7 +12,7 @@
 //!
 //! The metrics are `mean`, `p95` and `pct_above_0_5` of omega, as in 0.3.0's summary.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::features::FeatureSet;
 use crate::grid::Grid;
@@ -29,7 +29,7 @@ use crate::world::{Layer, ValueType, World};
 const DRIFT_BETA: f64 = 3.4;
 
 /// The parameters of `detuning`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct DetuningParams {
     /// Omega far from ruins, before the drift, in `[0, 1]`.

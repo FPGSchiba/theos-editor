@@ -16,7 +16,7 @@ mod sweep;
 #[cfg(test)]
 mod tests;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use self::sweep::limited;
 use crate::grid::Grid;
@@ -24,7 +24,7 @@ use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, Ty
 use crate::world::Layer;
 
 /// The parameters of `slope_limit`: none; the limits are the layer `critical_slope`.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SlopeLimitParams {}
 
 /// The process `slope_limit`.

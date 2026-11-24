@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use super::params::{self, StageParams};
@@ -18,10 +19,12 @@ use crate::world::World;
 /// `Params` is deserialised from the recipe's stage table without its `id` key. Give every field
 /// a default (`#[serde(default)]`) unless the recipe must set it. Enums tagged by a field
 /// (`#[serde(tag = "type")]`) and `#[serde(flatten)]` fields hide their keys from the
-/// unknown-key check, so they carry `#[serde(deny_unknown_fields)]`.
+/// unknown-key check, so they carry `#[serde(deny_unknown_fields)]`. `Params` is also
+/// serialised, so the number rule sees each number with its field's type; a field `validate`
+/// fills is `#[serde(skip)]`.
 pub trait TypedStage: Send + Sync + 'static {
     /// The parameters.
-    type Params: DeserializeOwned + Debug + Send + Sync + 'static;
+    type Params: DeserializeOwned + Serialize + Debug + Send + Sync + 'static;
     /// The id recipes use, `^[a-z][a-z0-9_]*$`.
     const ID: &'static str;
     /// One line for `describe` and the docs.
@@ -46,10 +49,11 @@ pub trait TypedStage: Send + Sync + 'static {
     ///
     /// Domains go through [`Check`](super::Check) (`Check::of(Self::ID)`), one wording per
     /// rule: `finite`, `positive`, `at_least`, the intervals and `count_at_least`, and `refuse`
-    /// for a rule of the stage's own. After `validate`, every number of the stage table must also
-    /// keep the bounds of every recipe number (a float 0 or of a magnitude from 1e-12 to 1e12, a
-    /// whole number at most a million), so a domain needs no upper bound of its own unless the
-    /// stage raises a parameter to a power or sizes something by it.
+    /// for a rule of the stage's own. After `validate`, every number of the parameters must also
+    /// keep the bounds of every recipe number by its field's type (a float field 0 or of a
+    /// magnitude from 1e-12 to 1e12, an integer field at most a million), so a domain needs no
+    /// upper bound of its own unless the stage raises a parameter to a power or sizes something
+    /// by it.
     ///
     /// # Errors
     /// [`ParamError`] naming the stage and, where one is to blame, the parameter
@@ -124,7 +128,7 @@ impl<T: TypedStage> Stage for T {
     fn params(&self, table: &toml::Table) -> Result<Box<dyn StageParams>, ParamError> {
         let mut parsed: T::Params = params::parse(T::ID, table)?;
         TypedStage::validate(self, &mut parsed)?;
-        params::check_numbers(T::ID, table)?;
+        params::check_numbers(T::ID, &parsed)?;
         Ok(Box::new(parsed))
     }
 
@@ -191,7 +195,7 @@ impl<T: TypedStage> Stage for T {
 mod tests {
     use std::collections::BTreeSet;
 
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
 
     use super::TypedStage;
     use crate::grid::Grid;
@@ -202,7 +206,7 @@ mod tests {
     };
     use crate::world::{Layer, World};
 
-    #[derive(Debug, Deserialize)]
+    #[derive(Debug, Deserialize, Serialize)]
     #[serde(default)]
     struct RateParams {
         rate: f64,

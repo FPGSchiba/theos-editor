@@ -1,12 +1,12 @@
 //! The parameters of `sites`, their defaults and their checks.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::stage::{Check, ParamError};
 
 /// How many of each scattered site; a count a recipe leaves out keeps its default (0.3.0 merged
 /// the table into its defaults).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Counts {
     /// Watchtowers over the roads.
@@ -28,7 +28,7 @@ impl Default for Counts {
 }
 
 /// The parameters of `sites`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct SitesParams {
     /// How many watchtowers, caves and camps.

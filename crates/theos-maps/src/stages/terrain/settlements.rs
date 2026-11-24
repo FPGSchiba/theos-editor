@@ -22,7 +22,7 @@
 //! per settlement in pick order its name (see [`generated_name`]) and its population factor.
 //! The metrics are the number of settlements, `settlements`, and of each class.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::features::{Feature, FeatureSet, Geometry, Prop, generated_name, interior, pick};
 use crate::grid::Grid;
@@ -89,7 +89,7 @@ const CLASSES: [Class; 4] = [
 
 /// How many settlements of each class. A `counts` table in a recipe replaces the default as a
 /// whole: a class it leaves out gets none, as in 0.3.0.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Counts {
     /// Cities.
@@ -130,7 +130,7 @@ impl Default for Counts {
 }
 
 /// The spacing of each class in km: the least distance between two settlements of the class.
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SpacingKm {
     /// Cities.
@@ -167,7 +167,7 @@ impl Default for SpacingKm {
 }
 
 /// The parameters of `settlements`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct SettlementsParams {
     /// How many settlements of each class; default 0.3.0's two towns, four villages and four

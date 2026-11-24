@@ -10,7 +10,7 @@ mod water;
 use std::any::Any;
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub use self::orographic::orographic;
 pub use self::water::{fu_aet, pet, temperature};
@@ -28,7 +28,7 @@ use crate::world::{Layer, MapFrame, ValueType, WorldValue};
 pub(crate) const SECONDS_PER_YEAR: f64 = 3.156e7;
 
 /// The climate parameters; defaults are 0.3.0's, `budyko_w` is the builder's choice.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct ClimateParams {
     /// Direction the wind blows from, degrees clockwise from north (270 is west).

@@ -36,7 +36,7 @@ mod uplift;
 
 use std::collections::BTreeSet;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub(crate) use self::processes::{Constructor, PROCESSES, PlannedProcess};
 use self::steps::Schedule;
@@ -47,7 +47,7 @@ use crate::stage::{
 
 /// The parameters of `landscape_evolution`; the defaults are 0.3.0's (`check_every` is plan
 /// ruling L6).
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct EvolutionParams {
     /// The number of time steps.
@@ -62,6 +62,11 @@ pub struct EvolutionParams {
     /// runs its process only at step 0, at every multiple of `n` and on the last step. Each run
     /// covers one `dt_yr`, so `every` is meant for refreshes such as `climate_update`; on a rate
     /// process (`uplift`, `hillslope`, `fluvial`) it slows the process by about `n`.
+    ///
+    /// Not serialised: the number rule (`stage::check_numbers`) checks each table as the
+    /// parameters of its own process, by their types, when `validate` plans them; raw TOML would
+    /// read a float written without a point as a count.
+    #[serde(skip_serializing)]
     pub process: Vec<toml::Table>,
     /// The processes of `process`, parsed by `validate`; not a recipe parameter.
     #[serde(skip)]

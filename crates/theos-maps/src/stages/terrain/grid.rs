@@ -2,14 +2,14 @@
 
 use std::any::Any;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::grid::Grid;
 use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, TypedStage};
 use crate::world::{Layer, ValueType, WorldValue};
 
 /// The sides of the map.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Edge {
     /// Row 0.
@@ -84,7 +84,7 @@ impl ValueType for FrameValue {
 }
 
 /// The parameters of `grid`.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct GridParams {
     /// The drained edges; the rest are closed walls.

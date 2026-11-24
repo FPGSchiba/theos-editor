@@ -19,7 +19,7 @@ mod tests;
 use std::any::Any;
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::features::FeatureSet;
 use crate::grid::Grid;
@@ -68,7 +68,7 @@ impl ValueType for ResourceFields {
 }
 
 /// The parameters of `resources`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct ResourcesParams {
     /// How many deposits of each type, by hyphenated type name; a type left out gets none.

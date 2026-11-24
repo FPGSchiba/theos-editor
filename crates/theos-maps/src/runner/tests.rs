@@ -2,7 +2,7 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::*;
 use crate::grid::Grid;
@@ -12,7 +12,7 @@ use crate::stage::{
 };
 use crate::world::Layer;
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 struct Knob {}
 
 const KINDS: &[MapKind] = &[MapKind::Terrain];

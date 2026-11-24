@@ -15,7 +15,7 @@
 //! The AET comes from `climate.fields` when present, else from the fields computed here from
 //! `height` (and not written), as in `hydrology`.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::grid::Grid;
 use crate::kernels::diff::slope;
@@ -33,7 +33,7 @@ const MIN_TAN_BETA: f64 = 1e-3;
 const NPP_FULL: f64 = 2000.0;
 
 /// The parameters of `ecology`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct EcologyParams {
     /// Largest relative gain of vegetation density in the wettest hollows (0.25 is a quarter).

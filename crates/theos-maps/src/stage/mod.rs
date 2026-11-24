@@ -24,6 +24,7 @@ use serde::{Deserialize, Serialize};
 pub use context::{StageContext, StepInfo};
 pub use error::{Access, ParamError, StageError};
 pub use layer_spec::LayerSpec;
+pub(crate) use params::too_large_count;
 pub use params::{Check, MAX_COUNT, MAX_MAGNITUDE, MIN_MAGNITUDE, StageParams};
 pub use registry::Registry;
 pub use report::{Finding, Metrics, Severity, StageReport};

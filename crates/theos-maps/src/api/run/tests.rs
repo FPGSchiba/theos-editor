@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::*;
 use crate::api::RunRequest;
@@ -9,7 +9,7 @@ use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, Ty
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 struct Knob {}
 
 /// A stage that panics with a known message.

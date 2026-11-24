@@ -12,7 +12,7 @@ mod stack;
 mod tests;
 mod weights;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::grid::Grid;
 use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, TypedStage};
@@ -21,7 +21,7 @@ use crate::world::{Layer, ValueType};
 use super::flow::FlowWeights;
 
 /// How a cell's water is shared.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Exponent {
     /// Everything goes to the cell's receiver.
@@ -31,7 +31,7 @@ pub enum Exponent {
 }
 
 /// The parameters of `partition_flow`.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PartitionFlowParams {
     /// How the water is shared; the recipe states it.

@@ -6,7 +6,7 @@
 
 use std::any::Any;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::processes::{self, Constructor, PlannedProcess};
 use super::steps::{self, Schedule};
@@ -131,7 +131,7 @@ pub(crate) fn logged(world: &World) -> Vec<u32> {
 }
 
 /// The parameters of a test process that takes none.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct Nothing {}
 
 /// A test process with fixed reads and writes and a run that does nothing.
@@ -288,7 +288,7 @@ impl TypedStage for Log {
 }
 
 /// The parameters of [`Scale`].
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub(crate) struct ScaleParams {
     pub(crate) factor: f64,
@@ -350,7 +350,7 @@ impl TypedStage for Boom {
 }
 
 /// The parameters of [`Judge`].
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub(crate) struct JudgeParams {
     /// The step whose checks find an error; the others warn.

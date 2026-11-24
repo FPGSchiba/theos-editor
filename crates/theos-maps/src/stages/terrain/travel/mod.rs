@@ -37,7 +37,7 @@ pub(crate) const CHIME_TO_CHIME_MIN: &str = "chime_to_chime_min";
 /// The metric of the share of cells within 15 minutes of a Chime, percent.
 const FLOOR_PCT_WITHIN_15_MIN: &str = "floor_pct_within_15_min";
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use self::walk::Walk;
 use crate::features::FeatureSet;
@@ -69,7 +69,7 @@ pub fn tobler_ms(slope: f64) -> f64 {
 }
 
 /// The parameters of `travel`; the defaults are 0.3.0's, but the off-path factor (spec §5.9).
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct TravelParams {
     /// Seconds for each stream or big-river cell a step passes.

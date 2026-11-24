@@ -1,6 +1,6 @@
 //! The per-step process `climate_update`: recomputes the climate fields from the current surface.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::stage::{LayerSpec, MapKind, StageContext, StageError, StageReport, TypedStage};
 use crate::stages::terrain::climate::{self, Climate};
@@ -8,7 +8,7 @@ use crate::world::{Layer, ValueType};
 
 /// The parameters of `climate_update`: none. How often it runs is the evolution's generic
 /// `every` option (plan ruling L27).
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct ClimateUpdateParams {}
 
 /// The process `climate_update`: `climate.fields = fields(height)` with the climate's own
