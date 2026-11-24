@@ -188,6 +188,41 @@ fn two_runs_into_two_folders_give_identical_outputs() -> TestResult {
     Ok(())
 }
 
+// Final review round 3, finding 9: each stage spells its own feature types, while the summary's
+// counts, the constraint paths and the render styles take theirs from `features::TYPES`; a type
+// spelled otherwise in a stage would break `docs/map-package.md` §5 with every other test green.
+// AC: CE-28.6
+#[test]
+fn every_feature_kind_and_type_is_one_of_the_types() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let (manifest, _) = run_api_small(1, dir.path())?;
+    let bytes = std::fs::read(dir.path().join(&manifest.outputs["features"]))?;
+    let collection: serde_json::Value = serde_json::from_slice(&bytes)?;
+    let features = collection["features"]
+        .as_array()
+        .ok_or("the features output holds no feature list")?;
+    let mut seen = BTreeSet::new();
+    for feature in features {
+        let text = |key: &str| feature["properties"][key].as_str().map(str::to_owned);
+        let pair = (text("kind"), text("type"));
+        let (Some(kind), Some(ty)) = pair else {
+            return Err(format!("a feature without kind or type: {feature}").into());
+        };
+        let known = theos_maps::features::TYPES
+            .iter()
+            .any(|&(k, t)| k == kind && t == ty);
+        assert!(known, "({kind}, {ty}) is not in features::TYPES");
+        seen.insert(kind);
+    }
+    // The run holds every kind a terrain stage writes, so each stage's spelling was looked at.
+    let kinds: BTreeSet<&str> = seen.iter().map(String::as_str).collect();
+    assert_eq!(
+        kinds,
+        BTreeSet::from(["poi", "resource", "road", "settlement", "site", "water"])
+    );
+    Ok(())
+}
+
 // AC: CE-28.4
 #[test]
 fn cancelling_from_an_evolution_event_returns_within_one_second() -> TestResult {
