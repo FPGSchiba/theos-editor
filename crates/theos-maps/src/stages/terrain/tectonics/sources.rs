@@ -121,10 +121,8 @@ pub enum Source {
         at: [f64; 2],
         /// The radius in map fractions.
         r: f64,
-        /// Unused except that 0.3.0 draws a rate jitter for it, which keeps the stream aligned.
-        #[serde(default)]
-        rate: f64,
-        /// Depth the bowl sags over the sag duration, in metres.
+        /// Depth the bowl sags over the sag duration, in metres. A basin has no rate: it damps
+        /// the uplift instead (0.3.0's basin `rate` was never read, so P08 drops it, spec §10).
         #[serde(default = "basin_depth")]
         depth_m: f64,
         /// Standard deviation of the centre jitter.
@@ -206,13 +204,11 @@ impl Source {
             Self::Basin {
                 at: centre,
                 r,
-                rate,
                 depth_m,
                 jitter,
             } => {
                 centre_of(centre)?;
                 check.positive(&name("r"), *r)?;
-                check.finite(&name("rate"), *rate)?;
                 check.at_least(&name("depth_m"), *depth_m, 0.0)?;
                 check.at_least(&name("jitter"), *jitter, 0.0)
             }
@@ -378,9 +374,9 @@ impl Source {
                 r,
                 depth_m,
                 jitter,
-                ..
             } => {
-                let _ = scattered(0.0, env.rng); // the rate draw 0.3.0 makes for every source
+                // The rate draw 0.3.0 makes for every source, a basin too: it keeps the stream.
+                let _ = scattered(0.0, env.rng);
                 let (cx, cy, radius) = centre(at, *r, *jitter, env.rng);
                 let d = scaled_distance(env.xx, env.yy, cx, cy, radius);
                 basin(env, &d, *depth_m);

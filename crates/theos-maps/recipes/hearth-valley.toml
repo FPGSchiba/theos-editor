@@ -34,7 +34,6 @@ background_beta      = 2.8
   type = "basin"
   at = [0.33, 0.60]
   r = 0.05
-  rate = 0.0
   depth_m = 10.0
   jitter = 0.08
 
