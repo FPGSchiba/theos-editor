@@ -10,8 +10,9 @@
 //!   spans the recipe's wanted range too. Lake share's range always starts at 0: fewer lakes is
 //!   the intended fix (spec §4.2).
 //! - **Passes:** the seeds whose run passes all its constraints (the run's `pass`, the placement
-//!   checks included) are at least 0.3.0's count. `fixture-small` had no constraints in 0.3.0 and
-//!   asks for none.
+//!   checks included) are at least 0.3.0's count. `fixture-small` had no constraints in 0.3.0, so
+//!   its count is 0: the recipe's own constraints (`features.ruin`, `features.chime`) are
+//!   reported, and parity needs none of its seeds to pass them.
 //!
 //! The runs go in parallel threads, one world each. The test writes a table of every value, median
 //! and range to stderr, and its failure message holds the same table.

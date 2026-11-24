@@ -80,7 +80,8 @@ as in the P02–P04 plans.
 - **G3** Rust: stable toolchain pinned in `rust-toolchain.toml`, edition 2024, `unsafe_code`
   forbidden, `Cargo.lock` committed, all builds `--locked`.
 - **G4** Crates: `theos-content`, `theos-vcs`, `theos-studio`, `theos-map-format`, `theos-maps`
-  (libs); `theos`, `theos-mcp`, `theos-editor` (bins); `xtask`. Paths `crates/<name>`, `xtask/`. UI in `editor-ui/`
+  (libs); `theos`, `theos-mcp`, `theos-editor` (bins); `xtask`. Paths `crates/<name>`, `xtask/`. UI
+  in `editor-ui/`
   (Svelte 5, TypeScript, pnpm).
 - **G5** Content files follow `docs/specs/data-model.md`; the restricted YAML parser is ours;
   any edit leaves untouched bytes identical.
@@ -278,7 +279,8 @@ bite. Each has its test in the owning task.
      stage, the layer and the cell.
 
    Tests: Task 6 (`max_and_min_return_positive_zero_on_ties`), Task 7
-   (`negative_zero_hashes_as_positive_zero`), Task 10 (`a_nan_in_a_written_layer_names_stage_layer_and_cell`).
+   (`negative_zero_hashes_as_positive_zero`), Task 10
+   (`a_nan_in_a_written_layer_names_stage_layer_and_cell`).
 4. **An output folder that already holds files, some with an output's name.** Expected:
    - unrelated files stay through success, failure and cancel;
    - a file with an output's name makes the run fail with `RunError::OutputExists` before
@@ -471,7 +473,8 @@ The phase branch then merges it (L1).
   - `.github/workflows/platforms.yml`: the Intel macOS job.
 
 - [ ] **Step 1: Add the two crates and run the workspace test.**
-  Run `cargo nextest run -p xtask workspace`. Expected: FAIL in `workspace_members_are_the_g4_crates`,
+  Run `cargo nextest run -p xtask workspace`. Expected: FAIL in
+  `workspace_members_are_the_g4_crates`,
   naming the two new members.
 - [ ] **Step 2: Update `xtask/tests/workspace.rs` and `gate/thresholds.toml`.** Run the same test,
   then `cargo xtask coverage`. Expected: both pass. The coverage check names no unlisted crate.
@@ -594,7 +597,8 @@ All derive `Debug, Clone, PartialEq, Serialize, Deserialize`. `Option` fields ar
 
 ### Task 3: Layer data
 
-**Files:** Create `crates/theos-map-format/src/layer.rs`; modify `Cargo.toml` (`sha2`) and `src/error.rs`.
+**Files:** Create `crates/theos-map-format/src/layer.rs`; modify `Cargo.toml` (`sha2`) and
+`src/error.rs`.
 
 **Interfaces — Produces:**
 
@@ -616,9 +620,12 @@ pub fn sha256_hex(bytes: &[u8]) -> String;      // lower-case hex
   - `f32_bytes_are_little_endian_and_zero_is_positive`:
     `LayerData::F32(vec![1.0, -0.0]).to_bytes()? == [0, 0, 128, 63, 0, 0, 0, 0]`.
   - `u16_bytes_are_little_endian`: `[258]` gives `[2, 1]`.
-  - `nan_and_infinity_are_refused_with_their_index`: `[0.0, f32::NAN]` gives `NonFinite { index: 1 }`.
-  - `from_bytes_checks_the_size`: 7 bytes for 2 `f32` cells gives `LayerSize { expected: 8, found: 7 }`.
-  - `sha256_of_abc`: `sha256_hex(b"abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"`.
+  - `nan_and_infinity_are_refused_with_their_index`: `[0.0, f32::NAN]` gives
+    `NonFinite { index: 1 }`.
+  - `from_bytes_checks_the_size`: 7 bytes for 2 `f32` cells gives
+    `LayerSize { expected: 8, found: 7 }`.
+  - `sha256_of_abc`:
+    `sha256_hex(b"abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"`.
   - `decoded_range_applies_scale_and_offset`: `U8([0, 255])` with scale `1/255` gives `(0.0, 1.0)`.
 - [ ] **Step 2: Run** them. Expected: FAIL.
 - [ ] **Step 3: Implement** with `f32::to_le_bytes` and `u16::from_le_bytes`, and
@@ -777,7 +784,8 @@ pub const IMPLEMENTED_CAPABILITIES: &[&str] = &[];   // none in format 1.0
 - [ ] **Step 3: Implement `read`.**
 - [ ] **Step 4: Run.** Expected: PASS. Run `cargo deny --locked check`. Expected: pass.
   `cargo tree -i miniz_oxide` shows it under `flate2`.
-- [ ] **Step 5: Commit** `feat(generators): read map packages leniently with version and capability checks`
+- [ ] **Step 5: Commit**
+  `feat(generators): read map packages leniently with version and capability checks`
   (`Refs: CE-76.1, CE-76.2, CE-76.3, CE-76.4, CE-76.5`).
 
 ---
@@ -1031,7 +1039,8 @@ A stage may read a layer it also declares as a write (in-place update through `t
     unique (trivially true now; it grows).
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
-  - **Parameters (L3):** `serde_ignored::deserialize(toml::Value::Table(t), |p| unknown.push(p.to_string()))`.
+  - **Parameters (L3):**
+    `serde_ignored::deserialize(toml::Value::Table(t), |p| unknown.push(p.to_string()))`.
     If `toml::Value` cannot serve as that deserialiser on toml 1.1, switch to
     `#[serde(deny_unknown_fields)]` and record it in the ledger.
   - **Errors:** a `Display` that names the stage and the layer, or the parameter.
@@ -1072,7 +1081,8 @@ pub enum RecipeError { Parse { origin: String, message: String },
                        Invalid { recipe: String, stage: Option<String>, layer: Option<String>,
                                  parameter: Option<String>, message: String },
                        UnknownRecipe(String), Io { path: PathBuf, source: std::io::Error } }
-pub const EXTRA_RENDERS: &[&str] = &["omega"];
+// The standard and extra renders: render::names(Role::Standard | Role::Extra) over
+// render::RENDERS (final review round 4: one table, no second list).
 ```
 
 **Catalog rules:**
@@ -1085,8 +1095,8 @@ pub const EXTRA_RENDERS: &[&str] = &["omega"];
 **`plan` checks, in this order** (spec §5.5). Each failure is `Invalid` naming what it can:
 1. `grid` ≥ `[2, 2]`, positive `size_km`, and square cells (`size_km[0]/cols` equals
    `size_km[1]/rows` within 1e-9 relative). `cell_m = size_km[0] · 1000 / cols`.
-2. Every name in `renders` is in `EXTRA_RENDERS`, and every `[render.<id>]` names a standard or
-   extra render.
+2. Every name in `renders` is an extra render of `render::RENDERS`, and every `[render.<id>]`
+   names a render of it.
 3. Inputs: any key of `[inputs]` or of the request's `inputs` gives `"unknown recipe input `<k>`"`
    with `parameter: Some(k)` (terrain recipes take none in P08).
 4. Per stage: known id ("unknown stage"), its kind, its params, then
@@ -1178,7 +1188,8 @@ Before any stage, `estimate(plan)` against `options.memory_budget` (or the defau
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run.** Expected: PASS.
-- [ ] **Step 5: Commit** `feat(generators): the runner with checks, hashes, budget, cancel and panics`.
+- [ ] **Step 5: Commit**
+  `feat(generators): the runner with checks, hashes, budget, cancel and panics`.
 
 ### Task 11: Constraints, results and the known summary paths
 
@@ -1189,7 +1200,7 @@ and `src/features/{mod.rs, types.rs}`; modify `src/recipe/plan.rs` (check 5).
 
 ```rust
 pub fn result_key(path: &str) -> String;   // lower case; every char outside [a-z0-9] → '_'
-pub fn evaluate(constraints: &BTreeMap<String, [f64; 2]>, summary: &serde_json::Value)
+pub(crate) fn evaluate(constraints: &BTreeMap<String, [f64; 2]>, summary: &serde_json::Value)
     -> serde_json::Map<String, serde_json::Value>;   // <key>, <key>_min, <key>_max, <key>_ok, pass
 pub const PATHS: &[&str] = &["elevation_m.relief", "lake_pct", "rivers_pct",
     "vegetation_cover_pct", "precip_mm_yr.median", "travel.chime_to_chime_min"];  // metrics.rs
@@ -1351,7 +1362,8 @@ pub fn slope(g: &Grid<f64>, cell_m: f64) -> Grid<f64>;       // sqrt(gr² + gc²
 pub fn percentile(values: &[f64], q: f64) -> f64;            // numpy 'linear'; sorts a copy by total_cmp
 pub fn median(values: &[f64]) -> f64;
 pub fn mean(values: &[f64]) -> f64;
-pub fn metres_to_cells(m: f64, cell_m: f64) -> usize;        // max(1, round(m / cell))
+// metres → cells: MapFrame::cells_of_m (world/mod.rs), max(1, round(m / cell)), at most
+// twice the longer side (final review round 3, ruling 72)
 ```
 
 **Details** (scipy's semantics):
@@ -1534,7 +1546,7 @@ pub struct Warp { pub x: Grid<f64>, pub y: Grid<f64> }   // NAME "warp"
   - `fault` {`path`, `rate`, `reach` 0.25, `jitter` 0.06};
   - `rift` {`path`, `width` 0.06, `rate`, `depth_m` 150, `jitter` 0.06};
   - `dome` and `volcano` {`at`, `r`, `rate`, `jitter` 0.06};
-  - `basin` {`at`, `r`, `rate` 0, `depth_m` 80, `jitter` 0.06}.
+  - `basin` {`at`, `r`, `depth_m` 80, `jitter` 0.06} (no `rate`: ruling 71).
 - **Positions** are `[x, y]` fractions (G19). The code reads `x` with columns and `y` with rows.
 - **Random draws** in 0.3.0's order: the rate jitter, then the path or centre jitter, then the
   radius jitter. Each of 0.3.0's `subseed` names becomes `ctx.sub_rng("<same name>")`.
@@ -1592,7 +1604,8 @@ limestone ≥ sandstone ≥ shale ≥ alluvium (spec §5.9).
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run.** Expected: PASS.
-- [ ] **Step 5: Commit** `feat(generators): geology with rock-dependent erodibility and threshold slopes`.
+- [ ] **Step 5: Commit**
+  `feat(generators): geology with rock-dependent erodibility and threshold slopes`.
 
 ### Task 20: Stage `climate_model` and the climate functions
 
@@ -1647,7 +1660,8 @@ tau_f 1000. `budyko_w` 2.6 is the builder's choice within Fu's and Zhang's range
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run.** Expected: PASS.
-- [ ] **Step 5: Commit** `feat(generators): climate model with orographic precipitation and a Budyko water balance`.
+- [ ] **Step 5: Commit**
+  `feat(generators): climate model with orographic precipitation and a Budyko water balance`.
 
 ---
 
@@ -1946,7 +1960,8 @@ incising spill nodes):
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run.** Expected: PASS.
-- [ ] **Step 5: Commit** `feat(generators): erosion-deposition after Yuan et al. 2019 with depression filling`.
+- [ ] **Step 5: Commit**
+  `feat(generators): erosion-deposition after Yuan et al. 2019 with depression filling`.
 
 ### Task 26: `hillslope`, `slope_limit`, `climate_update`
 
@@ -2107,7 +2122,8 @@ pub struct WaterThresholds { pub river_q: f64, pub big_river_q: f64 }   // NAME 
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement**; register `hydrology`.
 - [ ] **Step 4: Run.** Expected: PASS.
-- [ ] **Step 5: Commit** `feat(generators): hydrology with a lake water balance and single-flow channels`.
+- [ ] **Step 5: Commit**
+  `feat(generators): hydrology with a lake water balance and single-flow channels`.
 
 ### Task 29: `hydrology` — river lines and lake outlines
 
@@ -2412,7 +2428,8 @@ stream crossing, with `road` → the road's handle.
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement**; register both.
 - [ ] **Step 4: Run.** Expected: PASS.
-- [ ] **Step 5: Commit** `feat(generators): sites with spur tracks and walking times from the Chimes`.
+- [ ] **Step 5: Commit**
+  `feat(generators): sites with spur tracks and walking times from the Chimes`.
 
 ### Task 35: `detuning`
 
@@ -2607,7 +2624,8 @@ pub(crate) struct RenderInput<'a> { pub world: &'a World, pub features: &'a Feat
                                     pub options: Option<&'a toml::Table>, pub cancel: &'a CancelToken,
                                     pub title: String }
 pub(crate) type RenderFn = fn(&RenderInput<'_>) -> Result<tiny_skia::Pixmap, RenderError>;
-pub(crate) const RENDERS: &[(&str, RenderFn)];   // base, truth, inworld, geology, resources, omega
+pub(crate) const RENDERS: &[Render];  // name, role, draw, needs: base, truth, geology,
+                                      // resources, inworld (standard), omega (extra)
 pub(crate) fn encode_png(p: &tiny_skia::Pixmap) -> Result<Vec<u8>, RenderError>; // png, Compression::Fast
 pub(crate) fn fonts() -> Result<&'static Fonts, RenderError>;  // OnceLock; Inter, Spectral via wuff
 pub fn font_licences() -> &'static [(&'static str, &'static str)];  // names + OFL texts
@@ -2749,7 +2767,8 @@ pub(crate) fn run_inner(registry: &Registry, …same…) -> Result<(RunManifest,
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run.** Expected: PASS.
-- [ ] **Step 5: Commit** `feat(generators): run with outputs, cleanup and cancel` (`Refs: CE-28.2, CE-28.4`).
+- [ ] **Step 5: Commit** `feat(generators): run with outputs, cleanup and cancel`
+  (`Refs: CE-28.2, CE-28.4`).
 
 ### Task 42: The built-in recipes and `describe`
 
@@ -2777,7 +2796,8 @@ fixture-small}.toml`, `src/api/describe.rs` and `tests/maps/recipes.rs`; modify
 - **Constraints:**
   - `hearth-valley`: `"elevation_m.relief" = [800, 2200]`, `lake_pct = [0, 8]`,
     `vegetation_cover_pct = [25, 75]`, `"features.ruin" = [2, 2]`, `"features.chime" = [2, 2]`;
-  - `hearth-valley-omega`: relief and vegetation as above, `"travel.chime_to_chime_min" = [60, 240]`,
+  - `hearth-valley-omega`: relief and vegetation as above,
+    `"travel.chime_to_chime_min" = [60, 240]`,
     ruin and chime counts;
   - `fixture-small`: `"features.ruin" = [1, 1]`, `"features.chime" = [2, 2]` (L21).
 - **Omega's `detuning`:** `baseline = 0.12`, `ruin_radius_km = 2.5`.
@@ -2859,7 +2879,8 @@ cargo run -p theos-maps --release --example run -- <recipe>… --seeds 1..8 --ou
   **median of the per-seed ratios** within the tolerance. The noise draws its coefficients per
   wavenumber of the map, so a seed gives one landscape at both sizes. Every basin run must also
   hold a lake body of at least 0.25 km². The hearth pair has no lakes at either size on most seeds,
-  so the basin pair carries the lake check. Fast tests in `fixture_pairs.rs` keep the hearth pair equal to
+  so the basin pair carries the lake check. Fast tests in `fixture_pairs.rs` keep the hearth pair
+  equal to
   `recipes/hearth-valley.toml` and the basin pair equal to each other, apart from `id`, `title`
   and `grid`.
 - [ ] **Step 2: Run.** Expected: FAIL, or PASS if the stages are already right. A pass here
@@ -2941,7 +2962,8 @@ none asked for fixture-small.
   his decision (CLAUDE.md "When to stop").
 - [ ] **Step 4: Run** the parity test. Expected: PASS. Rerun the whole crate's tests, since
   recipe changes affect the earlier fixtures.
-- [ ] **Step 5: Commit** `feat(generators): tune the built-in recipes to 0.3.0's range` (`Refs: CE-28.5`).
+- [ ] **Step 5: Commit** `feat(generators): tune the built-in recipes to 0.3.0's range`
+  (`Refs: CE-28.5`).
 
 ### Task 45: Golden hashes and determinism
 
@@ -2981,7 +3003,8 @@ pub fn golden_path(version: &str) -> PathBuf;   // <CARGO_MANIFEST_DIR>/tests/fi
   - `// AC: CE-77.2` `bless_refuses_to_overwrite_an_existing_version`: `record` into a temp path
     twice; the second gives `Exists`, and the file is unchanged.
   - `two_runs_in_one_process_give_identical_packages_and_layers` (spec §5.14). Running in two
-    processes is covered by `bless` recording in one process and the golden test comparing in another (L28).
+    processes is covered by `bless` recording in one process and the golden test comparing in
+    another (L28).
 - [ ] **Step 2: Run.** Expected: FAIL (no golden file).
 - [ ] **Step 3: Record** with `cargo run -p theos-maps --example bless`. This is the last build
   task that changes outputs (spec §5.14). A later review fix that changes outputs deletes the file

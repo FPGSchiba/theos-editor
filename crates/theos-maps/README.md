@@ -56,7 +56,11 @@ Clippy enforces most of these (`-D warnings`).
 - No `HashMap` or `HashSet`; use `BTreeMap` and `Vec`.
 - Sorts and priority queues use `total_cmp` and break ties by cell index, then by feature handle.
 - No threads inside a run; seed and hash arithmetic uses `wrapping_*`.
-- JSON that is hashed or compared goes through the canonical writer of `theos-map-format`.
+- JSON that is hashed or compared goes through the canonical writer of `theos-map-format`. A
+  value that holds computed numbers turns into JSON through
+  `theos_map_format::json::to_checked_value`, not `serde_json::to_value` or `json!`: `serde_json`
+  writes NaN and the infinities as `null` without an error, and the checked conversion refuses
+  them. A single number goes through `Value::from` only where the code shows it is finite.
 - Callers must not set flush-to-zero or change the floating-point environment of the thread.
 
 ## Tests

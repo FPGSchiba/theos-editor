@@ -12,14 +12,18 @@ the bytes.
   equal bytes.
 - `read`: `read`. Lenient towards what a later minor version adds, strict about integrity (sizes,
   hashes, names).
-- `json`: the canonical JSON writer (object keys in lexicographic order, `serde_json`'s pretty printer, one LF at the end).
-  Everything that is hashed or compared as bytes goes through it.
+- `json`: the canonical JSON writer (object keys in lexicographic order, `serde_json`'s pretty
+  printer, one LF at the end), and `to_checked_value`, the one conversion of a value into it.
+  Everything that is hashed or compared as bytes goes through them.
 
 ## Determinism rules for contributors
 
 The same package must give the same bytes on every platform (G20).
 
 - Canonical JSON only: never serialize a manifest or feature file with a plain `serde_json` call.
+- Every value becomes JSON through `json::to_checked_value`, never `serde_json::to_value`:
+  `serde_json` writes NaN and the infinities as `null` without an error, and the checked
+  conversion refuses them (`FormatError::JsonNotFinite`).
 - No `HashMap` or `HashSet`; use `BTreeMap` and `Vec`, so no output depends on iteration order.
 - No clock, no OS values, no locale in the bytes.
 - ZIP entries are written in a fixed order with fixed timestamps and attributes.

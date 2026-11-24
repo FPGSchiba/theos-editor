@@ -27,8 +27,8 @@ use crate::stage::Registry;
 /// Runs the recipe `request.recipe` (from the built-ins and `recipe_dirs`, later folders winning
 /// by id) with `request.seed`, and writes its outputs into the existing folder `out_dir`: the
 /// standard renders (`base`, `truth`, `geology`, `resources`, `inworld`), the recipe's extra
-/// renders, the `features` and the `package`, named `s<seed>-<role>.png`, `s<seed>-features.geojson` and
-/// `s<seed>.theosmap` (plan ruling L10).
+/// renders, the `features` and the `package`, named `s<seed>-<role>.png`,
+/// `s<seed>-features.geojson` and `s<seed>.theosmap` (plan ruling L10).
 ///
 /// `progress` gets a `{stage, done, total}` event before every pipeline stage, the events long
 /// stages report themselves, and one at the start of each step after the pipeline

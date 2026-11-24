@@ -2,8 +2,8 @@
 //! the single steepest receiver, river masks, `flow_dir` and the water surface.
 //!
 //! 1. **Fill** (`discharge::drain`): priority-flood of `height` with ε = 1e-6 (Barnes et al.
-//!    2014) from the outlets (`kernels::routing::outlets`): the `fixed` cells, or on a closed map the lowest
-//!    cell (ties by index), the map's sink.
+//!    2014) from the outlets (`kernels::routing::outlets`): the `fixed` cells, or on a closed map
+//!    the lowest cell (ties by index), the map's sink.
 //! 2. **Depressions** (`lakes.rs`): 8-connected cells the fill raised by more than 1e-3 m. A
 //!    depression's spill level is its highest filled value; its exit is its cell the fill
 //!    reached first.
