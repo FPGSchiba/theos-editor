@@ -138,4 +138,28 @@ mod tests {
         assert!((p.k - 2.0e-4).abs() < 1e-12 && (p.kd - 0.02).abs() < 1e-12);
         assert_eq!(props(Rock::Basalt).colour, [0x62, 0x5e, 0x60]);
     }
+
+    // Final review round 4, class K: `ALL` holds every rock once, in code order. The match has
+    // no wildcard, so a new rock does not compile until it has its place here, and then `ALL`
+    // must hold it there. Each name is the spelling recipes use (`rock_mix`).
+    #[test]
+    fn all_holds_every_rock_and_names_are_the_recipe_keys() {
+        let place = |r: Rock| match r {
+            Rock::Granite => 0,
+            Rock::Quartzite => 1,
+            Rock::Basalt => 2,
+            Rock::Limestone => 3,
+            Rock::Sandstone => 4,
+            Rock::Shale => 5,
+            Rock::Alluvium => 6,
+        };
+        assert_eq!(Rock::ALL.len(), 7);
+        for (i, rock) in Rock::ALL.iter().enumerate() {
+            assert_eq!(place(*rock), i);
+            let spelt: Rock = toml::Value::String(rock.name().to_owned())
+                .try_into()
+                .unwrap();
+            assert_eq!(spelt, *rock);
+        }
+    }
 }

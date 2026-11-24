@@ -798,4 +798,13 @@ mod tests {
         let result = run_cancelled(&mut w, &Settlements, "");
         assert!(matches!(result, Err(StageError::Cancelled)), "{result:?}");
     }
+
+    // Final review round 4, class K: the types a stage spells are the table's types of its kind,
+    // in both directions.
+    #[test]
+    fn the_settlement_classes_are_the_tables() {
+        let classes: Vec<&str> = CLASSES.iter().map(|c| c.ty).collect();
+        let table: Vec<&str> = crate::features::types_of("settlement").collect();
+        assert_eq!(classes, table);
+    }
 }

@@ -10,4 +10,4 @@ mod types;
 pub use model::{Feature, FeatureHandle, FeatureSet, Geometry, Prop};
 pub use names::generated_name;
 pub use pick::{interior, pick};
-pub use types::TYPES;
+pub use types::{TYPES, types_of};

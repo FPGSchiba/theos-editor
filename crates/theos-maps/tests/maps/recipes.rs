@@ -90,6 +90,23 @@ fn describe_lists_the_three_built_in_recipes() -> TestResult {
         assert_eq!(info.stages.first().map(|s| s.id.as_str()), Some("grid"));
         assert!(info.stages.iter().all(|s| !s.summary.is_empty()), "{id}");
     }
+    let ids: Vec<&str> = d.recipes.iter().map(|r| r.id.as_str()).collect();
+    assert_eq!(ids, BUILT_IN, "exactly the built-ins");
+    Ok(())
+}
+
+// Final review round 4, class K: the built-in recipes are the files of `recipes/`, so a new file
+// there is offered and tested, and nothing is offered that the folder lacks.
+#[test]
+fn the_built_in_recipes_are_the_recipes_folder() -> TestResult {
+    let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("recipes");
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(folder)? {
+        let name = entry?.file_name().to_string_lossy().into_owned();
+        files.push(name.strip_suffix(".toml").ok_or("only recipes")?.to_owned());
+    }
+    files.sort();
+    assert_eq!(files, BUILT_IN);
     Ok(())
 }
 

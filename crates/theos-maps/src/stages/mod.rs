@@ -151,4 +151,22 @@ mod tests {
         }
         assert!(!is_metric_name("") && !is_metric_name("Area") && !is_metric_name("a-b"));
     }
+
+    // Final review round 4, class K: the manifest's `timing` holds the stages by id and the steps
+    // after the pipeline by name, and the outputs hold the renders by name next to `features`
+    // and `package`, so no stage takes a step's name and no render an output's.
+    #[test]
+    fn no_stage_or_render_takes_a_reserved_name() {
+        let steps = ["constraints", "features", "renders", "package"];
+        for id in Registry::builtin().ids() {
+            assert!(!steps.contains(&id), "stage {id}");
+        }
+        for render in crate::render::RENDERS {
+            assert!(
+                !["features", "package"].contains(&render.name),
+                "render {}",
+                render.name
+            );
+        }
+    }
 }

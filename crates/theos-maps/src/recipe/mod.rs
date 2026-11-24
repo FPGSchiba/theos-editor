@@ -19,12 +19,6 @@ pub use load::{Catalog, RecipeProblem, catalog};
 pub use plan::{MAX_CELL_M, MIN_CELL_M, Plan, PlannedStage, plan};
 pub use schema::{LoadedRecipe, Recipe, RecipeOrigin, parse};
 
-/// The renders every run produces (spec §5.11).
-pub const STANDARD_RENDERS: &[&str] = &["base", "truth", "geology", "resources", "inworld"];
-
-/// The renders a recipe may ask for in `renders`.
-pub const EXTRA_RENDERS: &[&str] = &["omega"];
-
 /// Why a recipe could not be read, parsed or validated.
 #[derive(Debug, thiserror::Error)]
 pub enum RecipeError {

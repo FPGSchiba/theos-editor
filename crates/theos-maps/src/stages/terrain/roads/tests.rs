@@ -653,3 +653,23 @@ fn roads_is_a_registered_terrain_stage() {
         assert!(reads.contains(&name), "{name}");
     }
 }
+
+// Final review round 4, class K: `ALL` holds every class once, in code order (the match has no
+// wildcard), and the class names are the table's road types.
+#[test]
+fn all_holds_every_road_class_and_names_are_the_road_types() {
+    let place = |c: RoadClass| match c {
+        RoadClass::Trail => 0,
+        RoadClass::Track => 1,
+        RoadClass::Road => 2,
+        RoadClass::Main => 3,
+    };
+    assert_eq!(RoadClass::ALL.len(), 4);
+    for (i, class) in RoadClass::ALL.iter().enumerate() {
+        assert_eq!(place(*class), i);
+        assert_eq!(usize::from(class.code()), i + 1);
+    }
+    let names: Vec<&str> = RoadClass::ALL.iter().map(|c| c.name()).collect();
+    let table: Vec<&str> = crate::features::types_of("road").collect();
+    assert_eq!(names, table);
+}

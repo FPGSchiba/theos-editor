@@ -101,6 +101,10 @@ fn the_package_holds_the_standard_terrain_layers_in_order() -> TestResult {
     for class in RoadClass::ALL {
         assert!(ROADS_LEGEND.contains(&(class.code().to_string().as_str(), class.name())));
     }
+    // and hold nothing else (final review round 4, class K)
+    assert_eq!(ROCK_LEGEND.len(), Rock::ALL.len());
+    assert_eq!(ROADS_LEGEND.len(), RoadClass::ALL.len() + 1);
+    assert_eq!(ROADS_LEGEND[0], ("0", "none"));
     Ok(())
 }
 

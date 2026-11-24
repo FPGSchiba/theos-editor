@@ -147,7 +147,10 @@ mod tests {
                 "site" => assert_ne!(site_mark(ty), UNKNOWN, "{ty}"),
                 "poi" => assert_ne!(poi_mark(ty), UNKNOWN, "{ty}"),
                 "resource" => assert_ne!(resource_colour(ty), [255; 3], "{ty}"),
-                _ => {}
+                // Final review round 4, class K: a new kind needs a style rule here.
+                "settlement" => assert!(settlement_px(ty) > 0, "{ty}"),
+                "road" | "water" => {}
+                other => panic!("the kind `{other}` has no style rule"),
             }
         }
         assert_eq!(site_mark("nothing"), UNKNOWN);

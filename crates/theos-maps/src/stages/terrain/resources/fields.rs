@@ -234,7 +234,7 @@ pub fn compute(
         let contact = flag(contact.as_slice()[i]);
         let omega = inputs.omega.map_or(0.0, |o| o.as_slice()[i]);
         let wetland = flat * flag(near) * flag(precipitation > 900.0);
-        let values = [
+        let values: [f64; NAMES.len()] = [
             0.8 * flag(is(Rock::Quartzite))
                 + 0.7 * contact
                 + 0.35 * flag(is(Rock::Basalt) && slope > 0.1),

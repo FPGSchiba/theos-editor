@@ -504,3 +504,11 @@ fn a_cancel_stops_the_picking() {
         "{result:?}"
     );
 }
+
+// Final review round 4, class K: the types a stage spells are the table's types of its kind,
+// in both directions.
+#[test]
+fn the_resource_types_are_the_tables() {
+    let table: Vec<&str> = crate::features::types_of("resource").collect();
+    assert_eq!(super::fields::NAMES.to_vec(), table);
+}

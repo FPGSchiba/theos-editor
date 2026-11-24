@@ -128,4 +128,30 @@ mod tests {
             assert_eq!(check(&planned(&ids)), Ok(()), "{ids:?}");
         }
     }
+
+    // Final review round 4, class K: the routing processes are the processes that write the
+    // routing layers (`receivers`, `stack`), in both directions.
+    #[test]
+    fn the_routing_processes_are_those_that_write_the_routing() {
+        let evolution = Evolution::default();
+        let registry = evolution.processes();
+        let mut writing: Vec<&str> = Vec::new();
+        for id in registry.ids() {
+            let process = registry.get(id).unwrap();
+            let params = process
+                .params(&toml::from_str(needed(id)).unwrap())
+                .unwrap();
+            let writes = process.writes(params.as_ref());
+            if writes
+                .iter()
+                .any(|l| ["receivers", "stack"].contains(&l.name))
+            {
+                writing.push(id);
+            }
+        }
+        let mut routing = ROUTING.to_vec();
+        writing.sort_unstable();
+        routing.sort_unstable();
+        assert_eq!(writing, routing);
+    }
 }

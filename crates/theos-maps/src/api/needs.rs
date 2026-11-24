@@ -6,16 +6,16 @@
 use std::collections::BTreeMap;
 
 use crate::package;
-use crate::recipe::{EXTRA_RENDERS, Plan, RecipeError, STANDARD_RENDERS};
-use crate::render;
+use crate::recipe::{Plan, RecipeError};
+use crate::render::{self, Role};
 use crate::stage::LayerSpec;
 use crate::world::LayerKind;
 
 /// The renders of `plan`: the standard ones, then the recipe's extras in its order, each once.
 pub(super) fn render_names(plan: &Plan) -> Vec<&'static str> {
-    let mut names: Vec<&'static str> = STANDARD_RENDERS.to_vec();
+    let mut names: Vec<&'static str> = render::names(Role::Standard).collect();
     for extra in &plan.renders {
-        if let Some(&known) = EXTRA_RENDERS.iter().find(|e| **e == extra.as_str())
+        if let Some(known) = render::names(Role::Extra).find(|e| *e == extra.as_str())
             && !names.contains(&known)
         {
             names.push(known);
@@ -94,11 +94,19 @@ mod tests {
         )?)
     }
 
+    // Final review round 4, finding 6: both lists of renders come from `render::RENDERS`, so a
+    // render is standard or extra and nothing else, in the table's order.
     #[test]
-    fn every_render_a_run_may_draw_declares_its_layers() {
-        for name in STANDARD_RENDERS.iter().chain(EXTRA_RENDERS) {
-            assert!(render::needs(name).is_some(), "{name}");
-        }
+    fn the_standard_and_extra_renders_are_the_table_of_renders() {
+        let standard: Vec<&str> = render::names(Role::Standard).collect();
+        let extra: Vec<&str> = render::names(Role::Extra).collect();
+        assert_eq!(
+            standard,
+            ["base", "truth", "geology", "resources", "inworld"]
+        );
+        assert_eq!(extra, ["omega"]);
+        let all: Vec<&str> = render::RENDERS.iter().map(|r| r.name).collect();
+        assert_eq!(all, [standard, extra].concat());
     }
 
     // Every built-in and every fixture recipe but the evolution budget fixture writes what its
@@ -164,8 +172,9 @@ mod tests {
         let mut plan = planned(text)?;
         plan.renders.push("omega".to_owned());
         let names = render_names(&plan);
-        assert_eq!(names[..STANDARD_RENDERS.len()], *STANDARD_RENDERS);
-        assert_eq!(names[STANDARD_RENDERS.len()..], ["omega"]);
+        let standard: Vec<&str> = render::names(Role::Standard).collect();
+        assert_eq!(names[..standard.len()], *standard);
+        assert_eq!(names[standard.len()..], ["omega"]);
         Ok(())
     }
 }

@@ -16,7 +16,11 @@ use crate::stages::terrain::roads::RoadClass;
 const ROWS: usize = 40;
 const COLS: usize = 48;
 const CELL_M: f64 = 50.0;
-const PEOPLE: [&str; 5] = ["truth", "geology", "resources", "inworld", "omega"];
+
+/// The name of every render, from the table: a new render is in every test that loops over it.
+fn every_render() -> impl Iterator<Item = &'static str> {
+    RENDERS.iter().map(|r| r.name)
+}
 
 /// A world (synthetic, not canon) with one of everything the renders draw. The settlement names
 /// are stand-ins for generated names.
@@ -116,7 +120,7 @@ fn distinct_colours(png: &[u8]) -> usize {
 fn each_render_has_its_size_and_is_not_blank() -> TestResult {
     let w = world();
     let (width, height) = FRAME_PX;
-    for name in PEOPLE {
+    for name in every_render() {
         let pixmap = w.draw_with(name, None, "A title")?;
         let expected = if name == "truth" {
             (width, height + TRUTH_TOP_PX + TRUTH_BOTTOM_PX)
@@ -380,7 +384,7 @@ fn omega_marks_ruins() -> TestResult {
 #[test]
 fn every_render_gives_the_same_bytes_twice() -> TestResult {
     let w = world();
-    for name in PEOPLE {
+    for name in every_render() {
         let first = canvas::encode_png(&w.draw_with(name, None, "A title")?)?;
         let second = canvas::encode_png(&w.draw_with(name, None, "A title")?)?;
         assert_eq!(first, second, "{name}");
@@ -414,7 +418,7 @@ fn every_render_stops_on_cancel() {
     let w = world();
     let cancel = CancelToken::new();
     cancel.cancel();
-    for name in PEOPLE {
+    for name in every_render() {
         let draw = render(name).unwrap();
         let result = draw(&w.input(&cancel));
         assert!(matches!(result, Err(RenderError::Cancelled)), "{name}");

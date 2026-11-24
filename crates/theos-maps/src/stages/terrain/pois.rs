@@ -57,6 +57,9 @@ const LOW_HEIGHT_PERCENTILE: f64 = 75.0;
 /// The metric names, in the order of the types the stage adds.
 const METRICS: [&str; 4] = ["ruin", "chime", "gate_down", "gate_up"];
 
+/// The types the stage places, in the order of [`METRICS`].
+const TYPES: [&str; 4] = ["ruin", "chime", "gate-down", "gate-up"];
+
 /// The parameters of `pois`.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
@@ -341,10 +344,7 @@ impl TypedStage for Pois {
             .map_err(|e| ctx.kernel_failed(e))?
         };
         let mut report = StageReport::default();
-        for (name, ty) in METRICS
-            .into_iter()
-            .zip(["ruin", "chime", "gate-down", "gate-up"])
-        {
+        for (name, ty) in METRICS.into_iter().zip(TYPES) {
             report.put(name, to_f64(Feature::count_of(&found, ty)));
         }
         add_features(ctx, found)?;
@@ -725,5 +725,16 @@ min_chime_sep_km = 1.0",
         let mut w = setup();
         let result = run_cancelled(&mut w, &Pois, "");
         assert!(matches!(result, Err(StageError::Cancelled)), "{result:?}");
+    }
+
+    // Final review round 4, class K: the types a stage spells are the table's types of its kind,
+    // in both directions.
+    #[test]
+    fn the_poi_types_are_the_tables() {
+        let mut placed = super::TYPES.to_vec();
+        let mut table: Vec<&str> = crate::features::types_of("poi").collect();
+        placed.sort_unstable();
+        table.sort_unstable();
+        assert_eq!(placed, table);
     }
 }

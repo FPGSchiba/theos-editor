@@ -38,3 +38,11 @@ pub const TYPES: &[(&str, &str)] = &[
     ("water", "river"),
     ("water", "lake"),
 ];
+
+/// The types of `kind`, in the order of [`TYPES`].
+pub fn types_of(kind: &str) -> impl Iterator<Item = &'static str> + '_ {
+    TYPES
+        .iter()
+        .filter(move |(k, _)| *k == kind)
+        .map(|(_, ty)| *ty)
+}

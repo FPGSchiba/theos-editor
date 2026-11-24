@@ -549,3 +549,14 @@ fn a_cancel_stops_the_mills_and_the_picking() {
         );
     }
 }
+
+// Final review round 4, class K: the types a stage spells are the table's types of its kind,
+// in both directions.
+#[test]
+fn the_site_types_are_the_tables() {
+    let mut spelt: Vec<&str> = super::TYPES.iter().map(|(ty, _)| *ty).collect();
+    // `roads` places the crossings.
+    spelt.extend(["bridge", "ford"]);
+    let table: Vec<&str> = crate::features::types_of("site").collect();
+    assert_eq!(spelt, table);
+}

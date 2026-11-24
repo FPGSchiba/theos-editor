@@ -226,6 +226,15 @@ mod tests {
         travel.0.insert("chime_to_chime_min".to_owned(), 12.34);
         let m = compute(&w, Some(&travel)).unwrap();
         assert!((num(&m, "travel.chime_to_chime_min") - 12.3).abs() < 1e-12);
+        // Final review round 4, class K: `compute` writes every path of `PATHS` and no other.
+        let full = compute(&world(true, true), Some(&travel)).unwrap();
+        let written: Vec<&str> = full
+            .as_object()
+            .map(|o| o.keys().map(String::as_str).collect())
+            .unwrap_or_default();
+        let mut paths = PATHS.to_vec();
+        paths.sort_unstable();
+        assert_eq!(written, paths);
         assert!(
             compute(&w, None)
                 .unwrap()

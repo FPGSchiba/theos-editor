@@ -2,9 +2,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{EXTRA_RENDERS, LoadedRecipe, RecipeError, STANDARD_RENDERS};
+use super::{LoadedRecipe, RecipeError};
 use crate::constraints::is_known_path;
 use crate::kernels::num;
+use crate::render::{self, Role};
 use crate::stage::{LayerSpec, MapKind, ParamError, Registry, StageParams};
 use crate::world::{LayerKind, MapFrame};
 
@@ -213,23 +214,19 @@ fn check_frame(recipe: &LoadedRecipe) -> Result<MapFrame, RecipeError> {
 /// Check 2: the extra renders and the render options.
 fn check_renders(recipe: &LoadedRecipe) -> Result<(), RecipeError> {
     let r = &recipe.recipe;
-    if let Some(name) = r
-        .renders
-        .iter()
-        .find(|n| !EXTRA_RENDERS.contains(&n.as_str()))
-    {
+    let extras: Vec<&str> = render::names(Role::Extra).collect();
+    if let Some(name) = r.renders.iter().find(|n| !extras.contains(&n.as_str())) {
         return Err(invalid(
             recipe,
             &at_parameter("renders"),
             format!(
                 "unknown extra render `{name}` (known: {})",
-                EXTRA_RENDERS.join(", ")
+                extras.join(", ")
             ),
         ));
     }
     for id in r.render.keys() {
-        let known = STANDARD_RENDERS.contains(&id.as_str()) || EXTRA_RENDERS.contains(&id.as_str());
-        if !known {
+        if render::needs(id).is_none() {
             let key = format!("render.{id}");
             return Err(invalid(
                 recipe,

@@ -212,7 +212,7 @@ fn entries(input: &RenderInput<'_>) -> Vec<Entry> {
         out.push(Entry::new(Swatch::Line(line), label));
     }
     let features = input.features;
-    for ty in ["city", "town", "village", "hamlet"] {
+    for ty in crate::features::types_of("settlement") {
         if features.count_type(ty) > 0 {
             out.push(Entry::new(Swatch::Mark(styles::settlement_mark(ty)), ty));
         }

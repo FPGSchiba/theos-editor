@@ -179,10 +179,21 @@ const LAKE_SPEC: LayerSpec = LayerSpec::mask("lake");
 const WATER_FEATURES_SPEC: LayerSpec =
     LayerSpec::value("water_features", <WaterFeatures as ValueType>::NAME);
 
+/// Whether every run draws a render or only a recipe that asks for it in `renders`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Role {
+    /// Every run draws it (spec §5.11).
+    Standard,
+    /// A recipe asks for it in `renders`.
+    Extra,
+}
+
 /// A render in the table of renders.
 pub(crate) struct Render {
     /// Its name.
     pub name: &'static str,
+    /// Whether every run draws it.
+    pub role: Role,
     /// How it draws.
     pub draw: RenderFn,
     /// The layers it reads: `run` and `describe` refuse a recipe whose stages do not write them
@@ -190,39 +201,55 @@ pub(crate) struct Render {
     pub needs: &'static [LayerSpec],
 }
 
-/// Every render by name. A new render is one module and one line here.
+/// Every render, the standard ones in the order a run draws them. A new render is one module
+/// and one entry here: its role makes it a standard render or an extra a recipe may ask for,
+/// and `plan`, `run` and `describe` take both lists from this table.
 pub(crate) const RENDERS: &[Render] = &[
     Render {
         name: "base",
+        role: Role::Standard,
         draw: base::base,
         needs: base::NEEDS,
     },
     Render {
         name: "truth",
+        role: Role::Standard,
         draw: truth::truth,
         needs: truth::NEEDS,
     },
     Render {
-        name: "inworld",
-        draw: inworld::inworld,
-        needs: inworld::NEEDS,
-    },
-    Render {
         name: "geology",
+        role: Role::Standard,
         draw: geology::geology,
         needs: geology::NEEDS,
     },
     Render {
         name: "resources",
+        role: Role::Standard,
         draw: resources::resources,
         needs: resources::NEEDS,
     },
     Render {
+        name: "inworld",
+        role: Role::Standard,
+        draw: inworld::inworld,
+        needs: inworld::NEEDS,
+    },
+    Render {
         name: "omega",
+        role: Role::Extra,
         draw: omega::omega,
         needs: omega::NEEDS,
     },
 ];
+
+/// The names of the renders of `role`, in table order.
+pub(crate) fn names(role: Role) -> impl Iterator<Item = &'static str> {
+    RENDERS
+        .iter()
+        .filter(move |r| r.role == role)
+        .map(|r| r.name)
+}
 
 /// The render `name`, if there is one.
 pub(crate) fn render(name: &str) -> Option<RenderFn> {
