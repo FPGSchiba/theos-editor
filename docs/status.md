@@ -56,7 +56,7 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 ## Needs Jann
 
 - P08's spec change PR #40 waits for Jann's merge. It carries every spec and format change of the
-  build (rulings 51–68 and errata):
+  build (rulings 51–73 and errata):
   - 51: the exact slope limiter, whose debris feeds the rivers;
   - 52: Aitken relaxation where the sweeps would miss the tolerance;
   - 53: fill-first lakes, filled before the solve in every iteration;
@@ -74,8 +74,13 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
   - 65: optional `features` reads;
   - 66: the §5.9 reads and writes as the stages declare them;
   - 67: a process run covers one `dt_yr`, also with `every`;
-  - 68: `priority_flood` returns the queue order.
-  The built-in recipes and CE-28.5 depend on 57–64. #40 must be on main before P08's build PR
+  - 68: `priority_flood` returns the queue order;
+  - 69: one bound for every number of a stage table;
+  - 70: a bounded cell edge and a cell count that does not overflow;
+  - 71: domains for exponents, tectonics sources and the rock mix; a basin takes no `rate`;
+  - 72: caps on lengths in cells and the Gaussian radius;
+  - 73: `RunError`'s variants as built.
+  The built-in recipes and CE-28.5 depend on 57–64; the recipe checks depend on 69–71. #40 must be on main before P08's build PR
   merges.
 - The SIL OFL 1.1 fonts (Inter, Spectral) that `theos-maps` embeds must ship with their licence
   texts (P08 §5.11, §7). `theos_maps::render::font_licences` hands them out; P09 or the release
