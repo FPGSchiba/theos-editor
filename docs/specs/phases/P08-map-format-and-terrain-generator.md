@@ -533,7 +533,13 @@ labels = []
   - every per-step process's reads are written by an earlier process or before the loop;
   - recipe inputs are empty: the terrain recipes take no inputs in P08 (decision 0003 §9), so any
     input is "unknown recipe input";
-  - constraint paths name values the metrics module or a stage's `metric_names` reports.
+  - constraint paths name values the metrics module or a stage's `metric_names` reports;
+  - the frame is bounded: a cell edge (`size_km` over `grid`) lies in [1 cm, 100 km], and the
+    grid's cell count fits the platform's index (ruling 70);
+  - each stage's own domains hold (ruling 71), then every number of a stage table is finite and
+    either 0 or of magnitude 1e-12 to 1e12, and every whole number is at most 1e6 in
+    magnitude (ruling 69). So no arithmetic on recipe numbers can overflow, wrap or panic, and
+    a recipe `describe` accepts never panics `run`.
 
   Each error names the stage (and the layer or parameter).
 - **A broken recipe in a folder** does not hide the others: `describe` lists the valid recipes and
@@ -670,7 +676,7 @@ Pure functions with unit tests against known values (scipy semantics where 0.3.0
 | `spectral_noise` | 1/f^β synthesis on the map's wavenumber lattice (step 3/4 cycle per map), kmin/kmax in cycles per map; counter-based coefficients keyed by wavenumber; zero mean, unit variance per grid |
 | `czt` | Chirp-z transform (Bluestein) on the radix-2 FFT, rational step, integer-reduced chirp |
 | `warp` | Domain warp of normalised coordinates |
-| `gaussian` | Separable, reflect mode, truncate at 4σ, σ in metres |
+| `gaussian` | Separable, reflect mode, truncate at 4σ, σ in metres; the radius stops at 16 map sides (ruling 72) |
 | `uniform`, `maximum` | Box filters, reflect mode |
 | `laplace`, `gradient` | Central differences (numpy's `gradient` at edges) |
 | `percentile` | Linear interpolation (numpy's default) |
@@ -683,6 +689,9 @@ Pure functions with unit tests against known values (scipy semantics where 0.3.0
 | `mst` | Kruskal with total order |
 | `marching_squares` | Lake outlines as rings in metres |
 | `priority_flood` | Barnes et al. 2014 with ε; filled surface and the order in which cells left the queue (ruling 68) |
+
+A length in metres becomes a number of cells through the frame, at most twice the map's longer
+side: a window that wide already reaches every cell (ruling 72).
 
 ### 5.9 Terrain stages
 
@@ -970,8 +979,10 @@ pub fn run(request: &RunRequest, recipe_dirs: &[PathBuf], out_dir: &Path,
 
 - `RunManifest` holds `generator` (`theos-maps@1.0.0`), `recipe`, `seed`, `inputs`, `frame`,
   `outputs` (role → file name in `out_dir`) and `results`.
-- `RunError` has typed variants: recipe invalid (with stage, layer or parameter), cancelled,
-  stage failed, stage panicked, finding failed, I/O.
+- `RunError` has typed variants: recipe invalid (with stage, layer or parameter), over the
+  memory budget, cancelled, stage failed, stage panicked, finding failed, a non-finite number
+  (in a raster cell, a value layer or a stage metric, each with its stage), output exists,
+  I/O, format, render, and output (the features or the package could not be built) (ruling 73).
 - `describe` lists, for each recipe: its id, title, `inputs: {}`, `seeded: true` and its stages
   with their summaries.
 - `accepts_notes` is `false` in P08.
@@ -1515,6 +1526,35 @@ Rulings of 13 Nov 2026, from the build:
     queue, not labels — the order, reversed, is a topological order towards the outlets, which
     `hydrology` walks to sum discharge and fill lakes; labels come from `labels` where a stage
     needs them — cost if wrong: none; one kernel row of §5.8.
+69. Ruling: every number of a stage table is finite and either 0 or of magnitude 1e-12 to
+    1e12, and every whole number at most 1e6 in magnitude, checked once after each stage's own
+    domains — the final review's audit found about 70 quantities over 22 parameter types that
+    recipe numbers could overflow (cell counts, weight totals, loop and allocation sizes); one
+    rule where numbers come in also covers later stages, where checks per parameter kept
+    leaking — cost if wrong: a recipe that needs a number beyond the bounds is refused (the
+    built-ins span 2.2e-4 to 2.4e4); the bounds are three constants.
+70. Ruling: a cell edge lies in [1 cm, 100 km] and the cell count `rows × columns` must not
+    overflow — a grid of 3e9 × 7e9 cells passed `describe` and panicked `run` in the memory
+    budget; a size whose cells underflowed to 0 m passed the square-cell check — cost if
+    wrong: a recipe outside is refused; two constants.
+71. Ruling: the domains of parameters that later arithmetic cannot take at any magnitude —
+    `background_beta` and `warp_beta` in [−8, 8] and `fluvial`'s m in [0, 2] (they are powers
+    of computed quantities; terrain spectra lie at 1–4, stream-power m at 0.3–0.7);
+    `tectonics`' sources: `width`, `reach` and `r` positive, `jitter` and `depth_m` at least 0,
+    `asymmetry` in [0, 2) (the flanks are width·(1 ∓ asymmetry/2) wide, so at 2 one vanishes;
+    a lean to the other side is the reversed path), `sag_duration_yr` positive; a basin takes
+    no `rate`, which 0.3.0 accepted and never read (§10); `geology`'s `rock_mix` total positive
+    (finite through ruling 69) — found by the final review (a vanished flank, NaN rock
+    provinces from weights whose total overflowed, an infinite sag duration that zeroed every
+    sag rate) — cost if wrong: a recipe outside is refused.
+72. Ruling: a length in metres becomes at most twice the map's longer side in cells, and a
+    Gaussian's radius stops at 16 map sides — a dilation or maximum that wide already reaches
+    every cell; a wider Gaussian or box only averages the reflected line again — cost if
+    wrong: a filter wider than the map differs slightly from scipy's.
+73. Ruling: `RunError` names a non-finite number by where it sits (a raster cell, a value
+    layer, a stage metric), each with its stage, and has variants for the memory budget, an
+    existing output, the format, renders and the post-pipeline outputs — §5.4 and §5.13 ask
+    for those errors, and P09 maps errors by variant — cost if wrong: P09 maps more variants.
 
 ## 10. Left to the builder
 
