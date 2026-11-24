@@ -69,13 +69,8 @@ pub(crate) fn compute(input: &RenderInput<'_>) -> Result<Known, RenderError> {
         for road in net.roads.iter().filter(|r| r.class >= RoadClass::Road) {
             input.check_cancel()?;
             for &cell in &road.cells {
-                let i = to_usize(cell);
-                stamp(
-                    &mut raw,
-                    i / frame.cols,
-                    i % frame.cols,
-                    BAND_SHARE * width_cells,
-                );
+                let (r, c) = raw.cell(to_usize(cell));
+                stamp(&mut raw, r, c, BAND_SHARE * width_cells);
             }
         }
     }

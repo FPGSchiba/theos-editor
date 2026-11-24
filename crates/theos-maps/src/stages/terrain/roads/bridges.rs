@@ -155,7 +155,7 @@ mod tests {
     fn a_bridge_reaches_the_first_land_cell_within_the_span() {
         let params = RoadsParams::default();
         let layers = river("big_river", 6..=8);
-        let cost = StepCost::new(layers.terrain(), &params, 100.0);
+        let cost = StepCost::new(layers.terrain(), &params, &layers.frame());
         // Only the perpendicular span east is within 400 m; the diagonals and knight lines
         // across three cells are longer. Cost: 400·25 + 12.5·3 (the deck's clearance).
         let found = cost.bridges(at(5, 5));
@@ -168,7 +168,7 @@ mod tests {
             max_bridge_span_m: 399.0,
             ..Default::default()
         };
-        let cost = StepCost::new(layers.terrain(), &short, 100.0);
+        let cost = StepCost::new(layers.terrain(), &short, &layers.frame());
         assert_eq!(cost.bridges(at(5, 5)).len(), 0);
     }
 
@@ -179,7 +179,7 @@ mod tests {
         let sqrt2 = libm::sqrt(2.0);
         for (water, skewed) in [("big_river", true), ("lake", false)] {
             let layers = river(water, 6..=6);
-            let cost = StepCost::new(layers.terrain(), &params, 100.0);
+            let cost = StepCost::new(layers.terrain(), &params, &layers.frame());
             let found = cost.bridges(at(5, 5));
             let to = |cell: usize| found.iter().find(|(c, _)| *c == cell).map(|&(_, v)| v);
             let pay = |span: f64, cos: f64| {
@@ -221,7 +221,7 @@ mod tests {
         let params = RoadsParams::default();
         let mut layers = river("lake", 6..=6);
         layers.height.as_mut_slice()[at(5, 7)] = 110.0;
-        let cost = StepCost::new(layers.terrain(), &params, 100.0);
+        let cost = StepCost::new(layers.terrain(), &params, &layers.frame());
         assert!(close(cost.deck_m(at(5, 5), at(5, 7)), 113.0));
         let found = cost.bridges(at(5, 5));
         let east = found.iter().find(|(c, _)| *c == at(5, 7)).unwrap().1;

@@ -59,6 +59,29 @@ impl MapFrame {
         ]
     }
 
+    /// The position `m` metres along either axis in cells, with the centre of cell `i` at `i`:
+    /// `m / cell_m − 0.5`, the inverse of [`MapFrame::centre_m`] on one axis (for interpolating
+    /// between cell centres).
+    #[must_use]
+    pub fn centre_coord(&self, m: f64) -> f64 {
+        m / self.cell_m - 0.5
+    }
+
+    /// The distance in metres between the centres of two cells `dr` rows and `dc` columns apart.
+    #[must_use]
+    pub fn offset_m(&self, dr: usize, dc: usize) -> f64 {
+        let (dr, dc) = (num::to_f64(dr), num::to_f64(dc));
+        self.cell_m * libm::sqrt(dr * dr + dc * dc)
+    }
+
+    /// The distance in metres between the centres of the cells with flat indices `a` and `b`.
+    #[must_use]
+    pub fn distance_m(&self, a: usize, b: usize) -> f64 {
+        let (ra, ca) = (a / self.cols, a % self.cols);
+        let (rb, cb) = (b / self.cols, b % self.cols);
+        self.offset_m(ra.abs_diff(rb), ca.abs_diff(cb))
+    }
+
     /// The `(row, col)` containing the point `(x, y)` in metres, clamped into the grid.
     #[must_use]
     pub fn cell_at_m(&self, x: f64, y: f64) -> (usize, usize) {
@@ -234,6 +257,15 @@ mod tests {
         // flat index 10 is row 1, column 2
         assert_eq!(frame.index_centre_m(10), [25.0, 15.0]);
         assert_eq!(frame.index_at_m(frame.index_centre_m(10)), 10);
+        // the centre of column 2 and of row 1 sit at whole cells
+        assert_eq!(frame.centre_coord(25.0).to_bits(), 2.0_f64.to_bits());
+        assert_eq!(frame.centre_coord(15.0).to_bits(), 1.0_f64.to_bits());
+        assert_eq!(frame.centre_coord(0.0).to_bits(), (-0.5_f64).to_bits());
+        // a knight's move (2, 1) and the same cells as flat indices 10 and 27 (row 3, column 3)
+        assert_eq!(frame.offset_m(2, 1).to_bits(), (10.0 * libm::sqrt(5.0)).to_bits());
+        assert_eq!(frame.distance_m(10, 27).to_bits(), frame.offset_m(2, 1).to_bits());
+        assert_eq!(frame.distance_m(27, 10).to_bits(), frame.offset_m(2, 1).to_bits());
+        assert_eq!(frame.distance_m(5, 5).to_bits(), 0.0_f64.to_bits());
     }
 
     fn world() -> World {

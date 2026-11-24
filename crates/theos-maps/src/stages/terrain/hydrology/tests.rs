@@ -11,7 +11,7 @@ use crate::stages::terrain::climate::{
     self, Climate, ClimateFields, ClimateParams, SECONDS_PER_YEAR,
 };
 use crate::stages::terrain::support::{run_stage, table, world};
-use crate::world::{Layer, World, WorldValue};
+use crate::world::{Layer, MapFrame, World, WorldValue};
 
 pub(super) const N: usize = 64;
 pub(super) const CELL_M: f64 = 100.0;
@@ -147,11 +147,20 @@ fn lowered(
     height
 }
 
+/// The frame of `grid` on cells of [`CELL_M`].
+pub(super) fn frame_of<T: Copy>(grid: &Grid<T>) -> MapFrame {
+    MapFrame {
+        rows: grid.rows(),
+        cols: grid.cols(),
+        cell_m: CELL_M,
+    }
+}
+
 /// The pure computation behind the stage, with the limits of the stage's default parameters,
 /// so it agrees with a staged run on every depression.
 pub(super) fn compute(height: &Grid<f64>, fixed: &Grid<bool>, weather: Weather) -> Water {
     let limits = HydrologyParams::default().limits();
-    water(height, fixed, &fields(weather), CELL_M, &limits)
+    water(height, fixed, &fields(weather), &frame_of(height), &limits)
 }
 
 /// A world holding `height`, `fixed` and a climate with `weather`'s fields.

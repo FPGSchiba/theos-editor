@@ -55,7 +55,7 @@ impl TypedStage for Hillslope {
         _: &HillslopeParams,
     ) -> Result<StageReport, StageError> {
         let step = ctx.process_step()?;
-        let cell_m = ctx.frame().cell_m;
+        let cell_area = ctx.frame().cell_area_m2();
         let start = ctx.take_f64("height")?;
         let mut erosion = ctx.take_f64("erosion")?;
         let mut deposition = ctx.take_f64("deposition")?;
@@ -63,7 +63,7 @@ impl TypedStage for Hillslope {
             kd: ctx.f64("diffusivity")?.as_slice(),
             fixed: ctx.mask("fixed")?.as_slice(),
             // The half step: dt / 2 over the squared cell size.
-            ratio: 0.5 * step.dt_yr / (cell_m * cell_m),
+            ratio: 0.5 * step.dt_yr / cell_area,
         };
         let height = diffuse(&medium, &start)
             .map_err(|e| ctx.fail(format!("the tridiagonal solve failed: {e}")))?;

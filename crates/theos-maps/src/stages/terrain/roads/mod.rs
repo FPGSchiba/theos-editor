@@ -151,7 +151,7 @@ impl Road {
     #[must_use]
     pub fn length_m(&self, frame: &MapFrame) -> f64 {
         self.steps()
-            .fold(0.0, |sum, (a, b)| sum + distance_m(frame, a, b))
+            .fold(0.0, |sum, (a, b)| sum + frame.distance_m(a, b))
     }
 
     /// The steepest grade of any step that is not a bridge; 0 for a road of one cell.
@@ -161,7 +161,7 @@ impl Road {
             .filter(|&(a, b)| !self.is_bridge(a, b))
             .fold(0.0, |steepest, (a, b)| {
                 let rise = (height.as_slice()[b] - height.as_slice()[a]).abs();
-                max(steepest, rise / distance_m(frame, a, b))
+                max(steepest, rise / frame.distance_m(a, b))
             })
     }
 }
@@ -208,14 +208,6 @@ impl WorldValue for RoadNetwork {
 
 impl ValueType for RoadNetwork {
     const NAME: &'static str = "road_network";
-}
-
-/// The distance between the centres of cells `a` and `b`, m.
-pub(crate) fn distance_m(frame: &MapFrame, a: usize, b: usize) -> f64 {
-    let (ra, ca) = (a / frame.cols, a % frame.cols);
-    let (rb, cb) = (b / frame.cols, b % frame.cols);
-    let (dr, dc) = (to_f64(ra.abs_diff(rb)), to_f64(ca.abs_diff(cb)));
-    frame.cell_m * libm::sqrt(dr * dr + dc * dc)
 }
 
 /// The metric names.
@@ -276,7 +268,7 @@ impl TypedStage for Roads {
         // The layers are copied so the context stays free for progress events while routing.
         let layers = build::Layers::read(ctx)?;
         let built = build::build(&layers, &set, &frame, params, ctx)?;
-        let cost = StepCost::new(layers.terrain(), params, frame.cell_m);
+        let cost = StepCost::new(layers.terrain(), params, &frame);
         let found = crossings::sites(&cost, &built.roads, &frame);
         let mut report = StageReport::default();
         let mut put = |name: &str, value: f64| {

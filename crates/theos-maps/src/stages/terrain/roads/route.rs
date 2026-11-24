@@ -154,7 +154,7 @@ mod tests {
                 merge_discount: discount,
                 ..Default::default()
             };
-            let cost = StepCost::new(layers.terrain(), &params, 100.0);
+            let cost = StepCost::new(layers.terrain(), &params, &layers.frame());
             let router = Router {
                 cost: &cost,
                 roads: &roads,
@@ -179,7 +179,7 @@ mod tests {
         }
         let built = BTreeSet::new();
         let params = RoadsParams::default();
-        let cost = StepCost::new(layers.terrain(), &params, 100.0);
+        let cost = StepCost::new(layers.terrain(), &params, &layers.frame());
         let router = Router {
             cost: &cost,
             roads: &roads,
@@ -199,7 +199,7 @@ mod tests {
             layers = layers.wet("big_river", at(r, 30));
         }
         let params = RoadsParams::default();
-        let cost = StepCost::new(layers.terrain(), &params, 100.0);
+        let cost = StepCost::new(layers.terrain(), &params, &layers.frame());
         let roads = Grid::filled(N, N, 0_u8);
         let mut built = BTreeSet::new();
         let across = |built: &BTreeSet<(u32, u32)>| {
@@ -222,7 +222,7 @@ mod tests {
         assert!((across(&built) - 0.35 * new).abs() < 1e-9);
         // Every one of the 4,096 cells of a dry grid is popped, so the search asks once.
         let dry = Layers::flat(N);
-        let cost = StepCost::new(dry.terrain(), &params, 100.0);
+        let cost = StepCost::new(dry.terrain(), &params, &dry.frame());
         let router = Router {
             cost: &cost,
             roads: &roads,

@@ -73,7 +73,7 @@ use crate::stage::{
     Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
 use crate::stages::terrain::climate::{self, Climate, ClimateFields};
-use crate::world::{Layer, ValueType, WorldValue};
+use crate::world::{Layer, MapFrame, ValueType, WorldValue};
 
 /// A depression smaller than this is filled when the recipe sets no `min_lake_area_m2`, m²:
 /// 0.3.0's four cells, converted at its cell size of 62.5 m (spec §5.5 "Units"), so the smallest
@@ -207,18 +207,18 @@ pub(crate) struct Water {
 }
 
 /// Steps 1 to 6 of the stage on `height` with the drained cells `fixed`, the water `fields`
-/// (mm/yr) and cells of `cell_m` metres.
+/// (mm/yr) and the cells of `frame`.
 pub(crate) fn water(
     height: &Grid<f64>,
     fixed: &Grid<bool>,
     fields: &ClimateFields,
-    cell_m: f64,
+    frame: &MapFrame,
     limits: &Limits,
 ) -> Water {
-    let cell_area = cell_m * cell_m;
+    let cell_area = frame.cell_area_m2();
     let runoff = fields.runoff.map(|mm| mm / lakes::MM_PER_M * cell_area);
     let outlets = outlets(height, fixed);
-    let filled = discharge::drain(height, &outlets, cell_m);
+    let filled = discharge::drain(height, &outlets, frame.cell_m);
     let found = lakes::depressions(height, &filled);
     let mut height = height.clone();
     let (kept, filled_pits) =
@@ -233,7 +233,7 @@ pub(crate) fn water(
     );
     seeds.sort_unstable();
     seeds.dedup();
-    let routing = discharge::route(&height, &seeds, &runoff, cell_m);
+    let routing = discharge::route(&height, &seeds, &runoff, frame.cell_m);
     let filled_nested = lakes::fill_dry_pits(&mut height, &routing.drainage.surface, &basins);
     Water {
         height,
@@ -354,7 +354,7 @@ impl TypedStage for Hydrology {
             &local
         };
         let limits = params.limits();
-        let water = water(height, ctx.mask("fixed")?, fields, frame.cell_m, &limits);
+        let water = water(height, ctx.mask("fixed")?, fields, &frame, &limits);
         let rasters = rasters::rasters(&water, &params.thresholds);
         let report = report(&water, frame.cell_area_m2());
         let geometry = Geometry {
@@ -362,8 +362,8 @@ impl TypedStage for Hydrology {
             depth_c: params.depth_c,
         };
         let features = WaterFeatures {
-            rivers: lines::lines(&water, &rasters.river, frame.cell_m, &geometry),
-            lakes: outlines::outlines(&water, frame.cell_m),
+            rivers: lines::lines(&water, &rasters.river, &frame, &geometry),
+            lakes: outlines::outlines(&water, &frame),
         };
         ctx.write("height", Layer::F64(water.height))?;
         ctx.write("lake", Layer::Mask(rasters.lake))?;

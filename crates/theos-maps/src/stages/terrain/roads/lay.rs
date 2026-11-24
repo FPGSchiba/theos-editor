@@ -124,7 +124,7 @@ mod tests {
             layers = layers.wet("big_river", at(r, 8));
         }
         let params = RoadsParams::default();
-        let cost = StepCost::new(layers.terrain(), &params, 100.0);
+        let cost = StepCost::new(layers.terrain(), &params, &layers.frame());
         let mut laid = Laid::new(N, N);
         // A knight move, a step east, a bridge over column 8, a diagonal.
         let path = [at(4, 4), at(5, 6), at(5, 7), at(5, 9), at(6, 10)];

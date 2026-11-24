@@ -162,7 +162,7 @@ fn contact_zone(rock: &Grid<u8>, frame: &MapFrame) -> Grid<bool> {
 fn ridge(height: &Grid<f64>, frame: &MapFrame) -> Result<Grid<f64>, KernelError> {
     let smooth = gaussian(height, CURVATURE_SIGMA_M, frame.cell_m);
     // `laplace` divides by the cell area; 0.3.0's units are height per cell squared.
-    let area = frame.cell_m * frame.cell_m;
+    let area = frame.cell_area_m2();
     let curvature = laplace(&smooth, frame.cell_m).map(|v| -v * area);
     let p99 = percentile(curvature.as_slice(), 99.0)?;
     Ok(curvature.map(|v| min(max(v / (p99 + 1e-9), 0.0), 1.0)))

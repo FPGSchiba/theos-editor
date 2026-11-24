@@ -2,8 +2,8 @@
 
 use crate::features::{Feature, FeatureSet, Prop};
 use crate::grid::Grid;
-use crate::kernels::num::to_u32;
-use crate::stages::terrain::roads::{Road, RoadClass, distance_m};
+use crate::kernels::num::{to_u32, to_usize};
+use crate::stages::terrain::roads::{Road, RoadClass};
 use crate::world::MapFrame;
 
 /// A link is long enough for an inn above this length, m (0.3.0's 6 km).
@@ -45,13 +45,10 @@ pub(super) fn inns(
 fn midpoint(road: &Road, frame: &MapFrame) -> usize {
     let half = road.length_m(frame) / 2.0;
     let mut along = 0.0;
-    let first = road
-        .cells
-        .first()
-        .map_or(0, |&c| usize::try_from(c).unwrap_or(0));
+    let first = road.cells.first().map_or(0, |&c| to_usize(c));
     let mut best = (first, half);
     for (a, b) in road.steps() {
-        along += distance_m(frame, a, b);
+        along += frame.distance_m(a, b);
         let off = (along - half).abs();
         if off < best.1 {
             best = (b, off);

@@ -118,7 +118,7 @@ impl TypedStage for Sites {
         let mut set = *ctx.take_value_or_default::<FeatureSet>("features")?;
         let mut rng = ctx.sub_rng("siting");
         let inside = interior(&frame, params.edge_margin);
-        let cost = StepCost::new(layers.terrain(), &network.params, frame.cell_m);
+        let cost = StepCost::new(layers.terrain(), &network.params, &frame);
         let mut spurs = Spurs::new(cost, frame, Laid::resume(network.roads.clone(), raster));
         let mut found: Vec<Feature> = Vec::new();
 

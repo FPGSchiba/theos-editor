@@ -27,31 +27,24 @@ pub struct LakeShape {
     pub depth_max_m: f64,
 }
 
-/// The outlines of the lakes of `water`, in the order of their numbers, on cells of `cell_m`
-/// metres.
-pub(crate) fn outlines(water: &Water, cell_m: f64) -> Vec<LakeShape> {
+/// The outlines of the lakes of `water` on the cells of `frame`, in the order of their numbers.
+pub(crate) fn outlines(water: &Water, frame: &MapFrame) -> Vec<LakeShape> {
     let height = &water.height;
-    let cols = height.cols();
     water
         .basins
         .iter()
         .filter_map(|basin| {
             let lake = basin.lake.as_ref()?;
-            let mut cells = Grid::filled(height.rows(), cols, false);
+            let mut cells = Grid::filled(frame.rows, frame.cols, false);
             let mut lowest = lake.level;
             for &c in &lake.cells {
                 cells.as_mut_slice()[c] = true;
                 lowest = min(lowest, height.as_slice()[c]);
             }
-            let frame = MapFrame {
-                rows: height.rows(),
-                cols,
-                cell_m,
-            };
             let outlet = (!basin.terminal).then(|| frame.index_centre_m(basin.depression.exit));
             Some(LakeShape {
                 id: lake.id,
-                rings: rings(&cells, cell_m),
+                rings: rings(&cells, frame.cell_m),
                 surface_m: lake.level,
                 terminal: basin.terminal,
                 outlet,
@@ -66,7 +59,7 @@ mod tests {
     use super::*;
     use crate::kernels::num::to_f64;
     use crate::stages::terrain::hydrology::tests::{
-        ARID, CELL_M, N, SEMI_ARID, WET, all_edges, bowl, closed, compute, hills,
+        ARID, CELL_M, N, SEMI_ARID, WET, all_edges, bowl, closed, compute, frame_of, hills,
     };
 
     /// Whether `p` lies inside the closed ring (even-odd rule).
@@ -93,7 +86,7 @@ mod tests {
     #[test]
     fn lake_rings_enclose_their_cells() {
         let water = compute(&bowl(), &all_edges(), WET);
-        let shapes = outlines(&water, CELL_M);
+        let shapes = outlines(&water, &frame_of(&water.height));
         assert_eq!(shapes.len(), 1);
         let (shape, lake) = (&shapes[0], water.basins[0].lake.as_ref().unwrap());
         assert_eq!(shape.id, lake.id);
@@ -128,7 +121,7 @@ mod tests {
             [(bowl(), all_edges(), ARID), (hills(), closed(), SEMI_ARID)]
         {
             let water = compute(&height, &fixed, weather);
-            let shapes = outlines(&water, CELL_M);
+            let shapes = outlines(&water, &frame_of(&water.height));
             assert!(shapes.iter().any(|s| s.terminal));
             for shape in &shapes {
                 let basin = water
@@ -145,7 +138,7 @@ mod tests {
     #[test]
     fn lakes_come_in_lake_number_order() {
         let water = compute(&hills(), &closed(), SEMI_ARID);
-        let shapes = outlines(&water, CELL_M);
+        let shapes = outlines(&water, &frame_of(&water.height));
         let ids: Vec<u32> = water
             .basins
             .iter()

@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use super::route::bridge_key;
-use super::{Road, StepCost, distance_m};
+use super::{Road, StepCost};
 use crate::features::{Feature, Prop};
 use crate::kernels::num::{canonical, round_half_even, to_u32};
 use crate::world::MapFrame;
@@ -71,7 +71,7 @@ fn bridge(cost: &StepCost<'_>, a: usize, b: usize, id: &Prop, frame: &MapFrame) 
     let tenth = |m: f64| Prop::Num(canonical(round_half_even(m * 10.0) / 10.0));
     let props = [
         ("road", id.clone()),
-        ("span_m", tenth(distance_m(frame, a, b))),
+        ("span_m", tenth(frame.distance_m(a, b))),
         ("deck_m", tenth(cost.deck_m(a, b))),
     ];
     Feature::site(
@@ -107,12 +107,8 @@ mod tests {
             layers = layers.wet("big_river", at(r, 10));
         }
         let params = RoadsParams::default();
-        let cost = StepCost::new(layers.terrain(), &params, 100.0);
-        let frame = MapFrame {
-            rows: N,
-            cols: N,
-            cell_m: 100.0,
-        };
+        let frame = layers.frame();
+        let cost = StepCost::new(layers.terrain(), &params, &frame);
         // Across the two-cell stream, then a bridge; a second road crosses both again, back
         // and partly by other cells.
         let first = road(

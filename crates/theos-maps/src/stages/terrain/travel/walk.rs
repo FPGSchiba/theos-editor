@@ -7,7 +7,7 @@ use crate::grid::Grid;
 use crate::kernels::KernelError;
 use crate::kernels::num::{max, to_f64, to_usize};
 use crate::kernels::paths::{Directions, PathTree, shortest_paths};
-use crate::stages::terrain::roads::{RoadNetwork, between, distance_m};
+use crate::stages::terrain::roads::{RoadNetwork, between};
 use crate::world::MapFrame;
 
 /// The terrain and roads a walk crosses.
@@ -68,7 +68,7 @@ impl<'a> Walk<'a> {
 
     /// The distance between the centres of two cells, m.
     fn length_m(&self, a: usize, b: usize) -> f64 {
-        distance_m(&self.frame, a, b)
+        self.frame.distance_m(a, b)
     }
 
     /// The cells the step from `a` to `b` crosses between its ends (see [`between`]).

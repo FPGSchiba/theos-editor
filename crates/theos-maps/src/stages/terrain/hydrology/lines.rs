@@ -22,6 +22,7 @@ use serde::Serialize;
 use super::Water;
 use crate::grid::Grid;
 use crate::kernels::num::{max, min, to_f64, to_index, to_usize};
+use crate::world::MapFrame;
 
 /// The hydraulic geometry of the channel, `width = a·Q^0.5` and `depth = c·Q^0.4` (Leopold and
 /// Maddock 1953), with `Q` the discharge in m³/s.
@@ -139,10 +140,11 @@ fn chaikin(points: &[[f64; 3]]) -> Vec<[f64; 3]> {
     out
 }
 
-/// `height` bilinearly interpolated at `(x, y)` metres, clamped to the cell centres' hull.
-fn bilinear(height: &Grid<f64>, x: f64, y: f64, cell_m: f64) -> f64 {
+/// `height` bilinearly interpolated at `(x, y)` metres of `frame`, clamped to the cell centres'
+/// hull.
+fn bilinear(height: &Grid<f64>, x: f64, y: f64, frame: &MapFrame) -> f64 {
     let at = |v: f64, len: usize| {
-        let g = min(max(v / cell_m - 0.5, 0.0), to_f64(len - 1));
+        let g = min(max(frame.centre_coord(v), 0.0), to_f64(len - 1));
         let i = to_index(g, len);
         (i, (i + 1).min(len - 1), g - to_f64(i))
     };
@@ -209,12 +211,12 @@ fn outlet_donors(water: &Water, river: &[bool], len: usize) -> Vec<Option<usize>
     donors
 }
 
-/// The river lines of `water` over the `river` cells on cells of `cell_m` metres, in the index
-/// order of their first cell.
+/// The river lines of `water` over the `river` cells of `frame`, in the index order of their
+/// first cell.
 pub(crate) fn lines(
     water: &Water,
     river: &Grid<bool>,
-    cell_m: f64,
+    frame: &MapFrame,
     geometry: &Geometry,
 ) -> Vec<RiverLine> {
     let drainage = &water.routing.drainage;
@@ -222,10 +224,7 @@ pub(crate) fn lines(
     let discharge = &water.routing.discharge;
     let lake = lake_ids(water, river.len());
     let outlets = outlet_donors(water, river.as_slice(), river.len());
-    let centre = |i: usize| {
-        let (r, c) = river.cell(i);
-        [(to_f64(c) + 0.5) * cell_m, (to_f64(r) + 0.5) * cell_m]
-    };
+    let centre = |i: usize| frame.index_centre_m(i);
     // The shore vertex between river cell `i` and lake cell `lake`, with `i`'s discharge.
     let shore = |i: usize, lake_cell: usize| {
         let (a, b) = (centre(i), centre(lake_cell));
@@ -260,7 +259,7 @@ pub(crate) fn lines(
                 order: orders[path[0]],
             };
             for [x, y, q] in smooth {
-                let bed = bilinear(&water.height, x, y, cell_m);
+                let bed = bilinear(&water.height, x, y, frame);
                 line.points.push([x, y, bed]);
                 line.width_m
                     .push(geometry.width_a * libm::pow(q, WIDTH_EXPONENT));
@@ -279,7 +278,7 @@ mod tests {
     use crate::stages::terrain::hydrology::outlines::outlines;
     use crate::stages::terrain::hydrology::rasters::rasters;
     use crate::stages::terrain::hydrology::tests::{
-        CELL_M, N, WET, all_edges, at, bowl, compute, grid, mask, plane, south_edge,
+        CELL_M, N, WET, all_edges, at, bowl, compute, frame_of, grid, mask, plane, south_edge,
     };
     use crate::stages::terrain::hydrology::{Water, WaterThresholds};
 
@@ -413,10 +412,13 @@ mod tests {
     fn single_cell_rivers_make_no_line() {
         let case = case(&plane(), &south_edge());
         let alone = mask(|r, c| r == N - 1 && c == 10);
-        assert_eq!(lines(&case.water, &alone, CELL_M, &GEOMETRY).len(), 0);
+        assert_eq!(
+            lines(&case.water, &alone, &frame_of(&alone), &GEOMETRY).len(),
+            0
+        );
         // Two cells make one line; two Chaikin passes turn 2 points into 8, keeping the ends.
         let pair = mask(|r, c| c == 10 && r >= N - 2);
-        let found = lines(&case.water, &pair, CELL_M, &GEOMETRY);
+        let found = lines(&case.water, &pair, &frame_of(&pair), &GEOMETRY);
         assert_eq!(found.len(), 1);
         let line = &found[0];
         assert_eq!(line.points.len(), 8);
@@ -441,7 +443,12 @@ mod tests {
     #[test]
     fn per_vertex_arrays_match_the_points() {
         let valley = case(&valley(), &south_edge());
-        let found = lines(&valley.water, &valley.river, CELL_M, &GEOMETRY);
+        let found = lines(
+            &valley.water,
+            &valley.river,
+            &frame_of(&valley.river),
+            &GEOMETRY,
+        );
         assert!(found.len() >= 3);
         let discharge = valley.water.routing.discharge.as_slice();
         for line in &found {
@@ -475,7 +482,7 @@ mod tests {
         // On the plane every river is a straight column and height is linear in the row, so the
         // bed height at a vertex is the plane's height at its y.
         let flat = case(&plane(), &south_edge());
-        let found = lines(&flat.water, &flat.river, CELL_M, &GEOMETRY);
+        let found = lines(&flat.water, &flat.river, &frame_of(&flat.river), &GEOMETRY);
         assert!(found.len() >= 60, "{} lines", found.len());
         for line in &found {
             for p in &line.points {
@@ -488,7 +495,7 @@ mod tests {
         // On a bent line every bed height lies within the heights of its four cells.
         let bent = case(&valley(), &south_edge());
         let h = &bent.water.height;
-        for line in lines(&bent.water, &bent.river, CELL_M, &GEOMETRY) {
+        for line in lines(&bent.water, &bent.river, &frame_of(&bent.river), &GEOMETRY) {
             for p in &line.points {
                 let (x, y) = (p[0] / CELL_M - 0.5, p[1] / CELL_M - 0.5);
                 let (r0, c0) = (to_index(y, N), to_index(x, N));
@@ -532,13 +539,13 @@ mod tests {
     #[test]
     fn lines_meet_the_lake_shore_and_start_again_at_its_outlet() {
         let wet = case(&bowl(), &all_edges());
-        let shapes = outlines(&wet.water, CELL_M);
+        let shapes = outlines(&wet.water, &frame_of(&wet.water.height));
         let rings = &shapes[0].rings;
         let receivers = &wet.water.routing.drainage.receivers;
         let lake = rasters(&wet.water, &THRESHOLDS).lake;
         let exit = wet.water.basins[0].depression.exit;
         let paths = cell_paths(&wet.water, &wet.river);
-        let found = lines(&wet.water, &wet.river, CELL_M, &GEOMETRY);
+        let found = lines(&wet.water, &wet.river, &frame_of(&wet.river), &GEOMETRY);
         assert_eq!(paths.len(), found.len());
         let (mut inflows, mut outflows) = (0, 0);
         for (path, line) in paths.iter().zip(&found) {
@@ -642,8 +649,8 @@ mod tests {
         for shared in 0..=2 {
             for inflow in [true, false] {
                 let (water, river) = diagonal(shared, inflow, false);
-                let shapes = outlines(&water, CELL_M);
-                let found = lines(&water, &river, CELL_M, &GEOMETRY);
+                let shapes = outlines(&water, &frame_of(&water.height));
+                let found = lines(&water, &river, &frame_of(&river), &GEOMETRY);
                 assert_eq!(found.len(), 1, "k = {shared}");
                 let line = &found[0];
                 let p = if inflow {
@@ -663,8 +670,8 @@ mod tests {
     fn an_outlet_cell_with_one_river_donor_still_starts_a_line() {
         for shared in 0..=2 {
             let (water, river) = diagonal(shared, false, true);
-            let shapes = outlines(&water, CELL_M);
-            let found = lines(&water, &river, CELL_M, &GEOMETRY);
+            let shapes = outlines(&water, &frame_of(&water.height));
+            let found = lines(&water, &river, &frame_of(&river), &GEOMETRY);
             assert_eq!(found.len(), 2, "k = {shared}");
             // The inflowing line ends at the centre of the outlet cell (1, 1).
             let end = found[0].points[found[0].points.len() - 1];

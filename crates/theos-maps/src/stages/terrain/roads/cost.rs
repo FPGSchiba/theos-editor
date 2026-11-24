@@ -3,6 +3,7 @@
 use super::{RoadClass, RoadsParams};
 use crate::grid::{D16, Grid};
 use crate::kernels::num::to_f64;
+use crate::world::MapFrame;
 
 /// The terrain layers a road's cost reads, all of the frame's shape.
 #[derive(Debug, Clone, Copy)]
@@ -27,17 +28,17 @@ pub struct Terrain<'a> {
 pub struct StepCost<'a> {
     pub(super) terrain: Terrain<'a>,
     pub(super) params: &'a RoadsParams,
-    pub(super) cell_m: f64,
+    pub(super) frame: MapFrame,
 }
 
 impl<'a> StepCost<'a> {
-    /// The costs over `terrain` with `params`, on cells of `cell_m` metres.
+    /// The costs over `terrain` with `params`, on the cells of `frame`.
     #[must_use]
-    pub fn new(terrain: Terrain<'a>, params: &'a RoadsParams, cell_m: f64) -> Self {
+    pub fn new(terrain: Terrain<'a>, params: &'a RoadsParams, frame: &MapFrame) -> Self {
         Self {
             terrain,
             params,
-            cell_m,
+            frame: *frame,
         }
     }
 
@@ -138,8 +139,8 @@ impl<'a> StepCost<'a> {
 
     /// The length of a step `offset`, m.
     pub(super) fn length(&self, offset: (isize, isize)) -> f64 {
-        let (dr, dc) = (offset.0.unsigned_abs(), offset.1.unsigned_abs());
-        self.cell_m * libm::sqrt(to_f64(dr * dr + dc * dc))
+        self.frame
+            .offset_m(offset.0.unsigned_abs(), offset.1.unsigned_abs())
     }
 }
 
@@ -204,6 +205,15 @@ pub(super) mod tests {
             self
         }
 
+        /// The frame of the layers, cells of 100 m.
+        pub fn frame(&self) -> MapFrame {
+            MapFrame {
+                rows: self.height.rows(),
+                cols: self.height.cols(),
+                cell_m: 100.0,
+            }
+        }
+
         pub fn terrain(&self) -> Terrain<'_> {
             Terrain {
                 height: &self.height,
@@ -224,7 +234,7 @@ pub(super) mod tests {
     fn knight_steps_check_every_cell_they_cross() {
         let params = RoadsParams::default();
         let check = |layers: &Layers, from: usize, to: usize| {
-            let cost = StepCost::new(layers.terrain(), &params, 100.0);
+            let cost = StepCost::new(layers.terrain(), &params, &layers.frame());
             [
                 cost.step(from, to, RoadClass::Trail),
                 cost.step(to, from, RoadClass::Trail),
@@ -263,7 +273,7 @@ pub(super) mod tests {
         let mut layers = Layers::flat(N).wet("river", at(5, 6));
         layers.height.as_mut_slice()[at(5, 6)] = 104.0;
         layers.vegetation.as_mut_slice()[at(5, 6)] = 0.5;
-        let cost = StepCost::new(layers.terrain(), &params, 100.0);
+        let cost = StepCost::new(layers.terrain(), &params, &layers.frame());
         // Grade 0.04 is half the comfort grade: 100·(1 + 0.25·6) = 250; forest 0.8·0.5·100 =
         // 40; one stream cell 250.
         let got = cost.step(at(5, 5), at(5, 6), RoadClass::Main).unwrap();
@@ -280,7 +290,7 @@ pub(super) mod tests {
         let mut layers = Layers::flat(N);
         layers.height.as_mut_slice()[at(5, 6)] = 109.0;
         layers.height.as_mut_slice()[at(5, 4)] = 108.0;
-        let cost = StepCost::new(layers.terrain(), &params, 100.0);
+        let cost = StepCost::new(layers.terrain(), &params, &layers.frame());
         assert_eq!(cost.step(at(5, 5), at(5, 6), RoadClass::Main), None);
         assert!(cost.step(at(5, 5), at(5, 6), RoadClass::Road).is_some());
         // Exactly the class's grade is allowed.
@@ -292,7 +302,7 @@ pub(super) mod tests {
             },
             ..Default::default()
         };
-        let cost = StepCost::new(layers.terrain(), &steep, 100.0);
+        let cost = StepCost::new(layers.terrain(), &steep, &layers.frame());
         assert_eq!(cost.step(at(5, 5), at(5, 4), RoadClass::Trail), None);
     }
 
@@ -300,7 +310,7 @@ pub(super) mod tests {
     fn only_the_sixteen_directions_are_steps() {
         let params = RoadsParams::default();
         let layers = Layers::flat(N);
-        let cost = StepCost::new(layers.terrain(), &params, 100.0);
+        let cost = StepCost::new(layers.terrain(), &params, &layers.frame());
         for to in [at(5, 5), at(5, 8), at(7, 7), at(6, 0)] {
             assert_eq!(cost.step(at(5, 5), to, RoadClass::Trail), None, "{to}");
             assert_eq!(cost.entered(at(5, 5), to).len(), 0);

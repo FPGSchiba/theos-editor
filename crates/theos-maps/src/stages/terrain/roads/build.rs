@@ -109,7 +109,7 @@ pub(super) fn build(
     params: &RoadsParams,
     ctx: &mut StageContext<'_>,
 ) -> Result<Built, StageError> {
-    let cost = StepCost::new(layers.terrain(), params, frame.cell_m);
+    let cost = StepCost::new(layers.terrain(), params, frame);
     let mut laid = Laid::new(frame.rows, frame.cols);
     let places = places(set, frame);
     if places.len() < 2 {
