@@ -117,9 +117,38 @@ fn written_bytes_follow_the_container_rules() -> TestResult {
         zip.entry("manifest.json")?,
         json::to_canonical_vec(&serde_json::to_value(&written)?)?
     );
+    // Final review round 4, A2. The entries lie in the archive in the order of the central
+    // directory (§1).
+    let offsets: Vec<usize> = zip.entries().iter().map(|e| e.local_offset).collect();
+    assert!(offsets.windows(2).all(|w| w[0] < w[1]), "{offsets:?}");
+    // Both JSON entries are canonical (§3), checked without the crate's own writer: serde_json's
+    // pretty printer over a map with sorted keys (no `preserve_order`), then one LF.
+    for name in ["manifest.json", "features.geojson"] {
+        let text = zip.entry(name)?;
+        let value: Value = serde_json::from_slice(&text)?;
+        let pretty = format!("{}\n", serde_json::to_string_pretty(&value)?);
+        assert_eq!(String::from_utf8(text)?, pretty, "{name}");
+    }
+    let features: geojson::FeatureCollection =
+        serde_json::from_slice(&zip.entry("features.geojson")?)?;
+    assert_eq!(features, package.features);
+    // The layers follow the index, not their names: reversed, `water` comes first.
+    let mut reversed = package.clone();
+    reversed.manifest.layers.reverse();
+    let bytes = write(&reversed, Cursor::new(Vec::new()))?.into_inner();
+    assert_eq!(
+        zip_bytes::parse(&bytes)?.names(),
+        [
+            "manifest.json",
+            "features.geojson",
+            "layers/water.u8",
+            "layers/height.f32"
+        ]
+    );
     Ok(())
 }
 
+// AC: CE-76.1
 #[test]
 fn entries_are_filled_in_by_the_writer() -> TestResult {
     let package = fixture()?;
@@ -135,6 +164,12 @@ fn entries_are_filled_in_by_the_writer() -> TestResult {
     assert_eq!(height.sha256, sha256_hex(&zip.entry("layers/height.f32")?));
     assert_eq!((height.min, height.max), (Some(10.5), Some(14.0)));
     assert_eq!(height.units.as_deref(), Some("m"));
+    // §4.2: f32 values little-endian, row-major (final review round 4, A2).
+    let Some(LayerData::F32(heights)) = package.layers.get(&key("height")) else {
+        return Err("the fixture has heights".into());
+    };
+    let encoded: Vec<u8> = heights.iter().flat_map(|v| v.to_le_bytes()).collect();
+    assert_eq!(zip.entry("layers/height.f32")?, encoded);
     let water = &manifest.layers[1];
     assert_eq!(water.file, "layers/water.u8");
     assert_eq!(water.sha256, sha256_hex(&zip.entry("layers/water.u8")?));

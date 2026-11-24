@@ -33,10 +33,16 @@ fn a_lake_at_a_known_position_lands_on_its_pixel() -> TestResult {
     // The whole lake is lake colour, though the river's stroke ends in its centre; the river
     // west of it is river colour, and the ground beyond both is neither.
     let image = decode(&png);
+    // Two pixels per cell, exactly the frame (final review round 4, A2).
+    assert_eq!((image.width, image.height), (128, 128));
     for y in 44..54 {
         for x in 28..38 {
             assert_eq!(image.rgb(x, y), palette::LAKE, "({x}, {y})");
         }
+    }
+    // The pixels just beyond the lake's cells, north, south and east, are no lake.
+    for (x, y) in [(32, 43), (32, 54), (38, 48)] {
+        assert_ne!(image.rgb(x, y), palette::LAKE, "({x}, {y})");
     }
     assert_eq!(image.rgb(20, 48), palette::RIVER);
     let ground = image.rgb(100, 100);

@@ -106,6 +106,19 @@ fn a_changed_output_fails_the_golden_comparison() -> TestResult {
         ),
         "a changed package was not seen"
     );
+    // The features output too (final review round 4, A2).
+    let mut features = golden.clone();
+    features.features = "0".repeat(64);
+    assert!(
+        matches!(
+            compare(&golden, &features),
+            Err(GoldenMismatch::Output {
+                output: "features",
+                ..
+            })
+        ),
+        "a changed features output was not seen"
+    );
     Ok(())
 }
 

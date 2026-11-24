@@ -54,18 +54,23 @@ fn run_from(
 fn invalid(
     outcome: (Result<(), RunError>, bool),
 ) -> Result<(Option<String>, Option<String>, String), String> {
+    match refusal(outcome)? {
+        RecipeError::Invalid {
+            stage,
+            parameter,
+            message,
+            ..
+        } => Ok((stage, parameter, message)),
+        other => Err(format!("expected Invalid, got {other:?}")),
+    }
+}
+
+/// The recipe error of `outcome`, raised before any stage ran (no progress event).
+fn refusal(outcome: (Result<(), RunError>, bool)) -> Result<RecipeError, String> {
     match outcome {
         (_, true) => Err("the progress closure was called".to_owned()),
-        (
-            Err(RunError::Recipe(RecipeError::Invalid {
-                stage,
-                parameter,
-                message,
-                ..
-            })),
-            false,
-        ) => Ok((stage, parameter, message)),
-        (other, _) => Err(format!("expected Invalid, got {other:?}")),
+        (Err(RunError::Recipe(err)), false) => Ok(err),
+        (other, _) => Err(format!("expected a recipe error, got {other:?}")),
     }
 }
 
@@ -138,6 +143,16 @@ fn a_folder_recipe_wins_over_the_built_in() -> TestResult {
     assert_eq!(shown[0].title, "Folder fixture");
     assert_eq!(shown[0].stages.len(), built_in - 1);
     assert_eq!(d.recipes.len(), BUILT_IN.len());
+    // A folder recipe of a new id is offered next to the built-ins (final review round 4, A2).
+    table.insert("id".to_owned(), "folder-only".into());
+    std::fs::write(
+        dir.path().join("folder-only.toml"),
+        toml::to_string(&table)?,
+    )?;
+    let d = describe(&[dir.path().to_owned()])?;
+    let ids: Vec<&str> = d.recipes.iter().map(|r| r.id.as_str()).collect();
+    assert!(ids.contains(&"folder-only"), "{ids:?}");
+    assert_eq!(d.recipes.len(), BUILT_IN.len() + 1);
     Ok(())
 }
 
@@ -146,9 +161,18 @@ fn a_folder_recipe_wins_over_the_built_in() -> TestResult {
 fn a_stage_before_its_input_fails_before_any_stage_runs() -> TestResult {
     let text = recipe_text("misordered", "Misordered", &format!("{TECTONICS}{GRID}"));
     let dir = folder_with("misordered.toml", &text)?;
-    let (stage, _, message) = invalid(run_from(&request("misordered", 1), dir.path())?)?;
+    let err = refusal(run_from(&request("misordered", 1), dir.path())?)?;
+    let RecipeError::Invalid { stage, layer, .. } = &err else {
+        return Err(format!("expected Invalid, got {err:?}").into());
+    };
     assert_eq!(stage.as_deref(), Some("tectonics"));
-    assert!(message.contains("frame"), "{message}");
+    // The message names the stage and the missing layer (final review round 4, A2).
+    assert_eq!(layer.as_deref(), Some("frame"));
+    let text = err.to_string();
+    assert!(
+        text.contains("stage `tectonics`") && text.contains("layer `frame`"),
+        "{text}"
+    );
     Ok(())
 }
 
@@ -160,8 +184,12 @@ fn an_unknown_stage_fails_before_any_stage_runs() -> TestResult {
         "u.toml",
         &recipe_text("unknown-stage", "Unknown stage", &rest),
     )?;
-    let (stage, _, _) = invalid(run_from(&request("unknown-stage", 1), dir.path())?)?;
+    let err = refusal(run_from(&request("unknown-stage", 1), dir.path())?)?;
+    let RecipeError::Invalid { stage, .. } = &err else {
+        return Err(format!("expected Invalid, got {err:?}").into());
+    };
     assert_eq!(stage.as_deref(), Some("erosion_magic"));
+    assert!(err.to_string().contains("erosion_magic"), "{err}");
     Ok(())
 }
 
@@ -204,13 +232,16 @@ fn a_recipe_input_fails_as_unknown() -> TestResult {
 #[test]
 fn slow_hearth_valley_omega_writes_the_omega_layer() -> TestResult {
     let out = tempfile::tempdir()?;
+    let mut stages = Vec::new();
     let manifest = run(
         &request("hearth-valley-omega", 1),
         &[],
         out.path(),
-        &mut |_| {},
+        &mut |p| stages.push(p.stage.clone()),
         &CancelToken::new(),
     )?;
+    // The recipe runs `detuning` (final review round 4, A2).
+    assert!(stages.iter().any(|s| s == "detuning"), "{stages:?}");
     let file = std::fs::File::open(out.path().join(&manifest.outputs["package"]))?;
     let package = theos_map_format::read(std::io::BufReader::new(file))?;
     let entry = package

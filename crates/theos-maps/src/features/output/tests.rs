@@ -84,16 +84,18 @@ fn features_carry_ids_kinds_types_and_water_properties() -> TestResult {
     let lakes = of(&fc, "water", "lake");
     let rivers = of(&fc, "water", "river");
     assert!(!lakes.is_empty() && !rivers.is_empty()); // the test's precondition
+    let mut ids = std::collections::BTreeSet::new();
     for f in &fc.features {
-        assert!(
-            matches!(&f.id, Some(geojson::feature::Id::String(s)) if !s.is_empty()),
-            "{:?}",
-            f.id
-        );
+        let Some(geojson::feature::Id::String(id)) = &f.id else {
+            return Err(format!("{:?} is no string id", f.id).into());
+        };
+        assert_ne!(id.as_str(), "");
+        // Ids are unique (map-package §5; final review round 4, A2).
+        assert!(ids.insert(id.clone()), "{id} twice");
         assert!(prop(f, "kind").is_some() && prop(f, "type").is_some());
     }
     for l in lakes {
-        assert!(prop(l, "surface_m").is_some());
+        assert!(num(l, "surface_m").is_some_and(f64::is_finite), "{l:?}");
     }
     for r in rivers {
         // A river is a LineString of at least two vertices; `coords` is empty for any other
@@ -102,6 +104,10 @@ fn features_carry_ids_kinds_types_and_water_properties() -> TestResult {
         assert!(n >= 2, "{:?}", r.geometry);
         for key in ["width_m", "discharge_m3s"] {
             assert_eq!(array_len(r, key), n);
+            let numbers = prop(r, key)
+                .and_then(Value::as_array)
+                .is_some_and(|a| a.iter().all(|v| v.as_f64().is_some_and(f64::is_finite)));
+            assert!(numbers, "{key} of {r:?}");
         }
         assert!(coords(r).iter().all(|c| c.len() == 3)); // bed height
     }

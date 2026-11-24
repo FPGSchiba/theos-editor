@@ -26,6 +26,8 @@ pub struct Entry {
     pub local_extra_len: u16,
     pub central_extra_len: u16,
     pub comment_len: u16,
+    /// Where the entry's local header starts in the archive.
+    pub local_offset: usize,
     data: Vec<u8>,
 }
 
@@ -143,6 +145,7 @@ pub fn parse(bytes: &[u8]) -> Result<Zip> {
             local_extra_len,
             central_extra_len,
             comment_len,
+            local_offset: local,
             data,
         });
         at += 46 + name_len + usize::from(central_extra_len) + usize::from(comment_len);

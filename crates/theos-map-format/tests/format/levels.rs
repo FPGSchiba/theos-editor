@@ -11,10 +11,11 @@ use crate::writer::fixture;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-fn room(level: &str) -> Value {
+/// A room on `level` at `at`.
+fn room(level: &str, at: [f64; 2]) -> Value {
     json!({
         "type": "Feature",
-        "geometry": {"type": "Point", "coordinates": [1.0, 2.0]},
+        "geometry": {"type": "Point", "coordinates": at},
         "properties": {"kind": "room", "level": level}
     })
 }
@@ -29,7 +30,8 @@ fn a_two_level_package_round_trips() -> TestResult {
     ]))?;
     let mut entries = Vec::new();
     let mut layers = BTreeMap::new();
-    for level in ["ground", "gallery"] {
+    // Each level's layer and room differ, so a swap or a merge of the levels shows.
+    for (level, cell) in [("ground", 1), ("gallery", 2)] {
         let mut entry = package.manifest.layers[1].clone();
         entry.name = "walkable".to_owned();
         entry.level = Some(level.to_owned());
@@ -39,14 +41,14 @@ fn a_two_level_package_round_trips() -> TestResult {
                 level: Some(level.to_owned()),
                 name: "walkable".to_owned(),
             },
-            LayerData::U8(vec![1; 12]),
+            LayerData::U8(vec![cell; 12]),
         );
     }
     package.manifest.layers = entries;
     package.layers = layers;
     package.features = serde_json::from_value(json!({
         "type": "FeatureCollection",
-        "features": [room("ground"), room("gallery")]
+        "features": [room("ground", [1.0, 2.0]), room("gallery", [3.0, 4.0])]
     }))?;
     let bytes = write(&package, Cursor::new(Vec::new()))?.into_inner();
     let zip = zip::ZipArchive::new(Cursor::new(bytes.clone()))?;
@@ -60,6 +62,32 @@ fn a_two_level_package_round_trips() -> TestResult {
     assert_eq!(back.manifest, written_manifest(&package)?);
     assert_eq!(back.features, package.features);
     assert_eq!(back.layers, package.layers);
+    // Final review round 4, A2: every layer and feature on its own level.
+    let on = |level: &str| LayerKey {
+        level: Some(level.to_owned()),
+        name: "walkable".to_owned(),
+    };
+    assert_eq!(back.layers[&on("ground")], LayerData::U8(vec![1; 12]));
+    assert_eq!(back.layers[&on("gallery")], LayerData::U8(vec![2; 12]));
+    let features = serde_json::to_value(&back.features)?;
+    let placed: Vec<(Value, Value)> = features["features"]
+        .as_array()
+        .ok_or("a feature list")?
+        .iter()
+        .map(|f| {
+            (
+                f["properties"]["level"].clone(),
+                f["geometry"]["coordinates"].clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        placed,
+        [
+            (json!("ground"), json!([1.0, 2.0])),
+            (json!("gallery"), json!([3.0, 4.0]))
+        ]
+    );
     Ok(())
 }
 
