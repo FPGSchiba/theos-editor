@@ -143,7 +143,7 @@ fn check_constraints(recipe: &LoadedRecipe, stages: &[PlannedStage]) -> Result<(
     Ok(())
 }
 
-/// Check 1: the grid, the size and square cells.
+/// Check 1: the grid (at least 2 x 2, a cell count that fits a `usize`), the size and square cells.
 fn check_frame(recipe: &LoadedRecipe) -> Result<MapFrame, RecipeError> {
     let r = &recipe.recipe;
     let [rows, cols] = r.grid;
@@ -152,6 +152,14 @@ fn check_frame(recipe: &LoadedRecipe) -> Result<MapFrame, RecipeError> {
             recipe,
             &at_parameter("grid"),
             format!("`grid` must be at least 2 x 2, got {rows} x {cols}"),
+        ));
+    }
+    // Every raster and `MapFrame::cells` multiply the two; the memory budget sees only the product.
+    if rows.checked_mul(cols).is_none() {
+        return Err(invalid(
+            recipe,
+            &at_parameter("grid"),
+            format!("`grid` of {rows} x {cols} overflows the cell count"),
         ));
     }
     let [width, height] = r.size_km;

@@ -201,6 +201,25 @@ fn degenerate_frames_are_refused() {
     }
 }
 
+// Final review round 3, finding 1: `rows * cols` overflowed in `MapFrame::cells` (a panic in a
+// debug build, 0 cells in a release build for [2^32, 2^32]) after `plan` had accepted the grid.
+#[test]
+fn a_grid_whose_cell_count_overflows_is_refused() {
+    for (grid, size) in [
+        ("[3000000000, 7000000000]", "[7000000.0, 3000000.0]"),
+        ("[4294967296, 4294967296]", "[4294967296.0, 4294967296.0]"),
+    ] {
+        let edited = text("", &[])
+            .replace("grid = [4, 8]", &format!("grid = {grid}"))
+            .replace("size_km = [1.0, 0.5]", &format!("size_km = {size}"));
+        let loaded = parse(&edited, RecipeOrigin::Builtin).unwrap();
+        let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+        let (stage, layer, parameter, message) = fields(&err);
+        assert_eq!((stage, layer, parameter), (None, None, Some("grid")), "{err}");
+        assert!(message.contains("cell count"), "{message}");
+    }
+}
+
 #[test]
 fn an_unknown_extra_render_is_refused() {
     let err = refusal("renders = [\"sparkle\"]\n", &["a"]);

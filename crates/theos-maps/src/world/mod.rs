@@ -37,7 +37,8 @@ impl MapFrame {
         ]
     }
 
-    /// The number of cells.
+    /// The number of cells. `recipe::plan` refuses a grid whose product overflows, so the frame
+    /// of a plan always has one.
     #[must_use]
     pub fn cells(&self) -> usize {
         self.rows * self.cols
