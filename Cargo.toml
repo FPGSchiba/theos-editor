@@ -41,6 +41,7 @@ mem_forget = "deny"
 anyhow = "1.0"
 cargo_metadata = "0.23"
 clap = { version = "4.6", features = ["derive"] }
+dirs = "7.0"
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 geojson = { version = "1.0", default-features = false }
 git-conventional = "0.12"
@@ -76,6 +77,8 @@ tiny-skia = { version = "0.12.0", default-features = false, features = ["no-std-
 toml = "1.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+unicode-normalization = "0.1"
+which = "8.0"
 # WOFF2 needs only Brotli; the `z` feature (WOFF 1 through flate2) stays off.
 wuff = { version = "0.2.10", default-features = false, features = ["brotli"] }
 yaml-rust2 = "0.13"

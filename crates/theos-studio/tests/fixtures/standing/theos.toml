@@ -1,0 +1,8 @@
+# synthetic fixture (P06), not canon
+[project]
+name = "synthetic-standing"
+kind = "content"
+schema_version = 1
+
+[parts]
+enabled = ["codex", "changes", "scripts", "graph", "concepts", "maps", "review", "mcp"]

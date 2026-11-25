@@ -56,10 +56,7 @@ fn run(source: &SourceRecord, targets: &Targets, registry: &KindRegistry) -> Vec
             };
             let wanted: Vec<String> = parents
                 .iter()
-                .map(|parent| match folder_of(&parent.path) {
-                    "" => link.target.clone(),
-                    folder => format!("{folder}/{}", link.target),
-                })
+                .map(|parent| Placement::under_parent(&parent.path, &link.target))
                 .collect();
             if wanted.iter().any(|folder| folder == actual) {
                 return Vec::new();

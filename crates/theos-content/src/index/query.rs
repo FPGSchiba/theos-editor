@@ -64,8 +64,22 @@ impl Index {
     ///
     /// Fails when SQLite fails.
     pub fn findings(&self) -> Result<Vec<Finding>, IndexError> {
-        let found = self.finding_rows(&format!("{FINDING_COLUMNS} {FINDING_ORDER}"), [])?;
-        self.configured(found)
+        all_findings_in(&self.store.conn, &self.registry)
+    }
+
+    /// Every path the cache holds a file or an input-file row for, sorted: the records and the
+    /// input files that exist.
+    ///
+    /// # Errors
+    ///
+    /// Fails when SQLite fails.
+    pub fn paths(&self) -> Result<Vec<String>, IndexError> {
+        let mut stmt = self
+            .store
+            .conn
+            .prepare_cached("SELECT path FROM files UNION SELECT path FROM inputs ORDER BY path")?;
+        let rows = stmt.query_map([], |row| row.get(0))?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
     /// The findings of one path, in the same order, with the configured severities applied.
@@ -170,16 +184,16 @@ impl Index {
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
     }
+}
 
-    /// `found` with the configured severities applied.
-    fn configured(&self, found: Vec<Finding>) -> Result<Vec<Finding>, IndexError> {
-        let table = rules::all(&self.registry);
-        Ok(configured::apply(&self.store.conn, &table, found)?)
-    }
-
-    fn finding_rows(&self, sql: &str, params: impl Params) -> Result<Vec<Finding>, IndexError> {
-        finding_rows_in(&self.store.conn, sql, params)
-    }
+/// Every finding on `conn`, in the order of [`Index::findings`], with the severities configured
+/// in `conn` applied.
+pub(super) fn all_findings_in(
+    conn: &Connection,
+    registry: &KindRegistry,
+) -> Result<Vec<Finding>, IndexError> {
+    let found = finding_rows_in(conn, &format!("{FINDING_COLUMNS} {FINDING_ORDER}"), [])?;
+    Ok(configured::apply(conn, &rules::all(registry), found)?)
 }
 
 /// The findings of one path on `conn`, in the order of [`Index::findings_for`], with the

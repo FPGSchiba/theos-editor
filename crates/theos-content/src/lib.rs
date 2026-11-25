@@ -53,6 +53,12 @@
 //! Every span is a byte range into the LF text of the whole record; a CRLF record is read as its
 //! LF text and a write returns LF.
 //!
+//! After P05 the index also gives [`Index::paths`], every path the cache holds, and
+//! [`Index::snapshot`], the findings of a whole changed state with its own configured severities,
+//! rolled back. The kind specs gained `IdRule::number_prefix`, the prefix of a numbered id, and
+//! `Placement::under_parent`, the folder of a record placed under its parent; `theos new` uses
+//! both.
+//!
 //! Later phases use it so: P05 the positions of errors, `Project::open`, `findings` with
 //! configured severities, `binary_findings`, `ledger_of`, [`rules::all`], `preview`, `search`,
 //! `lens` and [`KindSpec`]; P06 (editing) the patcher,
@@ -64,6 +70,16 @@
 //! and the links for the graph; P17 `preview` for drafts and the same store for
 //! embeddings; P19 the same store for comment lists; P21 and P26 the rules that parts register
 //! and the cycle walk.
+//!
+//! After P06 it also provides:
+//!
+//! - [`rename::edits`]: the span edits that rename ids in one record (its `id` field,
+//!   front-matter links in their own quoting and body link targets), the part of the rename
+//!   command that needs the record's spans;
+//! - [`walk::is_hidden_entry`] and [`walk::disk_spelling`]: whether a file or folder is hidden
+//!   on this OS, and how the disk spells the part of a project path that it has. The command
+//!   boundary of `theos-studio` judges a plan by these facts, so it decides which files are
+//!   records as the walk does.
 
 pub mod body;
 pub mod check;
@@ -76,6 +92,7 @@ pub mod lore;
 pub mod parts;
 pub mod project;
 pub mod record;
+pub mod rename;
 pub mod rules;
 pub mod settings;
 mod spelling;
