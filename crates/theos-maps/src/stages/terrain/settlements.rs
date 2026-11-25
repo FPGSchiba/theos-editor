@@ -89,7 +89,6 @@ const CLASSES: [Class; 4] = [
 /// How many settlements of each class. A `counts` table in a recipe replaces the default as a
 /// whole: a class it leaves out gets none, as in 0.3.0.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
 pub struct Counts {
     /// Cities.
     #[serde(default)]
@@ -130,7 +129,7 @@ impl Default for Counts {
 
 /// The spacing of each class in km: the least distance between two settlements of the class.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct SpacingKm {
     /// Cities.
     pub city: f64,

@@ -17,11 +17,13 @@ use crate::world::World;
 /// downcasts them, so no stage writes a downcast (ruling L2).
 ///
 /// `Params` is deserialised from the recipe's stage table without its `id` key. Give every field
-/// a default (`#[serde(default)]`) unless the recipe must set it. Enums tagged by a field
-/// (`#[serde(tag = "type")]`) and `#[serde(flatten)]` fields hide their keys from the
-/// unknown-key check, so they carry `#[serde(deny_unknown_fields)]`. `Params` is also
-/// serialised, so the number rule sees each number with its field's type; a field `validate`
-/// fills is `#[serde(skip)]`.
+/// a default (`#[serde(default)]`) unless the recipe must set it. Unknown keys are found
+/// centrally, so a plain struct carries no `#[serde(deny_unknown_fields)]`; only enums tagged
+/// by a field (`#[serde(tag = "type")]`) and `#[serde(flatten)]` fields, which hide their keys
+/// from that check, carry it. A table keyed by names (a map such as `rock_mix`) takes any key,
+/// so `validate` checks its keys with [`Check::known_keys`](super::Check::known_keys).
+/// `Params` is also serialised, so the number rule sees each number with its field's type; a
+/// field `validate` fills is `#[serde(skip)]`.
 pub trait TypedStage: Send + Sync + 'static {
     /// The parameters.
     type Params: DeserializeOwned + Serialize + Debug + Send + Sync + 'static;

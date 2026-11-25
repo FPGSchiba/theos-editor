@@ -32,7 +32,6 @@ pub enum Exponent {
 
 /// The parameters of `partition_flow`.
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
 pub struct PartitionFlowParams {
     /// How the water is shared; the recipe states it.
     pub exponent: Exponent,

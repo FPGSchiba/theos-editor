@@ -477,6 +477,8 @@ fn parameters_have_defaults_and_are_checked() {
         .params(&table("counts = { gold = 1 }"))
         .unwrap_err();
     assert_eq!(err.parameter.as_deref(), Some("counts.gold"));
+    // Final review round 5, finding 1: an unknown type reads as an unknown key.
+    assert_eq!(err.message, "unknown parameter");
     let err = Resources.params(&table("spacing = 1.0")).unwrap_err();
     assert!(err.to_string().contains("spacing"), "{err}");
 }

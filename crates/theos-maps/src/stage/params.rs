@@ -10,18 +10,31 @@ use super::ParamError;
 
 /// The parsed parameters of one stage, held by the runner as a trait object.
 ///
-/// Every `DeserializeOwned + Debug + Send + Sync + 'static` type is one, so a stage's own
-/// `Params` type needs no impl. `Box<dyn StageParams>` is not one (it does not deserialise), so
-/// `&boxed` is no `&dyn StageParams`: pass `boxed.as_ref()`, which borrows the parameters inside
-/// the box.
+/// Every `DeserializeOwned + Serialize + Debug + Send + Sync + 'static` type is one, so a stage's
+/// own `Params` type needs no impl. `Box<dyn StageParams>` is not one (it does not deserialise),
+/// so `&boxed` is no `&dyn StageParams`: pass `boxed.as_ref()`, which borrows the parameters
+/// inside the box.
 pub trait StageParams: Any + Debug + Send + Sync {
     /// The parameters as [`Any`], for the downcast to the stage's own type.
     fn as_any(&self) -> &dyn Any;
+
+    /// The parameters as TOML, as the number rule sees them: every field a recipe may set, with
+    /// the recipe's value or its default. Fields `validate` fills (`#[serde(skip)]`) and raw
+    /// tables a stage parses itself (`#[serde(skip_serializing)]`) are left out.
+    ///
+    /// # Errors
+    /// The serialiser's error when the parameters hold a value TOML cannot (an integer above
+    /// `i64::MAX`).
+    fn to_toml(&self) -> Result<toml::Value, toml::ser::Error>;
 }
 
-impl<T: DeserializeOwned + Debug + Send + Sync + 'static> StageParams for T {
+impl<T: DeserializeOwned + Serialize + Debug + Send + Sync + 'static> StageParams for T {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn to_toml(&self) -> Result<toml::Value, toml::ser::Error> {
+        toml::Value::try_from(self)
     }
 }
 
@@ -283,6 +296,30 @@ impl<'a> Check<'a> {
         let holds = value >= min;
         self.require(holds, parameter, format!("must be at least {min}"))
     }
+
+    /// Every key of the table `parameter` is one `known` accepts: for a table whose keys are
+    /// names, such as rocks or resource types, an unknown key reads as an unknown key of a
+    /// parameter struct does ("unknown parameter" at `<parameter>.<key>`, the further unknown
+    /// keys listed in the message), in the order of `keys`.
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and the first unknown key.
+    pub fn known_keys<'k>(
+        self,
+        parameter: &str,
+        keys: impl IntoIterator<Item = &'k String>,
+        known: impl Fn(&str) -> bool,
+    ) -> Result<(), ParamError> {
+        let unknown: Vec<String> = keys
+            .into_iter()
+            .filter(|key| !known(key))
+            .map(|key| format!("{parameter}.{key}"))
+            .collect();
+        match unknown.split_first() {
+            Some((first, rest)) => Err(unknown_parameter(self.stage, first, rest)),
+            None => Ok(()),
+        }
+    }
 }
 
 /// A `serde_ignored` path in the style of `serde_path_to_error`: `source[0].rate`.
@@ -373,6 +410,33 @@ mod tests {
         assert_eq!(
             err,
             error("t", Some("a"), "unknown parameter; also unknown: `b`, `c`")
+        );
+    }
+
+    // Final review round 5, finding 1: a table keyed by names refuses an unknown name as the
+    // parser refuses an unknown key of a struct, with the same path and wording.
+    #[test]
+    fn unknown_names_read_as_unknown_keys() {
+        let check = Check::of("t");
+        let keys = |names: &[&str]| -> Vec<String> {
+            names.iter().map(|name| (*name).to_owned()).collect()
+        };
+        let known = |name: &str| ["a", "b"].contains(&name);
+        assert_eq!(check.known_keys("mix", &keys(&["a", "b"]), known), Ok(()));
+        assert_eq!(check.known_keys("mix", &keys(&[]), known), Ok(()));
+        assert_eq!(
+            check.known_keys("mix", &keys(&["a", "c"]), known),
+            Err(error("t", Some("mix.c"), "unknown parameter"))
+        );
+        let parsed = parse::<Params>("t", &table("opt = {x = 1, c = 2}")).unwrap_err();
+        assert_eq!(parsed, error("t", Some("opt.c"), "unknown parameter"));
+        assert_eq!(
+            check.known_keys("mix", &keys(&["c", "a", "d", "e"]), known),
+            Err(error(
+                "t",
+                Some("mix.c"),
+                "unknown parameter; also unknown: `mix.d`, `mix.e`"
+            ))
         );
     }
 

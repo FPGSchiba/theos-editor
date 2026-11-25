@@ -7,7 +7,7 @@ use crate::stage::{Check, ParamError};
 /// How many of each scattered site; a count a recipe leaves out keeps its default (0.3.0 merged
 /// the table into its defaults).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct Counts {
     /// Watchtowers over the roads.
     pub watchtower: usize,

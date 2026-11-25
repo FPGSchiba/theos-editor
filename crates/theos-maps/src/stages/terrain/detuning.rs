@@ -30,7 +30,7 @@ const DRIFT_BETA: f64 = 3.4;
 
 /// The parameters of `detuning`.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct DetuningParams {
     /// Omega far from ruins, before the drift, in `[0, 1]`.
     pub baseline: f64,

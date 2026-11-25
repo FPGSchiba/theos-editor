@@ -95,7 +95,6 @@ const FALLBACK_TOLERANCE_M: f64 = 1e-6;
 
 /// The parameters of `fluvial`.
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
 pub struct FluvialParams {
     /// The drainage-area exponent m of `K·Q^m·S`, in [0, 2]; n is 1 (spec ruling 3).
     #[serde(default = "default_m")]

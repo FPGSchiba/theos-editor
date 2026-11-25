@@ -66,6 +66,12 @@ impl Rock {
             Rock::Alluvium => "alluvium",
         }
     }
+
+    /// The rock named `name` ([`Rock::name`]), if any.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Rock> {
+        Self::ALL.into_iter().find(|rock| rock.name() == name)
+    }
 }
 
 /// What the generator and the renders know about a rock.
@@ -141,7 +147,8 @@ mod tests {
 
     // Final review round 4, class K: `ALL` holds every rock once, in code order. The match has
     // no wildcard, so a new rock does not compile until it has its place here, and then `ALL`
-    // must hold it there. Each name is the spelling recipes use (`rock_mix`).
+    // must hold it there. Each name is the spelling recipes use (`rock_mix`, through
+    // `from_name`) and serde's.
     #[test]
     fn all_holds_every_rock_and_names_are_the_recipe_keys() {
         let place = |r: Rock| match r {
@@ -160,6 +167,9 @@ mod tests {
                 .try_into()
                 .unwrap();
             assert_eq!(spelt, *rock);
+            assert_eq!(Rock::from_name(rock.name()), Some(*rock));
         }
+        assert_eq!(Rock::from_name("marble"), None);
+        assert_eq!(Rock::from_name("Granite"), None);
     }
 }

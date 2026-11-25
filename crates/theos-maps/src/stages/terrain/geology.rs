@@ -48,8 +48,9 @@ impl Default for FoldBelt {
 pub struct GeologyParams {
     /// Number of Voronoi rock provinces.
     pub provinces: usize,
-    /// Weight of every rock a province may get; taken in `Rock` order, not key order.
-    pub rock_mix: BTreeMap<Rock, f64>,
+    /// Weight of every rock a province may get, by the rock's name ([`Rock::name`]); taken in
+    /// `Rock` order, not key order. `validate` refuses a name that is no rock.
+    pub rock_mix: BTreeMap<String, f64>,
     /// The fold belt; absent means none.
     pub fold_belt: Option<FoldBelt>,
     /// Smallest and largest number of granite plutons.
@@ -59,14 +60,16 @@ pub struct GeologyParams {
 impl Default for GeologyParams {
     fn default() -> Self {
         // 0.3.0 required `rock_mix`; this default is a generic sedimentary mix.
-        let rock_mix = BTreeMap::from([
+        let rock_mix = [
             (Rock::Granite, 0.15),
             (Rock::Quartzite, 0.1),
             (Rock::Basalt, 0.1),
             (Rock::Limestone, 0.25),
             (Rock::Sandstone, 0.25),
             (Rock::Shale, 0.15),
-        ]);
+        ]
+        .map(|(rock, weight)| (rock.name().to_owned(), weight))
+        .into();
         Self {
             provinces: 6,
             rock_mix,
@@ -108,8 +111,13 @@ impl TypedStage for Geology {
         let check = Check::of(Self::ID);
         let at = |parameter: &str, message: &str| ParamError::at(Self::ID, parameter, message);
         check.count_at_least("provinces", params.provinces, 1)?;
-        for (rock, &weight) in &params.rock_mix {
-            check.at_least(&format!("rock_mix.{}", rock.name()), weight, 0.0)?;
+        check.known_keys("rock_mix", params.rock_mix.keys(), |name| {
+            Rock::from_name(name).is_some()
+        })?;
+        for rock in Rock::ALL {
+            if let Some(&weight) = params.rock_mix.get(rock.name()) {
+                check.at_least(&format!("rock_mix.{}", rock.name()), weight, 0.0)?;
+            }
         }
         if params.rock_mix.values().sum::<f64>() <= 0.0 {
             return Err(at("rock_mix", "needs a positive total weight"));
@@ -197,7 +205,7 @@ fn province_rocks(
         .collect();
     let weights: Vec<f64> = Rock::ALL
         .iter()
-        .map(|r| params.rock_mix.get(r).copied().unwrap_or(0.0))
+        .map(|r| params.rock_mix.get(r.name()).copied().unwrap_or(0.0))
         .collect();
     let total: f64 = weights.iter().sum();
     let mut cdf = Vec::with_capacity(weights.len());
@@ -377,12 +385,15 @@ mod tests {
         assert!(slopes.iter().all(|s| (0.4..=1.0).contains(s)));
     }
 
+    // Final review round 5, finding 1: an unknown rock reads as an unknown key, at its path.
     #[test]
     fn unknown_rocks_are_parameter_errors() {
         let err = Geology
             .params(&table("[rock_mix]\nmarble = 1.0\n"))
             .unwrap_err();
         assert!(err.to_string().contains("marble"), "{err}");
+        assert_eq!(err.parameter.as_deref(), Some("rock_mix.marble"));
+        assert_eq!(err.message, "unknown parameter");
     }
 
     #[test]

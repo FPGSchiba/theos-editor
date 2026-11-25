@@ -133,15 +133,8 @@ impl TypedStage for Resources {
     }
 
     fn validate(&self, params: &mut ResourcesParams) -> Result<(), ParamError> {
-        if let Some(name) = params.counts.keys().find(|k| !NAMES.contains(&k.as_str())) {
-            let parameter = format!("counts.{name}");
-            return Err(ParamError::at(
-                Self::ID,
-                parameter,
-                "is not a resource type",
-            ));
-        }
         let check = Check::of(Self::ID);
+        check.known_keys("counts", params.counts.keys(), |name| NAMES.contains(&name))?;
         check.positive("spacing_km", params.spacing_km)?;
         check.in_closed_open("edge_margin", params.edge_margin, 0.0, 0.5)
     }

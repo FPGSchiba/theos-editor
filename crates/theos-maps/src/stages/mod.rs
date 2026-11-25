@@ -4,6 +4,8 @@ use crate::stage::Registry;
 
 pub mod evolution;
 pub mod terrain;
+#[cfg(test)]
+mod unknown_keys;
 
 /// Adds every built-in stage to `registry`, one line per stage.
 pub fn register(registry: &mut Registry) {
