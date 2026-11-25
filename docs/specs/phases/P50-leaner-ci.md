@@ -155,7 +155,7 @@ Wall-clock of successful PR runs of 3–12 Nov (warm caches; estimates from the 
 
 | Part | Tool or crate | Custom code, and why |
 |---|---|---|
-| Changed paths of a pull request | `git` CLI: merge base of the event's base and head, `git diff --name-only --no-renames` (what `approval` and PR #43's `slow-tests` do) | One shared module instead of three copies |
+| Changed paths of a pull request | `git` CLI: merge base of the event's base and head, `git diff --name-only --no-renames` (what `approval` and `slow-tests` do) | One shared module instead of three copies |
 | Path lists and matching | `toml` + `globset` with `literal_separator(true)`, as `gate/protected-paths.toml` | Only the two-list rule (§5.3) |
 | The docs-only decision | xtask, in the gate's runner, which every CI job uses | The rule itself; small and unit-tested |
 | Job summary | GitHub's `$GITHUB_STEP_SUMMARY` (Markdown) | Writing the existing verdict table as Markdown |
@@ -173,15 +173,15 @@ Wall-clock of successful PR runs of 3–12 Nov (warm caches; estimates from the 
 | `ci` | `coverage` | `cargo xtask gate --only coverage`, with the baseline cache as today | as `gate` | yes |
 | `pr` | `pr` | `pr-title`, then `pr-body`, in the same xtask call or as two steps that both always run, with the cached xtask | `pull_request` (opened, edited, synchronize, reopened) | yes |
 | `approval` | `approval` | unchanged logic, with the cached xtask of the base commit | unchanged | yes |
-| `platforms` | `windows`, `macos`, `macos-intel` | `cargo xtask gate --only clippy,test,lints,ac-trace` (plus `slow-tests` once PR #43 is in) | §5.6 | no |
+| `platforms` | `windows`, `macos`, `macos-intel` | `cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace` (§5.6) | §5.6 | no |
 | `settings` | `settings` | unchanged | unchanged | no |
 
 - The three `ci` jobs run side by side (no `needs:`), each with the whole history (`commit-msg`,
   `coverage` and the changed paths need it), each applying the docs-only rule itself through the
   gate's runner, and each running `tools` first (versions decide verdicts). `--only` and `--skip`
   choose among the checks after `tools`.
-- Timeouts cover a cold cache; the builder measures them (`slow-tests` from PR #43, which runs in
-  `gate`, brings its 120 minutes).
+- Timeouts cover a cold cache; the builder measures them (`slow-tests`, which runs in `gate`,
+  brings its 120 minutes).
 - A check that fails does not stop the others (the runner already works this way), so one run
   shows every verdict. A job fails when any of its checks fails.
 - The job summary is the verdict table with one row per check: passed, failed (with the
@@ -245,7 +245,7 @@ From reading every check on `main` at `0a6f480` (file:line evidence goes into `d
 | `lints` | every file name (looks for `Cargo.toml` and tool configs anywhere) and the two `include_str!` files | those names and files are always-code |
 | `ac-trace` | the umbrella, every `*.ts` file anywhere, the branch name | umbrella and `*.ts` are code; `phase/` branches run every check |
 | `tools` | `gate/tools.toml` | code |
-| `slow-tests` (PR #43) | its own changed-paths rule | no workspace crate changes |
+| `slow-tests` | its own changed-paths rule (#43) | no workspace crate changes |
 
 `commit-msg`, `pr-title`, `pr-body` and `approval` always run: they read the commits and the
 pull request, not files.
@@ -269,9 +269,9 @@ pull request, not files.
 ### 5.6 `platforms` (CE-08C.6)
 
 - Jobs `windows` (`windows-latest`) and `macos` (`macos-latest`, Apple silicon), each running
-  `cargo xtask gate --only clippy,test,lints,ac-trace` (and `slow-tests` with PR #43's rule) and
+  `cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace` (`slow-tests` with its own rule) and
   writing the verdict table to the job summary. Not required checks, as today.
-- Job `macos-intel` (`macos-15-intel`) runs `--only test` (and `slow-tests`), on demand only.
+- Job `macos-intel` (`macos-15-intel`) runs `--only test,slow-tests`, on demand only.
 - Triggers: Monday 04:00 UTC → `windows` and `macos`; label `windows` → `windows`; label `macos`
   → `macos`; `workflow_dispatch` with three boolean inputs `windows` (default on), `macos`
   (default on) and `macos-intel` (default off).
@@ -332,17 +332,20 @@ probe PRs and written into the P50 PR (today's numbers in §4.2):
 - `approval` and `pr` on a cached xtask: each job within 20 seconds (today 34–58 s and 36 s);
 - a docs-only pull request: every required job within today's `ci` median.
 
+A pull request whose slow tests run is measured without them: `gate` then takes their time on
+top, as the `slow-tests` job does today.
+
 If the build cannot meet a budget, it stops before asking for review and brings Jann the
 numbers and the options.
 
 ## 6. Interfaces
 
-- **PR #43 (`slow-tests`)**, open: if it merges first, `slow-tests` becomes one more check of
-  the `gate` job (CE-08C.1: `gate` runs every check but `test` and `coverage`) and of the
-  `platforms` jobs, keeps its own changed-paths rule, and uses the shared reader. It decides "not
-  needed" in seconds on most pull requests; on a map pull request `gate` takes the slow tests'
-  time plus about a minute and a half for its other checks. If P50 merges first, #43 is rebased
-  onto P50's shape. P50's build starts from the `main` of that day.
+- **`slow-tests` (#43, merged)**: one more check of the `gate` job (CE-08C.1: `gate` runs every
+  check but `test` and `coverage`) and of the `platforms` jobs. It keeps its own changed-paths
+  rule and moves onto the shared reader, and decides "not needed" in seconds on most pull
+  requests. On a map pull request `gate` takes the slow tests' time plus about a minute and a
+  half for its other checks, instead of running beside them; its own job and setup are saved on
+  every other pull request. The required check `slow-tests` goes with the switch-over (§5.7).
 - **P49 (`release.yml`)**: runs the full test suite (with `slow-tests`) on Windows, Linux,
   macOS on Apple silicon and macOS on Intel before every release (CE-08R.6).
 - **P11 (`ui`)**: adds `ui` as its own required job; `editor-ui/**` is code under §5.3.
