@@ -36,12 +36,14 @@
 pub mod branch;
 pub mod checks;
 pub mod ci;
+pub mod code_paths;
 pub mod conventional;
 pub mod error;
 pub mod files;
 pub mod gate;
 pub mod git;
 pub mod github;
+pub mod globs;
 pub mod markdown;
 pub mod process;
 pub mod repo_path;

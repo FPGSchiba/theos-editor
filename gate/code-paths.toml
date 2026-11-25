@@ -1,0 +1,35 @@
+# The paths no check of the gate reads (`docs/specs/phases/P50-leaner-ci.md` §5.3). A pull request
+# that changes only these paths skips the checks it cannot affect. `cargo xtask` reads this file
+# from the checkout it runs in. Changing it is a protected change (`gate/**`).
+
+# Globs against repo-relative paths with `/`. `*` stays inside a folder, `**` crosses folders. A
+# path that is not listed here is code: every new folder and every new root file counts as code
+# until someone adds it to this list in a protected PR. These match exactly as written, including
+# case.
+non_code = [
+    "docs/**",
+    "research/**",
+    "design/**",
+    "README.md",
+    "CLAUDE.md",
+    ".claude/**",
+]
+
+# Paths that are code although a `non_code` glob matches them. This list wins, in any folder. These
+# match whatever their case, because the tool configs are found in any case (the `lints` check).
+always_code = [
+    "docs/specs/00-umbrella.md",
+    "docs/gate.md",
+    "**/*.ts",
+    "**/Cargo.toml",
+    "**/Cargo.lock",
+    "**/rust-toolchain",
+    "**/rust-toolchain.toml",
+    "**/clippy.toml",
+    "**/.clippy.toml",
+    "**/rustfmt.toml",
+    "**/.rustfmt.toml",
+    "**/.cargo/**",
+    "**/.gitignore",
+    "**/.gitattributes",
+]
