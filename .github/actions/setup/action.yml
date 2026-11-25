@@ -1,7 +1,8 @@
 name: Set up the gate
 description: >-
   Installs the Rust toolchain of rust-toolchain.toml, restores the build cache and installs the
-  tools at the versions of gate/tools.toml. Every job of the gate runs it after the checkout.
+  tools at the versions of gate/tools.toml. Jobs that build or test run it after the checkout; jobs
+  that only run xtask get it through .github/actions/xtask, which runs it on a cache miss.
 
 # Without inputs a job gets rust-cache's own behaviour: a cache of its own, saved by every run.
 inputs:

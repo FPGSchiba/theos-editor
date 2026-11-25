@@ -16,8 +16,9 @@ checks of the Job column below through `cargo xtask`. A check that fails does no
 of its job, and the job is red when any of its checks is. The job summary of a run is the table of
 verdicts, one row per check: passed, failed with its findings, or not needed with the reason. A
 check that is not needed passes at once, and the job still reports, so a required check is never
-missing. When every check runs for a reason other than the change itself (a run started by a
-label, changed paths that cannot be read), the summary says why above the table.
+missing. When every check runs for a reason other than a change to code (a push, a manual or scheduled
+run, a `phase/` branch, a label, changed paths that cannot be read or are none, lists that cannot
+be read, a detached head), the summary says why above the table.
 
 | Check | Job | What it runs | OS |
 |---|---|---|---|
@@ -125,6 +126,9 @@ folder, and it ignores letter case, because the tool configs are found in any ca
 - `**/.gitignore`
 - `**/.gitattributes`
 
+The file `gate/code-paths.toml` itself is always code, whatever the lists say, so a pull request
+cannot make its own change to the lists skip the tests that guard them.
+
 Every other path is code: `CONTRIBUTING.md`, `.github/**`, `gate/**`, `xtask/**`, and every new
 folder or root file, until someone lists it in a protected PR. The rule, in this order: a branch
 called `phase/…` runs every check, because `ac-trace` reads the phase from the branch. Changed
@@ -142,14 +146,14 @@ each check reads, with the place in the code:
 |---|---|---|
 | `fmt` | the workspace `.rs` files (`xtask/src/checks/cargo_cmds.rs:28`) | no non-code path is Rust code |
 | `clippy` | the workspace, and by `include_str!` the umbrella (`xtask/src/umbrella.rs:287`) and the PR template (`xtask/src/checks/pr_body.rs:129`, `xtask/tests/pr_body.rs:10`) | the umbrella is always code, and `.github/**` is code |
-| `test`, `coverage` | `docs/gate.md` (`xtask/tests/settings.rs:78`, `xtask/tests/workflows.rs:836`, `xtask/tests/approval.rs:579`), `CONTRIBUTING.md` (`xtask/tests/commit_msg.rs:436`), the workflows, and the files `clippy` includes; no crate takes a doc file into its docs (no `doc = include_str!`), so no doc test reads one | `docs/gate.md` is always code, and the others are code |
+| `test`, `coverage` | `docs/gate.md` (`xtask/tests/settings.rs:78`, `xtask/tests/workflows.rs:837`, `xtask/tests/approval.rs:579`), `CONTRIBUTING.md` (`xtask/tests/commit_msg.rs:436`), the workflows, and the files `clippy` includes; no crate takes a doc file into its docs (no `doc = include_str!`), so no doc test reads one | `docs/gate.md` is always code, and the others are code |
 | `docs` | the workspace sources, through rustdoc (`xtask/src/checks/cargo_cmds.rs:83`) | no non-code path is Rust code |
 | `deny` | the Cargo files, `deny.toml` and the advisory database (`xtask/src/checks/cargo_cmds.rs:92`) | Cargo files and `deny.toml` are code; a new advisory is not caused by the pull request and shows at the next code PR and the next push to `main` |
 | `engine-free` | `cargo metadata` and `gate/engine-crates.toml` (`xtask/src/checks/engine_free.rs:42`) | both are code |
 | `lints` | every file name, for `Cargo.toml` and the tool configs in any folder (`xtask/src/checks/lints/config_files.rs:168`, `:243`), and the mirrored files of `gate/` (`:39`) | those names are always code, whatever the folder and the case |
 | `ac-trace` | the umbrella (`xtask/src/umbrella.rs:20`), every `.ts` file (`xtask/src/checks/ac_trace/mod.rs:311`, `:328`) and the branch (`:259`) | the umbrella and `.ts` files are always code, and a `phase/` branch runs every check |
 | `tools` | `gate/tools.toml` (`xtask/src/tools.rs:21`) | code |
-| `slow-tests` | its own changed-paths rule (`xtask/src/checks/slow.rs:45`) | it only watches workspace crates and the files listed there |
+| `slow-tests` | its own changed-paths rule (`xtask/src/checks/slow.rs:46`) | it only watches workspace crates and the files listed there |
 
 `commit-msg` always runs. `pr-title`, `pr-body` and `approval` always run too, in jobs of their
 own that the rule does not touch. They read the pull request, and the files they read are code:
