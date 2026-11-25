@@ -1,0 +1,88 @@
+//! The command that replaces a file's text.
+
+use super::{Base, Command, CommandError, Plan, PlanContext, Reads, project_path};
+
+/// Replaces the text of the file `path` with `text`, written with LF line ends. `base` is the
+/// base of the bytes the caller saw. A text equal to the file's own text with LF line ends
+/// plans nothing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Write {
+    /// Project-relative path.
+    pub path: String,
+    /// What the caller saw of the file.
+    pub base: Base,
+    /// The new text.
+    pub text: String,
+}
+
+impl Command for Write {
+    fn label(&self) -> String {
+        format!("write {}", self.path)
+    }
+
+    fn reads(&self) -> Reads {
+        Reads::Paths(vec![self.path.clone()])
+    }
+
+    fn plan(&self, ctx: &PlanContext<'_>) -> Result<Plan, CommandError> {
+        let path = project_path(&self.path)?;
+        let before = ctx.read_based(&path, &self.base)?;
+        Ok(Plan::text(path, before, &self.text))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{Fixture, TRUTH, TRUTH_PATH, TestResult};
+
+    fn write(base: Base, text: &str) -> Write {
+        Write {
+            path: TRUTH_PATH.to_owned(),
+            base,
+            text: text.to_owned(),
+        }
+    }
+
+    #[test]
+    fn a_missing_file_is_not_found() -> TestResult {
+        let fixture = Fixture::new(&[])?;
+        let result = write(Base::of(b""), "x").plan(&fixture.ctx());
+        assert!(matches!(result, Err(CommandError::NotFound { .. })));
+        Ok(())
+    }
+
+    #[test]
+    fn write_turns_line_ends_into_lf() -> TestResult {
+        let fixture = Fixture::new(&[(TRUTH_PATH, TRUTH.as_bytes())])?;
+        let plan = write(Base::of(TRUTH.as_bytes()), "a\r\nb\r\n").plan(&fixture.ctx())?;
+        assert_eq!(plan.changes.len(), 1);
+        assert_eq!(plan.changes[0].before.as_deref(), Some(TRUTH.as_bytes()));
+        assert_eq!(plan.changes[0].after.as_deref(), Some(&b"a\nb\n"[..]));
+        assert!(!plan.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn an_unchanged_save_of_a_crlf_record_is_an_empty_plan() -> TestResult {
+        let crlf = TRUTH.replace('\n', "\r\n");
+        let fixture = Fixture::new(&[(TRUTH_PATH, crlf.as_bytes())])?;
+        let plan = write(Base::of(crlf.as_bytes()), TRUTH).plan(&fixture.ctx())?;
+        assert!(plan.is_empty());
+        let plan = write(Base::of(crlf.as_bytes()), &crlf).plan(&fixture.ctx())?;
+        assert!(plan.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn write_takes_a_file_that_is_not_a_record() -> TestResult {
+        let fixture = Fixture::new(&[("notes.txt", &[0xff, 0xfe][..])])?;
+        let command = Write {
+            path: "notes.txt".to_owned(),
+            base: Base::of(&[0xff, 0xfe]),
+            text: "text".to_owned(),
+        };
+        assert!(!command.plan(&fixture.ctx())?.is_empty());
+        Ok(())
+    }
+}

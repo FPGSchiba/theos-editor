@@ -14,6 +14,9 @@
 //! The change boundary of `update`, `apply` and `preview` uses the same predicates, so a record
 //! path they take is one the walk lists. They also take the two input files of the index,
 //! `.theos/settings.toml` and `canon/formalism/_source.json`, which are no records.
+//!
+//! The command boundary of `theos-studio` judges a plan by the same facts, which this module
+//! decides alone: [`is_hidden_entry`] and [`disk_spelling`].
 
 use std::ffi::OsStr;
 use std::path::{Component, Path};
@@ -22,7 +25,7 @@ use std::time::UNIX_EPOCH;
 use ignore::WalkBuilder;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 
-use crate::spelling;
+use crate::spelling::{self, Spelling};
 
 /// A project-relative record path, with `/` on every OS.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -131,18 +134,20 @@ fn is_skipped_entry(path: &Path) -> bool {
 }
 
 /// Whether the file or folder at `path` is hidden on Unix: its name starts with `.`. Nothing is
-/// read from disk.
+/// read from disk. [`walk`] does not list such an entry or anything below it.
 #[cfg(unix)]
-fn is_hidden_entry(path: &Path) -> bool {
+#[must_use]
+pub fn is_hidden_entry(path: &Path) -> bool {
     path.file_name()
         .is_some_and(|name| name.as_encoded_bytes().starts_with(b"."))
 }
 
 /// Whether the file or folder at `path` is hidden on Windows: it exists and carries the hidden
 /// attribute (`FILE_ATTRIBUTE_HIDDEN`), whatever its name. A symbolic link is judged by its own
-/// attributes, as the walk sees it.
+/// attributes, as the walk sees it. [`walk`] does not list such an entry or anything below it.
 #[cfg(windows)]
-fn is_hidden_entry(path: &Path) -> bool {
+#[must_use]
+pub fn is_hidden_entry(path: &Path) -> bool {
     use std::os::windows::fs::MetadataExt;
     /// `FILE_ATTRIBUTE_HIDDEN` of the Windows API.
     const HIDDEN: u32 = 0x2;
@@ -192,6 +197,60 @@ fn gitignore(dir: &Path) -> Gitignore {
 pub(crate) fn is_listed(root: &Path, path: &str) -> bool {
     let parts: Vec<&str> = path.split('/').collect();
     spelling::of(root, &parts).is_plain_file()
+}
+
+/// How the folders on disk spell the part of a project path that the disk has, as
+/// [`disk_spelling`] finds it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiskSpelling {
+    /// Each segment on disk is an entry of its folder under exactly its name and each folder on
+    /// the way is no symbolic link; also when no segment is on disk.
+    Exact,
+    /// A segment on disk is an entry of its folder only under another name: another case where
+    /// the disk ignores case, or on Windows a short (8.3) name or a trailing dot or space.
+    Other,
+    /// A folder on the way is a symbolic link, which [`walk`] does not follow.
+    ThroughLink,
+}
+
+/// How the folders on disk spell the project path `path` (with `/`) below `root`, as far as the
+/// disk has it; the rest is what a write creates as spelled. Each segment is looked up by the
+/// listing of its folder, by the one rule of the crate for every lookup by relative path (the
+/// one that decides which records the index holds), so a name that the file system finds but
+/// that is no entry of its folder, such as a device name on Windows, counts as absent. The first
+/// segment in path order that the walk would not reach as given decides: one that its folder
+/// lists only under another name gives [`DiskSpelling::Other`], a folder that is a symbolic link
+/// gives [`DiskSpelling::ThroughLink`]. The last segment is no folder on the way, so it may be a
+/// link.
+#[must_use]
+pub fn disk_spelling(root: &Path, path: &str) -> DiskSpelling {
+    let parts: Vec<&str> = path.split('/').collect();
+    let folders = parts.len().saturating_sub(1);
+    // From the whole path down, the leading parts are absent first, then found under another
+    // spelling, then exact. The longest exact part holds the folders before the first segment
+    // that is not exact; a longer part that is found means that this segment is spelled otherwise.
+    let mut other = false;
+    for len in (1..=parts.len()).rev() {
+        match spelling::of(root, &parts[..len]) {
+            Spelling::Absent(_) => {}
+            Spelling::Other(_) => other = true,
+            Spelling::Exact(entries) => {
+                let link = entries
+                    .iter()
+                    .take(folders)
+                    .any(|entry| entry.file_type().is_ok_and(|kind| kind.is_symlink()));
+                if link {
+                    return DiskSpelling::ThroughLink;
+                }
+                break;
+            }
+        }
+    }
+    if other {
+        DiskSpelling::Other
+    } else {
+        DiskSpelling::Exact
+    }
 }
 
 /// The modification time of a file in nanoseconds since the UNIX epoch, negative before it.
@@ -488,6 +547,115 @@ mod tests {
         for rel in [".drafts/a.md", "things/c.md", "things/new.md", ".new/x.md"] {
             assert!(!is_hidden(root, rel), "{rel}");
         }
+    }
+
+    /// On Unix an entry is hidden by its own name alone, whether or not it exists.
+    #[cfg(unix)]
+    #[test]
+    fn is_hidden_entry_goes_by_the_name_on_unix() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        put(root, ".drafts/a.md", "x\n");
+        put(root, "things/b.md", "x\n");
+        for rel in [".drafts", "things/.new.md", ".none"] {
+            assert!(is_hidden_entry(&root.join(rel)), "{rel}");
+        }
+        for rel in [".drafts/a.md", "things", "things/b.md", "none"] {
+            assert!(!is_hidden_entry(&root.join(rel)), "{rel}");
+        }
+    }
+
+    /// On Windows an entry is hidden by its own hidden attribute alone: not by a name that starts
+    /// with `.`, not by a hidden folder above it, and not when it is not on disk.
+    #[cfg(windows)]
+    #[test]
+    fn is_hidden_entry_goes_by_the_attribute_on_windows() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        for rel in [".drafts/a.md", "things/b.md", "things/c.md", "secret/s.md"] {
+            put(root, rel, "x\n");
+        }
+        hide(root, "things/b.md");
+        hide(root, "secret");
+        for rel in ["things/b.md", "secret"] {
+            assert!(is_hidden_entry(&root.join(rel)), "{rel}");
+        }
+        for rel in [
+            ".drafts",
+            ".drafts/a.md",
+            "things",
+            "things/c.md",
+            "secret/s.md",
+            "things/new.md",
+        ] {
+            assert!(!is_hidden_entry(&root.join(rel)), "{rel}");
+        }
+    }
+
+    /// Only the part of a path on disk is judged, the rest counts as spelled; where the disk
+    /// ignores case (Windows, macOS) it has the cased paths under another name, elsewhere it lacks
+    /// them.
+    #[test]
+    fn disk_spelling_judges_the_part_on_disk() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        put(root, "lore/truths/T-960.md", "x\n");
+        for rel in [
+            "lore",
+            "lore/truths/T-960.md",
+            "lore/truths/T-961.md",
+            "lore/new/T-962.md",
+            "LORE-other/x.md",
+            // Through a file: the write fails on its own.
+            "lore/truths/T-960.md/x.md",
+        ] {
+            assert_eq!(disk_spelling(root, rel), DiskSpelling::Exact, "{rel}");
+        }
+        let cased = if root.join("LORE").exists() {
+            DiskSpelling::Other
+        } else {
+            DiskSpelling::Exact
+        };
+        for rel in [
+            "LORE",
+            "LORE/truths/T-960.md",
+            "lore/Truths/T-961.md",
+            "lore/truths/t-960.md",
+            "LORE/new/x.md",
+        ] {
+            assert_eq!(disk_spelling(root, rel), cased, "{rel}");
+        }
+        // A short (8.3) name, where the volume keeps them (Windows).
+        put(root, "longfoldername/a.md", "x\n");
+        if root.join("LONGFO~1").exists() {
+            assert_eq!(disk_spelling(root, "LONGFO~1/a.md"), DiskSpelling::Other);
+        }
+    }
+
+    /// A folder on the way that is a symbolic link is seen, whether or not the rest is on disk;
+    /// the last segment may be a link. The first segment in path order that the walk would not
+    /// reach as given decides.
+    #[cfg(unix)]
+    #[test]
+    fn disk_spelling_sees_a_link_on_the_way() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        put(root, "lore/a.md", "x\n");
+        std::os::unix::fs::symlink(root.join("lore"), root.join("linked")).expect("symlink");
+        std::os::unix::fs::symlink(root.join("lore/a.md"), root.join("lore/l.md"))
+            .expect("symlink");
+        for rel in ["linked/a.md", "linked/new.md", "linked/A.md"] {
+            assert_eq!(disk_spelling(root, rel), DiskSpelling::ThroughLink, "{rel}");
+        }
+        for rel in ["linked", "lore/l.md"] {
+            assert_eq!(disk_spelling(root, rel), DiskSpelling::Exact, "{rel}");
+        }
+        let cased = if root.join("LINKED").exists() {
+            DiskSpelling::Other
+        } else {
+            DiskSpelling::Exact
+        };
+        assert_eq!(disk_spelling(root, "LINKED/a.md"), cased);
     }
 
     #[test]

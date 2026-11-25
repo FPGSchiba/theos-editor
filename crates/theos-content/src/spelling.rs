@@ -7,7 +7,8 @@
 //! these apart from the exact name by the listing of each folder on the way.
 //!
 //! Every lookup by relative path decides through it: the records and input files of the index
-//! (`walk::is_listed`), binary references and the formalism mirror.
+//! (`walk::is_listed`), binary references, the formalism mirror, and the part on disk of a path
+//! that the command boundary of `theos-studio` judges (`walk::disk_spelling`).
 
 use std::ffi::OsString;
 use std::fs::DirEntry;
