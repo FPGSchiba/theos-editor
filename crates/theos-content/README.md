@@ -154,7 +154,8 @@ The walk lists every file below the project root whose name ends in `.md`, excep
 - every `README.md`, and everything under `templates/records/`, `tools/` and `attachments/`.
 
 `update`, `apply` and `preview` take a path by the same rules, so a path they index is one the
-next sync keeps.
+next sync keeps. The command boundary of `theos-studio` judges a plan by the same facts,
+`walk::is_hidden_entry` and `walk::disk_spelling`.
 
 ## The index and its cache
 
@@ -198,7 +199,7 @@ cache copies a project into a temporary folder first.
 | Phase | Uses |
 |---|---|
 | P05 | `Project::open`, `SCHEMA_VERSION`, `findings`, `preview` for the hook, `KindSpec`, `Placement` and `order()`, `search`, records, links, backlinks and `lens` for the MCP read tools |
-| P06 | `preview` before every write and `update` after it; `KindSpec::order()`; backlinks with spans for renaming an id; `Placement` |
+| P06 | `preview` before every write and `update` after it; `KindSpec::order()`; backlinks with spans for renaming an id; `Placement`; `walk::is_hidden_entry` and `walk::disk_spelling` for the command boundary |
 | P07 | One project and one `.theos/cache` per agent worktree; `preview` for proposals |
 | P11, P12 | `search`, backlinks, slot targets for `[[` suggestions, `link/dangling` findings |
 | P15 | `lens` and its beliefs; links for the graph |

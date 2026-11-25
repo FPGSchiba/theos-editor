@@ -5,18 +5,29 @@ use std::io::Write;
 use std::path::Path;
 
 use anyhow::Context;
-use theos_content::{BeatRef, Index, Project, TruthLedger, parts};
+use theos_content::{BeatRef, TruthLedger};
+use theos_studio::StudioError;
+use theos_studio::views::ledger::LedgerView;
 
-/// Opens the project at `folder`, syncs the index and writes the ledger to `out`.
+use crate::output;
+
+/// Writes the ledger of the project in `folder` to `out`, as text or as one JSON document.
 ///
 /// # Errors
 ///
 /// Fails when the project or the index cannot be opened, or when `out` cannot be written.
-pub(crate) fn run(folder: &Path, out: &mut impl Write) -> anyhow::Result<()> {
-    let project = Project::open(folder)?;
-    let registry = parts::builtin()?;
-    let (index, _update) = Index::open(&project, &registry)?;
-    let ledger = index.ledger()?;
+pub(crate) fn run(
+    folder: Option<&Path>,
+    json: bool,
+    out: &mut impl Write,
+    err: &mut impl Write,
+) -> anyhow::Result<()> {
+    let workspace = output::workspace(folder)?;
+    let ledger = workspace.index().ledger().map_err(StudioError::from)?;
+    output::in_memory_note(err, workspace.is_in_memory()).context("cannot write the output")?;
+    if json {
+        return output::json(out, &LedgerView::from(ledger.as_slice()));
+    }
     out.write_all(format(&ledger).as_bytes())
         .context("cannot write the output")
 }

@@ -36,6 +36,21 @@ pub struct IdRule {
     pub says: &'static str,
 }
 
+impl IdRule {
+    /// The prefix of a numbered kind, whose pattern is exactly `^<capitals>-[0-9]{3,}$`: `T-` for
+    /// `^T-[0-9]{3,}$`. `None` for every other pattern, such as a slug.
+    #[must_use]
+    pub fn number_prefix(&self) -> Option<&'static str> {
+        let letters = self
+            .pattern
+            .strip_prefix('^')?
+            .strip_suffix("-[0-9]{3,}$")?;
+        let numbered = !letters.is_empty() && letters.chars().all(|c| c.is_ascii_uppercase());
+        // The prefix is `letters` and the dash, a slice of the pattern, so it stays 'static.
+        numbered.then(|| &self.pattern[1..=letters.len() + 1])
+    }
+}
+
 /// Where the records of a kind live.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Placement {
@@ -43,6 +58,18 @@ pub enum Placement {
     Flat(&'static str),
     /// Under the folder of the record the named parent field links to.
     UnderParent(&'static str),
+}
+
+impl Placement {
+    /// The folder of the records under the parent record at `parent_path`: the parent's own
+    /// folder, then its id. `("lore/factions/x.md", "x")` gives `lore/factions/x`.
+    #[must_use]
+    pub fn under_parent(parent_path: &str, parent_id: &str) -> String {
+        match parent_path.rsplit_once('/') {
+            Some((folder, _)) => format!("{folder}/{parent_id}"),
+            None => parent_id.to_owned(),
+        }
+    }
 }
 
 /// A beat attribute and the kinds it may link to.
@@ -153,5 +180,34 @@ impl KindSpec {
         } else {
             order
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parts;
+
+    #[test]
+    fn number_prefixes_of_the_builtin_kinds() -> Result<(), Box<dyn std::error::Error>> {
+        let registry = parts::builtin()?;
+        let prefix = |kind: &str| registry.kind(kind).and_then(|spec| spec.id.number_prefix());
+        assert_eq!(prefix("truth"), Some("T-"));
+        assert_eq!(prefix("belief"), Some("B-"));
+        assert_eq!(prefix("clue"), Some("C-"));
+        assert_eq!(prefix("script"), Some("S-"));
+        assert_eq!(prefix("npc"), None);
+        assert_eq!(prefix("equation"), None);
+        assert_eq!(prefix("floor"), None);
+        Ok(())
+    }
+
+    #[test]
+    fn under_parent_joins_the_parent_folder_and_id() {
+        assert_eq!(
+            Placement::under_parent("lore/factions/x.md", "x"),
+            "lore/factions/x"
+        );
+        assert_eq!(Placement::under_parent("x.md", "x"), "x");
     }
 }
