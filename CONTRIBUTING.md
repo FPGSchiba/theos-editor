@@ -19,6 +19,13 @@ The same rules apply to everyone who changes this repo: Claude in its work sessi
 
 One branch, one pull request. Delete the branch after merging (GitHub does this automatically).
 
+Every push and every merge of `main` into a branch starts a CI run, and the runs cost money:
+
+- Push when a task or a review round is finished, not after every commit.
+- Update a pull request branch from `main` only when it is ready to merge and next in line, not
+  after every merge to `main`. The branch must be up to date before it merges (`docs/gate.md` §6),
+  but a merge that another one makes obsolete a day later was paid for twice.
+
 ## 2. Commits
 
 Every commit follows [Conventional Commits 1.0](https://www.conventionalcommits.org/en/v1.0.0/).

@@ -20,7 +20,8 @@ push to main ──► release-plz updates the release PR "chore(release): vX.Y.
                  (version in [workspace.package], CHANGELOG.md section)
 Jann merges the release PR
              ──► release-plz creates the annotated tag vX.Y.Z on main
-tag vX.Y.Z   ──► release.yml: tests on windows-latest, ubuntu-latest and macos-latest
+tag vX.Y.Z   ──► release.yml: tests on windows-latest, ubuntu-latest, macos-latest,
+                                macos-15-intel
              ──► builds on all three (macOS: arm64 + x86_64, merged into universal binaries)
                  ──► GitHub Release vX.Y.Z with artifacts, SHA256SUMS,
                      notes = the CHANGELOG section and the run that built it
@@ -34,10 +35,11 @@ tag vX.Y.Z   ──► release.yml: tests on windows-latest, ubuntu-latest and m
 2. **Tag.** Merging the release PR makes release-plz create the tag `vX.Y.Z`. Only the
    `theos-editor` package creates a tag; all crates are in one version group.
 3. **Build and publish.** The tag starts `release.yml`. It first runs the full test suite on
-   Windows, Linux and macOS (Windows and macOS are not part of the per-PR gate, so this is where a
-   break on one of them is caught before anything ships). Then it builds, checksums and creates
-   the GitHub Release; it attests the artifacts once the repository is public (§8). If any platform fails, no release is created; the fix goes to `main` and a new
-   patch version is cut. Nothing is published to crates.io.
+   Windows, Linux, macOS on Apple silicon and macOS on Intel (`macos-15-intel`). Windows and macOS
+   are not part of the per-PR gate, so this is where a break on one of them is caught before
+   anything ships. Then it builds, checksums and creates the GitHub Release; it attests the
+   artifacts once the repository is public (§8). If any platform fails, no release is created; the
+   fix goes to `main` and a new patch version is cut. Nothing is published to crates.io.
 4. **Consumers.** tower-of-theos runs `theos check` through the check action of this repository
    (`actions/theos-check/`), used at a release tag, which selects the released binary; moving it
    to a new release is a normal pull request there.
