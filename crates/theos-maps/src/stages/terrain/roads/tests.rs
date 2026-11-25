@@ -475,6 +475,18 @@ fn an_unreachable_ruin_gets_no_trail_and_a_warning() {
     assert!(found[0].contains("ruin"), "{}", found[0]);
 }
 
+// Final review round 5, finding 2 (sweep): every road class declares the length metric the run
+// reports for it, `<class>_km`; the test below only proves the declared ones are reported.
+#[test]
+fn every_road_class_has_its_length_metric() {
+    let params = Roads.params(&table("")).unwrap();
+    let names = Stage::metric_names(&Roads, params.as_ref());
+    for class in RoadClass::ALL {
+        let metric = format!("{}_km", class.name());
+        assert!(names.contains(&metric.as_str()), "{metric}: {names:?}");
+    }
+}
+
 #[test]
 fn roads_report_lengths_and_crossings() {
     let mut w = flat();
