@@ -110,8 +110,8 @@ mod tests {
     }
 
     // Every built-in and every fixture recipe but the evolution budget fixture writes what its
-    // outputs read; `evolution-384` stops after `landscape_evolution` and is only planned and
-    // executed (ruling of the final review, round 1).
+    // outputs read; `evolution-384` stops after `landscape_evolution`, and tests only plan it
+    // (ruling of the final review, round 1).
     #[test]
     fn the_built_in_and_fixture_recipes_pass_and_the_budget_fixture_is_refused() -> TestResult {
         let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/recipes");

@@ -1,7 +1,7 @@
 # synthetic fixture (P08), not canon
-# A measurement fixture of the evolution budget, not a full recipe: it stops after
-# `landscape_evolution`, so `run` and `describe` refuse it (ledger ruling P3); tests plan and
-# execute it directly.
+# The evolution budget recipe of Task 27, not a full recipe: it stops after
+# `landscape_evolution`, so `run` and `describe` refuse it (ledger ruling P3). Tests only plan
+# it; none executes it.
 id      = "evolution-384"
 title   = "Evolution budget, 384 squared"
 kind    = "terrain"
