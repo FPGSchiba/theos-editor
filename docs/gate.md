@@ -10,7 +10,13 @@ the gate and never merges a waiting PR are part of the gate.
 
 ## 1. Required checks
 
-All checks are required status checks on `main` (branch protection, administrators included).
+The required status checks on `main` are five CI jobs: `gate`, `test`, `coverage`, `pr` and
+`approval` (branch protection, administrators included; `ui` joins from P11). Each job runs the
+checks of the Job column below through `cargo xtask`. A check that fails does not stop the others
+of its job, and the job is red when any of its checks is. The job summary of a run is the table of
+verdicts, one row per check: passed, failed with its findings, or not needed with the reason. A
+check that is not needed passes at once, and the job still reports, so a required check is never
+missing.
 
 | Check | Job | What it runs | OS |
 |---|---|---|---|
@@ -35,6 +41,8 @@ All checks are required status checks on `main` (branch protection, administrato
 `slow_`: `maps::parity::slow_recipes_match`, or every test in a module `slow_runs`. The nextest
 profiles in `gate/nextest.toml` split the suite: `default` and `ci` leave the slow tests out, and
 the profile `slow` runs only them, so every test runs in exactly one of `test` and `slow-tests`.
+`slow-tests` runs in the job `gate`, beside `fmt`, `clippy` and the others, so on a pull request
+that changes a map crate `gate` takes the time of the slow tests on top of its other checks.
 `coverage` uses the profile `default` and so measures without the slow tests. A test that is not
 slow has no name segment that starts with `slow_`, or `test` would leave it out.
 
@@ -42,25 +50,31 @@ slow has no name segment that starts with `slow_`, or `test` would leave it out.
 the profile `ci` (`default` locally) with that of `slow`, so a criterion proven only by a slow
 test shows `pass` or `FAIL` from the slow run. A report that is missing adds nothing, so a slow
 test that did not run shows `–`; no pass is ever claimed that did not happen. `cargo xtask gate`
-runs `ac-trace` after `test` and `slow-tests` for that reason. The CI job `ac-trace` runs no
-tests and receives no reports from the other jobs, so there the table has no result column; the
-verdict never depends on it, because `test` and `slow-tests` fail for a failing test.
+runs `ac-trace` after `test` and `slow-tests` for that reason. In CI, `ac-trace` runs in the
+job `gate`, which runs no `test` and receives no reports from the other jobs, so there the table
+has no result column; the verdict never depends on it, because `test` and `slow-tests` fail for a
+failing test.
 
 On a pull request, `slow-tests` runs the slow tests only when the pull request changes, since its
 merge base, a file of a workspace crate with slow tests (one of its `.rs` files contains `slow_`),
 of a workspace crate such a crate depends on, or one of `Cargo.toml`, `Cargo.lock`,
 `rust-toolchain.toml`, `.cargo/`, `.config/`, `.github/`, `gate/` and `xtask/`. Otherwise it
-passes with a note that says so, without building anything. The job runs and reports on every
+passes with a note that says so, without building anything. The job `gate` runs and reports on every
 pull request either way, so the required check is never missing. A push to `main`, a manual run,
 the `platforms` schedule and `cargo xtask gate` always run the slow tests.
 
-**Windows and macOS** are not in the per-PR checks, because their runner minutes cost two and ten
-times as much as Linux on a private repository. Instead the workflow `platforms` runs `clippy`,
-`test`, `slow-tests`, `lints`, `ac-trace` and (from P11) `ui` on `windows-latest` and
-`macos-latest`, and `test` and `slow-tests` also on `macos-15-intel`: for `main` once a week, on
-demand, and on a PR when the label `windows` or `macos` is added (each label runs its own OS). The
-full test suite is `test` and `slow-tests` together; `release.yml` runs both on all three before
-every release (`docs/release.md`).
+**Windows and macOS** are not in the per-PR checks, because their runner minutes cost about 1.7
+and about 10 times as much as Linux on a private repository (GitHub's prices of November 2026:
+$0.010 and $0.062 against $0.006 a minute). Instead the workflow `platforms` has one job per OS,
+so each runner is set up and built once. The jobs `windows` (`windows-latest`) and `macos`
+(`macos-latest`, Apple silicon) run `clippy`, `test`, `slow-tests`, `lints`, `ac-trace` and (from
+P11) `ui`. The job `macos-intel` (`macos-15-intel`) runs `test` and `slow-tests` only, and only on
+demand. The triggers: Monday 04:00 UTC for `windows` and `macos`; the label `windows` or `macos`
+added to a PR (each label runs its own OS); a manual run with the inputs `windows` and `macos`
+(on by default) and `macos_intel` (off). The rule for pull requests that change no code (below)
+does not apply there: a label or a manual run is a deliberate request. The full test suite is
+`test` and `slow-tests` together; `release.yml` runs both on all four runners before every release
+(`docs/release.md`).
 These runs are not required checks. A red run is fixed before the next release; it is listed in
 `docs/status.md` under "Needs Jann" until then. `lints` and `ac-trace` run there too because
 they read what the compiler builds on the machine they run on, and code behind `#[cfg(windows)]`
@@ -69,7 +83,74 @@ or `#[cfg(target_os = "macos")]` is only built there.
 `cargo xtask gate` runs every check except `pr-body`, `pr-title` and `approval` locally, on
 Windows and Linux, with the same results as CI (`commit-msg` checks the commits since `main`).
 `slow-tests` always runs the slow tests there, so the local gate is never more lenient than CI.
-Claude runs it before claiming a phase is done.
+The rule for pull requests that change no code (below) applies locally too, judged on the working
+tree: the current branch and every path changed since the merge base with `origin/main`,
+committed or not, untracked files included, so uncommitted code always counts. Claude runs the
+gate before claiming a phase is done.
+
+### Pull requests that change no code
+
+A pull request that changes only paths no check reads needs only `commit-msg`; every other check
+is reported as not needed. `cargo xtask gate` decides, inside the job that always runs and
+reports, so a skipped check is never a missing required check. It reads `gate/code-paths.toml`,
+which holds two lists of globs. A path is non-code when it matches the first list and not the
+second. The first list:
+
+- `docs/**`
+- `research/**`
+- `design/**`
+- `README.md`
+- `CLAUDE.md`
+- `.claude/**`
+
+The second list is the paths that are code although the first list matches them. It wins in any
+folder, and it ignores letter case, because the tool configs are found in any case:
+
+- `docs/specs/00-umbrella.md`
+- `docs/gate.md`
+- `**/*.ts`
+- `**/Cargo.toml`
+- `**/Cargo.lock`
+- `**/rust-toolchain`
+- `**/rust-toolchain.toml`
+- `**/clippy.toml`
+- `**/.clippy.toml`
+- `**/rustfmt.toml`
+- `**/.rustfmt.toml`
+- `**/.cargo/**`
+- `**/.gitignore`
+- `**/.gitattributes`
+
+Every other path is code: `CONTRIBUTING.md`, `.github/**`, `gate/**`, `xtask/**`, and every new
+folder or root file, until someone lists it in a protected PR. The rule, in this order: a branch
+called `phase/…` runs every check, because `ac-trace` reads the phase from the branch. Changed
+paths that cannot be listed (a missing commit, git failing) run every check, with a note, and so
+does no changed path at all. Only non-code paths run `commit-msg` and nothing else. Anything else
+runs every check. The changed paths are those of the whole pull request against its merge base,
+never those of the last push, and a rename counts as a deletion and an addition. A push to `main`,
+a manual run and a detached head have no rule: every check runs. Every doubt adds checks; none
+removes one.
+
+A non-code change cannot alter a skipped check, because no check reads such a path. This is what
+each check reads, with the place in the code:
+
+| Check | What it reads | Why a non-code path cannot change its verdict |
+|---|---|---|
+| `fmt` | the workspace `.rs` files (`xtask/src/checks/cargo_cmds.rs:28`) | no non-code path is Rust code |
+| `clippy` | the workspace, and by `include_str!` the umbrella (`xtask/src/umbrella.rs:287`) and the PR template (`xtask/src/checks/pr_body.rs:129`, `xtask/tests/pr_body.rs:10`) | the umbrella is always code, and `.github/**` is code |
+| `test`, `coverage` | `docs/gate.md` (`xtask/tests/settings.rs:78`, `xtask/tests/workflows.rs:836`, `xtask/tests/approval.rs:579`), `CONTRIBUTING.md` (`xtask/tests/commit_msg.rs:436`), the workflows, and the files `clippy` includes; no crate takes a doc file into its docs (no `doc = include_str!`), so no doc test reads one | `docs/gate.md` is always code, and the others are code |
+| `docs` | the workspace sources, through rustdoc (`xtask/src/checks/cargo_cmds.rs:83`) | no non-code path is Rust code |
+| `deny` | the Cargo files, `deny.toml` and the advisory database (`xtask/src/checks/cargo_cmds.rs:92`) | Cargo files and `deny.toml` are code; a new advisory is not caused by the pull request and shows at the next code PR and the next push to `main` |
+| `engine-free` | `cargo metadata` and `gate/engine-crates.toml` (`xtask/src/checks/engine_free.rs:42`) | both are code |
+| `lints` | every file name, for `Cargo.toml` and the tool configs in any folder (`xtask/src/checks/lints/config_files.rs:168`, `:243`), and the mirrored files of `gate/` (`:39`) | those names are always code, whatever the folder and the case |
+| `ac-trace` | the umbrella (`xtask/src/umbrella.rs:20`), every `.ts` file (`xtask/src/checks/ac_trace/mod.rs:311`, `:328`) and the branch (`:259`) | the umbrella and `.ts` files are always code, and a `phase/` branch runs every check |
+| `tools` | `gate/tools.toml` (`xtask/src/tools.rs:21`) | code |
+| `slow-tests` | its own changed-paths rule (`xtask/src/checks/slow.rs:45`) | it only watches workspace crates and the files listed there |
+
+`commit-msg` always runs. `pr-title`, `pr-body` and `approval` always run too: they read the
+commits and the pull request, not files. The tests `gate_md_lists_the_code_paths_of_gate_toml` and
+`gate_md_explains_every_check_a_docs_change_skips` keep the lists and the table in step with
+`gate/code-paths.toml` and with the checks.
 
 ## 2. Lints (`gate/lints.toml`, mirrored into `Cargo.toml`)
 
