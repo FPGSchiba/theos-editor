@@ -2,7 +2,8 @@
 //! (`docs/specs/phases/P50-leaner-ci.md` §5.3).
 //!
 //! CI jobs and the local `cargo xtask gate` decide here, so they decide alike. Every uncertain
-//! case adds checks; none removes one.
+//! case adds checks; none removes one. A run that a label started is a deliberate request
+//! (§5.6) and runs every check.
 
 use std::path::Path;
 
@@ -62,12 +63,20 @@ pub fn decide(changes: Result<Changes>, paths: &CodePaths) -> Scope {
     Scope::DocsOnly
 }
 
+/// Why a run that a label started runs every check.
+const LABEL_NOTE: &str =
+    "a label started this run, a deliberate request: every selected check runs";
+
 /// The scope of this run in the checkout at `root`: a push or any other event runs every check, a
 /// pull request decides from its commits, and a run outside CI decides from the working tree.
+///
+/// A pull request run that a label started (`platforms`, §5.6) runs every check, with a note: the
+/// label is a deliberate request, and the rule for changes that touch no code does not apply.
 #[must_use]
 pub fn for_run(root: &Path, ci: Option<&CiEvent>) -> Scope {
     match ci {
         Some(CiEvent::Push(_) | CiEvent::Other) => every(),
+        Some(CiEvent::PullRequest(pr)) if pr.action == "labeled" => every_because(LABEL_NOTE),
         Some(CiEvent::PullRequest(pr)) => with_lists(root, |git, paths| {
             decide(changes::of_pull_request(git, pr), paths)
         }),
@@ -227,28 +236,86 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn a_pull_request_event_decides_from_its_commits() -> TestResult {
-        let dir = docs_repo()?;
-        let path = dir.path();
+    /// A pull request event with `action`, from `base` to `head` on the branch `head_ref`.
+    fn pull_request(action: &str, base: &str, head: &str, head_ref: &str) -> CiEvent {
+        CiEvent::PullRequest(PullRequestEvent {
+            action: action.to_owned(),
+            number: 1,
+            title: "docs: a".to_owned(),
+            body: None,
+            base_sha: base.to_owned(),
+            head_sha: head.to_owned(),
+            head_ref: head_ref.to_owned(),
+            label: (action == "labeled").then(|| "windows".to_owned()),
+        })
+    }
+
+    /// `docs_repo` with a branch `docs/x` that adds `docs/a.md`: its base and head commits.
+    fn docs_branch(path: &Path) -> TestResult<(String, String)> {
         let base = git(path, &["rev-parse", "HEAD"])?;
         git(path, &["switch", "-q", "-c", "docs/x"])?;
         write(path, "docs/a.md", "a\n")?;
         let head = commit(path, "docs: a")?;
-        let event = |head_ref: &str| {
-            CiEvent::PullRequest(PullRequestEvent {
-                action: "opened".to_owned(),
-                number: 1,
-                title: "docs: a".to_owned(),
-                body: None,
-                base_sha: base.clone(),
-                head_sha: head.clone(),
-                head_ref: head_ref.to_owned(),
-                label: None,
-            })
-        };
+        Ok((base, head))
+    }
+
+    #[test]
+    fn a_pull_request_event_decides_from_its_commits() -> TestResult {
+        let dir = docs_repo()?;
+        let path = dir.path();
+        let (base, head) = docs_branch(path)?;
+        let event = |head_ref: &str| pull_request("opened", &base, &head, head_ref);
         assert_eq!(for_run(path, Some(&event("docs/x"))), Scope::DocsOnly);
         assert_eq!(for_run(path, Some(&event("phase/P50-x"))), every());
+        Ok(())
+    }
+
+    // AC: CE-08C.6
+    #[test]
+    fn a_label_run_runs_every_check_of_a_docs_only_pull_request() -> TestResult {
+        let dir = docs_repo()?;
+        let path = dir.path();
+        let (base, head) = docs_branch(path)?;
+        let labeled = pull_request("labeled", &base, &head, "docs/x");
+        match for_run(path, Some(&labeled)) {
+            Scope::Every { note: Some(note) } => assert!(note.contains("label"), "{note}"),
+            other => panic!("expected Every with a note, got {other:?}"),
+        }
+        // The same pull request opened is docs-only: the label alone made the difference.
+        let opened = pull_request("opened", &base, &head, "docs/x");
+        assert_eq!(for_run(path, Some(&opened)), Scope::DocsOnly);
+        Ok(())
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn a_changed_tracked_code_file_on_a_docs_branch_runs_every_check() -> TestResult {
+        let dir = docs_repo()?;
+        let path = dir.path();
+        write(path, "crates/a/src/lib.rs", "// a\n")?;
+        let main = commit(path, "feat: a")?;
+        git(path, &["update-ref", "refs/remotes/origin/main", &main])?;
+        docs_branch(path)?;
+        assert_eq!(for_run(path, None), Scope::DocsOnly);
+        write(path, "crates/a/src/lib.rs", "// changed\n")?;
+        assert_eq!(for_run(path, None), every(), "unstaged");
+        git(path, &["add", "crates/a/src/lib.rs"])?;
+        assert_eq!(for_run(path, None), every(), "staged");
+        Ok(())
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn a_pull_request_whose_base_is_missing_runs_every_check_with_a_note() -> TestResult {
+        let dir = docs_repo()?;
+        let path = dir.path();
+        let (_, head) = docs_branch(path)?;
+        let missing = "0123456789abcdef0123456789abcdef01234567";
+        let event = pull_request("opened", missing, &head, "docs/x");
+        assert!(
+            matches!(for_run(path, Some(&event)), Scope::Every { note: Some(_) }),
+            "a base that is not in the repository"
+        );
         Ok(())
     }
 }
