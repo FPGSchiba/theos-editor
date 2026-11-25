@@ -64,6 +64,30 @@ impl Check {
             Self::Github => "github",
         }
     }
+
+    /// The check called `name`: the inverse of [`Check::name`].
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        Some(match name {
+            "tools" => Self::Tools,
+            "fmt" => Self::Fmt,
+            "clippy" => Self::Clippy,
+            "test" => Self::Test,
+            "slow-tests" => Self::SlowTests,
+            "docs" => Self::Docs,
+            "deny" => Self::Deny,
+            "engine-free" => Self::EngineFree,
+            "coverage" => Self::Coverage,
+            "lints" => Self::Lints,
+            "ac-trace" => Self::AcTrace,
+            "commit-msg" => Self::CommitMsg,
+            "pr-title" => Self::PrTitle,
+            "pr-body" => Self::PrBody,
+            "approval" => Self::Approval,
+            "github" => Self::Github,
+            _ => return None,
+        })
+    }
 }
 
 /// The checks `cargo xtask gate` runs, in order: cheap and local ones first. `ac-trace` is last,
@@ -128,6 +152,8 @@ pub struct Verdict {
     pub findings: Vec<Finding>,
     /// Remarks that do not fail the check, such as a crate with no instrumented lines.
     pub notes: Vec<String>,
+    /// Why the check did not run because the change does not need it; such a verdict passes.
+    pub not_needed: Option<String>,
 }
 
 impl Verdict {
@@ -138,6 +164,7 @@ impl Verdict {
             check,
             findings: Vec::new(),
             notes: Vec::new(),
+            not_needed: None,
         }
     }
 
@@ -148,7 +175,23 @@ impl Verdict {
             check,
             findings,
             notes: Vec::new(),
+            not_needed: None,
         }
+    }
+
+    /// A verdict for a check the change does not need, with the reason. It passes.
+    #[must_use]
+    pub fn not_needed(check: Check, reason: impl Into<String>) -> Self {
+        Self {
+            not_needed: Some(reason.into()),
+            ..Self::pass(check)
+        }
+    }
+
+    /// True when the check was left out because the change does not need it.
+    #[must_use]
+    pub const fn is_not_needed(&self) -> bool {
+        self.not_needed.is_some()
     }
 
     /// True when there are no findings.
@@ -190,6 +233,23 @@ mod tests {
         assert!(Verdict::pass(Check::Fmt).passed());
         assert!(Verdict::with(Check::Fmt, Vec::new()).passed());
         assert!(!Verdict::with(Check::Fmt, vec![Finding::new("drifted")]).passed());
+    }
+
+    #[test]
+    fn check_names_round_trip() {
+        for check in ALL {
+            assert_eq!(Check::from_name(check.name()), Some(check));
+        }
+        assert_eq!(Check::from_name("nope"), None);
+    }
+
+    #[test]
+    fn a_not_needed_verdict_passes_and_knows_its_reason() {
+        let verdict = Verdict::not_needed(Check::Test, "docs only");
+        assert!(verdict.passed());
+        assert!(verdict.is_not_needed());
+        assert_eq!(verdict.not_needed.as_deref(), Some("docs only"));
+        assert!(!Verdict::pass(Check::Test).is_not_needed());
     }
 
     #[test]

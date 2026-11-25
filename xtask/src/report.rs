@@ -27,8 +27,17 @@ use crate::{Error, Result};
 /// Fails when `out` cannot be written.
 pub fn write_table(verdicts: &[Verdict], out: &mut dyn Write) -> io::Result<()> {
     for verdict in verdicts {
-        let status = if verdict.passed() { "pass" } else { "FAIL" };
+        let status = if verdict.is_not_needed() {
+            "not needed"
+        } else if verdict.passed() {
+            "pass"
+        } else {
+            "FAIL"
+        };
         writeln!(out, "{status}  {}", verdict.check.name())?;
+        if let Some(reason) = &verdict.not_needed {
+            write_marked(out, "reason: ", reason)?;
+        }
         for finding in &verdict.findings {
             let text = match location(finding) {
                 Some(place) => format!("{place}: {}", finding.message),
@@ -122,16 +131,26 @@ pub fn annotation(check: Check, finding: &Finding) -> String {
 pub fn summary_markdown(verdicts: &[Verdict]) -> String {
     let mut text = String::from("### xtask\n\n| Check | Result |\n|---|---|\n");
     for verdict in verdicts {
-        let status = if verdict.passed() { "pass" } else { "**FAIL**" };
+        let status = if verdict.is_not_needed() {
+            "not needed"
+        } else if verdict.passed() {
+            "pass"
+        } else {
+            "**FAIL**"
+        };
         // Writing to a `String` cannot fail.
         let _ = writeln!(text, "| `{}` | {status} |", verdict.check.name());
     }
     text.push('\n');
     for verdict in verdicts {
-        if verdict.findings.is_empty() && verdict.notes.is_empty() {
+        if verdict.findings.is_empty() && verdict.notes.is_empty() && !verdict.is_not_needed() {
             continue;
         }
         let _ = write!(text, "#### `{}`\n\n", verdict.check.name());
+        if let Some(reason) = &verdict.not_needed {
+            let reason = reason.lines().collect::<Vec<_>>().join(" ");
+            let _ = write!(text, "{reason}\n\n");
+        }
         for finding in &verdict.findings {
             let message = finding.message.lines().collect::<Vec<_>>().join(" ");
             match location(finding) {
@@ -165,10 +184,7 @@ pub fn summary_markdown(verdicts: &[Verdict]) -> String {
 ///
 /// Fails when `out` or the summary file cannot be written.
 pub fn emit(verdict: &Verdict, ci: bool, out: &mut dyn Write) -> Result<()> {
-    let summary = std::env::var_os("GITHUB_STEP_SUMMARY")
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from);
-    emit_with(verdict, ci, summary.as_deref(), out)
+    emit_with(verdict, ci, summary_path().as_deref(), out)
 }
 
 fn emit_with(
@@ -180,14 +196,37 @@ fn emit_with(
     let verdicts = std::slice::from_ref(verdict);
     write_table(verdicts, out).map_err(output_error)?;
     if ci {
+        publish_with(verdicts, summary, out)?;
+    }
+    Ok(())
+}
+
+/// Writes the annotation of every finding of `verdicts` to `out`, and appends one markdown
+/// summary of all of them to the file named by `$GITHUB_STEP_SUMMARY` when it is set.
+///
+/// # Errors
+///
+/// Fails when `out` or the summary file cannot be written.
+pub fn publish(verdicts: &[Verdict], out: &mut dyn Write) -> Result<()> {
+    publish_with(verdicts, summary_path().as_deref(), out)
+}
+
+fn publish_with(verdicts: &[Verdict], summary: Option<&Path>, out: &mut dyn Write) -> Result<()> {
+    for verdict in verdicts {
         for finding in &verdict.findings {
             writeln!(out, "{}", annotation(verdict.check, finding)).map_err(output_error)?;
         }
-        if let Some(path) = summary {
-            append(path, &summary_markdown(verdicts))?;
-        }
+    }
+    if let Some(path) = summary {
+        append(path, &summary_markdown(verdicts))?;
     }
     Ok(())
+}
+
+fn summary_path() -> Option<PathBuf> {
+    std::env::var_os("GITHUB_STEP_SUMMARY")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
 }
 
 fn append(path: &Path, text: &str) -> Result<()> {
@@ -365,6 +404,7 @@ mod tests {
                 "note first\n::error::in a note".to_owned(),
                 "::notice::note".to_owned(),
             ],
+            not_needed: None,
         }
     }
 
@@ -543,6 +583,57 @@ mod tests {
         let mut out = Vec::new();
         let result = emit_with(&failing(), true, Some(dir.path()), &mut out);
         assert!(matches!(result, Err(crate::Error::Io { .. })), "{result:?}");
+        Ok(())
+    }
+
+    fn not_needed() -> Verdict {
+        Verdict::not_needed(Check::Test, "docs only")
+    }
+
+    // AC: CE-08C.1
+    #[test]
+    fn summary_lists_every_check_with_its_verdict() {
+        let clippy = Verdict::with(Check::Clippy, vec![Finding::new("unused")]);
+        let text = summary_markdown(&[Verdict::pass(Check::Fmt), clippy, not_needed()]);
+        assert!(text.contains("| `fmt` | pass |\n"), "{text}");
+        assert!(text.contains("| `clippy` | **FAIL** |\n"), "{text}");
+        assert!(text.contains("| `test` | not needed |\n"), "{text}");
+        assert!(text.contains("#### `test`\n\ndocs only\n"), "{text}");
+    }
+
+    #[test]
+    fn a_not_needed_verdict_passes_and_says_so_in_the_table() -> TestResult {
+        let verdict = not_needed();
+        assert!(verdict.passed());
+        assert_eq!(
+            table(&[verdict])?,
+            "not needed  test\n  reason: docs only\n"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn publish_appends_one_summary_for_all_verdicts() -> TestResult {
+        let summary = tempfile::NamedTempFile::new()?;
+        std::fs::write(summary.path(), "earlier step\n")?;
+        let mut out = Vec::new();
+        publish_with(
+            &[Verdict::pass(Check::Fmt), failing(), not_needed()],
+            Some(summary.path()),
+            &mut out,
+        )?;
+        assert_eq!(
+            String::from_utf8(out)?,
+            "::error file=crates/a/src/lib.rs,line=3,title=lints::allow attribute\n\
+             ::error title=lints::no clippy.toml\n"
+        );
+        let written = std::fs::read_to_string(summary.path())?;
+        assert_eq!(written.matches("### xtask").count(), 1, "{written}");
+        assert!(
+            written.starts_with("earlier step\n### xtask\n"),
+            "{written}"
+        );
+        assert!(written.contains("| `test` | not needed |"), "{written}");
         Ok(())
     }
 }
