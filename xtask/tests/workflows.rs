@@ -732,7 +732,7 @@ fn timeout_of(file: &str, name: &str) -> i64 {
     match name {
         _ if file == "ci.yml" => ci_job(name).map_or(0, |job| job.timeout),
         // Both run a binary `main` cached, so a label change is checked in seconds.
-        "pr" | "approval" => 15,
+        "pr" | "approval" | "settings" => 15,
         _ if check_of(name) == "slow-tests" => 120,
         _ if OS_SUFFIXES.iter().any(|suffix| name.ends_with(suffix)) => 60,
         _ => 30,
