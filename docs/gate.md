@@ -15,10 +15,10 @@ The required status checks on `main` are five CI jobs: `gate`, `test`, `coverage
 checks of the Job column below through `cargo xtask`. A check that fails does not stop the others
 of its job, and the job is red when any of its checks is. The job summary of a run is the table of
 verdicts, one row per check: passed, failed with its findings, or not needed with the reason. A
-check that is not needed passes at once, and the job still reports, so a required check is never
-missing. When every check runs for a reason other than a change to code (a push, a manual or scheduled
-run, a `phase/` branch, a label, changed paths that cannot be read or are none, lists that cannot
-be read, a detached head), the summary says why above the table.
+check that is not needed counts as passed and is not run, and the job still reports, so a required
+check is never missing. When every check runs for a reason other than a change to code (a push, a
+manual or scheduled run, a `phase/` branch, a label, changed paths that cannot be read or are
+none, lists that cannot be read, a detached head), the summary says why above the table.
 
 | Check | Job | What it runs | OS |
 |---|---|---|---|
@@ -63,8 +63,9 @@ merge base, a file of a workspace crate with slow tests (one of its `.rs` files 
 of a workspace crate such a crate depends on, or one of `Cargo.toml`, `Cargo.lock`,
 `rust-toolchain.toml`, `.cargo/`, `.config/`, `.github/`, `gate/` and `xtask/`. Otherwise it
 is reported as not needed, with the reason, without building anything. The job `gate` runs and
-reports on every pull request either way, so the required check is never missing. A push to `main`, a manual run,
-the `platforms` schedule and `cargo xtask gate` outside CI always run the slow tests. Inside a CI
+reports on every pull request either way, so the required check is never missing. A push to
+`main`, a manual run and the `platforms` schedule always run the slow tests; so does
+`cargo xtask gate` outside CI, unless the change touches no code (the rule below). Inside a CI
 job, `cargo xtask gate` hands `slow-tests` the event, so on a pull request, a `platforms` run
 started by a label included, the rule above decides.
 
@@ -87,11 +88,11 @@ or `#[cfg(target_os = "macos")]` is only built there.
 
 `cargo xtask gate` runs every check except `pr-body`, `pr-title` and `approval` locally, on
 Windows and Linux, with the same results as CI (`commit-msg` checks the commits since `main`).
-`slow-tests` always runs the slow tests there, so the local gate is never more lenient than CI.
-The rule for pull requests that change no code (below) applies locally too, judged on the working
-tree: the current branch and every path changed since the merge base with `origin/main`,
-committed or not, untracked files included, so uncommitted code always counts. Claude runs the
-gate before claiming a phase is done.
+`slow-tests` runs the slow tests there whenever the change touches code, so the local gate is
+never more lenient than CI. The rule for pull requests that change no code (below) applies
+locally too, judged on the working tree: the current branch and every path changed since the merge
+base with `origin/main`, committed or not, untracked files included, so uncommitted code always
+counts. Claude runs the gate before claiming a phase is done.
 
 ### Pull requests that change no code
 
