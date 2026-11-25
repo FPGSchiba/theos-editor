@@ -686,7 +686,7 @@ Pure functions with unit tests against known values (scipy semantics where 0.3.0
 | `laplace`, `gradient` | Central differences (numpy's `gradient` at edges) |
 | `percentile` | Linear interpolation (numpy's default) |
 | `distance` | Exact Euclidean distance transform (Felzenszwalb & Huttenlocher 2012), with nearest-index output |
-| `labels` | Connected components, 4- or 8-connectivity, union–find, labels in scan order |
+| `labels` | Connected components, 4- or 8-connectivity, an explicit-stack flood fill, labels in scan order (ruling 76) |
 | `morphology` | Binary dilation, erosion, opening with a cross or a disk in metres |
 | `curves` | Catmull–Rom; signed distance to a polyline through `spade`'s nearest neighbour |
 | `voronoi` | Nearest seed through `spade` |
@@ -1576,6 +1576,11 @@ Rulings of 13 Nov 2026, from the build:
     from about 1.8e9 px (a river width of `width_a = 1e12` panicked the renders); inside the
     bounds the drawing is unchanged bit for bit — cost if wrong: an absurd stroke or shape is
     drawn clamped.
+76. Ruling: `labels` finds components by a flood fill with an explicit stack, not by
+    union–find — what callers rely on is the numbering in scan order, which both give
+    identically, and the flood fill needs no second pass; the build made this call at Task 15
+    and the final review found the spec still naming union–find — cost if wrong: the
+    algorithm is swapped inside one function.
 
 ## 10. Left to the builder
 
