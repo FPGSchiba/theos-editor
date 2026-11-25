@@ -121,7 +121,8 @@ fn inner_message(error: RecipeError) -> String {
         other => other.to_string(),
     }
 }
-/// The `*.toml` files directly inside `dir`, sorted by file name.
+
+/// The `*.toml` files directly inside `dir`, the extension in any case, sorted by file name.
 fn recipe_files(dir: &Path) -> Result<Vec<PathBuf>, RecipeError> {
     let io = |source| RecipeError::Io {
         path: dir.to_owned(),
@@ -130,7 +131,11 @@ fn recipe_files(dir: &Path) -> Result<Vec<PathBuf>, RecipeError> {
     let mut files = Vec::new();
     for entry in std::fs::read_dir(dir).map_err(io)? {
         let path = entry.map_err(io)?.path();
-        if path.is_file() && path.extension().is_some_and(|ext| ext == "toml") {
+        if path.is_file()
+            && path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("toml"))
+        {
             files.push(path);
         }
     }

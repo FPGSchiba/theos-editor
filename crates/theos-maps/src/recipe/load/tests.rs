@@ -138,6 +138,23 @@ fn other_files_and_subfolders_are_ignored() {
     assert!(catalog.recipes.is_empty() && catalog.problems.is_empty());
 }
 
+// Final review round 5, finding 6 (a Task 9 nit): the extension matches in any case, as file
+// names on Windows do, so `Ridge.TOML` is a recipe and not skipped silently.
+#[test]
+fn the_extension_matches_in_any_case() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "Ridge.TOML", &recipe_text("ridge", "upper"));
+    write(dir.path(), "dale.Toml", &recipe_text("dale", "mixed"));
+    let catalog = catalog_with(&[], &[dir.path().to_owned()]).unwrap();
+    assert_eq!(
+        catalog.recipes.keys().collect::<Vec<_>>(),
+        ["dale", "ridge"]
+    );
+    assert_eq!(title(&catalog, "ridge"), "upper");
+    assert_eq!(title(&catalog, "dale"), "mixed");
+    assert!(catalog.problems.is_empty(), "{:?}", catalog.problems);
+}
+
 #[test]
 fn a_missing_folder_is_an_io_error_naming_it() {
     let dir = tempfile::tempdir().unwrap();
