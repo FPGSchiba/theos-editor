@@ -1,4 +1,5 @@
-//! The checks that are one or two cargo commands: `fmt`, `clippy`, `test`, `docs` and `deny`.
+//! The checks that are one or two cargo commands: `fmt`, `clippy`, `test`, `docs` and `deny`,
+//! and the command of `slow-tests`, which [`crate::checks::slow`] runs when it is needed.
 //!
 //! The commands are `docs/gate.md` §1, with `--locked` where cargo takes it. The same lists run
 //! locally and in CI, which is what makes the verdicts the same (CE-08.4). Cargo and the tools
@@ -42,7 +43,8 @@ pub fn clippy() -> Vec<CargoCommand> {
 }
 
 /// `cargo nextest run --workspace --locked --profile <ci|default>`, then
-/// `cargo test --doc --workspace --locked`. The profile is `ci` when `ci` is true.
+/// `cargo test --doc --workspace --locked`. The profile is `ci` when `ci` is true. Both profiles
+/// leave out the slow tests, which [`slow_tests`] runs.
 #[must_use]
 pub fn test(ci: bool) -> Vec<CargoCommand> {
     let profile = if ci { "ci" } else { "default" };
@@ -57,6 +59,23 @@ pub fn test(ci: bool) -> Vec<CargoCommand> {
         ]),
         cargo(&["test", "--doc", "--workspace", "--locked"]),
     ]
+}
+
+/// `cargo nextest run --workspace --locked --profile slow --no-tests=warn`: the slow tests, the
+/// ones the profiles of [`test`](fn@test) leave out (`gate/nextest.toml`), locally and in CI alike. A
+/// workspace without slow tests passes with nextest's warning. The `slow-tests` check
+/// ([`crate::checks::slow`]) decides whether these run.
+#[must_use]
+pub fn slow_tests() -> Vec<CargoCommand> {
+    vec![cargo(&[
+        "nextest",
+        "run",
+        "--workspace",
+        "--locked",
+        "--profile",
+        "slow",
+        "--no-tests=warn",
+    ])]
 }
 
 /// `cargo doc --workspace --no-deps --locked` with `RUSTDOCFLAGS=-D warnings` on the child.
@@ -218,6 +237,21 @@ mod tests {
             ]
         );
         assert_eq!(
+            slow_tests(),
+            [cmd(
+                &[
+                    "nextest",
+                    "run",
+                    "--workspace",
+                    "--locked",
+                    "--profile",
+                    "slow",
+                    "--no-tests=warn"
+                ],
+                &[]
+            )]
+        );
+        assert_eq!(
             docs(),
             [cmd(
                 &["doc", "--workspace", "--no-deps", "--locked"],
@@ -234,6 +268,8 @@ mod tests {
         assert_eq!(commands_for(Check::Docs, None), Some(docs()));
         assert_eq!(commands_for(Check::Deny, None), Some(deny()));
         assert_eq!(commands_for(Check::Lints, None), None);
+        // `slow-tests` first decides whether to run its command (`checks::slow`).
+        assert_eq!(commands_for(Check::SlowTests, None), None);
         assert_eq!(commands_for(Check::Tools, None), None);
     }
 
