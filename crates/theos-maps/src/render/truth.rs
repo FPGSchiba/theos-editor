@@ -30,10 +30,14 @@ const TITLE_PX: f32 = 15.0;
 const EDGE_PX: f32 = 8.0;
 /// A settlement name's size by class, pixels: larger for towns and cities, smallest for hamlets.
 fn name_px(ty: &str) -> f32 {
+    name_px_of(ty).unwrap_or(9.0)
+}
+/// The name size of a class above hamlet; `None` for a hamlet and any other type.
+fn name_px_of(ty: &str) -> Option<f32> {
     match ty {
-        "city" | "town" => 13.0,
-        "village" => 11.0,
-        _ => 9.0,
+        "city" | "town" => Some(13.0),
+        "village" => Some(11.0),
+        _ => None,
     }
 }
 /// The opacity of the box behind a name.
@@ -248,6 +252,14 @@ mod tests {
     use crate::progress::CancelToken;
     use crate::render::test_support::TestWorld;
     use crate::world::MapFrame;
+
+    // Final review round 6: a misspelt class arm would fall to the hamlet default unseen.
+    #[test]
+    fn every_settlement_class_above_hamlet_has_its_own_name_size() {
+        for ty in crate::features::types_of("settlement").filter(|t| *t != "hamlet") {
+            assert!(name_px_of(ty).is_some(), "{ty}");
+        }
+    }
 
     #[test]
     fn the_scale_bar_is_the_longest_step_that_fits() {

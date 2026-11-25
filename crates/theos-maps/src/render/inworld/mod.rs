@@ -58,11 +58,16 @@ const TITLE_BASELINE_PX: f64 = 28.0;
 
 /// The size of a settlement's house mark and its name, by class, pixels.
 fn house_px(ty: &str) -> (u8, f32) {
+    house_px_of(ty).unwrap_or((9, 10.0))
+}
+
+/// The house and name size of a class above hamlet; `None` for a hamlet and any other type.
+fn house_px_of(ty: &str) -> Option<(u8, f32)> {
     match ty {
-        "city" => (20, 16.0),
-        "town" => (16, 14.0),
-        "village" => (12, 12.0),
-        _ => (9, 10.0),
+        "city" => Some((20, 16.0)),
+        "town" => Some((16, 14.0)),
+        "village" => Some((12, 12.0)),
+        _ => None,
     }
 }
 
@@ -268,4 +273,17 @@ fn draw_inside(
     let x = min(max(origin[0], 0.0), max(w - width, 0.0));
     let y = min(max(origin[1], size_px * 0.8), max(h - size_px * 0.3, 0.0));
     text::draw(pixmap, face, string, size, [to_f32(x), to_f32(y)], colour)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::house_px_of;
+
+    // Final review round 6: a misspelt class arm would fall to the hamlet default unseen.
+    #[test]
+    fn every_settlement_class_above_hamlet_has_its_own_house_size() {
+        for ty in crate::features::types_of("settlement").filter(|t| *t != "hamlet") {
+            assert!(house_px_of(ty).is_some(), "{ty}");
+        }
+    }
 }

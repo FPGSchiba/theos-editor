@@ -33,11 +33,16 @@ const fn mark(shape: Shape, size: u8, face: Rgb, edge: Rgb) -> Mark {
 
 /// The side of a settlement's square in pixels: bigger for bigger classes.
 pub(crate) fn settlement_px(ty: &str) -> u8 {
+    settlement_px_of(ty).unwrap_or(6)
+}
+
+/// The square side of a class above hamlet; `None` for a hamlet and any other type.
+fn settlement_px_of(ty: &str) -> Option<u8> {
     match ty {
-        "city" => 14,
-        "town" => 11,
-        "village" => 8,
-        _ => 6,
+        "city" => Some(14),
+        "town" => Some(11),
+        "village" => Some(8),
+        _ => None,
     }
 }
 
@@ -139,6 +144,14 @@ pub(crate) const ROAD_EDGE_EXTRA_PX: f64 = 2.0;
 mod tests {
     use super::*;
     use crate::features::TYPES;
+
+    // Final review round 6: a misspelt class arm would fall to the hamlet default unseen.
+    #[test]
+    fn every_settlement_class_above_hamlet_has_its_own_square() {
+        for ty in crate::features::types_of("settlement").filter(|t| *t != "hamlet") {
+            assert!(settlement_px_of(ty).is_some(), "{ty}");
+        }
+    }
 
     #[test]
     fn every_type_has_its_own_style() {

@@ -12,11 +12,16 @@ use crate::world::MapFrame;
 
 /// The radius of the disc around a settlement, as a share of the map width (0.3.0).
 fn disc_share(ty: &str) -> f64 {
+    disc_share_of(ty).unwrap_or(0.10)
+}
+
+/// The disc share of a class above hamlet; `None` for a hamlet and any other type.
+fn disc_share_of(ty: &str) -> Option<f64> {
     match ty {
-        "city" => 0.30,
-        "town" => 0.25,
-        "village" => 0.18,
-        _ => 0.10,
+        "city" => Some(0.30),
+        "town" => Some(0.25),
+        "village" => Some(0.18),
+        _ => None,
     }
 }
 
@@ -91,6 +96,14 @@ mod tests {
     use super::*;
     use crate::progress::CancelToken;
     use crate::render::test_support::TestWorld;
+
+    // Final review round 6: a misspelt class arm would fall to the hamlet default unseen.
+    #[test]
+    fn every_settlement_class_above_hamlet_has_its_own_disc_share() {
+        for ty in crate::features::types_of("settlement").filter(|t| *t != "hamlet") {
+            assert!(disc_share_of(ty).is_some(), "{ty}");
+        }
+    }
 
     #[test]
     fn the_known_area_surrounds_settlements_and_stays_clear_of_the_rest() {
