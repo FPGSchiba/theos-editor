@@ -365,9 +365,12 @@ trait, but not lose a capability:
 - metric names known before the run, so constraint paths can be validated;
 - checks and metrics that see the parameters and the run's report.
 
-**`StageParams`** is a typed struct per stage, deserialised with `serde` (`deny_unknown_fields`,
-defaults per field) and downcast inside `run`. All lengths are in metres or kilometres, and all
-rates are per year, so a recipe means the same at any grid size (§5.5).
+**`StageParams`** is a typed struct per stage, deserialised with `serde` (defaults per field)
+and downcast inside `run`. Unknown keys are found in one place with `serde_ignored`, so every
+table reports "unknown parameter" at the key's path; only enums tagged by a field and
+flattened fields, which `serde_ignored` cannot see into, carry `deny_unknown_fields`
+(ruling 77). All lengths are in metres or kilometres, and all rates are per year, so a recipe
+means the same at any grid size (§5.5).
 
 **`StageContext`** gives the stage:
 
@@ -1581,6 +1584,12 @@ Rulings of 13 Nov 2026, from the build:
     identically, and the flood fill needs no second pass; the build made this call at Task 15
     and the final review found the spec still naming union–find — cost if wrong: the
     algorithm is swapped inside one function.
+77. Ruling: unknown parameter keys are found centrally with `serde_ignored`, not by
+    `deny_unknown_fields` on each struct — `deny_unknown_fields` reported a struct's first
+    unknown key in serde's own words and named no path for a key of an enum-keyed map, so the
+    same mistake read four ways; it stays only where `serde_ignored` cannot see: enums tagged by
+    a field (tectonics' sources) and flattened fields — cost if wrong: an unknown key inside a
+    tectonics source reads serde's "unknown field" at `source[i]`.
 
 ## 10. Left to the builder
 
