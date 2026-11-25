@@ -557,6 +557,51 @@ fn condition_of(job: &Job) -> TestResult<&str> {
         .ok_or_else(|| format!("job {} has no `if:`", job.name).into())
 }
 
+/// What follows each occurrence of `marker` in `text` up to the closing `quote` or the end of the
+/// identifier: the labels after `label.name == '` and the inputs after `inputs.`.
+fn after_marker(text: &str, marker: &str, stop: fn(char) -> bool) -> Vec<String> {
+    text.split(marker)
+        .skip(1)
+        .map(|rest| rest.chars().take_while(|c| !stop(*c)).collect())
+        .collect()
+}
+
+/// Pins the text of the condition of a job as the workflow spells it, independent of the table's
+/// model of it: the labels and inputs it names, and the events it mentions. A condition that
+/// names another job's label or input, or an event it should not start on, fails here.
+fn assert_condition_text(job: &Job) -> TestResult {
+    let expected = platform_job(&job.name).ok_or("an unexpected job")?;
+    let condition = condition_of(job)?;
+    let labels = after_marker(condition, "github.event.label.name == '", |c| c == '\'');
+    let inputs = after_marker(condition, "inputs.", |c| {
+        !(c.is_ascii_alphanumeric() || c == '_')
+    });
+    let name = &job.name;
+    assert_eq!(
+        inputs,
+        [expected.input],
+        "{name}: the inputs its condition names"
+    );
+    let events = |event: &str| condition.contains(&format!("github.event_name == '{event}'"));
+    if let Some(label) = expected.label {
+        // The schedule, its own manual input and its own label, and no other.
+        assert_eq!(labels, [label], "{name}: the labels its condition names");
+        assert!(events("schedule"), "{name}: not run by the schedule");
+        assert!(events("workflow_dispatch"), "{name}: not run on demand");
+        assert!(events("pull_request"), "{name}: not run by its label");
+    } else {
+        // On demand only: no schedule, no label, no pull request.
+        assert!(events("workflow_dispatch"), "{name}: not run on demand");
+        for word in ["schedule", "label", "pull_request"] {
+            assert!(
+                !condition.contains(word),
+                "{name}: the condition mentions {word}, but the job runs only on demand"
+            );
+        }
+    }
+    Ok(())
+}
+
 // AC: CE-08C.6, CE-08.12
 #[test]
 fn macos_runs_weekly_on_demand_and_by_label_on_apple_silicon() -> TestResult {
@@ -590,6 +635,7 @@ fn macos_runs_weekly_on_demand_and_by_label_on_apple_silicon() -> TestResult {
     let jobs = jobs(&platforms)?;
     let macos = &jobs[index_of(&jobs, "macos")?];
     assert_eq!(macos.runs_on()?, "macos-latest");
+    assert_condition_text(macos)?;
     let job = platform_job("macos").ok_or("no macos job")?;
     for (event, expected) in [
         (
@@ -643,6 +689,7 @@ fn intel_runs_only_on_demand() -> TestResult {
     let jobs = jobs(&workflow("platforms.yml")?)?;
     let intel = &jobs[index_of(&jobs, "macos-intel")?];
     assert_eq!(intel.runs_on()?, "macos-15-intel");
+    assert_condition_text(intel)?;
     let job = platform_job("macos-intel").ok_or("no macos-intel job")?;
     for (event, expected) in [
         (
@@ -739,6 +786,7 @@ fn platforms_starts_no_job_for_another_label() -> TestResult {
     let labels = ["windows", "macos", "macos-intel", "needs-jann", "approved"];
     for job in jobs(&workflow("platforms.yml")?)? {
         let expected = platform_job(&job.name).ok_or("an unexpected job")?;
+        assert_condition_text(&job)?;
         for label in labels {
             let event = Event {
                 name: "pull_request",
@@ -1041,25 +1089,28 @@ fn no_step_condition_except_the_cache_ones() -> TestResult {
 /// The minutes a job may run before GitHub cancels it. The default is six hours. The jobs of
 /// `ci.yml` and `platforms.yml` have their own: a platform job builds once and runs its checks,
 /// slow tests included, one after the other.
-fn timeout_of(file: &str, name: &str) -> i64 {
-    match name {
-        _ if file == "ci.yml" => ci_job(name).map_or(0, |job| job.timeout),
-        _ if file == "platforms.yml" => platform_job(name).map_or(0, |job| job.timeout),
-        // Both run a binary `main` cached, so a label change is checked in seconds.
-        _ => 15,
-    }
+fn timeout_of(file: &str, name: &str) -> TestResult<i64> {
+    let known = match (file, name) {
+        ("ci.yml", _) => ci_job(name).map(|job| job.timeout),
+        ("platforms.yml", _) => platform_job(name).map(|job| job.timeout),
+        // These run a binary `main` cached, so a label change is checked in seconds.
+        ("pr.yml", "pr") | ("approval.yml", "approval") | ("settings.yml", "settings") => Some(15),
+        _ => None,
+    };
+    known.ok_or_else(|| format!("{file}: job {name} has no expected timeout").into())
 }
 
 // AC: CE-08.3, CE-08.4
 #[test]
 fn every_job_has_a_timeout() -> TestResult {
     for (file, job) in all_jobs()? {
+        let expected = timeout_of(file, &job.name)?;
         assert_eq!(
             job.node["timeout-minutes"].as_i64(),
-            Some(timeout_of(file, &job.name)),
-            "{file}: job {} has no `timeout-minutes` of {}, and a hung job runs for six hours",
-            job.name,
-            timeout_of(file, &job.name)
+            Some(expected),
+            "{file}: job {} has no `timeout-minutes` of {expected}, and a hung job runs for six \
+             hours",
+            job.name
         );
     }
     Ok(())

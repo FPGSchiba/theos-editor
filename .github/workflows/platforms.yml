@@ -7,8 +7,8 @@
 #
 # One job per OS, running its checks through `cargo xtask gate --only`: a macOS minute costs about
 # ten Linux minutes, so each OS is set up and built once, not once per check. The Intel macOS
-# runner runs the tests only, and only when asked for in a manual run (`macos_intel`): it is the
-# dearest and its tests rarely differ from Apple silicon. A newer label run for the same pull
+# runner runs the tests and the slow tests, and only when asked for in a manual run
+# (`macos_intel`): it is the dearest and its tests rarely differ from Apple silicon. A newer label run for the same pull
 # request and OS cancels the older one. Only the schedule saves a build cache: a label or manual
 # run restores the one of the last scheduled run and saves nothing. The gate reads history for
 # `slow-tests`, so the checkout fetches it.
