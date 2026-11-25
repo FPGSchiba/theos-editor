@@ -49,6 +49,7 @@ pub mod markdown;
 pub mod process;
 pub mod repo_path;
 pub mod report;
+pub mod scope;
 pub mod tools;
 pub mod umbrella;
 pub mod verdict;
