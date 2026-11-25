@@ -82,34 +82,25 @@ impl Default for ClimateParams {
 }
 
 impl ClimateParams {
-    /// The parameters as `(name, value)` pairs, in declaration order.
-    fn named(&self) -> [(&'static str, f64); 13] {
-        [
-            ("wind_from_deg", self.wind_from_deg),
-            ("wind_speed", self.wind_speed),
-            ("base_precip_mm", self.base_precip_mm),
-            ("orographic_mm", self.orographic_mm),
-            ("min_precip_mm", self.min_precip_mm),
-            ("t_base_c", self.t_base_c),
-            ("lapse_c_per_km", self.lapse_c_per_km),
-            ("nm", self.nm),
-            ("hw", self.hw),
-            ("cw", self.cw),
-            ("tau_c", self.tau_c),
-            ("tau_f", self.tau_f),
-            ("budyko_w", self.budyko_w),
-        ]
-    }
-
     /// Checks that every value is finite, that the amounts, rates and timescales are not
     /// negative and that `budyko_w` is positive.
+    ///
+    /// The finite check takes every field as serde names it, in name order, so a new field is
+    /// checked without a line of its own.
     ///
     /// # Errors
     /// [`ParamError`] of `climate_model` naming the first offending parameter.
     pub fn validate(&self) -> Result<(), ParamError> {
         let check = Check::of(ClimateModel::ID);
-        for (name, value) in self.named() {
-            check.finite(name, value)?;
+        let fields = toml::Table::try_from(self).map_err(|e| ParamError {
+            stage: ClimateModel::ID.to_owned(),
+            parameter: None,
+            message: format!("the parameters cannot be checked: {e}"),
+        })?;
+        for (name, value) in &fields {
+            if let Some(value) = value.as_float() {
+                check.finite(name, value)?;
+            }
         }
         let non_negative = [
             ("wind_speed", self.wind_speed),
@@ -157,7 +148,6 @@ impl WorldValue for Climate {
         Self::NAME
     }
     fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
-        let params: BTreeMap<&str, f64> = self.params.named().into_iter().collect();
         let fields = self.fields.as_ref().map(|f| {
             BTreeMap::from([
                 ("precipitation", f.precipitation.as_slice()),
@@ -167,7 +157,7 @@ impl WorldValue for Climate {
             ])
         });
         Ok(serde_json::json!({
-            "params": theos_map_format::json::to_checked_value(&params)?,
+            "params": theos_map_format::json::to_checked_value(&self.params)?,
             "fields": theos_map_format::json::to_checked_value(&fields)?,
         }))
     }
@@ -429,6 +419,35 @@ t_base_c = 15.0",
         assert_eq!(bare.type_name(), "climate");
         let mut moved = full.clone();
         assert!(moved.as_any().is::<Climate>() && moved.as_any_mut().is::<Climate>());
+    }
+
+    // Final review round 5, finding 2: the climate value's canonical JSON holds every parameter
+    // as serde names it, and `validate` refuses a value that is not finite in every one of them,
+    // so a new field needs no line of its own in either.
+    #[test]
+    fn every_parameter_is_hashed_and_checked_for_finiteness() {
+        let params = ClimateParams {
+            budyko_w: 2.25,
+            ..ClimateParams::default()
+        };
+        let climate = Climate {
+            params: params.clone(),
+            fields: None,
+        };
+        let json = climate.canonical_json().unwrap();
+        let serialised = theos_map_format::json::to_checked_value(&params).unwrap();
+        assert_eq!(json["params"], serialised);
+        let names: Vec<&String> = serialised.as_object().unwrap().keys().collect();
+        assert_eq!(names.len(), 13, "{names:?}");
+        for name in names {
+            for bad in ["nan", "inf", "-inf"] {
+                let err = ClimateModel
+                    .params(&table(&format!("{name} = {bad}")))
+                    .unwrap_err();
+                assert_eq!(err.parameter.as_deref(), Some(name.as_str()), "{err}");
+                assert_eq!(err.message, "must be finite", "{name} = {bad}");
+            }
+        }
     }
 
     #[test]

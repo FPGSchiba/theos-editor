@@ -4,22 +4,20 @@
 use std::collections::BTreeMap;
 use std::io::{Read, Seek};
 
+use serde::Deserialize;
 use serde_json::Value;
 use zip::ZipArchive;
 use zip::result::ZipError;
 
 use crate::manifest::FORMAT;
 use crate::write::{MANIFEST_FILE, layer_path};
-use crate::{FormatError, LayerData, LayerEntry, LayerKey, Manifest, Package, sha256_hex};
+use crate::{DType, FormatError, LayerData, LayerEntry, LayerKey, Manifest, Package, sha256_hex};
 
 /// The capabilities this reader implements; format 1.0 defines none.
 pub const IMPLEMENTED_CAPABILITIES: &[&str] = &[];
 
 /// The major version this reader reads.
 const SUPPORTED_MAJOR: u32 = 1;
-
-/// The dtype names of [`DType`]; a layer with any other dtype is skipped.
-const KNOWN_DTYPES: [&str; 3] = ["f32", "u8", "u16"];
 
 /// Reads the bytes of the entry `name`, at most `limit` bytes.
 ///
@@ -84,14 +82,14 @@ fn check_header(manifest: &Value) -> Result<(), FormatError> {
     Ok(())
 }
 
-/// Drops the layer entries whose dtype this reader does not know.
+/// Drops the layer entries whose dtype this reader does not know: a string that is no
+/// [`DType`]'s name, as serde reads it. An entry whose dtype is missing or not a string is kept,
+/// so the manifest's own parse names it.
 fn drop_unknown_dtypes(manifest: &mut Value) {
     if let Some(layers) = manifest.get_mut("layers").and_then(Value::as_array_mut) {
-        layers.retain(|entry| {
-            entry
-                .get("dtype")
-                .and_then(Value::as_str)
-                .is_none_or(|dtype| KNOWN_DTYPES.contains(&dtype))
+        layers.retain(|entry| match entry.get("dtype") {
+            Some(dtype @ Value::String(_)) => DType::deserialize(dtype).is_ok(),
+            _ => true,
         });
     }
 }
@@ -166,4 +164,43 @@ pub fn read<R: Read + Seek>(input: R) -> Result<Package, FormatError> {
     };
     package.validate()?;
     Ok(package)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::{Value, json};
+
+    use super::drop_unknown_dtypes;
+    use crate::DType;
+
+    /// Every dtype. The match has no wildcard, so a new dtype does not compile until it has an
+    /// arm here, next to the list it then belongs in.
+    fn every_dtype() -> [DType; 3] {
+        let listed = |dtype: DType| match dtype {
+            DType::F32 | DType::U8 | DType::U16 => dtype,
+        };
+        [DType::F32, DType::U8, DType::U16].map(listed)
+    }
+
+    // Final review round 5, finding 2: the reader keeps a layer of every dtype `DType` has, by
+    // its serde name, and drops every other dtype; an entry without a string dtype is kept for
+    // the manifest's own error.
+    #[test]
+    fn the_reader_knows_exactly_the_dtypes() {
+        let names: Vec<Value> = every_dtype()
+            .iter()
+            .map(|dtype| serde_json::to_value(dtype).unwrap())
+            .collect();
+        assert_eq!(names, [json!("f32"), json!("u8"), json!("u16")]);
+        let kept: Vec<Value> = names
+            .iter()
+            .map(|name| json!({ "dtype": name }))
+            .chain([json!({ "name": "no dtype" }), json!({ "dtype": 2 })])
+            .collect();
+        let dropped = [json!({ "dtype": "f64" }), json!({ "dtype": "U8" })];
+        let layers = [kept.clone(), dropped.to_vec()].concat();
+        let mut manifest = json!({ "layers": layers });
+        drop_unknown_dtypes(&mut manifest);
+        assert_eq!(manifest["layers"], Value::Array(kept));
+    }
 }
