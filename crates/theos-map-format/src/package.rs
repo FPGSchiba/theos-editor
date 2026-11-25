@@ -64,25 +64,29 @@ fn check_level(
 }
 
 /// Refuses a NaN or infinity in the frame: JSON cannot hold one, and it would become `null`.
+///
+/// The check reads the frame as it is serialised, so a new float field of `Frame` or `Level` is
+/// covered without a list to update: every field of the frame is skipped when absent, so a
+/// `null` in the serialised frame is a non-finite number (a test pins that).
 fn check_frame_numbers(frame: &Frame) -> Result<(), FormatError> {
-    let mut numbers: Vec<(String, f64)> = vec![
-        ("frame.size_m[0]".to_owned(), frame.size_m[0]),
-        ("frame.size_m[1]".to_owned(), frame.size_m[1]),
-        ("frame.cell_m".to_owned(), frame.cell_m),
-    ];
-    if let Some(origin) = frame.origin_m {
-        numbers.push(("frame.origin_m[0]".to_owned(), origin[0]));
-        numbers.push(("frame.origin_m[1]".to_owned(), origin[1]));
-    }
-    for (index, level) in frame.levels.iter().flatten().enumerate() {
-        numbers.push((
-            format!("frame.levels[{index}].elevation_m"),
-            level.elevation_m,
-        ));
-    }
-    match numbers.into_iter().find(|(_, value)| !value.is_finite()) {
-        Some((field, _)) => Err(FormatError::ManifestNotFinite { field }),
+    match first_null(&serde_json::to_value(frame)?, "frame".to_owned()) {
+        Some(field) => Err(FormatError::ManifestNotFinite { field }),
         None => Ok(()),
+    }
+}
+
+/// The path of the first `null` in `value`, as `frame.levels[0].elevation_m`.
+fn first_null(value: &Value, path: String) -> Option<String> {
+    match value {
+        Value::Null => Some(path),
+        Value::Array(items) => items
+            .iter()
+            .enumerate()
+            .find_map(|(i, item)| first_null(item, format!("{path}[{i}]"))),
+        Value::Object(fields) => fields
+            .iter()
+            .find_map(|(name, item)| first_null(item, format!("{path}.{name}"))),
+        _ => None,
     }
 }
 
@@ -370,11 +374,56 @@ mod tests {
         ));
     }
 
+    /// Every path of a floating-point number in `value`, as `frame.levels[0].elevation_m`.
+    fn float_paths(value: &Value, path: String, out: &mut Vec<String>) {
+        match value {
+            Value::Number(n) if n.is_f64() => out.push(path),
+            Value::Array(items) => {
+                for (i, item) in items.iter().enumerate() {
+                    float_paths(item, format!("{path}[{i}]"), out);
+                }
+            }
+            Value::Object(fields) => {
+                for (name, item) in fields {
+                    float_paths(item, format!("{path}.{name}"), out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Final review round 6: the check once listed the float fields by hand. The cases below are
+    // pinned to the types: a frame with every optional field set serialises exactly the floats
+    // the cases break, so a new float field of `Frame` or `Level` fails here until a case
+    // exists, and the cases prove the check refuses each by name.
+    #[test]
+    fn the_frame_cases_cover_every_float_of_a_full_frame() {
+        let mut full = package().manifest.frame;
+        full.origin_m = Some([1.0, 2.0]);
+        full.levels = Some(vec![Level {
+            id: "f0".to_owned(),
+            elevation_m: 3.0,
+            name: Some("ground".to_owned()),
+        }]);
+        full.parent = Some(crate::Parent {
+            package_sha256: "0".repeat(64),
+            feature: "town-2".to_owned(),
+        });
+        let value = serde_json::to_value(&full).expect("a frame serialises");
+        let mut paths = Vec::new();
+        float_paths(&value, "frame".to_owned(), &mut paths);
+        let mut cased: Vec<String> = frame_cases().iter().map(|(f, _)| (*f).to_owned()).collect();
+        paths.sort();
+        cased.sort();
+        assert_eq!(paths, cased);
+    }
+
     type FrameBreaker = fn(&mut Frame);
 
-    #[test]
-    fn non_finite_frame_numbers_are_refused_with_their_field() {
-        let cases: [(&str, FrameBreaker); 5] = [
+    /// One way to break each float of a frame, by the field the check must name.
+    fn frame_cases() -> [(&'static str, FrameBreaker); 6] {
+        [
+            ("frame.size_m[0]", |f| f.size_m[0] = f64::NAN),
             ("frame.size_m[1]", |f| f.size_m[1] = f64::NAN),
             ("frame.cell_m", |f| f.cell_m = f64::INFINITY),
             ("frame.origin_m[0]", |f| f.origin_m = Some([f64::NAN, 0.0])),
@@ -386,7 +435,12 @@ mod tests {
                     name: None,
                 }]);
             }),
-        ];
+        ]
+    }
+
+    #[test]
+    fn non_finite_frame_numbers_are_refused_with_their_field() {
+        let cases = frame_cases();
         for (field, break_it) in cases {
             let mut p = package();
             break_it(&mut p.manifest.frame);
