@@ -46,55 +46,29 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P47 | Git write | theos-editor | todo | | |
 | P48 | MCP read | theos-editor | todo | | |
 | P49 | Releases and the check action | theos-editor | todo | | |
+| P50 | Leaner CI | theos-editor | spec-approved | #45 | |
 
 Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and P23 from version 3
 (decision 0003, #24). Rows P31–P34 and P45, and the new P29 and P30, come from umbrella version 4
 (decision 0004, #31). Rows P46 and P47 and the new P06 come from umbrella version 5 (the split of
 P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the split of P05,
-#34).
+#34). Row P50 comes from umbrella version 7 (#45), amended by version 8.
 
 ## Needs Jann
 
 - P08's build PR #44 is a draft labelled `needs-jann`. The final review loop reached its cap of
-  five rounds; round 5 left 6 Minor findings open, listed in the PR with their fixes. It merges
-  after #40 and #43. macOS is unverified while CI cannot run.
-- P08's spec change PR #40 waits for Jann's merge. It carries every spec and format change of the
-  build (rulings 51–75 and errata):
-  - 51: the exact slope limiter, whose debris feeds the rivers;
-  - 52: Aitken relaxation where the sweeps would miss the tolerance;
-  - 53: fill-first lakes, filled before the solve in every iteration;
-  - 54: `skrifa` for text;
-  - 55: loop roads without the merge discount;
-  - 56: lakes as MultiPolygons;
-  - 57: noise drawn per physical wavenumber, the same landscape at every grid size;
-  - 58: `hillslope` after `uplift` and before the routing;
-  - 59: physics test 14 on each partition's own network;
-  - 60: a basin below the lake it spills into joins that lake;
-  - 61: physics test 13 on what both grids resolve;
-  - 62: the slope-supply pre-pass before `fluvial`'s iterations;
-  - 63: the switch `supply_passes_dry_cells`;
-  - 64: the omega's Chime walk range [100, 400] min;
-  - 65: optional `features` reads;
-  - 66: the §5.9 reads and writes as the stages declare them;
-  - 67: a process run covers one `dt_yr`, also with `every`;
-  - 68: `priority_flood` returns the queue order;
-  - 69: one bound for every stage parameter, by its type (floats and counts);
-  - 70: a bounded cell edge and a cell count that does not overflow;
-  - 71: domains for exponents, tectonics sources and the rock mix; a basin takes no `rate`;
-  - 72: caps on lengths in cells and the Gaussian radius;
-  - 73: `RunError`'s variants as built;
-  - 74: work a recipe count sizes reaches a cancel point within a second;
-  - 75: the canvas clamps coordinates and strokes before `tiny-skia`.
-  The built-in recipes and CE-28.5 depend on 57–64; the recipe checks depend on 69–71. #40 must be
-  on main before P08's build PR merges.
+  five rounds; round 5 left 6 Minor findings open, listed in the PR with their fixes. Jann asked
+  on 25 Nov 2026 for a targeted fix and review round for them. Its spec changes (rulings 51–75)
+  reached main with #40, its gate change with #43.
 - The SIL OFL 1.1 fonts (Inter, Spectral) that `theos-maps` embeds must ship with their licence
   texts (P08 §5.11, §7). `theos_maps::render::font_licences` hands them out; P09 or the release
   workflow adds them to the releases of the binaries that embed the crate.
-- Gate PR #43 (17 Nov 2026) waits for Jann's merge. It keeps tests named `slow_` out of the
-  default `test` job and runs them in a new `slow-tests` check and job. One 384² run takes about
-  70 s, so 24 parity runs exceed P08 §5.14's five-minute budget. After the merge,
-  `cargo xtask github apply` makes `slow-tests` a required check. The phase branch carries its
-  content as one squashed commit, and #43 must be on main before P08's build PR merges.
+- GitHub refused every Actions job from 13 Nov 2026 to 25 Nov: the included $18 was used up on
+  3–12 Nov. Jann set an Actions budget of $15 on 25 Nov. P50 (Leaner CI) cuts the gate's
+  minutes; its build waits until the open PRs are merged.
+- When Jann approves P50's build PR, he switches the live ruleset to the required checks `gate`,
+  `test`, `coverage`, `pr` and `approval` (`cargo xtask github apply`); open PRs merge `main`
+  afterwards.
 - P06's spec (command layer and repo lock) waits for Jann in its spec PR #36. Its §6.1 holds the
   interfaces agreed with the P05 session, and its §11 the git probes for P46 and P47.
 - For P49 (umbrella version 6):

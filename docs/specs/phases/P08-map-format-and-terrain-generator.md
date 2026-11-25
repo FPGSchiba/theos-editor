@@ -1,6 +1,7 @@
 # P08 · Map format and terrain generator — phase spec
 
-Status: approved (#27, 11 Nov 2026) · amended by decision 0004 (12 Nov 2026) · repo of the build:
+Status: approved (#27, 11 Nov 2026) · amended by decision 0004 (12 Nov 2026) and by the slope
+limiter of 13 Nov 2026 (§4.1) · repo of the build:
 `theos-editor`
 Source: `docs/specs/00-umbrella.md` §3 P08, decision 0003
 (`docs/decisions/0003-map-generator-in-rust.md`) and decision 0004
@@ -161,6 +162,35 @@ What later phases build on it:
   - a `requires` list in the manifest and CE-76.5;
   - no size limit in the format; a memory budget instead of a fixed grid limit;
   - `route_potential` leaves P08; the extra metrics and the snapshot export move to P33.
+- **13 Nov 2026, from the build:** the slope limit becomes an exact threshold limiter in one
+  sweep, whose removed material feeds the rivers (§5.9 "Slope limit"). The half-excess passes
+  could not settle the built-in recipes' mountains. Jann: "Lets go with (a)", and on where the
+  removed material goes: "I also think into rivers as sediment makes sense." The same change
+  records two findings of the build: the reads of `resolve_sinks` and `fluvial`, and the
+  relaxation of Yuan's iterations on dry cells (§5.9).
+- **13 Nov 2026, later findings of the build:** routed depressions are filled before the implicit
+  solve and their cells are then solved like every other cell, as §5.9 already orders it (the
+  build had held them through the step, which drove an oscillation between steps); `skrifa`
+  replaces `ab_glyph`, whose font parser is unmaintained (Jann chose it); loop roads are routed
+  without the merge discount (Jann); a lake's geometry may be a MultiPolygon (Jann). Rulings
+  53–56.
+- **17 Nov 2026, from the build:** physics test 13 showed that a seed gave unrelated landscapes at
+  two grid sizes, because the noise was drawn per grid. Jann: spectral noise is drawn per physical
+  wavenumber (§5.7), and test 13 compares seeds in pairs on what both grids resolve. The minimum
+  lake area defaults to an area, not a cell count (§5.9). `hillslope` runs before the routing,
+  because after `fluvial` it dammed the channels and made most lakes (Jann). Physics test 14
+  compares both flow partitions on their own networks (Jann). A basin nested in a lake fills with
+  the lake. On 18 Nov Jann decided that test 13 checks each recipe pair on what both grids
+  resolve in it. Rulings 57–61.
+- **18–19 Nov 2026, from the build:** `fluvial` hit its iteration limit again on dry climate
+  periods, because slope supply cycled between `fluvial` and `slope_limit` on dry cells. Jann:
+  the iterations start with the supply laid down (§5.9 "Solution, each time step"), and a recipe
+  switch stops the loop (§5.9 "Slope supply"). Rulings 62 and 63.
+- **19 Nov 2026, the tuning:** the built-in recipes meet CE-28.5 (`hearth-valley` passes 5 of 8
+  seeds, `hearth-valley-omega` 4 of 8) with retuned uplift, `fixture-small`'s drier climate and
+  `supply_passes_dry_cells` set; Δt is kept. One constraint range changed, the omega's Chime walk
+  (§5.5), by Jann's ruling that tuning may adjust a range when the evidence shows 0.3.0's does not
+  fit the new physics. Ruling 64.
 
 ### 4.2 Research (10 Nov 2026)
 
@@ -209,7 +239,7 @@ Probe sources are in the session scratchpad. Their results, with what P08 takes 
 | ZIP | `zip` 9.5 with `flate2`: a feature enabled by an unrelated crate (`flate2/zlib-rs`) changed the package bytes. `zip`'s default `system` is DOS on Windows and Unix elsewhere, and its `time` feature stamps the current time. With every option set explicitly and miniz_oxide as the backend, two writes are byte-identical. zopfli uses std `log2`. `rawzip` always writes data descriptors | `zip` without default features + `deflate-flate2`; `flate2` with `rust_backend` (miniz_oxide); every header field set explicitly (§5.13); cargo-deny bans on the other backends (gate PR) |
 | FFT | `rustfft` computes its twiddles with std `cos`/`sin`, even in its scalar planner | Own radix-2 FFT with `libm` twiddles: relative difference to rustfft 7e-16; 512² forward + inverse 8.6 ms vs 6.5 ms |
 | Drawing | `tiny-skia` 0.12's `simd` feature uses approximate reciprocals that differ by architecture; `std` brings std trigonometry | `tiny-skia` without default features, with `no-std-float` |
-| Text | `ab_glyph` uses only exact float operations and has a `libm` feature. The design system's fonts are WOFF2 (Inter, JetBrains Mono, Spectral; SIL OFL 1.1). `wuff` (MIT) decodes WOFF2 | `ab_glyph` + `wuff`, fonts from `design/theos-ui/fonts` |
+| Text | `ab_glyph` pulls in `ttf-parser` 0.25.1, which RUSTSEC-2026-0192 marks unmaintained, so `cargo deny` fails (found in the build, 13 Nov 2026). `skrifa` 0.50 is maintained, has a `libm` feature and gives glyph outlines that `tiny-skia` fills like any other path. The design system's fonts are WOFF2 (Inter, JetBrains Mono, Spectral; SIL OFL 1.1). `wuff` (MIT) decodes WOFF2 | `skrifa` (no default features, `libm`) + `wuff`, fonts from `design/theos-ui/fonts` |
 | Rasters | `imageproc` without default features still pulls in nalgebra/matrixmultiply and moxcms, which pick CPU code at runtime; its morphology works on u8 images only | Own raster kernels in f64 with scipy's semantics (§5.8) |
 | Geometry | `kiddo` pulls in `generator` (inline-assembly coroutines); `spade` has exact predicates and nearest-neighbour queries; `petgraph`'s Dijkstra returns a `HashMap` | `spade` for Delaunay and nearest neighbour; own Kruskal and grid Dijkstra |
 | `num-traits/std` | Enabled by the default features of `image`, `kiddo`, `moxcms`, `spade` | `spade` without default features; the plan checks the feature tree (§7) |
@@ -255,7 +285,7 @@ uv) ran seeds 1–8 of the three recipes: about 17 s per hearth-valley seed (§5
 | Lake outlines | marching squares, own code (about 80 lines) | The `contour` crate works on f64 fields but its licence and float use are unchecked; the plan may probe it instead |
 | Drawing | `tiny-skia` (no default features, `no-std-float`) | §4.3 |
 | PNG | `png`, `Compression::Fast` (fdeflate) | Independent of the flate2 backend; renders are outside G20 anyway |
-| Text | `ab_glyph` (`libm`) + `wuff` | §4.3 |
+| Text | `skrifa` (`libm`) + `wuff`; glyph outlines drawn by `tiny-skia` | §4.3 |
 | Errors, logging | `thiserror`, `tracing` | G16 |
 
 ### 5.2 Crates and modules
@@ -366,7 +396,7 @@ The world stores them in a `BTreeMap` by name, so iteration order is fixed.
 
 - **The pipeline:** a recipe lists stages in order.
 - **The `landscape_evolution` stage** holds its own list of per-step stages (`uplift`,
-  `route_steepest`, `resolve_sinks`, `partition_flow`, `fluvial`, `hillslope`, `slope_limit`,
+  `hillslope`, `route_steepest`, `resolve_sinks`, `partition_flow`, `fluvial`, `slope_limit`,
   `climate_update`) and runs them in order every time step.
 - **The same rules apply at both levels:** declared layers, typed parameters, checks, metrics.
   The evolution stage's own reads and writes are the union of its processes' (minus what one
@@ -375,6 +405,11 @@ The world stores them in a `BTreeMap` by name, so iteration order is fixed.
   and "single-flow routing" is `partition_flow` with `exponent = "steepest"`.
 - **Per-step processes are cheap to check:** their `checks` run every `check_every` steps (a
   recipe option, default 10) and on the last step.
+- **A run covers one `dt_yr`.** A process with `every = n` runs at step 0, at every multiple of
+  n and on the last step, and each run advances the world by one `dt_yr`. So `every` on a rate
+  process (`uplift`, `hillslope`, `fluvial`) slows it by about n; it is meant for refreshes
+  such as `climate_update`, and `slope_limit` and `fluvial` may run at different `every`
+  because the slope supply waits for the next `fluvial` run (§5.9; ruling 67).
 
 **The rule for later phases** (`docs/architecture.md` §11, this PR):
 
@@ -422,12 +457,12 @@ edges = ["south"]
 
 [[stage]]
 id = "tectonics"
-background_uplift = 2.2e-4
+background_uplift = 3.3e-4
   [[stage.source]]
   type = "orogen"
   path = [[0.02, 0.14], [0.40, 0.08], [0.98, 0.20]]   # [x, y] fractions (G19)
   width = 0.10
-  rate = 2.6e-3
+  rate = 1.56e-3
   asymmetry = 0.5
   jitter = 0.06
 
@@ -443,6 +478,8 @@ dt_yr  = 2.5e4
   [[stage.process]]
   id = "uplift"
   [[stage.process]]
+  id = "hillslope"
+  [[stage.process]]
   id = "route_steepest"
   [[stage.process]]
   id = "resolve_sinks"
@@ -453,8 +490,7 @@ dt_yr  = 2.5e4
   id = "fluvial"
   m = 0.45
   g = 1.0
-  [[stage.process]]
-  id = "hillslope"
+  supply_passes_dry_cells = true
   [[stage.process]]
   id = "slope_limit"
   [[stage.process]]
@@ -497,22 +533,40 @@ labels = []
   - every per-step process's reads are written by an earlier process or before the loop;
   - recipe inputs are empty: the terrain recipes take no inputs in P08 (decision 0003 §9), so any
     input is "unknown recipe input";
-  - constraint paths name values the metrics module or a stage's `metric_names` reports.
+  - constraint paths name values the metrics module or a stage's `metric_names` reports;
+  - the frame is bounded: a cell edge (`size_km` over `grid`) lies in [1 cm, 100 km], and the
+    grid's cell count fits the platform's index (ruling 70);
+  - each stage's own domains hold (ruling 71), then every parameter of a stage, defaults
+    included, is bounded by its type: a float is finite and either 0 or of magnitude 1e-12 to
+    1e12, however the recipe writes it, and an integer (a count) is at most 1e6 in magnitude
+    (ruling 69). So no arithmetic on recipe numbers can overflow, wrap or panic, and a recipe
+    `describe` accepts never panics `run`.
 
   Each error names the stage (and the layer or parameter).
 - **A broken recipe in a folder** does not hide the others: `describe` lists the valid recipes and
   reports each broken one as a problem with its file and the error; `run` of a broken recipe fails
   with that error.
 - **Built-in recipes.** `hearth-valley`, `hearth-valley-omega` and `fixture-small` keep 0.3.0's
-  intent: the same sources, rock mixes, climate, feature counts and constraints. Their process
-  parameters are tuned so their seeds pass the recipe's constraints more often than 0.3.0 did
-  (CE-28.5).
+  intent: the same source geometry, rock mixes, feature counts and constraints, except the
+  omega's Chime walk (ruling 64). Their uplift rates, process parameters and, for
+  `fixture-small`, the base precipitation are tuned so that they meet CE-28.5 (Jann's ruling of
+  19 Nov 2026):
+  - relief is the height of the north-rim orogen, and vegetation cover falls with the share of
+    steep ground, which the background uplift sets. So the orogen of `hearth-valley` and
+    `hearth-valley-omega` rises at 1.56e-3 m/yr (0.3.0: 2.6e-3), and every built-in's
+    background uplift is 3.3e-4 m/yr (0.3.0: 2.2e-4);
+  - `fixture-small`'s base precipitation is 450 mm/yr (0.3.0: 800);
+  - every built-in sets `supply_passes_dry_cells` (§5.9);
+  - `hearth-valley-omega`'s Chime walk range is [100, 400] min (0.3.0: [60, 240]). Off roads,
+    P08 walks at 0.6 of Tobler's speed (§5.9), where 0.3.0 walked at full speed, and the omega
+    map has no roads. So the range is 0.3.0's divided by 0.6, which leaves every 0.3.0 seed's
+    verdict unchanged (Appendix A).
   - `hearth-valley-omega` stays as 0.3.0 had it: no settlements, resources, roads or sites. So
     `pois` reads `features` and `travel` reads `road_network` as optional reads; without roads,
     travel uses off-road walking only.
   - Deposition steepens channels at steady state (slope grows by (1 + G/p̂)^(1/n), Yuan et al.'s
-    eq. 24), so G > 0 raises relief at the same uplift. Uplift rates and K are retuned so relief
-    stays inside the recipe's range.
+    eq. 24), so G > 0 raises relief at the same uplift. Uplift rates are retuned (K is 0.3.0's
+    rock table) so relief stays inside the recipe's range.
   - Every recipe sets `river_q` and `big_river_q` on `hydrology`; they have no default. The
     built-in recipes keep 0.3.0's values (0.15 and 2.0 m³/s; `fixture-small` 0.05 and 0.5).
 - **Units.** Lengths in metres or kilometres, positions as fractions of the frame, rates per year.
@@ -554,7 +608,11 @@ labels = []
    router reports per routed link. Every pipeline stage reports at least its starting event.
 6. **Cancel:**
    - The token is checked between stages, every time step of `landscape_evolution`, every 4,096
-     queue pops of a shortest-path search, every row of a render, and between package entries.
+     units of a kernel's work (queue pops of a search, points inserted into a triangulation,
+     per-cell queries), before each item whose work is a pass over the grid (a feature pick,
+     a mill, an inn, a road's line in a render), per cell where a cell sums over a count, every
+     row of a render, and between package entries — so work sized by a recipe count also
+     stops within a second (ruling 74).
    - On cancel or failure, the runner deletes everything it wrote into the output folder before
      it returns, and only that: files that were there before stay (CE-28.4).
    - Outputs are first written under a temporary name in that folder and renamed at the end, so a
@@ -577,8 +635,16 @@ The rules of decision 0003 §3, made concrete:
   clippy ban on those would flag ordinary code in other crates (engineering directive 4), so this
   is a code-review item (§8) and the golden hashes on four platforms catch what slips through.
 - **FFT:** own iterative radix-2 FFT with `libm` twiddles.
-  - Spectral noise is synthesised at the next power of two of each dimension, with wavenumbers
-    scaled to cycles per map, then cropped.
+  - Spectral noise is a sum over a wavenumber lattice that the map fixes, not the grid: step 3/4
+    cycle per map along each axis, and a grid holds the points up to its Nyquist wavenumber, so a
+    finer grid of the same map holds every point of a coarser one, and more. Each point's
+    coefficient is a counter-based draw keyed by (key, wavenumber): a SplitMix64 seeded with
+    key XOR FNV-1a-64 of the point's two integers gives two outputs for a Box–Muller pair; a call
+    takes exactly one draw (the key) from its stage stream. The sum is evaluated at the cell
+    centres by chirp-z transforms on the radix-2 FFT, every angle reduced modulo one turn in
+    integers before `libm` evaluates it. The field is then normalised per grid (zero mean, unit
+    variance). So a seed gives the same landscape at every grid size, and a finer grid only adds
+    detail (Jann, 17 Nov 2026; physics test 13).
   - The orographic precipitation pads the terrain to the next power of two of 1.5 × its size with
     a linear ramp to zero.
 - **Random numbers:**
@@ -612,9 +678,10 @@ Pure functions with unit tests against known values (scipy semantics where 0.3.0
 | Kernel | Notes |
 |---|---|
 | `fft` | Radix-2, forward and inverse, 1D and 2D |
-| `spectral_noise` | 1/f^β synthesis, kmin/kmax in cycles per map, zero mean, unit variance |
+| `spectral_noise` | 1/f^β synthesis on the map's wavenumber lattice (step 3/4 cycle per map), kmin/kmax in cycles per map; counter-based coefficients keyed by wavenumber; zero mean, unit variance per grid |
+| `czt` | Chirp-z transform (Bluestein) on the radix-2 FFT, rational step, integer-reduced chirp |
 | `warp` | Domain warp of normalised coordinates |
-| `gaussian` | Separable, reflect mode, truncate at 4σ, σ in metres |
+| `gaussian` | Separable, reflect mode, truncate at 4σ, σ in metres; the radius stops at 16 map sides (ruling 72) |
 | `uniform`, `maximum` | Box filters, reflect mode |
 | `laplace`, `gradient` | Central differences (numpy's `gradient` at edges) |
 | `percentile` | Linear interpolation (numpy's default) |
@@ -626,7 +693,10 @@ Pure functions with unit tests against known values (scipy semantics where 0.3.0
 | `paths` | Grid Dijkstra (single and multiple sources), 16 directions, custom edge cost, total order |
 | `mst` | Kruskal with total order |
 | `marching_squares` | Lake outlines as rings in metres |
-| `priority_flood` | Barnes et al. 2014 with ε; filled surface and labels |
+| `priority_flood` | Barnes et al. 2014 with ε; filled surface and the order in which cells left the queue (ruling 68) |
+
+A length in metres becomes a number of cells through the frame, at most twice the map's longer
+side: a window that wide already reaches every cell (ruling 72).
 
 ### 5.9 Terrain stages
 
@@ -643,22 +713,25 @@ design. GPL code is never read.
 | `landscape_evolution` | the union of its processes → `height`, `erosion`, `deposition`, `receivers`, `drainage_area` | Initial surface from spectral noise, then `steps` time steps of its process list (below) | – |
 | ↳ `uplift` | `height`, `uplift`, `sag_rate`, `fixed` → `height` | height += (uplift − sag_rate)·dt; drained edges stay at base level | – |
 | ↳ `route_steepest` | `height`, `fixed` → `receivers` | Steepest-descent receiver per cell (D8 distances), ties by index | Braun & Willett 2013 |
-| ↳ `resolve_sinks` | `height`, `receivers` → `receivers`, `routing_surface`, `depressions` | Connects each closed basin through its lowest pass by the minimum spanning tree of basins; `routing_surface` lifts depression cells to their spill level + ε along the priority-flood order, `height` itself unchanged; `depressions` labels routed depressions with their spill node | MST of basins: Cordonnier, Bovy & Braun 2019; the ε lift: Barnes et al. 2014 |
+| ↳ `resolve_sinks` | `height`, `receivers`, `fixed` → `receivers`, `routing_surface`, `depressions` | Connects each closed basin through its lowest pass by the minimum spanning tree of basins; `routing_surface` lifts depression cells to their spill level + ε along the priority-flood order, `height` itself unchanged; `depressions` labels routed depressions with their spill node. A basin whose pass lies below the level of the depression it spills into belongs to that depression, so a lake fills as one up to its own spill (found in the build, 17 Nov 2026) | MST of basins: Cordonnier, Bovy & Braun 2019; the ε lift: Barnes et al. 2014 |
 | ↳ `partition_flow` | `routing_surface`, `receivers` → `weights`, `stack` | Weights over the lower neighbours of the routing surface for erosion: `exponent = "steepest"` (all to the receiver) or `"slope_adaptive"`, p = 0.5 + 0.6·S with S the steepest slope (FastScape's slope-dependent partition; that S is the steepest slope is this spec's reading). A fresh topological order (`stack`, receivers before donors) of the resulting graph | FastScape documentation; Freeman 1991 |
-| ↳ `fluvial` | `height`, `erodibility`, `receivers`, `weights`, `stack`, `depressions`, `fixed`, `climate` → `height`, `erosion`, `deposition`, `drainage_area` | The erosion–deposition law with n = 1 (below), solved implicitly in stack order with Gauss–Seidel iterations; sediment filling routed depressions; cumulative erosion and deposition | Yuan et al. 2019 (eq. 9, 11, 13–21), after Davy & Lague 2009; Braun & Willett 2013. Multiple flow with deposition as in FastScape's documentation (Yuan et al. solve single flow); the depression filling after goSPL's documentation, combined with the MST resolver as our own step |
-| ↳ `hillslope` | `height`, `diffusivity`, `fixed` → `height`, `erosion`, `deposition` | Linear diffusion, implicit ADI (Thomas algorithm per row and column), after `fluvial` as in Yuan et al.; per cell, a net loss books as erosion and a net gain as deposition | – |
-| ↳ `slope_limit` | `height`, `critical_slope`, `fixed` → `height`, `erosion`, `deposition` | Thermal step (algorithm below) | The classic thermal erosion step of graphics (Musgrave, Kolb & Mace 1989); threshold slopes after Montgomery & Brandon 2002 |
+| ↳ `fluvial` | `height`, `erodibility`, `receivers`, `weights`, `stack`, `depressions`, `fixed`, `climate`, `erosion`, `deposition`, [`slope_supply`]; with G > 0 also `routing_surface`, [`uplift`] → `height`, `erosion`, `deposition`, `drainage_area`, [`slope_supply`] | The erosion–deposition law with n = 1 (below), solved implicitly in stack order with Gauss–Seidel iterations; sediment filling routed depressions; cumulative erosion and deposition | Yuan et al. 2019 (eq. 9, 11, 13–21), after Davy & Lague 2009; Braun & Willett 2013. Multiple flow with deposition as in FastScape's documentation (Yuan et al. solve single flow); the depression filling after goSPL's documentation, combined with the MST resolver as our own step |
+| ↳ `hillslope` | `height`, `diffusivity`, `fixed`, `erosion`, `deposition` → `height`, `erosion`, `deposition` | Linear diffusion, implicit ADI (Thomas algorithm per row and column), before the routing, so each step ends on the surface `fluvial` cut (after `fluvial` it dammed one-cell channels by an amount that grew as cells shrank; found in the build, 17 Nov 2026); per cell, a net loss books as erosion and a net gain as deposition | – |
+| ↳ `slope_limit` | `height`, `critical_slope`, `fixed`, `erosion`, [`slope_supply`] → `height`, `erosion`, `slope_supply` | An exact threshold limiter in one sweep; the material removed goes to the rivers (algorithm below) | Threshold slopes after Montgomery & Brandon 2002; the sweep is own design (a shortest-path form of a slope-limited fill) |
 | ↳ `climate_update` | `height`, `climate` → `climate` | Recomputes precipitation, AET and runoff from the current surface every `every` steps | – |
-| `hydrology` | `height`, `climate` → `height`, `lake`, `lake_id`, `lake_level`, `river`, `big_river`, `discharge`, `flow_dir`, `water_surface`, `water_features` | Lakes by water balance, channel discharge over single flow, rivers, river lines and lake outlines (below) | Barnes et al. 2014; Bracht-Flyr et al. 2013; Quinn et al. 1991 (multiple flow on hillslopes, single flow in channels); Leopold & Maddock 1953; Génevaux et al. 2013 |
+| `hydrology` | `height`, `climate`, `fixed` → `height`, `lake`, `lake_id`, `lake_level`, `river`, `big_river`, `discharge`, `flow_dir`, `water_surface`, `water_thresholds`, `water_features` | Lakes by water balance, channel discharge over single flow, rivers, river lines and lake outlines (below) | Barnes et al. 2014; Bracht-Flyr et al. 2013; Quinn et al. 1991 (multiple flow on hillslopes, single flow in channels); Leopold & Maddock 1953; Génevaux et al. 2013 |
 | `ecology` | `height`, `climate`, `drainage_area` → `temperature`, `slope`, `vegetation`, `snow`, `wetness` | Net primary productivity from actual evapotranspiration (the Thornthwaite Memorial model, NPP = 3000·(1 − e^(−0.0009695·(AET − 20))) g dry matter/m²/yr), density = min(NPP / 2000, 1) × a slope factor (1 − smoothstep(0.45, 0.9, slope), as 0.3.0) × (1 + a wetness bonus from ln(a / tan β), capped); snow from temperature and slope as 0.3.0 | Lieth & Box 1972; Lieth 1975; Sørensen et al. 2006 |
-| `elements` | `river`, `lake`, `climate`, `vegetation`, `slope`, `rock`, `temperature` → `elements` | 0.3.0's ambient element mix (water, wood, earth, metal, fire) | – |
-| `settlements` | terrain layers → `features` (settlements), `site_quality` | 0.3.0's site quality with hinterland; greedy picking by class with spacing (absolute, set per recipe); names from a recipe list or the built-in syllable lists (generated, not canon) | After Emilien et al. 2012, whose interest maps place buildings inside a village; siting whole settlements with them is 0.3.0's adaptation |
+| `elements` | `height`, `river`, `lake`, `climate`, `vegetation`, `slope`, `rock`, `temperature` → `element_water`, `element_wood`, `element_earth`, `element_metal`, `element_fire` | 0.3.0's ambient element mix (water, wood, earth, metal, fire) | – |
+| `settlements` | terrain layers, [`features`] → `features` (settlements), `site_quality` | 0.3.0's site quality with hinterland; greedy picking by class with spacing (absolute, set per recipe); names from a recipe list or the built-in syllable lists (generated, not canon) | After Emilien et al. 2012, whose interest maps place buildings inside a village; siting whole settlements with them is 0.3.0's adaptation |
 | `pois` | terrain layers, [`features`] → `features` (ruins, Chimes, gates) | 0.3.0's rules: ruins on prominent hard ridges; `chime` where 0.3.0 placed extraction points; `gate-down` and `gate-up` where it placed the arrival and ascent portals. With no settlements, no distance to settlements is enforced | – |
-| `resources` | terrain layers, `features`, [`omega`] → `features` (deposits), `resource_fields` | 0.3.0's suitability fields | – |
-| `roads` | terrain layers, `features` → `road_network`, `roads`, `features` (bridges, fords) | Network and routing on terrain cost (below) | Routing after Galin et al. 2010 (16 directions instead of its 80, no curvature cost); the network construction is own |
-| `sites` | terrain layers, `road_network`, `features` → `features` (sites), `road_network`, `roads` | 0.3.0's mills, mines, quarries, lumber camps, shrines, watchtowers, inns (at the midpoint of long main and road links away from settlements) and camps, with spur tracks routed by the `roads` router. A mill needs discharge of at least `mill_q_factor` × `river_q` (default 2.7, which is 0.3.0's 0.4 m³/s at its 0.15) | – |
-| `travel` | `height`, [`road_network`], water layers, `features` → `reach_min` | Tobler's hiking function on the 16-direction graph, a road speed-up and an off-path factor of 0.6 off roads, ford and lake penalties; multi-source Dijkstra from the Chimes. Unreachable cells, or every cell when there is no Chime, hold −1 (finite, documented); the Chime-to-Chime time goes into the stage report | Tobler 1993 |
-| `detuning` | `height`, `features` → `omega` | 0.3.0's ω field: baseline, hot spots around ruins, slow drift (CE-28.7) | – |
+| `resources` | terrain layers, [`features`], [`omega`] → `features` (deposits), `resource_fields` | 0.3.0's suitability fields | – |
+| `roads` | terrain layers, [`features`] → `road_network`, `roads`, `features` (bridges, fords) | Network and routing on terrain cost (below) | Routing after Galin et al. 2010 (16 directions instead of its 80, no curvature cost); the network construction is own |
+| `sites` | terrain layers, `road_network`, [`features`] → `features` (sites), `road_network`, `roads` | 0.3.0's mills, mines, quarries, lumber camps, shrines, watchtowers, inns (at the midpoint of long main and road links away from settlements) and camps, with spur tracks routed by the `roads` router. A mill needs discharge of at least `mill_q_factor` × `river_q` (default 2.7, which is 0.3.0's 0.4 m³/s at its 0.15) | – |
+| `travel` | `height`, [`road_network`], water layers, [`features`] → `reach_min` | Tobler's hiking function on the 16-direction graph, a road speed-up and an off-path factor of 0.6 off roads, ford and lake penalties; multi-source Dijkstra from the Chimes. Unreachable cells, or every cell when there is no Chime, hold −1 (finite, documented); the Chime-to-Chime time goes into the stage report | Tobler 1993 |
+| `detuning` | `height`, [`features`] → `omega` | 0.3.0's ω field: baseline, hot spots around ruins, slow drift (CE-28.7) | – |
+
+A stage that adds features starts from the world's `features` when an earlier stage wrote it,
+and from an empty set otherwise; a stage that only reads them sees none (ruling 65).
 
 Constraints are evaluated by the runner after the pipeline (§5.6), not by a stage.
 
@@ -684,36 +757,74 @@ rate U, erodibility K and the slope S to the receivers:
 - At steady state, slope and relief grow by the factor (1 + G/p̂)^(1/n) (Yuan's eq. 24 and 28;
   Davy & Lague's eq. 15). With n = 1 and mean runoff that is 1 + G, so G = 1 doubles slopes at equal
   K and uplift.
-- **Solution, each time step** (Yuan's eq. 20, 21):
+- **Solution, each time step** (Yuan's eq. 20, 21). The iterations start from h* with the step's
+  slope supply laid down along its way: one routing of the supply alone in which every cell
+  outside the routed depressions keeps c/(1 + c) of what passes through it, c = G·area/Q, and each
+  depression keeps what reaches it up to its capacity, letting go only the excess at its spill
+  node. From h* itself the first sweep routed all the supply undeposited down dry slopes and
+  started a transient that outlasted the iteration limit (found in the build; Jann, 18 Nov 2026).
   1. Accumulate Qs from donors to receivers (reverse stack order, split by `weights`) using the
      current heights.
   2. Solve h implicitly from receivers to donors (stack order).
   3. Repeat both until the largest height change between iterations is below 10⁻³ × max(U)·Δt
      (Yuan's tolerance; 10⁻⁶ m when no cell uplifts) or 50 iterations have run. Non-convergence is
      a warning finding with the residual; the result stays deterministic. Convergence is proven for
-     G/p̂ ≤ 1 and shown experimentally above it; the iteration count depends on G, not on the grid.
+     G/p̂ ≤ 1; the iteration count depends on G, not on the grid. Above G/p̂ = 1 the plain sweeps
+     can oscillate: on the dry cells of a rain shadow (p̂ far below 1) a whole patch rises and
+     falls between iterations. When the sweeps would not reach the tolerance within the limit,
+     successive iterates are combined by Aitken's Δ² relaxation, which converges to the same
+     solution; sweeps that are on track stay unrelaxed (found in the build, 13 Nov 2026). The
+     depressions' filled heights move with the heights they belong to, and in the iterations a
+     depression never lets go a negative volume. From the iteration after half the limit, a
+     depression that is full stays full for the rest of the step, so it changes between full and
+     not full a bounded number of times (found in the build, 13 Nov 2026).
 - **Depression filling** (part of step 1, only when G > 0): when the Qs accumulation reaches a
   routed depression, the sediment volume fills the depression's cells in height order, up to its
-  spill level. Filled cells get an ε slope toward the spill node, so they are not pits next step.
-  The excess passes on from the spill node in the same sweep: `resolve_sinks` connects the spill
-  node downstream of the depression in the stack. With G = 0 there is no deposition and no
-  filling.
+  spill level, from their heights at the start of the step. Filled cells get an ε slope toward
+  the spill node, so they are not pits next step. The excess passes on from the spill node in the
+  same sweep: `resolve_sinks` connects the spill node downstream of the depression in the stack.
+  Step 2 then solves the depression's cells like every other cell, from their filled heights;
+  the sediment that reached the depression is in the fill, so their deposition term sees none of
+  it. A depression the sediment does not fill has no receiver below its level and stays; a full
+  one follows the incision of its spill node. When the iterations stop, the step's sediment is
+  routed once more over the final heights; each depression keeps what reaches it up to its
+  capacity, and its cells take the fill of that volume, so the volume balance closes exactly.
+  With G = 0 there is no deposition and no filling.
+- **Slope supply:** `slope_supply` holds, per cell, the thickness `slope_limit` has removed since
+  `fluvial` last ran, in metres: `slope_limit` adds to it and `fluvial` empties it, so no supply is
+  counted twice or lost when the two run at different `every`. It enters Qs at its cell like
+  eroded sediment, so G decides how much of it the rivers lay down and how much they carry on.
+  Supply still pending when the evolution ends leaves the map; the reports show it as the volume
+  `slope_limit` removed minus the volume `fluvial` took in.
+  - Without more, a dry cell (G/p̂ ≤ 1 fails) lays nearly all of its own supply back down,
+    `slope_limit` cuts it again, and the supply grows through a dry climate period. `fluvial`'s
+    switch `supply_passes_dry_cells` (off by default; a recipe sets it where it is worth it)
+    breaks that loop: the supply passes the cells whose catchment is dry, Q < G·A with A the
+    drainage area, without being laid down. Their deposition term leaves out the supply passing
+    them, and it joins the sediment at the first cell that is not dry, at a routed depression or
+    at an outlet (Jann, 18–19 Nov 2026).
 - `erosion` books the thickness removed per cell and step, `deposition` the thickness added
   (deposition and filling); both are cumulative, non-negative and in metres.
 - Deposition alone is not expected to give braided rivers, meanders or deltas: recent work needs
   more than this law for alluvial forms (McDonald & Cordonnier 2026, seen at video level). P08
   promises filled basins and wider valley floors, not those forms.
 
-**Slope limit.**
+**Slope limit** (an exact threshold limiter, decided by Jann on 13 Nov 2026). It replaces passes
+that moved half the excess to the steepest neighbour: they settled by only about 2 % per pass, and
+on the built-in recipes' mountains they hit their 100-pass cap on 236 of 240 steps.
 
-- Slope = the largest downhill gradient to the 8 neighbours (height difference ÷ distance).
-- Passes visit cells from highest to lowest (ties by index). Where a cell's slope to its steepest
-  neighbour exceeds its rock's critical slope, half the excess height difference moves to that
-  neighbour, booked as erosion and deposition.
-- Passes repeat until no slope exceeds critical + 1e-6, or 100 passes (a warning finding if not
-  reached).
-- Drained edges are sinks: material moved onto them leaves the map and is counted in the stage
-  report, so the volume balance holds with that term.
+- A cell i may be at most S_c,i × d_ij above each D8 neighbour j, where S_c,i is its rock's
+  critical slope and d_ij the D8 distance.
+- The limited surface is the highest surface at or below `height` that keeps this rule:
+  L_i = min(h_i, min over j of (L_j + S_c,i × d_ij)).
+- One sweep finds it: a priority queue starts with every cell at its height and pops the lowest
+  (ties by cell index); a popped cell offers each neighbour n the height L + S_c,n × d. Drained
+  (fixed) cells keep their height.
+- The material removed, (h_i − L_i) × cell area, books as erosion and is added to
+  `slope_supply` (the fluvial law above): a failing slope sends its debris into the drainage
+  network, as landslides feed rivers. No material moves to a neighbour, so the limiter never
+  raises a cell.
+- The limiter settles exactly in every time step; its stage report carries the volume removed.
 
 **Hydrology.**
 
@@ -729,8 +840,10 @@ rate U, erodibility K and the slope S to the receivers:
   - In Hearth's climate most depressions reach spill. Lake share then depends mostly on deposition
     in `fluvial` and on the shallow-pit rule.
 - **Shallow pits:** depressions shallower than `min_lake_depth_m` (default 2 m) or smaller than
-  `min_lake_area_m2` (default 4 cells) are filled to spill + ε in `height`. That is why
-  `hydrology` writes `height`; river beds then never cross dry pits.
+  `min_lake_area_m2` (default 15,625 m², four cells at 62.5 m) are filled to spill + ε in
+  `height`. That is why `hydrology` writes `height`; river beds then never cross dry pits. The
+  default is an area, not a cell count, so a finer grid does not keep smaller lakes (found in the
+  build, 17 Nov 2026).
 - **Channel discharge:** runoff accumulated over the single steepest receiver on the
   depression-filled surface, as 0.3.0 did and as channels behave (Quinn et al. 1991: multiple flow
   on hillslopes, single flow in channels). The `river` raster, the river lines, `discharge` and the
@@ -779,7 +892,9 @@ rate U, erodibility K and the slope S to the receivers:
   - the MST of those costs, plus each further link whose cost through the current network
     exceeds `loop_detour` × its direct cost, between settlements of class village or higher;
   - links are routed in order of class, then cost, with a discount on cells that already carry a
-    road, so trunks merge;
+    road, so trunks merge; loop links (the further links above) are routed without that
+    discount, so a loop is a new road and not mostly the trunks it was meant to bypass (Jann,
+    13 Nov 2026);
   - road class follows the endpoints' classes, as 0.3.0;
   - trails to ruins;
   - bridges and fords become `site` features.
@@ -806,8 +921,10 @@ Each is a later stage under the same contract.
 - **Water features:**
   - rivers: `water`/`river` LineStrings with (x, y, bed height), `width_m`, `depth_m`,
     `discharge_m3s` per vertex, and `order`;
-  - lakes: `water`/`lake` Polygons with `surface_m`, `terminal`, `outlet` (a point in metres, or
-    none for a terminal lake) and `depth_max_m`.
+  - lakes: one `water`/`lake` feature per lake, a Polygon or, when the lake's cells give several
+    outlines (basins merged at one level, cells that touch only at a corner), a MultiPolygon, with
+    `surface_m`, `terminal`, `outlet` (a point in metres, or none for a terminal lake) and
+    `depth_max_m`.
 - **Roads** carry `class`, `from`, `to`, `length_m`, `width_m` and `grade_max`. Bridges carry
   `span_m` and `deck_m`.
 - **Layers written to the package for terrain** (the standard layers of §4.4 plus this spec's
@@ -834,12 +951,14 @@ Plain styling with every layer and feature kind visible (Jann). All PNG.
 | `truth` | `base`, plus: roads by class (width, dashes); every feature kind as a plain shape per type (square settlements sized by class, triangle ruins, circle Chimes, star gates, small marks for sites and deposits); settlement names; a legend of what is present; a scale bar; a title (recipe, seed, relief, lakes, Chime walk). It may have margins |
 | `geology` | Rock colours over hillshade, rivers and lakes, legend |
 | `resources` | Grey relief, deposits as circles by type sized by radius, a ring for exceptional tier, legend |
-| `inworld` | Paper tone, the known area around settlements and main roads, main roads, settlements with names, lakes, big rivers, simple ridge and forest marks. Texts (title, labels and their positions) only from the recipe's `[renders.inworld]`, never from code; everything is drawn inside the frame |
+| `inworld` | Paper tone, the known area around settlements and main roads, main roads, settlements with names, lakes, big rivers, simple ridge and forest marks. Texts (title, labels and their positions) only from the recipe's `[render.inworld]`, never from code; everything is drawn inside the frame |
 | `omega` | ω over hillshade, ruins marked (an extra render, asked for by `hearth-valley-omega`) |
 
-- **Drawing:** `tiny-skia` (scalar), labels with `ab_glyph`. Inter is used for `truth`, legends
-  and the contact sheet, Spectral for `inworld`. Both are read from `design/theos-ui/fonts` with
-  `include_bytes!` and decoded with `wuff` once per process.
+- **Drawing:** `tiny-skia` (scalar); labels are `skrifa` glyph outlines that `tiny-skia` fills.
+  The canvas hands `tiny-skia` only coordinates within one pixmap extent (width plus height)
+  beyond the pixmap and strokes at most four extents wide (ruling 75).
+  Inter is used for `truth`, legends and the contact sheet, Spectral for `inworld`. Both are read
+  from `design/theos-ui/fonts` with `include_bytes!` and decoded with `wuff` once per process.
 - **Licence:** the fonts are under SIL OFL 1.1. `theos-maps` exposes the licence texts, so the
   binaries that embed it can ship them (Needs Jann, §7).
 - **Contact sheet:** `render::contact_sheet(paths, columns)` tiles the first render of several
@@ -867,8 +986,10 @@ pub fn run(request: &RunRequest, recipe_dirs: &[PathBuf], out_dir: &Path,
 
 - `RunManifest` holds `generator` (`theos-maps@1.0.0`), `recipe`, `seed`, `inputs`, `frame`,
   `outputs` (role → file name in `out_dir`) and `results`.
-- `RunError` has typed variants: recipe invalid (with stage, layer or parameter), cancelled,
-  stage failed, stage panicked, finding failed, I/O.
+- `RunError` has typed variants: recipe invalid (with stage, layer or parameter), over the
+  memory budget, cancelled, stage failed, stage panicked, finding failed, a non-finite number
+  (in a raster cell, a value layer or a stage metric, each with its stage), output exists,
+  I/O, format, render, and output (the features or the package could not be built) (ruling 73).
 - `describe` lists, for each recipe: its id, title, `inputs: {}`, `seeded: true` and its stages
   with their summaries.
 - `accepts_notes` is `false` in P08.
@@ -919,7 +1040,8 @@ pub fn run(request: &RunRequest, recipe_dirs: &[PathBuf], out_dir: &Path,
    volume − the sediment flux Qs leaving at drained-edge outlets (taken from the routed flux, not
    from the difference of the other terms), to 1e-9 relative.
 5. **Lake filling:** sediment routed into a closed depression fills it up to its spill level and
-   passes on the excess.
+   passes on the excess; the slope that feeds a depression that is not full ends above its level,
+   and a full depression follows the incision of its spill node instead of perching above it.
 6. **Discharge routing:** on a surface without depressions, the runoff accumulated over
    multiple flow directions and leaving over drained edges equals the total runoff put in (the
    routing itself loses nothing; lake evaporation is tested in 8).
@@ -929,18 +1051,27 @@ pub fn run(request: &RunRequest, recipe_dirs: &[PathBuf], out_dir: &Path,
    share.
 9. **Smith–Barstad:** wind over a symmetric hill gives positive precipitation on the windward
    side and negative on the lee side.
-10. **Slope limit:** after `slope_limit`, no slope exceeds the rock's critical slope + 1e-6;
-    volume is conserved once the material moved onto drained edges is counted.
+10. **Slope limit:** after `slope_limit`, no cell lies more than its critical slope × distance
+    above a neighbour (to 1e-9 m); the volume removed equals the booked erosion and the
+    `slope_supply` handed on; a surface that already keeps the rule is unchanged.
 11. **Orientation:** row 0 is north, column 0 west; a source at a known fraction appears at the
     expected cell.
 12. **Roads:** no road step exceeds `max_grade` except bridge edges; bridges span the water in
     one edge.
-13. **Resolution independence:** the same recipe at 192² and 384², over seeds 1–4, gives median
-    relief and lake share within 15 % and median river length per km² (not river cell share,
-    which halves with the cell size) within 25 %.
+13. **Resolution independence:** two recipes at 192² and 384², seed by seed over seeds 1–4 (a
+    seed gives the same landscape at both sizes, §5.7), compared by the median of the per-seed
+    ratios. Each recipe is checked on what both grids resolve in it (Jann, 18 Nov 2026):
+    - a hearth-valley copy: relief within 15 % and river length per km², counted through lakes
+      (not river cell share, which halves with the cell size), within 25 %;
+    - a recipe with a closed basin, so that lakes are present at both sizes: relief within 15 %
+      and lake share over lakes of at least 0.25 km² within 15 %.
 14. **Steady state with deposition:** with uniform U, K and runoff, n = 1 and no hillslope
     processes, the steady-state slope at G > 0 is (1 + G) times the slope at G = 0 within 2 %, and
-    so is the relief (Yuan et al. 2019, eq. 24 and 28). Run with both flow partitions.
+    so is the relief (Yuan et al. 2019, eq. 24 and 28). Run with both flow partitions. A G > 0
+    run need not keep the G = 0 run's network (with `slope_adaptive` the partition depends on the
+    slope, and with `steepest` the network may change on most landscapes), so each run's slopes
+    and relief are compared with (1 + G) times the G = 0 law on its own flow weights (found in
+    the build, 13 and 17 Nov 2026).
 
 **Metrics** (`metrics.rs`), deterministic and reported in every summary: relief, lake share, river
 share, vegetation cover, median precipitation and the Chime-to-Chime walk, as 0.3.0 defined them
@@ -968,7 +1099,8 @@ constrains that metric, the recipe's wanted range is added to it. Lake share alw
 of 0: fewer lakes is the intended fix (§4.2), so hearth-valley-omega, which has no lake
 constraint, may lie anywhere in [0, 31.14]. The number of seeds passing all constraints (the
 placement checks included, §5.5) is at least 0.3.0's. Appendix A holds 0.3.0's per-seed values,
-which the fixture copies.
+which the fixture copies. `hearth-valley-omega`'s walk range is 0.3.0's divided by the off-path
+factor 0.6 (§5.5); under it 0.3.0's walk verdicts are the same, so its count stays 3 of 8.
 
 **Golden hashes (CE-77.1, CE-77.2):**
 
@@ -1117,7 +1249,10 @@ renamed the place types, added `requires` and dropped the size note of §4.3.
    - sediment exceeding a depression's volume;
    - very large time steps;
    - no cell uplifting (the tolerance falls back to 10⁻⁶ m);
-   - G/p̂ above 1, where convergence is not proven, up to the 50-iteration limit;
+   - G/p̂ above 1, where convergence is not proven and the relaxation must take over (rain-shadow
+     cells), up to the 50-iteration limit;
+   - a whole over-steep flank: the limiter settles it in one sweep, and its supply reaches the
+     rivers in the next step;
    - `slope_adaptive` erosion on a plain, where channel discharge follows the single steepest
      receiver: river lines, fords and lake outlets must still agree.
 3. **Lakes:**
@@ -1144,7 +1279,8 @@ renamed the place types, added `requires` and dropped the size note of §4.3.
    - std float methods through a trait (the ban does not see `num_traits::Float`);
    - JSON key order;
    - ZIP headers on Windows;
-   - FFT padding for sizes 64, 384 and 1024.
+   - the noise's chirp-z lengths for sizes 64, 384 and 1024 (FFT lengths 256 to 4096), and the
+     orographic precipitation's padding.
 7. **Runner:**
    - cancel at every stage boundary and inside every long loop;
    - a panic in a per-step process;
@@ -1181,7 +1317,7 @@ renamed the place types, added `requires` and dropped the size note of §4.3.
 7. Ruling: the parity tolerance is the 0.3.0 range widened by the recipe's wanted range, with a
    floor of 0 for lake share — a better generator should not fail for having fewer lakes than
    0.3.0's least-lake seed — cost if wrong: CE-28.5 stricter in a later phase.
-8. Ruling: built-in recipes carry no in-world texts; `[renders.inworld]` supplies them — no lore
+8. Ruling: built-in recipes carry no in-world texts; `[render.inworld]` supplies them — no lore
    ships inside the editor, and labels stay inside the frame — cost if wrong: texts move from
    recipes to code.
 9. Ruling: generated settlement names keep 0.3.0's syllable lists as defaults, overridable per
@@ -1297,6 +1433,149 @@ Rulings of decision 0004 (12 Nov 2026), Claude's calls inside Jann's decisions:
 50. Ruling: feature ids stay assigned after the pipeline although `route_potential` left — P31 or
     P32 may bring promotion back, and the mechanism is already specified — cost if wrong: a little
     unused generality.
+
+Rulings of 13 Nov 2026, from the build:
+
+51. Ruling (Jann): the slope limit is an exact one-sweep threshold limiter, and the material it
+    removes feeds the rivers as `slope_supply` — the half-excess passes needed 600–900 passes per
+    step on the built-in recipes and hit the 100-pass cap on 236 of 240 steps — cost if wrong:
+    debris carried by the rivers instead of piling up at the slope's foot.
+52. Ruling: when Yuan's sweeps would miss the tolerance, Aitken relaxation combines successive
+    iterates — on dry cells (p̂ ≪ 1) G/p̂ ≤ 1 fails and the plain sweeps oscillate (a dominant
+    eigenvalue of −1.009 was measured); sweeps that are on track stay unrelaxed — cost if wrong:
+    another stabiliser.
+53. Ruling: routed depressions are filled before the implicit solve in every Gauss–Seidel
+    iteration and their cells are then solved like every other cell, as §5.9 orders it; the
+    build had first held them through the step and filled them afterwards — held lakes perched
+    tens to hundreds of metres above their incising spill nodes at the built-in time step and
+    drove a period-2 oscillation between steps (8,162 alternating cells at 384², 15 after the
+    change) — cost if wrong: a lower landscape (mean height 445 → about 200 m, relief 1,817 →
+    about 1,300 m on the 384² budget fixture) and slower convergence on it (about +40 % run time).
+54. Ruling (Jann): `skrifa` replaces `ab_glyph` for text — `ab_glyph` pulls in `ttf-parser`
+    0.25.1, which RUSTSEC-2026-0192 marks unmaintained, and `cargo deny` fails; `skrifa` is
+    maintained, has a `libm` feature, and `tiny-skia` fills its glyph outlines like other paths —
+    cost if wrong: a crate swap back.
+55. Ruling (Jann): loop links of the road network are routed without the merge discount — with
+    the discount (0.35) a loop whose detour lay between `loop_detour` and 1/0.35 ≈ 2.9 times its
+    cost ran mostly along the existing roads (68 % in the build's test), so few loops added a
+    road — cost if wrong: loops cross terrain where a trunk could have served.
+56. Ruling (Jann): a lake is one feature, a MultiPolygon when its cells give several outlines —
+    one feature per outline broke the match between `lake-n` ids and lake numbers; format 1.0 has
+    no released writer or reader yet, so this amends 1.0 instead of adding a capability — cost if
+    wrong: readers must accept both geometries for lakes.
+57. Ruling (Jann): spectral noise is a sum over a wavenumber lattice fixed by the map, with
+    counter-based coefficients keyed by wavenumber, so a seed gives the same landscape at every
+    grid size — drawn per grid, a seed gave unrelated landscapes at 192² and 384², and physics
+    test 13 could not compare them; two 4-seed sets at one size already differed by 28–37 % in
+    lake share — cost if wrong: every output changed once (before parity and golden hashes), and
+    the noise costs 1.35–1.54 times the old FFT work per call at 192, 384 and 768 cells and about
+    3.3 times at 64, 512 and 1024 (+10 ms per call at 384²).
+58. Ruling (Jann): `hillslope` runs after `uplift` and before the routing in every time step —
+    after `fluvial` it diffused the banks of the one-cell channels `fluvial` had cut back into
+    them, so every step ended on dammed channels; the dam grew as cells shrank and as Δt grew
+    (about 3 m on plains, up to 80 m in canyons), passed the 2 m lake depth at 384² and made most
+    of the built-in lake share (hearth-valley seed 4: 9.5 %); with the new order test 13's ratios
+    are 1.00, 1.00 and 0.99 — cost if wrong: fewer lakes; lakes come from closed basins only.
+59. Ruling (Jann): physics test 14 compares both flow partitions with (1 + G) times the G = 0 law
+    on each run's own network — with `steepest` the G > 0 run kept the G = 0 network on only one
+    of 32 landscapes, so the test rested on a hand-picked seed; the slopes held on all 32 —
+    cost if wrong: the test no longer shows that the network stays.
+60. Ruling: a basin whose pass lies below the level of the lake it spills into is part of that
+    lake's depression, with no spill node of its own — kept as a depression of its own it filled
+    only to its pass, the lake's room above stayed empty, its cells were cut as dry floor and the
+    lake let sediment go while it still had room; closed basins sank below base level, more on
+    finer grids (26.6 % of a 384² test map against 0.3 % at 192², 0 % at both after the change)
+    — cost if wrong: none known; the volume balance is unchanged.
+61. Ruling (Jann): physics test 13 checks each recipe pair on what both grids resolve in it —
+    relief and rivers on the hearth-valley copies, relief and lakes on the closed basin — the
+    hearth copies hold no lakes at either size since ruling 58, and the dry basin's rivers
+    (0.007–0.044 km/km²) are a few channel cells whose ratio flipped from 0.92 to 0.72 with a
+    1e-6 m change — cost if wrong: river and lake independence each rest on one recipe.
+62. Ruling (Jann): `fluvial`'s iterations start from h* with the step's slope supply laid down
+    by one trap-aware routing of the supply alone (c/(1 + c) kept per cell) — on dry climate
+    periods the supply grew to about 1.7 km per cell, the first sweep routed it undeposited, and
+    18 to 60 of 240 steps hit the iteration limit on the 384² fixture; with the pre-pass none
+    did, runs got faster, and the converged solution is unchanged — cost if wrong: one more
+    routing per step.
+63. Ruling (Jann, form chosen in the build): the switch `supply_passes_dry_cells`, off by
+    default, lets the supply pass cells whose catchment is dry (Q < G·A) — it was the only
+    candidate that stopped the loop (pending supply 137–795 m instead of 316–2,605 m); keeping
+    fresh deposit from `slope_limit` only delayed the loop, left cells up to 8.1 km above their
+    critical slope and broke physics test 10 — cost if wrong: where a recipe sets it, the debris
+    of dry catchments is laid down further downstream or leaves the map.
+64. Ruling (under Jann's ruling of 19 Nov 2026 that tuning may adjust constraint ranges with
+    evidence): `hearth-valley-omega`'s `travel.chime_to_chime_min` range is [100, 400] — P08
+    walks off roads at 0.6 of Tobler's speed and the omega map has no roads, so the same walk
+    takes 1/0.6 as long as in 0.3.0 (0.3.0's median 149.2 min / 0.6 = 248.7; the untuned P08
+    median was 249.35); the scaled range keeps every 0.3.0 verdict, and with the old range only
+    1 seed of 8 passed — cost if wrong: the omega accepts walks up to 400 min.
+65. Ruling: every stage that adds features (`settlements`, `pois`, `resources`, `roads`,
+    `sites`) or reads them (`travel`, `detuning`) reads `features` as optional and starts from
+    an empty set without it — `features` has no single writer: each of these stages adds to
+    what earlier ones placed, so the first of them in a recipe finds none, and a required read
+    would refuse every recipe that leaves one out (the omega has no settlements) — cost if
+    wrong: a recipe that leaves out a stage gets fewer features instead of an error (roads
+    without places connect nothing); the count constraints catch it.
+66. Ruling: §5.9's reads and writes are the stages' declared layers — `fluvial` and
+    `hillslope` read the cumulative `erosion` and `deposition` they add to; `fluvial` reads
+    `routing_surface` only with G > 0; `hydrology` reads `fixed` (the drained edges) and writes
+    `water_thresholds` (the `river_q` and `big_river_q` in force, which `sites`' mill rule
+    reads); `elements` reads `height` and writes one raster per element (plan ruling L5) — the
+    table had left them out, found by the final review — cost if wrong: none; validation
+    checks the declared layers.
+67. Ruling: each run of a per-step process advances the world by one `dt_yr`, also with
+    `every`, so `every = n` on a rate process slows it by about n; `every` is documented as
+    meant for refreshes and is not refused on rate processes — the slope supply is built for
+    `slope_limit` and `fluvial` at different `every`, and refusing it would take that from
+    recipes — cost if wrong: a recipe that sets `every` on `fluvial` cuts its rivers more
+    slowly without a warning.
+68. Ruling: `priority_flood` returns the filled surface and the order in which cells left the
+    queue, not labels — the order, reversed, is a topological order towards the outlets, which
+    `hydrology` walks to sum discharge and fill lakes; labels come from `labels` where a stage
+    needs them — cost if wrong: none; one kernel row of §5.8.
+69. Ruling: every float parameter of a stage is finite and either 0 or of magnitude 1e-12 to
+    1e12, and every integer parameter (a count) at most 1e6 in magnitude, checked once on the
+    parsed parameters (defaults included) after each stage's own domains, so the parameter's
+    type decides, not how the recipe writes the number (a float written without a point was
+    taken for a count and refused above 1e6) — the final review's audit found about 70
+    quantities over 22 parameter types that recipe numbers could overflow (cell counts,
+    weight totals, loop and allocation sizes); one rule where numbers come in also covers
+    later stages, where checks per parameter kept leaking — cost if wrong: a recipe that
+    needs a number beyond the bounds is refused (the built-ins span 2.2e-4 to 2.4e4); the
+    bounds are three constants.
+70. Ruling: a cell edge lies in [1 cm, 100 km] and the cell count `rows × columns` must not
+    overflow — a grid of 3e9 × 7e9 cells passed `describe` and panicked `run` in the memory
+    budget; a size whose cells underflowed to 0 m passed the square-cell check — cost if
+    wrong: a recipe outside is refused; two constants.
+71. Ruling: the domains of parameters that later arithmetic cannot take at any magnitude —
+    `background_beta` and `warp_beta` in [−8, 8] and `fluvial`'s m in [0, 2] (they are powers
+    of computed quantities; terrain spectra lie at 1–4, stream-power m at 0.3–0.7);
+    `tectonics`' sources: `width`, `reach` and `r` positive, `jitter` and `depth_m` at least 0,
+    `asymmetry` in [0, 2) (the flanks are width·(1 ∓ asymmetry/2) wide, so at 2 one vanishes;
+    a lean to the other side is the reversed path), `sag_duration_yr` positive; a basin takes
+    no `rate`, which 0.3.0 accepted and never read (§10); `geology`'s `rock_mix` total positive
+    (finite through ruling 69) — found by the final review (a vanished flank, NaN rock
+    provinces from weights whose total overflowed, an infinite sag duration that zeroed every
+    sag rate) — cost if wrong: a recipe outside is refused.
+72. Ruling: a length in metres becomes at most twice the map's longer side in cells, and a
+    Gaussian's radius stops at 16 map sides — a dilation or maximum that wide already reaches
+    every cell; a wider Gaussian or box only averages the reflected line again — cost if
+    wrong: a filter wider than the map differs slightly from scipy's.
+73. Ruling: `RunError` names a non-finite number by where it sits (a raster cell, a value
+    layer, a stage metric), each with its stage, and has variants for the memory budget, an
+    existing output, the format, renders and the post-pipeline outputs — §5.4 and §5.13 ask
+    for those errors, and P09 maps errors by variant — cost if wrong: P09 maps more variants.
+74. Ruling: work that a recipe count sizes reaches a cancel point within a second: kernels
+    check every 4,096 units of work, per-item loops check per item where an item is a pass
+    over the grid, and per-cell sums over a count check per cell — a million Voronoi
+    provinces ran 87 s past a cancel; linear passes over the features (hashing, the features
+    output, the package entry) keep no cancel point inside — cost if wrong: an atomic load per
+    unit of work; the golden runs took as long before as after.
+75. Ruling: the canvas clamps coordinates to one pixmap extent beyond the pixmap and strokes to
+    four extents — `tiny-skia`'s scan converter draws nothing beyond about 5e8 px and panics
+    from about 1.8e9 px (a river width of `width_a = 1e12` panicked the renders); inside the
+    bounds the drawing is unchanged bit for bit — cost if wrong: an absurd stroke or shape is
+    drawn clamped.
 
 ## 10. Left to the builder
 

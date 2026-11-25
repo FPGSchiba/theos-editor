@@ -3,6 +3,12 @@
 Status: waiting for Jann's approval · 12 Nov 2026 · repo of the build: `theos-editor`
 Source: `docs/specs/00-umbrella.md` §3 P05, version 6 (the P05 split, docs PR #34). Scope and
 acceptance criteria come from there; this spec decides how.
+Changes: 13 Nov 2026 — the staged read and check judge paths in git's spelling, under git's
+folding (§5.2, §5.7, §9). Why: the build's final review (R1-1) reproduced a false pass when a
+case-only rename or an NFD name hid a record from the snapshot. The final review's later rounds
+add: intent-to-add entries found by two index reads, not by status `A` (§5.2; R2-2); the git
+environment `Git::find` resolves for a hook (§5.2, §5.8; R2-1, R3-1); `theos hook install` also writes `pre-merge-commit`, so a merge
+commit is checked too (§5.8, §5.11; R4-1); risks, review focus and rulings (§7, §8, §9).
 
 ## 1. Goal
 
@@ -11,7 +17,7 @@ After P05, `theos` is the command line of a content project:
 - `theos ledger` prints the reveal ledger;
 - `theos new` creates a record where its kind belongs;
 - `theos schema` describes the kinds and the rules;
-- `theos hook install` writes a git pre-commit hook.
+- `theos hook install` writes a git pre-commit hook, and the same script as a pre-merge-commit hook (§5.8).
 
 Every one of them prints text by default and one JSON document with `--json`.
 
@@ -190,6 +196,22 @@ pub enum GitError {
 }
 ```
 
+**The git environment.** git starts a hook in the work tree's top and may export where the
+repository is as relative paths:
+- `GIT_WORK_TREE=.` when the commit was given a work tree (`--work-tree`, `GIT_WORK_TREE`);
+- a relative `GIT_DIR`, with `--git-dir=.git`;
+- an absolute `GIT_DIR` and no `GIT_WORK_TREE`, in a linked worktree, a `--separate-git-dir`
+  repository or a submodule.
+
+theos runs its first `rev-parse` in the project folder, where a relative path means something
+else. So `Git::find` resolves the environment once, against the process's current folder:
+- a relative `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR` or `GIT_OBJECT_DIRECTORY` becomes
+  absolute;
+- with `GIT_DIR` and no `GIT_WORK_TREE`, `GIT_WORK_TREE` is set to the current folder (git's own
+  rule);
+- `GIT_INDEX_FILE` stays as it is, because git resolves it in the top, where every index read
+  runs.
+
 P46 adds `TooOld { found, required }` and a cancel variant, and a cancellable spawn beside `run`.
 The parameter types of `run` are the plan's call, as long as P46 and P47 can add to them without
 changing them.
@@ -199,30 +221,63 @@ changing them.
 pub struct Staged {
     /// The repository's top folder.
     pub top: PathBuf,
-    /// The commit's paths and how each changes, from `diff --cached`.
+    /// The place of the folder read in the repository, in git's spelling: empty at the top,
+    /// `a/b` below it.
+    pub place: String,
+    /// How the repository compares paths; `tracked` and `modified` are the entries below
+    /// `place` under it.
+    pub folding: Folding,
+    /// The commit's paths and how each changes, from `diff --cached`, for the whole repository.
     pub changed: Vec<StagedPath>,
-    /// Every path in the index under the folder read, with its mode.
+    /// Every index entry below the folder read, at stage 0, without intent-to-add entries.
     pub tracked: Vec<Tracked>,
-    /// The bytes of each tracked regular file whose working copy differs from the index.
+    /// The bytes of each tracked regular file whose working copy differs from the index or is
+    /// gone.
     pub modified: Vec<(Vec<u8>, Vec<u8>)>,   // (path, staged bytes)
 }
 pub struct StagedPath { pub path: Vec<u8>, pub status: Status }   // A, M, D, T, …
-pub struct Tracked { pub path: Vec<u8>, pub mode: u32 }
+pub struct Tracked { pub path: Vec<u8>, pub mode: u32, pub object: String }
+
+/// How git compares paths: `core.ignorecase` and `core.precomposeunicode`.
+pub struct Folding { pub ignore_case: bool, pub precompose: bool }
 
 pub fn read(git: &Git, folder: &Path) -> Result<Staged, GitError>;
+/// The bytes of git objects by object id, in the order asked, with one `cat-file --batch`.
+pub fn blobs(git: &Git, top: &Path, objects: &[&str]) -> Result<Vec<Vec<u8>>, GitError>;
 ```
+
+**Paths are judged in the spelling of git's index.** A file system can hold one entry under
+another spelling than git's index does:
+- on NTFS and APFS (the Windows and macOS defaults) a case-only rename on disk is invisible to
+  git, and `core.ignorecase` is true;
+- on macOS a name stored as NFD canonicalizes to NFD, while git stores NFC
+  (`core.precomposeunicode`).
+
+`Folding` compares paths the way git does: case-folded when `ignore_case`, NFC when `precompose`,
+byte for byte otherwise. The crate `unicode-normalization` does the NFC (directive 2). The index
+decides how a path is spelled, and every path `read` returns is in git's spelling.
 
 `read` runs, in this order:
 1. `git rev-parse --show-toplevel` in `folder`. Every later command runs in that top folder,
-   where git runs hooks, so a relative `GIT_INDEX_FILE` resolves as git meant it.
-2. `git --no-optional-locks diff --cached --name-status --no-renames -z` gives `changed`. Before
+   where git runs hooks, so a relative `GIT_INDEX_FILE` resolves as git meant it. The paths git
+   answers with are rebuilt from their components, so they carry the platform's separators.
+2. `git config --bool --get core.ignorecase` and the same for `core.precomposeunicode` give
+   `folding`. A setting that is not set is false.
+3. `git --no-optional-locks diff --cached --name-status --no-renames -z` gives `changed`. Before
    the first commit it lists every staged file as added (probe §4.3).
-3. `git --no-optional-locks ls-files -s -z -- <folder>` gives `tracked`: every index entry under
-   the folder, with its mode and object id.
-4. `git --no-optional-locks diff --name-only --no-renames -z -- <folder>` gives the tracked paths
-   whose working copy is modified or deleted. For the regular files among them, one
-   `git cat-file --batch` reads the staged bytes by object id, so no path ever goes into the
-   batch input. That gives `modified`.
+4. `git --no-optional-locks ls-files -s -z`, with no pathspec, lists the whole index. The entries
+   whose first components are the folder's place, under `folding`, are `tracked`, with their mode
+   and object id. `place` is the spelling of the first such entry.
+5. `git --no-optional-locks diff --name-status --no-renames -z`, with no pathspec, gives the
+   tracked paths whose working copy is modified or deleted, kept under the place as in step 4.
+   The same step finds the intent-to-add entries (`git add -N`): their index entry is an empty
+   placeholder that git does not commit. `read` runs `git --no-optional-locks diff --cached
+   --name-status --no-renames -z` twice, once as is and once with `--ita-visible-in-index`. The
+   paths on which the two reads disagree are the intent-to-add entries, and they are left out of
+   `tracked` and `modified`. This also covers an intent-to-add file that was deleted on disk (the
+   work-tree diff reports `D` for it) and one over a path that exists in `HEAD`.
+   For the regular files among the rest, `blobs` reads the staged bytes by object id with one
+   `git cat-file --batch`, so no path ever goes into the batch input. That gives `modified`.
 
 Untracked files need no git call. The cache knows which files the working tree holds, and a path
 that the cache holds but `tracked` does not is not in the snapshot (§5.7). git's own exclude
@@ -267,7 +322,9 @@ impl Workspace {
   same.
 - `StudioError` is a `thiserror` enum. Its variants are `Project`, `Registry`, `Index`, `Git`,
   `Io { path, source }`, `NotAProject { start }` (no `theos.toml` at or above the folder) and
-  `NotInRepository { folder }`. It is `#[non_exhaustive]`.
+  `NotInRepository { folder, source }`. It is `#[non_exhaustive]`. `NotInRepository` keeps git's
+  own error as its source, so the report (§5.12) shows git's reason (dubious ownership, a bare
+  repository, a corrupt `.git`, or no repository) once.
 
 ### 5.4 The `theos` binary: commands, project, output, exit codes
 
@@ -281,10 +338,14 @@ theos hook install [<folder>] [--force] [--json]
 theos formalism [<folder>] [--json]
 ```
 
-- **Project:** a `<folder>` given is the project root, as in P04. Without one, the project is the
-  nearest folder at or above the current one that holds `theos.toml`, like git and cargo
-  (`Workspace::find`). `new` and `schema` take the folder as `--project`, because their
-  positionals are a kind and an id.
+- **Project:** one helper resolves it for every command.
+  - A `<folder>` given (or `--project`) is the project root, as in P04. It must hold
+    `theos.toml`. If not, the command exits 2 with "`X` is not a content project: it has no
+    theos.toml". A given folder is never searched upward.
+  - Without one, the project is the nearest folder at or above the current one that holds
+    `theos.toml`, like git and cargo (`Workspace::find`).
+  - `new` and `schema` take the folder as `--project`, because their positionals are a kind and
+    an id.
 - **Text:** stdout carries only the result. A finding is one line in P03's `Display` form:
   - `path:line:column: severity rule: message` when it has a position;
   - `path: severity rule: message` when it has none.
@@ -351,10 +412,10 @@ pub fn check_staged(workspace: &mut Workspace, git: &Git) -> Result<StagedCheck,
 
 **Steps:**
 1. `staged::read(git, project root)`.
-2. **Map paths:** project path = repository path minus the project's place in the repository.
-   The project's place is its root relative to `Staged::top`, after both are made absolute with
-   `std::fs::canonicalize`. Paths outside the project are dropped. A path that is not UTF-8
-   cannot be a record or an input file, so it is dropped too.
+2. **Map paths:** project path = repository path minus the project's place in the repository,
+   compared by components under `Staged::folding`. The place is `Staged::place`, in git's
+   spelling. The path keeps git's spelling. Paths outside the project are dropped. A path that is
+   not UTF-8 cannot be a record or an input file, so it is dropped too.
 3. **Build the changes** relative to the cache. The cache mirrors the working tree once the
    workspace has synced it. A new `Index::paths()` lists every record and input file it holds.
    - For each `modified` path: `Change::Content(path, staged bytes)`. This covers a file staged
@@ -362,9 +423,21 @@ pub fn check_staged(workspace: &mut Workspace, git: &Git) -> Result<StagedCheck,
    - For each cached path that is not a regular file in `tracked` (mode 100644 or 100755):
      `Change::Removed(path)`. This covers an untracked or locally excluded record, a staged
      deletion, and a symbolic link or submodule entry at a record path.
-   - A tracked path that the cache does not hold and that is not modified gets no change. The
-     walk leaves it out (a project `.gitignore` or a hidden file), so for the index it is not a
-     record, staged or not.
+   - A tracked path that the cache does not hold under any spelling and that is not modified gets
+     no change. The walk leaves it out (a project `.gitignore` or a hidden file), so for the
+     index it is not a record, staged or not.
+   - A tracked regular path that the cache holds only under another spelling (the same under the
+     folding) and that is not modified gets `Change::Content(path, staged bytes)` in git's
+     spelling, besides the `Removed` of the cached spelling. The bytes come from `staged::blobs`.
+   - The order is: the `Content` changes in `modified` order, then these in `tracked` order, then
+     the `Removed` changes in cache order.
+
+   **Why the spelling rule:** on a case-insensitive file system a case-only rename on disk is
+   invisible to git, so the work-tree diff is empty and `modified` does not list the file. The
+   cache holds the disk's spelling, `tracked` holds git's. On macOS a name stored as NFD
+   canonicalizes to NFD while git stores NFC. Without the rule, the cached spelling counts as
+   removed and the tracked one is no record, so a record, or the whole project folder, silently
+   left the snapshot and violations committed (P05 final review R1-1).
 4. **Snapshot preview:** `Index::snapshot(&changes)` runs. It is one of two additions to
    `theos-content`'s index; `paths()` is the other:
    - it applies the changes in a transaction and rolls it back, as `preview` does;
@@ -396,7 +469,8 @@ hold an index transaction while git runs the hook (§6).
 
 1. Finds the project as in §5.4 and `Git::find()`, then the repository's top folder
    (`git rev-parse --show-toplevel`). The git commands below run in that top folder, the folder
-   git runs hooks in.
+   git runs hooks in. `Git::find` has resolved the relative paths that git exports to a hook
+   (§5.2), so the hook's call `theos check --staged '.'` finds the same top as git does.
 2. **Finds the hooks folder** with `git rev-parse --git-path hooks`, resolved against the top
    folder. That honours `core.hooksPath`, and a linked worktree shares the common folder's hooks.
    The folder must lie inside the repository's git folder
@@ -405,7 +479,12 @@ hold an index transaction while git runs the hook (§6).
    - a global `core.hooksPath` would install the hook into every repository of the user, and its
      commits outside a theos project would all be refused;
    - a tracked hooks folder would commit a path that only fits this machine.
-3. Writes `pre-commit` with LF line ends:
+3. Writes the same script to two hooks, with LF line ends:
+   - `pre-commit`, run by `git commit`;
+   - `pre-merge-commit`, run by `git merge` and `git pull` when they create a merge commit
+     (githooks(5)). Two branches that each pass the check can merge into a never-confirm
+     violation: one side lowers a truth's target, the other adds a clue.
+
 
    ```sh
    #!/bin/sh
@@ -425,15 +504,23 @@ hold an index transaction while git runs the hook (§6).
      so the hook needs no search. Because the path is relative, it also fits every linked
      worktree, whose top holds the same layout.
    - On Unix the file gets mode 0755. Git for Windows runs hooks without an executable bit.
-4. **An existing `pre-commit`:**
+4. **An existing hook file,** `pre-commit` and `pre-merge-commit` each judged on its own:
    - with the marker line (`# theos pre-commit hook`) and the same project folder, it is
      replaced: a re-install updates the path;
    - a marked hook for another project folder of the same repository, or any other hook, is left
      alone, and the command exits 2, naming the file. One hook checks one project;
-   - with `--force` the existing hook is first renamed to `pre-commit.before-theos`, and the
-     message names that file.
-5. Prints the hook's path. `--json` prints
-   `{ "hook": path, "replaced": bool, "backup": path|null }`.
+   - a symbolic link is always foreign;
+   - with `--force` the existing hook is first renamed to `<name>.before-theos`, and the
+     message names that file. An existing backup of that name stops the install.
+
+   Every check for both files runs before anything is renamed or written, so a refusal changes
+   nothing on disk.
+5. Prints the `pre-commit` path, then the `pre-merge-commit` path, then one line per backup.
+   `--json` prints
+   `{ "hook": path, "replaced": bool, "backup": path|null, "pre_merge_commit": { "hook": path,
+   "replaced": bool, "backup": path|null } }`. The first three keys are those of `pre-commit`;
+   every key is always present. In Rust, `Installed` keeps `hook`, `replaced` and `backup`, and
+   gains `pre_merge_commit: HookFile { hook, replaced, backup }`.
 
 A folder outside a git repository is exit 2: "`<folder>` is not in a git repository".
 
@@ -536,7 +623,8 @@ there.
     "required" }], "body": { "beats": [{ "key", "targets" }]|null, "notes": [targets]|null,
     "verbatim" } }`;
   - `placement` is `{ "folder": "lore/truths" }` or `{ "under": "parent" }`.
-- **`new`, `hook install` and `formalism`:** as in §5.6, §5.8 and §5.9.
+- **`new`, `hook install` and `formalism`:** as in §5.6, §5.8 and §5.9. `hook install`'s
+  `pre_merge_commit` object is an added key, so it is not a breaking change.
 
 These shapes are a public contract. A renamed or removed key is a breaking change
 (`CONTRIBUTING.md` §2); an added key is not.
@@ -584,8 +672,9 @@ the nine variants and checks that each cause appears exactly once.
 
 | AC | Test |
 |---|---|
-| CE-17.1 | **Per command, a binary test** on a fixture project: the text output, and `--json` parsed with `serde_json` and compared field by field:<br>- `check`: findings, counts, binaries checked and not checked, exit 0, 1 and 2;<br>- `ledger`: the P04 ledger as JSON;<br>- `new`: path from both placements, numbering, template and skeleton, a refusal leaves no file;<br>- `schema`: all kinds, one kind, rules with configured severities;<br>- `hook install`: the script, the marker, re-install, foreign hook, `--force` with backup, a repo-local `core.hooksPath`, a refused global one, a project in a subfolder, a linked worktree. |
-| CE-17.2 | **Through git, with the installed hook:**<br>- a staged never-confirm violation is refused, and the message names `lore/never-confirm` and the file;<br>- the same violation with a fix only in the working tree is refused;<br>- a clean snapshot with a violation only in the working tree commits;<br>- `commit -a` and `commit <path>` check their own snapshots;<br>- the lowered target makes a committed clue overshoot and is refused;<br>- a staged settings change that tries to lower never-confirm is refused;<br>- a local record excluded through `.git/info/exclude` with a violation does not block;<br>- a project in a subfolder commits through its hook.<br>**Unit tests:** the path mapping and the change building of §5.7, with a project in a subfolder and files outside it. |
+| CE-17.1 | **Per command, a binary test** on a fixture project: the text output, and `--json` parsed with `serde_json` and compared field by field:<br>- `check`: findings, counts, binaries checked and not checked, exit 0, 1 and 2;<br>- `ledger`: the P04 ledger as JSON;<br>- `new`: path from both placements, numbering, template and skeleton, a refusal leaves no file;<br>- `schema`: all kinds, one kind, rules with configured severities;<br>- `hook install`: the script, the marker, re-install, foreign hook, `--force` with backup, both hook files, a refused foreign `pre-merge-commit` that leaves `pre-commit` untouched, a repo-local `core.hooksPath`, a refused global one, a project in a subfolder, a linked worktree. |
+| CE-17.2 | **Through git, with the installed hook:**<br>- a staged never-confirm violation is refused, and the message names `lore/never-confirm` and the file;<br>- the same violation with a fix only in the working tree is refused;<br>- a clean snapshot with a violation only in the working tree commits;<br>- `commit -a` and `commit <path>` check their own snapshots;<br>- the lowered target makes a committed clue overshoot and is refused;<br>- a staged settings change that tries to lower never-confirm is refused;<br>- a local record excluded through `.git/info/exclude` with a violation does not block;<br>- a project in a subfolder commits through its hook;<br>- a case-only rename of a record, or of the project folder, on disk after staging cannot hide a
+  violation.<br>**Unit tests:** the path mapping and the change building of §5.7, with a project in a subfolder and files outside it. |
 
 ## 6. Interfaces other phases use
 
@@ -607,9 +696,15 @@ the nine variants and checks that each cause appears exactly once.
 | The hook is slow on a cold cache | The first commit after a clone waits for a full index | Under a second for 500 records (CE-12.1). Later commits sync only changed files |
 | `theos` moves after the hook is installed | The hook finds no program | Fallback to the PATH. A re-install updates the path |
 | Older git without `--no-optional-locks` (2.15) | The reads fail | P46 sets the minimum version in `Git::find`. P05's tests run on the runners' git |
+| Cherry-pick, rebase and revert run neither hook, and a fast-forward merge creates no commit (known gap; for Jann) | Such a change can bring a violation into a branch unchecked. A hook cannot cover these | Accepted. Backstops: the next `git commit` judges the whole snapshot and is refused; P47's commit runs the same check; P49's check action judges every pushed commit |
 | Windows `sh` and paths with spaces or quotes | The hook fails to start | Single-quoted path with `'` escaped. A test path with a space and a `'` on Windows |
 | A cache contended by another build | `IndexError::Contended` | The in-memory fallback (§5.3) |
 | CRLF in staged blobs (`core.autocrlf`) | Positions or findings differ from the working copy's | `theos-content` reads CRLF as LF (P02). A test commits with `autocrlf=true` |
+| Path identity: a case-only rename on disk (NTFS, APFS), or an NFD name on macOS, against git's NFC | The cache and the index spell a path differently, so a record, or the whole project folder, leaves the snapshot and violations commit | Paths are compared under git's folding and kept in git's spelling; a respelled tracked path gets its staged bytes (§5.2, §5.7). Tests rename after staging, with `core.ignorecase=true`, on every OS |
+| Intent-to-add entries (`git add -N`) | An empty placeholder is judged as an empty record, and a commit does not contain it. Status `A` in the work-tree diff misses an entry deleted on disk or over a path in `HEAD` | `diff --cached` is read twice, with and without `--ita-visible-in-index`; the paths that differ are the entries, which are left out (§5.2) |
+| The git environment of a hook (relative `GIT_DIR`, `GIT_WORK_TREE=.`, an absolute `GIT_DIR` with no work tree) | theos judged a subfolder project with the wrong top: clean commits were refused, and an error the project's settings raise was committed | `Git::find` resolves the relative variables once against the current folder and sets `GIT_WORK_TREE` as git does; `GIT_INDEX_FILE` stays (§5.2). Tests commit with `--git-dir`/`--work-tree`, from a linked worktree, a `--separate-git-dir` repository and a submodule |
+| `Folding` folds case with Unicode lowercasing; git's `core.ignorecase` folds ASCII only (not judged by the build's reviewers; for Jann) | A path that git keeps apart can compare equal | Accepted: it is wider, the safe direction. NTFS and APFS fold Unicode, and the respelling rule only adds a record's staged bytes |
+| A repository with `core.ignorecase=false` on a case-insensitive file system, for example copied from Linux (not judged by the build's reviewers; for Jann) | The spelling rule does not apply, so a case-only rename can still hide a record | Accepted: git itself misjudges such a repository. Not mitigated |
 
 ## 8. Review Focus — inputs most likely to break it
 
@@ -630,7 +725,21 @@ the nine variants and checks that each cause appears exactly once.
 - **Paths:** with a space, with non-ASCII letters, or that are not UTF-8; an id that exists in
   another case; a record tracked with `git add -f` although the project's `.gitignore` keeps it
   out.
-- **The hook script:** an existing foreign hook, a re-install, `--force`, an install path with a
+- **Path identity:** a case-only rename of a record or of the project folder on disk, after
+  staging; a name in NFD on disk and NFC in git; `core.ignorecase` and `core.precomposeunicode`
+  on and off; a place that no entry lies below.
+- **Intent-to-add:** a file added with `git add -N`, which a commit leaves out; one deleted on
+  disk afterwards; one over a path that exists in `HEAD`.
+- **Git environment:** a commit from a linked worktree, a `--separate-git-dir` repository or a
+  submodule, and a commit with `--git-dir` or `--work-tree`, each with the project in a
+  subfolder.
+- **Project resolution:** a given folder or `--project` without `theos.toml`, for every command.
+- **Git's refusals:** a folder git cannot use (dubious ownership, a bare repository), with git's
+  reason once in the report.
+- **Merge of two clean branches into a violating state:** one side lowers a truth's target, the
+  other adds a clue; `git merge` and `git pull` create the merge commit, and `pre-merge-commit`
+  refuses it.
+- **The hook script:** an existing foreign hook (also only one of the two), a re-install, `--force`, an install path with a
   space or a `'`.
 - **`theos new`:** a template whose body contains `{{title}}`; a compile template's
   `{{speaker}}`; a `--set` value the restricted YAML rejects; a parent that does not exist; the
@@ -671,6 +780,9 @@ the nine variants and checks that each cause appears exactly once.
 - Ruling: `hook install` never overwrites a foreign hook without `--force`, and `--force` keeps
   a backup — a hook may be someone's work, and deleting it is destructive — cost if wrong: one
   more file in the hooks folder.
+- Ruling: `hook install` also writes `pre-merge-commit` with the same script — `pre-commit` does
+  not run for merge commits, and merging two branches that each pass can create a never-confirm
+  violation (final review R4-1) — cost if wrong: one more hook file per install.
 - Ruling: `theos new` starts from the project's template, else from the kind — Jann keeps the
   templates for Obsidian, and a project without them still works — cost if wrong: one source to
   drop.
@@ -716,6 +828,24 @@ the nine variants and checks that each cause appears exactly once.
   files from links and submodules — cost if wrong: one more git call.
 - Ruling: paths that are not UTF-8 are dropped from the snapshot — records and input files have
   ASCII names (data model §2, §3) — cost if wrong: such a file is not checked.
+- Ruling: paths are compared under git's own folding, and git's index decides the spelling — the
+  file system can hold an entry under another spelling (a case-only rename on NTFS or APFS, NFD
+  on macOS), and a snapshot that trusts the cache's spelling loses records silently; the options
+  were to build the snapshot from the index alone, or to refuse on any mismatch — cost if wrong:
+  one more git config read and whole-repository listings per staged check (content repositories
+  are small).
+- Ruling: intent-to-add entries are the paths on which `diff --cached` differs with and without
+  `--ita-visible-in-index`, and are not tracked — git does not commit them, and status `A` in the
+  work-tree diff misses an entry deleted on disk or over a path in `HEAD` (final review R2-2) —
+  cost if wrong: one more git call.
+- Ruling: `Git::find` resolves the relative git variables once against the current folder —
+  git starts a hook in the work tree's top with relative paths that mean something else in the
+  project folder, and a subfolder project was judged with the wrong top (final review R2-1,
+  R3-1);
+  `GIT_INDEX_FILE` stays, because git resolves it in the top — cost if wrong: a repository
+  layout git exports in a way not listed in §5.2.
+- Ruling: a given project folder must hold `theos.toml` and is never searched upward — a typo in
+  a folder must not check another project — cost if wrong: one error variant.
 - Ruling: `theos formalism` gets `--json` although CE-17.1 does not list it — every command of the
   binary then behaves the same — cost if wrong: a few lines.
 
