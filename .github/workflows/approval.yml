@@ -45,6 +45,15 @@ jobs:
       # After both checkouts: the key of the cached xtask hashes the checkout this job runs, the
       # base commit (the head only while the base has no xtask).
       - uses: ./.github/actions/xtask
+        if: hashFiles('.github/actions/xtask/action.yml') != ''
+      # Bases older than P50 have no cached-xtask action. Their setup action builds xtask into the
+      # same path (its tools step runs the `cargo xtask` alias) and, with these inputs, saves no
+      # cache.
+      - uses: ./.github/actions/setup
+        if: hashFiles('.github/actions/xtask/action.yml') == ''
+        with:
+          cache-key: gate
+          save-cache: 'false'
       - run: target/xtask-bin/debug/xtask --root . approval
         env:
           GH_TOKEN: ${{ github.token }}

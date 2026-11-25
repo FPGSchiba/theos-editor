@@ -60,4 +60,4 @@ runs:
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: target/xtask-bin/debug/xtask
-        key: xtask-bin-${{ runner.os }}-${{ hashFiles('xtask/**', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/**') }}
+        key: xtask-bin-${{ runner.os }}-${{ hashFiles('xtask/**', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/**') }}
