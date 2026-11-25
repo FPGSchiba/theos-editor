@@ -41,7 +41,9 @@ cargo xtask gate                  # before you say a change is done
 network and takes a few minutes, once per pinned version.
 
 `cargo xtask gate` runs every local check of `docs/gate.md` with the same code as CI, in this
-order, and prints one table at the end:
+order, and prints one table at the end. When the change touches only paths no check reads (docs
+and the like), the checks are reported as not needed, except on a `phase/` branch; `docs/gate.md`
+§1 has the full rule.
 
 | Check | What it checks |
 |---|---|
@@ -49,15 +51,19 @@ order, and prints one table at the end:
 | `fmt` | `cargo fmt --all --check` |
 | `lints` | The lint list, the tool configuration and the attributes in the sources |
 | `engine-free` | No engine crate in the tree without the feature `engine` |
-| `ac-trace` | Every acceptance criterion of the phase has a tagged test; every tag names one |
 | `commit-msg` | Every commit since `main` is a Conventional Commit |
 | `clippy` | `cargo clippy` on every crate and target, warnings denied |
 | `docs` | `cargo doc` with warnings denied |
 | `deny` | `cargo deny check`: licences, advisories, bans and sources |
-| `test` | The tests (nextest) and the doc tests |
+| `test` | The tests (nextest) and the doc tests, without the slow tests |
 | `coverage` | Line coverage per crate against its floor and against `main` |
+| `slow-tests` | The slow tests (names with a segment that starts with `slow_`) |
+| `ac-trace` | Every acceptance criterion of the phase has a tagged test; every tag names one |
 
-It keeps going after a check fails and exits 1 if any failed. When a tool is not the pinned
+`--only a,b` runs just those checks and `--skip a,b` runs all but those; `tools` always runs
+first. `cargo xtask pr` runs `pr-title` and `pr-body`.
+
+The gate keeps going after a check fails and exits 1 if any failed. When a tool is not the pinned
 version it stops after `tools`, because versions decide the verdicts. `commit-msg` and `coverage`
 compare with `origin/main`, so fetch it first.
 

@@ -62,8 +62,8 @@ On a pull request, `slow-tests` runs the slow tests only when the pull request c
 merge base, a file of a workspace crate with slow tests (one of its `.rs` files contains `slow_`),
 of a workspace crate such a crate depends on, or one of `Cargo.toml`, `Cargo.lock`,
 `rust-toolchain.toml`, `.cargo/`, `.config/`, `.github/`, `gate/` and `xtask/`. Otherwise it
-passes with a note that says so, without building anything. The job `gate` runs and reports on every
-pull request either way, so the required check is never missing. A push to `main`, a manual run,
+is reported as not needed, with the reason, without building anything. The job `gate` runs and
+reports on every pull request either way, so the required check is never missing. A push to `main`, a manual run,
 the `platforms` schedule and `cargo xtask gate` outside CI always run the slow tests. Inside a CI
 job, `cargo xtask gate` hands `slow-tests` the event, so on a pull request, a `platforms` run
 started by a label included, the rule above decides.

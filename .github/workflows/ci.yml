@@ -22,8 +22,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Every job reads history: `commit-msg` the commits of the pull request, `slow-tests` and
-# `coverage` the merge base. A pull request saves no build cache and no xtask: it is searched
+# Every job reads history: every job reads the changed paths since the merge base to decide
+# whether the change needs its checks, `commit-msg` also the commits of the pull request, and
+# `slow-tests` and `coverage` the merge base. A pull request saves no build cache and no xtask: it is searched
 # first, so one it saved would win over the cache of `main`. Only the coverage baseline, keyed by
 # the base commit, is saved by whichever run measured it.
 jobs:
