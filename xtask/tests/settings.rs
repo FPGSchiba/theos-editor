@@ -79,20 +79,7 @@ fn ruleset_contexts_equal_gate_md_checks() -> TestResult {
     let required = required_contexts_from_gate_md(&gate_md);
     assert_eq!(contexts, required);
     let expected: BTreeSet<String> = [
-        "fmt",
-        "clippy",
-        "test",
-        "slow-tests",
-        "docs",
-        "deny",
-        "engine-free",
-        "coverage",
-        "lints",
-        "ac-trace",
-        "commit-msg",
-        "pr-title",
-        "pr-body",
-        "approval",
+        "gate", "test", "coverage", "pr-title", "pr-body", "approval",
     ]
     .into_iter()
     .map(String::from)
@@ -213,36 +200,44 @@ fn repo_settings_encode_section_6() -> TestResult {
     Ok(())
 }
 
+// AC: CE-08.3
 #[test]
-fn required_contexts_are_the_first_column_of_section_1_without_ui() {
+fn required_contexts_are_the_job_column_of_section_1_without_ui() {
     let text = "# The gate
 
 ## 1. Required checks
 
-| Check | What it runs | OS |
-|---|---|---|
-| `fmt` | `cargo fmt --all --check` | Linux |
-| `clippy` | `cargo clippy` | Linux |
-| `ui` | from P11: `pnpm install` | Linux |
-| `docs` | `cargo doc` with warnings | Linux |
+| Check | Job | What it runs | OS |
+|---|---|---|---|
+| `fmt` | `gate` | `cargo fmt --all --check` | Linux |
+| `clippy` | `gate` | `cargo clippy` | Linux |
+| `test` | `test` | `cargo nextest` | Linux |
+| `ui` | `ui` | from P11: `pnpm install` | Linux |
+| `docs` | `not a job` | `cargo doc` with warnings | Linux |
 
 Text after the table, and `not-a-check` in it.
 
 ## 2. Lints
 
-| Check | What it runs | OS |
-|---|---|---|
-| `other` | not in section 1 | Linux |
+| Check | Job | What it runs | OS |
+|---|---|---|---|
+| `other` | `other` | not in section 1 | Linux |
 ";
-    let expected: BTreeSet<String> = ["fmt", "clippy", "docs"]
-        .into_iter()
-        .map(String::from)
-        .collect();
+    let expected: BTreeSet<String> = ["gate", "test"].into_iter().map(String::from).collect();
     assert_eq!(required_contexts_from_gate_md(text), expected);
     assert_eq!(
         required_contexts_from_gate_md("no table here"),
         BTreeSet::new()
     );
+
+    // A table without a Job column names no job.
+    let without_job = "## 1. Required checks
+
+| Check | What it runs | OS |
+|---|---|---|
+| `fmt` | `cargo fmt` | Linux |
+";
+    assert_eq!(required_contexts_from_gate_md(without_job), BTreeSet::new());
 }
 
 /// `value` with every list reversed and an extra key on every object: what GitHub may answer for
@@ -439,9 +434,9 @@ fn required_checks_are_a_set_of_context_and_app() -> TestResult {
         let checks = rule["parameters"]["required_status_checks"]
             .as_array_mut()
             .ok_or("checks is not a list")?;
-        // `docs` is gone, `fmt` is pinned to another app, `lint` is new.
-        checks.retain(|check| check["context"] != "docs");
-        for check in checks.iter_mut().filter(|check| check["context"] == "fmt") {
+        // `coverage` is gone, `test` is pinned to another app, `lint` is new.
+        checks.retain(|check| check["context"] != "coverage");
+        for check in checks.iter_mut().filter(|check| check["context"] == "test") {
             check["integration_id"] = json!(1);
         }
         checks.push(json!({"context": "lint"}));
@@ -449,11 +444,11 @@ fn required_checks_are_a_set_of_context_and_app() -> TestResult {
     assert_eq!(
         differences(&desired, &live),
         [
-            "ruleset main: rule required_status_checks: required check docs (app 15368) is missing",
-            "ruleset main: rule required_status_checks: required check fmt (app 15368) is missing",
-            "ruleset main: rule required_status_checks: required check fmt (app 1) is on \
-             GitHub but not in the file",
+            "ruleset main: rule required_status_checks: required check coverage (app 15368) is missing",
+            "ruleset main: rule required_status_checks: required check test (app 15368) is missing",
             "ruleset main: rule required_status_checks: required check lint (any app) is on \
+             GitHub but not in the file",
+            "ruleset main: rule required_status_checks: required check test (app 1) is on \
              GitHub but not in the file",
         ]
     );

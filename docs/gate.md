@@ -12,23 +12,23 @@ the gate and never merges a waiting PR are part of the gate.
 
 All checks are required status checks on `main` (branch protection, administrators included).
 
-| Check | What it runs | OS |
-|---|---|---|
-| `fmt` | `cargo fmt --all --check` | Linux |
-| `clippy` | `cargo clippy --workspace --all-targets --locked -- -D warnings` | Linux |
-| `test` | `cargo nextest run --workspace --locked` (profile `ci` in CI, `default` locally; both leave out the slow tests) and `cargo test --doc --workspace --locked` | Linux |
-| `slow-tests` | `cargo xtask slow-tests`: `cargo nextest run --workspace --locked --profile slow --no-tests=warn`, only the slow tests; on a pull request only when it can change their outcome (below) | Linux |
-| `docs` | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked` | Linux |
-| `deny` | `cargo deny --locked check` (licences, advisories, bans, sources) | Linux |
-| `engine-free` | `cargo xtask engine-free`: no engine crate in the tree without feature `engine` | Linux |
-| `coverage` | `cargo xtask coverage`: per-crate line coverage ≥ floor in `gate/thresholds.toml`, and no crate drops more than the allowed amount below `main` | Linux |
-| `lints` | `cargo xtask lints`: `[workspace.lints]` in the root `Cargo.toml` equals `gate/lints.toml`; the config files equal their `gate/` copies and exist nowhere else; library and binary code comes only from its crate's `src/`; `cfg` names only what `gate/cfg-names.toml` allows, and no `cfg` is an empty `any()`; no `allow` or `warn` attribute anywhere, outer or inner; no `allow` or `expect` of a guard lint or of `clippy::pedantic`/`clippy::restriction` (§2); no reasonless `#[expect]` or `#[ignore]` anywhere, macro input and code behind another OS's `cfg` included (P00 spec §5.10). | Linux |
-| `ac-trace` | `cargo xtask ac-trace`: every acceptance criterion of the PR's phase has at least one test tagged `AC: <id>`; no tag names an unknown criterion | Linux |
-| `pr-body` | `cargo xtask pr-body`: the PR description has every section of the template, filled | Linux |
-| `pr-title` | `cargo xtask pr-title`: the title is a Conventional Commit ending with `(PNN)`, `(gate)`, `(docs)` or a release title (`CONTRIBUTING.md` §3) | Linux |
-| `commit-msg` | `cargo xtask commit-msg`: every commit of the PR is a Conventional Commit (`CONTRIBUTING.md` §2) | Linux |
-| `approval` | fails while the PR touches a protected path and lacks the label `approved` | Linux |
-| `ui` | from P11: `pnpm install --frozen-lockfile`, `svelte-check`, `eslint`, `vitest`, Playwright component tests | Linux |
+| Check | Job | What it runs | OS |
+|---|---|---|---|
+| `fmt` | `gate` | `cargo fmt --all --check` | Linux |
+| `clippy` | `gate` | `cargo clippy --workspace --all-targets --locked -- -D warnings` | Linux |
+| `test` | `test` | `cargo nextest run --workspace --locked` (profile `ci` in CI, `default` locally; both leave out the slow tests) and `cargo test --doc --workspace --locked` | Linux |
+| `slow-tests` | `gate` | `cargo xtask slow-tests`: `cargo nextest run --workspace --locked --profile slow --no-tests=warn`, only the slow tests; on a pull request only when it can change their outcome (below) | Linux |
+| `docs` | `gate` | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked` | Linux |
+| `deny` | `gate` | `cargo deny --locked check` (licences, advisories, bans, sources) | Linux |
+| `engine-free` | `gate` | `cargo xtask engine-free`: no engine crate in the tree without feature `engine` | Linux |
+| `coverage` | `coverage` | `cargo xtask coverage`: per-crate line coverage ≥ floor in `gate/thresholds.toml`, and no crate drops more than the allowed amount below `main` | Linux |
+| `lints` | `gate` | `cargo xtask lints`: `[workspace.lints]` in the root `Cargo.toml` equals `gate/lints.toml`; the config files equal their `gate/` copies and exist nowhere else; library and binary code comes only from its crate's `src/`; `cfg` names only what `gate/cfg-names.toml` allows, and no `cfg` is an empty `any()`; no `allow` or `warn` attribute anywhere, outer or inner; no `allow` or `expect` of a guard lint or of `clippy::pedantic`/`clippy::restriction` (§2); no reasonless `#[expect]` or `#[ignore]` anywhere, macro input and code behind another OS's `cfg` included (P00 spec §5.10). | Linux |
+| `ac-trace` | `gate` | `cargo xtask ac-trace`: every acceptance criterion of the PR's phase has at least one test tagged `AC: <id>`; no tag names an unknown criterion | Linux |
+| `pr-body` | `pr-body` | `cargo xtask pr-body`: the PR description has every section of the template, filled | Linux |
+| `pr-title` | `pr-title` | `cargo xtask pr-title`: the title is a Conventional Commit ending with `(PNN)`, `(gate)`, `(docs)` or a release title (`CONTRIBUTING.md` §3) | Linux |
+| `commit-msg` | `gate` | `cargo xtask commit-msg`: every commit of the PR is a Conventional Commit (`CONTRIBUTING.md` §2) | Linux |
+| `approval` | `approval` | fails while the PR touches a protected path and lacks the label `approved` | Linux |
+| `ui` | `ui` | from P11: `pnpm install --frozen-lockfile`, `svelte-check`, `eslint`, `vitest`, Playwright component tests | Linux |
 
 **Slow tests** are tests that take minutes, such as the map generator's parity and golden runs
 (P08 spec §5.14). A test is slow when a segment of its name, the path nextest shows, starts with
