@@ -83,7 +83,10 @@ runs only them. Every test that proves an AC carries `// AC: <id>` on the line a
    the parameters' domains in `validate` with `stage::Check` (one wording per rule); every number
    of the parameters also keeps, by its type, the bounds `stage::MAX_MAGNITUDE` and
    `MIN_MAGNITUDE` (a float field) or `MAX_COUNT` (an integer field), and the frame's cell edge
-   lies between `recipe::MIN_CELL_M` and `MAX_CELL_M`. Lengths in metres become cells through
+   lies between `recipe::MIN_CELL_M` and `MAX_CELL_M`. Unknown keys are found centrally and
+   read "unknown parameter" at their path: a plain struct carries no `deny_unknown_fields` (only
+   an enum tagged by a field or a flattened field does), and `validate` checks the keys of a
+   table keyed by names with `Check::known_keys`. Lengths in metres become cells through
    `MapFrame` (`cells_of_m`, `centre_m`, `index_centre_m`, ...), never by hand. A loop whose
    length a recipe count sets reaches a cancel point (`StageContext::check_cancel`, or the
    `cancel` callback of a kernel or of `features::pick`) at least once per pass over the grid.
