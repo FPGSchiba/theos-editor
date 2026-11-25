@@ -20,9 +20,9 @@ gate/code-paths.toml, which no check reads (docs/gate.md §1)";
 /// What a run has to check.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Scope {
-    /// Every check runs; `note` says why when the reason is an uncertainty, not a code change.
+    /// Every check runs; `note` says why when the reason is not a change to code.
     Every {
-        /// Why the scope could not be narrowed, if that is the reason.
+        /// Why every check runs, when it is not because the change touches code.
         note: Option<String>,
     },
     /// Only `commit-msg` runs: the change touches no path a check reads.
@@ -39,9 +39,9 @@ fn every_because(note: impl Into<String>) -> Scope {
     }
 }
 
-/// The scope of a change, by the rules of §5.3 in order: a `phase/` branch runs every check; an
-/// unreadable change list runs every check; no changed path runs every check; only non-code paths
-/// is docs-only; anything else runs every check.
+/// The scope of a change, by the rules of §5.3 in order: an unreadable change list, a `phase/`
+/// branch and no changed path each run every check, with a note; only non-code paths is
+/// docs-only; anything else (code) runs every check without a note.
 #[must_use]
 pub fn decide(changes: Result<Changes>, paths: &CodePaths) -> Scope {
     let changes = match changes {
@@ -55,9 +55,14 @@ pub fn decide(changes: Result<Changes>, paths: &CodePaths) -> Scope {
         .as_deref()
         .is_some_and(|branch| branch.starts_with("phase/"))
     {
-        return every();
+        return every_because(
+            "the branch is a phase branch, and `ac-trace` reads the phase from it",
+        );
     }
-    if changes.paths.is_empty() || !changes.paths.iter().all(|path| paths.is_non_code(path)) {
+    if changes.paths.is_empty() {
+        return every_because("no changed path was found");
+    }
+    if !changes.paths.iter().all(|path| paths.is_non_code(path)) {
         return every();
     }
     Scope::DocsOnly
@@ -69,13 +74,19 @@ const LABEL_NOTE: &str =
 
 /// The scope of this run in the checkout at `root`: a push or any other event runs every check, a
 /// pull request decides from its commits, and a run outside CI decides from the working tree.
+/// Every run of every check for a reason other than a code change carries a note that says why.
 ///
 /// A pull request run that a label started (`platforms`, §5.6) runs every check, with a note: the
 /// label is a deliberate request, and the rule for changes that touch no code does not apply.
 #[must_use]
 pub fn for_run(root: &Path, ci: Option<&CiEvent>) -> Scope {
     match ci {
-        Some(CiEvent::Push(_) | CiEvent::Other) => every(),
+        Some(CiEvent::Push(_)) => {
+            every_because("this is a push, which has no pull request to narrow by")
+        }
+        Some(CiEvent::Other) => every_because(
+            "this event is not a pull request (a manual or scheduled run, for example)",
+        ),
         Some(CiEvent::PullRequest(pr)) if pr.action == "labeled" => every_because(LABEL_NOTE),
         Some(CiEvent::PullRequest(pr)) => with_lists(root, |git, paths| {
             decide(changes::of_pull_request(git, pr), paths)
@@ -135,18 +146,26 @@ mod tests {
         assert_eq!(scope, Scope::DocsOnly);
     }
 
-    // AC: CE-08C.2
-    #[test]
-    fn a_phase_branch_runs_every_check() {
-        let scope = decide(Ok(changes("phase/P50-leaner-ci", &["docs/x.md"])), &lists());
-        assert_eq!(scope, every());
+    /// The note of a scope that runs every check; fails the test for any other scope or no note.
+    fn note_of(scope: &Scope) -> &str {
+        match scope {
+            Scope::Every { note: Some(note) } => note,
+            other => panic!("expected Every with a note, got {other:?}"),
+        }
     }
 
     // AC: CE-08C.2
     #[test]
-    fn a_malformed_phase_branch_runs_every_check() {
+    fn a_phase_branch_runs_every_check_with_a_note() {
+        let scope = decide(Ok(changes("phase/P50-leaner-ci", &["docs/x.md"])), &lists());
+        assert!(note_of(&scope).contains("phase branch"), "{scope:?}");
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn a_malformed_phase_branch_runs_every_check_with_a_note() {
         let scope = decide(Ok(changes("phase/foo", &["docs/x.md"])), &lists());
-        assert_eq!(scope, every());
+        assert!(note_of(&scope).contains("phase branch"), "{scope:?}");
     }
 
     // AC: CE-08C.2
@@ -166,16 +185,15 @@ mod tests {
             file: "somewhere".to_owned(),
             message: "boom-text".to_owned(),
         };
-        match decide(Err(error), &lists()) {
-            Scope::Every { note: Some(note) } => assert!(note.contains("boom-text"), "{note}"),
-            other => panic!("expected Every with a note, got {other:?}"),
-        }
+        let scope = decide(Err(error), &lists());
+        assert!(note_of(&scope).contains("boom-text"), "{scope:?}");
     }
 
     // AC: CE-08C.2
     #[test]
-    fn no_change_runs_every_check() {
-        assert_eq!(decide(Ok(changes("docs/x", &[])), &lists()), every());
+    fn no_change_runs_every_check_with_a_note() {
+        let scope = decide(Ok(changes("docs/x", &[])), &lists());
+        assert!(note_of(&scope).contains("no changed path"), "{scope:?}");
     }
 
     fn docs_repo() -> TestResult<tempfile::TempDir> {
@@ -190,13 +208,23 @@ mod tests {
 
     // AC: CE-08C.2
     #[test]
-    fn a_push_runs_every_check() -> TestResult {
+    fn a_push_runs_every_check_with_a_note() -> TestResult {
         let dir = docs_repo()?;
         let event = CiEvent::Push(PushEvent {
             before: "a".to_owned(),
             after: "b".to_owned(),
         });
-        assert_eq!(for_run(dir.path(), Some(&event)), every());
+        let scope = for_run(dir.path(), Some(&event));
+        assert!(note_of(&scope).contains("push"), "{scope:?}");
+        Ok(())
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn a_manual_or_scheduled_run_runs_every_check_with_a_note() -> TestResult {
+        let dir = docs_repo()?;
+        let scope = for_run(dir.path(), Some(&CiEvent::Other));
+        assert!(note_of(&scope).contains("not a pull request"), "{scope:?}");
         Ok(())
     }
 
@@ -218,10 +246,8 @@ mod tests {
     fn a_detached_head_runs_every_check_with_a_note() -> TestResult {
         let dir = docs_repo()?;
         git(dir.path(), &["switch", "-q", "--detach"])?;
-        assert!(matches!(
-            for_run(dir.path(), None),
-            Scope::Every { note: Some(_) }
-        ));
+        let scope = for_run(dir.path(), None);
+        assert!(note_of(&scope).contains("detached"), "{scope:?}");
         Ok(())
     }
 
@@ -229,10 +255,8 @@ mod tests {
     fn missing_lists_run_every_check_with_a_note() -> TestResult {
         let dir = init_repo()?;
         commit(dir.path(), "chore: initial")?;
-        assert!(matches!(
-            for_run(dir.path(), None),
-            Scope::Every { note: Some(_) }
-        ));
+        let scope = for_run(dir.path(), None);
+        assert!(note_of(&scope).contains("non-code list"), "{scope:?}");
         Ok(())
     }
 
@@ -266,7 +290,8 @@ mod tests {
         let (base, head) = docs_branch(path)?;
         let event = |head_ref: &str| pull_request("opened", &base, &head, head_ref);
         assert_eq!(for_run(path, Some(&event("docs/x"))), Scope::DocsOnly);
-        assert_eq!(for_run(path, Some(&event("phase/P50-x"))), every());
+        let phase = for_run(path, Some(&event("phase/P50-x")));
+        assert!(note_of(&phase).contains("phase branch"), "{phase:?}");
         Ok(())
     }
 
@@ -277,10 +302,8 @@ mod tests {
         let path = dir.path();
         let (base, head) = docs_branch(path)?;
         let labeled = pull_request("labeled", &base, &head, "docs/x");
-        match for_run(path, Some(&labeled)) {
-            Scope::Every { note: Some(note) } => assert!(note.contains("label"), "{note}"),
-            other => panic!("expected Every with a note, got {other:?}"),
-        }
+        let scope = for_run(path, Some(&labeled));
+        assert!(note_of(&scope).contains("label"), "{scope:?}");
         // The same pull request opened is docs-only: the label alone made the difference.
         let opened = pull_request("opened", &base, &head, "docs/x");
         assert_eq!(for_run(path, Some(&opened)), Scope::DocsOnly);
