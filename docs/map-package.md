@@ -227,7 +227,7 @@ longitude and latitude: an alternative coordinate reference by prior arrangement
 | `resource` | one type per resource (`iron-ore`, `timber`, …) | Point | `richness`, `tier`, `element`, `harvest`, `radius_m` |
 | `road` | `trail`, `track`, `road`, `main` | LineString | `from`, `to` (feature ids), `length_m`, `width_m`, `grade_max` |
 | `water` | `river` | LineString (x, y, bed height) | `width_m`, `depth_m`, `discharge_m3s` per vertex; `order` (Strahler) |
-| `water` | `lake` | Polygon | `surface_m` (water level), `terminal` (no outflow), `outlet` (a point in metres; absent for a terminal lake), `depth_max_m` |
+| `water` | `lake` | Polygon, or MultiPolygon when one lake has several outlines | `surface_m` (water level), `terminal` (no outflow), `outlet` (a point in metres; absent for a terminal lake), `depth_max_m` |
 | `street` | `lane`, `street`, `main-street` | LineString | |
 | `building` | `building` | Polygon | `use`, `storeys` |
 | `landmark` | free text | Point | `name` |

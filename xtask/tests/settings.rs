@@ -82,6 +82,7 @@ fn ruleset_contexts_equal_gate_md_checks() -> TestResult {
         "fmt",
         "clippy",
         "test",
+        "slow-tests",
         "docs",
         "deny",
         "engine-free",

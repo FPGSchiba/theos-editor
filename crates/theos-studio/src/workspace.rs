@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use theos_content::{Index, IndexError, KindRegistry, Project, parts};
 
+use crate::command::state::CommandState;
 use crate::error::StudioError;
 
 /// An opened project: its files, its editor parts and the index over them.
@@ -12,6 +13,7 @@ pub struct Workspace {
     registry: KindRegistry,
     index: Index,
     in_memory: bool,
+    pub(crate) commands: CommandState,
 }
 
 impl Workspace {
@@ -41,6 +43,7 @@ impl Workspace {
             registry,
             index,
             in_memory,
+            commands: CommandState::default(),
         })
     }
 

@@ -12,7 +12,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | done | #21 | #28 |
 | P05 | CLI and hook | theos-editor | pr-open | #35, #41 | #42 |
-| P06 | Command layer and repo lock | theos-editor | spec-pr | #36 | |
+| P06 | Command layer and repo lock | theos-editor | pr-open | #36 | #39 |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map format and terrain generator | theos-editor | spec-approved | #27 | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
@@ -46,15 +46,22 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P47 | Git write | theos-editor | todo | | |
 | P48 | MCP read | theos-editor | todo | | |
 | P49 | Releases and the check action | theos-editor | todo | | |
+| P50 | Leaner CI | theos-editor | spec-approved | #45 | |
 
 Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and P23 from version 3
 (decision 0003, #24). Rows P31–P34 and P45, and the new P29 and P30, come from umbrella version 4
 (decision 0004, #31). Rows P46 and P47 and the new P06 come from umbrella version 5 (the split of
 P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the split of P05,
-#34).
+#34). Row P50 comes from umbrella version 7 (#45), amended by version 8.
 
 ## Needs Jann
 
+- GitHub refused every Actions job from 13 Nov 2026 to 25 Nov: the included $18 was used up on
+  3–12 Nov. Jann set an Actions budget of $15 on 25 Nov. P50 (Leaner CI) cuts the gate's
+  minutes; its build waits until the open PRs are merged.
+- When Jann approves P50's build PR, he switches the live ruleset to the required checks `gate`,
+  `test`, `coverage`, `pr` and `approval` (`cargo xtask github apply`); open PRs merge `main`
+  afterwards.
 - P05's build PR #42 is a draft labelled `needs-jann`: its final review loop reached the cap of 5
   rounds with one Minor open (R5-1: four `hook install` cases that spec PR #41 calls binary
   tests have library tests only). The fix (four binary tests in `crates/theos/tests/cli/hook.rs`)
@@ -65,8 +72,18 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
   where git folds ASCII; `core.ignorecase=false` on a case-insensitive file system.
 - P05 and P06 (#39): whichever PR merges second moves `theos new` onto P06's `Create` command
   (agreed by both sessions). Until then P05's `create.rs` has its own preview, verdict and write.
-- P06's spec (command layer and repo lock) waits for Jann in its spec PR #36. Its §6.1 holds the
-  interfaces agreed with the P05 session, and its §11 the git probes for P46 and P47.
+- P06's build PR #39 (labelled `needs-jann`) is ready for Jann's merge.
+  - The final review loop reached its cap.
+  - Jann's targeted fix round closed m5-1 and m5-2.
+  - Jann then chose to fix N4 and to record N1–N3 as rulings R24–R26. A fresh scoped review of
+    that change was clean.
+- Follow-up from P06: the class "a command changes which files are records without the verdict
+  judging it" (m4-4, m5-1, and N1–N3 of PR #39) needs a general design. One option is a check
+  after the write that compares the reindex with the preview and heals the cache; another is a
+  P03 preview over the planned disk state. Rulings R16, R21 and R23 refuse the common cases
+  today. R24–R26 accept the rare rest: a `.gitignore` behind a symbolic link, a hidden file
+  restored visible by a Windows rollback, and new folders that differ only in case. The commit
+  check stops any error those cases leave.
 - For P49 (umbrella version 6):
   - before its gate PR: Jann creates a GitHub App for release-plz (contents and pull requests
     write), installs it on this repository and stores its id and key as secrets; the tag ruleset

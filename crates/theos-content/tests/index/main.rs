@@ -17,6 +17,7 @@ mod links;
 mod lore;
 mod neighbours;
 mod order;
+mod rename;
 mod rules;
 mod schema;
 mod search;

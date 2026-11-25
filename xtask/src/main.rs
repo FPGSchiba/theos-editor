@@ -18,6 +18,7 @@ use tracing_subscriber::filter::LevelFilter;
 use xtask::branch::Phase;
 use xtask::checks::{
     ac_trace, approval, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title,
+    slow,
 };
 use xtask::gate;
 use xtask::git::Git;
@@ -54,8 +55,14 @@ enum Command {
     Fmt,
     /// Run clippy on every crate with warnings denied.
     Clippy,
-    /// Run the tests and the doc tests of every crate.
+    /// Run the tests and the doc tests of every crate, without the slow tests.
     Test,
+    /// Run the slow tests of every crate: the tests with a name segment that starts with `slow_`.
+    ///
+    /// On a pull request under GitHub Actions they run only when the pull request changes a crate
+    /// with slow tests, a crate it depends on, or a build input or file of the gate; otherwise
+    /// the check passes with a note. Everywhere else they always run.
+    SlowTests,
     /// Build the documentation of every crate with warnings denied.
     Docs,
     /// Check licences, advisories, bans and sources.
@@ -136,7 +143,8 @@ enum Command {
     /// Run every check that needs no pull request, in order, and print one verdict table.
     ///
     /// Runs `tools`, `fmt`, `lints`, `engine-free`, `ac-trace`, `commit-msg`, `clippy`, `docs`,
-    /// `deny`, `test` and `coverage` with the same code as their CI jobs, and goes on after a
+    /// `deny`, `test`, `coverage` and `slow-tests` with the same code as their CI jobs (the slow
+    /// tests always run here, as on a push to `main`), and goes on after a
     /// check fails. It leaves out `pr-title`, `pr-body` and `approval`. When a tool is not the
     /// pinned version, nothing but `tools` runs, because versions decide verdicts. Exit code 1
     /// when any check failed.
@@ -219,6 +227,7 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         Command::Fmt => cargo_cmds::run(Check::Fmt, &root, ci.as_ref(), &mut out)?,
         Command::Clippy => cargo_cmds::run(Check::Clippy, &root, ci.as_ref(), &mut out)?,
         Command::Test => cargo_cmds::run(Check::Test, &root, ci.as_ref(), &mut out)?,
+        Command::SlowTests => slow::run(&root, ci.as_ref(), &mut out)?,
         Command::Docs => cargo_cmds::run(Check::Docs, &root, ci.as_ref(), &mut out)?,
         Command::Deny => cargo_cmds::run(Check::Deny, &root, ci.as_ref(), &mut out)?,
         Command::EngineFree => engine_free::run(&root, ci.as_ref(), &mut out)?,
