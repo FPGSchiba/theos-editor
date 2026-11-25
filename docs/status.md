@@ -12,7 +12,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | done | #21 | #28 |
 | P05 | CLI and hook | theos-editor | pr-open | #35, #41 | #42 |
-| P06 | Command layer and repo lock | theos-editor | pr-open | #36 | #39 |
+| P06 | Command layer and repo lock | theos-editor | done | #36 | #39 |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map format and terrain generator | theos-editor | spec-approved | #27 | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
@@ -62,21 +62,11 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 - When Jann approves P50's build PR, he switches the live ruleset to the required checks `gate`,
   `test`, `coverage`, `pr` and `approval` (`cargo xtask github apply`); open PRs merge `main`
   afterwards.
-- P05's build PR #42 is a draft labelled `needs-jann`: its final review loop reached the cap of 5
-  rounds with one Minor open (R5-1: four `hook install` cases that spec PR #41 calls binary
-  tests have library tests only). The fix (four binary tests in `crates/theos/tests/cli/hook.rs`)
-  is ready to apply on Jann's word.
-- P05's spec change PR #41 (judge staged paths in git's spelling, the git environment of a hook,
-  intent-to-add entries, the hook for merge commits) waits for Jann. Its §7 has three rows for
-  Jann to decide: cherry-pick, rebase and revert run no commit hook; `Folding` folds Unicode case
-  where git folds ASCII; `core.ignorecase=false` on a case-insensitive file system.
-- P05 and P06 (#39): whichever PR merges second moves `theos new` onto P06's `Create` command
-  (agreed by both sessions). Until then P05's `create.rs` has its own preview, verdict and write.
-- P06's build PR #39 (labelled `needs-jann`) is ready for Jann's merge.
-  - The final review loop reached its cap.
-  - Jann's targeted fix round closed m5-1 and m5-2.
-  - Jann then chose to fix N4 and to record N1–N3 as rulings R24–R26. A fresh scoped review of
-    that change was clean.
+- P05's build PR #42 (a draft labelled `needs-jann`) is ready for Jann's merge.
+  - The final review loop reached its cap of 5 rounds with one Minor open, R5-1. Four `hook
+    install` cases now have binary tests (face6ef), as the merged spec (#41, §5.14) says.
+  - `main` is merged, with P06 (#39). As agreed with P06, `theos new` now writes through P06's
+    `Create` command (171a7d6).
 - Follow-up from P06: the class "a command changes which files are records without the verdict
   judging it" (m4-4, m5-1, and N1–N3 of PR #39) needs a general design. One option is a check
   after the write that compares the reindex with the preview and heals the cache; another is a
