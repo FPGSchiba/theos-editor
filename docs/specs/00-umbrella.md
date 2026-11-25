@@ -1,6 +1,6 @@
 # Theos content editor — umbrella spec
 
-Status: accepted when this file is merged by Jann · version 7 · 25 Nov 2026 (version 1: 31 Oct 2026;
+Status: accepted when this file is merged by Jann · version 8 · 25 Nov 2026 (version 1: 31 Oct 2026;
 version 2, 5 Nov 2026, adds the world atlas, quests and art from lore: G19, P20–P28, slices S8 and
 S9; version 3, 10 Nov 2026, moves the map generator to Rust in this repo, decision 0003: G1, G4,
 G11, G20, P08 rewritten, P09 (with `theos gen`), P22 and P23 adjusted, P29, P30 and slice S10;
@@ -14,7 +14,9 @@ P06 into P06 Command layer and repo lock (CE-20, CE-22.2), P46 Git read (CE-21) 
 read and P49 Releases and the check action, and CE-08R.3 names the run and commit that built a
 release instead of build provenance, which GitHub offers private repositories only on GitHub
 Enterprise Cloud; version 7, 25 Nov 2026, adds P50 Leaner CI (CE-08C) after the included runner
-minutes ran out, and rewords G2, CE-08.3 and CE-08R.6 for it)
+minutes ran out, and rewords G2, CE-08.3 and CE-08R.6 for it; version 8, the same day, runs
+P50's checks in three parallel jobs so CI reports as fast as before: CE-08C.1, CE-08C.2,
+CE-08C.5 and CE-08.3 reworded)
 Owner of architecture: Jann · Built by: Claude Code with superpowers
 
 This spec defines the whole build as phases. Each phase runs one superpowers cycle:
@@ -159,8 +161,8 @@ waits for Jann.
   Linux and Windows.
 - CE-08.2 CI fails when a crate depends on an engine crate without feature `engine`.
 - CE-08.3 Every check of `docs/gate.md` §1 (except `ui`) runs in a required status check on
-  `main` (`gate`, `pr` or `approval`); branch protection and repo settings match `docs/gate.md`
-  §6.
+  `main` (`gate`, `test`, `coverage`, `pr` or `approval`); branch protection and repo settings
+  match `docs/gate.md` §6.
 - CE-08.4 `cargo xtask gate` gives the same verdicts as CI on Windows and Linux.
 - CE-08.5 `approval` fails for a PR that touches a protected path without the label `approved`
   and passes once it is added; CI adds `needs-jann` to such PRs.
@@ -961,27 +963,30 @@ that runs `theos check` for tower-of-theos. Settled with Jann on 12 Nov 2026:
 
 The gate on fewer runner minutes, with the same checks and the same verdicts. On 3–12 Nov 2026
 the gate used the included $18 of GitHub Actions usage in ten days, mostly on setting up thirteen
-small jobs per push; GitHub has refused every job since. Settled with Jann on 25 Nov 2026: one CI
-job runs `cargo xtask gate`; a pull request that changes only paths no check reads runs only the
+small jobs per push; GitHub has refused every job since. Settled with Jann on 25 Nov 2026: CI
+runs the checks of `cargo xtask gate` in three parallel jobs and reports as fast as before, while
+`approval` and `pr` start from a cached xtask; a pull request that changes only paths no check
+reads runs only the
 checks those paths can affect; `platforms` runs one job per OS and tests macOS on Intel only on
 demand and before releases. This phase changes protected paths, so its PR waits for Jann, who
 switches the required checks of the live ruleset when he approves it.
 
 **CE-08C Leaner CI**
-- CE-08C.1 CI runs every check of `cargo xtask gate` in one job `gate`, and `pr-title` and
-  `pr-body` in one job `pr`; the job summary of each lists every check it ran with its verdict.
+- CE-08C.1 CI runs the checks of `cargo xtask gate` in three jobs side by side: `test` runs
+  `test`, `coverage` runs `coverage`, and `gate` runs every other check; `pr-title` and `pr-body`
+  run in one job `pr`; the job summary of each job lists every check it ran with its verdict.
 - CE-08C.2 On a pull request or a local branch that is not a `phase/` branch and whose changed
   paths all match the non-code list of `gate/code-paths.toml` and none of its always-code list,
-  `cargo xtask gate` runs `commit-msg` only and reports every other check as not needed; every
-  other pull request and branch, every push, and every run whose changed paths cannot be read run
-  every check.
+  `cargo xtask gate` and the CI jobs run `commit-msg` only and report every other check as not
+  needed; every other pull request and branch, every push, and every run whose changed paths
+  cannot be read run every check.
 - CE-08C.3 Every path outside the code that a check reads counts as code: the umbrella spec,
   `docs/gate.md`, `CONTRIBUTING.md`, `.github/**`, every `*.ts` file, and every `Cargo.toml`,
   `Cargo.lock`, toolchain, clippy, rustfmt or cargo configuration file in any folder.
 - CE-08C.4 `docs/gate.md` lists the non-code and always-code paths exactly as
   `gate/code-paths.toml` does, and says for every check that a non-code pull request does not
   run why such a change cannot affect it.
-- CE-08C.5 `pr` and `approval` build xtask from a cache that `main` saves, and no job of a pull
+- CE-08C.5 `pr` and `approval` take xtask from a cache that `main` saves, and no job of a pull
   request saves a build cache.
 - CE-08C.6 `platforms` runs the checks of one OS in one job; its weekly and label runs test macOS
   on Apple silicon; the Intel macOS tests run only on demand; a newer label run for the same pull
