@@ -198,27 +198,73 @@ fn map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         .collect()
 }
 
-/// The suffixes GitHub adds to the name of a job that runs on one OS of a matrix.
-const OS_SUFFIXES: [&str; 3] = [" (windows)", " (macos)", " (macos intel)"];
-
-/// The check a job runs: its name without the OS suffix.
-fn check_of(name: &str) -> &str {
-    OS_SUFFIXES
-        .iter()
-        .find_map(|suffix| name.strip_suffix(suffix))
-        .unwrap_or(name)
+/// One job of `platforms.yml`: one per OS, which runs its checks through `cargo xtask gate
+/// --only`, so an OS is set up and built once.
+struct PlatformJob {
+    name: &'static str,
+    runner: &'static str,
+    command: &'static str,
+    timeout: i64,
+    /// The label of a pull request that starts the job, if any.
+    label: Option<&'static str>,
+    /// The `workflow_dispatch` input that starts the job.
+    input: &'static str,
+    /// The condition the job spells.
+    condition: &'static str,
 }
 
-/// The runner a job of this name needs: its OS suffix says which.
-fn runner_of(name: &str) -> &'static str {
-    if name.ends_with(" (windows)") {
-        "windows-latest"
-    } else if name.ends_with(" (macos)") {
-        "macos-latest"
-    } else if name.ends_with(" (macos intel)") {
-        "macos-15-intel"
+/// The jobs of `platforms.yml`.
+const PLATFORM_JOBS: [PlatformJob; 3] = [
+    PlatformJob {
+        name: "windows",
+        runner: "windows-latest",
+        command: "cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace",
+        timeout: 150,
+        label: Some("windows"),
+        input: "windows",
+        condition: "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' \
+                    && inputs.windows) || (github.event_name == 'pull_request' && \
+                    github.event.label.name == 'windows')",
+    },
+    PlatformJob {
+        name: "macos",
+        runner: "macos-latest",
+        command: "cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace",
+        timeout: 150,
+        label: Some("macos"),
+        input: "macos",
+        condition: "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' \
+                    && inputs.macos) || (github.event_name == 'pull_request' && \
+                    github.event.label.name == 'macos')",
+    },
+    PlatformJob {
+        name: "macos-intel",
+        runner: "macos-15-intel",
+        command: "cargo xtask gate --only test,slow-tests",
+        timeout: 150,
+        label: None,
+        input: "macos_intel",
+        condition: "github.event_name == 'workflow_dispatch' && inputs.macos_intel",
+    },
+];
+
+/// The `platforms.yml` job of this name in [`PLATFORM_JOBS`].
+fn platform_job(name: &str) -> Option<&'static PlatformJob> {
+    PLATFORM_JOBS.iter().find(|job| job.name == name)
+}
+
+/// The expression that is true on the schedule only: the one case where `platforms` saves a build
+/// cache.
+const ON_SCHEDULE: &str = "${{ github.event_name == 'schedule' }}";
+
+/// The runner of a job of `file`.
+fn runner_for(file: &str, name: &str) -> &'static str {
+    if file == "platforms.yml" {
+        platform_job(name).map_or("", |job| job.runner)
     } else {
-        "ubuntu-latest"
+        ci_job(name)
+            .filter(|_| file == "ci.yml")
+            .map_or("ubuntu-latest", |job| job.runner)
     }
 }
 
@@ -259,15 +305,15 @@ fn ci_job(name: &str) -> Option<&'static CiJob> {
     CI_JOBS.iter().find(|job| job.name == name)
 }
 
-/// The command a job runs: the one of [`CI_JOBS`] for `ci.yml`, for `pr`, `approval` and
-/// `settings` the cached xtask binary, for the others `cargo xtask <check>`.
+/// The command a job runs: the one of [`CI_JOBS`] for `ci.yml`, of [`PLATFORM_JOBS`] for
+/// `platforms.yml`, for `pr`, `approval` and `settings` the cached xtask binary.
 fn command_of(file: &str, name: &str) -> String {
     if file == "ci.yml" {
         ci_job(name).map_or_else(String::new, |job| job.command.to_owned())
-    } else if let Some(command) = cached_xtask_command(name) {
-        command.to_owned()
+    } else if file == "platforms.yml" {
+        platform_job(name).map_or_else(String::new, |job| job.command.to_owned())
     } else {
-        format!("cargo xtask {}", check_of(name))
+        cached_xtask_command(name).map_or_else(String::new, str::to_owned)
     }
 }
 
@@ -430,16 +476,280 @@ fn ci_jobs_run_the_gate_runner() -> TestResult {
 // AC: CE-08.1
 #[test]
 fn platforms_builds_and_tests_on_windows_and_macos() -> TestResult {
+    // The Windows and the Apple silicon job build with clippy and run the tests and the slow
+    // tests; each runs them in the one gate command of its job.
     let jobs = jobs(&workflow("platforms.yml")?)?;
-    for (os, runner) in [("windows", "windows-latest"), ("macos", "macos-latest")] {
-        for check in ["clippy", "test", "slow-tests"] {
-            let name = format!("{check} ({os})");
-            let job = &jobs[index_of(&jobs, &name)?];
-            assert_eq!(job.runs_on()?, runner, "{name}");
+    for (name, runner) in [("windows", "windows-latest"), ("macos", "macos-latest")] {
+        let job = &jobs[index_of(&jobs, name)?];
+        assert_eq!(job.runs_on()?, runner, "{name}");
+        let [command] = job
+            .commands()?
+            .try_into()
+            .map_err(|_| format!("job {name} does not run exactly one command"))?;
+        let checks = selection_of(&command)?.checks();
+        for check in [Check::Clippy, Check::Test, Check::SlowTests] {
+            assert!(
+                checks.contains(&check),
+                "{name} does not run {}",
+                check.name()
+            );
+        }
+    }
+    Ok(())
+}
+
+// AC: CE-08C.6
+#[test]
+fn platforms_runs_one_job_per_os() -> TestResult {
+    let jobs = jobs(&workflow("platforms.yml")?)?;
+    let found: Vec<(&str, &str)> = jobs
+        .iter()
+        .map(|job| (job.id.as_str(), job.name.as_str()))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            ("windows", "windows"),
+            ("macos", "macos"),
+            ("macos-intel", "macos-intel")
+        ]
+    );
+    for job in &jobs {
+        let expected = platform_job(&job.name).ok_or("an unexpected job")?;
+        assert_eq!(job.runs_on()?, expected.runner, "{}", job.name);
+        assert_eq!(job.commands()?, [expected.command], "{}", job.name);
+        assert_eq!(job.node["needs"], Yaml::BadValue, "{} has needs", job.name);
+    }
+    Ok(())
+}
+
+/// What starts a run of `platforms`: the event, the label of a `labeled` pull request, and the
+/// `workflow_dispatch` inputs that are on.
+struct Event {
+    name: &'static str,
+    label: &'static str,
+    inputs: &'static [&'static str],
+}
+
+/// Whether a job runs for an event, by its condition. Only the conditions of [`PLATFORM_JOBS`]
+/// are known, and an unknown one fails the test, so a changed condition is a changed test.
+fn runs(job: &PlatformJob, condition: &str, event: &Event) -> TestResult<bool> {
+    if condition != job.condition {
+        return Err(format!("job {} has the unknown condition `{condition}`", job.name).into());
+    }
+    let on_demand = event.name == "workflow_dispatch" && event.inputs.contains(&job.input);
+    Ok(match job.label {
+        // The scheduled run, the manual run that asks for it, and its own label.
+        Some(label) => {
+            event.name == "schedule"
+                || on_demand
+                || (event.name == "pull_request" && event.label == label)
+        }
+        // Only on demand: the Intel runner is dear and its tests rarely differ.
+        None => on_demand,
+    })
+}
+
+/// The condition of a job as the workflow spells it.
+fn condition_of(job: &Job) -> TestResult<&str> {
+    job.node["if"]
+        .as_str()
+        .ok_or_else(|| format!("job {} has no `if:`", job.name).into())
+}
+
+// AC: CE-08C.6, CE-08.12
+#[test]
+fn macos_runs_weekly_on_demand_and_by_label_on_apple_silicon() -> TestResult {
+    let platforms = workflow("platforms.yml")?;
+    let on = &platforms["on"];
+    assert_eq!(
+        keys(on)?,
+        set(&["schedule", "workflow_dispatch", "pull_request"])
+    );
+    let schedule = on["schedule"].as_vec().ok_or("schedule is not a list")?;
+    assert_eq!(schedule.len(), 1, "one schedule");
+    // Monday, 04:00 UTC.
+    assert_eq!(schedule[0]["cron"].as_str(), Some("0 4 * * 1"));
+    assert_eq!(strings(&on["pull_request"]["types"])?, ["labeled"]);
+
+    let inputs = &on["workflow_dispatch"]["inputs"];
+    assert_eq!(keys(inputs)?, set(&["windows", "macos", "macos_intel"]));
+    for (input, default) in [
+        ("windows", "true"),
+        ("macos", "true"),
+        ("macos_intel", "false"),
+    ] {
+        assert_eq!(inputs[input]["type"].as_str(), Some("boolean"), "{input}");
+        assert_eq!(
+            scalar(&inputs[input]["default"]).as_deref(),
+            Some(default),
+            "{input}"
+        );
+    }
+
+    let jobs = jobs(&platforms)?;
+    let macos = &jobs[index_of(&jobs, "macos")?];
+    assert_eq!(macos.runs_on()?, "macos-latest");
+    let job = platform_job("macos").ok_or("no macos job")?;
+    for (event, expected) in [
+        (
+            Event {
+                name: "schedule",
+                label: "",
+                inputs: &[],
+            },
+            true,
+        ),
+        (
+            Event {
+                name: "workflow_dispatch",
+                label: "",
+                inputs: &["macos"],
+            },
+            true,
+        ),
+        (
+            Event {
+                name: "workflow_dispatch",
+                label: "",
+                inputs: &["windows"],
+            },
+            false,
+        ),
+        (
+            Event {
+                name: "pull_request",
+                label: "macos",
+                inputs: &[],
+            },
+            true,
+        ),
+    ] {
+        assert_eq!(
+            runs(job, condition_of(macos)?, &event)?,
+            expected,
+            "{} {} {:?}",
+            event.name,
+            event.label,
+            event.inputs
+        );
+    }
+    Ok(())
+}
+
+// AC: CE-08C.6
+#[test]
+fn intel_runs_only_on_demand() -> TestResult {
+    let jobs = jobs(&workflow("platforms.yml")?)?;
+    let intel = &jobs[index_of(&jobs, "macos-intel")?];
+    assert_eq!(intel.runs_on()?, "macos-15-intel");
+    let job = platform_job("macos-intel").ok_or("no macos-intel job")?;
+    for (event, expected) in [
+        (
+            Event {
+                name: "schedule",
+                label: "",
+                inputs: &[],
+            },
+            false,
+        ),
+        (
+            Event {
+                name: "pull_request",
+                label: "macos",
+                inputs: &[],
+            },
+            false,
+        ),
+        (
+            Event {
+                name: "pull_request",
+                label: "macos-intel",
+                inputs: &[],
+            },
+            false,
+        ),
+        (
+            Event {
+                name: "workflow_dispatch",
+                label: "",
+                inputs: &["macos"],
+            },
+            false,
+        ),
+        (
+            Event {
+                name: "workflow_dispatch",
+                label: "",
+                inputs: &["macos_intel"],
+            },
+            true,
+        ),
+    ] {
+        assert_eq!(
+            runs(job, condition_of(intel)?, &event)?,
+            expected,
+            "{} {} {:?}",
+            event.name,
+            event.label,
+            event.inputs
+        );
+    }
+    // Its input is off unless asked for.
+    let on = &workflow("platforms.yml")?["on"];
+    assert_eq!(
+        scalar(&on["workflow_dispatch"]["inputs"]["macos_intel"]["default"]).as_deref(),
+        Some("false")
+    );
+    Ok(())
+}
+
+// AC: CE-08C.6
+#[test]
+fn a_newer_label_run_cancels_the_older_one() -> TestResult {
+    for job in jobs(&workflow("platforms.yml")?)? {
+        let concurrency = &job.node["concurrency"];
+        // Per pull request and per job, so labels of two OSes do not cancel each other.
+        assert_eq!(
+            concurrency["group"].as_str(),
+            Some(
+                format!(
+                    "platforms-${{{{ github.event.pull_request.number || github.run_id }}}}-{}",
+                    job.id
+                )
+                .as_str()
+            ),
+            "{}",
+            job.name
+        );
+        // Only a pull request run is cancelled: a schedule or manual run has its own run id.
+        assert_eq!(
+            concurrency["cancel-in-progress"].as_str(),
+            Some("${{ github.event_name == 'pull_request' }}"),
+            "{}",
+            job.name
+        );
+    }
+    Ok(())
+}
+
+// AC: CE-08C.6
+#[test]
+fn platforms_starts_no_job_for_another_label() -> TestResult {
+    let labels = ["windows", "macos", "macos-intel", "needs-jann", "approved"];
+    for job in jobs(&workflow("platforms.yml")?)? {
+        let expected = platform_job(&job.name).ok_or("an unexpected job")?;
+        for label in labels {
+            let event = Event {
+                name: "pull_request",
+                label,
+                inputs: &[],
+            };
             assert_eq!(
-                job.commands()?,
-                [format!("cargo xtask {}", check_of(&name))],
-                "{name}"
+                runs(expected, condition_of(&job)?, &event)?,
+                expected.label == Some(label),
+                "{}: label {label}",
+                job.name
             );
         }
     }
@@ -516,9 +826,10 @@ fn every_job_runs_only_its_command_on_its_runner() -> TestResult {
             [command_of(file, name)],
             "{file}: job {name} runs more or other than its check"
         );
-        let runner = ci_job(name)
-            .filter(|_| file == "ci.yml")
-            .map_or_else(|| runner_of(name), |job| job.runner);
+        let runner = match cached_xtask_command(name) {
+            Some(_) => "ubuntu-latest",
+            None => runner_for(file, name),
+        };
         assert_eq!(job.runs_on()?, runner, "{file}: job {name}");
 
         let kinds = job
@@ -575,14 +886,16 @@ const WORKFLOW_KEYS: [&str; 5] = ["name", "on", "permissions", "concurrency", "j
 
 /// What a job may spell. Left out on purpose: `continue-on-error` (a failed check passes),
 /// `defaults` (another shell or folder), `strategy` and `needs` (a job that is skipped or
-/// tolerated), `container` and `services`.
-const JOB_KEYS: [&str; 6] = [
+/// tolerated), `container` and `services`. `concurrency` is the cancelling of an older label run
+/// of a `platforms` job, which `a_newer_label_run_cancels_the_older_one` pins.
+const JOB_KEYS: [&str; 7] = [
     "name",
     "runs-on",
     "timeout-minutes",
     "permissions",
     "if",
     "steps",
+    "concurrency",
 ];
 
 /// What a step of a job may spell. `env` is the token of the two steps that call GitHub, which
@@ -726,16 +1039,14 @@ fn no_step_condition_except_the_cache_ones() -> TestResult {
 }
 
 /// The minutes a job may run before GitHub cancels it. The default is six hours. The jobs of
-/// `ci.yml` have their own; of the others the builds and tests of one platform take the longest,
-/// the slow tests longer still: map-scale generator runs of a minute each, on every OS.
+/// `ci.yml` and `platforms.yml` have their own: a platform job builds once and runs its checks,
+/// slow tests included, one after the other.
 fn timeout_of(file: &str, name: &str) -> i64 {
     match name {
         _ if file == "ci.yml" => ci_job(name).map_or(0, |job| job.timeout),
+        _ if file == "platforms.yml" => platform_job(name).map_or(0, |job| job.timeout),
         // Both run a binary `main` cached, so a label change is checked in seconds.
-        "pr" | "approval" | "settings" => 15,
-        _ if check_of(name) == "slow-tests" => 120,
-        _ if OS_SUFFIXES.iter().any(|suffix| name.ends_with(suffix)) => 60,
-        _ => 30,
+        _ => 15,
     }
 }
 
@@ -749,61 +1060,6 @@ fn every_job_has_a_timeout() -> TestResult {
             "{file}: job {} has no `timeout-minutes` of {}, and a hung job runs for six hours",
             job.name,
             timeout_of(file, &job.name)
-        );
-    }
-    Ok(())
-}
-
-// AC: CE-08.12
-#[test]
-fn platforms_runs_weekly_on_demand_and_by_label() -> TestResult {
-    let platforms = workflow("platforms.yml")?;
-    let on = &platforms["on"];
-    assert_eq!(
-        keys(on)?,
-        set(&["schedule", "workflow_dispatch", "pull_request"])
-    );
-    let schedule = on["schedule"].as_vec().ok_or("schedule is not a list")?;
-    assert_eq!(schedule.len(), 1, "one schedule");
-    // Monday, 04:00 UTC.
-    assert_eq!(schedule[0]["cron"].as_str(), Some("0 4 * * 1"));
-    assert_eq!(strings(&on["pull_request"]["types"])?, ["labeled"]);
-
-    let jobs = jobs(&platforms)?;
-    let names: BTreeSet<String> = jobs.iter().map(|job| job.name.clone()).collect();
-    assert_eq!(
-        names,
-        set(&[
-            "clippy (windows)",
-            "test (windows)",
-            "slow-tests (windows)",
-            "lints (windows)",
-            "ac-trace (windows)",
-            "clippy (macos)",
-            "test (macos)",
-            "test (macos intel)",
-            "slow-tests (macos)",
-            "slow-tests (macos intel)",
-            "lints (macos)",
-            "ac-trace (macos)",
-        ])
-    );
-    for job in &jobs {
-        let os = if job.name.ends_with(" (windows)") {
-            "windows"
-        } else {
-            "macos"
-        };
-        assert_eq!(job.runs_on()?, runner_of(&job.name), "{}", job.name);
-        // On a pull request only the label of the job's own OS starts it; the schedule and a
-        // manual run always do.
-        let expected =
-            format!("github.event_name != 'pull_request' || github.event.label.name == '{os}'");
-        assert_eq!(
-            job.node["if"].as_str(),
-            Some(expected.as_str()),
-            "{}",
-            job.name
         );
     }
     Ok(())
@@ -1070,7 +1326,7 @@ fn no_expressions_in_run_steps() -> TestResult {
 /// The checks of `platforms.yml` that read history: the commits of a pull request, or the merge
 /// base with its base. `slow-tests` reads the changes since the merge base to decide whether its
 /// tests run.
-const READ_HISTORY: [&str; 3] = ["commit-msg", "coverage", "slow-tests"];
+const READ_HISTORY: [Check; 3] = [Check::CommitMsg, Check::Coverage, Check::SlowTests];
 
 #[test]
 fn history_is_fetched_where_commits_or_the_merge_base_are_read() -> TestResult {
@@ -1086,7 +1342,15 @@ fn history_is_fetched_where_commits_or_the_merge_base_are_read() -> TestResult {
     }
     for job in jobs(&workflow("platforms.yml")?)? {
         let depth = &job.steps()?[0]["with"]["fetch-depth"];
-        if READ_HISTORY.contains(&check_of(&job.name)) {
+        let [command] = job
+            .commands()?
+            .try_into()
+            .map_err(|_| format!("job {} does not run exactly one command", job.name))?;
+        let reads_history = selection_of(&command)?
+            .checks()
+            .iter()
+            .any(|check| READ_HISTORY.contains(check));
+        if reads_history {
             assert_eq!(
                 depth.as_i64(),
                 Some(0),
@@ -1353,22 +1617,27 @@ fn pull_request_jobs() -> TestResult<Vec<(&'static str, Job)>> {
 fn no_pull_request_job_saves_a_build_cache() -> TestResult {
     // A pull request is searched first, so a cache it saved would win over the one of `main`.
     for (file, job) in pull_request_jobs()? {
-        // `platforms.yml` still runs the setup action without inputs, so its label runs save a
-        // cache; Task 8 of P50 makes it save on the schedule only and removes this exception.
-        if file == "platforms.yml" {
-            continue;
-        }
         let Some(inputs) = setup_inputs(&job)? else {
             continue;
         };
-        for input in ["save-cache", "save-xtask"] {
-            let value = setup_input(&inputs, input)?;
-            assert!(
-                value == "false" || value == ON_MAIN,
-                "{file}: job {} saves with {input}: {value}, which a pull request does",
-                job.name
-            );
-        }
+        // `platforms` runs on a label as well as on the schedule: it saves on the schedule only.
+        let cache_ok = if file == "platforms.yml" {
+            ON_SCHEDULE
+        } else {
+            ON_MAIN
+        };
+        let value = setup_input(&inputs, "save-cache")?;
+        assert!(
+            value == cache_ok || (value == "false" && file != "platforms.yml"),
+            "{file}: job {} saves with save-cache: {value}, which a pull request does",
+            job.name
+        );
+        let value = setup_input(&inputs, "save-xtask")?;
+        assert!(
+            value == "false" || value == ON_MAIN,
+            "{file}: job {} saves with save-xtask: {value}, which a pull request does",
+            job.name
+        );
     }
     Ok(())
 }
@@ -1401,10 +1670,14 @@ fn setup_inputs_of_every_job() -> TestResult {
     let long = |key: &str| map(&[("cache-key", key), ("save-cache", ON_MAIN)]);
     let mut gate = long("gate");
     gate.insert("save-xtask".to_owned(), ON_MAIN.to_owned());
+    let platform = |key: &str| map(&[("cache-key", key), ("save-cache", ON_SCHEDULE)]);
     let shared = [
         ("ci.yml", "gate", gate),
         ("ci.yml", "test", long("test")),
         ("ci.yml", "coverage", long("coverage")),
+        ("platforms.yml", "windows", platform("windows")),
+        ("platforms.yml", "macos", platform("macos")),
+        ("platforms.yml", "macos-intel", platform("macos-intel")),
     ];
     for (file, job) in all_jobs()? {
         let name = &job.name;
