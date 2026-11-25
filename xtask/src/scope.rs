@@ -7,7 +7,6 @@
 use std::path::Path;
 
 use crate::Result;
-use crate::branch::{BranchKind, parse_branch};
 use crate::changes::{self, Changes};
 use crate::ci::CiEvent;
 use crate::code_paths::CodePaths;
@@ -53,7 +52,7 @@ pub fn decide(changes: Result<Changes>, paths: &CodePaths) -> Scope {
     if changes
         .branch
         .as_deref()
-        .is_some_and(|branch| matches!(parse_branch(branch), BranchKind::Phase(_)))
+        .is_some_and(|branch| branch.starts_with("phase/"))
     {
         return every();
     }
@@ -67,24 +66,25 @@ pub fn decide(changes: Result<Changes>, paths: &CodePaths) -> Scope {
 /// pull request decides from its commits, and a run outside CI decides from the working tree.
 #[must_use]
 pub fn for_run(root: &Path, ci: Option<&CiEvent>) -> Scope {
-    if matches!(ci, Some(CiEvent::Push(_) | CiEvent::Other)) {
-        return every();
-    }
-    let paths = match CodePaths::load(root) {
-        Ok(paths) => paths,
-        Err(error) => {
-            return every_because(format!("the non-code list could not be read: {error}"));
-        }
-    };
-    let git = Git::new(root);
     match ci {
-        Some(CiEvent::PullRequest(pr)) => decide(changes::of_pull_request(&git, pr), &paths),
-        _ => match changes::of_worktree(&git) {
+        Some(CiEvent::Push(_) | CiEvent::Other) => every(),
+        Some(CiEvent::PullRequest(pr)) => with_lists(root, |git, paths| {
+            decide(changes::of_pull_request(git, pr), paths)
+        }),
+        None => with_lists(root, |git, paths| match changes::of_worktree(git) {
             Ok(Changes { branch: None, .. }) => {
                 every_because("HEAD is detached, so there is no branch")
             }
-            other => decide(other, &paths),
-        },
+            other => decide(other, paths),
+        }),
+    }
+}
+
+/// Runs `decide_with` over the non-code lists of `root`; lists that cannot be read run every check.
+fn with_lists(root: &Path, decide_with: impl FnOnce(&Git, &CodePaths) -> Scope) -> Scope {
+    match CodePaths::load(root) {
+        Ok(paths) => decide_with(&Git::new(root), &paths),
+        Err(error) => every_because(format!("the non-code list could not be read: {error}")),
     }
 }
 
@@ -130,6 +130,13 @@ mod tests {
     #[test]
     fn a_phase_branch_runs_every_check() {
         let scope = decide(Ok(changes("phase/P50-leaner-ci", &["docs/x.md"])), &lists());
+        assert_eq!(scope, every());
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn a_malformed_phase_branch_runs_every_check() {
+        let scope = decide(Ok(changes("phase/foo", &["docs/x.md"])), &lists());
         assert_eq!(scope, every());
     }
 
