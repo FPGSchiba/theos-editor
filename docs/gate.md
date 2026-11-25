@@ -16,7 +16,8 @@ checks of the Job column below through `cargo xtask`. A check that fails does no
 of its job, and the job is red when any of its checks is. The job summary of a run is the table of
 verdicts, one row per check: passed, failed with its findings, or not needed with the reason. A
 check that is not needed passes at once, and the job still reports, so a required check is never
-missing.
+missing. When every check runs for a reason other than the change itself (a run started by a
+label, changed paths that cannot be read), the summary says why above the table.
 
 | Check | Job | What it runs | OS |
 |---|---|---|---|
@@ -51,9 +52,10 @@ the profile `ci` (`default` locally) with that of `slow`, so a criterion proven 
 test shows `pass` or `FAIL` from the slow run. A report that is missing adds nothing, so a slow
 test that did not run shows `–`; no pass is ever claimed that did not happen. `cargo xtask gate`
 runs `ac-trace` after `test` and `slow-tests` for that reason. In CI, `ac-trace` runs in the
-job `gate`, which runs no `test` and receives no reports from the other jobs, so there the table
-has no result column; the verdict never depends on it, because `test` and `slow-tests` fail for a
-failing test.
+job `gate`, after `slow-tests` and without `test`, whose report stays in the job `test`. When the
+slow tests ran in `gate`, the table has a result column in which they show `pass` or `FAIL` and
+every other test shows `–`; when they did not run, the table has no result column. The verdict
+never depends on the column, because `test` and `slow-tests` fail for a failing test.
 
 On a pull request, `slow-tests` runs the slow tests only when the pull request changes, since its
 merge base, a file of a workspace crate with slow tests (one of its `.rs` files contains `slow_`),
@@ -61,7 +63,9 @@ of a workspace crate such a crate depends on, or one of `Cargo.toml`, `Cargo.loc
 `rust-toolchain.toml`, `.cargo/`, `.config/`, `.github/`, `gate/` and `xtask/`. Otherwise it
 passes with a note that says so, without building anything. The job `gate` runs and reports on every
 pull request either way, so the required check is never missing. A push to `main`, a manual run,
-the `platforms` schedule and `cargo xtask gate` always run the slow tests.
+the `platforms` schedule and `cargo xtask gate` outside CI always run the slow tests. Inside a CI
+job, `cargo xtask gate` hands `slow-tests` the event, so on a pull request, a `platforms` run
+started by a label included, the rule above decides.
 
 **Windows and macOS** are not in the per-PR checks, because their runner minutes cost about 1.7
 and about 10 times as much as Linux on a private repository (GitHub's prices of November 2026:
@@ -128,8 +132,8 @@ paths that cannot be listed (a missing commit, git failing) run every check, wit
 does no changed path at all. Only non-code paths run `commit-msg` and nothing else. Anything else
 runs every check. The changed paths are those of the whole pull request against its merge base,
 never those of the last push, and a rename counts as a deletion and an addition. A push to `main`,
-a manual run and a detached head have no rule: every check runs. Every doubt adds checks; none
-removes one.
+a manual run, a `platforms` run started by a label and a detached head have no rule: every check
+runs. Every doubt adds checks; none removes one.
 
 A non-code change cannot alter a skipped check, because no check reads such a path. This is what
 each check reads, with the place in the code:
@@ -147,8 +151,11 @@ each check reads, with the place in the code:
 | `tools` | `gate/tools.toml` (`xtask/src/tools.rs:21`) | code |
 | `slow-tests` | its own changed-paths rule (`xtask/src/checks/slow.rs:45`) | it only watches workspace crates and the files listed there |
 
-`commit-msg` always runs. `pr-title`, `pr-body` and `approval` always run too: they read the
-commits and the pull request, not files. The tests `gate_md_lists_the_code_paths_of_gate_toml` and
+`commit-msg` always runs. `pr-title`, `pr-body` and `approval` always run too, in jobs of their
+own that the rule does not touch. They read the pull request, and the files they read are code:
+`pr-body` reads `.github/pull_request_template.md`, and `approval` reads
+`gate/protected-paths.toml` and `gate/repo-settings.toml` of the base commit. The tests
+`gate_md_lists_the_code_paths_of_gate_toml` and
 `gate_md_explains_every_check_a_docs_change_skips` keep the lists and the table in step with
 `gate/code-paths.toml` and with the checks.
 
