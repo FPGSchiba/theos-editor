@@ -1,7 +1,10 @@
 //! `create`: a new record from a template or a skeleton, judged before it is written.
 
+use std::time::Duration;
+
 use theos_studio::create::{CreateError, Created, NewRequest, create};
-use theos_studio::{StudioError, Workspace};
+use theos_studio::lock::{self, COMMAND_WAIT, LockError};
+use theos_studio::{CommandError, StudioError, Workspace};
 
 use crate::common::{Error, TempProject, TestResult, put};
 use crate::repo::variant;
@@ -358,6 +361,25 @@ fn id_and_kind_cannot_be_set() -> TestResult {
             "{error:?}"
         );
     }
+    assert!(!temp.root().join("lore/truths/T-902.md").exists());
+    Ok(())
+}
+
+#[test]
+fn a_held_repo_lock_is_a_command_error_and_writes_nothing() -> TestResult {
+    let (temp, mut workspace) = project(&[])?;
+    let _held = lock::acquire(temp.root(), "synthetic holder", COMMAND_WAIT)?;
+    workspace.set_lock_wait(Duration::from_millis(200));
+    let set = pairs(&[("target", "hinted")]);
+    let result = create(&mut workspace, &request("truth", None, &set));
+    assert!(
+        matches!(
+            &result,
+            Err(StudioError::Command(error))
+                if matches!(**error, CommandError::Lock(LockError::Busy { .. }))
+        ),
+        "{result:?}"
+    );
     assert!(!temp.root().join("lore/truths/T-902.md").exists());
     Ok(())
 }

@@ -1,17 +1,16 @@
 //! `theos new`: a record of a kind from its template or a skeleton, judged against the canon rules
-//! and written only when it introduces no error (spec §5.9).
+//! and written only when it introduces no error (spec §5.9). The record is written by P06's
+//! [`Create`] command, so the command layer's lock, verdict and write apply.
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::fs::OpenOptions;
-use std::io::{ErrorKind, Write};
+use std::io::ErrorKind;
 
 use theos_content::yaml::{RawValue, Value};
-use theos_content::{Change, Finding, KindSpec, PatchOp, Placement, Record, RecordError, Update};
+use theos_content::{Finding, KindSpec, PatchOp, Placement, Record, RecordError};
 
 use crate::error::StudioError;
-use crate::introduced::{FindingCounts, introduced};
 use crate::report::report;
 use crate::workspace::Workspace;
+use crate::{CommandError, Create};
 
 /// What `theos new` was asked for.
 #[derive(Clone, Copy, Debug)]
@@ -117,14 +116,16 @@ pub enum CreateError {
     },
 }
 
-/// Makes a record of `request.kind`, judges it with `Index::preview`, and writes it unless it
-/// introduces an error. Nothing is written when [`Created::written`] is false.
+/// Makes a record of `request.kind` and runs P06's [`Create`] command with it through
+/// [`Workspace::run`]: behind the repo lock, judged by the command layer's verdict, and written
+/// unless it introduces an error. Nothing is written when [`Created::written`] is false.
 ///
 /// # Errors
 ///
 /// [`StudioError::UnknownKind`] for an unknown kind; a [`CreateError`] when the request or the
-/// template is wrong, the parent is missing or the file exists; otherwise the index or the file
-/// system failed.
+/// template is wrong, the parent is missing or the file exists (reported before any verdict);
+/// [`StudioError::Command`] when the command layer fails otherwise, for example when the repo
+/// lock stays taken or the file cannot be written; otherwise the index failed.
 pub fn create(workspace: &mut Workspace, request: &NewRequest<'_>) -> Result<Created, StudioError> {
     let spec = workspace
         .registry()
@@ -134,27 +135,29 @@ pub fn create(workspace: &mut Workspace, request: &NewRequest<'_>) -> Result<Cre
     let id = choose_id(workspace, &spec, request.id)?;
     let record = fill(workspace, &spec, &id, request)?;
     let path = place(workspace, &spec, &id, &record)?;
-    let text = record.text().to_owned();
-    if workspace.project().root().join(&path).exists() {
-        return Err(CreateError::Exists { path }.into());
-    }
-
-    let preview = workspace.write(|index| index.preview(&[Change::text(&path, &text)]))?;
-    let before = standing(workspace, &path, &preview.update)?;
-    let introduced = introduced(
-        &FindingCounts::of(&before, &BTreeMap::new()),
-        &preview.findings,
-    );
-    let created = Created {
-        path,
-        id,
-        findings: preview.findings,
-        introduced,
+    let command = Create {
+        path: path.clone(),
+        text: record.text().to_owned(),
     };
-    if created.written() {
-        write_new(workspace, &created.path, &text)?;
+    match workspace.run(&command) {
+        Ok(outcome) => Ok(Created {
+            path,
+            id,
+            findings: outcome.findings,
+            introduced: Vec::new(),
+        }),
+        // Ruling L27: `introduced` holds only the errors that refused the record; new warnings
+        // stay in `findings`.
+        Err(CommandError::Rejected { blocking, findings }) => Ok(Created {
+            path,
+            id,
+            findings,
+            introduced: blocking,
+        }),
+        // `Create` plans before the preview, so an existing file is reported before any verdict.
+        Err(CommandError::Exists { path }) => Err(CreateError::Exists { path }.into()),
+        Err(other) => Err(other.into()),
     }
-    Ok(created)
 }
 
 /// The given id when it fits, else the next number of a numbered kind.
@@ -339,51 +342,6 @@ fn place(
             ))
         }
     }
-}
-
-/// The findings the index holds now for every path the preview touched and for the new path.
-fn standing(
-    workspace: &Workspace,
-    path: &str,
-    update: &Update,
-) -> Result<Vec<Finding>, StudioError> {
-    let paths: BTreeSet<&str> = [path]
-        .into_iter()
-        .chain(update.reparsed.iter().map(String::as_str))
-        .chain(update.relinked.iter().map(String::as_str))
-        .chain(update.revalidated.iter().map(String::as_str))
-        .chain(update.removed.iter().map(String::as_str))
-        .collect();
-    let mut before = Vec::new();
-    for each in paths {
-        before.extend(workspace.index().findings_for(each)?);
-    }
-    Ok(before)
-}
-
-/// Creates the file, which must not exist, and tells the index.
-fn write_new(workspace: &mut Workspace, path: &str, text: &str) -> Result<(), StudioError> {
-    let full = workspace.project().root().join(path);
-    let io = |source| StudioError::Io {
-        path: full.clone(),
-        source,
-    };
-    if let Some(folder) = full.parent() {
-        std::fs::create_dir_all(folder).map_err(io)?;
-    }
-    let mut file = match OpenOptions::new().write(true).create_new(true).open(&full) {
-        Ok(file) => file,
-        Err(error) if error.kind() == ErrorKind::AlreadyExists => {
-            return Err(CreateError::Exists {
-                path: path.to_owned(),
-            }
-            .into());
-        }
-        Err(error) => return Err(io(error)),
-    };
-    file.write_all(text.as_bytes()).map_err(io)?;
-    workspace.write(|index| index.update(&[path]))?;
-    Ok(())
 }
 
 #[cfg(test)]

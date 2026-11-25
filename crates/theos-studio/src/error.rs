@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use theos_content::{IndexError, KindRegistry, ProjectError, RegistryError};
 
+use crate::CommandError;
 use crate::create::CreateError;
 use crate::hook::HookError;
 use theos_vcs::GitError;
@@ -69,6 +70,20 @@ pub enum StudioError {
     /// `theos hook install` refused.
     #[error(transparent)]
     Hook(#[from] HookError),
+    /// A command of the command layer failed. Boxed, since a [`CommandError`] can hold a
+    /// [`StudioError`].
+    #[error(transparent)]
+    Command(Box<CommandError>),
+}
+
+impl From<CommandError> for StudioError {
+    /// The error of a command; a studio error the command layer passed on is that error again.
+    fn from(error: CommandError) -> StudioError {
+        match error {
+            CommandError::Studio(inner) => inner,
+            other => StudioError::Command(Box::new(other)),
+        }
+    }
 }
 
 impl StudioError {
@@ -79,5 +94,34 @@ impl StudioError {
             kind: kind.to_owned(),
             known: registry.kinds().map(|spec| spec.name.to_owned()).collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::TestResult;
+
+    #[test]
+    fn a_command_error_is_boxed_and_shown_as_it_is() -> TestResult {
+        let error = StudioError::from(CommandError::NothingToUndo);
+        let StudioError::Command(inner) = &error else {
+            return Err(format!("expected a command error, got {error:?}").into());
+        };
+        assert!(matches!(**inner, CommandError::NothingToUndo), "{inner:?}");
+        assert_eq!(error.to_string(), "there is nothing to undo");
+        Ok(())
+    }
+
+    #[test]
+    fn a_studio_error_a_command_passed_on_is_that_error_again() -> TestResult {
+        let error = StudioError::from(CommandError::Studio(StudioError::NotAProject {
+            start: PathBuf::from("synthetic"),
+        }));
+        let StudioError::NotAProject { start } = &error else {
+            return Err(format!("expected the studio error itself, got {error:?}").into());
+        };
+        assert_eq!(start, &PathBuf::from("synthetic"));
+        Ok(())
     }
 }
