@@ -46,20 +46,20 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P47 | Git write | theos-editor | todo | | |
 | P48 | MCP read | theos-editor | todo | | |
 | P49 | Releases and the check action | theos-editor | todo | | |
-| P50 | Leaner CI | theos-editor | spec-pr | | |
+| P50 | Leaner CI | theos-editor | spec-pr | #45 | |
 
 Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and P23 from version 3
 (decision 0003, #24). Rows P31–P34 and P45, and the new P29 and P30, come from umbrella version 4
 (decision 0004, #31). Rows P46 and P47 and the new P06 come from umbrella version 5 (the split of
 P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the split of P05,
-#34). Row P50 comes from umbrella version 7 (P50's spec PR).
+#34). Row P50 comes from umbrella version 7 (#45).
 
 ## Needs Jann
 
 - GitHub has refused every Actions job since 13 Nov 2026 07:01 UTC ("recent account payments
   have failed or your spending limit needs to be increased"): the included $18 was used up on
   3–12 Nov. Until billing works again (a budget, or the next billing cycle) no check runs and no
-  PR can merge. P50 (Leaner CI) cuts the gate's minutes; its spec waits for Jann in its spec PR.
+  PR can merge. P50 (Leaner CI) cuts the gate's minutes; its spec waits for Jann in #45.
 - When Jann approves P50's build PR, he switches the live ruleset to the required checks `gate`,
   `pr` and `approval` (`cargo xtask github apply`); open PRs merge `main` afterwards.
 - P06's spec (command layer and repo lock) waits for Jann in its spec PR #36. Its §6.1 holds the
