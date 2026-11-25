@@ -12,7 +12,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | done | #21 | #28 |
 | P05 | CLI and hook | theos-editor | spec-approved | #35 | |
-| P06 | Command layer and repo lock | theos-editor | spec-pr | #36 | |
+| P06 | Command layer and repo lock | theos-editor | pr-open | #36 | #39 |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map format and terrain generator | theos-editor | spec-approved | #27 | |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
@@ -62,8 +62,18 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 - When Jann approves P50's build PR, he switches the live ruleset to the required checks `gate`,
   `test`, `coverage`, `pr` and `approval` (`cargo xtask github apply`); open PRs merge `main`
   afterwards.
-- P06's spec (command layer and repo lock) waits for Jann in its spec PR #36. Its §6.1 holds the
-  interfaces agreed with the P05 session, and its §11 the git probes for P46 and P47.
+- P06's build PR #39 (labelled `needs-jann`) is ready for Jann's merge.
+  - The final review loop reached its cap.
+  - Jann's targeted fix round closed m5-1 and m5-2.
+  - Jann then chose to fix N4 and to record N1–N3 as rulings R24–R26. A fresh scoped review of
+    that change was clean.
+- Follow-up from P06: the class "a command changes which files are records without the verdict
+  judging it" (m4-4, m5-1, and N1–N3 of PR #39) needs a general design. One option is a check
+  after the write that compares the reindex with the preview and heals the cache; another is a
+  P03 preview over the planned disk state. Rulings R16, R21 and R23 refuse the common cases
+  today. R24–R26 accept the rare rest: a `.gitignore` behind a symbolic link, a hidden file
+  restored visible by a Windows rollback, and new folders that differ only in case. The commit
+  check stops any error those cases leave.
 - For P49 (umbrella version 6):
   - before its gate PR: Jann creates a GitHub App for release-plz (contents and pull requests
     write), installs it on this repository and stores its id and key as secrets; the tag ruleset
