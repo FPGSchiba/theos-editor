@@ -8,3 +8,26 @@ repository.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+geojson.workspace = true
+libm.workspace = true
+png.workspace = true
+rand_core.workspace = true
+rand_pcg.workspace = true
+serde.workspace = true
+serde_ignored.workspace = true
+serde_json.workspace = true
+serde_path_to_error.workspace = true
+skrifa.workspace = true
+spade.workspace = true
+thiserror.workspace = true
+theos-map-format = { path = "../theos-map-format" }
+tiny-skia.workspace = true
+toml.workspace = true
+wuff.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true
+clap.workspace = true
+tempfile.workspace = true

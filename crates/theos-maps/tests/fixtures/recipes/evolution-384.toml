@@ -1,0 +1,88 @@
+# synthetic fixture (P08), not canon
+# The evolution budget recipe of Task 27, not a full recipe: it stops after
+# `landscape_evolution`, so `run` and `describe` refuse it (ledger ruling P3). Tests only plan
+# it; none executes it.
+id      = "evolution-384"
+title   = "Evolution budget, 384 squared"
+kind    = "terrain"
+grid    = [384, 384]
+size_km = [24.0, 24.0]
+
+[[stage]]
+id    = "grid"
+edges = ["south"]
+
+[[stage]]
+id                   = "tectonics"
+background_uplift    = 2.2e-4
+background_variation = 0.9
+background_beta      = 2.8
+  [[stage.source]]
+  type = "orogen"
+  path = [[0.02, 0.14], [0.40, 0.08], [0.98, 0.20]]
+  width = 0.10
+  rate = 2.6e-3
+  asymmetry = 0.5
+  jitter = 0.06
+  [[stage.source]]
+  type = "dome"
+  at = [0.75, 0.55]
+  r = 0.12
+  rate = 9.0e-4
+  jitter = 0.10
+  [[stage.source]]
+  type = "basin"
+  at = [0.33, 0.60]
+  r = 0.05
+  depth_m = 10.0
+  jitter = 0.08
+
+[[stage]]
+id        = "geology"
+provinces = 7
+plutons   = [1, 2]
+  [stage.rock_mix]
+  granite   = 0.15
+  sandstone = 0.30
+  shale     = 0.25
+  limestone = 0.20
+  basalt    = 0.10
+  [stage.fold_belt]
+  width    = 0.09
+  strength = 0.45
+  period   = 0.045
+  contrast = 1.8
+
+[[stage]]
+id              = "climate_model"
+wind_from_deg   = 250.0
+wind_speed      = 10.0
+base_precip_mm  = 520.0
+orographic_mm   = 1300.0
+t_base_c        = 12.0
+lapse_c_per_km  = 6.5
+
+[[stage]]
+id     = "landscape_evolution"
+steps  = 240
+dt_yr  = 2.5e4
+  [[stage.process]]
+  id = "uplift"
+  [[stage.process]]
+  id = "hillslope"
+  [[stage.process]]
+  id = "route_steepest"
+  [[stage.process]]
+  id = "resolve_sinks"
+  [[stage.process]]
+  id = "partition_flow"
+  exponent = "slope_adaptive"
+  [[stage.process]]
+  id = "fluvial"
+  m = 0.45
+  g = 1.0
+  [[stage.process]]
+  id = "slope_limit"
+  [[stage.process]]
+  id = "climate_update"
+  every = 30

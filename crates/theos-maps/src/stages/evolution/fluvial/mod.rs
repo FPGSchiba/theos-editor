@@ -1,0 +1,465 @@
+//! The per-step process `fluvial`: the erosion–deposition law of Yuan et al. 2019 with n = 1
+//! over the multiple-flow weights, solved implicitly in stack order, and sediment filling of the
+//! routed depressions (spec §5.9 "The fluvial law", rulings 3, 28, 29, 43).
+//!
+//! The law is `dh/dt = U − K·Q^m·S + G·Qs/Q` (Yuan et al. 2019, eq. 11, after Davy & Lague
+//! 2009), in `FastScape`'s multiple-flow form: `S` is the flow-weighted slope
+//! `Σ_r w_r·(h − h_r) / d_r` over the cell's weighted receivers. `Q` is the runoff-weighted
+//! drainage area, the upstream sum of `p̂ × cell area` with `p̂` the local runoff over the
+//! map-mean runoff ([`runoff_weight`]). `Qs` is the sediment flux leaving the cell: what reaches
+//! it from upstream plus its own net erosion (spec §5.9; `solve` says why its own term counts).
+//!
+//! - **G = 0** is detachment-limited stream power (Braun & Willett 2013): one implicit sweep, no
+//!   deposition and no filling (spec ruling 29).
+//! - **G > 0** couples each cell to its donors through `Qs`; Yuan's Gauss–Seidel iterations
+//!   solve it (`solve`), stopping at 10⁻³ × max(U)·Δt, or 10⁻⁶ m without uplift (ruling 43).
+//!   Where dry catchments break Yuan's condition `G/p̂ ≤ 1` they oscillate, and Aitken's
+//!   relaxation (`relax`) damps them once they are not on track to converge in time; the
+//!   solution they converge to is unchanged.
+//! - **Depression filling**, in the spec's order: in each iteration the routed sediment first
+//!   fills each routed depression in height order up to its spill level, with an ε slope toward
+//!   its spill cell (`fill`), and passes the excess on from the spill node; then every cell is
+//!   solved, the depressions' cells from their filled heights. A lake that is not full keeps its
+//!   level and the slope that feeds it ends above it; a full lake follows the incision of its
+//!   spill node instead of perching above it. Two consequences: the dry floor cells of a lake
+//!   that is not full erode where their receiver lies lower (their sediment goes into the fill),
+//!   and a spill cell inside its depression is a lake cell, whose deposition term sees no release,
+//!   while one outside it sees the release (`solve` says more). From the iteration after half the
+//!   limit a full depression stays full, so it changes state a bounded number of times.
+//! - **The books** (`sediment`): after the iterations one more routing of the step's sediment
+//!   over the final heights fills each depression with what reaches it up to its capacity, and
+//!   gives its cells that fill in place of the one their last sweep started from. The volume
+//!   balance closes exactly, also at the iteration limit: a lake that is not full keeps all of a
+//!   positive inflow and lets nothing go, and an inflow that is not positive passes on with its
+//!   sign. When the iterations did not converge and the books moved a lake cell by the
+//!   tolerance or more, a warning names the move; at a converged step it stays silent, because a
+//!   lake's fill sums its whole catchment's changes and a correction above the per-cell tolerance
+//!   is expected there.
+//! - **The slope supply** (spec §5.9 "Slope supply", ruling 51): `slope_supply` holds, per cell,
+//!   the thickness `slope_limit` has removed since `fluvial` last ran. `fluvial` takes it into the
+//!   sediment flux at its cell like eroded sediment, in the iterations and in the books (`solve`
+//!   gives the term); on a depression's cell it goes into the fill. It writes the layer back
+//!   emptied. G decides how much of it is laid down; with G = 0 all of it leaves at the outlets.
+//!   Without the layer there is no supply. With G > 0 the iterations start from `h*` with the
+//!   supply laid down along its way, as the law lays it down where nothing incises (`solve`), so
+//!   that dry cells do not route it undeposited in the first iteration.
+//! - **The switch `supply_passes_dry_cells`** (off by default; Task 27h): the slope supply passes
+//!   the cells whose catchment is dry (`Q < G·A`) without being laid down, and joins the sediment
+//!   at the first cell that is not dry (`runout`). Without it, a dry cell keeps nearly all of its
+//!   own supply, `slope_limit` cuts it straight back, and the supply grows through dry climate
+//!   periods.
+//!
+//! The report holds `sediment_out_m3`, the sediment that left the map in the step at the cells
+//! without an edge (the drained edges, or the closed map's sink), `iterations`, and `supply_m3`,
+//! the volume of slope supply taken in.
+
+mod cell;
+mod fill;
+mod inputs;
+mod relax;
+mod runout;
+mod sediment;
+mod solve;
+#[cfg(test)]
+mod tests;
+
+use serde::{Deserialize, Serialize};
+
+use self::fill::Traps;
+use self::inputs::{depressions_misfit, routing_misfit};
+use self::runout::passing;
+use self::sediment::{Books, Ledger, books};
+use self::solve::{Deposition, Incision, Solution, deposit, incise};
+use super::booking::book;
+use super::flow::{FlowWeights, accumulate};
+use crate::grid::Grid;
+use crate::kernels::num::max;
+use crate::kernels::stats;
+use crate::stage::{
+    Check, Finding, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport,
+    TypedStage,
+};
+use crate::stages::evolution::resolve_sinks::Depressions;
+use crate::stages::terrain::climate::Climate;
+use crate::world::{Layer, MapFrame, ValueType};
+
+/// Yuan et al.'s tolerance as a share of the largest uplift per step, max(U)·Δt (ruling 43).
+const TOLERANCE_SHARE: f64 = 1e-3;
+
+/// The largest drainage-area exponent m: the stream-power literature uses about 0.3 to 0.7, and
+/// `Q^m` must stay far from overflow for any discharge a map can carry.
+const MAX_M: f64 = 2.0;
+
+/// The tolerance when no cell uplifts, metres (ruling 43).
+const FALLBACK_TOLERANCE_M: f64 = 1e-6;
+
+/// The parameters of `fluvial`.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct FluvialParams {
+    /// The drainage-area exponent m of `K·Q^m·S`, in [0, 2]; n is 1 (spec ruling 3).
+    #[serde(default = "default_m")]
+    pub m: f64,
+    /// The dimensionless deposition coefficient `G = d*·v_s / r̄` (Yuan et al. 2019, eq. 9); 0 is
+    /// detachment-limited stream power without deposition or depression filling (spec ruling
+    /// 29). The recipe states it.
+    pub g: f64,
+    /// The most Gauss–Seidel iterations per step while deposition couples the cells (`g > 0`).
+    #[serde(default = "default_max_iterations")]
+    pub max_iterations: u32,
+    /// Whether the slope supply passes dry cells without being laid down (default `false`; Task
+    /// 27h). A cell is dry when its catchment's mean runoff weight is below G, `Q < G·A` with `A`
+    /// the plain drainage area: a dry catchment keeps about G/p̄ to 1 of the supply (Yuan et
+    /// al.'s `G/p̂ ≤ 1` fails). A locally wet cell can count as dry; with uniform runoff every
+    /// cell is dry when G > 1 and none is when G ≤ 1. With the switch the supply runs out
+    /// over dry cells, as debris runs down dry gullies, and joins the sediment at the first cell
+    /// that is not dry, a routed depression or an outlet (`runout`). Without it a dry cell keeps
+    /// nearly all of its own supply, `slope_limit` cuts it straight back into the supply, and the
+    /// supply grows from step to step through a dry climate period. Only with `g > 0` does it
+    /// change anything.
+    #[serde(default)]
+    pub supply_passes_dry_cells: bool,
+}
+
+/// The default m, 0.45.
+fn default_m() -> f64 {
+    0.45
+}
+
+/// The default iteration limit, 50 (spec §5.9).
+fn default_max_iterations() -> u32 {
+    50
+}
+
+/// The process `fluvial`.
+pub struct Fluvial;
+
+impl TypedStage for Fluvial {
+    type Params = FluvialParams;
+    const ID: &'static str = "fluvial";
+    const SUMMARY: &'static str = "The erosion–deposition law with n = 1 over the multiple-flow weights (Yuan et al. 2019), solved implicitly in stack order with Gauss–Seidel iterations; sediment fills routed depressions; runoff-weighted drainage area; cumulative erosion and deposition.";
+    const KINDS: &'static [MapKind] = &[MapKind::Terrain];
+
+    /// With deposition (`g > 0`) also the routing surface, whose order fills the depressions,
+    /// and the uplift, whose largest rate sets the tolerance; it may be absent.
+    fn reads(&self, params: &FluvialParams) -> Vec<LayerSpec> {
+        let mut reads = vec![
+            LayerSpec::f64("height"),
+            LayerSpec::f64("erodibility"),
+            LayerSpec::u32("receivers"),
+            LayerSpec::value("weights", FlowWeights::NAME),
+            LayerSpec::u32("stack"),
+            LayerSpec::value("depressions", Depressions::NAME),
+            LayerSpec::mask("fixed"),
+            LayerSpec::value("climate", Climate::NAME),
+            LayerSpec::f64("erosion"),
+            LayerSpec::f64("deposition"),
+            LayerSpec::f64("slope_supply").optional(),
+        ];
+        if params.g > 0.0 {
+            reads.push(LayerSpec::f64("routing_surface"));
+            reads.push(LayerSpec::f64("uplift").optional());
+        }
+        reads
+    }
+
+    /// The slope supply is written back emptied when the world holds it.
+    fn writes(&self, _: &FluvialParams) -> Vec<LayerSpec> {
+        vec![
+            LayerSpec::f64("height"),
+            LayerSpec::f64("erosion"),
+            LayerSpec::f64("deposition"),
+            LayerSpec::f64("drainage_area"),
+            LayerSpec::f64("slope_supply").optional(),
+        ]
+    }
+
+    fn validate(&self, params: &mut FluvialParams) -> Result<(), ParamError> {
+        let check = Check::of(Self::ID);
+        // Final review round 3, class B: `Q^m` overflows for an exponent of hundreds.
+        check.in_closed("m", params.m, 0.0, MAX_M)?;
+        check.at_least("g", params.g, 0.0)?;
+        check.count_at_least("max_iterations", params.max_iterations, 1)
+    }
+
+    fn run(
+        &self,
+        ctx: &mut StageContext<'_>,
+        params: &FluvialParams,
+    ) -> Result<StageReport, StageError> {
+        let step = ctx.process_step()?;
+        let start = ctx.take_f64("height")?;
+        let supply = ctx.take_f64_opt("slope_supply")?;
+        let outcome = erode(ctx, params, step.dt_yr, &start, supply.as_ref())?;
+        let mut erosion = ctx.take_f64("erosion")?;
+        let mut deposition = ctx.take_f64("deposition")?;
+        book(&start, &outcome.height, &mut erosion, &mut deposition);
+        ctx.write("height", Layer::F64(outcome.height))?;
+        ctx.write("erosion", Layer::F64(erosion))?;
+        ctx.write("deposition", Layer::F64(deposition))?;
+        ctx.write("drainage_area", Layer::F64(outcome.drainage_area))?;
+        if let Some(mut taken) = supply {
+            taken.as_mut_slice().fill(0.0);
+            ctx.write("slope_supply", Layer::F64(taken))?;
+        }
+        Ok(outcome.report)
+    }
+}
+
+/// One step's result besides the cumulative layers.
+struct Outcome {
+    /// The new heights.
+    height: Grid<f64>,
+    /// The plain drainage area (spec §5.10: not weighted by runoff).
+    drainage_area: Grid<f64>,
+    /// `sediment_out_m3`, `iterations`, `supply_m3`, a warning when the iterations did not
+    /// converge, and with it one when the books moved a lake cell by the tolerance or more.
+    report: StageReport,
+}
+
+/// One implicit step from `start` (`h*`) over the current weights and stack, with deposition
+/// and depression filling when `g > 0`, taking in the slope `supply` (thickness per cell) if any.
+fn erode(
+    ctx: &StageContext<'_>,
+    params: &FluvialParams,
+    dt: f64,
+    start: &Grid<f64>,
+    supply: Option<&Grid<f64>>,
+) -> Result<Outcome, StageError> {
+    let frame = *ctx.frame();
+    let cells = frame.cells();
+    let (weights, stack) = (ctx.value::<FlowWeights>("weights")?, ctx.u32("stack")?);
+    let stack = stack.as_slice();
+    if let Some(problem) = routing_misfit(weights, stack, cells) {
+        return Err(ctx.fail(problem));
+    }
+    let climate = ctx.value::<Climate>("climate")?;
+    let Some(p_hat) = runoff_weight(climate, &frame) else {
+        let (rows, cols) = climate
+            .fields
+            .as_ref()
+            .map_or((0, 0), |f| (f.runoff.rows(), f.runoff.cols()));
+        return Err(ctx.fail(format!(
+            "the climate's runoff covers {rows} x {cols} cells, but the grid has {} x {}",
+            frame.rows, frame.cols
+        )));
+    };
+    let cell_area = frame.cell_area_m2();
+    let discharge = accumulate(stack, weights, &p_hat.map(|p| p * cell_area));
+    let area = Grid::filled(frame.rows, frame.cols, cell_area);
+    let drainage_area = accumulate(stack, weights, &area);
+    let (fixed, erodibility) = (ctx.mask("fixed")?.as_slice(), ctx.f64("erodibility")?);
+    // The supply as a volume per cell, m³ (thickness × cell area).
+    let supply_m3: Vec<f64> = supply.map_or_else(
+        || vec![0.0; cells],
+        |s| s.as_slice().iter().map(|t| t * cell_area).collect(),
+    );
+    let mut report = StageReport::default();
+    report.put("supply_m3", supply_m3.iter().sum());
+    let step = Incision {
+        weights,
+        stack,
+        fixed,
+        erodibility: erodibility.as_slice(),
+        discharge: discharge.as_slice(),
+        m: params.m,
+        dt,
+    };
+    let (height, out) = if params.g > 0.0 {
+        let area = drainage_area.as_slice();
+        with_deposition(ctx, params, &step, start, &supply_m3, area, &mut report)?
+    } else {
+        report.put("iterations", 1.0);
+        let mut height = incise(&step, start);
+        let ledger = Ledger {
+            h_star: start.as_slice(),
+            start: start.as_slice(),
+            supply: &supply_m3,
+            cell_area,
+        };
+        let books = books(
+            stack,
+            weights,
+            &Traps::default(),
+            &ledger,
+            height.as_mut_slice(),
+        );
+        (height, books.out)
+    };
+    report.put("sediment_out_m3", out);
+    Ok(Outcome {
+        height,
+        drainage_area,
+        report,
+    })
+}
+
+/// The step with deposition (`g > 0`) from `start` (`h*`): the routed depressions as traps, the
+/// slope supply that passes dry cells when the recipe says so (over the plain drainage `area`,
+/// m²), Yuan's Gauss–Seidel iterations, then the books. Returns the new heights and the sediment
+/// that left the map, m³, and adds `iterations` and the warnings of the iterations and the books
+/// to `report`.
+fn with_deposition(
+    ctx: &StageContext<'_>,
+    params: &FluvialParams,
+    step: &Incision<'_>,
+    start: &Grid<f64>,
+    supply_m3: &[f64],
+    area: &[f64],
+    report: &mut StageReport,
+) -> Result<(Grid<f64>, f64), StageError> {
+    let depressions = ctx.value::<Depressions>("depressions")?;
+    if let Some(problem) = depressions_misfit(depressions, start.len()) {
+        return Err(ctx.fail(problem));
+    }
+    let cell_area = ctx.frame().cell_area_m2();
+    let routing = ctx.f64("routing_surface")?.as_slice();
+    let traps = Traps::new(depressions, routing, start.as_slice(), cell_area);
+    let passes = if params.supply_passes_dry_cells {
+        // A dry catchment: its mean runoff weight `Q/A` below G. A depression's cell sends its
+        // supply into the fill; a fixed cell keeps its height.
+        let dry =
+            |i: usize| !traps.holds(i) && !step.fixed[i] && step.discharge[i] < params.g * area[i];
+        passing(step.stack, step.weights, supply_m3, dry)
+    } else {
+        vec![0.0; start.len()]
+    };
+    let dep = Deposition {
+        g: params.g,
+        traps: &traps,
+        cell_area,
+        supply: supply_m3,
+        passing: &passes,
+        tolerance: tolerance(ctx.f64_opt("uplift")?, step.dt),
+        max_iterations: params.max_iterations,
+        cancel: &|| ctx.check_cancel(),
+    };
+    let solution = deposit(step, &dep, start)?;
+    let converged = solution.converged(dep.tolerance);
+    let Solution {
+        mut height,
+        start: from,
+        iterations,
+        residual,
+    } = solution;
+    let ledger = Ledger {
+        h_star: start.as_slice(),
+        start: &from,
+        supply: supply_m3,
+        cell_area,
+    };
+    let Books { out, correction } = books(
+        step.stack,
+        step.weights,
+        &traps,
+        &ledger,
+        height.as_mut_slice(),
+    );
+    if !converged {
+        report.findings.push(
+            Finding::warning(format!(
+                "the Gauss–Seidel iterations stopped after {iterations} iterations with the \
+                 residual {residual:e} m, above the tolerance {:e} m",
+                dep.tolerance
+            ))
+            .on_layer("height"),
+        );
+    }
+    if let Some(warning) = books_warning(iterations, converged, correction, dep.tolerance) {
+        report.findings.push(warning);
+    }
+    report.put("iterations", f64::from(iterations));
+    Ok((height, out))
+}
+
+/// The warning when the books moved a lake cell by `correction` metres, the tolerance or more,
+/// at a step whose `iterations` did not converge: a depression's inflow was still changing when
+/// they stopped. A step that converged never warns. The tolerance bounds each cell's last change,
+/// but a lake's fill sums the changes of its whole catchment, so a correction at or above it is
+/// expected at convergence; heights and balance are exact (Task 27h, fix round 1).
+fn books_warning(
+    iterations: u32,
+    converged: bool,
+    correction: f64,
+    tolerance: f64,
+) -> Option<Finding> {
+    (!converged && correction >= tolerance).then(|| {
+        Finding::warning(format!(
+            "after {iterations} iterations the final routing of the sediment moved a lake cell \
+             by {correction:e} m, at or above the tolerance {tolerance:e} m"
+        ))
+        .on_layer("height")
+    })
+}
+
+/// Yuan et al.'s tolerance `10⁻³ × max(U)·Δt` for the largest `uplift` rate, or 10⁻⁶ m when no
+/// cell uplifts or the layer is absent (spec ruling 43).
+fn tolerance(uplift: Option<&Grid<f64>>, dt: f64) -> f64 {
+    let most = uplift.map_or(0.0, |u| u.as_slice().iter().fold(0.0, |m, &x| max(m, x)));
+    if most > 0.0 {
+        TOLERANCE_SHARE * most * dt
+    } else {
+        FALLBACK_TOLERANCE_M
+    }
+}
+
+/// The runoff weight `p̂ = runoff / mean(runoff)` of every cell (spec ruling 28): all 1 while
+/// the climate has no fields yet, and all 0 when the mean runoff is 0 (no water, no stream).
+/// `None` when the climate's runoff does not have the shape of `frame`.
+#[must_use]
+pub(crate) fn runoff_weight(climate: &Climate, frame: &MapFrame) -> Option<Grid<f64>> {
+    let Some(fields) = &climate.fields else {
+        return Some(Grid::filled(frame.rows, frame.cols, 1.0));
+    };
+    let runoff = &fields.runoff;
+    if (runoff.rows(), runoff.cols()) != (frame.rows, frame.cols) {
+        return None;
+    }
+    let mean = stats::mean(runoff.as_slice()).unwrap_or(0.0);
+    Some(if mean > 0.0 {
+        runoff.map(|r| r / mean)
+    } else {
+        runoff.map(|_| 0.0)
+    })
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::{books_warning, tolerance};
+    use crate::grid::Grid;
+
+    #[test]
+    fn the_books_warn_only_when_the_step_did_not_converge_and_at_the_tolerance() {
+        // A converged step never warns, whatever the correction: a lake's fill sums its whole
+        // catchment's changes, so a correction above the per-cell tolerance is expected there.
+        assert!(books_warning(20, true, 5.0, 0.1).is_none());
+        assert!(books_warning(50, true, 5.0, 0.1).is_none());
+        // A capped step warns when a lake cell moved by the tolerance or more.
+        assert!(books_warning(50, false, 0.099, 0.1).is_none());
+        for moved in [0.1, 3.5] {
+            let finding = books_warning(30, false, moved, 0.1).unwrap();
+            let message = &finding.message;
+            assert!(message.contains(&format!("{moved:e} m")), "{message}");
+            assert!(message.contains("30 iterations"), "{message}");
+            assert!(message.contains("tolerance 1e-1 m"), "{message}");
+            assert!(message.contains("a lake cell by "), "{message}");
+            assert!(!message.contains("  "), "no run of spaces: {message}");
+        }
+    }
+
+    #[test]
+    fn the_tolerance_follows_the_largest_uplift_or_falls_back() {
+        let close = |a: f64, b: f64| (a - b).abs() <= 1e-15 * b.abs();
+        let rates = Grid::from_vec(1, 3, vec![2e-4, 1e-3, -5e-3]).unwrap();
+        assert!(close(tolerance(Some(&rates), 2.5e4), 1e-3 * 1e-3 * 2.5e4));
+        for flat in [
+            None,
+            Some(Grid::filled(1, 3, 0.0)),
+            Some(Grid::filled(1, 3, -1e-3)),
+        ] {
+            assert_eq!(
+                tolerance(flat.as_ref(), 2.5e4).to_bits(),
+                1e-6_f64.to_bits()
+            );
+        }
+    }
+}

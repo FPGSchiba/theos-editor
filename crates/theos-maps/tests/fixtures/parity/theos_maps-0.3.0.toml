@@ -1,0 +1,325 @@
+# 0.3.0 reference for CE-28.5 — copied from the P08 spec, Appendix A
+# (docs/specs/phases/P08-map-format-and-terrain-generator.md). The spec is the source: change it
+# there first. Every row of the appendix is here.
+#
+# Fields per seed, with the appendix's column:
+# - relief_m              "Relief (m)", summary path `elevation_m.relief`
+# - lake_pct              "Lake share (%)", `lake_pct`
+# - rivers_pct            "River share (%)", `rivers_pct`
+# - vegetation_cover_pct  "Vegetation cover (%)", `vegetation_cover_pct`
+# - precip_median_mm      "Median precipitation (mm/yr)", `precip_mm_yr.median`
+# - lakes                 "Lakes", the number of lakes
+# - chime_to_chime_min    "Extraction walk (min)": 0.3.0's `travel.extraction_to_extraction_min`,
+#                         which P08 reports as `travel.chime_to_chime_min`
+# - passes                "All constraints": true or false, or "no constraints" for a recipe
+#                         that has none; 0.3.0's ruin and extraction placement checks included
+# - failed                the constraints a failing seed missed, as the appendix names them
+
+[provenance]
+toolset = "theos_maps 0.3.0"
+python = "3.12"
+fastscapelib = "0.3.0"
+numpy = "2.5.4"
+scipy = "1.18.1"
+command = "uv run --no-project --python 3.12 --with fastscapelib==0.3.0 … (do_export=False)"
+date = "2026-11-10"
+reference = "Jann's export, in no repository"
+
+[[seed]]
+recipe = "hearth-valley"
+seed = 1
+relief_m = 1281
+lake_pct = 3.63
+rivers_pct = 0.93
+vegetation_cover_pct = 55.1
+precip_median_mm = 895
+lakes = 18
+chime_to_chime_min = 96.0
+passes = true
+
+[[seed]]
+recipe = "hearth-valley"
+seed = 2
+relief_m = 2809
+lake_pct = 10.09
+rivers_pct = 1.87
+vegetation_cover_pct = 56.0
+precip_median_mm = 914
+lakes = 22
+chime_to_chime_min = 102.2
+passes = false
+failed = ["relief", "lake share"]
+
+[[seed]]
+recipe = "hearth-valley"
+seed = 3
+relief_m = 1630
+lake_pct = 23.04
+rivers_pct = 1.26
+vegetation_cover_pct = 59.2
+precip_median_mm = 953
+lakes = 17
+chime_to_chime_min = 133.7
+passes = false
+failed = ["lake share"]
+
+[[seed]]
+recipe = "hearth-valley"
+seed = 4
+relief_m = 2131
+lake_pct = 6.43
+rivers_pct = 1.56
+vegetation_cover_pct = 37.8
+precip_median_mm = 735
+lakes = 14
+chime_to_chime_min = 108.9
+passes = true
+
+[[seed]]
+recipe = "hearth-valley"
+seed = 5
+relief_m = 1754
+lake_pct = 1.46
+rivers_pct = 1.51
+vegetation_cover_pct = 77.3
+precip_median_mm = 988
+lakes = 6
+chime_to_chime_min = 121.9
+passes = false
+failed = ["vegetation cover"]
+
+[[seed]]
+recipe = "hearth-valley"
+seed = 6
+relief_m = 1435
+lake_pct = 18.37
+rivers_pct = 1.25
+vegetation_cover_pct = 82.4
+precip_median_mm = 1091
+lakes = 17
+chime_to_chime_min = 174.0
+passes = false
+failed = ["lake share", "vegetation cover"]
+
+[[seed]]
+recipe = "hearth-valley"
+seed = 7
+relief_m = 1777
+lake_pct = 32.04
+rivers_pct = 0.93
+vegetation_cover_pct = 55.1
+precip_median_mm = 909
+lakes = 17
+chime_to_chime_min = 243.6
+passes = false
+failed = ["lake share"]
+
+[[seed]]
+recipe = "hearth-valley"
+seed = 8
+relief_m = 2767
+lake_pct = 16.54
+rivers_pct = 1.38
+vegetation_cover_pct = 40.1
+precip_median_mm = 804
+lakes = 15
+chime_to_chime_min = 208.1
+passes = false
+failed = ["relief", "lake share"]
+
+[[seed]]
+recipe = "hearth-valley-omega"
+seed = 1
+relief_m = 1243
+lake_pct = 1.38
+rivers_pct = 0.88
+vegetation_cover_pct = 54.8
+precip_median_mm = 888
+lakes = 14
+chime_to_chime_min = 100.2
+passes = true
+
+[[seed]]
+recipe = "hearth-valley-omega"
+seed = 2
+relief_m = 2750
+lake_pct = 10.34
+rivers_pct = 1.78
+vegetation_cover_pct = 55.9
+precip_median_mm = 920
+lakes = 23
+chime_to_chime_min = 134.5
+passes = false
+failed = ["relief"]
+
+[[seed]]
+recipe = "hearth-valley-omega"
+seed = 3
+relief_m = 1678
+lake_pct = 23.56
+rivers_pct = 1.17
+vegetation_cover_pct = 58.0
+precip_median_mm = 949
+lakes = 18
+chime_to_chime_min = 108.7
+passes = true
+
+[[seed]]
+recipe = "hearth-valley-omega"
+seed = 4
+relief_m = 2109
+lake_pct = 11.51
+rivers_pct = 1.40
+vegetation_cover_pct = 37.8
+precip_median_mm = 731
+lakes = 13
+chime_to_chime_min = 200.7
+passes = true
+
+[[seed]]
+recipe = "hearth-valley-omega"
+seed = 5
+relief_m = 1762
+lake_pct = 23.87
+rivers_pct = 1.45
+vegetation_cover_pct = 77.5
+precip_median_mm = 997
+lakes = 10
+chime_to_chime_min = 108.4
+passes = false
+failed = ["vegetation cover"]
+
+[[seed]]
+recipe = "hearth-valley-omega"
+seed = 6
+relief_m = 1417
+lake_pct = 16.85
+rivers_pct = 1.31
+vegetation_cover_pct = 82.5
+precip_median_mm = 1104
+lakes = 20
+chime_to_chime_min = 163.9
+passes = false
+failed = ["vegetation cover"]
+
+[[seed]]
+recipe = "hearth-valley-omega"
+seed = 7
+relief_m = 1810
+lake_pct = 31.14
+rivers_pct = 0.97
+vegetation_cover_pct = 54.8
+precip_median_mm = 899
+lakes = 17
+chime_to_chime_min = 435.5
+passes = false
+failed = ["extraction walk"]
+
+[[seed]]
+recipe = "hearth-valley-omega"
+seed = 8
+relief_m = 2782
+lake_pct = 18.28
+rivers_pct = 1.36
+vegetation_cover_pct = 38.4
+precip_median_mm = 797
+lakes = 12
+chime_to_chime_min = 412.2
+passes = false
+failed = ["relief", "extraction walk"]
+
+[[seed]]
+recipe = "fixture-small"
+seed = 1
+relief_m = 267
+lake_pct = 1.05
+rivers_pct = 2.08
+vegetation_cover_pct = 37.5
+precip_median_mm = 656
+lakes = 1
+chime_to_chime_min = 18.8
+passes = "no constraints"
+
+[[seed]]
+recipe = "fixture-small"
+seed = 2
+relief_m = 284
+lake_pct = 10.82
+rivers_pct = 0.27
+vegetation_cover_pct = 59.8
+precip_median_mm = 836
+lakes = 2
+chime_to_chime_min = 23.8
+passes = "no constraints"
+
+[[seed]]
+recipe = "fixture-small"
+seed = 3
+relief_m = 212
+lake_pct = 11.25
+rivers_pct = 0.27
+vegetation_cover_pct = 36.4
+precip_median_mm = 683
+lakes = 1
+chime_to_chime_min = 40.3
+passes = "no constraints"
+
+[[seed]]
+recipe = "fixture-small"
+seed = 4
+relief_m = 345
+lake_pct = 2.27
+rivers_pct = 0.00
+vegetation_cover_pct = 39.4
+precip_median_mm = 623
+lakes = 1
+chime_to_chime_min = 26.9
+passes = "no constraints"
+
+[[seed]]
+recipe = "fixture-small"
+seed = 5
+relief_m = 992
+lake_pct = 2.91
+rivers_pct = 0.34
+vegetation_cover_pct = 32.0
+precip_median_mm = 707
+lakes = 2
+chime_to_chime_min = 23.8
+passes = "no constraints"
+
+[[seed]]
+recipe = "fixture-small"
+seed = 6
+relief_m = 1327
+lake_pct = 2.37
+rivers_pct = 0.29
+vegetation_cover_pct = 48.3
+precip_median_mm = 852
+lakes = 3
+chime_to_chime_min = 34.4
+passes = "no constraints"
+
+[[seed]]
+recipe = "fixture-small"
+seed = 7
+relief_m = 353
+lake_pct = 0.00
+rivers_pct = 2.25
+vegetation_cover_pct = 32.9
+precip_median_mm = 679
+lakes = 0
+chime_to_chime_min = 18.6
+passes = "no constraints"
+
+[[seed]]
+recipe = "fixture-small"
+seed = 8
+relief_m = 2292
+lake_pct = 6.69
+rivers_pct = 1.64
+vegetation_cover_pct = 52.7
+precip_median_mm = 839
+lakes = 3
+chime_to_chime_min = 24.4
+passes = "no constraints"

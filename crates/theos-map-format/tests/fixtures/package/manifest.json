@@ -1,0 +1,36 @@
+{
+  "note": "synthetic fixture (P08), not canon; file, shape, sha256, min and max are filled in by the writer",
+  "format": "theos-map",
+  "format_version": "1.0",
+  "generator": "fixture@0.0.0",
+  "requires": [],
+  "kind": "terrain",
+  "recipe_id": "fixture",
+  "recipe": {},
+  "seed": 1,
+  "inputs": {},
+  "frame": { "size_m": [40.0, 30.0], "cell_m": 10.0, "grid": [3, 4] },
+  "layers": [
+    {
+      "name": "height",
+      "file": "",
+      "dtype": "f32",
+      "shape": [0, 0],
+      "sha256": "",
+      "description": "fixture height",
+      "units": "m"
+    },
+    {
+      "name": "water",
+      "file": "",
+      "dtype": "u8",
+      "shape": [0, 0],
+      "sha256": "",
+      "description": "fixture water classes",
+      "legend": { "0": "dry", "3": "lake" }
+    }
+  ],
+  "features": "",
+  "results": {},
+  "summary": {}
+}
