@@ -77,10 +77,11 @@ impl CodePaths {
     }
 
     /// Whether no check reads `path` (repo-relative, with `/`): it matches `non_code` and not
-    /// `always_code`.
+    /// `always_code`. The lists file itself is always code, so a pull request cannot make its
+    /// own change to the lists skip the tests that guard them.
     #[must_use]
     pub fn is_non_code(&self, path: &str) -> bool {
-        self.non_code_set.is_match(path) && !self.always_code_set.is_match(path)
+        path != FILE && self.non_code_set.is_match(path) && !self.always_code_set.is_match(path)
     }
 
     /// The `non_code` patterns, in file order.
@@ -138,6 +139,7 @@ mod tests {
             "crates/theos/src/main.rs",
             "xtask/src/main.rs",
             "gate/tools.toml",
+            "gate/code-paths.toml",
             "Cargo.toml",
             "editor-ui/src/App.svelte",
         ] {
@@ -177,6 +179,18 @@ mod tests {
     #[test]
     fn a_ts_file_in_docs_is_code() -> Result<()> {
         assert!(!real()?.is_non_code("docs/x.ts"));
+        Ok(())
+    }
+
+    // AC: CE-08C.3
+    #[test]
+    fn a_list_cannot_make_its_own_file_non_code() -> Result<()> {
+        let paths = CodePaths::parse(
+            "non_code = [\"gate/**\", \"**\"]
+always_code = []",
+        )?;
+        assert!(paths.is_non_code("gate/tools.toml"));
+        assert!(!paths.is_non_code(FILE));
         Ok(())
     }
 
