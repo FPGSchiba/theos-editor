@@ -456,4 +456,12 @@ mod tests {
         assert!(far > 0.0 && 3.0 * far < 1.0, "far {far}");
         assert!(near(water.get(8, 14), 3.0 * far));
     }
+
+    // Final review round 5, finding 2: each element's raster is `element_<name>`, in the same
+    // place.
+    #[test]
+    fn every_element_has_its_raster() {
+        let derived: Vec<String> = NAMES.iter().map(|n| format!("element_{n}")).collect();
+        assert_eq!(ELEMENT_LAYERS.to_vec(), derived);
+    }
 }

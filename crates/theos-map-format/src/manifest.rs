@@ -25,6 +25,9 @@ pub enum DType {
 }
 
 impl DType {
+    /// Every dtype, in declaration order.
+    pub const ALL: [DType; 3] = [DType::F32, DType::U8, DType::U16];
+
     /// The bytes of one value.
     #[must_use]
     pub const fn width(self) -> usize {
@@ -254,5 +257,21 @@ mod tests {
             assert_eq!(serde_json::from_value::<DType>(json!(text))?, dtype);
         }
         Ok(())
+    }
+
+    // Final review round 5, finding 2: `ALL` holds every dtype once, in declaration order. The
+    // match has no wildcard, so a new dtype does not compile until it has its place here, and
+    // then `ALL` must hold it there.
+    #[test]
+    fn all_holds_every_dtype() {
+        let place = |dtype: DType| match dtype {
+            DType::F32 => 0,
+            DType::U8 => 1,
+            DType::U16 => 2,
+        };
+        assert_eq!(DType::ALL.len(), 3);
+        for (i, dtype) in DType::ALL.into_iter().enumerate() {
+            assert_eq!(place(dtype), i);
+        }
     }
 }

@@ -173,21 +173,12 @@ mod tests {
     use super::drop_unknown_dtypes;
     use crate::DType;
 
-    /// Every dtype. The match has no wildcard, so a new dtype does not compile until it has an
-    /// arm here, next to the list it then belongs in.
-    fn every_dtype() -> [DType; 3] {
-        let listed = |dtype: DType| match dtype {
-            DType::F32 | DType::U8 | DType::U16 => dtype,
-        };
-        [DType::F32, DType::U8, DType::U16].map(listed)
-    }
-
     // Final review round 5, finding 2: the reader keeps a layer of every dtype `DType` has, by
     // its serde name, and drops every other dtype; an entry without a string dtype is kept for
     // the manifest's own error.
     #[test]
     fn the_reader_knows_exactly_the_dtypes() {
-        let names: Vec<Value> = every_dtype()
+        let names: Vec<Value> = DType::ALL
             .iter()
             .map(|dtype| serde_json::to_value(dtype).unwrap())
             .collect();

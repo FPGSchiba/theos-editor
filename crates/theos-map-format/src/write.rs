@@ -20,6 +20,8 @@ pub(crate) fn needs_zip64(len: u64) -> bool {
     len > u64::from(u32::MAX)
 }
 
+/// The file extension of a layer of `dtype`: the dtype's name in the manifest (a test pins it to
+/// serde's).
 pub(crate) fn extension(dtype: DType) -> &'static str {
     match dtype {
         DType::F32 => "f32",
@@ -152,6 +154,16 @@ mod tests {
     fn zip64_is_used_only_above_4_gib() {
         assert!(!needs_zip64(u64::from(u32::MAX)));
         assert!(needs_zip64(u64::from(u32::MAX) + 1));
+    }
+
+    // Final review round 5, finding 2: a layer file's extension is its dtype's name in the
+    // manifest, serde's, for every dtype.
+    #[test]
+    fn the_extension_is_the_dtype_name() {
+        for dtype in DType::ALL {
+            let name = serde_json::to_value(dtype).unwrap();
+            assert_eq!(name.as_str(), Some(extension(dtype)));
+        }
     }
 
     #[test]

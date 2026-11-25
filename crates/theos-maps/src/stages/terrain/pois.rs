@@ -737,4 +737,12 @@ min_chime_sep_km = 1.0",
         table.sort_unstable();
         assert_eq!(placed, table);
     }
+
+    // Final review round 5, finding 2: each type has its metric, the type's name with `_` for
+    // `-`, in the same place.
+    #[test]
+    fn every_type_has_its_metric() {
+        let derived: Vec<String> = super::TYPES.iter().map(|t| t.replace('-', "_")).collect();
+        assert_eq!(super::METRICS.to_vec(), derived);
+    }
 }

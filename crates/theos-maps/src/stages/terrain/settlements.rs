@@ -806,4 +806,38 @@ mod tests {
         let table: Vec<&str> = crate::features::types_of("settlement").collect();
         assert_eq!(classes, table);
     }
+
+    // Final review round 5, finding 2: `counts` and `spacing_km` have a field for every class
+    // and no other, by serde's names, `of` reads each class's own field, and the metrics are
+    // `settlements` and then the classes.
+    #[test]
+    fn every_class_has_its_own_count_spacing_and_metric() {
+        let classes: Vec<&str> = CLASSES.iter().map(|c| c.ty).collect();
+        let mut sorted = classes.clone();
+        sorted.sort_unstable();
+        let counts = Counts {
+            city: 1,
+            town: 2,
+            village: 3,
+            hamlet: 4,
+        };
+        let spacing = SpacingKm {
+            city: 1.5,
+            town: 2.5,
+            village: 3.5,
+            hamlet: 4.5,
+        };
+        let counts_table = toml::Table::try_from(counts).unwrap();
+        let spacing_table = toml::Table::try_from(spacing).unwrap();
+        for table in [&counts_table, &spacing_table] {
+            assert_eq!(table.keys().map(String::as_str).collect::<Vec<_>>(), sorted);
+        }
+        for ty in &classes {
+            let count = i64::try_from(counts.of(ty)).unwrap();
+            assert_eq!(counts_table[*ty].as_integer(), Some(count), "{ty}");
+            assert_eq!(spacing_table[*ty].as_float(), Some(spacing.of(ty)), "{ty}");
+        }
+        assert_eq!(METRICS[1..], classes[..]);
+        assert_eq!(METRICS[0], "settlements");
+    }
 }
