@@ -144,16 +144,17 @@ enum Command {
     Approval,
     /// Run every check that needs no pull request, in order, and print one verdict table.
     ///
-    /// Runs `tools`, `fmt`, `lints`, `engine-free`, `ac-trace`, `commit-msg`, `clippy`, `docs`,
-    /// `deny`, `test`, `coverage` and `slow-tests` with the same code as their CI jobs (the slow
-    /// tests always run here, as on a push to `main`), and goes on after a
-    /// check fails. It leaves out `pr-title`, `pr-body` and `approval`. When a tool is not the
-    /// pinned version, nothing but `tools` runs, because versions decide verdicts. Exit code 1
-    /// when any check failed.
+    /// Runs `tools`, `fmt`, `lints`, `engine-free`, `commit-msg`, `clippy`, `docs`, `deny`,
+    /// `test`, `coverage`, `slow-tests` and `ac-trace` with the same code as their subcommands
+    /// (the CI jobs run this command too), and goes on after a check fails. Outside GitHub Actions
+    /// the slow tests always run, as on a push to `main`; on a pull request in CI `slow-tests`
+    /// decides by its own rule. It leaves out `pr-title`, `pr-body` and `approval`. When a tool is
+    /// not the pinned version, nothing but `tools` runs, because versions decide verdicts. Exit
+    /// code 1 when any check failed.
     ///
     /// `--only` and `--skip` choose checks (`tools` always runs first); when a pull request or
     /// the working tree changes only paths no check reads, every selected check but `commit-msg`
-    /// is reported as not needed.
+    /// is reported as not needed, except in a run that a label started.
     Gate {
         /// Run only these checks, comma separated.
         #[arg(long, value_delimiter = ',', value_parser = gate::parse_selectable, conflicts_with = "skip")]

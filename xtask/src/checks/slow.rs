@@ -11,7 +11,8 @@
 //! member such a member depends on, or one of [`ALWAYS`]. Otherwise it passes with a note and
 //! runs nothing, so a pull request that cannot affect them does not pay for their build. The job
 //! still runs and reports, so the required status check is never missing. A push to `main`, a
-//! manual or scheduled run and `cargo xtask gate` always run them.
+//! manual or scheduled run and `cargo xtask gate` outside CI always run them; inside a CI job the
+//! gate hands this check the event, so a pull request decides as above.
 //!
 //! A member has slow tests when one of its `.rs` files contains `slow_` ([`has_slow_tests`]).
 //! That over-counts (a variable `slow_path` counts too), which only makes the tests run more

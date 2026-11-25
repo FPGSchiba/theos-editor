@@ -1,12 +1,14 @@
 //! `cargo xtask gate`: every local check of `docs/gate.md` §1, in a fixed order, and one table.
 //!
-//! The gate calls the same per-check runners as the subcommands do, with no override flags, so a
-//! check gives the same verdict here as in its CI job (CE-08.4); only where the inputs come from
-//! differs (the repository instead of the event payload). It leaves out the checks that need a
-//! pull request (`pr-title`, `pr-body`, `approval`) and the settings check, which needs GitHub.
-//! `slow-tests` always runs its tests here, as on a push to `main`; only on a pull request that
-//! cannot change their outcome does it pass without running them ([`slow`]), so the gate is never
-//! more lenient than CI.
+//! The gate calls the same per-check runners as the subcommands do, with no override flags, and
+//! the CI jobs run the gate itself, each with its `--only` or `--skip`, so a check gives the same
+//! verdict locally as in its CI job (CE-08.4). Each runner reads the GitHub Actions event when
+//! there is one and the repository otherwise. The gate leaves out the checks that need a pull
+//! request (`pr-title`, `pr-body`, `approval`) and the settings check, which needs GitHub.
+//! Outside CI `slow-tests` always runs its tests, as on a push to `main`; on a pull request in CI
+//! it passes without running them when the pull request cannot change their outcome ([`slow`]),
+//! so a local gate is never more lenient than CI. Before any check, [`scope`] decides whether the
+//! change needs them at all.
 //!
 //! Versions decide verdicts, so a gate whose tools are not the pinned ones would give verdicts
 //! that CI does not. When the `tools` check fails, nothing else runs.
