@@ -25,6 +25,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
+use crate::changes;
 use crate::checks::cargo_cmds;
 use crate::ci::{CiEvent, PullRequestEvent};
 use crate::files::{extension, repo_files};
@@ -85,9 +86,7 @@ pub fn run(root: &Path, ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<Ve
     if let Some(CiEvent::PullRequest(pull_request)) = ci
         && !needed_by(root, pull_request)?
     {
-        let mut verdict = Verdict::pass(Check::SlowTests);
-        verdict.notes.push(NOT_NEEDED.to_owned());
-        return Ok(verdict);
+        return Ok(Verdict::not_needed(Check::SlowTests, NOT_NEEDED));
     }
     cargo_cmds::run_cargo_check(root, Check::SlowTests, &cargo_cmds::slow_tests())
 }
@@ -101,9 +100,7 @@ pub fn run(root: &Path, ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<Ve
 /// Fails when either commit is not in the repository, cargo cannot give the metadata, or a source
 /// file cannot be read.
 pub fn needed_by(root: &Path, pull_request: &PullRequestEvent) -> Result<bool> {
-    let git = Git::new(root);
-    let merge_base = git.merge_base(&pull_request.base_sha, &pull_request.head_sha)?;
-    let changed = git.diff_name_only_no_renames(&merge_base, &pull_request.head_sha)?;
+    let changed = changes::of_pull_request(&Git::new(root), pull_request)?.paths;
     let dirs = watched_dirs(&members(root)?);
     Ok(changed.iter().any(|path| watched(path, &dirs)))
 }

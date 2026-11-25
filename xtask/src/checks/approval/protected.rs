@@ -26,6 +26,7 @@ use std::path::Path;
 use globset::GlobSet;
 use serde::Deserialize;
 
+use crate::changes;
 use crate::checks::lints;
 use crate::git::Git;
 use crate::globs;
@@ -131,8 +132,7 @@ pub fn touched(
     merge_base: &str,
     head: &str,
 ) -> Result<Vec<String>> {
-    let mut touched: Vec<String> = git
-        .diff_name_only_no_renames(merge_base, head)?
+    let mut touched: Vec<String> = changes::paths_between(git, merge_base, head)?
         .into_iter()
         .filter(|path| rules.matches(path))
         .collect();

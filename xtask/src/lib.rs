@@ -34,6 +34,7 @@
 //!   order, and writes one verdict table.
 
 pub mod branch;
+pub mod changes;
 pub mod checks;
 pub mod ci;
 pub mod code_paths;
