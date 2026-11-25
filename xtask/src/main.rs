@@ -6,7 +6,9 @@
 //! Adding a check is one arm in `run`: call the check's `run(root, ci, out)`, which gathers its
 //! own inputs and returns a verdict, and let `report::emit` write it. Also add it to
 //! `gate::run_check`, which the compiler asks for. `gate` is the one subcommand with many
-//! verdicts: `gate::run` writes its own table, so its arm does not go through `report::emit`.
+//! verdicts: `gate::run` (like `gate::run_pr` for `pr`) writes its own table, so its arm does not
+//! go through `report::emit`; under GitHub Actions it hands all verdicts to `report::publish`
+//! (annotations and the step summary) instead.
 
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
@@ -148,7 +150,20 @@ enum Command {
     /// check fails. It leaves out `pr-title`, `pr-body` and `approval`. When a tool is not the
     /// pinned version, nothing but `tools` runs, because versions decide verdicts. Exit code 1
     /// when any check failed.
-    Gate,
+    ///
+    /// `--only` and `--skip` choose checks (`tools` always runs first); when a pull request or
+    /// the working tree changes only paths no check reads, every selected check but `commit-msg`
+    /// is reported as not needed.
+    Gate {
+        /// Run only these checks, comma separated.
+        #[arg(long, value_delimiter = ',', value_parser = gate::parse_selectable, conflicts_with = "skip")]
+        only: Vec<Check>,
+        /// Run every check except these, comma separated.
+        #[arg(long, value_delimiter = ',', value_parser = gate::parse_selectable)]
+        skip: Vec<Check>,
+    },
+    /// Run `pr-title` and `pr-body` and print one table.
+    Pr,
     /// Check or apply the repository settings: the rulesets, the merge settings and the labels
     /// kept in `gate/` (`docs/gate.md` §6).
     Github {
@@ -271,9 +286,17 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
             pr_body::check_body(&template, Some(&body))
         }
         Command::Approval => approval::run(&root, ci.as_ref(), &mut out)?,
-        Command::Gate => {
-            let verdicts = gate::run(&root, ci.as_ref(), &mut out)?;
-            return Ok(verdicts.iter().all(Verdict::passed));
+        Command::Gate { only, skip } => {
+            let selection = gate::Selection {
+                only: only.clone(),
+                skip: skip.clone(),
+            };
+            let verdicts = gate::run(&root, ci.as_ref(), &selection, &mut out)?;
+            return finish(&verdicts, ci.is_some(), &mut out);
+        }
+        Command::Pr => {
+            let verdicts = gate::run_pr(&root, ci.as_ref(), &mut out)?;
+            return finish(&verdicts, ci.is_some(), &mut out);
         }
         Command::Github {
             repo,
@@ -286,6 +309,14 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
     };
     report::emit(&verdict, ci.is_some(), &mut out)?;
     Ok(verdict.passed())
+}
+
+/// Publishes the verdicts of a multi-check run under GitHub Actions and says whether all passed.
+fn finish(verdicts: &[Verdict], in_ci: bool, out: &mut dyn Write) -> anyhow::Result<bool> {
+    if in_ci {
+        report::publish(verdicts, out)?;
+    }
+    Ok(verdicts.iter().all(Verdict::passed))
 }
 
 /// The workspace root: the parent of the directory this xtask was built from.

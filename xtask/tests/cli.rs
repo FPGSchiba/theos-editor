@@ -73,3 +73,20 @@ fn no_line_of_an_error_can_start_a_workflow_command() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn gate_rejects_names_it_cannot_select() -> TestResult {
+    for (flag, name) in [
+        ("--only", "approval"),
+        ("--skip", "nope"),
+        ("--only", "tools"),
+    ] {
+        let output = xtask(&["gate", flag, name], |_| {})?;
+        assert_eq!(output.status.code(), Some(2), "{flag} {name}");
+        let stderr = String::from_utf8(output.stderr)?;
+        assert!(stderr.contains(name), "{stderr}");
+    }
+    let output = xtask(&["gate", "--only", "test", "--skip", "fmt"], |_| {})?;
+    assert_eq!(output.status.code(), Some(2), "--only and --skip conflict");
+    Ok(())
+}

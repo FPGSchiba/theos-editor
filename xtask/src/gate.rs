@@ -14,28 +14,125 @@
 use std::io::Write;
 use std::path::Path;
 
-use crate::checks::{ac_trace, cargo_cmds, commit_msg, coverage, engine_free, lints, slow};
+use crate::checks::{
+    ac_trace, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title, slow,
+};
 use crate::ci::CiEvent;
-use crate::verdict::{Check, Finding, GATE_ORDER, Verdict};
+use crate::scope::{self, Scope};
+use crate::verdict::{Check, Finding, GATE_ORDER, PR_ONLY, Verdict};
 use crate::view::Shared;
 use crate::{Error, Result, report, tools};
 
-/// Runs every check of [`GATE_ORDER`] in `root`, and writes the verdict table to `out` after the
+/// Which checks of [`GATE_ORDER`] a run covers: the CI jobs split the gate with this.
+#[derive(Clone, Default, PartialEq, Eq, Debug)]
+pub struct Selection {
+    /// Run only these checks (and `tools`); empty means every check.
+    pub only: Vec<Check>,
+    /// Leave these checks out.
+    pub skip: Vec<Check>,
+}
+
+impl Selection {
+    /// The checks to run, in order: `tools` first, then [`GATE_ORDER`] without it, each kept when
+    /// `only` is empty or names it, and dropped when `skip` names it.
+    #[must_use]
+    pub fn checks(&self) -> Vec<Check> {
+        let rest = GATE_ORDER
+            .iter()
+            .copied()
+            .filter(|&check| check != Check::Tools)
+            .filter(|check| self.only.is_empty() || self.only.contains(check))
+            .filter(|check| !self.skip.contains(check));
+        std::iter::once(Check::Tools).chain(rest).collect()
+    }
+}
+
+/// Parses a check name of `--only` or `--skip`: the checks of the gate, not `tools` (it always
+/// runs) and not the checks that need a pull request or GitHub.
+///
+/// # Errors
+///
+/// Returns the message to show when `name` is not a check or is not selectable.
+pub fn parse_selectable(name: &str) -> std::result::Result<Check, String> {
+    let check = Check::from_name(name).ok_or_else(|| format!("`{name}` is not a check"))?;
+    if check == Check::Tools {
+        return Err("`tools` always runs first and cannot be selected".to_owned());
+    }
+    if PR_ONLY.contains(&check) || check == Check::Github {
+        return Err(format!(
+            "`{name}` is not part of the gate: it needs a pull request or GitHub"
+        ));
+    }
+    Ok(check)
+}
+
+/// Runs the checks of `selection` in `root`, and writes the verdict table to `out` after the
 /// output of the checks themselves. Returns the verdicts; the gate passes when all of them do.
 ///
-/// A check that fails does not stop the others, and a check that cannot run is a failing verdict
-/// that carries the error. Only a failing `tools` check stops the gate, as the module
-/// documentation says: the checks after it are not run, and its verdict notes which.
+/// The scope is decided once ([`scope::for_run`]): when the change touches only paths no check
+/// reads, every selected check but `commit-msg` is not needed and is not run. A check that fails
+/// does not stop the others, and a check that cannot run is a failing verdict that carries the
+/// error. Only a failing `tools` check stops the gate, as the module documentation says: the
+/// checks after it are not run, and its verdict notes which.
 ///
 /// # Errors
 ///
 /// Fails only when `out` cannot be written.
-pub fn run(root: &Path, ci: Option<&CiEvent>, out: &mut dyn Write) -> Result<Vec<Verdict>> {
+pub fn run(
+    root: &Path,
+    ci: Option<&CiEvent>,
+    selection: &Selection,
+    out: &mut dyn Write,
+) -> Result<Vec<Verdict>> {
     // The checks that read code share one view, built when the first of them asks for it.
     let shared = Shared::new();
-    run_checks(
-        &GATE_ORDER,
+    run_scoped(
+        &selection.checks(),
+        &scope::for_run(root, ci),
         |check, out| run_check(check, root, ci, &shared, out),
+        out,
+    )
+}
+
+/// The checks that need a pull request and are run by `cargo xtask pr`.
+pub const PR_CHECKS: [Check; 2] = [Check::PrTitle, Check::PrBody];
+
+/// Runs `pr-title` and `pr-body` and writes one table. Needs no `tools` check and has no scope.
+///
+/// # Errors
+///
+/// Fails only when `out` cannot be written.
+pub fn run_pr(root: &Path, ci: Option<&CiEvent>, out: &mut dyn Write) -> Result<Vec<Verdict>> {
+    run_checks(
+        &PR_CHECKS,
+        |check, out| match check {
+            Check::PrTitle => pr_title::run(root, ci, out),
+            _ => pr_body::run(root, ci, out),
+        },
+        out,
+    )
+}
+
+/// Applies `scope` to `run_one`, then runs the checks. See [`run`].
+fn run_scoped(
+    order: &[Check],
+    scope: &Scope,
+    mut run_one: impl FnMut(Check, &mut dyn Write) -> Result<Verdict>,
+    out: &mut dyn Write,
+) -> Result<Vec<Verdict>> {
+    if let Scope::Every { note: Some(note) } = scope {
+        writeln!(out, "note: every check runs: {note}").map_err(report::output_error)?;
+    }
+    let docs_only = *scope == Scope::DocsOnly;
+    run_checks(
+        order,
+        |check, out| {
+            if docs_only && check != Check::CommitMsg {
+                Ok(Verdict::not_needed(check, scope::NOT_NEEDED_REASON))
+            } else {
+                run_one(check, out)
+            }
+        },
         out,
     )
 }
@@ -112,7 +209,6 @@ fn could_not_run(check: Check, error: &Error) -> Verdict {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::verdict::PR_ONLY;
 
     type TestResult<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -379,6 +475,152 @@ mod tests {
             out,
             Vec::<u8>::new(),
             "nothing is written for a check that is not run"
+        );
+    }
+
+    fn selection(only: &[Check], skip: &[Check]) -> Selection {
+        Selection {
+            only: only.to_vec(),
+            skip: skip.to_vec(),
+        }
+    }
+
+    // AC: CE-08C.1
+    #[test]
+    fn only_and_skip_choose_the_checks_after_tools() {
+        assert_eq!(Selection::default().checks(), GATE_ORDER);
+        assert_eq!(
+            selection(&[Check::Test], &[]).checks(),
+            [Check::Tools, Check::Test]
+        );
+        let expected: Vec<Check> = GATE_ORDER
+            .iter()
+            .copied()
+            .filter(|check| !matches!(check, Check::Test | Check::Coverage))
+            .collect();
+        assert_eq!(
+            selection(&[], &[Check::Test, Check::Coverage]).checks(),
+            expected
+        );
+        assert_eq!(expected.first(), Some(&Check::Tools));
+    }
+
+    // AC: CE-08C.1
+    #[test]
+    fn the_three_ci_jobs_cover_the_gate_once() {
+        let jobs = [
+            selection(&[], &[Check::Test, Check::Coverage]),
+            selection(&[Check::Test], &[]),
+            selection(&[Check::Coverage], &[]),
+        ];
+        let mut covered: Vec<Check> = jobs
+            .iter()
+            .flat_map(Selection::checks)
+            .filter(|check| *check != Check::Tools)
+            .collect();
+        let mut expected: Vec<Check> = GATE_ORDER
+            .iter()
+            .copied()
+            .filter(|check| *check != Check::Tools)
+            .collect();
+        covered.sort_by_key(|check| check.name());
+        expected.sort_by_key(|check| check.name());
+        assert_eq!(covered, expected);
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn docs_only_runs_commit_msg_and_marks_the_rest_not_needed() -> TestResult {
+        let mut ran = Vec::new();
+        let mut out = Vec::new();
+        let verdicts = run_scoped(
+            &GATE_ORDER,
+            &Scope::DocsOnly,
+            |check, _| {
+                ran.push(check);
+                Ok(Verdict::pass(check))
+            },
+            &mut out,
+        )?;
+        assert_eq!(ran, [Check::CommitMsg]);
+        assert_eq!(checks_of(&verdicts), GATE_ORDER);
+        for verdict in &verdicts {
+            assert_eq!(
+                verdict.is_not_needed(),
+                verdict.check != Check::CommitMsg,
+                "{}",
+                verdict.check.name()
+            );
+        }
+        assert!(String::from_utf8(out)?.contains("not needed"));
+        Ok(())
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn docs_only_in_a_test_job_runs_nothing() -> TestResult {
+        let mut out = Vec::new();
+        let verdicts = run_scoped(
+            &selection(&[Check::Test], &[]).checks(),
+            &Scope::DocsOnly,
+            |check, _| {
+                Err(Error::Missing {
+                    what: format!("a run of {}", check.name()),
+                })
+            },
+            &mut out,
+        )?;
+        assert_eq!(checks_of(&verdicts), [Check::Tools, Check::Test]);
+        assert!(verdicts.iter().all(Verdict::is_not_needed));
+        Ok(())
+    }
+
+    #[test]
+    fn a_scope_with_a_note_prints_it_before_the_table() -> TestResult {
+        let scope = Scope::Every {
+            note: Some("HEAD is detached".to_owned()),
+        };
+        let mut out = Vec::new();
+        let verdicts = run_scoped(
+            &[Check::Fmt],
+            &scope,
+            |check, _| Ok(Verdict::pass(check)),
+            &mut out,
+        )?;
+        let out = String::from_utf8(out)?;
+        assert_eq!(checks_of(&verdicts), [Check::Fmt]);
+        assert!(
+            out.starts_with("note: every check runs: HEAD is detached\n"),
+            "{out}"
+        );
+        Ok(())
+    }
+
+    // AC: CE-08C.1
+    #[test]
+    fn pr_runs_title_and_body_in_one_table() -> TestResult {
+        // Outside a pull request neither check can read its input: both are failing verdicts.
+        let mut out = Vec::new();
+        let verdicts = run_pr(Path::new("."), None, &mut out)?;
+        assert_eq!(checks_of(&verdicts), PR_CHECKS);
+        let out = String::from_utf8(out)?;
+        assert!(
+            out.contains("==> pr-title") && out.contains("==> pr-body"),
+            "{out}"
+        );
+        assert_eq!(out.matches("==> gate").count(), 1, "{out}");
+        Ok(())
+    }
+
+    #[test]
+    fn unknown_or_pr_only_names_are_rejected() {
+        assert_eq!(parse_selectable("test"), Ok(Check::Test));
+        for name in ["approval", "pr-title", "pr-body", "github", "tools"] {
+            assert!(parse_selectable(name).is_err(), "{name}");
+        }
+        assert_eq!(
+            parse_selectable("nope"),
+            Err("`nope` is not a check".to_owned())
         );
     }
 
