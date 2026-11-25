@@ -59,7 +59,8 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 - P08's build PR #44 is a draft labelled `needs-jann`. The final review loop reached its cap of
   five rounds; round 5 left 6 Minor findings open, listed in the PR with their fixes. Jann asked
   on 25 Nov 2026 for a targeted fix and review round for them. Its spec changes (rulings 51–75)
-  reached main with #40, its gate change with #43.
+  reached main with #40, its gate change with #43. macOS stays unverified until the `platforms`
+  run on #44's head.
 - The SIL OFL 1.1 fonts (Inter, Spectral) that `theos-maps` embeds must ship with their licence
   texts (P08 §5.11, §7). `theos_maps::render::font_licences` hands them out; P09 or the release
   workflow adds them to the releases of the binaries that embed the crate.
