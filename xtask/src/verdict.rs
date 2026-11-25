@@ -42,7 +42,8 @@ pub enum Check {
 }
 
 impl Check {
-    /// The name of the check: its subcommand, its CI job and its status check on GitHub.
+    /// The name of the check: its subcommand and its name in the verdict table. A check runs inside
+    /// a CI job (`gate`, `test`, `coverage`, `pr` or `approval`), which is not named after it.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
