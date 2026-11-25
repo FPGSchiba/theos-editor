@@ -145,7 +145,7 @@ mod tests {
     use super::*;
     use crate::features::TYPES;
 
-    // Final review round 6: a misspelt class arm would fall to the hamlet default unseen.
+    // Targeted review: a misspelt class arm would fall to the hamlet default unseen.
     #[test]
     fn every_settlement_class_above_hamlet_has_its_own_square() {
         for ty in crate::features::types_of("settlement").filter(|t| *t != "hamlet") {

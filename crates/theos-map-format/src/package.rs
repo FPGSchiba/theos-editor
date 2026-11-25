@@ -392,7 +392,7 @@ mod tests {
         }
     }
 
-    // Final review round 6: the check once listed the float fields by hand. The cases below are
+    // Targeted review: the check once listed the float fields by hand. The cases below are
     // pinned to the types: a frame with every optional field set serialises exactly the floats
     // the cases break, so a new float field of `Frame` or `Level` fails here until a case
     // exists, and the cases prove the check refuses each by name.

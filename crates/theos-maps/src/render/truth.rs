@@ -253,7 +253,7 @@ mod tests {
     use crate::render::test_support::TestWorld;
     use crate::world::MapFrame;
 
-    // Final review round 6: a misspelt class arm would fall to the hamlet default unseen.
+    // Targeted review: a misspelt class arm would fall to the hamlet default unseen.
     #[test]
     fn every_settlement_class_above_hamlet_has_its_own_name_size() {
         for ty in crate::features::types_of("settlement").filter(|t| *t != "hamlet") {
