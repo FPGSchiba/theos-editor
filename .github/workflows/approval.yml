@@ -25,13 +25,13 @@ jobs:
   approval:
     name: approval
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: write
       issues: write
     steps:
-      # The credentials stay in the checkout: `cargo xtask approval` fetches the refs of the pull
+      # The credentials stay in the checkout: `xtask approval` fetches the refs of the pull
       # request with `git fetch origin`.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,13 +42,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-      # The job runs on pull requests only, so a cache of its own would never be on `main`, where
-      # every pull request can restore it. It restores the xtask build `fmt` saved on `main`
-      # instead, and saves nothing.
-      - uses: ./.github/actions/setup
-        with:
-          cache-key: xtask
-          save-cache: false
-      - run: cargo xtask approval
+      # After both checkouts: the key of the cached xtask hashes the checkout this job runs, the
+      # base commit (the head only while the base has no xtask).
+      - uses: ./.github/actions/xtask
+      - run: target/xtask-bin/debug/xtask --root . approval
         env:
           GH_TOKEN: ${{ github.token }}

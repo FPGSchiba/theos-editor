@@ -34,6 +34,17 @@ const SETUP_ACTION: &str = ".github/actions/setup/action.yml";
 /// The step that runs the setup action, as a job names it.
 const SETUP_USES: &str = "./.github/actions/setup";
 
+const XTASK_ACTION: &str = ".github/actions/xtask/action.yml";
+
+/// The step that runs the xtask action: the binary `main` built and cached, or a fresh build.
+const XTASK_USES: &str = "./.github/actions/xtask";
+
+/// The binary the xtask action leaves behind, which `pr`, `approval` and `settings` run.
+const XTASK_BIN: &str = "target/xtask-bin/debug/xtask";
+
+/// The condition of the one step of the xtask action that has one: build only on a cache miss.
+const BUILD_ON_MISS_IF: &str = "steps.restore.outputs.cache-hit != 'true'";
+
 /// The expression that is the workflow token.
 const TOKEN: &str = "${{ github.token }}";
 
@@ -248,15 +259,25 @@ fn ci_job(name: &str) -> Option<&'static CiJob> {
     CI_JOBS.iter().find(|job| job.name == name)
 }
 
-/// The command a job runs: the one of [`CI_JOBS`] for `ci.yml`, for the others `cargo xtask
-/// <check>`, and for `settings` the settings check.
+/// The command a job runs: the one of [`CI_JOBS`] for `ci.yml`, for `pr`, `approval` and
+/// `settings` the cached xtask binary, for the others `cargo xtask <check>`.
 fn command_of(file: &str, name: &str) -> String {
     if file == "ci.yml" {
         ci_job(name).map_or_else(String::new, |job| job.command.to_owned())
-    } else if name == "settings" {
-        "cargo xtask github check".to_owned()
+    } else if let Some(command) = cached_xtask_command(name) {
+        command.to_owned()
     } else {
         format!("cargo xtask {}", check_of(name))
+    }
+}
+
+/// The command of a job that runs the xtask binary `main` cached, by the name of the job.
+fn cached_xtask_command(name: &str) -> Option<&'static str> {
+    match name {
+        "pr" => Some("target/xtask-bin/debug/xtask --root . pr"),
+        "approval" => Some("target/xtask-bin/debug/xtask --root . approval"),
+        "settings" => Some("target/xtask-bin/debug/xtask --root . github check"),
+        _ => None,
     }
 }
 
@@ -312,6 +333,8 @@ fn step_kind(step: &Yaml) -> TestResult<&'static str> {
             Ok("checkout")
         } else if uses == SETUP_USES {
             Ok("setup")
+        } else if uses == XTASK_USES {
+            Ok("xtask")
         } else if uses.starts_with("actions/cache@") {
             Ok("cache")
         } else if uses.starts_with("actions/cache/save@") {
@@ -381,7 +404,8 @@ fn ci_jobs_run_the_gate_runner() -> TestResult {
         "the ci jobs and cargo xtask gate run different checks, or one twice"
     );
 
-    // The pull-request-only checks have their jobs in the other workflows.
+    // The pull-request-only checks have their jobs in the other workflows: `pr` runs the title
+    // and the body, `approval` the approval.
     let mut pr_jobs = BTreeSet::new();
     for file in ["pr.yml", "approval.yml"] {
         for job in jobs(&workflow(file)?)? {
@@ -389,8 +413,13 @@ fn ci_jobs_run_the_gate_runner() -> TestResult {
         }
     }
     for pr_only in PR_ONLY {
+        let job = if pr_only == Check::Approval {
+            "approval"
+        } else {
+            "pr"
+        };
         assert!(
-            pr_jobs.contains(pr_only.name()),
+            pr_jobs.contains(job),
             "{} is a PR-only check without a job",
             pr_only.name()
         );
@@ -498,7 +527,8 @@ fn every_job_runs_only_its_command_on_its_runner() -> TestResult {
             .map(step_kind)
             .collect::<TestResult<Vec<_>>>()?;
         let expected: &[&str] = match name.as_str() {
-            "approval" => &["checkout", "checkout", "setup", "run"],
+            "approval" => &["checkout", "checkout", "xtask", "run"],
+            "pr" | "settings" => &["checkout", "xtask", "run"],
             "coverage" if file == "ci.yml" => &["checkout", "setup", "cache", "run"],
             _ => &["checkout", "setup", "run"],
         };
@@ -624,38 +654,72 @@ fn no_key_lets_a_job_pass_while_xtask_fails() -> TestResult {
     Ok(())
 }
 
+/// The local actions, the action whose step may carry a condition in each, and that condition.
+/// Every other step of them runs always: a condition anywhere else could skip a check.
+const LOCAL_ACTIONS: [(&str, &str, &str); 2] = [
+    (SETUP_ACTION, "actions/cache/save", SAVE_XTASK_IF),
+    (XTASK_ACTION, SETUP_USES, BUILD_ON_MISS_IF),
+];
+
+/// Whether a step uses `action`, with or without a version.
+fn step_uses(step: &Yaml, action: &str) -> bool {
+    step["uses"]
+        .as_str()
+        .is_some_and(|uses| uses == action || action_name(step) == Some(action))
+}
+
 // AC: CE-08.3, CE-08.4
 #[test]
-fn no_key_lets_a_step_of_the_setup_action_fail_silently() -> TestResult {
-    let action = parse(SETUP_ACTION)?;
-    // `inputs` are pinned by `setup_action_passes_the_cache_inputs_to_rust_cache`.
-    assert_eq!(
-        unexpected_keys(&action, &["name", "description", "inputs", "runs"])?,
-        Vec::<String>::new(),
-        "the setup action has a key it does not need"
-    );
-    assert_eq!(
-        unexpected_keys(&action["runs"], &["using", "steps"])?,
-        Vec::<String>::new(),
-        "the runs of the setup action has a key it does not need"
-    );
-    for (position, step) in action["runs"]["steps"]
-        .as_vec()
-        .ok_or("the setup action has no steps")?
-        .iter()
-        .enumerate()
-    {
+fn no_key_lets_a_step_of_a_local_action_fail_silently() -> TestResult {
+    for (file, _, _) in LOCAL_ACTIONS {
+        let action = parse(file)?;
+        // The inputs of the setup action are pinned by
+        // `setup_action_passes_the_cache_inputs_to_rust_cache`; the xtask action has none.
         assert_eq!(
-            unexpected_keys(step, &SETUP_STEP_KEYS)?,
+            unexpected_keys(&action, &["name", "description", "inputs", "runs"])?,
             Vec::<String>::new(),
-            "setup action, step {position}: keys that can make the step pass when it fails (such \
-             as `continue-on-error`), skip it or run it elsewhere than the root of the repository"
+            "{file} has a key it does not need"
         );
-        let saves_xtask = action_name(step) == Some("actions/cache/save");
         assert_eq!(
-            step["if"].as_str(),
-            saves_xtask.then_some(SAVE_XTASK_IF),
-            "setup action, step {position}: only the step that saves xtask has an `if:`"
+            unexpected_keys(&action["runs"], &["using", "steps"])?,
+            Vec::<String>::new(),
+            "{file}: the runs has a key it does not need"
+        );
+        for (position, step) in action["runs"]["steps"]
+            .as_vec()
+            .ok_or_else(|| format!("{file} has no steps"))?
+            .iter()
+            .enumerate()
+        {
+            assert_eq!(
+                unexpected_keys(step, &SETUP_STEP_KEYS)?,
+                Vec::<String>::new(),
+                "{file}, step {position}: keys that can make the step pass when it fails (such as \
+                 `continue-on-error`), skip it or run it elsewhere than the root of the repository"
+            );
+        }
+    }
+    Ok(())
+}
+
+// AC: CE-08.3
+#[test]
+fn no_step_condition_except_the_cache_ones() -> TestResult {
+    for (file, action, condition) in LOCAL_ACTIONS {
+        let parsed = parse(file)?;
+        let steps = parsed["runs"]["steps"]
+            .as_vec()
+            .ok_or_else(|| format!("{file} has no steps"))?;
+        for (position, step) in steps.iter().enumerate() {
+            assert_eq!(
+                step["if"].as_str(),
+                step_uses(step, action).then_some(condition),
+                "{file}, step {position}: only the step that uses {action} has an `if:`"
+            );
+        }
+        assert!(
+            steps.iter().any(|step| step_uses(step, action)),
+            "{file} has no step that uses {action}"
         );
     }
     Ok(())
@@ -667,6 +731,8 @@ fn no_key_lets_a_step_of_the_setup_action_fail_silently() -> TestResult {
 fn timeout_of(file: &str, name: &str) -> i64 {
     match name {
         _ if file == "ci.yml" => ci_job(name).map_or(0, |job| job.timeout),
+        // Both run a binary `main` cached, so a label change is checked in seconds.
+        "pr" | "approval" => 15,
         _ if check_of(name) == "slow-tests" => 120,
         _ if OS_SUFFIXES.iter().any(|suffix| name.ends_with(suffix)) => 60,
         _ => 30,
@@ -831,8 +897,11 @@ fn no_pull_request_target_and_least_privilege() -> TestResult {
 
 /// The step of each job that calls GitHub, the only one that gets the token.
 const TOKEN_STEPS: [(&str, &str); 2] = [
-    ("approval", "cargo xtask approval"),
-    ("settings", "cargo xtask github check"),
+    ("approval", "target/xtask-bin/debug/xtask --root . approval"),
+    (
+        "settings",
+        "target/xtask-bin/debug/xtask --root . github check",
+    ),
 ];
 
 #[test]
@@ -907,6 +976,7 @@ fn uses_lines() -> TestResult<Vec<(String, String)>> {
         .map(|file| workflow_path(file))
         .collect();
     files.push(SETUP_ACTION.to_owned());
+    files.push(XTASK_ACTION.to_owned());
     let mut found = Vec::new();
     for file in files {
         for line in read(&file)?.lines() {
@@ -933,11 +1003,13 @@ fn actions_pinned_by_sha() -> TestResult {
             .filter(|step| step["uses"].as_str().is_some())
             .count();
     }
-    for step in parse(SETUP_ACTION)?["runs"]["steps"]
-        .as_vec()
-        .ok_or("the setup action has no steps")?
-    {
-        parsed += usize::from(step["uses"].as_str().is_some());
+    for (file, _, _) in LOCAL_ACTIONS {
+        for step in parse(file)?["runs"]["steps"]
+            .as_vec()
+            .ok_or_else(|| format!("{file} has no steps"))?
+        {
+            parsed += usize::from(step["uses"].as_str().is_some());
+        }
     }
     assert_eq!(
         found.len(),
@@ -982,13 +1054,15 @@ fn no_expressions_in_run_steps() -> TestResult {
             );
         }
     }
-    let action = parse(SETUP_ACTION)?;
-    let steps = action["runs"]["steps"].as_vec().ok_or("no steps")?;
-    for command in run_values(steps) {
-        assert!(
-            !command.contains("${{"),
-            "the setup action has an expression in `run: {command}`"
-        );
+    for (file, _, _) in LOCAL_ACTIONS {
+        let action = parse(file)?;
+        let steps = action["runs"]["steps"].as_vec().ok_or("no steps")?;
+        for command in run_values(steps) {
+            assert!(
+                !command.contains("${{"),
+                "{file} has an expression in `run: {command}`"
+            );
+        }
     }
     Ok(())
 }
@@ -1235,33 +1309,65 @@ fn setup_action_passes_the_cache_inputs_to_rust_cache() -> TestResult {
 /// The expression that is true on `main` only.
 const ON_MAIN: &str = "${{ github.ref == 'refs/heads/main' }}";
 
-/// The inputs a job passes to its setup step.
-fn setup_inputs(job: &Job) -> TestResult<BTreeMap<String, String>> {
-    let setup = job
+/// The inputs a job passes to its setup step, or `None` when the job has no setup step (the jobs
+/// that run the xtask action).
+fn setup_inputs(job: &Job) -> TestResult<Option<BTreeMap<String, String>>> {
+    let Some(setup) = job
         .steps()?
         .iter()
         .find(|step| step["uses"].as_str() == Some(SETUP_USES))
-        .ok_or_else(|| format!("job {} has no setup step", job.name))?;
+    else {
+        return Ok(None);
+    };
     if setup["with"].is_badvalue() {
-        Ok(BTreeMap::new())
+        Ok(Some(BTreeMap::new()))
     } else {
-        string_map(&setup["with"])
+        string_map(&setup["with"]).map(Some)
     }
+}
+
+/// The value of an input of the setup action: what the step passes, else the default of the
+/// action, so a step that leaves an input out is not taken to save nothing.
+fn setup_input(inputs: &BTreeMap<String, String>, input: &str) -> TestResult<String> {
+    if let Some(value) = inputs.get(input) {
+        return Ok(value.clone());
+    }
+    let action = parse(SETUP_ACTION)?;
+    scalar(&action["inputs"][input]["default"])
+        .ok_or_else(|| format!("the setup action has no default for {input}").into())
+}
+
+/// The jobs of the workflows that run on `pull_request`, which may not save a build cache.
+fn pull_request_jobs() -> TestResult<Vec<(&'static str, Job)>> {
+    let mut found = Vec::new();
+    for (file, job) in all_jobs()? {
+        if keys(&workflow(file)?["on"])?.contains("pull_request") {
+            found.push((file, job));
+        }
+    }
+    Ok(found)
 }
 
 // AC: CE-08C.5
 #[test]
 fn no_pull_request_job_saves_a_build_cache() -> TestResult {
     // A pull request is searched first, so a cache it saved would win over the one of `main`.
-    for (file, job) in all_jobs()? {
-        for (input, value) in setup_inputs(&job)? {
-            if input == "save-cache" || input == "save-xtask" {
-                assert!(
-                    value == "false" || value == ON_MAIN,
-                    "{file}: job {} passes {input}: {value}, which a pull request saves",
-                    job.name
-                );
-            }
+    for (file, job) in pull_request_jobs()? {
+        // `platforms.yml` still runs the setup action without inputs, so its label runs save a
+        // cache; Task 8 of P50 makes it save on the schedule only and removes this exception.
+        if file == "platforms.yml" {
+            continue;
+        }
+        let Some(inputs) = setup_inputs(&job)? else {
+            continue;
+        };
+        for input in ["save-cache", "save-xtask"] {
+            let value = setup_input(&inputs, input)?;
+            assert!(
+                value == "false" || value == ON_MAIN,
+                "{file}: job {} saves with {input}: {value}, which a pull request does",
+                job.name
+            );
         }
     }
     Ok(())
@@ -1271,7 +1377,7 @@ fn no_pull_request_job_saves_a_build_cache() -> TestResult {
 #[test]
 fn only_gate_on_main_saves_the_cached_xtask() -> TestResult {
     for (file, job) in all_jobs()? {
-        let inputs = setup_inputs(&job)?;
+        let inputs = setup_inputs(&job)?.unwrap_or_default();
         let saves = inputs
             .get("save-xtask")
             .is_some_and(|value| value != "false");
@@ -1288,8 +1394,8 @@ fn only_gate_on_main_saves_the_cached_xtask() -> TestResult {
     Ok(())
 }
 
-/// The inputs each job passes to the setup action. `approval` still restores the `xtask` cache
-/// and saves nothing; its move to the cached xtask binary is a later task of P50.
+/// The inputs each job passes to the setup action. The jobs that run the xtask action have no
+/// setup step of their own.
 #[test]
 fn setup_inputs_of_every_job() -> TestResult {
     let long = |key: &str| map(&[("cache-key", key), ("save-cache", ON_MAIN)]);
@@ -1299,20 +1405,150 @@ fn setup_inputs_of_every_job() -> TestResult {
         ("ci.yml", "gate", gate),
         ("ci.yml", "test", long("test")),
         ("ci.yml", "coverage", long("coverage")),
-        (
-            "approval.yml",
-            "approval",
-            map(&[("cache-key", "xtask"), ("save-cache", "false")]),
-        ),
     ];
     for (file, job) in all_jobs()? {
         let name = &job.name;
-        let expected = shared
-            .iter()
-            .find(|(in_file, job_name, _)| *in_file == file && job_name == name)
-            .map(|(_, _, with)| with.clone())
-            .unwrap_or_default();
+        let expected = if cached_xtask_command(name).is_some() {
+            None
+        } else {
+            Some(
+                shared
+                    .iter()
+                    .find(|(in_file, job_name, _)| *in_file == file && job_name == name)
+                    .map(|(_, _, with)| with.clone())
+                    .unwrap_or_default(),
+            )
+        };
         assert_eq!(setup_inputs(&job)?, expected, "{file}: job {name}");
     }
+    Ok(())
+}
+
+/// The one key of the cached xtask binary, as a step spells it.
+fn xtask_key(step: &Yaml) -> TestResult<String> {
+    step["with"]["key"]
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| "the step has no key".into())
+}
+
+/// The steps of the xtask action.
+fn xtask_action_steps() -> TestResult<Vec<Yaml>> {
+    Ok(parse(XTASK_ACTION)?["runs"]["steps"]
+        .as_vec()
+        .ok_or("the xtask action has no steps")?
+        .clone())
+}
+
+// AC: CE-08C.5
+#[test]
+fn pr_and_approval_take_xtask_from_main_s_cache() -> TestResult {
+    // The xtask action restores the binary by its exact key, without `restore-keys`, so it never
+    // takes a stale one, and saves nothing: `main` is the only job that saves it.
+    let steps = xtask_action_steps()?;
+    let restore = &steps[0];
+    assert_eq!(action_name(restore), Some("actions/cache/restore"));
+    assert_eq!(restore["id"].as_str(), Some("restore"));
+    assert_eq!(
+        string_map(&restore["with"])?,
+        map(&[("path", XTASK_BIN), ("key", &xtask_key(restore)?)]),
+        "the restore step has `restore-keys` or other inputs"
+    );
+    assert!(
+        steps
+            .iter()
+            .all(|step| action_name(step) != Some("actions/cache/save")),
+        "the xtask action saves a cache"
+    );
+
+    // On a miss it builds xtask as before, and saves nothing, so a pull request never writes the
+    // cache `main` is searched for.
+    assert_eq!(steps.len(), 2);
+    assert_eq!(steps[1]["if"].as_str(), Some(BUILD_ON_MISS_IF));
+    assert_eq!(steps[1]["uses"].as_str(), Some(SETUP_USES));
+    assert_eq!(
+        string_map(&steps[1]["with"])?,
+        map(&[("cache-key", "gate"), ("save-cache", "false")]),
+        "the fallback build of xtask"
+    );
+
+    for (file, name) in [("pr.yml", "pr"), ("approval.yml", "approval")] {
+        let jobs = jobs(&workflow(file)?)?;
+        let job = &jobs[index_of(&jobs, name)?];
+        let kinds = job
+            .steps()?
+            .iter()
+            .map(step_kind)
+            .collect::<TestResult<Vec<_>>>()?;
+        assert!(kinds.contains(&"xtask"), "{file}: {name} has no xtask step");
+        assert!(
+            !kinds.iter().any(|kind| kind.starts_with("cache")),
+            "{file}: {name} touches a cache itself"
+        );
+    }
+    Ok(())
+}
+
+// AC: CE-08C.5
+#[test]
+fn the_cached_xtask_has_one_key() -> TestResult {
+    let setup = parse(SETUP_ACTION)?;
+    let saved = setup["runs"]["steps"]
+        .as_vec()
+        .ok_or("the setup action has no steps")?
+        .iter()
+        .find(|step| action_name(step) == Some("actions/cache/save"))
+        .ok_or("the setup action saves no xtask")?;
+    let restored = &xtask_action_steps()?[0];
+    assert_eq!(
+        xtask_key(saved)?,
+        xtask_key(restored)?,
+        "the key that saves the xtask binary is not the key that restores it"
+    );
+    assert_eq!(saved["with"]["path"], restored["with"]["path"]);
+    Ok(())
+}
+
+// AC: CE-08.5
+#[test]
+fn approval_keys_the_cached_xtask_on_the_base_checkout() -> TestResult {
+    // The key hashes `xtask/**`, so the xtask step comes after every checkout: it then hashes the
+    // checkout `approval` runs, the base commit (D3), and a head checkout (only while the base
+    // has no xtask) is hashed too.
+    let approval = jobs(&workflow("approval.yml")?)?;
+    let steps = approval[index_of(&approval, "approval")?].steps()?;
+    let xtask = steps
+        .iter()
+        .position(|step| step["uses"].as_str() == Some(XTASK_USES))
+        .ok_or("approval has no xtask step")?;
+    for (position, step) in steps.iter().enumerate() {
+        if step_kind(step)? == "checkout" {
+            assert!(
+                position < xtask,
+                "step {position}: a checkout after the xtask step changes what the key hashed"
+            );
+            // The checkouts that always run are the base commit; the head only on the fallback.
+            if step["if"].is_badvalue() {
+                assert_eq!(
+                    step["with"]["ref"].as_str(),
+                    Some("${{ github.event.pull_request.base.sha }}"),
+                    "step {position}: a checkout that always runs is not the base commit"
+                );
+            }
+        }
+    }
+    assert!(xtask > 0, "the xtask step is the first step");
+    Ok(())
+}
+
+// AC: CE-08C.1
+#[test]
+fn pr_runs_both_checks_in_one_job() -> TestResult {
+    let jobs = jobs(&workflow("pr.yml")?)?;
+    assert_eq!(jobs.len(), 1, "pr.yml has more than the one job `pr`");
+    let job = &jobs[0];
+    assert_eq!((job.id.as_str(), job.name.as_str()), ("pr", "pr"));
+    assert_eq!(job.commands()?, [command_of("pr.yml", "pr")]);
+    assert_eq!(job.node["timeout-minutes"].as_i64(), Some(15));
     Ok(())
 }

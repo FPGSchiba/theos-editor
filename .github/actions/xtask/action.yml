@@ -1,0 +1,25 @@
+name: Get xtask
+description: >-
+  Leaves the xtask binary at target/xtask-bin/debug/xtask: the one the gate job of `main` built and
+  cached for this xtask source, or, on a miss, a build of it. For the jobs that only run xtask.
+
+runs:
+  using: composite
+  steps:
+    # The same path and key as the save step of the setup action, which only the gate job on `main`
+    # runs. No `restore-keys`: a binary of other xtask source must never stand in for this one.
+    - name: Restore the xtask binary
+      id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: target/xtask-bin/debug/xtask
+        key: xtask-bin-${{ runner.os }}-${{ hashFiles('xtask/**', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/**') }}
+
+    # A miss builds xtask the way every job does and saves nothing: a pull request never writes
+    # the cache that `main` is searched for.
+    - name: Build xtask
+      if: steps.restore.outputs.cache-hit != 'true'
+      uses: ./.github/actions/setup
+      with:
+        cache-key: gate
+        save-cache: 'false'

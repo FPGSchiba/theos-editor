@@ -78,12 +78,10 @@ fn ruleset_contexts_equal_gate_md_checks() -> TestResult {
     let gate_md = fs::read_to_string(root.join("docs").join("gate.md"))?;
     let required = required_contexts_from_gate_md(&gate_md);
     assert_eq!(contexts, required);
-    let expected: BTreeSet<String> = [
-        "gate", "test", "coverage", "pr-title", "pr-body", "approval",
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect();
+    let expected: BTreeSet<String> = ["gate", "test", "coverage", "pr", "approval"]
+        .into_iter()
+        .map(String::from)
+        .collect();
     assert_eq!(required, expected, "docs/gate.md §1 lists other checks");
     Ok(())
 }
