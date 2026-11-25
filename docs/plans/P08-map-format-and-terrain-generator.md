@@ -447,6 +447,11 @@ These go into the ledger's "Rulings (build)" and the PR, in this form.
 Order rules (spec §10): the format crate and the Stage contract come first, and each process lands
 with its physics test.
 
+> **The interface blocks are planning-time snapshots.** The "Interfaces" blocks of the tasks
+> below, and the signatures, tests and fixtures the tasks name, show the build as planned. They
+> are not kept in step with the build: the ledger's rulings (listed in the PR) and the code
+> supersede them, and the code is the reference for every signature.
+
 ---
 
 ## Part A — the gate PR
