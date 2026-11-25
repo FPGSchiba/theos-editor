@@ -316,3 +316,121 @@ fn a_project_in_a_subfolder_names_its_folder() -> TestResult {
     );
     Ok(())
 }
+
+// AC: CE-17.1
+#[test]
+fn theos_hook_install_uses_a_local_hooks_path() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let top = repository(&sandbox)?;
+    sandbox.git(&["config", "core.hooksPath", ".git/myhooks"], &top)?;
+    let myhooks = top.join(".git").join("myhooks");
+    assert!(!myhooks.exists());
+    let output = sandbox.run(&["hook", "install"], &top)?;
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{output:?} {}",
+        stderr(&output)
+    );
+    assert!(myhooks.join("pre-commit").is_file());
+    assert!(myhooks.join("pre-merge-commit").is_file());
+    assert!(!hook_of(&top).exists());
+    let printed = stdout(&output);
+    assert!(printed.contains("myhooks"), "{printed}");
+    for line in printed.lines() {
+        assert_eq!(
+            std::fs::canonicalize(line)?.parent(),
+            Some(std::fs::canonicalize(&myhooks)?.as_path()),
+            "{printed}"
+        );
+    }
+    Ok(())
+}
+
+// AC: CE-17.1
+#[test]
+fn theos_hook_install_refuses_a_global_hooks_path_with_2() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let top = repository(&sandbox)?;
+    let outside = tempfile::tempdir()?;
+    let target = outside.path().join("global-hooks");
+    sandbox.git(
+        &[
+            "config",
+            "--global",
+            "core.hooksPath",
+            target.to_str().ok_or("path")?,
+        ],
+        &top,
+    )?;
+    let output = sandbox.run(&["hook", "install"], &top)?;
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(
+        stderr(&output).contains("is outside the git folder"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(!target.exists());
+    assert!(!hook_of(&top).exists());
+    assert!(!merge_hook_of(&top).exists());
+    Ok(())
+}
+
+// AC: CE-17.1
+#[test]
+fn theos_hook_install_from_a_linked_worktree_writes_the_common_hooks() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let top = repository(&sandbox)?;
+    let linked = sandbox.work().join("linked");
+    sandbox.git(
+        &["worktree", "add", "-q", linked.to_str().ok_or("path")?],
+        &top,
+    )?;
+    let output = sandbox.run(&["hook", "install"], &linked)?;
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{output:?} {}",
+        stderr(&output)
+    );
+    let hooks = std::fs::canonicalize(top.join(".git").join("hooks"))?;
+    let lines = stdout(&output);
+    let lines: Vec<&str> = lines.lines().collect();
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert_eq!(std::fs::canonicalize(lines[0])?, hooks.join("pre-commit"));
+    assert_eq!(
+        std::fs::canonicalize(lines[1])?,
+        hooks.join("pre-merge-commit")
+    );
+    assert!(hook_of(&top).is_file());
+    assert!(merge_hook_of(&top).is_file());
+    let private = top.join(".git").join("worktrees");
+    for entry in std::fs::read_dir(&private)? {
+        let hooks = entry?.path().join("hooks");
+        assert!(!hooks.join("pre-commit").exists(), "{hooks:?}");
+        assert!(!hooks.join("pre-merge-commit").exists(), "{hooks:?}");
+    }
+    Ok(())
+}
+
+// AC: CE-17.1
+#[test]
+fn theos_hook_install_refuses_a_foreign_pre_merge_commit_with_2() -> TestResult {
+    let sandbox = Sandbox::new()?;
+    let top = repository(&sandbox)?;
+    std::fs::create_dir_all(top.join(".git").join("hooks"))?;
+    std::fs::write(merge_hook_of(&top), "#!/bin/sh\necho mine\n")?;
+    let output = sandbox.run(&["hook", "install"], &top)?;
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(
+        stderr(&output).contains("pre-merge-commit.before-theos"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(!hook_of(&top).exists(), "half installed");
+    assert_eq!(
+        std::fs::read_to_string(merge_hook_of(&top))?,
+        "#!/bin/sh\necho mine\n"
+    );
+    Ok(())
+}
