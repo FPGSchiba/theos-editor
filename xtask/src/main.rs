@@ -291,12 +291,17 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
                 only: only.clone(),
                 skip: skip.clone(),
             };
-            let verdicts = gate::run(&root, ci.as_ref(), &selection, &mut out)?;
-            return finish(&verdicts, ci.is_some(), &mut out);
+            let outcome = gate::run(&root, ci.as_ref(), &selection, &mut out)?;
+            return finish(
+                &outcome.verdicts,
+                outcome.every_because.as_deref(),
+                ci.is_some(),
+                &mut out,
+            );
         }
         Command::Pr => {
             let verdicts = gate::run_pr(&root, ci.as_ref(), &mut out)?;
-            return finish(&verdicts, ci.is_some(), &mut out);
+            return finish(&verdicts, None, ci.is_some(), &mut out);
         }
         Command::Github {
             repo,
@@ -311,10 +316,16 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
     Ok(verdict.passed())
 }
 
-/// Publishes the verdicts of a multi-check run under GitHub Actions and says whether all passed.
-fn finish(verdicts: &[Verdict], in_ci: bool, out: &mut dyn Write) -> anyhow::Result<bool> {
+/// Publishes the verdicts of a multi-check run under GitHub Actions, with why every check ran
+/// when the gate says so, and says whether all passed.
+fn finish(
+    verdicts: &[Verdict],
+    every_because: Option<&str>,
+    in_ci: bool,
+    out: &mut dyn Write,
+) -> anyhow::Result<bool> {
     if in_ci {
-        report::publish(verdicts, out)?;
+        report::publish(verdicts, every_because, out)?;
     }
     Ok(verdicts.iter().all(Verdict::passed))
 }

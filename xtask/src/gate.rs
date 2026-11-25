@@ -66,8 +66,18 @@ pub fn parse_selectable(name: &str) -> std::result::Result<Check, String> {
     Ok(check)
 }
 
+/// What a run of the gate found.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Outcome {
+    /// The verdict of every check, run or not needed, in order.
+    pub verdicts: Vec<Verdict>,
+    /// Why every check ran, when the scope says so ([`Scope::Every`]); the job summary shows it.
+    pub every_because: Option<String>,
+}
+
 /// Runs the checks of `selection` in `root`, and writes the verdict table to `out` after the
-/// output of the checks themselves. Returns the verdicts; the gate passes when all of them do.
+/// output of the checks themselves. Returns the verdicts, which pass when all of them do, and why
+/// every check ran if the scope gives a reason.
 ///
 /// The scope is decided once ([`scope::for_run`]): when the change touches only paths no check
 /// reads, every selected check but `commit-msg` is not needed and is not run. A check that fails
@@ -83,7 +93,7 @@ pub fn run(
     ci: Option<&CiEvent>,
     selection: &Selection,
     out: &mut dyn Write,
-) -> Result<Vec<Verdict>> {
+) -> Result<Outcome> {
     // The checks that read code share one view, built when the first of them asks for it.
     let shared = Shared::new();
     run_scoped(
@@ -105,12 +115,44 @@ pub const PR_CHECKS: [Check; 2] = [Check::PrTitle, Check::PrBody];
 pub fn run_pr(root: &Path, ci: Option<&CiEvent>, out: &mut dyn Write) -> Result<Vec<Verdict>> {
     run_checks(
         &PR_CHECKS,
-        |check, out| match check {
-            Check::PrTitle => pr_title::run(root, ci, out),
-            _ => pr_body::run(root, ci, out),
-        },
+        |check, out| run_pr_check(check, root, ci, out),
         out,
     )
+}
+
+/// The runner of one check of [`PR_CHECKS`]; any other check is an error.
+///
+/// There is no wildcard arm, so a new [`Check`] does not compile until it is decided here.
+fn run_pr_check(
+    check: Check,
+    root: &Path,
+    ci: Option<&CiEvent>,
+    out: &mut dyn Write,
+) -> Result<Verdict> {
+    match check {
+        Check::PrTitle => pr_title::run(root, ci, out),
+        Check::PrBody => pr_body::run(root, ci, out),
+        Check::Tools
+        | Check::Fmt
+        | Check::Clippy
+        | Check::Test
+        | Check::SlowTests
+        | Check::Docs
+        | Check::Deny
+        | Check::EngineFree
+        | Check::Coverage
+        | Check::Lints
+        | Check::AcTrace
+        | Check::CommitMsg
+        | Check::Approval
+        | Check::Github => Err(Error::Missing {
+            what: format!(
+                "a way to run the `{}` check in `cargo xtask pr`: it runs `pr-title` and \
+                 `pr-body` only",
+                check.name()
+            ),
+        }),
+    }
 }
 
 /// Applies `scope` to `run_one`, then runs the checks. See [`run`].
@@ -119,12 +161,18 @@ fn run_scoped(
     scope: &Scope,
     mut run_one: impl FnMut(Check, &mut dyn Write) -> Result<Verdict>,
     out: &mut dyn Write,
-) -> Result<Vec<Verdict>> {
-    if let Scope::Every { note: Some(note) } = scope {
-        writeln!(out, "note: every check runs: {note}").map_err(report::output_error)?;
+) -> Result<Outcome> {
+    let every_because = match scope {
+        Scope::Every { note } => note.clone(),
+        Scope::DocsOnly => None,
+    };
+    if let Some(note) = &every_because {
+        // The note can hold git's stderr, so it is marked line by line like any other text.
+        report::write_note(out, &format!("every check runs: {note}"))
+            .map_err(report::output_error)?;
     }
     let docs_only = *scope == Scope::DocsOnly;
-    run_checks(
+    let verdicts = run_checks(
         order,
         |check, out| {
             if docs_only && check != Check::CommitMsg {
@@ -134,7 +182,11 @@ fn run_scoped(
             }
         },
         out,
-    )
+    )?;
+    Ok(Outcome {
+        verdicts,
+        every_because,
+    })
 }
 
 /// The runner of one gate check: the function its subcommand calls.
@@ -533,7 +585,7 @@ mod tests {
     fn docs_only_runs_commit_msg_and_marks_the_rest_not_needed() -> TestResult {
         let mut ran = Vec::new();
         let mut out = Vec::new();
-        let verdicts = run_scoped(
+        let outcome = run_scoped(
             &GATE_ORDER,
             &Scope::DocsOnly,
             |check, _| {
@@ -543,6 +595,8 @@ mod tests {
             &mut out,
         )?;
         assert_eq!(ran, [Check::CommitMsg]);
+        assert_eq!(outcome.every_because, None);
+        let verdicts = outcome.verdicts;
         assert_eq!(checks_of(&verdicts), GATE_ORDER);
         for verdict in &verdicts {
             assert_eq!(
@@ -560,7 +614,7 @@ mod tests {
     #[test]
     fn docs_only_in_a_test_job_runs_nothing() -> TestResult {
         let mut out = Vec::new();
-        let verdicts = run_scoped(
+        let outcome = run_scoped(
             &selection(&[Check::Test], &[]).checks(),
             &Scope::DocsOnly,
             |check, _| {
@@ -570,8 +624,8 @@ mod tests {
             },
             &mut out,
         )?;
-        assert_eq!(checks_of(&verdicts), [Check::Tools, Check::Test]);
-        assert!(verdicts.iter().all(Verdict::is_not_needed));
+        assert_eq!(checks_of(&outcome.verdicts), [Check::Tools, Check::Test]);
+        assert!(outcome.verdicts.iter().all(Verdict::is_not_needed));
         Ok(())
     }
 
@@ -581,18 +635,85 @@ mod tests {
             note: Some("HEAD is detached".to_owned()),
         };
         let mut out = Vec::new();
-        let verdicts = run_scoped(
+        let outcome = run_scoped(
             &[Check::Fmt],
             &scope,
             |check, _| Ok(Verdict::pass(check)),
             &mut out,
         )?;
         let out = String::from_utf8(out)?;
-        assert_eq!(checks_of(&verdicts), [Check::Fmt]);
+        assert_eq!(checks_of(&outcome.verdicts), [Check::Fmt]);
+        assert_eq!(outcome.every_because.as_deref(), Some("HEAD is detached"));
         assert!(
             out.starts_with("note: every check runs: HEAD is detached\n"),
             "{out}"
         );
+        Ok(())
+    }
+
+    /// Lines a reader of the output could take for a workflow command: they start with `::` once
+    /// leading whitespace is gone.
+    fn command_lines(text: &str) -> Vec<&str> {
+        text.lines()
+            .filter(|line| line.trim_start().starts_with("::"))
+            .collect()
+    }
+
+    #[test]
+    fn a_multi_line_note_is_marked_on_every_line() -> TestResult {
+        // The note can hold the stderr of git, which can quote what a pull request controls.
+        let scope = Scope::Every {
+            note: Some("the changed paths could not be read: first\n::error::x".to_owned()),
+        };
+        let mut out = Vec::new();
+        let outcome = run_scoped(
+            &[Check::Fmt],
+            &scope,
+            |check, _| Ok(Verdict::pass(check)),
+            &mut out,
+        )?;
+        let out = String::from_utf8(out)?;
+        assert!(
+            out.starts_with(
+                "note: every check runs: the changed paths could not be read: first\n  | \
+                 ::error::x\n"
+            ),
+            "{out}"
+        );
+        assert_eq!(command_lines(&out), Vec::<&str>::new(), "{out}");
+        // The summary gets the note as it is; `report` keeps it to one line there.
+        assert_eq!(
+            outcome.every_because.as_deref(),
+            Some("the changed paths could not be read: first\n::error::x")
+        );
+        Ok(())
+    }
+
+    // AC: CE-08C.1
+    #[test]
+    fn pr_runs_no_other_check() -> TestResult {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .ok_or("xtask has no parent folder")?;
+        let event = CiEvent::PullRequest(crate::ci::PullRequestEvent {
+            action: "opened".to_owned(),
+            number: 1,
+            title: "docs(gate): x (gate)".to_owned(),
+            body: Some("## Summary\n\nx\n".to_owned()),
+            base_sha: "a".to_owned(),
+            head_sha: "b".to_owned(),
+            head_ref: "docs/x".to_owned(),
+            label: None,
+        });
+        for &check in ALL.iter().filter(|check| !PR_CHECKS.contains(check)) {
+            let mut out = Vec::new();
+            let result = run_pr_check(check, root, Some(&event), &mut out);
+            assert!(
+                matches!(result, Err(Error::Missing { .. })),
+                "{}: {result:?}",
+                check.name()
+            );
+        }
         Ok(())
     }
 
