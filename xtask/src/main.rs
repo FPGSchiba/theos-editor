@@ -63,7 +63,9 @@ enum Command {
     ///
     /// On a pull request under GitHub Actions they run only when the pull request changes a crate
     /// with slow tests, a crate it depends on, or a build input or file of the gate; otherwise
-    /// the check is reported as not needed, with the reason. Everywhere else they always run.
+    /// the check is reported as not needed, with the reason. Run as this subcommand anywhere else
+    /// they always run; `cargo xtask gate` can still report them as not needed for a change that
+    /// touches no code (`docs/gate.md` §1).
     SlowTests,
     /// Build the documentation of every crate with warnings denied.
     Docs,
@@ -147,15 +149,15 @@ enum Command {
     /// Runs `tools`, `fmt`, `lints`, `engine-free`, `commit-msg`, `clippy`, `docs`, `deny`,
     /// `test`, `coverage`, `slow-tests` and `ac-trace` with the same code as their subcommands
     /// (the CI jobs run this command too), and goes on after a check fails. Outside GitHub Actions
-    /// the slow tests always run, as on a push to `main`; on a pull request in CI `slow-tests`
-    /// decides by its own rule. It leaves out `pr-title`, `pr-body` and `approval`. When a tool is
-    /// not the pinned version, nothing but `tools` runs, because versions decide verdicts. Exit
-    /// code 1 when any check failed.
+    /// the slow tests run whenever the change touches code, as on a push to `main`; on a pull
+    /// request in CI `slow-tests` decides by its own rule. It leaves out `pr-title`, `pr-body` and
+    /// `approval`. When a tool is not the pinned version, nothing but `tools` runs, because
+    /// versions decide verdicts. Exit code 1 when any check failed.
     ///
-    /// `--only` and `--skip` choose checks (`tools` always runs first); when a pull request or
-    /// the working tree changes only paths no check reads, every selected check but `commit-msg`
-    /// is reported as not needed, except on a `phase/` branch and in a run that a label started
-    /// (`docs/gate.md` §1 has the full rule).
+    /// `--only` and `--skip` choose checks (`tools` is always the first check); when a pull
+    /// request or the working tree changes only paths no check reads, every selected check but
+    /// `commit-msg` is reported as not needed, except on a `phase/` branch and in a run that a
+    /// label started (`docs/gate.md` §1 has the full rule).
     Gate {
         /// Run only these checks, comma separated.
         #[arg(long, value_delimiter = ',', value_parser = gate::parse_selectable, conflicts_with = "skip")]

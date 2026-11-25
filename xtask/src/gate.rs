@@ -5,10 +5,10 @@
 //! verdict locally as in its CI job (CE-08.4). Each runner reads the GitHub Actions event when
 //! there is one and the repository otherwise. The gate leaves out the checks that need a pull
 //! request (`pr-title`, `pr-body`, `approval`) and the settings check, which needs GitHub.
-//! Outside CI `slow-tests` always runs its tests, as on a push to `main`; on a pull request in CI
-//! it passes without running them when the pull request cannot change their outcome ([`slow`]),
-//! so a local gate is never more lenient than CI. Before any check, [`scope`] decides whether the
-//! change needs them at all.
+//! Outside CI `slow-tests` runs its tests whenever the change touches code, as on a push to
+//! `main`; on a pull request in CI it is reported as not needed, without running them, when the
+//! pull request cannot change their outcome ([`slow`]), so a local gate is never more lenient than
+//! CI. Before any check, [`scope`] decides whether the change needs them at all.
 //!
 //! Versions decide verdicts, so a gate whose tools are not the pinned ones would give verdicts
 //! that CI does not. When the `tools` check fails, nothing else runs.
@@ -49,8 +49,8 @@ impl Selection {
     }
 }
 
-/// Parses a check name of `--only` or `--skip`: the checks of the gate, not `tools` (it always
-/// runs) and not the checks that need a pull request or GitHub.
+/// Parses a check name of `--only` or `--skip`: the checks of the gate, not `tools` (it is always
+/// the first check) and not the checks that need a pull request or GitHub.
 ///
 /// # Errors
 ///
@@ -58,7 +58,7 @@ impl Selection {
 pub fn parse_selectable(name: &str) -> std::result::Result<Check, String> {
     let check = Check::from_name(name).ok_or_else(|| format!("`{name}` is not a check"))?;
     if check == Check::Tools {
-        return Err("`tools` always runs first and cannot be selected".to_owned());
+        return Err("`tools` is always the first check and cannot be selected".to_owned());
     }
     if PR_ONLY.contains(&check) || check == Check::Github {
         return Err(format!(

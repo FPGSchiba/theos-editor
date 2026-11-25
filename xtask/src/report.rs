@@ -20,9 +20,8 @@ use crate::{Error, Result};
 /// Finding and note text can come from a pull request, and the runner reads a line as a workflow
 /// command when it starts with `::` once leading whitespace is gone. So no line of the table
 /// starts with the text itself: each one starts with a marker (`- `, `note: `, `reason: ` or
-/// `| `), and the
-/// text is split into lines at every kind of line break first, so a break cannot hide a
-/// line start in the middle of one of ours.
+/// `| `), and the text is split into lines at every kind of line break first, so a break cannot
+/// hide a line start in the middle of one of ours.
 ///
 /// # Errors
 ///
@@ -176,8 +175,7 @@ pub fn annotation(check: Check, finding: &Finding) -> String {
 
 /// The verdicts as markdown: why every check ran, when `every_because` says so, then a table with
 /// a row per check, then a section for every check that has findings or notes or was not needed.
-/// This is what goes
-/// to `$GITHUB_STEP_SUMMARY`.
+/// This is what goes to `$GITHUB_STEP_SUMMARY`.
 #[must_use]
 pub fn summary_markdown(verdicts: &[Verdict], every_because: Option<&str>) -> String {
     let mut text = String::from("### xtask\n\n");

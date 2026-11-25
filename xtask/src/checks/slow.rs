@@ -9,10 +9,12 @@
 //! On a pull request the check runs the slow tests only when the pull request can change their
 //! outcome ([`needed_by`]): when it changes a file of a workspace member with slow tests, of a
 //! member such a member depends on, or one of [`ALWAYS`]. Otherwise it is reported as not needed,
-//! with the reason, and runs nothing, so a pull request that cannot affect them does not pay for their build. The job
-//! still runs and reports, so the required status check is never missing. A push to `main`, a
-//! manual or scheduled run and `cargo xtask gate` outside CI always run them; inside a CI job the
-//! gate hands this check the event, so a pull request decides as above.
+//! with the reason, and runs nothing, so a pull request that cannot affect them does not pay for
+//! their build. The job still runs and reports, so the required status check is never missing. A
+//! push to `main` and a manual or scheduled run always run them; so does `cargo xtask gate`
+//! outside CI, unless the change touches no code (`docs/gate.md` §1) and the gate reports every
+//! check as not needed first. Inside a CI job the gate hands this check the event, so a pull
+//! request decides as above.
 //!
 //! A member has slow tests when one of its `.rs` files contains `slow_` ([`has_slow_tests`]).
 //! That over-counts (a variable `slow_path` counts too), which only makes the tests run more
@@ -72,7 +74,7 @@ pub struct Member {
     pub has_slow_tests: bool,
 }
 
-/// Runs the slow tests in `root`, or, on a pull request that cannot change their outcome, passes
+/// Runs the slow tests in `root`, or, on a pull request that cannot change their outcome,
 /// reports it as not needed with the reason [`NOT_NEEDED`], without running them.
 ///
 /// `_out` is not written to: cargo's own output goes straight to the terminal and the caller
