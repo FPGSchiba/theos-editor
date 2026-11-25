@@ -8,8 +8,8 @@
 //!
 //! On a pull request the check runs the slow tests only when the pull request can change their
 //! outcome ([`needed_by`]): when it changes a file of a workspace member with slow tests, of a
-//! member such a member depends on, or one of [`ALWAYS`]. Otherwise it passes with a note and
-//! runs nothing, so a pull request that cannot affect them does not pay for their build. The job
+//! member such a member depends on, or one of [`ALWAYS`]. Otherwise it is reported as not needed,
+//! with the reason, and runs nothing, so a pull request that cannot affect them does not pay for their build. The job
 //! still runs and reports, so the required status check is never missing. A push to `main`, a
 //! manual or scheduled run and `cargo xtask gate` outside CI always run them; inside a CI job the
 //! gate hands this check the event, so a pull request decides as above.
@@ -54,7 +54,7 @@ pub const ALWAYS: [&str; 8] = [
     "xtask/",
 ];
 
-/// The note of a pull request whose changes cannot change the outcome of a slow test.
+/// The reason for a pull request whose changes cannot change the outcome of a slow test.
 pub const NOT_NEEDED: &str = "the slow tests did not run: the pull request changes no workspace \
                               member with slow tests, no member they depend on, and none of the \
                               workspace manifest, the lock file, the toolchain, the cargo and \
@@ -73,7 +73,7 @@ pub struct Member {
 }
 
 /// Runs the slow tests in `root`, or, on a pull request that cannot change their outcome, passes
-/// with the note [`NOT_NEEDED`] without running them.
+/// reports it as not needed with the reason [`NOT_NEEDED`], without running them.
 ///
 /// `_out` is not written to: cargo's own output goes straight to the terminal and the caller
 /// writes the verdict.

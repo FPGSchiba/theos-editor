@@ -63,7 +63,7 @@ enum Command {
     ///
     /// On a pull request under GitHub Actions they run only when the pull request changes a crate
     /// with slow tests, a crate it depends on, or a build input or file of the gate; otherwise
-    /// the check passes with a note. Everywhere else they always run.
+    /// the check is reported as not needed, with the reason. Everywhere else they always run.
     SlowTests,
     /// Build the documentation of every crate with warnings denied.
     Docs,
@@ -154,7 +154,8 @@ enum Command {
     ///
     /// `--only` and `--skip` choose checks (`tools` always runs first); when a pull request or
     /// the working tree changes only paths no check reads, every selected check but `commit-msg`
-    /// is reported as not needed, except in a run that a label started.
+    /// is reported as not needed, except on a `phase/` branch and in a run that a label started
+    /// (`docs/gate.md` §1 has the full rule).
     Gate {
         /// Run only these checks, comma separated.
         #[arg(long, value_delimiter = ',', value_parser = gate::parse_selectable, conflicts_with = "skip")]

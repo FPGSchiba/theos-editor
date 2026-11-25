@@ -11,14 +11,16 @@ use std::path::{Path, PathBuf};
 use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
-/// Writes one line per check, `pass` or `FAIL` and the check's name, and under each failing
-/// check its findings as `  - path:line: message`. Notes follow as `  note: …`.
+/// Writes one line per check, `pass`, `not needed` or `FAIL` and the check's name. Under it come
+/// the reason a check was not needed as `  reason: …`, its findings as `  - path:line: message`
+/// and its notes as `  note: …`.
 ///
 /// A finding or note that spans several lines continues on lines that start with `    | `.
 ///
 /// Finding and note text can come from a pull request, and the runner reads a line as a workflow
 /// command when it starts with `::` once leading whitespace is gone. So no line of the table
-/// starts with the text itself: each one starts with a marker (`- `, `note:` or `| `), and the
+/// starts with the text itself: each one starts with a marker (`- `, `note: `, `reason: ` or
+/// `| `), and the
 /// text is split into lines at every kind of line break first, so a break cannot hide a
 /// line start in the middle of one of ours.
 ///
@@ -173,7 +175,8 @@ pub fn annotation(check: Check, finding: &Finding) -> String {
 }
 
 /// The verdicts as markdown: why every check ran, when `every_because` says so, then a table with
-/// a row per check, then a section for every check that has findings or notes. This is what goes
+/// a row per check, then a section for every check that has findings or notes or was not needed.
+/// This is what goes
 /// to `$GITHUB_STEP_SUMMARY`.
 #[must_use]
 pub fn summary_markdown(verdicts: &[Verdict], every_because: Option<&str>) -> String {

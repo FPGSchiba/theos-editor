@@ -1514,7 +1514,8 @@ const READ_HISTORY: [Check; 3] = [Check::CommitMsg, Check::Coverage, Check::Slow
 
 #[test]
 fn history_is_fetched_where_commits_or_the_merge_base_are_read() -> TestResult {
-    // Every `ci.yml` job runs a gate that includes a check that reads history.
+    // Every `ci.yml` job reads the changed paths since the merge base to decide whether the
+    // change needs its checks.
     for job in jobs(&workflow("ci.yml")?)? {
         let depth = &job.steps()?[0]["with"]["fetch-depth"];
         assert_eq!(
