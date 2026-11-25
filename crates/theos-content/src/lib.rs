@@ -53,6 +53,12 @@
 //! Every span is a byte range into the LF text of the whole record; a CRLF record is read as its
 //! LF text and a write returns LF.
 //!
+//! After P05 the index also gives [`Index::paths`], every path the cache holds, and
+//! [`Index::snapshot`], the findings of a whole changed state with its own configured severities,
+//! rolled back. The kind specs gained `IdRule::number_prefix`, the prefix of a numbered id, and
+//! `Placement::under_parent`, the folder of a record placed under its parent; `theos new` uses
+//! both.
+//!
 //! Later phases use it so: P05 the positions of errors, `Project::open`, `findings` with
 //! configured severities, `binary_findings`, `ledger_of`, [`rules::all`], `preview`, `search`,
 //! `lens` and [`KindSpec`]; P06 (editing) the patcher,

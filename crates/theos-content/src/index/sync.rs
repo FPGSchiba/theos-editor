@@ -262,6 +262,27 @@ impl Index {
         Ok(Preview { update, findings })
     }
 
+    /// Does what [`Index::apply`] does, reads every finding of the result, with the severities
+    /// the result's own settings configure, and rolls everything back: the cache is not changed.
+    /// The staged check judges a whole snapshot with it: a changed settings file applies to the
+    /// records it did not touch. The order is that of [`Index::findings`]; paths are taken as in
+    /// [`Index::apply`].
+    ///
+    /// A cache file that another theos build keeps rebuilding is rebuilt at most three times per
+    /// call; then the call fails with [`IndexError::Contended`].
+    ///
+    /// # Errors
+    ///
+    /// Fails when SQLite fails or the cache is contended.
+    pub fn snapshot(&mut self, changes: &[Change]) -> Result<Vec<Finding>, IndexError> {
+        self.transact(
+            |work| apply_changes(work, changes),
+            |conn, registry, _| query::all_findings_in(conn, registry),
+            false,
+        )
+        .map(|(_, findings)| findings)
+    }
+
     /// Runs `work` in one `BEGIN IMMEDIATE` transaction and commits it.
     fn run(
         &mut self,

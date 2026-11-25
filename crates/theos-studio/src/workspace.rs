@@ -114,23 +114,22 @@ impl Workspace {
 }
 
 /// The folder of the project that holds `start`: the first of `start` and its ancestors with a
-/// `theos.toml` file.
+/// `theos.toml` file. `start` is made absolute first, so `.` searches from the current folder.
 ///
 /// # Errors
 ///
-/// [`StudioError::NotAProject`] when there is none.
+/// [`StudioError::NotAProject`], naming the absolute start, when there is none, and
+/// [`StudioError::Io`] when `start` cannot be made absolute.
 pub fn find_root(start: &Path) -> Result<PathBuf, StudioError> {
     let absolute = std::path::absolute(start).map_err(|source| StudioError::Io {
         path: start.to_path_buf(),
         source,
     })?;
-    absolute
+    let found = absolute
         .ancestors()
         .find(|dir| dir.join("theos.toml").is_file())
-        .map(Path::to_path_buf)
-        .ok_or_else(|| StudioError::NotAProject {
-            start: start.to_path_buf(),
-        })
+        .map(Path::to_path_buf);
+    found.ok_or(StudioError::NotAProject { start: absolute })
 }
 
 /// The opened index, or, when its cache is contended, the index in memory (with `true`).

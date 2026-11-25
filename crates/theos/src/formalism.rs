@@ -4,15 +4,24 @@ use std::io::Write;
 use std::path::Path;
 
 use anyhow::Context;
+use theos_studio::views::ledger::FormalismView;
 
-/// Regenerates the mirror of the project at `folder` and writes each path it wrote to `out`, or
-/// "nothing to write".
+use crate::output;
+
+/// Regenerates the mirror of the project at `folder` (the nearest project at or above the current
+/// folder by default, see [`output::project_root`]) and writes each path it wrote to `out`, or
+/// "nothing to write"; with `json`, one JSON document instead.
 ///
 /// # Errors
 ///
-/// Fails when the source is missing or invalid, or when a file or `out` cannot be written.
-pub(crate) fn run(folder: &Path, out: &mut impl Write) -> anyhow::Result<()> {
-    let regenerated = theos_content::formalism::regenerate(folder)?;
+/// Fails when there is no project, the source is missing or invalid, or a file or `out` cannot
+/// be written.
+pub(crate) fn run(folder: Option<&Path>, json: bool, out: &mut impl Write) -> anyhow::Result<()> {
+    let root = output::project_root(folder)?;
+    let regenerated = theos_content::formalism::regenerate(&root)?;
+    if json {
+        return output::json(out, &FormalismView::new(&regenerated.written));
+    }
     report(&regenerated.written, out).context("cannot write the output")
 }
 
