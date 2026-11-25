@@ -4,6 +4,9 @@
 //! check gives the same verdict here as in its CI job (CE-08.4); only where the inputs come from
 //! differs (the repository instead of the event payload). It leaves out the checks that need a
 //! pull request (`pr-title`, `pr-body`, `approval`) and the settings check, which needs GitHub.
+//! `slow-tests` always runs its tests here, as on a push to `main`; only on a pull request that
+//! cannot change their outcome does it pass without running them ([`slow`]), so the gate is never
+//! more lenient than CI.
 //!
 //! Versions decide verdicts, so a gate whose tools are not the pinned ones would give verdicts
 //! that CI does not. When the `tools` check fails, nothing else runs.
@@ -11,7 +14,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use crate::checks::{ac_trace, cargo_cmds, commit_msg, coverage, engine_free, lints};
+use crate::checks::{ac_trace, cargo_cmds, commit_msg, coverage, engine_free, lints, slow};
 use crate::ci::CiEvent;
 use crate::verdict::{Check, Finding, GATE_ORDER, Verdict};
 use crate::view::Shared;
@@ -57,6 +60,7 @@ fn run_check(
         Check::AcTrace => ac_trace::run(root, ci, shared, out),
         Check::CommitMsg => commit_msg::run(root, ci, out),
         Check::Coverage => coverage::run(root, ci, out),
+        Check::SlowTests => slow::run(root, ci, out),
         Check::PrTitle | Check::PrBody | Check::Approval | Check::Github => Err(Error::Missing {
             what: format!(
                 "a way to run the `{}` check in the gate: it needs a pull request or GitHub",
@@ -143,6 +147,7 @@ mod tests {
         Fmt => Gate,
         Clippy => Gate,
         Test => Gate,
+        SlowTests => Gate,
         Docs => Gate,
         Deny => Gate,
         EngineFree => Gate,

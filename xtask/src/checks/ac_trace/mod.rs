@@ -242,7 +242,7 @@ fn printable(text: &str) -> String {
 ///
 /// The branch is the head branch of a pull request event, or else the one that is checked out;
 /// only `phase/PNN-…` has a phase. The results are read from the report of the profile `ci`
-/// under GitHub Actions and `default` elsewhere. The Rust tests come from the workspace view of
+/// under GitHub Actions and `default` elsewhere, plus the report of `slow`. The Rust tests come from the workspace view of
 /// `shared`.
 ///
 /// # Errors
@@ -328,9 +328,25 @@ fn is_typescript(path: &str) -> bool {
     extension(path) == Some("ts") && !is_fixture(path) && !built
 }
 
-/// The results of the last test run of the profile, if nextest wrote a report.
+/// The results of the last test runs, if nextest wrote a report.
+///
+/// The report of the profile `ci` (under GitHub Actions) or `default`, and the report of the
+/// profile `slow`, which holds the tests the first one leaves out (`docs/gate.md` §1), are merged.
+/// A report that is missing adds nothing: a slow test whose run did not happen has no result, and
+/// without any report there is no result column.
 fn read_junit(root: &Path, ci: bool) -> Result<Option<BTreeMap<String, bool>>> {
     let profile = if ci { "ci" } else { "default" };
+    let mut merged: Option<BTreeMap<String, bool>> = None;
+    for profile in [profile, "slow"] {
+        if let Some(results) = read_report(root, profile)? {
+            merged.get_or_insert_with(BTreeMap::new).extend(results);
+        }
+    }
+    Ok(merged)
+}
+
+/// The results of the report of one nextest profile, if it was written.
+fn read_report(root: &Path, profile: &str) -> Result<Option<BTreeMap<String, bool>>> {
     let path = root
         .join("target")
         .join("nextest")
@@ -926,6 +942,80 @@ version = \"0.0.0\"
         )?;
         let result = run(path, None, &shared(), &mut Vec::new());
         assert!(matches!(result, Err(Error::Parse { .. })), "{result:?}");
+        Ok(())
+    }
+
+    /// Writes the nextest report of `profile` with one passed or failed test case.
+    fn write_report(root: &Path, profile: &str, case: &str, passed: bool) -> TestResult {
+        let folder = root.join("target").join("nextest").join(profile);
+        std::fs::create_dir_all(&folder)?;
+        let inside = if passed {
+            String::new()
+        } else {
+            "<failure message=\"x\"/>".to_owned()
+        };
+        std::fs::write(
+            folder.join("junit.xml"),
+            format!(
+                "<testsuites><testsuite name=\"x\"><testcase name=\"{case}\">{inside}</testcase></testsuite></testsuites>"
+            ),
+        )?;
+        Ok(())
+    }
+
+    /// The first row of the table for the fixture repository on the profiles `ci` and `slow`.
+    fn first_row_of_run(path: &Path) -> TestResult<String> {
+        let mut out = Vec::new();
+        run_phase(path, Some(phase("P90")?), true, &shared(), &mut out)?;
+        let text = String::from_utf8(out)?;
+        Ok(text.lines().nth(1).unwrap_or_default().to_owned())
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn a_slow_test_shows_the_result_of_the_slow_report() -> TestResult {
+        let dir = repository("phase/P90-fixture")?;
+        let path = dir.path();
+        std::fs::write(
+            path.join("src").join("lib.rs"),
+            "// AC: CE-90.1
+#[test]
+fn slow_proves_the_first() {}
+",
+        )?;
+        commit(path, "test: slow")?;
+        write_report(path, "ci", "lib::other", true)?;
+
+        // Without the slow report the slow test has no result.
+        assert_eq!(
+            first_row_of_run(path)?,
+            "CE-90.1   –     src/lib.rs:1 slow_proves_the_first"
+        );
+
+        write_report(path, "slow", "lib::slow_proves_the_first", true)?;
+        assert_eq!(
+            first_row_of_run(path)?,
+            "CE-90.1   pass  src/lib.rs:1 slow_proves_the_first"
+        );
+
+        write_report(path, "slow", "lib::slow_proves_the_first", false)?;
+        assert_eq!(
+            first_row_of_run(path)?,
+            "CE-90.1   FAIL  src/lib.rs:1 slow_proves_the_first"
+        );
+        Ok(())
+    }
+
+    // AC: CE-08.6
+    #[test]
+    fn a_slow_report_alone_does_not_hide_the_missing_default_report() -> TestResult {
+        let dir = repository("phase/P90-fixture")?;
+        let path = dir.path();
+        write_report(path, "slow", "lib::slow_other", true)?;
+        assert_eq!(
+            first_row_of_run(path)?,
+            "CE-90.1   –     src/lib.rs:1 proves_the_first"
+        );
         Ok(())
     }
 }
