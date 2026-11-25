@@ -1,6 +1,6 @@
 # Theos content editor — umbrella spec
 
-Status: accepted when this file is merged by Jann · version 6 · 12 Nov 2026 (version 1: 31 Oct 2026;
+Status: accepted when this file is merged by Jann · version 7 · 25 Nov 2026 (version 1: 31 Oct 2026;
 version 2, 5 Nov 2026, adds the world atlas, quests and art from lore: G19, P20–P28, slices S8 and
 S9; version 3, 10 Nov 2026, moves the map generator to Rust in this repo, decision 0003: G1, G4,
 G11, G20, P08 rewritten, P09 (with `theos gen`), P22 and P23 adjusted, P29, P30 and slice S10;
@@ -13,7 +13,8 @@ P06 into P06 Command layer and repo lock (CE-20, CE-22.2), P46 Git read (CE-21) 
 (CE-22.1, CE-22.3), with no AC reworded; version 6 splits P05 into P05 CLI and hook, P48 MCP
 read and P49 Releases and the check action, and CE-08R.3 names the run and commit that built a
 release instead of build provenance, which GitHub offers private repositories only on GitHub
-Enterprise Cloud)
+Enterprise Cloud; version 7, 25 Nov 2026, adds P50 Leaner CI (CE-08C) after the included runner
+minutes ran out, and rewords G2, CE-08.3 and CE-08R.6 for it)
 Owner of architecture: Jann · Built by: Claude Code with superpowers
 
 This spec defines the whole build as phases. Each phase runs one superpowers cycle:
@@ -44,8 +45,9 @@ assets generated from the lore through prepared pipelines that agents can run.
   and the blockout generator. `Theos-Engine` is never a dependency, except behind the cargo
   feature `engine`, which no phase here builds; the engine may depend on the map crates.
 - **G2** Platforms: Windows 11 x64 (primary), Linux x64, and macOS 13 or later on Apple silicon
-  and Intel (universal builds). Every PR is checked on Linux; Windows and macOS are tested
-  weekly, on demand (a label on the PR) and before every release (`docs/gate.md` §1).
+  and Intel (universal builds). Every PR is checked on Linux; Windows and macOS on Apple silicon
+  are tested weekly, on demand (a label on the PR) and before every release, and macOS on Intel
+  on demand and before every release (`docs/gate.md` §1).
 - **G3** Rust: stable toolchain pinned in `rust-toolchain.toml`, edition 2024, `unsafe_code`
   forbidden, `Cargo.lock` committed, all builds `--locked`.
 - **G4** Crates: `theos-content`, `theos-vcs`, `theos-studio`, `theos-map-format`, `theos-maps`
@@ -127,6 +129,7 @@ Slices say what Jann can do once their phases are merged; Jira tracks slices.
 | P47 | Git write | theos-editor | S3 | P06, P46 |
 | P48 | MCP read | theos-editor | S2 | P05 |
 | P49 | Releases and the check action | theos-editor | S2 | P05, P48 |
+| P50 | Leaner CI | theos-editor | S2 | P00 |
 
 Core track runs in order P00 → P02 → … → P07; the git phases P46 (after P05) and P47 (after P06
 and P46) and the MCP read phase P48 (after P05) belong to it and come before P07. P49 can run
@@ -135,9 +138,10 @@ own worktrees. UI phases start after P06. P20, P23, P29 and P34 can also run in 
 sessions once their dependencies are merged. P28 runs in a session linked to Jann's PC, where
 ComfyUI runs. The map phases of version 4 run P31 → P32 → P33 after P08 and P09 (decision
 0004). Phase numbers P35–P44 are held by proposals of the map generation research
-(`research/map-generation/09-proposed-phases.md`) that are not phases yet (§5).
+(`research/map-generation/09-proposed-phases.md`) that are not phases yet (§5). P50 changes only
+the gate and can run beside any phase.
 
-Slices: **S1** write lore now (P01, P10) · **S2** canon checks (P00, P02–P05, P48, P49) · **S3**
+Slices: **S1** write lore now (P01, P10) · **S2** canon checks (P00, P02–P05, P48–P50) · **S3**
 propose and review (P06, P07, P46, P47) · **S4** maps (P08, P09) · **S5** core UI (P11–P13,
 P19) · **S6** complete UI (P14, P15) · **S7** pictures and places (P16–P18) · **S8** the world
 on the map (P20–P25, P29, P34) · **S9** art from lore (P26–P28) · **S10** indoor floors (P30,
@@ -154,8 +158,9 @@ waits for Jann.
 - CE-08.1 The workspace with all crates of G4 (empty, documented) builds and tests in CI on
   Linux and Windows.
 - CE-08.2 CI fails when a crate depends on an engine crate without feature `engine`.
-- CE-08.3 Every check of `docs/gate.md` §1 (except `ui`) exists and is a required status check on
-  `main`; branch protection and repo settings match `docs/gate.md` §6.
+- CE-08.3 Every check of `docs/gate.md` §1 (except `ui`) runs in a required status check on
+  `main` (`gate`, `pr` or `approval`); branch protection and repo settings match `docs/gate.md`
+  §6.
 - CE-08.4 `cargo xtask gate` gives the same verdicts as CI on Windows and Linux.
 - CE-08.5 `approval` fails for a PR that touches a protected path without the label `approved`
   and passes once it is added; CI adds `needs-jann` to such PRs.
@@ -946,11 +951,41 @@ that runs `theos check` for tower-of-theos. Settled with Jann on 12 Nov 2026:
   binary) with `--locked` and publishes them with `SHA256SUMS` in a GitHub Release whose notes
   are the changelog section, the macOS first-start steps and a link to the workflow run and the
   commit that built them.
-- CE-08R.6 The release workflow runs the full test suite on Windows, Linux and macOS first and
-  creates no release if any platform fails.
+- CE-08R.6 The release workflow runs the full test suite on Windows, Linux and macOS (Apple
+  silicon and Intel) first and creates no release if any platform fails.
 - CE-08R.4 A tag with `-rc.N` produces a GitHub pre-release.
 - CE-08R.5 `theos --version` and `theos-mcp --version` print the version, the commit, the data
   model `schema_version` and the generator protocol version.
+
+### P50 · Leaner CI
+
+The gate on fewer runner minutes, with the same checks and the same verdicts. On 3–12 Nov 2026
+the gate used the included $18 of GitHub Actions usage in ten days, mostly on setting up thirteen
+small jobs per push; GitHub has refused every job since. Settled with Jann on 25 Nov 2026: one CI
+job runs `cargo xtask gate`; a pull request that changes only paths no check reads runs only the
+checks those paths can affect; `platforms` runs one job per OS and tests macOS on Intel only on
+demand and before releases. This phase changes protected paths, so its PR waits for Jann, who
+switches the required checks of the live ruleset when he approves it.
+
+**CE-08C Leaner CI**
+- CE-08C.1 CI runs every check of `cargo xtask gate` in one job `gate`, and `pr-title` and
+  `pr-body` in one job `pr`; the job summary of each lists every check it ran with its verdict.
+- CE-08C.2 On a pull request or a local branch that is not a `phase/` branch and whose changed
+  paths all match the non-code list of `gate/code-paths.toml` and none of its always-code list,
+  `cargo xtask gate` runs `commit-msg` only and reports every other check as not needed; every
+  other pull request and branch, every push, and every run whose changed paths cannot be read run
+  every check.
+- CE-08C.3 Every path outside the code that a check reads counts as code: the umbrella spec,
+  `docs/gate.md`, `CONTRIBUTING.md`, `.github/**`, every `*.ts` file, and every `Cargo.toml`,
+  `Cargo.lock`, toolchain, clippy, rustfmt or cargo configuration file in any folder.
+- CE-08C.4 `docs/gate.md` lists the non-code and always-code paths exactly as
+  `gate/code-paths.toml` does, and says for every check that a non-code pull request does not
+  run why such a change cannot affect it.
+- CE-08C.5 `pr` and `approval` build xtask from a cache that `main` saves, and no job of a pull
+  request saves a build cache.
+- CE-08C.6 `platforms` runs the checks of one OS in one job; its weekly and label runs test macOS
+  on Apple silicon; the Intel macOS tests run only on demand; a newer label run for the same pull
+  request and OS cancels the older one.
 
 ---
 
@@ -987,4 +1022,5 @@ steering by layers and field mixing (P36); a ruin pass (P37); needle peaks and f
 giant trees (P43, last); band recipe families in `tower-of-theos` (P44); placing required features
 and trial sites, where a guardian arena is one option, not a rule; promoting settlements at road
 junctions; regions with a recommended power and danger zones; ring layouts; larger places as a
-parent map with child maps; per-level grids; stored volumes.
+parent map with child maps; per-level grids; stored volumes. From version 7: self-hosted runners
+on Jann's homelab (Proxmox) for Windows and Linux jobs (P50 spec §11).
