@@ -306,16 +306,9 @@ fn a_cancel_before_the_call_is_cancelled_for_any_id() -> TestResult {
     put(
         repo.top(),
         "lore/truths/T-906.md",
-        b"---
-# synthetic fixture (P46), not canon
-id: T-906
-kind: truth
-          title: Synthetic truth not committed
-status: draft
-target: confirmed
----
-          Synthetic statement.
-",
+        b"---\n# synthetic fixture (P46), not canon\nid: T-906\nkind: truth\n\
+          title: Synthetic truth not committed\nstatus: draft\ntarget: confirmed\n---\n\
+          Synthetic statement.\n",
     )?;
     let workspace = Workspace::open(repo.top())?;
     let cancel = Cancel::new();
