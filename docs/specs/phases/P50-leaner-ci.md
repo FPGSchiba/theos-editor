@@ -261,8 +261,9 @@ pull request, not files.
 - **Cached xtask.** On a push to `main`, `gate` saves the xtask it built
   (`target/xtask-bin/debug/xtask`) with `actions/cache` under a key made of the OS and the hash
   of every input of the xtask build (`xtask/**`, `Cargo.toml`, `Cargo.lock`,
-  `rust-toolchain.toml`, `.cargo/**`). `pr` computes the key from the pull request's checkout and `approval` from the
-  base commit it checks out (spec D3: it runs `main`'s gate). Both restore by that exact key,
+  `rust-toolchain.toml`, `.cargo/**`). `pr` computes the key from the pull request's checkout
+  and `approval` from the base commit it checks out (spec D3: it runs `main`'s gate). Both
+  restore by that exact key,
   with no fallback keys, and run the binary with `--root .`: on a hit they need neither the
   toolchain nor a build cache. On a miss (an xtask change not yet on `main`, an evicted cache)
   they install the toolchain and build xtask as today. No pull request job saves this cache.
