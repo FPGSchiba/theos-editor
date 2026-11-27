@@ -41,26 +41,26 @@ use crate::{Error, Result};
 /// The text that marks a member as one with slow tests: the start of a slow test's name segment.
 pub const MARKER: &str = "slow_";
 
-/// The paths outside the members whose change can change the outcome of any test: the
-/// workspace manifest and lock file, the toolchain, the cargo and nextest configuration, and the
-/// gate itself (its files, xtask and the workflows). An entry that ends with `/` is a folder and
-/// covers everything in it; any other entry is one file.
-pub const ALWAYS: [&str; 8] = [
+/// The paths outside the members whose change can change the outcome of a slow test: the
+/// workspace manifest and lock file (dependencies), the toolchain (the compiler), the cargo
+/// configuration, and the nextest profiles that pick the slow tests (`.config/nextest.toml` and
+/// its original `gate/nextest.toml`). The rest of the gate, xtask and the workflows are not here:
+/// they do not change what a slow test does. An entry that ends with `/` is a folder and covers
+/// everything in it; any other entry is one file.
+pub const ALWAYS: [&str; 6] = [
     "Cargo.toml",
     "Cargo.lock",
     "rust-toolchain.toml",
     ".cargo/",
-    ".config/",
-    ".github/",
-    "gate/",
-    "xtask/",
+    ".config/nextest.toml",
+    "gate/nextest.toml",
 ];
 
 /// The reason for a pull request whose changes cannot change the outcome of a slow test.
 pub const NOT_NEEDED: &str = "the slow tests did not run: the pull request changes no workspace \
                               member with slow tests, no member they depend on, and none of the \
-                              workspace manifest, the lock file, the toolchain, the cargo and \
-                              nextest configuration and the gate";
+                              workspace manifest, the lock file, the toolchain, the cargo \
+                              configuration and the nextest profiles";
 
 /// A member of the workspace, as far as the slow tests are concerned.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -287,13 +287,16 @@ mod tests {
             "rust-toolchain.toml",
             ".cargo/config.toml",
             ".config/nextest.toml",
-            ".github/workflows/ci.yml",
             "gate/nextest.toml",
-            "xtask/src/main.rs",
         ] {
             assert!(watched(path, &none), "{path}");
         }
         for path in [
+            ".github/workflows/ci.yml",
+            "gate/tools.toml",
+            "gate/nextest.toml.orig",
+            ".config/other.toml",
+            "xtask/src/main.rs",
             "crates/vcs/Cargo.toml",
             "docs/Cargo.toml",
             "Cargo.toml.orig",

@@ -61,8 +61,9 @@ never depends on the column, because `test` and `slow-tests` fail for a failing 
 On a pull request, `slow-tests` runs the slow tests only when the pull request changes, since its
 merge base, a file of a workspace crate with slow tests (one of its `.rs` files contains `slow_`),
 of a workspace crate such a crate depends on, or one of `Cargo.toml`, `Cargo.lock`,
-`rust-toolchain.toml`, `.cargo/`, `.config/`, `.github/`, `gate/` and `xtask/`. Otherwise it
-is reported as not needed, with the reason, without building anything. The job `gate` runs and
+`rust-toolchain.toml`, `.cargo/`, `.config/nextest.toml` and `gate/nextest.toml` (dependencies,
+the compiler and the nextest profiles that pick the slow tests); a change to the rest of the
+gate, to `xtask/` or to the workflows does not count. Otherwise it is reported as not needed, with the reason, without building anything. The job `gate` runs and
 reports on every pull request either way, so the required check is never missing. A push to
 `main`, a manual run and the `platforms` schedule always run the slow tests; so does
 `cargo xtask gate` outside CI, unless the change touches no code (the rule below). Inside a CI
