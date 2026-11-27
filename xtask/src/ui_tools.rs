@@ -53,10 +53,18 @@ pub fn judge_pnpm(output: &str, pin: &str) -> Option<Finding> {
     )))
 }
 
-/// What `<program> --version` prints, or `None` when it is not installed or fails.
-fn version_of(program: &str) -> Option<String> {
+/// `<program> --version` run in `dir`: Corepack applies the `packageManager` pin only inside the
+/// package folder, and `ui::run` runs there too.
+fn version_command(program: &Path, dir: &Path) -> Command {
+    let mut command = Command::new(program);
+    command.arg("--version").current_dir(dir);
+    command
+}
+
+/// What `<program> --version` prints in `dir`, or `None` when it is not installed or fails.
+fn version_of(program: &str, dir: &Path) -> Option<String> {
     let path = which::which(program).ok()?;
-    let output = Command::new(path).arg("--version").output().ok()?;
+    let output = version_command(&path, dir).output().ok()?;
     output
         .status
         .success()
@@ -71,14 +79,15 @@ pub fn check(root: &Path) -> Vec<Finding> {
     else {
         return Vec::new();
     };
+    let dir = root.join("editor-ui");
     let mut findings = Vec::new();
-    match version_of("node") {
+    match version_of("node", &dir) {
         Some(output) => findings.extend(judge_node(&output)),
         None => findings.push(Finding::new(format!(
             "node is not installed; editor-ui needs major version {NODE_MAJOR}"
         ))),
     }
-    match (version_of("pnpm"), package_manager_pin(&package_json)) {
+    match (version_of("pnpm", &dir), package_manager_pin(&package_json)) {
         (_, None) => findings.push(Finding::new(
             "editor-ui/package.json has no `packageManager` field pinning pnpm@<version>",
         )),
@@ -110,6 +119,15 @@ mod tests {
         );
         assert_eq!(package_manager_pin("{}"), None);
         assert_eq!(package_manager_pin("not json"), None);
+    }
+
+    #[test]
+    fn versions_are_asked_inside_editor_ui() {
+        let dir = Path::new("repo").join("editor-ui");
+        let command = version_command(Path::new("pnpm"), &dir);
+        assert_eq!(command.get_current_dir(), Some(dir.as_path()));
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(args, ["--version"]);
     }
 
     #[test]
