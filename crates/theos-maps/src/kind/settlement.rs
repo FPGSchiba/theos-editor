@@ -17,6 +17,6 @@ pub(super) const TABLE: KindTable = KindTable {
     metrics: no_metrics,
     features: output::build_set,
     title: plain_title,
-    frame: FrameRule::Recipe,
+    frame: FrameRule::SettlementClass,
     seeded: seeds_nothing,
 };

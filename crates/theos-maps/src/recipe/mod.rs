@@ -6,6 +6,7 @@
 //! before any stage runs.
 
 mod builtin;
+mod frame;
 mod inputs;
 mod load;
 mod plan;
@@ -16,6 +17,7 @@ pub(crate) mod test_stages;
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
+pub(crate) use frame::{check_cell, grid_frame, invalid};
 pub use inputs::{InputDecl, InputProblem, Inputs};
 pub use load::{Catalog, RecipeProblem, catalog};
 pub use plan::{MAX_CELL_M, MIN_CELL_M, Plan, PlannedStage, plan};

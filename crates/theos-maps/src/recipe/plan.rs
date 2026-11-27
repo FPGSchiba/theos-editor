@@ -3,14 +3,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{LoadedRecipe, RecipeError};
+use crate::child::standalone_frame;
 use crate::constraints::is_known_path;
-use crate::kernels::num;
 use crate::render::{self, Role};
 use crate::stage::{LayerSpec, MapKind, ParamError, Registry, StageParams};
 use crate::world::{LayerKind, MapFrame};
-
-/// How far two cell edges may differ, relative, and still count as square.
-const SQUARE_TOLERANCE: f64 = 1e-9;
 
 /// The smallest cell edge of a map, m: a centimetre, below any floor plan's need.
 pub const MIN_CELL_M: f64 = 0.01;
@@ -150,100 +147,9 @@ fn check_constraints(recipe: &LoadedRecipe, stages: &[PlannedStage]) -> Result<(
     Ok(())
 }
 
-/// Check 1: the keys `grid` and `size_km` by kind (terrain and interior need both, a settlement
-/// map has neither: its frame comes from the parent), then the grid (at least 2 x 2, a cell
-/// count that fits a `usize`), the size, square cells and a cell edge from [`MIN_CELL_M`] to
-/// [`MAX_CELL_M`].
+/// Check 1: the frame of a map without a parent (`child::standalone_frame`).
 fn check_frame(recipe: &LoadedRecipe) -> Result<MapFrame, RecipeError> {
-    let r = &recipe.recipe;
-    let (grid, size_km) = match r.kind {
-        MapKind::Settlement => {
-            for (key, present) in [("grid", r.grid.is_some()), ("size_km", r.size_km.is_some())] {
-                if present {
-                    return Err(invalid(
-                        recipe,
-                        &at_parameter(key),
-                        format!(
-                            "a settlement recipe has no `{key}`; its frame comes from the parent"
-                        ),
-                    ));
-                }
-            }
-            return Err(invalid(
-                recipe,
-                &Spot::default(),
-                "the frame of a settlement map is not available yet",
-            ));
-        }
-        MapKind::Terrain | MapKind::Interior => {
-            let need = |key: &str| {
-                invalid(
-                    recipe,
-                    &at_parameter(key),
-                    format!("a {} recipe needs `{key}`", r.kind),
-                )
-            };
-            (
-                r.grid.ok_or_else(|| need("grid"))?,
-                r.size_km.ok_or_else(|| need("size_km"))?,
-            )
-        }
-    };
-    let [rows, cols] = grid;
-    if rows < 2 || cols < 2 {
-        return Err(invalid(
-            recipe,
-            &at_parameter("grid"),
-            format!("`grid` must be at least 2 x 2, got {rows} x {cols}"),
-        ));
-    }
-    // Every raster and `MapFrame::cells` multiply the two; the memory budget sees only the product.
-    if rows.checked_mul(cols).is_none() {
-        return Err(invalid(
-            recipe,
-            &at_parameter("grid"),
-            format!("`grid` of {rows} x {cols} overflows the cell count"),
-        ));
-    }
-    let [width, height] = size_km;
-    // In metres too: a size beyond f64 there would make the cell edge an infinity.
-    let usable = |km: f64| km > 0.0 && (km * 1000.0).is_finite();
-    if !(usable(width) && usable(height)) {
-        return Err(invalid(
-            recipe,
-            &at_parameter("size_km"),
-            "`size_km` must be positive and finite, also in metres",
-        ));
-    }
-    let across = width / num::to_f64(cols);
-    let down = height / num::to_f64(rows);
-    if (across - down).abs() > SQUARE_TOLERANCE * across {
-        return Err(invalid(
-            recipe,
-            &at_parameter("size_km"),
-            format!(
-                "cells must be square: {width} km over {cols} columns is {} m, \
-                 {height} km over {rows} rows is {} m",
-                across * 1000.0,
-                down * 1000.0
-            ),
-        ));
-    }
-    // Final review round 3, class B: every metre of a stage becomes cells, areas and slopes
-    // through the cell edge, so its range keeps them finite and its conversions bounded. It also
-    // refuses a size whose cells underflow to 0, which the square check above cannot see.
-    let cell_m = width * 1000.0 / num::to_f64(cols);
-    if !(MIN_CELL_M..=MAX_CELL_M).contains(&cell_m) {
-        return Err(invalid(
-            recipe,
-            &at_parameter("size_km"),
-            format!(
-                "`size_km` over `grid` gives cells of {cell_m} m; the edge must be from \
-                 {MIN_CELL_M} m to {MAX_CELL_M} m"
-            ),
-        ));
-    }
-    Ok(MapFrame { rows, cols, cell_m })
+    standalone_frame(recipe.recipe.kind, &recipe.recipe)
 }
 
 /// Check 2: the extra renders and the render options.

@@ -13,6 +13,7 @@
 
 pub mod api;
 
+pub mod child;
 pub mod constraints;
 pub mod error;
 pub mod features;

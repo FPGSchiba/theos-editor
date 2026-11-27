@@ -14,6 +14,7 @@ use geojson::FeatureCollection;
 use serde_json::Value;
 use theos_map_format::FormatError;
 
+use crate::child::FrameRule;
 use crate::features::output::FeaturesError;
 use crate::package::PackageLayer;
 use crate::render::Render;
@@ -27,13 +28,6 @@ pub enum IdScheme {
     ByType,
     /// `<kind>-<n>`, numbered per feature kind from 1.
     ByKind,
-}
-
-/// What decides the frame of a map of a kind; Task 4 adds the rules of child maps.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FrameRule {
-    /// The recipe's `size_km` and `grid`.
-    Recipe,
 }
 
 /// The values the runner seeds into the world before the first stage; Task 6 gives it a
@@ -73,7 +67,6 @@ pub(crate) struct KindTable {
     /// The title line of the people renders.
     pub title: TitleFn,
     /// What decides the frame.
-    #[expect(dead_code, reason = "wired in by Task 4")]
     pub frame: FrameRule,
     /// The values the runner seeds.
     #[expect(dead_code, reason = "wired in by Task 6")]
