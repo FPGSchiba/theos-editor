@@ -11,6 +11,10 @@ no-default-features = false
 # A yanked release is an error. An advisory ignore needs a reason:
 # ignore = [{ id = "RUSTSEC-0000-0000", reason = "why it does not apply" }]
 yanked = "deny"
+ignore = [
+    { id = "RUSTSEC-2024-0370", reason = "unmaintained, not vulnerable; a proc macro of glib 0.18 that Tauri's GTK 3 stack pulls in on Linux; leaves with Tauri's move off GTK 3" },
+    { id = "RUSTSEC-2024-0436", reason = "unmaintained, not vulnerable; a proc macro that specta uses at build time" },
+]
 
 [licenses]
 allow = [

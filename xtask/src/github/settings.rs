@@ -580,8 +580,8 @@ pub fn run_apply(root: &Path, repo: Option<&str>) -> Result<Verdict> {
 
 /// The jobs that are the required status checks, as `docs/gate.md` §1 names them: the cell of the
 /// column headed `Job` in every row of the first table under the level-two section whose heading
-/// starts with `1.`, each job once, `ui` left out (it starts in P11). A cell that is not a bare
-/// job name (`[a-z0-9-]`) is skipped. A table without a `Job` column gives no jobs.
+/// starts with `1.`, each job once. A cell that is not a bare job name (`[a-z0-9-]`) is skipped. A
+/// table without a `Job` column gives no jobs.
 #[must_use]
 pub fn required_contexts_from_gate_md(text: &str) -> BTreeSet<String> {
     let sections = markdown::sections(text, 2);
@@ -604,7 +604,6 @@ pub fn required_contexts_from_gate_md(text: &str) -> BTreeSet<String> {
         .filter_map(|row| row.get(column))
         .filter(|name| {
             !name.is_empty()
-                && name.as_str() != "ui"
                 && name
                     .chars()
                     .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')

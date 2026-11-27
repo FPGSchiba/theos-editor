@@ -117,6 +117,15 @@ pub fn write_note(out: &mut dyn Write, note: &str) -> io::Result<()> {
     write_labelled(out, "note: ", note)
 }
 
+/// Writes the note "every check runs: `why`" to `out`, marked line by line like any note.
+///
+/// # Errors
+///
+/// Fails when `out` cannot be written to.
+pub fn write_every_note(out: &mut dyn Write, why: &str) -> Result<()> {
+    write_note(out, &format!("every check runs: {why}")).map_err(output_error)
+}
+
 /// Writes `text`, its first line after `label` and every further line after `  | `.
 fn write_labelled(out: &mut dyn Write, label: &str, text: &str) -> io::Result<()> {
     let mut lines = lines_of(text).into_iter();
@@ -235,11 +244,27 @@ pub fn summary_markdown(verdicts: &[Verdict], every_because: Option<&str>) -> St
 ///
 /// Fails when `out` or the summary file cannot be written.
 pub fn emit(verdict: &Verdict, ci: bool, out: &mut dyn Write) -> Result<()> {
-    emit_with(verdict, ci, summary_path().as_deref(), out)
+    emit_because(verdict, None, ci, out)
+}
+
+/// [`emit`], with why every check ran when `every_because` says so: the summary shows it above
+/// its table.
+///
+/// # Errors
+///
+/// Fails when `out` or the summary file cannot be written.
+pub fn emit_because(
+    verdict: &Verdict,
+    every_because: Option<&str>,
+    ci: bool,
+    out: &mut dyn Write,
+) -> Result<()> {
+    emit_with(verdict, every_because, ci, summary_path().as_deref(), out)
 }
 
 fn emit_with(
     verdict: &Verdict,
+    every_because: Option<&str>,
     ci: bool,
     summary: Option<&Path>,
     out: &mut dyn Write,
@@ -247,7 +272,7 @@ fn emit_with(
     let verdicts = std::slice::from_ref(verdict);
     write_table(verdicts, out).map_err(output_error)?;
     if ci {
-        publish_with(verdicts, None, summary, out)?;
+        publish_with(verdicts, every_because, summary, out)?;
     }
     Ok(())
 }
@@ -566,7 +591,7 @@ mod tests {
     fn emit_outside_ci_writes_the_table_only() -> TestResult {
         let summary = tempfile::NamedTempFile::new()?;
         let mut out = Vec::new();
-        emit_with(&failing(), false, Some(summary.path()), &mut out)?;
+        emit_with(&failing(), None, false, Some(summary.path()), &mut out)?;
         assert_eq!(
             String::from_utf8(out)?,
             "FAIL  lints\n  - crates/a/src/lib.rs:3: allow attribute\n  - no clippy.toml\n"
@@ -578,7 +603,7 @@ mod tests {
     #[test]
     fn emit_outside_ci_forms_no_workflow_command() -> TestResult {
         let mut out = Vec::new();
-        emit_with(&hostile(), false, None, &mut out)?;
+        emit_with(&hostile(), None, false, None, &mut out)?;
         let text = String::from_utf8(out)?;
         assert_eq!(command_lines(&text), Vec::<&str>::new(), "{text}");
         Ok(())
@@ -589,7 +614,7 @@ mod tests {
         let finding = Finding::new("x\n::error::forged");
         let verdict = Verdict::with(Check::CommitMsg, vec![finding]);
         let mut out = Vec::new();
-        emit_with(&verdict, true, None, &mut out)?;
+        emit_with(&verdict, None, true, None, &mut out)?;
         let text = String::from_utf8(out)?;
         assert_eq!(
             command_lines(&text),
@@ -598,7 +623,7 @@ mod tests {
         );
 
         let mut out = Vec::new();
-        emit_with(&hostile(), true, None, &mut out)?;
+        emit_with(&hostile(), None, true, None, &mut out)?;
         let text = String::from_utf8(out)?;
         let commands = command_lines(&text);
         assert_eq!(commands.len(), hostile().findings.len(), "{text}");
@@ -614,7 +639,7 @@ mod tests {
         let summary = tempfile::NamedTempFile::new()?;
         std::fs::write(summary.path(), "earlier step\n")?;
         let mut out = Vec::new();
-        emit_with(&failing(), true, Some(summary.path()), &mut out)?;
+        emit_with(&failing(), None, true, Some(summary.path()), &mut out)?;
         let text = String::from_utf8(out)?;
         assert!(text.starts_with("FAIL  lints\n"), "{text}");
         assert!(
@@ -636,7 +661,7 @@ mod tests {
     #[test]
     fn emit_in_ci_without_a_summary_file_still_annotates() -> TestResult {
         let mut out = Vec::new();
-        emit_with(&failing(), true, None, &mut out)?;
+        emit_with(&failing(), None, true, None, &mut out)?;
         assert!(String::from_utf8(out)?.contains("::error "));
         Ok(())
     }
@@ -645,7 +670,7 @@ mod tests {
     fn emit_reports_an_unwritable_summary_as_an_io_error() -> TestResult {
         let dir = tempfile::tempdir()?;
         let mut out = Vec::new();
-        let result = emit_with(&failing(), true, Some(dir.path()), &mut out);
+        let result = emit_with(&failing(), None, true, Some(dir.path()), &mut out);
         assert!(matches!(result, Err(crate::Error::Io { .. })), "{result:?}");
         Ok(())
     }

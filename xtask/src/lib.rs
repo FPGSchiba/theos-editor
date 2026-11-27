@@ -34,11 +34,14 @@
 //! - [`umbrella`]: the umbrella spec's phases and acceptance criteria, which `ac-trace` and
 //!   `commit-msg` read their ids from.
 //! - [`tools`]: the pinned tools (`gate/tools.toml`) and the `tools` check.
+//! - [`ui_tools`]: node and pnpm, which the `ui` check verifies before it runs its steps.
 //! - [`view`]: the workspace view, the files cargo compiles and what `syn` reads in them, which
 //!   the checks that read code share.
 //! - [`code_paths`]: the paths no check reads (`gate/code-paths.toml`).
 //! - [`scope`]: whether a run needs every check or, for a change that touches no code, only
 //!   `commit-msg`.
+//! - [`needs`]: `cargo xtask needs`, whether a run needs any of some checks, which CI asks
+//!   before it installs what they need.
 //! - [`gate`]: `cargo xtask gate`, which runs the checks above that need no pull request, in
 //!   order, and writes one verdict table.
 
@@ -55,11 +58,13 @@ pub mod git;
 pub mod github;
 pub mod globs;
 pub mod markdown;
+pub mod needs;
 pub mod process;
 pub mod repo_path;
 pub mod report;
 pub mod scope;
 pub mod tools;
+pub mod ui_tools;
 pub mod umbrella;
 pub mod verdict;
 pub mod view;
