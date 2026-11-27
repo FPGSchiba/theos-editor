@@ -83,8 +83,9 @@ pub struct Analysis {
     /// The rooms of the critical route from start to goal, revisits included; empty when the
     /// goal cannot be reached.
     pub route: Vec<RoomId>,
-    /// The start's centre, the centres of the doors crossed and the goal's centre, in route
-    /// order, as raster `(row, col)`.
+    /// The route as raster `(row, col)` points: the start's centre, then per connection crossed
+    /// its door's centre and the next room's centre, ending at the goal's centre. Its legs are
+    /// the ones `critical_path_m` measures (centre -> door -> centre, spec §5.9).
     pub route_points: Vec<(u32, u32)>,
     /// The failed checks, each with a message that starts with its code.
     pub findings: Vec<(Code, String)>,
@@ -450,7 +451,7 @@ struct Route {
     rooms: Vec<RoomId>,
     /// The length in metres.
     length_m: f64,
-    /// The start's centre, the door centres and the goal's centre.
+    /// Every room centre on the route with the door centres between them.
     points: Vec<(u32, u32)>,
 }
 
@@ -491,8 +492,8 @@ fn route(g: &RoomGraph, s: &SpaceOut, dist: &mut Distances<'_>) -> Result<Route,
         {
             points.push(d.centre);
         }
+        points.push(centre(w[1]));
     }
-    points.extend(rooms.last().map(|&r| centre(r)));
     Ok(Route {
         rooms,
         length_m: total,
@@ -671,24 +672,23 @@ mod tests {
         let a = run(&g, &s, &no_cover());
         assert_eq!(a.findings, Vec::<(Code, String)>::new());
         assert_eq!(a.route, [0, 1, 4]);
+        // Each connection costs centre -> door -> centre, so the route passes every room centre.
         assert_eq!(
             a.route_points,
             [
                 s.centres[0],
                 s.doors.0[0].centre,
+                s.centres[1],
                 s.doors.0[3].centre,
                 s.centres[4]
             ]
         );
-        // Each connection costs centre -> door -> centre, so the route passes the hall's centre.
-        let cells = manhattan(&[
-            s.centres[0],
-            s.doors.0[0].centre,
-            s.centres[1],
-            s.doors.0[3].centre,
-            s.centres[4],
-        ]);
-        assert!(cells > manhattan(&a.route_points));
+        assert_eq!(a.route_points.first(), Some(&s.centres[0]));
+        assert_eq!(a.route_points.last(), Some(&s.centres[4]));
+        // In rect rooms every raster leg is a Manhattan one, so the polyline length is the
+        // route's length, in whole cells.
+        let cells = manhattan(&a.route_points);
+        assert!(cells > 0);
         assert_eq!(a.critical_path_m, whole(cells));
         assert_eq!(a.start_to_exit_min_m, Some(whole(walk(&g, &s, &[0, 2, 5]))));
         let from_goal = [
