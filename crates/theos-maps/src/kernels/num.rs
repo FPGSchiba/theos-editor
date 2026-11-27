@@ -61,6 +61,13 @@ pub fn round_half_even(x: f64) -> f64 {
     x.round_ties_even()
 }
 
+/// `x` rounded to the nearest integer, halves away from zero (libm, exact), for lattice
+/// snapping.
+#[must_use]
+pub fn round_half_away(x: f64) -> f64 {
+    libm::round(x)
+}
+
 /// `x` rounded to one decimal place (`scale` 10) or two (`scale` 100) the way Python's
 /// `round(x, n)` does: halves to even on the scaled value, both steps exact IEEE operations, and
 /// never `-0.0` (a ruling of the metrics: the plan said `f64::round`, which rounds halves away

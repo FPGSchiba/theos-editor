@@ -9,6 +9,7 @@ pub mod distance;
 pub mod fft;
 pub mod filters;
 pub mod flood;
+pub mod geometry;
 pub mod labels;
 pub mod morphology;
 pub mod mst;
