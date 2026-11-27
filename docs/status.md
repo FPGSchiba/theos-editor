@@ -17,7 +17,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P08 | Map format and terrain generator | theos-editor | done | #27 | #44 |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
 | P10 | Prose editor research | theos-editor | done | #3 | #11 |
-| P11 | Editor shell and Codex | theos-editor | todo | | |
+| P11 | Editor shell and Codex | theos-editor | spec-pr | | |
 | P12 | Manuscript editor | theos-editor | todo | | |
 | P13 | Changes and Review screens | theos-editor | todo | | |
 | P14 | Start and Settings | theos-editor | todo | | |
@@ -56,6 +56,13 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
+- P11 (spec PR, 27 Nov 2026):
+  - Theos UI's light mode: Jann hands it over once it is final, as a change to
+    `design/theos-ui/`. P11 takes every colour from tokens and sets `data-theme` on the root, so
+    the light theme needs new tokens and a switch only (P11 spec §5.7).
+  - P11's gate PR (`ci(gate): the ui check and the editor's build needs (gate)`) waits for Jann
+    and must merge before the build PR. When Jann merges it, he switches the live ruleset to add
+    `ui` to the required checks (`cargo xtask github apply`).
 - P08's build PR #44 is a draft labelled `needs-jann`. The final review loop reached its cap of
   five rounds with 6 Minor findings open. A targeted fix and review round, which Jann asked for
   on 25 Nov 2026, closed them. Its spec changes reached main with #40 (rulings 51–75) and #47
