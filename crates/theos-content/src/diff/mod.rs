@@ -1,8 +1,8 @@
 //! Diffs of texts and records, for the review of changes (P46).
 //!
-//! - [`words`]: a word-level diff of two texts.
-//! - [`fields`]: old and new per front matter field, compared by value.
-//! - [`record`]: a record's fields plus a word diff of its body.
+//! - [`words()`]: a word-level diff of two texts.
+//! - [`fields()`]: old and new per front matter field, compared by value.
+//! - [`record()`]: a record's fields plus a word diff of its body.
 
 pub mod fields;
 pub mod record;

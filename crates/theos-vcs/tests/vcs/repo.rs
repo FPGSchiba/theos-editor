@@ -148,3 +148,39 @@ fn the_first_parent_of_a_root_commit_is_none() -> Result<(), Box<dyn std::error:
     ));
     Ok(())
 }
+
+#[test]
+fn the_first_parent_of_a_merge_is_the_previous_tip() -> Result<(), Box<dyn std::error::Error>> {
+    let sandbox = Sandbox::new()?;
+    let top = sandbox.init("repo")?;
+    Sandbox::write(&top.join("file.txt"), "synthetic\n")?;
+    sandbox.commit(&top, "first")?;
+    sandbox.run(&top, &["checkout", "-q", "-b", "side"])?;
+    Sandbox::write(&top.join("side.txt"), "synthetic side\n")?;
+    sandbox.commit(&top, "side")?;
+    let side = sandbox.run(&top, &["rev-parse", "HEAD"])?.trim().to_owned();
+    sandbox.run(&top, &["checkout", "-q", "main"])?;
+    Sandbox::write(&top.join("main.txt"), "synthetic main\n")?;
+    sandbox.commit(&top, "main")?;
+    let tip = sandbox.run(&top, &["rev-parse", "HEAD"])?.trim().to_owned();
+    sandbox.run(
+        &top,
+        &[
+            "-c",
+            "user.name=Synthetic",
+            "-c",
+            "user.email=synthetic@example.invalid",
+            "merge",
+            "-q",
+            "--no-ff",
+            "-m",
+            "merge",
+            "side",
+        ],
+    )?;
+    let merge = sandbox.run(&top, &["rev-parse", "HEAD"])?.trim().to_owned();
+    let found = repo::first_parent(&sandbox.git()?, &top, &merge)?;
+    assert_eq!(found, Some(tip));
+    assert_ne!(found, Some(side));
+    Ok(())
+}

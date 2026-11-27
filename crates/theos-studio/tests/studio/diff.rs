@@ -219,9 +219,15 @@ fn a_rename_commit_reads_its_parent_at_the_old_path() -> TestResult {
     let commits = commits(&repo, T905)?;
     let renamed = commits.first().ok_or("no commit")?;
     assert_eq!(renamed.from.as_deref(), Some(T901.as_bytes()));
-    let from = Some(T901);
-    let found = diff_of(&repo, T905, from, Side::Commit(renamed))?;
-    assert_eq!(shown(&found)?, (changed(&["id"]), Vec::new(), Vec::new()));
+    // The commit's own paths count, not the arguments.
+    for (path, from) in [(T905, Some(T901)), ("unused", None)] {
+        let found = diff_of(&repo, path, from, Side::Commit(renamed))?;
+        assert_eq!(
+            shown(&found)?,
+            (changed(&["id"]), Vec::new(), Vec::new()),
+            "{path}"
+        );
+    }
     Ok(())
 }
 
@@ -381,5 +387,17 @@ fn the_word_diff_deletes_and_inserts_the_words_git_does() -> TestResult {
         pairs += 1;
     }
     assert!(pairs >= 5, "only {pairs} fixture pairs");
+    Ok(())
+}
+
+// AC: CE-21.2
+#[test]
+fn a_side_that_is_no_regular_file_is_binary() -> TestResult {
+    let repo = Repo::committed("")?;
+    let head = repo.run(&["rev-parse", "HEAD"])?;
+    let gitlink = format!("160000,{},lore/sub", head.trim());
+    repo.run(&["update-index", "--add", "--cacheinfo", &gitlink])?;
+    let found = diff_of(&repo, "lore/sub", None, Side::Staged)?;
+    assert_eq!(found, FileDiff::Binary);
     Ok(())
 }

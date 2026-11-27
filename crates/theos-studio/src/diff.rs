@@ -77,18 +77,16 @@ pub fn diff(
         Side::Commit(commit) => repo::first_parent(git, &top, &commit.id)?,
         _ => None,
     };
-    let (path, from) = match side {
-        Side::Commit(commit) => (commit.path.as_slice(), commit.from.as_deref()),
-        _ => (path, from),
-    };
-    let (old_version, new_version) = match side {
-        Side::Staged => (Some(Version::Head), Version::Index),
-        Side::Unstaged => (Some(Version::Index), Version::WorkTree),
+    let (old_version, new_version, path, from) = match side {
+        Side::Staged => (Some(Version::Head), Version::Index, path, from),
+        Side::Unstaged => (Some(Version::Index), Version::WorkTree, path, from),
         Side::Commit(commit) => (
             parent.as_deref().map(Version::Rev),
             Version::Rev(&commit.id),
+            commit.path.as_slice(),
+            commit.from.as_deref(),
         ),
-        Side::Between(old, new) => (Some(old), new),
+        Side::Between(old, new) => (Some(old), new, path, from),
     };
     let new = Loaded::from(read(git, &top, new_version, path)?);
     let (old, old_path) = match old_version {
@@ -158,6 +156,8 @@ impl From<Content> for Loaded {
         match content {
             Content::Absent => Loaded::Absent,
             Content::File(bytes) => String::from_utf8(bytes).map_or(Loaded::Binary, Loaded::Text),
+            // `Content::NotAFile` (a link, a submodule, a folder). `Content` is non-exhaustive, so
+            // the arm is a wildcard, which also takes a kind of content added later: no text either.
             _ => Loaded::Binary,
         }
     }
