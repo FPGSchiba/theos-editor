@@ -18,6 +18,7 @@ use crate::rooms::solve::solvable;
 use crate::rooms::{Cell, Connection, KeyId, LatticeRef, Passage, Role, Room, RoomGraph, RoomId};
 use crate::stage::{ParamError, parse_table};
 use crate::stages::interior::program::{CountSpec, ProgramQueue};
+use crate::world::{ValueType, WorldValue};
 
 /// The stage id mission errors carry.
 pub const STAGE: &str = "mission";
@@ -299,6 +300,26 @@ pub struct MissionReport {
     pub short: u32,
     /// Per entry, in recipe order.
     pub per_entry: Vec<EntryReport>,
+}
+
+/// `mission_report` is a world value: the summary's `mission.entries` (ruling R33).
+impl WorldValue for MissionReport {
+    fn type_name(&self) -> &'static str {
+        Self::NAME
+    }
+    fn canonical_json(&self) -> Result<serde_json::Value, theos_map_format::FormatError> {
+        theos_map_format::json::to_checked_value(self)
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl ValueType for MissionReport {
+    const NAME: &'static str = "mission_report";
 }
 
 /// Why the mission cannot run.

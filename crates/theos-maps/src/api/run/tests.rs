@@ -217,7 +217,7 @@ fn a_child_run_writes_origin_and_parent_into_the_package() -> TestResult {
         tempfile::tempdir()?,
         tempfile::tempdir()?,
     );
-    child_recipe(recipes.path(), &["ph"])?;
+    child_recipe(recipes.path(), &["ph", "pi"])?;
     let parent = parent_run(parent_dir.path())?;
     let (manifest, _) = run_child(
         recipes.path(),
@@ -259,7 +259,7 @@ fn a_child_recipe_with_a_standalone_stage_runs_without_from() -> TestResult {
         tempfile::tempdir()?,
         tempfile::tempdir()?,
     );
-    child_recipe(recipes.path(), &["ph", "sa"])?;
+    child_recipe(recipes.path(), &["ph", "sa", "pi"])?;
     let (manifest, _) = run_child(recipes.path(), &child_request(None, None), out.path())?;
     assert_eq!(manifest.frame.origin_m, None);
     let package = theos_map_format::read(std::fs::File::open(

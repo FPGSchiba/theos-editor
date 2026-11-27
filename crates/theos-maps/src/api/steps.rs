@@ -132,6 +132,7 @@ pub(super) fn constraints(
     let title = (table.title)(&plan.recipe_id, seed, &metrics);
     let summary = summary(
         plan.kind,
+        &plan.stages,
         metrics,
         &counts,
         &execution.stage_metrics,

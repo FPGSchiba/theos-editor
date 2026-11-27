@@ -39,25 +39,52 @@ fn the_terrain_table_is_p08s() {
 }
 
 #[test]
-fn the_other_tables_are_empty_for_now() {
-    for kind in [MapKind::Settlement, MapKind::Interior] {
-        let t = table(kind);
-        assert!(t.layers.is_empty() && t.optional_layers.is_empty());
-        assert!(t.renders.is_empty() && t.types.is_empty() && t.summary_paths.is_empty());
-        assert_eq!(
-            (t.metrics)(
-                &crate::world::World::new(crate::world::MapFrame {
-                    rows: 1,
-                    cols: 1,
-                    cell_m: 1.0
-                }),
-                &[]
-            )
-            .unwrap(),
-            serde_json::json!({})
-        );
-        assert_eq!((t.title)("r", 3, &serde_json::json!({})), "r \u{b7} seed 3");
-    }
-    assert_eq!(table(MapKind::Settlement).ids, IdScheme::ByType);
-    assert_eq!(table(MapKind::Interior).ids, IdScheme::ByKind);
+fn the_settlement_table_is_empty_for_now() {
+    let t = table(MapKind::Settlement);
+    assert!(t.layers.is_empty() && t.optional_layers.is_empty());
+    assert!(t.renders.is_empty() && t.types.is_empty() && t.summary_paths.is_empty());
+    assert_eq!(
+        (t.metrics)(
+            &crate::world::World::new(crate::world::MapFrame {
+                rows: 1,
+                cols: 1,
+                cell_m: 1.0
+            }),
+            &[]
+        )
+        .unwrap(),
+        serde_json::json!({})
+    );
+    assert_eq!((t.title)("r", 3, &serde_json::json!({})), "r \u{b7} seed 3");
+    assert_eq!(t.ids, IdScheme::ByType);
+}
+
+// AC: CE-80.1
+#[test]
+fn the_interior_table_is_p34s() {
+    let t = table(MapKind::Interior);
+    let layers: Vec<&str> = t.layers.iter().map(|l| l.name).collect();
+    assert_eq!(layers, ["walkable", "rooms", "corridors", "cover", "walls"]);
+    assert!(t.optional_layers.is_empty() && t.summary_paths.is_empty());
+    assert_eq!(t.ids, IdScheme::ByKind);
+    assert_eq!((t.title)("r", 3, &serde_json::json!({})), "r \u{b7} seed 3");
+    // Without a `mission` stage the known types are the static ones.
+    assert_eq!(
+        t.known_types(&[]),
+        [
+            "open", "locked", "drop", "open", "locked", "oneway", "critical"
+        ]
+    );
+    assert_eq!(
+        (t.metrics)(
+            &crate::world::World::new(crate::world::MapFrame {
+                rows: 1,
+                cols: 1,
+                cell_m: 1.0
+            }),
+            &[]
+        )
+        .unwrap(),
+        serde_json::json!({})
+    );
 }

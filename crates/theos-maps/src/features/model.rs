@@ -39,6 +39,8 @@ pub enum Prop {
     Int(i64),
     /// Text.
     Text(String),
+    /// A list of texts (the keys of a room).
+    Texts(Vec<String>),
     /// A flag.
     Bool(bool),
     /// A list of numbers (a per-vertex attribute).

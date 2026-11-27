@@ -148,3 +148,305 @@ fn loader_refusals() -> TestResult {
     }
     Ok(())
 }
+
+/// The package and manifest of `fixture-interior` with seed 1.
+fn fixture_run()
+-> Result<(theos_map_format::Package, theos_maps::RunManifest), Box<dyn std::error::Error>> {
+    Ok(run_package("fixture-interior", 1, &recipes()).map_err(|e| e.to_string())?)
+}
+
+/// The id of a feature.
+fn id_of(f: &geojson::Feature) -> String {
+    match &f.id {
+        Some(geojson::feature::Id::String(s)) => s.clone(),
+        _ => String::new(),
+    }
+}
+
+/// A property of a feature.
+fn prop<'a>(f: &'a geojson::Feature, key: &str) -> Option<&'a serde_json::Value> {
+    f.properties.as_ref()?.get(key)
+}
+
+/// The features of `kind`.
+fn of_kind<'a>(package: &'a theos_map_format::Package, kind: &str) -> Vec<&'a geojson::Feature> {
+    package
+        .features
+        .features
+        .iter()
+        .filter(|f| prop(f, "kind").and_then(serde_json::Value::as_str) == Some(kind))
+        .collect()
+}
+
+/// Half the shoelace sum of a closed ring.
+fn shoelace(ring: &[geojson::Position]) -> f64 {
+    ring.windows(2)
+        .map(|w| {
+            let (a, b) = (w[0].as_slice(), w[1].as_slice());
+            a[0] * b[1] - b[0] * a[1]
+        })
+        .sum::<f64>()
+        / 2.0
+}
+
+// AC: CE-80.1
+#[test]
+fn room_polygons_enclose_their_cells() -> TestResult {
+    use geojson::GeometryValue;
+    use theos_map_format::{LayerData, LayerKey};
+    let (package, _) = fixture_run()?;
+    let cell_m = package.manifest.frame.cell_m;
+    let key = LayerKey {
+        level: None,
+        name: "rooms".to_owned(),
+    };
+    let Some(LayerData::U16(numbers)) = package.layers.get(&key) else {
+        return Err("the package has no u16 `rooms` layer".into());
+    };
+    let rooms = of_kind(&package, "room");
+    assert!(rooms.len() >= 8, "{} rooms", rooms.len());
+    for (k, room) in rooms.iter().enumerate() {
+        let id = id_of(room);
+        assert_eq!(id, format!("room-{}", k + 1));
+        let number = prop(room, "number")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or(format!("{id}: no number"))?;
+        assert_eq!(number, u64::try_from(k)?, "{id}");
+        let cells = numbers
+            .iter()
+            .filter(|&&v| u64::from(v) == number + 1)
+            .count();
+        assert!(cells > 0, "{id} has no cells");
+        let Some(GeometryValue::Polygon { coordinates }) = room.geometry.as_ref().map(|g| &g.value)
+        else {
+            return Err(format!("{id} is not a Polygon").into());
+        };
+        let (outline, holes) = coordinates.split_first().ok_or("no outline")?;
+        let area = shoelace(outline).abs() - holes.iter().map(|h| shoelace(h).abs()).sum::<f64>();
+        let expected = f64::from(u32::try_from(cells)?) * cell_m * cell_m;
+        assert!(
+            (area - expected).abs() < 1e-9,
+            "{id}: {area} m2, {cells} cells"
+        );
+        let area_m2 = prop(room, "area_m2")
+            .and_then(serde_json::Value::as_f64)
+            .ok_or(format!("{id}: no area_m2"))?;
+        assert!((area_m2 - expected).abs() < 1e-9, "{id}: area_m2 {area_m2}");
+        for key in ["role", "shape", "keys", "locked"] {
+            assert!(prop(room, key).is_some(), "{id}: no {key}");
+        }
+    }
+    Ok(())
+}
+
+// AC: CE-80.1
+#[test]
+fn doors_and_connections_follow_the_format() -> TestResult {
+    let (package, _) = fixture_run()?;
+    let room_ids: Vec<String> = of_kind(&package, "room").into_iter().map(id_of).collect();
+    let doors = of_kind(&package, "door");
+    let door_ids: Vec<String> = doors.iter().map(|f| id_of(f)).collect();
+    assert_ne!(doors.len(), 0, "no doors");
+    for door in &doors {
+        let id = id_of(door);
+        let rooms = prop(door, "rooms")
+            .and_then(serde_json::Value::as_array)
+            .ok_or(format!("{id}: no rooms"))?;
+        assert_eq!(rooms.len(), 2, "{id}");
+        for room in rooms {
+            let room = room.as_str().ok_or("a room id is text")?;
+            assert!(room_ids.iter().any(|r| r == room), "{id}: {room}");
+        }
+        assert!(
+            matches!(
+                door.geometry.as_ref().map(|g| &g.value),
+                Some(geojson::GeometryValue::Point { .. })
+            ),
+            "{id} is not a Point"
+        );
+    }
+    let bytes = theos_map_format::features_bytes(&package.features)?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes)?;
+    let connections: Vec<&serde_json::Value> = json["features"]
+        .as_array()
+        .ok_or("no features")?
+        .iter()
+        .filter(|f| f["properties"]["kind"] == "connection")
+        .collect();
+    assert_eq!(connections.len(), doors.len(), "one door per connection");
+    for (i, c) in connections.iter().enumerate() {
+        let id = &c["id"];
+        assert_eq!(c.get("geometry"), Some(&serde_json::Value::Null), "{id}");
+        for key in ["from", "to"] {
+            let room = c["properties"][key]
+                .as_str()
+                .ok_or(format!("{id}: no {key}"))?;
+            assert!(room_ids.iter().any(|r| r == room), "{id}: {key} {room}");
+        }
+        assert_eq!(c["properties"]["door"], door_ids[i].as_str(), "{id}");
+    }
+    Ok(())
+}
+
+// AC: CE-80.1
+#[test]
+fn one_critical_route_from_start_to_goal() -> TestResult {
+    let (package, _) = fixture_run()?;
+    let routes = of_kind(&package, "route");
+    assert_eq!(routes.len(), 1);
+    let route = routes[0];
+    assert_eq!(id_of(route), "route-1");
+    assert_eq!(
+        prop(route, "type"),
+        Some(&serde_json::Value::from("critical"))
+    );
+    let role_of = |id: &str| {
+        of_kind(&package, "room")
+            .into_iter()
+            .find(|r| id_of(r) == id)
+            .and_then(|r| prop(r, "role").and_then(serde_json::Value::as_str))
+            .map(str::to_owned)
+    };
+    let rooms = prop(route, "rooms")
+        .and_then(serde_json::Value::as_array)
+        .ok_or("no rooms")?;
+    let first = rooms
+        .first()
+        .and_then(serde_json::Value::as_str)
+        .ok_or("empty")?;
+    let last = rooms
+        .last()
+        .and_then(serde_json::Value::as_str)
+        .ok_or("empty")?;
+    assert_eq!(role_of(first).as_deref(), Some("start"));
+    assert_eq!(role_of(last).as_deref(), Some("goal"));
+    let Some(geojson::GeometryValue::LineString { coordinates }) =
+        route.geometry.as_ref().map(|g| &g.value)
+    else {
+        return Err("the route is not a LineString".into());
+    };
+    assert!(coordinates.len() >= 2);
+    assert!(
+        coordinates
+            .iter()
+            .all(|p| p.as_slice().len() == 3 && p.as_slice()[2] == 0.0)
+    );
+    // Ruling R26: `length_m` is the analysis's critical path, not the line's own length.
+    let length = prop(route, "length_m").and_then(serde_json::Value::as_f64);
+    let critical = package.manifest.summary["stages"]["playability"]["critical_path_m"].as_f64();
+    assert!(
+        length.is_some() && length == critical,
+        "{length:?} vs {critical:?}"
+    );
+    Ok(())
+}
+
+// AC: CE-80.1
+#[test]
+fn ids_are_unique_per_kind() -> TestResult {
+    let (package, _) = fixture_run()?;
+    let mut seen = std::collections::BTreeSet::new();
+    let mut next: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for f in &package.features.features {
+        let id = id_of(f);
+        assert!(seen.insert(id.clone()), "{id} twice");
+        let kind = prop(f, "kind")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(format!("{id}: no kind"))?;
+        let n = next.entry(kind.to_owned()).or_insert(0);
+        *n += 1;
+        assert_eq!(id, format!("{kind}-{n}"));
+    }
+    for kind in ["room", "door", "connection", "route"] {
+        assert!(next.contains_key(kind), "no {kind}");
+    }
+    Ok(())
+}
+
+// AC: CE-80.1
+#[test]
+fn package_layers_and_dtypes() -> TestResult {
+    use theos_map_format::DType;
+    let (package, _) = fixture_run()?;
+    let layers: Vec<(&str, DType)> = package
+        .manifest
+        .layers
+        .iter()
+        .map(|l| (l.name.as_str(), l.dtype))
+        .collect();
+    assert_eq!(
+        layers,
+        [
+            ("walkable", DType::U8),
+            ("rooms", DType::U16),
+            ("corridors", DType::U8),
+            ("cover", DType::U8),
+            ("walls", DType::U8),
+        ]
+    );
+    Ok(())
+}
+
+/// The fixture with one more constraint line.
+fn constrained(text: &str, line: &str) -> String {
+    text.replace("[constraints]\n", &format!("[constraints]\n{line}\n"))
+}
+
+// AC: CE-80.1
+#[test]
+fn room_type_constraint_counts() -> TestResult {
+    let dir = broken(|t| constrained(&t, "\"features.entrance\" = [1, 1]"))?;
+    let out = tempfile::tempdir()?;
+    let manifest = run(
+        &request("broken", 1),
+        &[PathBuf::from(dir.path())],
+        out.path(),
+        &mut |_: &Progress| {},
+        &CancelToken::new(),
+    )?;
+    assert_eq!(result(&manifest, "features_entrance"), Some(1.0));
+    assert_eq!(
+        manifest.results.get("pass"),
+        Some(&serde_json::Value::Bool(true)),
+        "{:?}",
+        manifest.results
+    );
+    let dir = broken(|t| constrained(&t, "\"features.no-such\" = [0, 0]"))?;
+    let out = tempfile::tempdir()?;
+    let mut stages_run = 0_u32;
+    let refused = run(
+        &request("broken", 1),
+        &[PathBuf::from(dir.path())],
+        out.path(),
+        &mut |p: &Progress| {
+            if p.done == 0 && p.stage != "constraints" {
+                stages_run += 1;
+            }
+        },
+        &CancelToken::new(),
+    );
+    assert!(
+        matches!(refused, Err(RunError::Recipe(RecipeError::Invalid { .. }))),
+        "{:?}",
+        refused.map(|_| ())
+    );
+    assert_eq!(stages_run, 0);
+    Ok(())
+}
+
+// AC: CE-80.1
+#[test]
+fn the_summary_holds_the_mission_entries() -> TestResult {
+    let (package, _) = fixture_run()?;
+    let entries = package.manifest.summary["mission"]["entries"]
+        .as_array()
+        .ok_or("no summary.mission.entries")?;
+    let rules: Vec<&str> = entries.iter().filter_map(|e| e["rule"].as_str()).collect();
+    assert_eq!(rules, ["main_cycle", "leaf", "leaf"]);
+    for e in entries {
+        for key in ["asked", "applied", "undone"] {
+            assert!(e[key].is_u64(), "{e}: {key}");
+        }
+    }
+    Ok(())
+}

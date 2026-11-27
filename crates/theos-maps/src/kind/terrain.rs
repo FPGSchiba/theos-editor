@@ -3,7 +3,7 @@
 use serde_json::Value;
 use theos_map_format::FormatError;
 
-use super::{FrameRule, IdScheme, KindTable};
+use super::{FrameRule, IdScheme, KindTable, no_recipe_types};
 use crate::features::TYPES;
 use crate::features::output;
 use crate::metrics;
@@ -20,6 +20,7 @@ pub(super) const TABLE: KindTable = KindTable {
     optional_layers: &[OMEGA_LAYER],
     renders: RENDERS,
     types: TYPES,
+    recipe_types: no_recipe_types,
     ids: IdScheme::ByType,
     summary_paths: metrics::PATHS,
     metrics: terrain_metrics,

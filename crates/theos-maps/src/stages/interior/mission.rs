@@ -12,11 +12,16 @@ use crate::stage::{
     LayerSpec, MAX_COUNT, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
     too_large_count,
 };
-use crate::stages::interior::mission_core::{MissionState, RuleEntry, key_budget, run_mission};
+use crate::stages::interior::mission_core::{
+    MissionReport, MissionState, RuleEntry, key_budget, run_mission,
+};
 use crate::stages::interior::program::{CountSpec, ProgramQueue, ProgramRoom, check_program};
 use crate::stages::interior::rules::rules;
 use crate::stages::interior::support::ROOM_GRAPH;
 use crate::world::{Layer, ValueType};
+
+/// What the mission's rule entries did, for the summary's `mission.entries` (ruling R33).
+pub const MISSION_REPORT: LayerSpec = LayerSpec::value("mission_report", MissionReport::NAME);
 
 /// The parameters of `mission`: `[[stage.room]]` and `[[stage.rule]]`.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
@@ -51,7 +56,7 @@ impl TypedStage for Mission {
     }
 
     fn writes(&self, _: &MissionParams) -> Vec<LayerSpec> {
-        vec![ROOM_GRAPH]
+        vec![ROOM_GRAPH, MISSION_REPORT]
     }
 
     fn metric_names(&self, _: &MissionParams) -> Vec<&'static str> {
@@ -89,6 +94,7 @@ impl TypedStage for Mission {
         let mut report = StageReport::default();
         report.put("applied", f64::from(done.applied));
         report.put("short", f64::from(done.short));
+        ctx.write(MISSION_REPORT.name, Layer::Value(Box::new(done)))?;
         Ok(report)
     }
 }

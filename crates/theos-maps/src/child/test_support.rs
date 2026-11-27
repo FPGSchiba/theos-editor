@@ -94,6 +94,44 @@ stage!(
     writes: []
 );
 
+/// A stage that writes the package layers of an interior, empty, so a test child of the
+/// interior kind can write its package without the interior stages.
+pub(crate) struct Floor;
+
+/// The layers [`Floor`] writes: the interior package's.
+const FLOOR: [LayerSpec; 5] = [
+    LayerSpec::mask("walkable"),
+    LayerSpec::u32("rooms"),
+    LayerSpec::mask("corridors"),
+    LayerSpec::mask("cover"),
+    LayerSpec::mask("walls"),
+];
+
+impl TypedStage for Floor {
+    type Params = Knob;
+    const ID: &'static str = "pi";
+    const SUMMARY: &'static str = "A synthetic test stage.";
+    const KINDS: &'static [MapKind] = &[MapKind::Interior];
+    fn reads(&self, _: &Knob) -> Vec<LayerSpec> {
+        Vec::new()
+    }
+    fn writes(&self, _: &Knob) -> Vec<LayerSpec> {
+        FLOOR.to_vec()
+    }
+    fn run(&self, ctx: &mut StageContext<'_>, _: &Knob) -> Result<StageReport, StageError> {
+        let (rows, cols) = (ctx.frame().rows, ctx.frame().cols);
+        for spec in FLOOR {
+            let layer = if spec.kind == crate::world::LayerKind::U32 {
+                Layer::U32(crate::grid::Grid::filled(rows, cols, 0))
+            } else {
+                Layer::Mask(crate::grid::Grid::filled(rows, cols, false))
+            };
+            ctx.write(spec.name, layer)?;
+        }
+        Ok(StageReport::default())
+    }
+}
+
 /// A registry of the test stages.
 pub(crate) fn registry() -> Registry {
     add_test_stages(Registry::empty())
@@ -113,6 +151,7 @@ fn add_test_stages(mut registry: Registry) -> Registry {
     registry.add(Box::new(OnlyChild));
     registry.add(Box::new(Feats));
     registry.add(Box::new(Class));
+    registry.add(Box::new(Floor));
     registry
 }
 
