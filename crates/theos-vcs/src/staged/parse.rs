@@ -3,7 +3,7 @@
 use super::{StagedPath, Status, Tracked};
 
 /// Splits NUL-terminated output into its fields; the last field must end with a NUL too.
-fn fields(out: &[u8]) -> Result<Vec<&[u8]>, String> {
+pub(crate) fn fields(out: &[u8]) -> Result<Vec<&[u8]>, String> {
     if out.is_empty() {
         return Ok(Vec::new());
     }

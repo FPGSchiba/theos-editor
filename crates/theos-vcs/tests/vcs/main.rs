@@ -6,3 +6,4 @@ mod git;
 mod read;
 mod repo;
 mod staged;
+mod status;
