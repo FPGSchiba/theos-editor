@@ -209,4 +209,17 @@ mod tests {
         assert!(batch(b"aaaa blob 3\nabc\n", 2).is_err());
         assert!(batch(b"aaaa blob 3\nabc\nextra", 1).is_err());
     }
+
+    #[test]
+    fn batch_rejects_a_header_without_a_kind() {
+        let error = batch(
+            b"aaaa
+abc
+",
+            1,
+        )
+        .err()
+        .unwrap_or_default();
+        assert!(error.contains("is not a header"), "{error}");
+    }
 }

@@ -471,4 +471,29 @@ mod tests {
         assert!(status(b"# branch.head main\0").is_err());
         assert!(status(format!("# branch.oid {OID}\0").as_bytes()).is_err());
     }
+
+    #[test]
+    fn a_header_without_a_value_is_an_error() {
+        let error = status(b"# branch.oid\0").err().unwrap_or_default();
+        assert!(error.contains("has no value"), "{error}");
+        assert!(status(&[b'#', b' ', 0xff, 0]).is_err());
+    }
+
+    #[test]
+    fn a_malformed_ahead_behind_is_an_error() {
+        for value in ["+1", "1 -2", "+1 2", "+x -2", "+1 -y"] {
+            let out = format!("# branch.oid {OID}\0# branch.head main\0# branch.ab {value}\0");
+            assert!(ahead_behind(value).is_err(), "{value}");
+            assert!(status(out.as_bytes()).is_err(), "{value}");
+        }
+    }
+
+    #[test]
+    fn an_xy_field_of_the_wrong_length_is_an_error() {
+        assert!(changes(b"M").is_err());
+        assert!(changes(b"MMM").is_err());
+        assert!(changes(b"MX").is_err());
+        let line = line_1("MMM", b"a.md");
+        assert!(entries(&line).is_err());
+    }
 }

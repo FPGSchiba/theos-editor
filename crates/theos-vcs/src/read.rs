@@ -238,4 +238,40 @@ mod tests {
         assert_eq!(work_tree(dir.path(), "a.md")?, Content::File(b"x".to_vec()));
         Ok(())
     }
+
+    #[test]
+    fn an_entry_is_found_by_its_exact_name() {
+        let out = b"100644 blob aaaa\ta.md\x00120000 blob bbbb\tb.md\0";
+        assert_eq!(entry_mode(out, "b.md"), Ok(0o120_000));
+        assert_eq!(entry_mode(out, "a.md"), Ok(0o100_644));
+    }
+
+    #[test]
+    fn a_name_the_folder_lacks_is_an_error() {
+        let error = entry_mode(b"100644 blob aaaa\ta.md\0", "c.md").err();
+        assert_eq!(
+            error.as_deref(),
+            Some("the folder has no entry called c.md")
+        );
+    }
+
+    #[test]
+    fn a_record_without_a_tab_is_skipped_and_a_broken_entry_is_an_error() {
+        let out = b"stray\x00100644 blob aaaa\ta.md\0";
+        assert_eq!(entry_mode(out, "a.md"), Ok(0o100_644));
+        assert!(entry_mode(b"100644\ta.md\0", "a.md").is_err());
+        assert!(entry_mode(b"9 blob aaaa\ta.md\0", "a.md").is_err());
+        assert!(entry_mode(b"\xff \ta.md\0", "a.md").is_err());
+    }
+
+    #[test]
+    fn a_path_that_is_not_utf_8_is_an_output_error() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        let git = Git::find()?;
+        for version in [Version::WorkTree, Version::Index, Version::Head] {
+            let result = read(&git, dir.path(), version, &[0xff, b'.', b'm', b'd']);
+            assert!(matches!(result, Err(GitError::Output { .. })), "{result:?}");
+        }
+        Ok(())
+    }
 }

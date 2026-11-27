@@ -625,4 +625,10 @@ mod tests {
         assert!(matches!(result, Err(GitError::Io { .. })));
         Ok(())
     }
+
+    #[test]
+    fn a_process_without_an_exit_code_is_named_so() {
+        assert_eq!(exit_text(None), "no exit code");
+        assert_eq!(exit_text(Some(3)), "exit code 3");
+    }
 }

@@ -344,4 +344,12 @@ mod tests {
         let out = record(ID_A, "yesterday", "edit", "", &["M", "a.md"]);
         assert!(commits(&out).is_err());
     }
+
+    #[test]
+    fn a_zone_without_a_sign_or_with_bad_digits_is_an_error() {
+        for date in ["1 0100", "1 x0100", "1 +100", "1 +01x0", "1 +01000", "1"] {
+            assert!(raw_date(date.as_bytes()).is_err(), "{date}");
+        }
+        assert!(raw_date(&[0xff, b' ', b'+']).is_err());
+    }
 }

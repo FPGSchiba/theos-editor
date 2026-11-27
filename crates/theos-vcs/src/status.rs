@@ -641,4 +641,56 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn a_path_that_is_not_utf_8_is_kept_as_it_may_still_exist() {
+        let top = Path::new("no-such-folder");
+        let kept = existing(top, vec![vec![0xff, b'.', b'm', b'd'], b"gone.md".to_vec()]);
+        assert_eq!(kept, vec![vec![0xff, b'.', b'm', b'd']]);
+    }
+
+    #[test]
+    fn an_index_that_cannot_be_copied_is_an_io_error() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        // A folder is not a file the copy can read, and it is not "not found" either.
+        let result = copy_index(dir.path(), &dir.path().join("copy"));
+        assert!(matches!(result, Err(GitError::Io { .. })), "{result:?}");
+        assert!(copy_index(&dir.path().join("none"), &dir.path().join("copy")).is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn an_untracked_entry_the_status_already_lists_stays_untracked_and_last() {
+        let status = Status {
+            branch: Branch {
+                head: None,
+                commit: None,
+                upstream: None,
+            },
+            entries: vec![
+                Entry::Untracked {
+                    path: b"new.md".to_vec(),
+                },
+                Entry::Changed {
+                    path: b"a.md".to_vec(),
+                    staged: Change::Modified,
+                    unstaged: Change::Unchanged,
+                },
+            ],
+        };
+        let paired = paired(status, &[]);
+        assert_eq!(
+            paired.entries,
+            vec![
+                Entry::Changed {
+                    path: b"a.md".to_vec(),
+                    staged: Change::Modified,
+                    unstaged: Change::Unchanged,
+                },
+                Entry::Untracked {
+                    path: b"new.md".to_vec()
+                },
+            ]
+        );
+    }
 }
