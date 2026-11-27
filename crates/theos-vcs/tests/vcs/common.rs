@@ -1,7 +1,8 @@
 //! A sandbox for tests: a temp folder, an isolated git configuration and small git helpers.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use tempfile::TempDir;
 use theos_vcs::Git;
@@ -57,6 +58,37 @@ impl Sandbox {
     /// Runs git in `cwd` with the isolation of the sandbox and returns stdout.
     pub fn run(&self, cwd: &Path, args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
         self.run_env(cwd, args, &[])
+    }
+
+    /// Like [`Sandbox::run`], with `input` on git's stdin.
+    pub fn run_input(
+        &self,
+        cwd: &Path,
+        args: &[&str],
+        input: &[u8],
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let mut child = Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .env("GIT_CONFIG_GLOBAL", &self.config)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        child.stdin.take().ok_or("git stdin")?.write_all(input)?;
+        let output = child.wait_with_output()?;
+        if !output.status.success() {
+            return Err(format!(
+                "git {args:?} failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into());
+        }
+        Ok(String::from_utf8(output.stdout)?)
     }
 
     /// Like [`Sandbox::run`], with more variables set after the isolation.

@@ -47,7 +47,7 @@ pub(super) fn name_status(out: &[u8]) -> Result<Vec<StagedPath>, String> {
 }
 
 /// Reads `ls-files -s -z`: `<mode> SP <object> SP <stage> TAB <path> NUL`, stage 0 only.
-pub(super) fn ls_files(out: &[u8]) -> Result<Vec<Tracked>, String> {
+pub(crate) fn ls_files(out: &[u8]) -> Result<Vec<Tracked>, String> {
     let mut entries = Vec::new();
     for field in fields(out)? {
         let tab = field
