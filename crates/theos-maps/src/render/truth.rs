@@ -84,7 +84,7 @@ pub(crate) fn truth(input: &RenderInput<'_>) -> Result<Pixmap, RenderError> {
     roads::draw(&mut pixmap, input, &view, &plan, &|_| true)?;
     draw_features(&mut pixmap, input, &view, face)?;
     draw_title(&mut pixmap, face, &input.title)?;
-    draw_scale_bar(&mut pixmap, face, &view)?;
+    draw_scale_bar(&mut pixmap, face, &view, &SCALE_STEPS_M)?;
     legend::draw(&mut pixmap, face, &entries(input))?;
     Ok(pixmap)
 }
@@ -151,20 +151,21 @@ fn draw_name(
 }
 
 /// Draws the title in the top margin, as large as fits.
-fn draw_title(pixmap: &mut Pixmap, face: &Face, title: &str) -> Result<(), RenderError> {
+pub(super) fn draw_title(pixmap: &mut Pixmap, face: &Face, title: &str) -> Result<(), RenderError> {
     let room = to_f32(f64::from(pixmap.width())) - 2.0 * EDGE_PX;
     let size = text::fit(face, title, TITLE_PX, room);
     let baseline = to_f32(f64::from(TRUTH_TOP_PX)) * 0.65;
     text::draw(pixmap, face, title, size, [EDGE_PX, baseline], INK)
 }
 
-/// The length and label of the longest scale bar that fits.
-fn scale(view: &View, canvas_w: f64) -> (u32, String) {
+/// The length and label of the longest of the ascending `steps` (metres) that fits.
+fn scale(view: &View, canvas_w: f64, steps: &[u32]) -> (u32, String) {
     let fits = |m: &&u32| view.len_px(f64::from(**m)) <= canvas_w * SCALE_MAX_SHARE;
-    let metres = SCALE_STEPS_M
+    let metres = steps
         .iter()
         .rev()
         .find(fits)
+        .or(steps.first())
         .copied()
         .unwrap_or(SCALE_STEPS_M[0]);
     let label = if metres >= 1_000 {
@@ -175,9 +176,14 @@ fn scale(view: &View, canvas_w: f64) -> (u32, String) {
     (metres, label)
 }
 
-/// Draws the scale bar in the bottom margin.
-fn draw_scale_bar(pixmap: &mut Pixmap, face: &Face, view: &View) -> Result<(), RenderError> {
-    let (metres, label) = scale(view, f64::from(pixmap.width()));
+/// Draws the scale bar in the bottom margin, its length one of the ascending `steps` (metres).
+pub(super) fn draw_scale_bar(
+    pixmap: &mut Pixmap,
+    face: &Face,
+    view: &View,
+    steps: &[u32],
+) -> Result<(), RenderError> {
+    let (metres, label) = scale(view, f64::from(pixmap.width()), steps);
     let y = f64::from(pixmap.height()) - 13.0;
     let x0 = f64::from(EDGE_PX);
     let x1 = x0 + view.len_px(f64::from(metres));
@@ -270,9 +276,15 @@ mod tests {
         };
         let view = View::new(&frame, [0.0, 0.0]);
         // 25 m per pixel: 1000 px wide, at most 300 px = 7500 m.
-        assert_eq!(scale(&view, 1000.0), (5_000, "5 km".to_owned()));
-        assert_eq!(scale(&view, 100.0), (500, "500 m".to_owned()));
-        assert_eq!(scale(&view, 1.0), (100, "100 m".to_owned()));
+        assert_eq!(
+            scale(&view, 1000.0, &SCALE_STEPS_M),
+            (5_000, "5 km".to_owned())
+        );
+        assert_eq!(
+            scale(&view, 100.0, &SCALE_STEPS_M),
+            (500, "500 m".to_owned())
+        );
+        assert_eq!(scale(&view, 1.0, &SCALE_STEPS_M), (100, "100 m".to_owned()));
     }
 
     #[test]

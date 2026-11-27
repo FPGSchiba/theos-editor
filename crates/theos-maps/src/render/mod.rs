@@ -18,6 +18,7 @@ mod farmland;
 mod feats;
 mod fonts;
 mod geology;
+pub(crate) mod interior;
 mod inworld;
 mod legend;
 mod marks;

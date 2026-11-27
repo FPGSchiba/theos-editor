@@ -20,7 +20,7 @@ pub(super) const TABLE: KindTable = KindTable {
     kind: MapKind::Interior,
     layers: INTERIOR_LAYERS,
     optional_layers: &[],
-    renders: &[],
+    renders: crate::render::interior::RENDERS,
     types: TYPES,
     recipe_types: room_types,
     ids: IdScheme::ByKind,
