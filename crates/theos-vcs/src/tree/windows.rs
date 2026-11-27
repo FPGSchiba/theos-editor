@@ -3,8 +3,17 @@
 use std::io;
 use std::os::windows::io::AsRawHandle;
 use std::process::{Child, Command};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use win32job::Job;
+
+/// How long a git whose assignment failed is given to finish exiting (the order of P46 §5.3's
+/// cancel bound).
+const EXIT_GRACE: Duration = Duration::from_millis(50);
+
+/// How often an exiting git is checked within [`EXIT_GRACE`].
+const EXIT_POLL: Duration = Duration::from_millis(1);
 
 /// The job that holds git and every process git starts; none when git exited before it could
 /// join one.
@@ -39,6 +48,10 @@ impl Tree {
 /// gets to run again, and Windows refuses to put an exited process into a job ("Access is
 /// denied"). Such a run goes on without a job: no tree is left to stop, and git's exit status
 /// and output are collected as usual.
+///
+/// Windows refuses a process that is already exiting before its handle is signalled, so a single
+/// `try_wait` right after the refusal can still see git running; git is therefore given
+/// [`EXIT_GRACE`] to finish exiting before it counts as running.
 fn enter(job: Job, child: &mut Child) -> io::Result<Option<Job>> {
     match job.assign_process(child.as_raw_handle() as isize) {
         Ok(()) => Ok(Some(job)),
@@ -49,16 +62,28 @@ fn enter(job: Job, child: &mut Child) -> io::Result<Option<Job>> {
     }
 }
 
-/// Handles a failed assignment of `child` to its job: fine when `child` has exited; otherwise
-/// `child` runs outside the job, so it is killed and `error` returned.
+/// Handles a failed assignment of `child` to its job: fine when `child` exits within
+/// [`EXIT_GRACE`]; otherwise `child` runs outside the job, so it is killed and `error` returned.
 fn assignment_failed(child: &mut Child, error: io::Error) -> io::Result<()> {
-    if let Ok(Some(_)) = child.try_wait() {
+    if exits_within(child, EXIT_GRACE) {
         return Ok(());
     }
     // git runs outside the job: end it as well as std can, then report.
     let _ = child.kill();
     let _ = child.wait();
     Err(error)
+}
+
+/// Whether `child` has exited or exits within `grace`, checked every [`EXIT_POLL`].
+fn exits_within(child: &mut Child, grace: Duration) -> bool {
+    let deadline = Instant::now() + grace;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return true,
+            Ok(None) if Instant::now() < deadline => thread::sleep(EXIT_POLL),
+            Ok(None) | Err(_) => return false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -93,6 +118,17 @@ mod tests {
             .read_to_string(&mut stdout)?;
         assert!(status.success(), "{status:?}");
         assert!(stdout.starts_with("git version "), "{stdout:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn a_git_that_finishes_exiting_after_the_first_check_counts_as_exited() -> io::Result<()> {
+        // `hash-object --stdin` runs until its input ends; closing the pipe makes it exit a
+        // moment later, after the first check. The long grace keeps the test free of timing.
+        let mut child = git(&["hash-object", "--stdin"])?;
+        assert!(child.try_wait()?.is_none(), "git waits for its input");
+        drop(child.stdin.take());
+        assert!(exits_within(&mut child, Duration::from_secs(30)));
         Ok(())
     }
 
