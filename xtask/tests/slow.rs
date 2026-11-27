@@ -82,7 +82,7 @@ impl Repo {
         repo.git(&["init", "-q", "-b", "main"])?;
         repo.write(
             "Cargo.toml",
-            "[workspace]\nresolver = \"3\"\nmembers = [\"crates/*\"]\n",
+            "[workspace]\nresolver = \"3\"\nmembers = [\"crates/*\", \"xtask\"]\n",
         )?;
         repo.member("maps", &["format"])?;
         repo.write(
@@ -92,6 +92,15 @@ impl Repo {
         repo.member("format", &[])?;
         repo.member("cli", &["maps"])?;
         repo.member("vcs", &[])?;
+        // The gate's own crate holds the marker as text, as the real `xtask` does.
+        repo.write(
+            "xtask/Cargo.toml",
+            "[package]\nname = \"xtask\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+        )?;
+        repo.write(
+            "xtask/src/lib.rs",
+            "//! The gate.\npub const MARKER: &str = \"slow_\";\n",
+        )?;
         repo.write("docs/notes.md", "# Notes\n")?;
         repo.commit("the workspace")?;
         Ok(repo)
@@ -202,6 +211,7 @@ fn members_are_read_from_cargo_and_their_sources() -> TestResult {
             member("crates/format", &[], false),
             member("crates/maps", &["crates/format"], true),
             member("crates/vcs", &[], false),
+            member("xtask", &[], false),
         ]
     );
     Ok(())
@@ -225,6 +235,7 @@ fn a_pull_request_needs_the_slow_tests_when_it_can_change_them() -> TestResult {
         // The gate does not change what a slow test does.
         ("gate-tools", "gate/tools.toml", false),
         ("xtask", "xtask/src/x.rs", false),
+        ("xtask-marker", "xtask/src/lib.rs", false),
         ("workflow", ".github/workflows/ci.yml", false),
         ("cli", "crates/cli/src/lib.rs", false),
         ("vcs", "crates/vcs/src/lib.rs", false),

@@ -18,7 +18,8 @@
 //!
 //! A member has slow tests when one of its `.rs` files contains `slow_` ([`has_slow_tests`]).
 //! That over-counts (a variable `slow_path` counts too), which only makes the tests run more
-//! often. A pull request that removes the last slow test of a member leaves none there to run.
+//! often. The gate's own package [`GATE_PACKAGE`] is left out: it holds the marker as text. A pull
+//! request that removes the last slow test of a member leaves none there to run.
 //!
 //! The module is not called `slow_tests`: its own tests would be `checks::slow_tests::tests::…`,
 //! which the profiles take for slow tests.
@@ -40,6 +41,11 @@ use crate::{Error, Result};
 
 /// The text that marks a member as one with slow tests: the start of a slow test's name segment.
 pub const MARKER: &str = "slow_";
+
+/// The package of the gate itself. It never counts as a member with slow tests: its sources hold
+/// [`MARKER`] as text (this module, its tests) and it has no map-scale tests, so counting it
+/// would run the slow tests on every change to the gate.
+pub const GATE_PACKAGE: &str = "xtask";
 
 /// The paths outside the members whose change can change the outcome of a slow test: the
 /// workspace manifest and lock file (dependencies), the toolchain (the compiler), the cargo
@@ -142,7 +148,8 @@ pub fn members(root: &Path) -> Result<Vec<Member>> {
                 .map(|path| repo_relative(workspace, path.as_str()))
                 .filter(|path| dirs.contains(path))
                 .collect();
-            let has_slow_tests = has_slow_tests(workspace, &dir, &sources)?;
+            let has_slow_tests =
+                package.name != GATE_PACKAGE && has_slow_tests(workspace, &dir, &sources)?;
             Ok(Member {
                 dir,
                 depends_on,

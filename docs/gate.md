@@ -59,8 +59,8 @@ every other test shows `–`; when they did not run, the table has no result col
 never depends on the column, because `test` and `slow-tests` fail for a failing test.
 
 On a pull request, `slow-tests` runs the slow tests only when the pull request changes, since its
-merge base, a file of a workspace crate with slow tests (one of its `.rs` files contains `slow_`),
-of a workspace crate such a crate depends on, or one of `Cargo.toml`, `Cargo.lock`,
+merge base, a file of a workspace crate with slow tests (one of its `.rs` files contains `slow_`; the crate `xtask`
+itself never counts), of a workspace crate such a crate depends on, or one of `Cargo.toml`, `Cargo.lock`,
 `rust-toolchain.toml`, `.cargo/`, `.config/nextest.toml` and `gate/nextest.toml` (dependencies,
 the compiler and the nextest profiles that pick the slow tests); a change to the rest of the
 gate, to `xtask/` or to the workflows does not count. Otherwise it is reported as not needed, with the reason, without building anything. The job `gate` runs and
