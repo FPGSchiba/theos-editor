@@ -20,7 +20,8 @@ the HTML, in both themes.
 Every screen works in both Theos UI themes (`design/theos-ui/README.md`, "Themes"). A screen opens
 in Grid Noir; add `?theme=grid-light` to its URL to see Grid Light. The switch is
 `design/theos-ui/components/bundle.js` (`TheosUI.setTheme`), loaded only so a reviewer can flip
-the theme. It is not the editor's theme setting, which no phase specifies yet.
+the theme. It is not the editor's theme setting: P11's spec leaves the switch to P14, and no AC
+specifies it yet.
 
 The page styles follow the rules of the design system:
 
@@ -35,9 +36,10 @@ The page styles follow the rules of the design system:
 Contrast was checked in both themes against the design system's rules (text 4.5:1; large text,
 icons and control borders 3:1). The check covered every text and input value that is not on a
 picture, the placeholders, the glyphs that `::before` and `::after` draw, and the borders of
-check boxes, toggles, inputs and selects. What does not pass is either redundant `textMute`
-text such as indices, timestamps and tags (the design system's known flag) or a state of the
-design system's own components, listed in `docs/status.md` under "Needs Jann".
+check boxes, toggles, inputs and selects. What does not pass is redundant `textMute` text such
+as indices, timestamps and tags (the design system's known flag), an inactive control (the
+locked tier option, which WCAG 1.4.3 exempts), or a state of the design system's own components,
+listed in `docs/status.md` under "Needs Jann".
 
 Where the sample content disagrees with `docs/specs/data-model.md` (for example paths like
 `floor.md`, the id `F04`, or the "Perspectives" and "Chronicles" folders), the data model wins.

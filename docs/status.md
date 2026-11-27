@@ -57,9 +57,9 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 ## Needs Jann
 
 - P11 (spec PR, 27 Nov 2026):
-  - Theos UI's light mode: Jann hands it over once it is final, as a change to
-    `design/theos-ui/`. P11 takes every colour from tokens and sets `data-theme` on the root, so
-    the light theme needs new tokens and a switch only (P11 spec §5.7).
+  - Theos UI's light mode is the theme `grid-light`, which branch `docs/theos-ui-grid-light` adds
+    to `design/theos-ui/`. P11 takes every colour from tokens and sets `data-theme="grid-noir"`
+    on the root today; the switch (P14) sets `grid-light` (P11 spec §5.7).
   - P11's gate PR (`ci(gate): the ui check and the editor's build needs (gate)`) waits for Jann
     and must merge before the build PR. When Jann merges it, he switches the live ruleset to add
     `ui` to the required checks (`cargo xtask github apply`).
@@ -124,12 +124,14 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
   released the day it was locked. Pinning an older 4.x is a one-line follow-up if Jann prefers a
   cool-down.
 - Theos UI with Grid Light (branch `docs/theos-ui-grid-light`, 27 Nov 2026):
-  - A user-facing theme setting is new scope: the umbrella has none (G13 only says the UI uses
-    `design/theos-ui/`). Proposed AC, under CE-42 as Jann asked: "CE-42.3 The user picks Grid
-    Noir, Grid Light or the system's preference; the choice is a user setting, applies to every
-    window at once, and 3D viewports and map stages stay Grid Noir." CE-42 is the Graph story of
-    P15, and settings are CE-39 (P14, `10-settings.html`), so CE-39.5 may be the better home.
-    Jann decides the place and the wording; no phase builds it before that.
+  - A user-facing theme setting is new scope. G13 makes the UI use `design/theos-ui/` and follow
+    `docs/ui/`, so the editor must render in both themes, but no AC lets the user choose the
+    theme. Proposed AC, under CE-42 as Jann asked: "CE-42.3 The user picks Grid Noir, Grid Light
+    or the system's preference; the choice is a user setting, applies to every window at once,
+    and 3D viewports and map stages stay Grid Noir." CE-42 is the Graph story of P15, settings
+    are CE-39 (P14, `10-settings.html`), and P11's spec already leaves the light theme switch to
+    P14, so CE-39 is the likelier home (as CE-39.5). Jann decides the place and the wording; no
+    phase builds it before that.
   - Four component states in the design system's `bundle.css` put signal-coloured text on a
     tint of the same signal and miss 4.5:1: the active rail label (amber 4.30:1 in Grid Light),
     tinted chips (magenta 4.13 and cyan 4.27 in Grid Light), the review summary (amber 4.29 and
@@ -149,13 +151,24 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
     Measured in the screens and the previews (Grid Noir / Grid Light; text needs 4.5:1, icons
     and controls 3:1): inactive tab labels 2.84 / 3.01; the actions, counts and ⋯ in section
     headers ("stage all", "58 calls") 2.42–2.46 / 3.29; off filters, property keys, popover key
-    hints and the empty beat value ("+ add") 2.68 / 3.56; input placeholders 2.84 / 3.01; the
-    window controls, the select caret and the input icon 2.84 in Grid Noir (they pass in Grid
-    Light); the `border` of unchecked check boxes, of toggles that are off, of inputs and of
-    selects 1.24–1.34 / 1.38–1.50; the knob of a toggle that is off 2.46 in Grid Noir (it passes
-    in Grid Light). Redundant `textMute` text (tree tags and indices, timestamps, separators,
-    popover kind words) stays under the flag. Like the states above, these go to the artifact
-    and are not patched in `design/theos-ui/`.
+    hints and the empty beat value ("+ add") 2.68 / 3.56; the key hint on the LinkAutocomplete
+    create row ("⏎ ⇧", which the footer does not repeat) 2.46 / 3.29; tree tags that are the
+    only place that says a state or a reason ("needs engine extension", "no quest yet", "no maps
+    yet", "needs an npc", "to prove", "you pick", "draft" on the selected row; bundle
+    `.tu-tree__tag`) 2.23–2.68 / 2.96–3.56; input placeholders 2.84 / 3.01; the window controls,
+    the select caret and the input icon 2.84 in Grid Noir (they pass in Grid Light); the
+    `border` of unchecked check boxes, of toggles that are off, of inputs and of selects
+    1.24–1.34 / 1.38–1.50; the knob of a toggle that is off 2.46 in Grid Noir (it passes in Grid
+    Light). Some cards' own preview pages set text that is not redundant in `textMute` too:
+    KindGlyph's labels ("tower", "band", …) and explanatory lines 2.84 / 3.01 on `bg`, the "sig"
+    meter labels of ReviewCard and Themes and the "spawn · theos-game --from-editor" line of
+    SampleInstrument 2.68 / 3.56 on `panel`, and ReviewCard's entry count ("· jsonl · 51
+    entries") 2.46 / 3.29 on `panel2`. Redundant `textMute` text (tree tags that repeat an id, a
+    count or a band, indices, timestamps, separators, popover kind words) stays under the flag.
+    Like the states above, these go to the artifact and are not patched in `design/theos-ui/`.
+  - P12 should not copy the P10 prototype's `textMute` for front matter and raw source lines
+    (`research/P10-prose-editor/app/src/adapters/*/theme.ts`, `harness/styles.css`): 2.68 / 3.56
+    on `panel` for text that is not redundant, where `textDim` gives 5.56 / 6.71.
 
 ## Needs a private session (Confluence, Jira, plugin)
 
