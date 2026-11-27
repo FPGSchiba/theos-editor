@@ -3,3 +3,5 @@
 pub mod mission_core;
 pub mod program;
 pub mod rules;
+pub mod shapes;
+pub mod space_core;
