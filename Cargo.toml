@@ -8,6 +8,7 @@ edition = "2024"
 rust-version = "1.99.1"
 publish = false
 repository = "https://github.com/FPGSchiba/theos-editor"
+license = "MIT"
 
 # Mirror of `gate/lints.toml`; the `lints` check keeps the two identical.
 [workspace.lints.rust]
