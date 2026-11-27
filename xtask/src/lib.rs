@@ -40,6 +40,8 @@
 //! - [`code_paths`]: the paths no check reads (`gate/code-paths.toml`).
 //! - [`scope`]: whether a run needs every check or, for a change that touches no code, only
 //!   `commit-msg`.
+//! - [`needs`]: `cargo xtask needs`, whether a run needs any of some checks, which CI asks
+//!   before it installs what they need.
 //! - [`gate`]: `cargo xtask gate`, which runs the checks above that need no pull request, in
 //!   order, and writes one verdict table.
 
@@ -56,6 +58,7 @@ pub mod git;
 pub mod github;
 pub mod globs;
 pub mod markdown;
+pub mod needs;
 pub mod process;
 pub mod repo_path;
 pub mod report;

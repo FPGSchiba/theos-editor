@@ -229,7 +229,7 @@ const PLATFORM_JOBS: [PlatformJob; 3] = [
         name: "windows",
         runner: "windows-latest",
         command: "cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace,ui",
-        prelude: &[UI_BROWSER_LOCAL],
+        prelude: &[NEEDS_UI_CARGO, UI_BROWSER_LOCAL],
         timeout: 150,
         label: Some("windows"),
         input: "windows",
@@ -241,7 +241,7 @@ const PLATFORM_JOBS: [PlatformJob; 3] = [
         name: "macos",
         runner: "macos-latest",
         command: "cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace,ui",
-        prelude: &[UI_BROWSER_LOCAL],
+        prelude: &[NEEDS_UI_CARGO, UI_BROWSER_LOCAL],
         timeout: 150,
         label: Some("macos"),
         input: "macos",
@@ -269,9 +269,24 @@ const UI_BROWSER_LOCAL: &str = "pnpm --dir editor-ui install --frozen-lockfile &
 const UI_BROWSER_CI: &str = "pnpm --dir editor-ui install --frozen-lockfile && pnpm --dir \
                              editor-ui exec playwright install --with-deps chromium";
 
-/// The condition of every step that sets up Node and pnpm: only where `editor-ui/` exists, so
-/// the jobs stay green until it does and `ui` is reported as not needed.
-const UI_EXISTS_IF: &str = "hashFiles('editor-ui/package.json') != ''";
+/// The condition of every step that sets up Node, pnpm and the browser: the run needs `ui`
+/// (`xtask needs ui`, which is the scope of `gate`) and `editor-ui/` exists, so a pull request
+/// that changes no code pays nothing and the jobs stay green until the folder does.
+const UI_EXISTS_IF: &str =
+    "steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''";
+
+/// The condition of the step of the `ui` job that runs the check: the run needs it.
+const UI_RUN_IF: &str = "steps.needs.outputs.needed == 'true'";
+
+/// The step that asks xtask whether the run needs `ui`, and leaves the answer as the step output
+/// `needed`. The `ui` job asks the cached binary; the platform jobs have built xtask already.
+const NEEDS_UI_CACHED: &str = "target/xtask-bin/debug/xtask --root . needs ui";
+const NEEDS_UI_CARGO: &str = "cargo xtask needs ui";
+
+/// The check of the `ui` job: the `ui` subcommand of the cached binary. Not `gate --only ui`,
+/// because `gate` always runs `tools` first, which fails in a job that installed none of the
+/// pinned Rust tools, and `cargo xtask` would rebuild xtask on a toolchain the job never set up.
+const UI_CACHED: &str = "target/xtask-bin/debug/xtask --root . ui";
 
 /// The `platforms.yml` job of this name in [`PLATFORM_JOBS`].
 fn platform_job(name: &str) -> Option<&'static PlatformJob> {
@@ -331,15 +346,28 @@ const CI_JOBS: [CiJob; 4] = [
     CiJob {
         name: "ui",
         runner: "ubuntu-latest",
-        command: "cargo xtask gate --only ui",
-        prelude: &[UI_BROWSER_CI],
+        command: UI_CACHED,
+        prelude: &[NEEDS_UI_CACHED, UI_BROWSER_CI],
         timeout: 30,
     },
 ];
 
 /// The jobs that build Rust with the Tauri crates, which need the Linux packages of
-/// `gate/linux-packages.txt`.
-const GUI_JOBS: [&str; 3] = ["gate", "test", "coverage"];
+/// `gate/linux-packages.txt`, and the checks of each that build: the value of `gui-packages`,
+/// which the setup action asks `xtask needs` about.
+const GUI_JOBS: [(&str, &str); 3] = [
+    ("gate", "clippy,docs,slow-tests"),
+    ("test", "test"),
+    ("coverage", "coverage"),
+];
+
+/// The value of the setup input `gui-packages` of a job: its checks that need the packages.
+fn gui_packages_of(job: &str) -> Option<&'static str> {
+    GUI_JOBS
+        .iter()
+        .find(|(name, _)| *name == job)
+        .map(|(_, checks)| *checks)
+}
 
 /// The `ci.yml` job of this name in [`CI_JOBS`].
 fn ci_job(name: &str) -> Option<&'static CiJob> {
@@ -379,6 +407,12 @@ fn cached_xtask_command(name: &str) -> Option<&'static str> {
 /// The selection a `cargo xtask gate` command spells with `--only` and `--skip`, read from the
 /// command itself so the test does not repeat what the workflow says.
 fn selection_of(command: &str) -> TestResult<Selection> {
+    if command == UI_CACHED {
+        return Ok(Selection {
+            only: vec![Check::Ui],
+            skip: Vec::new(),
+        });
+    }
     let rest = command
         .strip_prefix("cargo xtask gate")
         .ok_or_else(|| format!("`{command}` is not `cargo xtask gate`"))?;
@@ -1023,10 +1057,13 @@ fn every_job_runs_only_its_command_on_its_runner() -> TestResult {
             (_, "approval") => &["checkout", "checkout", "xtask", "setup", "run"],
             (_, "pr" | "settings") => &["checkout", "xtask", "run"],
             ("ci.yml", "coverage") => &["checkout", "setup", "cache", "run"],
-            // Node and pnpm, the browser cache and the browser, before `ui`.
-            ("ci.yml", "ui") => &["checkout", "xtask", "pnpm", "node", "cache", "run", "run"],
+            // The question whether `ui` is needed, then Node and pnpm, the browser cache and the
+            // browser, before `ui`.
+            ("ci.yml", "ui") => &[
+                "checkout", "xtask", "run", "pnpm", "node", "cache", "run", "run",
+            ],
             ("platforms.yml", "windows" | "macos") => {
-                &["checkout", "setup", "pnpm", "node", "run", "run"]
+                &["checkout", "setup", "run", "pnpm", "node", "run", "run"]
             }
             _ => &["checkout", "setup", "run"],
         };
@@ -1103,23 +1140,32 @@ const PLATFORM_JOB_KEYS: [&str; 7] = [
 ];
 
 /// What a step of a job may spell. `env` is the token of the two steps that call GitHub, which
-/// `token_reaches_only_the_steps_that_call_github` pins. Left out on purpose:
-/// `continue-on-error`, `working-directory`, `shell`, `timeout-minutes` and `id`.
-const STEP_KEYS: [&str; 5] = ["uses", "with", "run", "if", "env"];
+/// `token_reaches_only_the_steps_that_call_github` pins. `id` names the step whose output the
+/// conditions of the `ui` steps read. Left out on purpose: `continue-on-error`,
+/// `working-directory`, `shell` and `timeout-minutes`.
+const STEP_KEYS: [&str; 6] = ["uses", "with", "run", "if", "env", "id"];
 
-/// What a step of the setup action may spell on top of the keys of a job's step.
-const SETUP_STEP_KEYS: [&str; 7] = ["name", "id", "uses", "with", "run", "shell", "if"];
+/// What a step of the setup action may spell on top of the keys of a job's step. `env` hands the
+/// `gui-packages` input to the step that asks `xtask needs`, which `setup_installs_packages_from_the_list`
+/// pins.
+const SETUP_STEP_KEYS: [&str; 8] = ["name", "id", "uses", "with", "run", "shell", "if", "env"];
 
 /// The condition of the step of the setup action that saves the built xtask.
 const SAVE_XTASK_IF: &str = "inputs.save-xtask == 'true'";
 
-/// The condition of the steps of the setup action that install the Linux packages of the GUI.
-const GUI_IF: &str = "inputs.gui-packages == 'true'";
+/// The condition of the step of the setup action that asks whether the run needs the packages:
+/// the job passes the checks that build.
+const ASK_IF: &str = "inputs.gui-packages != 'false'";
 
-/// The condition of the step that saves the packages: the job asks for a save, and the restore
-/// found nothing.
-const GUI_SAVE_IF: &str = "inputs.gui-packages == 'true' && inputs.save-cache == 'true' && \
-                           steps.packages.outputs.cache-hit != 'true'";
+/// The condition of the steps of the setup action that install the Linux packages of the GUI: the
+/// job asks for them and `xtask needs` says the run needs its checks.
+const GUI_IF: &str = "inputs.gui-packages != 'false' && steps.needs.outputs.needed == 'true'";
+
+/// The condition of the step that saves the packages: the job saves its build cache, and the
+/// restore found nothing.
+const GUI_SAVE_IF: &str = "inputs.gui-packages != 'false' && steps.needs.outputs.needed == 'true' \
+                           && inputs.save-cache == 'true' && steps.packages.outputs.cache-hit != \
+                           'true'";
 
 /// The condition of the checkout of the head of the pull request in `approval`, which runs only
 /// while the base commit has no xtask.
@@ -1142,11 +1188,12 @@ fn step_condition(file: &str, job: &str, position: usize) -> Option<&'static str
         ("approval.yml", "approval", 1) => Some(APPROVAL_FALLBACK_IF),
         ("approval.yml", "approval", 2) => Some(APPROVAL_XTASK_IF),
         ("approval.yml", "approval", 3) => Some(APPROVAL_BUILD_IF),
-        // pnpm, Node, the browser cache and the browser after checkout and xtask; in the platform
-        // jobs pnpm, Node and the browser after checkout and setup.
-        ("ci.yml", "ui", 2..=5) | ("platforms.yml", "windows" | "macos", 2..=4) => {
+        // pnpm, Node, the browser cache and the browser after the question; in the platform jobs
+        // pnpm, Node and the browser. The `ui` job also runs its check only when it is needed.
+        ("ci.yml", "ui", 3..=6) | ("platforms.yml", "windows" | "macos", 3..=5) => {
             Some(UI_EXISTS_IF)
         }
+        ("ci.yml", "ui", 7) => Some(UI_RUN_IF),
         _ => None,
     }
 }
@@ -1216,11 +1263,12 @@ const LOCAL_ACTIONS: [(&str, &[(usize, &str)]); 2] = [
         SETUP_ACTION,
         &[
             (4, SAVE_XTASK_IF),
-            (5, GUI_IF),
+            (5, ASK_IF),
             (6, GUI_IF),
             (7, GUI_IF),
             (8, GUI_IF),
-            (9, GUI_SAVE_IF),
+            (9, GUI_IF),
+            (10, GUI_SAVE_IF),
         ],
     ),
     (XTASK_ACTION, &[(1, BUILD_ON_MISS_IF)]),
@@ -1743,9 +1791,9 @@ fn setup_action_installs_the_toolchain_the_cache_and_the_pinned_tools() -> TestR
     let steps = action["runs"]["steps"]
         .as_vec()
         .ok_or("the action has no steps")?;
-    // The five steps below, then the five of the Linux packages (see
+    // The five steps below, then the six of the Linux packages (see
     // `setup_installs_packages_from_the_list`).
-    assert_eq!(steps.len(), 10);
+    assert_eq!(steps.len(), 11);
 
     // Every command step names its shell: a composite action has no default.
     for step in steps.iter().filter(|step| step["run"].as_str().is_some()) {
@@ -1934,11 +1982,11 @@ fn only_gate_on_main_saves_the_cached_xtask() -> TestResult {
 #[test]
 fn setup_inputs_of_every_job() -> TestResult {
     let long = |key: &str| {
-        map(&[
-            ("cache-key", key),
-            ("save-cache", ON_MAIN),
-            ("gui-packages", "true"),
-        ])
+        let mut with = map(&[("cache-key", key), ("save-cache", ON_MAIN)]);
+        if let Some(checks) = gui_packages_of(key) {
+            with.insert("gui-packages".to_owned(), checks.to_owned());
+        }
+        with
     };
     let mut gate = long("gate");
     gate.insert("save-xtask".to_owned(), ON_MAIN.to_owned());
@@ -2167,6 +2215,14 @@ fn ci_has_a_ui_job() -> TestResult {
     assert_eq!(job.runs_on()?, "ubuntu-latest");
     let steps = job.steps()?;
     assert_eq!(steps[1]["uses"].as_str(), Some(XTASK_USES));
+    // The cached binary answers whether the run needs `ui`, before anything is installed.
+    assert_eq!(steps[2]["id"].as_str(), Some("needs"));
+    assert_eq!(steps[2]["run"].as_str(), Some(NEEDS_UI_CACHED));
+    assert_eq!(
+        steps[2]["if"],
+        Yaml::BadValue,
+        "the question is always asked"
+    );
     assert_node_and_pnpm(&job)?;
 
     // The browsers of Playwright are cached by the lockfile.
@@ -2182,11 +2238,19 @@ fn ci_has_a_ui_job() -> TestResult {
         ])
     );
 
-    // The last step is the check; the step before it installs the browser with its system
-    // libraries.
+    // The last step is the check, from the cached binary and only when it is needed; the step
+    // before it installs the browser with its system libraries. Every step after the question
+    // waits for the answer.
     let last = steps.last().ok_or("the ui job has no steps")?;
-    assert_eq!(last["run"].as_str(), Some("cargo xtask gate --only ui"));
-    assert_eq!(last["if"], Yaml::BadValue, "the check always runs");
+    assert_eq!(last["run"].as_str(), Some(UI_CACHED));
+    assert_eq!(last["if"].as_str(), Some(UI_RUN_IF));
+    for step in &steps[3..] {
+        let condition = step["if"].as_str().unwrap_or_default();
+        assert!(
+            condition.starts_with("steps.needs.outputs.needed == 'true'"),
+            "a step of the ui job runs without asking whether ui is needed: {condition:?}"
+        );
+    }
     assert_eq!(job.commands()?, commands_of("ci.yml", "ui"));
     Ok(())
 }
@@ -2194,19 +2258,20 @@ fn ci_has_a_ui_job() -> TestResult {
 // AC: CE-08.3
 #[test]
 fn rust_jobs_install_the_gui_packages() -> TestResult {
-    for name in GUI_JOBS {
+    for (name, checks) in GUI_JOBS {
         let job = ci_named(name)?;
         let inputs = setup_inputs(&job)?.ok_or("no setup step")?;
         assert_eq!(
             inputs.get("gui-packages").map(String::as_str),
-            Some("true"),
-            "ci.yml: job {name} builds the Tauri crates without their Linux packages"
+            Some(checks),
+            "ci.yml: job {name} builds the Tauri crates without their Linux packages, or asks \
+             about other checks than the ones that build"
         );
     }
     // Only the jobs that build the GUI install them: they cost time and the others do not need
     // them.
     for (file, job) in all_jobs()? {
-        if file == "ci.yml" && GUI_JOBS.contains(&job.name.as_str()) {
+        if file == "ci.yml" && gui_packages_of(&job.name).is_some() {
             continue;
         }
         let inputs = setup_inputs(&job)?.unwrap_or_default();
@@ -2230,8 +2295,17 @@ fn setup_installs_packages_from_the_list() -> TestResult {
     let steps = action["runs"]["steps"]
         .as_vec()
         .ok_or("the action has no steps")?;
-    // The tail of the action: the image, the folder, the restore, the install and the save.
-    let image = &steps[5];
+    // The tail of the action: the question, the image, the folder, the restore, the install and
+    // the save. The question is asked only for a job that passes checks, and answers through the
+    // step output `needed`, which every later step reads.
+    let ask = &steps[5];
+    assert_eq!(ask["id"].as_str(), Some("needs"));
+    assert_eq!(
+        string_map(&ask["env"])?,
+        map(&[("NEEDS", "${{ inputs.gui-packages }}")])
+    );
+    assert_eq!(ask["run"].as_str(), Some("cargo xtask needs \"$NEEDS\""));
+    let image = &steps[6];
     assert_eq!(image["id"].as_str(), Some("image"));
     let image_command = image["run"].as_str().ok_or("the image step runs nothing")?;
     for variable in ["ImageOS", "ImageVersion"] {
@@ -2240,11 +2314,11 @@ fn setup_installs_packages_from_the_list() -> TestResult {
     assert!(image_command.contains("$GITHUB_OUTPUT"), "{image_command}");
 
     // The apt cache folder belongs to root; the cache action runs as the runner user.
-    let folder = steps[6]["run"].as_str().ok_or("no folder step")?;
+    let folder = steps[7]["run"].as_str().ok_or("no folder step")?;
     assert!(folder.contains("chown") && folder.contains("/var/cache/apt/archives"));
 
     // The cache: the downloaded packages, by the runner image and the list.
-    let restore = &steps[7];
+    let restore = &steps[8];
     assert_eq!(action_name(restore), Some("actions/cache/restore"));
     assert_eq!(restore["id"].as_str(), Some("packages"));
     let key = "linux-packages-${{ runner.os }}-${{ steps.image.outputs.image }}-${{ \
@@ -2255,7 +2329,7 @@ fn setup_installs_packages_from_the_list() -> TestResult {
     );
 
     // The install takes the packages from the file and no recommended ones.
-    let install = steps[8]["run"].as_str().ok_or("no install step")?;
+    let install = steps[9]["run"].as_str().ok_or("no install step")?;
     assert!(
         install.contains("apt-get install --no-install-recommends"),
         "{install}"
@@ -2263,7 +2337,15 @@ fn setup_installs_packages_from_the_list() -> TestResult {
     assert!(install.contains("gate/linux-packages.txt"), "{install}");
 
     // The save runs only when the job saves its caches, with the key and path of the restore.
-    let save = &steps[9];
+    let save = &steps[10];
+    // Only the step that asks has `env`.
+    assert_eq!(
+        steps
+            .iter()
+            .filter(|step| !step["env"].is_badvalue())
+            .count(),
+        1
+    );
     assert_eq!(action_name(save), Some("actions/cache/save"));
     assert_eq!(save["if"].as_str(), Some(GUI_SAVE_IF));
     assert_eq!(string_map(&save["with"])?, string_map(&restore["with"])?);
@@ -2283,6 +2365,13 @@ fn platforms_run_ui_on_windows_and_macos() -> TestResult {
             "{name} does not run ui"
         );
         assert_node_and_pnpm(job)?;
+        // The question comes before the setup of Node, and every step of it waits for the answer.
+        let steps = job.steps()?;
+        assert_eq!(steps[2]["id"].as_str(), Some("needs"));
+        assert_eq!(steps[2]["run"].as_str(), Some(NEEDS_UI_CARGO));
+        for step in &steps[3..6] {
+            assert_eq!(step["if"].as_str(), Some(UI_EXISTS_IF), "{name}");
+        }
     }
     // Intel macOS runs the tests only.
     let intel = &jobs[index_of(&jobs, "macos-intel")?];

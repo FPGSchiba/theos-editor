@@ -174,14 +174,13 @@ fn run_scoped(
         report::write_note(out, &format!("every check runs: {note}"))
             .map_err(report::output_error)?;
     }
-    let docs_only = *scope == Scope::DocsOnly;
     let verdicts = run_checks(
         order,
         |check, out| {
-            if docs_only && check != Check::CommitMsg {
-                Ok(Verdict::not_needed(check, scope::NOT_NEEDED_REASON))
-            } else {
+            if scope::runs(scope, check) {
                 run_one(check, out)
+            } else {
+                Ok(Verdict::not_needed(check, scope::NOT_NEEDED_REASON))
             }
         },
         out,
