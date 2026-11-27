@@ -42,7 +42,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
 | P34 | Interiors | theos-editor | todo | | |
 | P45 | Atlas level switcher | theos-editor | todo | | |
-| P46 | Git read | theos-editor | pr-open | #52, #58 | draft, branch `phase/P46-git-read` |
+| P46 | Git read | theos-editor | pr-open | #52, #58 | #62 |
 | P47 | Git write | theos-editor | todo | | |
 | P48 | MCP read | theos-editor | todo | | |
 | P49 | Releases and the check action | theos-editor | todo | | |
@@ -70,12 +70,12 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 - P50 is merged (#48), and the `main` ruleset requires `gate`, `test`, `coverage`, `pr` and
   `approval`. Its proofs after the merge remain: the probe PRs and the speed measurements (spec
   §5.9, §5.10) and one manual Intel macOS run of `platforms`.
-- P46's build PR (a draft labelled `needs-jann`, branch `phase/P46-git-read`) waits for Jann:
-  - The final review loop reached its cap of 5 rounds with one Important open (R5-I1): git 2.54+
-    also runs hooks defined in config (`hook.<name>.event` and `.command`), and `status`'s
-    `add -N` on its index copy still runs a `post-index-change` hook defined that way. Round 1's
-    fix (`core.hooksPath`) disables only hook files. The fix is known and probed: pass
-    `-c hook.<name>.enabled=false` for each configured hook name, with a test.
+- P46's build PR #62 (labelled `needs-jann`) waits for Jann's review and merge:
+  - The final review loop reached its cap of 5 rounds with one Important open (R5-I1: hooks
+    defined in config, git 2.54+, still ran during `status`). Jann approved one more fix round and
+    a targeted review: `status` now turns off every configured hook by name; the review was clean.
+  - The PR also fixes four P05 `hook install` tests that failed on macOS (git answers
+    `/private/var/…`, the tests built `/var/…`); they had never run on macOS before.
   - Spec text that the build found wrong or too narrow (a docs PR after Jann's rulings):
     - §5.6 names `--skip`; git applies it before `--follow` sees the skipped renames, so paging
       uses `--max-count` and skips in Rust (R7-1);
