@@ -149,20 +149,113 @@ fn a_stage_of_another_kind_is_refused() {
     assert!(fields(&err).3.contains("does not apply"), "{err}");
 }
 
+// AC: CE-28.3
 #[test]
-fn a_recipe_input_is_unknown() {
-    let err = refusal("[inputs]\nseed_hint = 3\n", &["a"]);
+fn an_undeclared_input_is_refused_before_the_run() {
+    let mut inputs = no_inputs();
+    inputs.insert("floor".to_owned(), serde_json::json!(2));
+    let err = plan(&recipe("", &["a"]), &registry(), &inputs).unwrap_err();
     let (_, _, parameter, message) = fields(&err);
-    assert_eq!(parameter, Some("seed_hint"));
-    assert_eq!(message, "unknown recipe input `seed_hint`");
+    assert_eq!(parameter, Some("floor"));
+    assert_eq!(message, "unknown recipe input `floor`");
+}
+
+// AC: CE-28.3
+#[test]
+fn an_input_of_the_wrong_type_is_refused_before_the_run() {
+    let loaded = recipe(
+        "[inputs]
+floor = { type = \"number\", min = 1, max = 10, integer = true }
+",
+        &["a"],
+    );
+    for bad in [
+        serde_json::json!("two"),
+        serde_json::json!(11),
+        serde_json::json!(2.5),
+    ] {
+        let mut inputs = no_inputs();
+        inputs.insert("floor".to_owned(), bad.clone());
+        let err = plan(&loaded, &registry(), &inputs).unwrap_err();
+        assert_eq!(fields(&err).2, Some("floor"), "{bad}");
+    }
+    let mut inputs = no_inputs();
+    inputs.insert("floor".to_owned(), serde_json::json!(3));
+    assert!(plan(&loaded, &registry(), &inputs).is_ok());
+}
+
+fn parse_refusal(text: &str) -> String {
+    parse(text, RecipeOrigin::Builtin).unwrap_err().to_string()
 }
 
 #[test]
-fn a_request_input_is_unknown() {
-    let mut inputs = no_inputs();
-    inputs.insert("tint".to_owned(), serde_json::json!(1));
-    let err = plan(&recipe("", &["a"]), &registry(), &inputs).unwrap_err();
-    assert_eq!(fields(&err).2, Some("tint"));
+fn two_feature_inputs_are_refused() {
+    let extra = "[inputs]
+a = { type = \"feature\", parent_types = [\"town\"] }
+                 b = { type = \"feature\", parent_types = [\"town\"] }
+";
+    assert!(parse_refusal(&text(extra, &[])).contains("only one `feature` input"));
+}
+
+#[test]
+fn cameras_inputs_are_refused_as_unsupported() {
+    let extra = "[inputs]
+cams = { type = \"cameras\" }
+";
+    assert!(parse_refusal(&text(extra, &[])).contains("unsupported"));
+}
+
+fn settlement_text(frame: &str) -> String {
+    format!(
+        "id = \"s\"
+title = \"S\"
+kind = \"settlement\"
+{frame}"
+    )
+}
+
+#[test]
+fn a_settlement_recipe_with_grid_is_refused() {
+    let loaded = parse(
+        &settlement_text(
+            "grid = [4, 8]
+",
+        ),
+        RecipeOrigin::Builtin,
+    )
+    .unwrap();
+    let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+    assert_eq!(fields(&err).2, Some("grid"));
+    let loaded = parse(
+        &settlement_text(
+            "size_km = [1.0, 1.0]
+",
+        ),
+        RecipeOrigin::Builtin,
+    )
+    .unwrap();
+    let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+    assert_eq!(fields(&err).2, Some("size_km"));
+}
+
+#[test]
+fn a_terrain_recipe_without_grid_is_refused() {
+    let without_grid = "id = \"t\"
+title = \"T\"
+kind = \"terrain\"
+size_km = [1.0, 0.5]
+";
+    let loaded = parse(without_grid, RecipeOrigin::Builtin).unwrap();
+    let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+    assert_eq!(fields(&err).2, Some("grid"));
+    let without_size = "id = \"t\"
+title = \"T\"
+kind = \"terrain\"
+grid = [4, 8]
+";
+    let loaded = parse(without_size, RecipeOrigin::Builtin).unwrap();
+    let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+    assert_eq!(fields(&err).2, Some("size_km"));
 }
 
 #[test]

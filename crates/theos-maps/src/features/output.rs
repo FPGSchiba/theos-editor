@@ -3,10 +3,10 @@
 //!
 //! The features come in this order: the [`FeatureSet`] in handle order, then the roads of the
 //! `road_network` in network order, then the river lines, then the lakes of
-//! `water_features`, one per lake. Every feature gets the id `<type>-<n>`, numbered per final
-//! type from 1 in that order, so a stage that changed a type (a promotion) renames no
-//! reference. Every [`Prop::Ref`], [`Prop::Refs`] and [`Prop::Road`] becomes the id or ids of
-//! the features it names; a reference to something that does not exist is an error. Coordinates
+//! `water_features`, one per lake. Every feature gets an id by the kind's `IdScheme`
+//! (`<type>-<n>` or `<kind>-<n>`), numbered from 1 in that order through one map, so ids are
+//! unique and a stage that changed a type (a promotion) renames no reference. Every
+//! [`Prop::Ref`], [`Prop::Refs`] and [`Prop::Road`] becomes the id or ids of the features it names; a reference to something that does not exist is an error. Coordinates
 //! are metres, and `-0.0` is written as `0.0`. A world without one of the three values has no
 //! features of it.
 //!
@@ -168,7 +168,7 @@ impl Named {
     }
 
     /// The ids of `features` by `scheme`, then of roads, rivers and lakes, which only terrain
-    /// has and which are numbered per type. `counts` holds how many features each type has.
+    /// has, all numbered through one map. `counts` holds how many features each type has.
     fn new(
         features: &[&Feature],
         lists: &BTreeMap<&'static str, Vec<FeatureHandle>>,

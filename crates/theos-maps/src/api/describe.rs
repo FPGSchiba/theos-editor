@@ -12,8 +12,8 @@ use crate::stage::Registry;
 ///
 /// Every recipe is planned with empty inputs. One that does not plan, or whose stages do not
 /// write a layer the package or a render reads (ledger ruling P3), is reported as a problem
-/// naming its file and is not offered. Terrain recipes take no inputs, so `inputs` is empty and
-/// every recipe is `seeded`.
+/// naming its file and is not offered. `inputs` are the declarations of the recipe
+/// (`Inputs::describe`) and every recipe is `seeded`.
 ///
 /// # Errors
 /// [`RecipeError::Io`] when a recipe folder or file cannot be read.
@@ -59,7 +59,7 @@ fn info(loaded: &LoadedRecipe, plan: &recipe::Plan, registry: &Registry) -> Reci
     RecipeInfo {
         id: loaded.recipe.id.clone(),
         title: loaded.recipe.title.clone(),
-        inputs: serde_json::Map::new(),
+        inputs: loaded.recipe.inputs().describe(),
         seeded: true,
         stages,
     }

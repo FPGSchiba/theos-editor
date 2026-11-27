@@ -150,11 +150,45 @@ fn check_constraints(recipe: &LoadedRecipe, stages: &[PlannedStage]) -> Result<(
     Ok(())
 }
 
-/// Check 1: the grid (at least 2 x 2, a cell count that fits a `usize`), the size, square cells
+/// Check 1: the keys `grid` and `size_km` by kind (terrain and interior need both, a settlement
+/// map has neither: its frame comes from the parent), then the grid (at least 2 x 2, a cell count that fits a `usize`), the size, square cells
 /// and a cell edge from [`MIN_CELL_M`] to [`MAX_CELL_M`].
 fn check_frame(recipe: &LoadedRecipe) -> Result<MapFrame, RecipeError> {
     let r = &recipe.recipe;
-    let [rows, cols] = r.grid;
+    let (grid, size_km) = match r.kind {
+        MapKind::Settlement => {
+            for (key, present) in [("grid", r.grid.is_some()), ("size_km", r.size_km.is_some())] {
+                if present {
+                    return Err(invalid(
+                        recipe,
+                        &at_parameter(key),
+                        format!(
+                            "a settlement recipe has no `{key}`; its frame comes from the parent"
+                        ),
+                    ));
+                }
+            }
+            return Err(invalid(
+                recipe,
+                &Spot::default(),
+                "the frame of a settlement map is not available yet",
+            ));
+        }
+        MapKind::Terrain | MapKind::Interior => {
+            let need = |key: &str| {
+                invalid(
+                    recipe,
+                    &at_parameter(key),
+                    format!("a {} recipe needs `{key}`", r.kind),
+                )
+            };
+            (
+                r.grid.ok_or_else(|| need("grid"))?,
+                r.size_km.ok_or_else(|| need("size_km"))?,
+            )
+        }
+    };
+    let [rows, cols] = grid;
     if rows < 2 || cols < 2 {
         return Err(invalid(
             recipe,
@@ -170,7 +204,7 @@ fn check_frame(recipe: &LoadedRecipe) -> Result<MapFrame, RecipeError> {
             format!("`grid` of {rows} x {cols} overflows the cell count"),
         ));
     }
-    let [width, height] = r.size_km;
+    let [width, height] = size_km;
     // In metres too: a size beyond f64 there would make the cell edge an infinity.
     let usable = |km: f64| km > 0.0 && (km * 1000.0).is_finite();
     if !(usable(width) && usable(height)) {
@@ -238,20 +272,16 @@ fn check_renders(recipe: &LoadedRecipe) -> Result<(), RecipeError> {
     Ok(())
 }
 
-/// Check 3: terrain recipes take no inputs in P08.
+/// Check 3: the request's inputs against the recipe's declarations.
 fn check_inputs(
     recipe: &LoadedRecipe,
     request: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<(), RecipeError> {
-    let mut keys = recipe.recipe.inputs.keys().chain(request.keys());
-    if let Some(key) = keys.next() {
-        return Err(invalid(
-            recipe,
-            &at_parameter(key),
-            format!("unknown recipe input `{key}`"),
-        ));
-    }
-    Ok(())
+    recipe
+        .recipe
+        .inputs()
+        .check(request)
+        .map_err(|e| invalid(recipe, &at_parameter(&e.input), e.message))
 }
 
 /// Check 4: the stages, in order, with the layers available before each.
