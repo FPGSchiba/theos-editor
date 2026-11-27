@@ -6,7 +6,7 @@ use theos_content::RecordSummary;
 
 use crate::marks::{MarkView, Marks};
 use crate::views::check::FindingView;
-use crate::views::ledger::TruthView;
+use crate::views::project::MarkedTruthView;
 
 /// A record named in a result: who it is, where it lies and what marks it carries.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
@@ -132,7 +132,7 @@ pub struct RecordView {
     /// The effective lens, for a record that can hold one.
     pub lens: Option<LensView>,
     /// The reveal ledger, for a truth.
-    pub ledger: Option<TruthView>,
+    pub ledger: Option<MarkedTruthView>,
 }
 
 /// An id a link names: the record, when there is one.

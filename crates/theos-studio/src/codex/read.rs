@@ -12,6 +12,7 @@ use crate::views::codex::{
     RecordView,
 };
 use crate::views::ledger::TruthView;
+use crate::views::project::MarkedTruthView;
 use crate::{StudioError, Workspace};
 
 /// What to read.
@@ -71,7 +72,10 @@ fn record_view(
         .ledger_of(&summary.id)?
         .iter()
         .find(|truth| truth.path == summary.path)
-        .map(TruthView::from);
+        .map(|truth| MarkedTruthView {
+            truth: TruthView::from(truth),
+            mark: lookup.marks.of_path(&truth.path),
+        });
     Ok(RecordView {
         record: RecordRef::from_summary(summary, &lookup.marks),
         text,

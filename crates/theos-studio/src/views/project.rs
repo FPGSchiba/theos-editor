@@ -72,7 +72,8 @@ pub struct MarkedTruthView {
     /// The truth and the clues that reveal it.
     #[serde(flatten)]
     pub truth: TruthView,
-    /// The marks of the truth.
+    /// The marks of the truth, flattened next to its `id` (spec 5.6).
+    #[serde(flatten)]
     pub mark: MarkView,
 }
 

@@ -5,23 +5,45 @@ use std::process::{Command, Stdio};
 
 use rmcp::model::CallToolRequestParams;
 
-use crate::common::{TestResult, client, copy_dir, fixture, fixture_copy, structured, text};
+use crate::common::{
+    TestResult, assert_error, client, copy_dir, fixture, fixture_copy, structured,
+};
 
 /// The records of the `codex` fixture.
 const FIXTURE_RECORDS: u64 = 18;
 
 // AC: CE-18.1
 #[tokio::test]
-async fn lists_exactly_the_tools() -> TestResult {
+async fn lists_exactly_the_six_tools() -> TestResult {
     let (_dir, project) = fixture_copy()?;
     let client = client(&project, &[]).await?;
     let tools = client.list_all_tools().await?;
-    let names: Vec<&str> = tools.iter().map(|tool| &*tool.name).collect();
-    assert_eq!(names, ["project_info"]);
-    let tool = &tools[0];
-    assert!(tool.output_schema.is_some(), "no output schema");
-    let read_only = tool.annotations.as_ref().and_then(|a| a.read_only_hint);
-    assert_eq!(read_only, Some(true));
+    let mut names: Vec<&str> = tools.iter().map(|tool| &*tool.name).collect();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        [
+            "codex_graph",
+            "codex_list",
+            "codex_read",
+            "codex_search",
+            "ledger_check",
+            "project_info"
+        ]
+    );
+    for tool in &tools {
+        let name = &*tool.name;
+        // G7: tool names are `^[a-z][a-z0-9_]*$`.
+        assert!(name.starts_with(|c: char| c.is_ascii_lowercase()), "{name}");
+        assert!(
+            name.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+            "{name}"
+        );
+        assert!(tool.output_schema.is_some(), "{name}: no output schema");
+        let read_only = tool.annotations.as_ref().and_then(|a| a.read_only_hint);
+        assert_eq!(read_only, Some(true), "{name}");
+    }
     client.cancel().await?;
     Ok(())
 }
@@ -50,8 +72,7 @@ async fn start_outside_project_reports_then_recovers() -> TestResult {
     let first = client
         .call_tool(CallToolRequestParams::new("project_info"))
         .await?;
-    assert_eq!(first.is_error, Some(true));
-    assert!(text(&first)?.contains("no theos.toml"), "{first:?}");
+    assert_error(&first, "no theos.toml")?;
     copy_dir(&fixture(), dir.path())?;
     let second = client
         .call_tool(CallToolRequestParams::new("project_info"))
@@ -72,10 +93,8 @@ async fn given_project_must_hold_theos_toml() -> TestResult {
     let result = client
         .call_tool(CallToolRequestParams::new("project_info"))
         .await?;
-    assert_eq!(result.is_error, Some(true));
-    let message = text(&result)?;
-    assert!(message.contains("theos.toml"), "{message}");
-    assert!(message.contains(&folder), "{message}");
+    assert_error(&result, "theos.toml")?;
+    assert_error(&result, &folder)?;
     client.cancel().await?;
     Ok(())
 }
@@ -108,9 +127,15 @@ fn stdout_is_only_json_rpc() -> TestResult {
     let stdout = String::from_utf8(output.stdout)?;
     let lines: Vec<&str> = stdout.lines().filter(|l| !l.trim().is_empty()).collect();
     assert!(lines.len() >= 2, "expected two responses: {stdout}");
+    let mut answered = false;
     for line in lines {
         let value: serde_json::Value = serde_json::from_str(line)?;
         assert_eq!(value["jsonrpc"], "2.0", "{line}");
+        if value["id"] == 2 {
+            assert!(value.get("result").is_some(), "no result: {line}");
+            answered = true;
+        }
     }
+    assert!(answered, "no response with id 2: {stdout}");
     Ok(())
 }

@@ -73,8 +73,8 @@ mod tests {
         let view = serde_json::to_value(ledger_check(&workspace, None)?)?;
         let truths = view["truths"].as_array().ok_or("no truths")?;
         let of = |id: &str| truths.iter().find(|t| t["id"] == id).ok_or("missing truth");
-        assert_eq!(of("T-911")?["mark"]["never"], true);
-        assert_eq!(of("T-912")?["mark"]["never"], false);
+        assert_eq!(of("T-911")?["never"], true);
+        assert_eq!(of("T-912")?["never"], false);
         let clues: Vec<&str> = of("T-912")?["entries"]
             .as_array()
             .ok_or("no entries")?

@@ -23,7 +23,7 @@ tracing-subscriber.workspace = true
 rmcp = { workspace = true, features = ["client", "transport-child-process"] }
 serde_json.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["process", "rt-multi-thread", "time", "io-util"] }
+tokio = { workspace = true, features = ["process", "rt-multi-thread", "time"] }
 
 [lints]
 workspace = true
