@@ -11,7 +11,7 @@ use super::{
     Finding, LayerSpec, MapKind, Metrics, ParamError, Runs, Stage, StageContext, StageError,
     StageReport,
 };
-use crate::world::World;
+use crate::world::{MapFrame, World};
 
 /// A stage with its own parameter type. Every stage implements this trait; the blanket impl
 /// makes it a [`Stage`] that parses its parameters (unknown keys refused), validates them and
@@ -64,6 +64,15 @@ pub trait TypedStage: Send + Sync + 'static {
     /// [`ParamError`] naming the stage and, where one is to blame, the parameter
     /// ([`ParamError::at`], [`Check::refuse`](super::Check::refuse)).
     fn validate(&self, _params: &mut Self::Params) -> Result<(), ParamError> {
+        Ok(())
+    }
+
+    /// Checks `params` against the map's `frame` before any stage runs: parameters in metres
+    /// that must be whole raster cells, or a lattice that must fit the grid. Nothing by default.
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and the parameter.
+    fn check_frame(&self, _params: &Self::Params, _frame: &MapFrame) -> Result<(), ParamError> {
         Ok(())
     }
 
@@ -167,6 +176,15 @@ impl<T: TypedStage> Stage for T {
         own::<T>(params)
             .map(|p| TypedStage::metric_names(self, p))
             .unwrap_or_default()
+    }
+
+    fn check_frame(&self, params: &dyn StageParams, frame: &MapFrame) -> Result<(), ParamError> {
+        let p = own::<T>(params).ok_or_else(|| ParamError {
+            stage: T::ID.to_owned(),
+            parameter: None,
+            message: FOREIGN.to_owned(),
+        })?;
+        TypedStage::check_frame(self, p, frame)
     }
 
     fn check_order(

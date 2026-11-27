@@ -1,0 +1,56 @@
+# synthetic fixture (P34), not canon
+# A 40 x 40 interior at 1 m through every interior stage: a 5 x 5 lattice at 8 m, a main cycle
+# with two open routes and one leaf. Tests only; not a built-in, so `describe` does not list it.
+# The program names six rooms (start, goal, two galleries, a store, an exit). The arcs from the
+# south rim to the centre need at least four path rooms, so the cycle adds generic `path` rooms
+# after the two galleries (7 to 12 rooms in all); no P34 rule places an `exit` room yet.
+id      = "fixture-interior"
+title   = "A small interior, 40 squared"
+kind    = "interior"
+grid    = [40, 40]
+size_km = [0.04, 0.04]
+
+[[stage]]
+id       = "envelope"
+shape    = "rect"
+margin_m = 0.0
+pitch_m  = 8.0
+
+[[stage]]
+id = "mission"
+  [[stage.room]]
+  type = "entrance"
+  role = "start"
+  [[stage.room]]
+  type = "hall"
+  role = "goal"
+  [[stage.room]]
+  type  = "gallery"
+  role  = "path"
+  count = 2
+  [[stage.room]]
+  type = "store"
+  role = "leaf"
+  [[stage.room]]
+  type = "gate"
+  role = "exit"
+  [[stage.rule]]
+  rule    = "main_cycle"
+  side    = "south"
+  cycle   = "two_routes"
+  min_arc = 1
+  [[stage.rule]]
+  rule = "leaf"
+
+[[stage]]
+id = "space"
+
+[[stage]]
+id = "cover"
+
+[[stage]]
+id = "playability"
+
+[constraints]
+"stages.mission.short"      = [0, 0]
+"stages.playability.rooms"  = [7, 12]

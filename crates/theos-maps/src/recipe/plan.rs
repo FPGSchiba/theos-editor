@@ -6,6 +6,7 @@ use super::{LoadedRecipe, Recipe, RecipeError};
 use crate::child::values::PARENT_PREFIX;
 use crate::child::{ParentContext, child_frame, describe_frame, standalone_frame};
 use crate::constraints::is_known_path;
+use crate::kind;
 use crate::render::{self, Role};
 use crate::stage::{LayerSpec, MapKind, ParamError, Registry, Runs, StageParams};
 use crate::world::{LayerKind, MapFrame};
@@ -125,9 +126,10 @@ pub fn plan(
 ) -> Result<Plan, RecipeError> {
     check_id(recipe)?;
     let placed = check_frame(recipe, planning)?;
+    check_kind_frame(recipe, &placed.frame)?;
     check_renders(recipe)?;
     check_inputs(recipe, inputs)?;
-    let (stages, seeded) = plan_stages(recipe, registry, planning)?;
+    let (stages, seeded) = plan_stages(recipe, registry, planning, &placed.frame)?;
     check_constraints(recipe, &stages)?;
     let r = &recipe.recipe;
     Ok(Plan {
@@ -225,6 +227,18 @@ fn check_frame(recipe: &LoadedRecipe, planning: Planning<'_>) -> Result<Placed, 
     })
 }
 
+/// Check 1, the kind's part: the frame keeps the rule of the recipe's kind (an interior's cell
+/// size lies on the 1/16 m lattice). The refusal names `size_km`, which sets the cell size with
+/// `grid`.
+fn check_kind_frame(recipe: &LoadedRecipe, frame: &MapFrame) -> Result<(), RecipeError> {
+    match kind::table(recipe.recipe.kind).check_frame {
+        Some(check) => {
+            check(frame).map_err(|message| invalid(recipe, &at_parameter("size_km"), message))
+        }
+        None => Ok(()),
+    }
+}
+
 /// Check 2: the extra renders and the render options.
 fn check_renders(recipe: &LoadedRecipe) -> Result<(), RecipeError> {
     let r = &recipe.recipe;
@@ -264,7 +278,8 @@ fn check_inputs(
         .map_err(|e| invalid(recipe, &at_parameter(&e.input), e.message))
 }
 
-/// Check 4: the stages, in order, with the layers available before each.
+/// Check 4: the stages, in order, with the layers available before each; each stage's
+/// parameters are also checked against the `frame`.
 ///
 /// A stage that does not run in this planning is parsed (so a wrong table is still refused) and
 /// then left out: it is not counted for the random-stream keys and writes nothing. Returns the
@@ -273,6 +288,7 @@ fn plan_stages(
     recipe: &LoadedRecipe,
     registry: &Registry,
     planning: Planning<'_>,
+    frame: &MapFrame,
 ) -> Result<(Vec<PlannedStage>, Vec<LayerSpec>), RecipeError> {
     let offer = offered::Offered::of(&recipe.recipe, planning);
     let mut available: BTreeMap<String, LayerKind> = offer.names.clone();
@@ -309,6 +325,9 @@ fn plan_stages(
             )
         };
         let params = stage.params(table).map_err(param_error)?;
+        stage
+            .check_frame(params.as_ref(), frame)
+            .map_err(param_error)?;
         let skipped = matches!(
             (planning, stage.runs()),
             (Planning::Standalone, Runs::Child) | (Planning::Child(_), Runs::Standalone)

@@ -26,6 +26,11 @@ pub fn register(registry: &mut Registry) {
     registry.add(Box::new(terrain::roads::Roads));
     registry.add(Box::new(terrain::sites::Sites));
     registry.add(Box::new(terrain::travel::Travel));
+    registry.add(Box::new(interior::envelope::Envelope));
+    registry.add(Box::new(interior::mission::Mission));
+    registry.add(Box::new(interior::space::Space));
+    registry.add(Box::new(interior::cover::Cover));
+    registry.add(Box::new(interior::playability::Playability));
 }
 
 #[cfg(test)]
@@ -36,6 +41,7 @@ mod tests {
     fn minimal_params(id: &str) -> toml::Table {
         let text = match id {
             "hydrology" => "river_q = 0.15\nbig_river_q = 2.0",
+            "envelope" => "pitch_m = 8.0",
             _ => "",
         };
         toml::from_str(text).unwrap()

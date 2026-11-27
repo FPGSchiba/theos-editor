@@ -145,8 +145,9 @@ const MAX_DOOR: u32 = 2;
 ///   one cell that is the spec's `below(len - door - 1) + 1`; a thicker wall keeps its corners
 ///   closed. The gap runs through the wall, `door` x `wall` cells.
 /// - **Shapes** (module [`super::shapes`]) cut each room inside its bounding rectangle; the
-///   room centre is taken on the shaped room, and a line from every door's inner cells to it is
-///   carved back.
+///   shaped room's centre is taken, and a line from every door's inner cells to it is carved
+///   back. The centres returned are those of the rooms as built ([`room_centres`]), so the
+///   stages that read the rasters from the world find the same ones.
 ///
 /// # Errors
 /// [`SpaceError::BadParam`] for a parameter out of range; [`SpaceError::EmptyRoom`] for a block
@@ -195,16 +196,13 @@ pub fn build_space(
     };
     let mut rooms = Grid::filled(rows, cols, 0_u32);
     let boxes = bounds(&base, g.rooms.len());
-    let mut centres = Vec::with_capacity(g.rooms.len());
     for (i, room) in g.rooms.iter().enumerate() {
         let stubs: Vec<((u32, u32), bool)> = placed.iter().flat_map(|d| d.stubs_of(i)).collect();
-        let centre = boxes
-            .get(i)
-            .copied()
-            .flatten()
-            .and_then(|b| shaping.room(&mut rooms, b, number(i), room.shape, &stubs));
-        centres.push(centre.unwrap_or((0, 0)));
+        if let Some(b) = boxes.get(i).copied().flatten() {
+            shaping.room(&mut rooms, b, number(i), room.shape, &stubs);
+        }
     }
+    let centres = room_centres(&rooms, g.rooms.len());
     for i in 0..rooms.len() {
         if let Some(k) = rooms.as_slice()[i].checked_sub(1) {
             walkable.as_mut_slice()[i] = true;
@@ -439,8 +437,9 @@ struct Shaping<'a> {
 }
 
 impl Shaping<'_> {
-    /// Shapes the room numbered `id` inside its rectangle `b`, carves its door stubs, writes
-    /// its cells into `rooms` and returns its centre (`None` when it has no cell).
+    /// Shapes the room numbered `id` inside its rectangle `b`, carves its door stubs to the
+    /// shaped room's centre and writes its cells into `rooms`; a room without a cell writes
+    /// nothing.
     fn room(
         &self,
         rooms: &mut Grid<u32>,
@@ -448,9 +447,11 @@ impl Shaping<'_> {
         id: u32,
         shape: Shape,
         stubs: &[((u32, u32), bool)],
-    ) -> Option<(u32, u32)> {
+    ) {
         let room = window(self.base, b, 0).map(|v| v == id);
-        let anchor = shapes::centre(&room)?;
+        let Some(anchor) = shapes::centre(&room) else {
+            return;
+        };
         let mut mask = match shape {
             Shape::Rect => shapes::rect(&room),
             Shape::Round => shapes::round(&room),
@@ -460,7 +461,9 @@ impl Shaping<'_> {
             }
             Shape::Passage => shapes::passage(&room, us(self.p.passage)),
         };
-        let centre = shapes::centre(&mask)?;
+        let Some(centre) = shapes::centre(&mask) else {
+            return;
+        };
         for &((r, c), rows_first) in stubs {
             if let (Some(lr), Some(lc)) = (us(r).checked_sub(b.0), us(c).checked_sub(b.2)) {
                 shapes::carve(&mut mask, &room, (lr, lc), centre, rows_first);
@@ -479,8 +482,28 @@ impl Shaping<'_> {
                 rooms.set(b.0 + r, b.2 + c, id);
             }
         }
-        Some((to_u32(b.0 + centre.0), to_u32(b.2 + centre.1)))
     }
+}
+
+/// The centre of each of the `n` rooms of a `rooms` raster (room number + 1 per cell), by room
+/// number: the room's cell nearest to the mean of its cells ([`shapes::centre`], spec §5.7), on
+/// the room as built, door stubs included. A room without a cell gets `(0, 0)`.
+///
+/// `space` returns it with the rasters, and `cover` and `playability`, which read the rasters
+/// from the world, compute the same centres from the `rooms` layer.
+#[must_use]
+pub fn room_centres(rooms: &Grid<u32>, n: usize) -> Vec<(u32, u32)> {
+    bounds(rooms, n)
+        .into_iter()
+        .enumerate()
+        .map(|(i, b)| {
+            b.and_then(|b| {
+                let mask = window(rooms, b, 0).map(|v| v == number(i));
+                shapes::centre(&mask).map(|(r, c)| (to_u32(b.0 + r), to_u32(b.2 + c)))
+            })
+            .unwrap_or((0, 0))
+        })
+        .collect()
 }
 
 /// The checks of spec §5.7, in order; the first failure is returned.
@@ -851,9 +874,8 @@ mod tests {
             noise: &z,
         };
         let mut rooms = Grid::filled(15, 15, 0_u32);
-        let centre = shaping
-            .room(&mut rooms, (0, 15, 0, 15), 1, Shape::Round, &[])
-            .unwrap();
+        shaping.room(&mut rooms, (0, 15, 0, 15), 1, Shape::Round, &[]);
+        let centre = room_centres(&rooms, 1)[0];
         assert_eq!(rooms.get(centre.0 as usize, centre.1 as usize), 1);
         let (_, parts) = labels(&rooms.map(|v| v == 1), Connectivity::Four);
         assert_eq!(parts, 1);

@@ -27,6 +27,7 @@ pub(super) const TABLE: KindTable = KindTable {
     title: render::title_line,
     frame: FrameRule::Recipe,
     own_seeds: &[],
+    check_frame: None,
 };
 
 /// The parity metrics; the Chime walk comes from the `travel` stage's metrics.

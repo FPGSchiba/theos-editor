@@ -21,7 +21,7 @@ use crate::package::PackageLayer;
 use crate::recipe::Plan;
 use crate::render::Render;
 use crate::stage::{LayerSpec, MapKind, Metrics};
-use crate::world::{Layer, World};
+use crate::world::{Layer, MapFrame, World};
 
 /// How the ids of a kind's features are numbered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +43,9 @@ pub(crate) struct OwnSeed {
     /// Builds the value.
     pub build: SeedFn,
 }
+
+/// Refuses a frame a kind cannot use, with the reason.
+pub(crate) type FrameCheck = fn(&MapFrame) -> Result<(), String>;
 
 /// The top-level metrics of the summary, from the world and the stages' metrics.
 pub(crate) type MetricsFn = fn(&World, &[(String, Metrics)]) -> Result<Value, FormatError>;
@@ -80,6 +83,9 @@ pub(crate) struct KindTable {
     pub frame: FrameRule,
     /// The world values the kind offers besides `parent.*`, available before the first stage.
     pub own_seeds: &'static [OwnSeed],
+    /// Refuses a frame the kind cannot use, with the reason; the plan names `size_km`. `None`
+    /// for a kind that takes every frame the recipe checks allow.
+    pub check_frame: Option<FrameCheck>,
 }
 
 /// One entry per [`MapKind`].

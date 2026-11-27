@@ -124,18 +124,8 @@ impl Lattice {
         stagger: Stagger,
         rng: &mut StageRng,
     ) -> Result<Self, LatticeError> {
-        if pitch < MIN_PITCH {
-            return Err(LatticeError::PitchTooSmall(pitch));
-        }
-        let max = pitch / 4;
-        if jitter > max {
-            return Err(LatticeError::JitterTooLarge { jitter, max });
-        }
+        let (rows, cols) = Self::size(grid_rows, grid_cols, pitch, jitter)?;
         let p = pitch as usize;
-        let (rows, cols) = (grid_rows / p, grid_cols / p);
-        if rows < 1 || cols < 1 {
-            return Err(LatticeError::TooSmall { rows, cols });
-        }
         // Beyond u16 the lattice is clamped; the leftover then centres the clamped lattice.
         let rows = rows.min(usize::from(u16::MAX));
         let cols = cols.min(usize::from(u16::MAX));
@@ -165,6 +155,33 @@ impl Lattice {
             enabled: vec![true; rows * cols],
             offsets,
         })
+    }
+
+    /// The lattice rows and columns over a `grid_rows` x `grid_cols` raster, before the clamp
+    /// to `u16`: the checks of [`Lattice::new`] without building anything, so the recipe loader
+    /// refuses what the stage would.
+    ///
+    /// # Errors
+    /// [`LatticeError`] for a pitch below 6, a jitter above `pitch / 4`, or a grid without a cell.
+    pub fn size(
+        grid_rows: usize,
+        grid_cols: usize,
+        pitch: u32,
+        jitter: u32,
+    ) -> Result<(usize, usize), LatticeError> {
+        if pitch < MIN_PITCH {
+            return Err(LatticeError::PitchTooSmall(pitch));
+        }
+        let max = pitch / 4;
+        if jitter > max {
+            return Err(LatticeError::JitterTooLarge { jitter, max });
+        }
+        let p = pitch as usize;
+        let (rows, cols) = (grid_rows / p, grid_cols / p);
+        if rows < 1 || cols < 1 {
+            return Err(LatticeError::TooSmall { rows, cols });
+        }
+        Ok((rows, cols))
     }
 
     fn offset(&self, lane: u16, at: u16) -> i64 {

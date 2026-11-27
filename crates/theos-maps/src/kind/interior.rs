@@ -19,4 +19,5 @@ pub(super) const TABLE: KindTable = KindTable {
     title: plain_title,
     frame: FrameRule::RecipeChild,
     own_seeds: &[],
+    check_frame: Some(crate::stages::interior::units::check_cell_size),
 };

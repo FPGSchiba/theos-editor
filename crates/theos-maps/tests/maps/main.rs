@@ -4,6 +4,7 @@ mod api;
 mod determinism;
 mod fixture_pairs;
 mod golden;
+mod interiors;
 mod parity;
 mod recipes;
 mod resolution;

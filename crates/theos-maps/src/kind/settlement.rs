@@ -27,6 +27,7 @@ pub(super) const TABLE: KindTable = KindTable {
         spec: LayerSpec::value(CLASS_FRAME, "class_frame"),
         build: class_frame,
     }],
+    check_frame: None,
 };
 
 /// The class table entry of the map (`class_frame`): the class of the parent feature, or of the
