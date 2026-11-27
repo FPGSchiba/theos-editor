@@ -33,6 +33,17 @@ repo column in the umbrella's phase table names it, and for reading fixtures.
 - Parallel PRs touch `docs/status.md` at the same time. When a rebase conflicts there, keep the
   newest state of every row and every list entry from both sides.
 
+## CI minutes
+
+- GitHub Actions minutes are paid (private repository); every push to a pull request starts its
+  jobs.
+- Push once when a task or a review round is finished and checked locally (`cargo xtask gate` or
+  the task's checks), never after every commit. Never re-run CI on a commit that did not change.
+  Subagents never push.
+- Merge `main` into a pull request branch only when it is next to merge (`CONTRIBUTING.md`).
+- Never start `platforms` by hand unless Jann asks. OS checks on a pull request go through the
+  labels `windows` and `macos`, and only for the OS whose code the change touches.
+
 ## Hard rules — the gate
 
 These rules are part of the gate (`docs/gate.md`). Claude works under Jann's GitHub account, so
@@ -120,9 +131,9 @@ every subagent; put them in subagent briefs.
 - Windows matters most, and macOS ships too: paths through `std::path`, no shell assumptions, LF
   in files we write, Ctrl in the UI (Cmd on macOS), processes stopped as whole trees. Code paths
   that differ per OS get a test on each OS. Per PR, CI runs on Linux only; Windows and macOS are
-  tested by the weekly `platforms` workflow. A PR with OS-specific code gets the labels `windows`
-  and `macos` and links their runs, and `cargo xtask gate` runs on Windows before any phase is
-  claimed done.
+  tested by the weekly `platforms` workflow. A PR with OS-specific code gets the label `windows`
+  or `macos` for the OS whose code it touches and links its run (see "CI minutes"), and
+  `cargo xtask gate` runs on Windows before any phase is claimed done.
 - Branches, commits, PR titles, versions and tags follow `CONTRIBUTING.md`: Conventional
   Commits with the `Refs:` and `Phase:` footers and the Claude trailers; PR titles like
   `feat(content): records and grammars (P02)` and `docs(spec): records and grammars (P02)`.
