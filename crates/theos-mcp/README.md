@@ -13,7 +13,9 @@ theos-mcp [--project <folder>]
   exists.
 - stdout carries only the protocol. Logs go to stderr, filtered by `THEOS_LOG` (default `warn`),
   for example `THEOS_LOG=debug`.
-- Exit code 0 when stdin closes, 2 when the transport fails.
+- Exit code 0 when stdin closes. Exit code 2 when the server cannot start or the MCP handshake
+  fails. After the handshake, rmcp 3.12 treats a failed stdin read as closed input and only
+  logs a failed stdout write, so the server then exits with 0.
 - `--version` is not offered yet.
 
 ## Tools

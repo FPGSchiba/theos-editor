@@ -57,10 +57,9 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 ## Needs Jann
 
 - P48's build PR (a draft labelled `needs-jann`, branch `phase/P48-mcp-read`) waits for Jann:
-  - The final review loop reached its cap of 5 rounds with one Minor open (R5-1): after the
-    handshake, rmcp 3.12 treats a failed stdin read as closed input and only logs a failed
-    stdout write, so `theos-mcp` exits 0 there, not 2 as spec §5.2 and the crate README say.
-    The fix is the README line and a spec erratum; no code change.
+  - The final review loop reached its cap of 5 rounds with one Minor open (R5-1, the exit code
+    after the handshake). On Jann's word, a targeted fix round fixed the crate README; the spec
+    erratum for §5.2 is in the list below.
   - The recorded Claude Code session that spec §5.14 asks for as CE-18.1/CE-18.2 evidence is
     blocked: "MCP server blocked by enterprise policy: theos". Jann allows the server in the
     managed MCP policy, or runs the session himself. The stdio tests prove all three ACs.
