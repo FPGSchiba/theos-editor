@@ -26,10 +26,16 @@ fn answers(sandbox: &Sandbox, repo: &Path) -> Result<String> {
     let git = sandbox.git()?;
     let cancel = Cancel::new();
     let status = status::status(&git, repo, &cancel)?;
-    let history = history::history(&git, repo, b"a.md", Page { skip: 0, max: 100 }, &cancel)?;
+    let all = Page { skip: 0, max: 100 };
+    let history = history::history(&git, repo, b"a.md", all, &cancel)?;
+    // `c.md` was renamed from `b.md` in a commit: `log.follow` and `diff.renames` must not stop
+    // its history at the rename.
+    let renamed = history::history(&git, repo, b"c.md", all, &cancel)?;
     let head = read::read(&git, repo, Version::Head, b"a.md")?;
     let index = read::read(&git, repo, Version::Index, b"c.md")?;
-    Ok(format!("{status:?}\n{history:?}\n{head:?}\n{index:?}"))
+    Ok(format!(
+        "{status:?}\n{history:?}\n{renamed:?}\n{head:?}\n{index:?}"
+    ))
 }
 
 #[test]
@@ -44,10 +50,29 @@ fn user_settings_do_not_change_the_reads() -> Result {
     Sandbox::write(&repo.join("a.md"), &format!("second\n{body}"))?;
     sandbox.commit(&repo, "second \u{fc}ber\n\nApproved-by: Jann")?;
     sandbox.run(&repo, &["mv", "b.md", "c.md"])?;
+    sandbox.commit(&repo, "rename b to c")?;
+    // An unstaged rename, which `status.renames=false` must not split.
+    std::fs::rename(repo.join("c.md"), repo.join("d.md"))?;
     Sandbox::write(&repo.join("a.md"), &format!("third\n{body}"))?;
     Sandbox::write(&repo.join("\u{fc}ntracked.md"), "new\n")?;
 
     let before = answers(&sandbox, &repo)?;
+    let followed = history::history(
+        &sandbox.git()?,
+        &repo,
+        b"c.md",
+        Page { skip: 0, max: 100 },
+        &Cancel::new(),
+    )?;
+    assert_eq!(followed.len(), 2, "{followed:?}");
+    let unstaged = status::status(&sandbox.git()?, &repo, &Cancel::new())?;
+    assert!(
+        unstaged
+            .entries
+            .iter()
+            .any(|entry| matches!(entry, status::Entry::Renamed { .. })),
+        "{unstaged:?}"
+    );
     let mut config = std::fs::OpenOptions::new()
         .append(true)
         .open(repo.join(".git").join("config"))?;

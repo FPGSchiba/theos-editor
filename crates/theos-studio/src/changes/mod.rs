@@ -6,7 +6,7 @@ mod versions;
 
 use std::path::Path;
 
-use theos_content::KindRegistry;
+use theos_content::{KindRegistry, is_record_path};
 use theos_vcs::status::{self, Branch, Change, Conflict, Entry};
 use theos_vcs::{Cancel, Folding, Git, GitError, repo};
 
@@ -177,13 +177,16 @@ impl InRepo<'_> {
 
     /// The name of the record at the project path `path` (`repo_path` in git's spelling): from
     /// its newest version, or for a `conflicted` path from the first of the working copy and
-    /// `HEAD` that is a record.
+    /// `HEAD` that is a record. A path that is no record path ([`is_record_path`]) is not read.
     fn name(
         &self,
         path: &str,
         repo_path: &[u8],
         conflicted: bool,
     ) -> Result<Option<Named>, GitError> {
+        if !is_record_path(path) {
+            return Ok(None);
+        }
         let of = |bytes: &[u8]| named(path, bytes, self.registry);
         if conflicted {
             return first_of_conflict(self.git, self.top, repo_path, of);

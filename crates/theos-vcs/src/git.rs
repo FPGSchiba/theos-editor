@@ -207,7 +207,12 @@ impl Git {
             Err(GitError::Cancelled { .. }) => {
                 tracing::debug!(?args, %cwd, ?elapsed, "git cancelled");
             }
-            Err(error) => tracing::warn!(?args, %cwd, ?elapsed, %error, "git failed"),
+            // A failure exit is often expected (`rev-parse --verify --quiet` of a missing
+            // version, `config --get` of an unset key); the caller decides whether it matters.
+            Err(error @ GitError::Failed { .. }) => {
+                tracing::debug!(?args, %cwd, ?elapsed, %error, "git failed");
+            }
+            Err(error) => tracing::warn!(?args, %cwd, ?elapsed, %error, "git could not run"),
         }
         result
     }
@@ -602,7 +607,6 @@ mod tests {
         );
     }
 
-    // AC: CE-21.3
     #[test]
     fn cancelled_names_the_command() {
         let error = GitError::Cancelled {
