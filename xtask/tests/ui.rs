@@ -147,6 +147,40 @@ fn the_probe_findings_come_before_the_step_findings() -> TestResult {
     Ok(())
 }
 
+// AC: CE-08C.2
+#[test]
+fn a_docs_only_scope_is_not_needed_and_runs_nothing() -> TestResult {
+    use xtask::scope::{NOT_NEEDED_REASON, Scope};
+    // With an `editor-ui/` that would otherwise run its steps: nothing is probed and no pnpm
+    // starts, so the run needs no Node.
+    let root = root_with_editor_ui()?;
+    let verdict = ui::verdict_under(
+        &Scope::DocsOnly,
+        root.path(),
+        || panic!("the probe ran for a change that touches no code"),
+        |_| panic!("a step ran for a change that touches no code"),
+    );
+    assert!(verdict.passed());
+    assert_eq!(verdict.not_needed.as_deref(), Some(NOT_NEEDED_REASON));
+    assert_eq!(verdict.check, Check::Ui);
+
+    // Any other scope runs the steps; without `editor-ui/` it is not needed for its own reason.
+    let every = Scope::Every { note: None };
+    let mut ran = 0;
+    let verdict = ui::verdict_under(&every, root.path(), Vec::new, |_| {
+        ran += 1;
+        Ok(output(true, ""))
+    });
+    assert_eq!(ran, 5);
+    assert!(verdict.passed() && verdict.not_needed.is_none());
+    let empty = tempfile::tempdir()?;
+    let verdict = ui::verdict_under(&every, empty.path(), Vec::new, |_| {
+        panic!("a step ran without editor-ui")
+    });
+    assert_eq!(verdict.not_needed.as_deref(), Some("no editor-ui yet"));
+    Ok(())
+}
+
 #[test]
 fn check_name_round_trips() {
     assert_eq!(Check::from_name("ui"), Some(Check::Ui));

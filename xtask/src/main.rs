@@ -98,7 +98,7 @@ enum Command {
         phase: Option<Phase>,
     },
     /// Check `editor-ui/`: install, svelte-check, eslint, vitest and playwright (not needed
-    /// without `editor-ui/package.json`).
+    /// without `editor-ui/package.json`, nor for a change that touches no code, as for `gate`).
     Ui,
     /// Say whether a run needs any of the checks: `true` or `false`.
     ///
@@ -276,7 +276,7 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         Command::AcTrace { phase } => {
             ac_trace::run_phase(&root, *phase, ci.is_some(), &shared, &mut out)?
         }
-        Command::Ui => ui::run(&root, ci.as_ref(), &mut out)?,
+        Command::Ui => ui::run_scoped(&root, ci.as_ref(), &mut out)?,
         Command::Needs {
             checks,
             requires_package,
