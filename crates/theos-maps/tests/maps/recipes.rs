@@ -220,8 +220,13 @@ floor = 1
         ),
     );
     let dir = folder_with("declares.toml", &declared)?;
-    let (outcome, called) = run_from(&request("declares", 1), dir.path())?;
-    assert!(outcome.is_err() && !called, "a malformed declaration ran");
+    let outcome = run_from(&request("declares", 1), dir.path())?;
+    match refusal(outcome)? {
+        RecipeError::Parse { message, .. } => {
+            assert!(message.contains("inputs.floor"), "{message}");
+        }
+        other => return Err(format!("expected Parse, got {other:?}").into()),
+    }
 
     let plain = recipe_text("plain", "Plain", GRID);
     let dir = folder_with("plain.toml", &plain)?;

@@ -21,19 +21,52 @@ fn describe_reports_a_feature_input() {
 
 #[test]
 fn declarations_are_validated() {
-    for bad in [
-        "a = { type = \"feature\", parent_types = [\"t\"] }\nb = { type = \"feature\", parent_types = [\"t\"] }",
-        "a = { type = \"feature\", parent_types = [] }",
-        "a = { type = \"number\", min = 2, max = 1 }",
-        "a = { type = \"enum\", values = [] }",
-        "a = { type = \"enum\", values = [\"x\"], default = \"y\" }",
+    let two = "a = { type = \"feature\", parent_types = [\"t\"] }\n\
+               b = { type = \"feature\", parent_types = [\"t\"] }";
+    for (bad, message) in [
+        (two, "only one `feature` input"),
+        (
+            "a = { type = \"feature\", parent_types = [] }",
+            "needs `parent_types`",
+        ),
+        (
+            "a = { type = \"number\", min = 2, max = 1 }",
+            "`min` 2 is above `max` 1",
+        ),
+        ("a = { type = \"enum\", values = [] }", "needs `values`"),
+        (
+            "a = { type = \"enum\", values = [\"x\"], default = \"y\" }",
+            "`default` `y` is not one of the values",
+        ),
+        (
+            "a = { type = \"number\", min = 1, max = 5, default = 9 }",
+            "outside its range",
+        ),
+        (
+            "a = { type = \"number\", integer = true, default = 1.5 }",
+            "whole number",
+        ),
     ] {
-        assert!(decls(bad).validate().is_err(), "{bad}");
+        let problem = decls(bad).validate().unwrap_err();
+        assert!(
+            problem.message.contains(message),
+            "{bad}: {}",
+            problem.message
+        );
     }
     assert!(
-        decls("a = { type = \"number\", min = 1, max = 1 }")
+        decls("a = { type = \"number\", min = 1, max = 1, default = 1 }")
             .validate()
             .is_ok()
+    );
+}
+
+#[test]
+fn absent_options_are_not_reported() {
+    let inputs = decls("n = { type = \"number\", min = 1 }");
+    assert_eq!(
+        Value::Object(inputs.describe()),
+        serde_json::json!({"n": {"type": "number", "min": 1.0, "integer": false}})
     );
 }
 

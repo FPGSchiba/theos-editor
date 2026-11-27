@@ -18,10 +18,13 @@ pub enum InputDecl {
     /// A number.
     Number {
         /// The value when the request gives none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         default: Option<f64>,
         /// The smallest value.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         min: Option<f64>,
         /// The largest value.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         max: Option<f64>,
         /// Whether the value must be a whole number.
         #[serde(default)]
@@ -32,6 +35,7 @@ pub enum InputDecl {
         /// The values.
         values: Vec<String>,
         /// The value when the request gives none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         default: Option<String>,
     },
 }
@@ -92,7 +96,12 @@ impl Inputs {
                         ));
                     }
                 }
-                InputDecl::Number { min, max, .. } => {
+                InputDecl::Number {
+                    default,
+                    min,
+                    max,
+                    integer,
+                } => {
                     if let (Some(min), Some(max)) = (min, max)
                         && min > max
                     {
@@ -100,6 +109,11 @@ impl Inputs {
                             name,
                             format!("`min` {min} is above `max` {max}"),
                         ));
+                    }
+                    if let Some(default) = default {
+                        check_number(name, *default, *min, *max, *integer).map_err(|e| {
+                            InputProblem::new(name, format!("`default`: {}", e.message))
+                        })?;
                     }
                 }
                 InputDecl::Enum { values, default } => {
@@ -173,19 +187,7 @@ fn check_value(name: &str, decl: &InputDecl, value: &Value) -> Result<(), InputP
                     format!("input `{name}` must be a number"),
                 ));
             };
-            if *integer && libm::fmod(n, 1.0).abs() > 0.0 {
-                return Err(InputProblem::new(
-                    name,
-                    format!("input `{name}` must be a whole number, got {n}"),
-                ));
-            }
-            if min.is_some_and(|m| n < m) || max.is_some_and(|m| n > m) {
-                return Err(InputProblem::new(
-                    name,
-                    format!("input `{name}` is {n}, outside its range"),
-                ));
-            }
-            Ok(())
+            check_number(name, n, *min, *max, *integer)
         }
         InputDecl::Enum { values, .. } => match value.as_str() {
             Some(s) if values.iter().any(|v| v == s) => Ok(()),
@@ -195,6 +197,29 @@ fn check_value(name: &str, decl: &InputDecl, value: &Value) -> Result<(), InputP
             )),
         },
     }
+}
+
+/// Checks a number against the whole-number rule and the range.
+fn check_number(
+    name: &str,
+    n: f64,
+    min: Option<f64>,
+    max: Option<f64>,
+    integer: bool,
+) -> Result<(), InputProblem> {
+    if integer && libm::fmod(n, 1.0).abs() > 0.0 {
+        return Err(InputProblem::new(
+            name,
+            format!("input `{name}` must be a whole number, got {n}"),
+        ));
+    }
+    if min.is_some_and(|m| n < m) || max.is_some_and(|m| n > m) {
+        return Err(InputProblem::new(
+            name,
+            format!("input `{name}` is {n}, outside its range"),
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

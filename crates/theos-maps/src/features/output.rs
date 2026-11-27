@@ -6,7 +6,8 @@
 //! `water_features`, one per lake. Every feature gets an id by the kind's `IdScheme`
 //! (`<type>-<n>` or `<kind>-<n>`), numbered from 1 in that order through one map, so ids are
 //! unique and a stage that changed a type (a promotion) renames no reference. Every
-//! [`Prop::Ref`], [`Prop::Refs`] and [`Prop::Road`] becomes the id or ids of the features it names; a reference to something that does not exist is an error. Coordinates
+//! [`Prop::Ref`], [`Prop::Refs`] and [`Prop::Road`] becomes the id or ids of the features
+//! it names; a reference to something that does not exist is an error. Coordinates
 //! are metres, and `-0.0` is written as `0.0`. A world without one of the three values has no
 //! features of it.
 //!

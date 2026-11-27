@@ -151,8 +151,9 @@ fn check_constraints(recipe: &LoadedRecipe, stages: &[PlannedStage]) -> Result<(
 }
 
 /// Check 1: the keys `grid` and `size_km` by kind (terrain and interior need both, a settlement
-/// map has neither: its frame comes from the parent), then the grid (at least 2 x 2, a cell count that fits a `usize`), the size, square cells
-/// and a cell edge from [`MIN_CELL_M`] to [`MAX_CELL_M`].
+/// map has neither: its frame comes from the parent), then the grid (at least 2 x 2, a cell
+/// count that fits a `usize`), the size, square cells and a cell edge from [`MIN_CELL_M`] to
+/// [`MAX_CELL_M`].
 fn check_frame(recipe: &LoadedRecipe) -> Result<MapFrame, RecipeError> {
     let r = &recipe.recipe;
     let (grid, size_km) = match r.kind {
