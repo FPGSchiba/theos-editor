@@ -1,0 +1,89 @@
+# synthetic fixture (P08), not canon
+# A closed basin on 384 x 384 cells over 24 km, for physics test 13 (resolution independence,
+# spec 5.14), so that both grid sizes hold lakes from a real basin. The basin sags 100 m per
+# step at its centre (depth_m 24 km over the 6 Myr sag duration: 4e-3 m/yr) for 10 steps, so
+# sediment cannot fill it, and the climate is dry, so its lake is terminal and the water balance
+# sets its area. Keep every other line equal to basin-192.toml.
+id      = "basin-384"
+title   = "Closed basin at 384 squared"
+kind    = "terrain"
+grid    = [384, 384]
+size_km = [24.0, 24.0]
+renders = []
+
+[[stage]]
+id    = "grid"
+edges = ["south"]
+
+[[stage]]
+id                   = "tectonics"
+background_uplift    = 2.2e-4
+background_variation = 0.9
+background_beta      = 2.8
+  [[stage.source]]
+  type = "basin"
+  at = [0.50, 0.45]
+  r = 0.10
+  depth_m = 24000.0
+  jitter = 0.05
+
+[[stage]]
+id        = "geology"
+provinces = 7
+plutons   = [1, 2]
+  [stage.rock_mix]
+  granite   = 0.15
+  sandstone = 0.30
+  shale     = 0.25
+  limestone = 0.20
+  basalt    = 0.10
+  [stage.fold_belt]
+  width    = 0.09
+  strength = 0.45
+  period   = 0.045
+  contrast = 1.8
+
+[[stage]]
+id              = "climate_model"
+wind_from_deg   = 250.0
+wind_speed      = 10.0
+base_precip_mm  = 250.0
+orographic_mm   = 300.0
+t_base_c        = 12.0
+lapse_c_per_km  = 6.5
+
+[[stage]]
+id     = "landscape_evolution"
+steps  = 10
+dt_yr  = 2.5e4
+  [[stage.process]]
+  id = "uplift"
+  [[stage.process]]
+  id = "hillslope"
+  [[stage.process]]
+  id = "route_steepest"
+  [[stage.process]]
+  id = "resolve_sinks"
+  [[stage.process]]
+  id = "partition_flow"
+  exponent = "slope_adaptive"
+  [[stage.process]]
+  id = "fluvial"
+  m = 0.45
+  g = 1.0
+  [[stage.process]]
+  id = "slope_limit"
+  [[stage.process]]
+  id = "climate_update"
+  every = 10
+
+[[stage]]
+id          = "hydrology"
+river_q     = 0.15
+big_river_q = 2.0
+
+[[stage]]
+id = "ecology"
+
+[[stage]]
+id = "elements"

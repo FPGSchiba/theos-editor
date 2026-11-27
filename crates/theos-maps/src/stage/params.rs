@@ -1,0 +1,666 @@
+//! Typed stage parameters and their parsing from a recipe's stage table.
+
+use std::any::Any;
+use std::fmt::Debug;
+
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+
+use super::ParamError;
+
+/// The parsed parameters of one stage, held by the runner as a trait object.
+///
+/// Every `DeserializeOwned + Serialize + Debug + Send + Sync + 'static` type is one, so a stage's
+/// own `Params` type needs no impl. `Box<dyn StageParams>` is not one (it does not deserialise),
+/// so `&boxed` is no `&dyn StageParams`: pass `boxed.as_ref()`, which borrows the parameters
+/// inside the box.
+pub trait StageParams: Any + Debug + Send + Sync {
+    /// The parameters as [`Any`], for the downcast to the stage's own type.
+    fn as_any(&self) -> &dyn Any;
+
+    /// The parameters as TOML, as the number rule sees them: every field a recipe may set, with
+    /// the recipe's value or its default. Fields `validate` fills (`#[serde(skip)]`) and raw
+    /// tables a stage parses itself (`#[serde(skip_serializing)]`) are left out.
+    ///
+    /// # Errors
+    /// The serialiser's error when the parameters hold a value TOML cannot (an integer above
+    /// `i64::MAX`).
+    fn to_toml(&self) -> Result<toml::Value, toml::ser::Error>;
+}
+
+impl<T: DeserializeOwned + Serialize + Debug + Send + Sync + 'static> StageParams for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn to_toml(&self) -> Result<toml::Value, toml::ser::Error> {
+        toml::Value::try_from(self)
+    }
+}
+
+/// Parses a recipe's stage table into `P`; the `id` key names the stage and is not a parameter.
+///
+/// Unknown keys are found with `serde_ignored` around the TOML deserialiser (ruling L3) and
+/// named with their path. The path of a value of the wrong type comes from
+/// `serde_path_to_error`, because `toml`'s error keeps its key path private.
+///
+/// `serde_ignored` cannot see inside internally tagged or untagged enums or `#[serde(flatten)]`
+/// fields, because serde buffers their content first; such types carry
+/// `#[serde(deny_unknown_fields)]`.
+///
+/// Deserialising stops at the first error, and the keys of a table are visited in name order,
+/// so only the unknown keys visited before it are found. A missing required key is noticed at
+/// the end of its table, after every key of it was visited, so a misspelt required key reads as
+/// unknown rather than missing; an unknown key that sorts after a value of the wrong type is not
+/// reported, the type error is.
+///
+/// # Errors
+/// [`ParamError`] naming `stage` and the unknown or invalid parameter: the unknown keys found
+/// before the first other error when there are any, else that error. Its parameter is `None`
+/// when the error lies in the table itself (a missing key at the top level).
+pub(crate) fn parse<P: DeserializeOwned>(
+    stage: &str,
+    table: &toml::Table,
+) -> Result<P, ParamError> {
+    let mut table = table.clone();
+    table.remove("id");
+    let mut unknown = Vec::new();
+    let parsed = serde_path_to_error::deserialize(serde_ignored::Deserializer::new(
+        toml::Value::Table(table),
+        &mut |path: serde_ignored::Path<'_>| unknown.push(path_text(&path)),
+    ));
+    if let Some((first, rest)) = unknown.split_first() {
+        return Err(unknown_parameter(stage, first, rest));
+    }
+    parsed.map_err(|err| ParamError {
+        stage: stage.to_owned(),
+        parameter: err
+            .path()
+            .iter()
+            .next()
+            .is_some()
+            .then(|| err.path().to_string()),
+        message: err.inner().message().to_owned(),
+    })
+}
+
+/// The largest magnitude of a number in a stage table.
+pub const MAX_MAGNITUDE: f64 = 1e12;
+
+/// The smallest magnitude of a float other than 0 in a stage table.
+pub const MIN_MAGNITUDE: f64 = 1e-12;
+
+/// The largest magnitude of a whole number in a stage table.
+pub const MAX_COUNT: i64 = 1_000_000;
+
+/// Refuses a number of the parsed parameters `params` outside the bounds every recipe number
+/// keeps (final review, rounds 3 and 4): a float is finite, and 0 or of a magnitude in
+/// [`MIN_MAGNITUDE`, `MAX_MAGNITUDE`]; a whole number is at most [`MAX_COUNT`] in magnitude.
+///
+/// Parameters are lengths, rates, times, weights and counts of a map, so no product of a few of
+/// them, nor a quotient, leaves the range of `f64`, and no count sizes an allocation or a loop
+/// beyond a million. A stage's own domains are checked first by its `validate`; this rule catches
+/// what they leave open, in every stage and process alike.
+///
+/// The rule follows each parameter's type, not how the recipe spells it: `params` is serialised
+/// into a [`toml::Value`], where an integer field (`u32`, `usize`, …) becomes an integer and a
+/// float field a float, so `6000000` given for a float takes the float rule. Fields filled by
+/// `validate` (`#[serde(skip)]`) are not recipe numbers and are skipped; so are the defaults the
+/// recipe leaves alone, which keep the bounds anyway.
+///
+/// # Errors
+/// [`ParamError`] naming `stage` and the path of the first number out of bounds, in key order;
+/// without a parameter when `params` cannot be serialised (an integer above `i64::MAX`, which no
+/// TOML number parses into).
+pub(crate) fn check_numbers<P: Serialize>(stage: &str, params: &P) -> Result<(), ParamError> {
+    let value = toml::Value::try_from(params).map_err(|e| ParamError {
+        stage: stage.to_owned(),
+        parameter: None,
+        message: format!("the parameters cannot be checked: {e}"),
+    })?;
+    check_number(stage, "", &value)
+}
+
+/// The message of a whole number beyond [`MAX_COUNT`].
+pub(crate) fn too_large_count() -> String {
+    format!("must be at most {MAX_COUNT} in magnitude")
+}
+
+/// [`check_numbers`] for `value` at `path`; the empty path is the table of the parameters.
+fn check_number(stage: &str, path: &str, value: &toml::Value) -> Result<(), ParamError> {
+    let refuse = |message: String| Err(ParamError::at(stage, path, message));
+    let join = |key: &str| {
+        if path.is_empty() {
+            key.to_owned()
+        } else {
+            format!("{path}.{key}")
+        }
+    };
+    match value {
+        toml::Value::Float(x) if !x.is_finite() => refuse("must be finite".to_owned()),
+        toml::Value::Float(x)
+            if *x != 0.0 && !(MIN_MAGNITUDE..=MAX_MAGNITUDE).contains(&x.abs()) =>
+        {
+            refuse(format!(
+                "must be 0 or of a magnitude from {MIN_MAGNITUDE:e} to {MAX_MAGNITUDE:e}"
+            ))
+        }
+        toml::Value::Integer(n) if n.unsigned_abs() > MAX_COUNT.unsigned_abs() => {
+            refuse(too_large_count())
+        }
+        toml::Value::Array(items) => items
+            .iter()
+            .enumerate()
+            .try_for_each(|(i, item)| check_number(stage, &format!("{path}[{i}]"), item)),
+        toml::Value::Table(inner) => inner
+            .iter()
+            .try_for_each(|(key, item)| check_number(stage, &join(key), item)),
+        _ => Ok(()),
+    }
+}
+
+/// The error for the unknown keys `first` and `rest`.
+fn unknown_parameter(stage: &str, first: &str, rest: &[String]) -> ParamError {
+    let mut message = "unknown parameter".to_owned();
+    if !rest.is_empty() {
+        let others: Vec<String> = rest.iter().map(|path| format!("`{path}`")).collect();
+        message.push_str("; also unknown: ");
+        message.push_str(&others.join(", "));
+    }
+    ParamError {
+        stage: stage.to_owned(),
+        parameter: Some(first.to_owned()),
+        message,
+    }
+}
+
+/// The domain checks every stage's `validate` shares, each rule with one fixed wording, so the
+/// same rule reads the same in every stage (final review, round 2).
+///
+/// Every float check refuses NaN and both infinities, so each wording says "finite" or names a
+/// bounded interval. A stage's own rules (a relation between two parameters, a set of values)
+/// keep their own words.
+#[derive(Debug, Clone, Copy)]
+pub struct Check<'a> {
+    /// The stage whose parameters are checked.
+    stage: &'a str,
+}
+
+impl<'a> Check<'a> {
+    /// The checks of the parameters of `stage`.
+    #[must_use]
+    pub const fn of(stage: &'a str) -> Self {
+        Self { stage }
+    }
+
+    /// The error of `parameter` for a rule of the stage's own, in its own words.
+    #[must_use]
+    pub fn refuse(self, parameter: &str, message: impl Into<String>) -> ParamError {
+        ParamError::at(self.stage, parameter, message)
+    }
+
+    /// `Ok` when `holds`, else the error of `parameter` with `message`.
+    fn require(self, holds: bool, parameter: &str, message: String) -> Result<(), ParamError> {
+        if holds {
+            Ok(())
+        } else {
+            Err(self.refuse(parameter, message))
+        }
+    }
+
+    /// `value` is neither NaN nor an infinity: "must be finite".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub fn finite(self, parameter: &str, value: f64) -> Result<(), ParamError> {
+        self.require(value.is_finite(), parameter, "must be finite".to_owned())
+    }
+
+    /// `value` is finite and above 0: "must be positive and finite".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub fn positive(self, parameter: &str, value: f64) -> Result<(), ParamError> {
+        let holds = value.is_finite() && value > 0.0;
+        self.require(holds, parameter, "must be positive and finite".to_owned())
+    }
+
+    /// `value` is finite and at least `min`: "must be at least `min` and finite".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub fn at_least(self, parameter: &str, value: f64, min: f64) -> Result<(), ParamError> {
+        let holds = value.is_finite() && value >= min;
+        self.require(
+            holds,
+            parameter,
+            format!("must be at least {min} and finite"),
+        )
+    }
+
+    /// `value` lies in the closed interval `[lo, hi]`: "must be in [`lo`, `hi`]".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub fn in_closed(
+        self,
+        parameter: &str,
+        value: f64,
+        lo: f64,
+        hi: f64,
+    ) -> Result<(), ParamError> {
+        let holds = (lo..=hi).contains(&value);
+        self.require(holds, parameter, format!("must be in [{lo}, {hi}]"))
+    }
+
+    /// `value` lies in the half-open interval `[lo, hi)`: "must be in [`lo`, `hi`)".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub fn in_closed_open(
+        self,
+        parameter: &str,
+        value: f64,
+        lo: f64,
+        hi: f64,
+    ) -> Result<(), ParamError> {
+        let holds = (lo..hi).contains(&value);
+        self.require(holds, parameter, format!("must be in [{lo}, {hi})"))
+    }
+
+    /// `value` lies in the half-open interval `(lo, hi]`: "must be in (`lo`, `hi`]".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub fn in_open_closed(
+        self,
+        parameter: &str,
+        value: f64,
+        lo: f64,
+        hi: f64,
+    ) -> Result<(), ParamError> {
+        let holds = value > lo && value <= hi;
+        self.require(holds, parameter, format!("must be in ({lo}, {hi}]"))
+    }
+
+    /// A whole number of at least `min`: "must be at least `min`".
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and `parameter`.
+    pub fn count_at_least<T: Copy + PartialOrd + std::fmt::Display>(
+        self,
+        parameter: &str,
+        value: T,
+        min: T,
+    ) -> Result<(), ParamError> {
+        let holds = value >= min;
+        self.require(holds, parameter, format!("must be at least {min}"))
+    }
+
+    /// Every key of the table `parameter` is one `known` accepts: for a table whose keys are
+    /// names, such as rocks or resource types, an unknown key reads as an unknown key of a
+    /// parameter struct does ("unknown parameter" at `<parameter>.<key>`, the further unknown
+    /// keys listed in the message), in the order of `keys`.
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and the first unknown key.
+    pub fn known_keys<'k>(
+        self,
+        parameter: &str,
+        keys: impl IntoIterator<Item = &'k String>,
+        known: impl Fn(&str) -> bool,
+    ) -> Result<(), ParamError> {
+        let unknown: Vec<String> = keys
+            .into_iter()
+            .filter(|key| !known(key))
+            .map(|key| format!("{parameter}.{key}"))
+            .collect();
+        match unknown.split_first() {
+            Some((first, rest)) => Err(unknown_parameter(self.stage, first, rest)),
+            None => Ok(()),
+        }
+    }
+}
+
+/// A `serde_ignored` path in the style of `serde_path_to_error`: `source[0].rate`.
+fn path_text(path: &serde_ignored::Path<'_>) -> String {
+    use serde_ignored::Path;
+    match path {
+        Path::Root => String::new(),
+        Path::Seq { parent, index } => format!("{}[{index}]", path_text(parent)),
+        Path::Map { parent, key } => match path_text(parent) {
+            parent if parent.is_empty() => key.clone(),
+            parent => format!("{parent}.{key}"),
+        },
+        Path::Some { parent }
+        | Path::NewtypeStruct { parent }
+        | Path::NewtypeVariant { parent } => path_text(parent),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde::Deserialize;
+
+    use super::{Check, check_numbers, parse};
+    use crate::stage::ParamError;
+
+    #[derive(Debug, Deserialize)]
+    #[serde(default)]
+    struct Params {
+        rate: f64,
+        inner: Vec<Inner>,
+        opt: Option<Inner>,
+    }
+
+    impl Default for Params {
+        fn default() -> Self {
+            Self {
+                rate: 2.5,
+                inner: Vec::new(),
+                opt: None,
+            }
+        }
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct Inner {
+        x: f64,
+    }
+
+    fn table(text: &str) -> toml::Table {
+        text.parse().unwrap()
+    }
+
+    fn error(stage: &str, parameter: Option<&str>, message: &str) -> ParamError {
+        ParamError {
+            stage: stage.into(),
+            parameter: parameter.map(Into::into),
+            message: message.into(),
+        }
+    }
+
+    #[test]
+    fn the_id_key_is_not_a_parameter() {
+        let p: Params = parse("t", &table(r#"id = "t""#)).unwrap();
+        assert!((p.rate - 2.5).abs() < 1e-12);
+        assert!(p.inner.is_empty() && p.opt.is_none());
+        let p: Params = parse("t", &table("rate = 1\ninner = [{x = 3}]\nopt = {x = 4}")).unwrap();
+        assert!(
+            (p.rate - 1.0).abs() < 1e-12,
+            "integers are accepted as floats"
+        );
+        assert!((p.inner[0].x - 3.0).abs() < 1e-12);
+        assert!(p.opt.is_some_and(|o| (o.x - 4.0).abs() < 1e-12));
+    }
+
+    #[test]
+    fn unknown_keys_are_named_with_their_path() {
+        let err = parse::<Params>("t", &table("bogus = 1")).unwrap_err();
+        assert_eq!(err, error("t", Some("bogus"), "unknown parameter"));
+        let err = parse::<Params>("t", &table("inner = [{x = 1, y = 2}]")).unwrap_err();
+        assert_eq!(err, error("t", Some("inner[0].y"), "unknown parameter"));
+        let err = parse::<Params>("t", &table("opt = {x = 1, y = 2}")).unwrap_err();
+        assert_eq!(err, error("t", Some("opt.y"), "unknown parameter"));
+    }
+
+    #[test]
+    fn several_unknown_keys_are_all_named() {
+        let err = parse::<Params>("t", &table("a = 1\nb = 2\nc = 3")).unwrap_err();
+        assert_eq!(
+            err,
+            error("t", Some("a"), "unknown parameter; also unknown: `b`, `c`")
+        );
+    }
+
+    // Final review round 5, finding 1: a table keyed by names refuses an unknown name as the
+    // parser refuses an unknown key of a struct, with the same path and wording.
+    #[test]
+    fn unknown_names_read_as_unknown_keys() {
+        let check = Check::of("t");
+        let keys = |names: &[&str]| -> Vec<String> {
+            names.iter().map(|name| (*name).to_owned()).collect()
+        };
+        let known = |name: &str| ["a", "b"].contains(&name);
+        assert_eq!(check.known_keys("mix", &keys(&["a", "b"]), known), Ok(()));
+        assert_eq!(check.known_keys("mix", &keys(&[]), known), Ok(()));
+        assert_eq!(
+            check.known_keys("mix", &keys(&["a", "c"]), known),
+            Err(error("t", Some("mix.c"), "unknown parameter"))
+        );
+        let parsed = parse::<Params>("t", &table("opt = {x = 1, c = 2}")).unwrap_err();
+        assert_eq!(parsed, error("t", Some("opt.c"), "unknown parameter"));
+        assert_eq!(
+            check.known_keys("mix", &keys(&["c", "a", "d", "e"]), known),
+            Err(error(
+                "t",
+                Some("mix.c"),
+                "unknown parameter; also unknown: `mix.d`, `mix.e`"
+            ))
+        );
+    }
+
+    #[test]
+    fn a_misspelt_required_key_is_reported_as_unknown() {
+        let err = parse::<Inner>("t", &table("y = 1")).unwrap_err();
+        assert_eq!(err, error("t", Some("y"), "unknown parameter"));
+    }
+
+    // Final review round 3, finding 4: the keys are visited in name order and deserialising
+    // stops at the first error, so an unknown key wins only when it sorts before the error.
+    #[test]
+    fn an_unknown_key_wins_only_before_the_first_other_error() {
+        let err = parse::<Params>(
+            "t",
+            &table(
+                "rate = \"x\"
+zzz = 1",
+            ),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err,
+            error(
+                "t",
+                Some("rate"),
+                r#"invalid type: string "x", expected f64"#
+            )
+        );
+        let err = parse::<Params>(
+            "t",
+            &table(
+                "aaa = 1
+rate = \"x\"",
+            ),
+        )
+        .unwrap_err();
+        assert_eq!(err, error("t", Some("aaa"), "unknown parameter"));
+    }
+
+    #[test]
+    fn a_wrong_type_names_the_parameter() {
+        let err = parse::<Params>("t", &table(r#"rate = "x""#)).unwrap_err();
+        assert_eq!(
+            err,
+            error(
+                "t",
+                Some("rate"),
+                r#"invalid type: string "x", expected f64"#
+            )
+        );
+        let err = parse::<Params>("t", &table(r#"inner = [{x = 1}, {x = "a"}]"#)).unwrap_err();
+        assert_eq!(
+            err,
+            error(
+                "t",
+                Some("inner[1].x"),
+                r#"invalid type: string "a", expected f64"#
+            )
+        );
+    }
+
+    /// The message of `result`, or `"ok"`.
+    fn said(result: Result<(), ParamError>) -> String {
+        match result {
+            Ok(()) => "ok".to_owned(),
+            Err(e) => {
+                assert_eq!((e.stage.as_str(), e.parameter.as_deref()), ("t", Some("p")));
+                e.message
+            }
+        }
+    }
+
+    // Final review round 2: one wording per rule, NaN and the infinities refused by every
+    // bounded rule.
+    #[test]
+    fn each_check_has_one_wording_and_refuses_nan_and_infinities() {
+        let check = Check::of("t");
+        let (nan, inf) = (f64::NAN, f64::INFINITY);
+        for value in [0.0, -2.5] {
+            assert_eq!(said(check.finite("p", value)), "ok");
+        }
+        for value in [nan, inf, -inf] {
+            assert_eq!(said(check.finite("p", value)), "must be finite");
+        }
+        for value in [0.0, -1.0, nan, inf] {
+            assert_eq!(
+                said(check.positive("p", value)),
+                "must be positive and finite"
+            );
+        }
+        assert_eq!(said(check.positive("p", 1e-300)), "ok");
+        for value in [0.99, nan, inf] {
+            assert_eq!(
+                said(check.at_least("p", value, 1.0)),
+                "must be at least 1 and finite"
+            );
+        }
+        assert_eq!(said(check.at_least("p", 1.0, 1.0)), "ok");
+        assert_eq!(said(check.at_least("p", -0.0, 0.0)), "ok");
+        assert_eq!(
+            said(check.at_least("p", -0.1, 0.0)),
+            "must be at least 0 and finite"
+        );
+        for value in [-0.1, 1.1, nan, inf, -inf] {
+            assert_eq!(
+                said(check.in_closed("p", value, 0.0, 1.0)),
+                "must be in [0, 1]"
+            );
+        }
+        for value in [0.0, 1.0] {
+            assert_eq!(said(check.in_closed("p", value, 0.0, 1.0)), "ok");
+        }
+        for value in [-0.1, 0.5, nan, inf] {
+            assert_eq!(
+                said(check.in_closed_open("p", value, 0.0, 0.5)),
+                "must be in [0, 0.5)"
+            );
+        }
+        assert_eq!(said(check.in_closed_open("p", 0.0, 0.0, 0.5)), "ok");
+        for value in [0.0, 1.1, nan, inf] {
+            assert_eq!(
+                said(check.in_open_closed("p", value, 0.0, 1.0)),
+                "must be in (0, 1]"
+            );
+        }
+        assert_eq!(said(check.in_open_closed("p", 1.0, 0.0, 1.0)), "ok");
+        assert_eq!(
+            said(check.count_at_least("p", 0_u32, 1)),
+            "must be at least 1"
+        );
+        assert_eq!(said(check.count_at_least("p", 1_u32, 1)), "ok");
+    }
+
+    // Final review round 3, class B: one bound for every number of a stage table, named by its
+    // path, NaN and the infinities included (for a field no `validate` checks).
+    #[test]
+    fn numbers_out_of_bounds_are_refused_with_their_path() {
+        let magnitude = "must be 0 or of a magnitude from 1e-12 to 1e12";
+        let count = "must be at most 1000000 in magnitude";
+        for (text, path, message) in [
+            ("rate = 1.1e12", "rate", magnitude),
+            ("rate = -1e13", "rate", magnitude),
+            ("rate = 9e-13", "rate", magnitude),
+            ("rate = 5e-324", "rate", magnitude),
+            ("inner = [{x = 1.0}, {x = 2e300}]", "inner[1].x", magnitude),
+            ("opt = {x = -1e-300}", "opt.x", magnitude),
+            ("rate = nan", "rate", "must be finite"),
+            ("rate = -inf", "rate", "must be finite"),
+            ("n = 1000001", "n", count),
+            ("deep = [[1, -2000000]]", "deep[0][1]", count),
+        ] {
+            let err = check_numbers("t", &table(text)).unwrap_err();
+            assert_eq!(err, error("t", Some(path), message), "{text}");
+        }
+        for text in [
+            "rate = 0.0\nzero = -0.0",
+            "rate = 1e12\nsmall = -1e-12",
+            "n = -1000000\nm = 1000000",
+            "id = \"t\"\nname = \"x\"\nflag = true\nlist = [\"a\"]",
+        ] {
+            assert!(check_numbers("t", &table(text)).is_ok(), "{text}");
+        }
+    }
+
+    #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+    #[serde(default)]
+    struct Typed {
+        rate: f64,
+        count: u32,
+        rates: Vec<f64>,
+        /// Filled by a `validate`; not a recipe number.
+        #[serde(skip)]
+        derived: f64,
+    }
+
+    /// A count no TOML number parses into.
+    #[derive(serde::Serialize)]
+    struct Huge {
+        n: u64,
+    }
+
+    // Final review round 4, finding 1: the rule follows each field's type, not the spelling of
+    // the number, and skips the fields `validate` fills.
+    #[test]
+    fn the_number_rule_follows_the_field_type() {
+        let checked = |text: &str| {
+            let mut p: Typed = parse("t", &table(text)).unwrap();
+            p.derived = 1e300;
+            check_numbers("t", &p)
+        };
+        for text in [
+            "rate = 6000000",
+            "rate = 1000000000000\nrates = [2000000, -3000000]",
+            "count = 1000000",
+        ] {
+            assert!(checked(text).is_ok(), "{text}");
+        }
+        let count = "must be at most 1000000 in magnitude";
+        let magnitude = "must be 0 or of a magnitude from 1e-12 to 1e12";
+        for (text, path, message) in [
+            ("count = 1000001", "count", count),
+            ("rate = 2000000000000", "rate", magnitude),
+            ("rates = [1, 2000000000000]", "rates[1]", magnitude),
+        ] {
+            assert_eq!(
+                checked(text).unwrap_err(),
+                error("t", Some(path), message),
+                "{text}"
+            );
+        }
+        let err = check_numbers("t", &Huge { n: u64::MAX }).unwrap_err();
+        assert_eq!((err.stage.as_str(), err.parameter.as_deref()), ("t", None));
+        assert!(
+            err.message.starts_with("the parameters cannot be checked"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_missing_field_names_its_table() {
+        let err = parse::<Params>("t", &table("inner = [{}]")).unwrap_err();
+        assert_eq!(err, error("t", Some("inner[0]"), "missing field `x`"));
+        let err = parse::<Inner>("t", &table("")).unwrap_err();
+        assert_eq!(err, error("t", None, "missing field `x`"));
+    }
+}

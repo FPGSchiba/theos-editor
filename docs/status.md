@@ -14,7 +14,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P05 | CLI and hook | theos-editor | pr-open | #35, #41 | #42 |
 | P06 | Command layer and repo lock | theos-editor | done | #36 | #39 |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
-| P08 | Map format and terrain generator | theos-editor | spec-approved | #27 | |
+| P08 | Map format and terrain generator | theos-editor | pr-open | #27 | #44 |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
 | P10 | Prose editor research | theos-editor | done | #3 | #11 |
 | P11 | Editor shell and Codex | theos-editor | todo | | |
@@ -56,6 +56,14 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
+- P08's build PR #44 is a draft labelled `needs-jann`. The final review loop reached its cap of
+  five rounds with 6 Minor findings open. A targeted fix and review round, which Jann asked for
+  on 25 Nov 2026, closed them. Its spec changes reached main with #40 (rulings 51–75) and #47
+  (76–77), its gate change with #43. macOS stays unverified until the `platforms` run on #44's
+  head.
+- The SIL OFL 1.1 fonts (Inter, Spectral) that `theos-maps` embeds must ship with their licence
+  texts (P08 §5.11, §7). `theos_maps::render::font_licences` hands them out; P09 or the release
+  workflow adds them to the releases of the binaries that embed the crate.
 - GitHub refused every Actions job from 13 Nov 2026 to 25 Nov: the included $18 was used up on
   3–12 Nov. Jann set an Actions budget of $15 on 25 Nov. P50 (Leaner CI) cuts the gate's
   minutes.
@@ -105,9 +113,6 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 - For P09's spec (decision 0004): the machine-aware memory budget for map runs (at least 3 GiB,
   more where the machine allows) covers all seeds running at once, so the built-in adapter starts
   only as many seeds in parallel as fit.
-- Before P08's build, one more gate PR (decision 0003 §12) adds `theos-map-format` and
-  `theos-maps` to the workspace test and `gate/thresholds.toml`, and bans the std float methods in
-  `gate/clippy.toml`. P08's spec lists its contents.
 - The Maps screen reference (`docs/ui/screens/11-maps.html`) still says "theos_maps 0.3.0 ·
   Python 3.12 (uv)", describes a Python venv, and shows "2 extractions" and "extraction ↔
   extraction 99 min". P16's spec PR updates it to the built-in generator and the place types

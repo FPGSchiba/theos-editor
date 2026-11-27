@@ -1,0 +1,145 @@
+# synthetic fixture (P08), not canon
+# A 64 x 64 terrain through every terrain stage, tuned so that seed 1 has at least one lake and one
+# river. It exists for the features output (CE-28.6). The basin, a quarter of the map's side in
+# radius at its centre, sinks 12 km over the 6 Myr sag duration (2e-3 m/yr, 50 m per step at its
+# centre), faster than the rivers fill it, and seed 1's lake lies in it.
+# What the retune produces (Task 43e fix round 1), so that a later retune knows what it can move:
+#   seed 1: the lake covers 33.5 % of the map, its floor lies at -29 m, and 74 % of the map lies
+#           below the drained edge's 0 m;
+#   seeds 2 and 4: lakes of 76.1 % and 71.8 % of the map;
+#   seed 3: no lake.
+# The fixture sits near a threshold: the basin drowns most of the map, and a small change in
+# depth, radius or position can drop seed 1's lake (as seed 3's is gone).
+id      = "water-small"
+title   = "Lakes, rivers and roads, 64 squared"
+kind    = "terrain"
+grid    = [64, 64]
+size_km = [6.4, 6.4]
+
+[[stage]]
+id    = "grid"
+edges = ["south"]
+
+[[stage]]
+id                   = "tectonics"
+background_uplift    = 2.2e-4
+background_variation = 0.9
+background_beta      = 2.8
+  [[stage.source]]
+  type = "orogen"
+  path = [[0.02, 0.14], [0.40, 0.08], [0.98, 0.20]]
+  width = 0.20
+  rate = 2.6e-3
+  asymmetry = 0.5
+  jitter = 0.06
+  [[stage.source]]
+  type = "basin"
+  at = [0.50, 0.50]
+  r = 0.25
+  depth_m = 12000.0
+  jitter = 0.08
+
+[[stage]]
+id        = "geology"
+provinces = 4
+plutons   = [1, 1]
+  [stage.rock_mix]
+  granite   = 0.25
+  sandstone = 0.25
+  shale     = 0.25
+  limestone = 0.25
+  [stage.fold_belt]
+  width    = 0.09
+  strength = 0.45
+  period   = 0.045
+  contrast = 1.8
+
+[[stage]]
+id              = "climate_model"
+wind_from_deg   = 250.0
+wind_speed      = 10.0
+base_precip_mm  = 520.0
+orographic_mm   = 1300.0
+t_base_c        = 12.0
+lapse_c_per_km  = 6.5
+
+[[stage]]
+id     = "landscape_evolution"
+steps  = 10
+dt_yr  = 2.5e4
+  [[stage.process]]
+  id = "uplift"
+  [[stage.process]]
+  id = "hillslope"
+  [[stage.process]]
+  id = "route_steepest"
+  [[stage.process]]
+  id = "resolve_sinks"
+  [[stage.process]]
+  id = "partition_flow"
+  exponent = "slope_adaptive"
+  [[stage.process]]
+  id = "fluvial"
+  m = 0.45
+  g = 1.0
+  [[stage.process]]
+  id = "slope_limit"
+  [[stage.process]]
+  id = "climate_update"
+  every = 20
+
+[[stage]]
+id       = "hydrology"
+river_q  = 0.02
+big_river_q = 0.5
+min_lake_depth_m = 1.0
+min_lake_area_m2 = 30000.0
+
+[[stage]]
+id = "ecology"
+
+[[stage]]
+id = "elements"
+
+[[stage]]
+id = "settlements"
+  [stage.counts]
+  city    = 0
+  town    = 1
+  village = 2
+  hamlet  = 3
+  [stage.spacing_km]
+  town    = 2.0
+  village = 1.2
+  hamlet  = 0.7
+
+[[stage]]
+id    = "pois"
+ruins = 2
+chimes = 0
+gates = 2
+
+[[stage]]
+id = "detuning"
+
+[[stage]]
+id = "resources"
+spacing_km = 0.5
+  [stage.counts]
+  iron-ore = 3
+  timber   = 3
+  stone    = 3
+
+[[stage]]
+id = "roads"
+
+[[stage]]
+id = "sites"
+min_richness = 0.0
+  [stage.counts]
+  watchtower = 2
+  cave       = 1
+  camp       = 1
+
+[[stage]]
+id = "travel"

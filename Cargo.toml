@@ -42,33 +42,55 @@ anyhow = "1.0"
 cargo_metadata = "0.23"
 clap = { version = "4.6", features = ["derive"] }
 dirs = "7.0"
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
+geojson = { version = "1.0", default-features = false }
 git-conventional = "0.12"
 globset = "0.4"
 ignore = "0.4"
+libm = "0.2.16"
+png = { version = "0.18.1", default-features = false }
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 proptest = { version = "1.12", default-features = false, features = ["std"] }
 pulldown-cmark = { version = "0.13", default-features = false }
 regex = "1.13"
 rusqlite = { version = "0.41", features = ["bundled"] }
 quick-xml = "0.41"
+rand_core = "0.10"
+rand_pcg = "0.10"
 same-file = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_ignored = "0.1.14"
+serde_json = { version = "1.0", features = ["float_roundtrip"] }
+serde_path_to_error = "0.1.20"
 sha2 = "0.11"
 similar = "2.7"
+# Glyph outlines for the renders' text; `libm` instead of `std` float methods, so outlines are
+# the same on every platform (P08 §4.3). tiny-skia fills them.
+skrifa = { version = "0.50.0", default-features = false, features = ["libm"] }
+spade = { version = "2.15", default-features = false }
 syn = { version = "2.0", features = ["full", "visit", "extra-traits"] }
 tempfile = "3.27"
 thiserror = "2.0"
+# Scalar only: `simd` uses approximate reciprocals that differ by CPU, `std` brings std
+# trigonometry; `no-std-float` takes the float functions from `libm` (P08 §4.3).
+tiny-skia = { version = "0.12.0", default-features = false, features = ["no-std-float"] }
 toml = "1.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unicode-normalization = "0.1"
 which = "8.0"
+# WOFF2 needs only Brotli; the `z` feature (WOFF 1 through flate2) stays off.
+wuff = { version = "0.2.10", default-features = false, features = ["brotli"] }
 yaml-rust2 = "0.13"
+zip = { version = "9.5", default-features = false, features = ["deflate-flate2"] }
 
 # Third-party crates are optimised also in the dev profile, which `cargo test`, nextest and the
 # coverage run use: unoptimised SQLite, YAML, Markdown and SHA-2 code made the index tests spend
 # more time in them than in the code under test (CE-12.1). Workspace crates keep the dev profile,
-# so debugging and coverage see their code as written.
+# so debugging and coverage see their code as written, except `theos-maps`, whose physics,
+# parity and golden runs would take the better part of an hour unoptimised (P08 §5.16).
 [profile.dev.package."*"]
 opt-level = 1
+
+[profile.dev.package.theos-maps]
+opt-level = 2

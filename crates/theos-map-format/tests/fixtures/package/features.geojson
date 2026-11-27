@@ -1,0 +1,35 @@
+{
+  "note": "synthetic fixture (P08), not canon",
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "lake-1",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[5.0, 5.0], [25.0, 5.0], [25.0, 20.0], [5.0, 20.0], [5.0, 5.0]]]
+      },
+      "properties": { "kind": "water", "type": "lake", "surface_m": 11.5 }
+    },
+    {
+      "type": "Feature",
+      "id": "river-1",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[30.0, 25.0, 14.0], [32.0, 15.0, 12.5], [35.0, 2.0, 11.0]]
+      },
+      "properties": {
+        "kind": "water",
+        "type": "river",
+        "width_m": [2.0, 3.0, 4.5],
+        "discharge_m3s": [0.5, 0.8, 1.2]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "chime-1",
+      "geometry": { "type": "Point", "coordinates": [15.0, 12.0] },
+      "properties": { "kind": "poi", "type": "chime" }
+    }
+  ]
+}
