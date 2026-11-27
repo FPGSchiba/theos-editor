@@ -18,58 +18,71 @@ pub enum Sampling {
     Nearest,
 }
 
-/// `parent` (rows × cols of `parent_cell_m`) sampled at the centres of a child grid of
-/// `rows × cols` cells of `cell_m` whose north-west corner lies at `origin_m` in the parent's
-/// frame. Every sample point is clamped to the parent's grid, so cells past its edge read the
-/// nearest edge cell. An empty child gives an empty grid.
+/// The child grid to sample: `rows × cols` cells of `cell_m` whose north-west corner lies at
+/// `origin_m` in the parent's frame.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ChildGrid {
+    /// The north-west corner of the child, in metres from the parent's north-west corner.
+    pub origin_m: [f64; 2],
+    /// Rows of child cells.
+    pub rows: usize,
+    /// Columns of child cells.
+    pub cols: usize,
+    /// Side of a child cell, in metres.
+    pub cell_m: f64,
+}
+
+/// `parent` (rows × cols of `parent_cell_m`) sampled at the centres of the `child` grid. Every
+/// sample point is clamped to the parent's grid, so cells past its edge read the nearest edge
+/// cell. An empty child gives an empty grid.
 ///
 /// # Errors
 /// [`KernelError::BadGeometry`] when a cell size is not positive and finite or the origin is not
-/// finite, [`KernelError::NoCells`] when the child has cells but the parent has none,
+/// finite, [`KernelError::Shape`] when the child's cell count overflows `usize`,
+/// [`KernelError::NoCells`] when the child has cells but the parent has none,
 /// [`KernelError::Cancelled`] when `cancel` returns `true` (called every 4,096 child cells).
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the kernel's interface is fixed by P29 Task 5: the parent and its cell size, the child origin, shape and cell size, the sampling and the cancel point"
-)]
 pub fn resample(
     parent: &Grid<f64>,
     parent_cell_m: f64,
-    origin_m: [f64; 2],
-    rows: usize,
-    cols: usize,
-    cell_m: f64,
+    child: &ChildGrid,
     sampling: Sampling,
     cancel: &dyn Fn() -> bool,
 ) -> Result<Grid<f64>, KernelError> {
     let positive = |x: f64| x.is_finite() && x > 0.0;
-    if !(positive(parent_cell_m) && positive(cell_m) && origin_m.iter().all(|v| v.is_finite())) {
+    let origin_m = child.origin_m;
+    if !(positive(parent_cell_m)
+        && positive(child.cell_m)
+        && origin_m.iter().all(|v| v.is_finite()))
+    {
         return Err(KernelError::BadGeometry);
     }
-    if rows * cols > 0 && parent.is_empty() {
+    let (rows, cols) = (child.rows, child.cols);
+    let len = rows.checked_mul(cols).ok_or(KernelError::Shape {
+        rows,
+        cols,
+        len: usize::MAX,
+    })?;
+    if len > 0 && parent.is_empty() {
         return Err(KernelError::NoCells);
     }
-    let mut data = Vec::with_capacity(rows * cols);
+    let mut data = Vec::with_capacity(len);
     for r in 0..rows {
-        let ey = edge(origin_m[1], cell_m, r, parent_cell_m);
+        let ey = centre_in_parent(origin_m[1], child.cell_m, r, parent_cell_m);
         for c in 0..cols {
             cancel_point(data.len(), cancel)?;
-            let ex = edge(origin_m[0], cell_m, c, parent_cell_m);
+            let ex = centre_in_parent(origin_m[0], child.cell_m, c, parent_cell_m);
             data.push(match sampling {
                 Sampling::Nearest => nearest(parent, ex, ey),
                 Sampling::CatmullRom => catmull_rom(parent, ex - 0.5, ey - 0.5),
             });
         }
     }
-    Grid::from_vec(rows, cols, data).map_err(|_| KernelError::Shape {
-        rows,
-        cols,
-        len: rows * cols,
-    })
+    Grid::from_vec(rows, cols, data).map_err(|_| KernelError::Shape { rows, cols, len })
 }
 
-/// The position of the centre of child cell `k` in parent cell units, measured from the
+/// The centre of child cell `k` along one axis, in parent cell units, measured from the
 /// parent's north-west corner: a parent cell `i` spans `i..i + 1`.
-fn edge(origin: f64, cell_m: f64, k: usize, parent_cell_m: f64) -> f64 {
+fn centre_in_parent(origin: f64, cell_m: f64, k: usize, parent_cell_m: f64) -> f64 {
     (origin + (to_f64(k) + 0.5) * cell_m) / parent_cell_m
 }
 
@@ -119,6 +132,16 @@ mod tests {
         Grid::from_vec(rows, cols, data).unwrap_or_else(|_| Grid::filled(0, 0, 0.0))
     }
 
+    /// A child grid of `rows × cols` cells of `cell_m` from `origin_m`.
+    fn child(origin_m: [f64; 2], rows: usize, cols: usize, cell_m: f64) -> ChildGrid {
+        ChildGrid {
+            origin_m,
+            rows,
+            cols,
+            cell_m,
+        }
+    }
+
     /// Centre of cell `k` along an axis that starts at `origin` with cells of `cell`.
     fn centre(origin: f64, cell: f64, k: usize) -> f64 {
         origin + (to_f64(k) + 0.5) * cell
@@ -133,10 +156,7 @@ mod tests {
         let out = resample(
             &p,
             8.0,
-            [12.0, 12.0],
-            30,
-            30,
-            2.0,
+            &child([12.0, 12.0], 30, 30, 2.0),
             Sampling::CatmullRom,
             &never,
         )?;
@@ -159,7 +179,7 @@ mod tests {
         // sit exactly on parent centres (4 m, 12 m, ...), so the sample is exact in binary.
         let p = parent(4, 4, |r, c| to_f64(r * 4 + c) + 0.125);
         for sampling in [Sampling::CatmullRom, Sampling::Nearest] {
-            let out = resample(&p, 8.0, [-1.0, -1.0], 16, 16, 2.0, sampling, &never)?;
+            let out = resample(&p, 8.0, &child([-1.0, -1.0], 16, 16, 2.0), sampling, &never)?;
             for r in (2..16).step_by(4) {
                 for c in (2..16).step_by(4) {
                     let want = p.get(r / 4, c / 4);
@@ -180,10 +200,7 @@ mod tests {
         let nearest = resample(
             &p,
             8.0,
-            [-100.0, -100.0],
-            4,
-            4,
-            2.0,
+            &child([-100.0, -100.0], 4, 4, 2.0),
             Sampling::Nearest,
             &never,
         )?;
@@ -193,10 +210,7 @@ mod tests {
         let smooth = resample(
             &p,
             8.0,
-            [-100.0, -100.0],
-            4,
-            4,
-            2.0,
+            &child([-100.0, -100.0], 4, 4, 2.0),
             Sampling::CatmullRom,
             &never,
         )?;
@@ -207,10 +221,7 @@ mod tests {
         let far = resample(
             &p,
             8.0,
-            [200.0, 200.0],
-            4,
-            4,
-            2.0,
+            &child([200.0, 200.0], 4, 4, 2.0),
             Sampling::Nearest,
             &never,
         )?;
@@ -222,14 +233,25 @@ mod tests {
 
     #[test]
     fn nearest_keeps_class_codes() -> Result<(), KernelError> {
+        // Checkerboard of codes 0 and 3 on 8 m cells; the child starts west and north of the
+        // parent, so some samples clamp to the edge.
         let p = parent(3, 4, |r, c| if (r + c) % 2 == 0 { 0.0 } else { 3.0 });
-        let out = resample(&p, 8.0, [-3.0, -5.0], 9, 13, 2.0, Sampling::Nearest, &never)?;
-        let allowed = [0.0_f64.to_bits(), 3.0_f64.to_bits()];
-        for &v in out.as_slice() {
-            assert!(
-                allowed.contains(&v.to_bits()),
-                "code {v} is not a parent code"
-            );
+        let (origin, pc) = ([-3.0, -5.0], 8.0);
+        let grid = child(origin, 9, 13, 2.0);
+        let out = resample(&p, pc, &grid, Sampling::Nearest, &never)?;
+        for r in 0..grid.rows {
+            for c in 0..grid.cols {
+                // The parent cell containing the child centre, clamped to the parent grid.
+                let ex = libm::floor(centre(origin[0], grid.cell_m, c) / pc);
+                let ey = libm::floor(centre(origin[1], grid.cell_m, r) / pc);
+                let want = p.get(to_index(ey, p.rows()), to_index(ex, p.cols()));
+                assert_eq!(
+                    out.get(r, c).to_bits(),
+                    want.to_bits(),
+                    "cell ({r}, {c}): got {}, want {want}",
+                    out.get(r, c)
+                );
+            }
         }
         Ok(())
     }
@@ -240,10 +262,7 @@ mod tests {
         let cancelled = resample(
             &p,
             8.0,
-            [0.0, 0.0],
-            100,
-            100,
-            2.0,
+            &child([0.0, 0.0], 100, 100, 2.0),
             Sampling::Nearest,
             &|| true,
         );
@@ -255,17 +274,20 @@ mod tests {
         let p = parent(4, 4, |_, _| 1.0);
         let empty = parent(0, 0, |_, _| 0.0);
         assert_eq!(
-            resample(&p, 0.0, [0.0, 0.0], 2, 2, 2.0, Sampling::Nearest, &never),
+            resample(
+                &p,
+                0.0,
+                &child([0.0, 0.0], 2, 2, 2.0),
+                Sampling::Nearest,
+                &never
+            ),
             Err(KernelError::BadGeometry)
         );
         assert_eq!(
             resample(
                 &p,
                 8.0,
-                [f64::NAN, 0.0],
-                2,
-                2,
-                2.0,
+                &child([f64::NAN, 0.0], 2, 2, 2.0),
                 Sampling::Nearest,
                 &never
             ),
@@ -275,10 +297,7 @@ mod tests {
             resample(
                 &empty,
                 8.0,
-                [0.0, 0.0],
-                2,
-                2,
-                2.0,
+                &child([0.0, 0.0], 2, 2, 2.0),
                 Sampling::CatmullRom,
                 &never
             ),
@@ -287,13 +306,29 @@ mod tests {
         let none = resample(
             &empty,
             8.0,
-            [0.0, 0.0],
-            0,
-            0,
-            2.0,
+            &child([0.0, 0.0], 0, 0, 2.0),
             Sampling::CatmullRom,
             &never,
         );
         assert_eq!(none.map(|g| g.len()), Ok(0));
+    }
+
+    #[test]
+    fn resample_refuses_a_child_whose_cell_count_overflows() {
+        let p = parent(4, 4, |_, _| 1.0);
+        assert_eq!(
+            resample(
+                &p,
+                8.0,
+                &child([0.0, 0.0], usize::MAX, 2, 2.0),
+                Sampling::Nearest,
+                &never
+            ),
+            Err(KernelError::Shape {
+                rows: usize::MAX,
+                cols: 2,
+                len: usize::MAX,
+            })
+        );
     }
 }
