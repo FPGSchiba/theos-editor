@@ -91,9 +91,10 @@ jobs:
   # `gate` does: a pull request that changes no code, or a repository without `editor-ui/`, needs
   # no `ui`, and the steps after the question are skipped, so the job stays green and costs
   # seconds. The check is the `ui` subcommand, not `gate --only ui`: `gate` always runs `tools`
-  # first, which fails here, where none of the pinned Rust tools is installed. pnpm comes before
-  # setup-node because setup-node reads its store; its version is the `packageManager` of
-  # editor-ui. Playwright's browsers are cached by the lockfile.
+  # first, which fails here, where none of the pinned Rust tools is installed. The set-up action
+  # of the UI (.github/actions/ui) installs pnpm at the version of the `packageManager` of
+  # editor-ui, Node, the packages and Chromium. Its pnpm store and browsers are restored on every
+  # run and saved on `main` only, like the Rust caches: a pull request saves no cache.
   ui:
     name: ui
     runs-on: ubuntu-latest
@@ -107,21 +108,10 @@ jobs:
       - id: needs
         run: target/xtask-bin/debug/xtask --root . needs ui
       - if: steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''
-        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        uses: ./.github/actions/ui
         with:
-          package_json_file: editor-ui/package.json
-      - if: steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: editor-ui/pnpm-lock.yaml
-      - if: steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('editor-ui/pnpm-lock.yaml') }}
-      - if: steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''
-        run: pnpm --dir editor-ui install --frozen-lockfile && pnpm --dir editor-ui exec playwright install --with-deps chromium
-      - if: steps.needs.outputs.needed == 'true'
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
+          browser-deps: true
+      # Fails closed: only an answer of `false` skips the check, so a missing answer runs it.
+      - if: steps.needs.outputs.needed != 'false'
         run: target/xtask-bin/debug/xtask --root . ui

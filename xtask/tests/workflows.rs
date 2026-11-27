@@ -229,7 +229,7 @@ const PLATFORM_JOBS: [PlatformJob; 3] = [
         name: "windows",
         runner: "windows-latest",
         command: "cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace,ui",
-        prelude: &[NEEDS_UI_CARGO, UI_BROWSER_LOCAL],
+        prelude: &[NEEDS_UI_CARGO],
         timeout: 150,
         label: Some("windows"),
         input: "windows",
@@ -241,7 +241,7 @@ const PLATFORM_JOBS: [PlatformJob; 3] = [
         name: "macos",
         runner: "macos-latest",
         command: "cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace,ui",
-        prelude: &[NEEDS_UI_CARGO, UI_BROWSER_LOCAL],
+        prelude: &[NEEDS_UI_CARGO],
         timeout: 150,
         label: Some("macos"),
         input: "macos",
@@ -261,22 +261,26 @@ const PLATFORM_JOBS: [PlatformJob; 3] = [
     },
 ];
 
-/// What the jobs that run `ui` install before it: the packages and Chromium of Playwright.
-/// `pnpm install` comes first because `pnpm exec playwright` needs the packages; `ui` installs
-/// them again, which finds them there. The Linux job adds the system libraries of the browser.
-const UI_BROWSER_LOCAL: &str = "pnpm --dir editor-ui install --frozen-lockfile && pnpm --dir \
-                                editor-ui exec playwright install chromium";
-const UI_BROWSER_CI: &str = "pnpm --dir editor-ui install --frozen-lockfile && pnpm --dir \
-                             editor-ui exec playwright install --with-deps chromium";
+/// The set-up action of the UI: pnpm, Node, the packages and Chromium, with the pnpm store and the
+/// browsers cached.
+const UI_USES: &str = "./.github/actions/ui";
+const UI_ACTION: &str = ".github/actions/ui/action.yml";
 
-/// The condition of every step that sets up Node, pnpm and the browser: the run needs `ui`
-/// (`xtask needs ui`, which is the scope of `gate`) and `editor-ui/` exists, so a pull request
-/// that changes no code pays nothing and the jobs stay green until the folder does.
+/// The condition of the step that sets up the UI: the run needs `ui` (`xtask needs ui`, which is
+/// the scope of `gate`) and `editor-ui/` exists, so a pull request that changes no code pays
+/// nothing and the jobs stay green until the folder does.
 const UI_EXISTS_IF: &str =
     "steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''";
 
-/// The condition of the step of the `ui` job that runs the check: the run needs it.
-const UI_RUN_IF: &str = "steps.needs.outputs.needed == 'true'";
+/// The condition of the step of the `ui` job that runs the check. It fails closed: only an
+/// answer of `false` skips the check, so an answer that is missing runs it and fails the job.
+const UI_RUN_IF: &str = "steps.needs.outputs.needed != 'false'";
+
+/// The conditions inside the set-up action of the UI: the browser with or without its system
+/// libraries, and the save of the caches after a miss when the job saves.
+const UI_DEPS_IF: &str = "inputs.browser-deps == 'true'";
+const UI_NO_DEPS_IF: &str = "inputs.browser-deps != 'true'";
+const UI_SAVE_IF: &str = "inputs.save-cache == 'true' && steps.cache.outputs.cache-hit != 'true'";
 
 /// The step that asks xtask whether the run needs `ui`, and leaves the answer as the step output
 /// `needed`. The `ui` job asks the cached binary; the platform jobs have built xtask already.
@@ -347,7 +351,7 @@ const CI_JOBS: [CiJob; 4] = [
         name: "ui",
         runner: "ubuntu-latest",
         command: UI_CACHED,
-        prelude: &[NEEDS_UI_CACHED, UI_BROWSER_CI],
+        prelude: &[NEEDS_UI_CACHED],
         timeout: 30,
     },
 ];
@@ -460,10 +464,8 @@ fn step_kind(step: &Yaml) -> TestResult<&'static str> {
             Ok("setup")
         } else if uses == XTASK_USES {
             Ok("xtask")
-        } else if uses.starts_with("pnpm/action-setup@") {
-            Ok("pnpm")
-        } else if uses.starts_with("actions/setup-node@") {
-            Ok("node")
+        } else if uses == UI_USES {
+            Ok("ui")
         } else if uses.starts_with("actions/cache@") {
             Ok("cache")
         } else if uses.starts_with("actions/cache/save@") {
@@ -1057,14 +1059,9 @@ fn every_job_runs_only_its_command_on_its_runner() -> TestResult {
             (_, "approval") => &["checkout", "checkout", "xtask", "setup", "run"],
             (_, "pr" | "settings") => &["checkout", "xtask", "run"],
             ("ci.yml", "coverage") => &["checkout", "setup", "cache", "run"],
-            // The question whether `ui` is needed, then Node and pnpm, the browser cache and the
-            // browser, before `ui`.
-            ("ci.yml", "ui") => &[
-                "checkout", "xtask", "run", "pnpm", "node", "cache", "run", "run",
-            ],
-            ("platforms.yml", "windows" | "macos") => {
-                &["checkout", "setup", "run", "pnpm", "node", "run", "run"]
-            }
+            // The question whether `ui` is needed, then the set-up of the UI, then the check.
+            ("ci.yml", "ui") => &["checkout", "xtask", "run", "ui", "run"],
+            ("platforms.yml", "windows" | "macos") => &["checkout", "setup", "run", "ui", "run"],
             _ => &["checkout", "setup", "run"],
         };
         assert_eq!(kinds, expected, "{file}: the steps of job {name}");
@@ -1188,12 +1185,10 @@ fn step_condition(file: &str, job: &str, position: usize) -> Option<&'static str
         ("approval.yml", "approval", 1) => Some(APPROVAL_FALLBACK_IF),
         ("approval.yml", "approval", 2) => Some(APPROVAL_XTASK_IF),
         ("approval.yml", "approval", 3) => Some(APPROVAL_BUILD_IF),
-        // pnpm, Node, the browser cache and the browser after the question; in the platform jobs
-        // pnpm, Node and the browser. The `ui` job also runs its check only when it is needed.
-        ("ci.yml", "ui", 3..=6) | ("platforms.yml", "windows" | "macos", 3..=5) => {
-            Some(UI_EXISTS_IF)
-        }
-        ("ci.yml", "ui", 7) => Some(UI_RUN_IF),
+        // The set-up of the UI after the question. The `ui` job also runs its check unless the
+        // answer is `false`.
+        ("ci.yml", "ui", 3) | ("platforms.yml", "windows" | "macos", 3) => Some(UI_EXISTS_IF),
+        ("ci.yml", "ui", 4) => Some(UI_RUN_IF),
         _ => None,
     }
 }
@@ -1258,7 +1253,7 @@ fn no_key_lets_a_job_pass_while_xtask_fails() -> TestResult {
 
 /// The local actions, and the steps of each that carry a condition, by position, with that
 /// condition. Every other step of them runs always: a condition anywhere else could skip a check.
-const LOCAL_ACTIONS: [(&str, &[(usize, &str)]); 2] = [
+const LOCAL_ACTIONS: [(&str, &[(usize, &str)]); 3] = [
     (
         SETUP_ACTION,
         &[
@@ -1272,6 +1267,10 @@ const LOCAL_ACTIONS: [(&str, &[(usize, &str)]); 2] = [
         ],
     ),
     (XTASK_ACTION, &[(1, BUILD_ON_MISS_IF)]),
+    (
+        UI_ACTION,
+        &[(5, UI_DEPS_IF), (6, UI_NO_DEPS_IF), (7, UI_SAVE_IF)],
+    ),
 ];
 
 // AC: CE-08.3, CE-08.4
@@ -1545,6 +1544,7 @@ fn uses_lines() -> TestResult<Vec<(String, String)>> {
         .collect();
     files.push(SETUP_ACTION.to_owned());
     files.push(XTASK_ACTION.to_owned());
+    files.push(UI_ACTION.to_owned());
     let mut found = Vec::new();
     for file in files {
         for line in read(&file)?.lines() {
@@ -2161,14 +2161,6 @@ fn pr_runs_both_checks_in_one_job() -> TestResult {
 /// The package list the setup action installs, as `gate/linux-packages.txt` writes it.
 const LINUX_PACKAGES: [&str; 3] = ["build-essential", "pkg-config", "libwebkit2gtk-4.1-dev"];
 
-/// The step of a job that uses `action`, by the part of its `uses:` before the version.
-fn step_of<'a>(job: &'a Job, action: &str) -> TestResult<&'a Yaml> {
-    job.steps()?
-        .iter()
-        .find(|step| action_name(step) == Some(action))
-        .ok_or_else(|| format!("job {} has no step that uses {action}", job.name).into())
-}
-
 /// A job of `ci.yml`, by name.
 fn ci_named(name: &str) -> TestResult<Job> {
     let all = jobs(&workflow("ci.yml")?)?;
@@ -2178,33 +2170,132 @@ fn ci_named(name: &str) -> TestResult<Job> {
         .ok_or_else(|| format!("no job named {name}").into())
 }
 
-/// The setup of Node and pnpm that the jobs running `ui` share: pnpm at the version of
-/// `editor-ui/package.json`, then Node 24 with the pnpm store cached by the lockfile.
-fn assert_node_and_pnpm(job: &Job) -> TestResult {
-    let name = &job.name;
-    let pnpm = step_of(job, "pnpm/action-setup")?;
+/// The steps of the set-up action of the UI.
+fn ui_action_steps() -> TestResult<Vec<Yaml>> {
+    Ok(parse(UI_ACTION)?["runs"]["steps"]
+        .as_vec()
+        .ok_or("the ui action has no steps")?
+        .clone())
+}
+
+// AC: CE-08.3
+/// The set-up of the UI, as the action spells it: pnpm at the version of `editor-ui/package.json`
+/// first, then Node 24 with no cache of its own (setup-node would save one on every run, a pull
+/// request's included), then the store path, the restore of the caches, the installs, the save.
+#[test]
+fn the_ui_action_installs_pnpm_node_and_the_browser_and_caches_them_without_saving_on_prs()
+-> TestResult {
+    let steps = ui_action_steps()?;
+    assert_eq!(steps.len(), 8);
+    assert_eq!(action_name(&steps[0]), Some("pnpm/action-setup"));
     assert_eq!(
-        string_map(&pnpm["with"])?,
+        string_map(&steps[0]["with"])?,
         map(&[("package_json_file", "editor-ui/package.json")]),
-        "{name}: pnpm takes its version from packageManager in editor-ui"
+        "pnpm takes its version from packageManager in editor-ui"
     );
-    let node = step_of(job, "actions/setup-node")?;
+    assert_eq!(action_name(&steps[1]), Some("actions/setup-node"));
     assert_eq!(
-        string_map(&node["with"])?,
-        map(&[
-            ("node-version", "24"),
-            ("cache", "pnpm"),
-            ("cache-dependency-path", "editor-ui/pnpm-lock.yaml"),
-        ]),
-        "{name}: Node"
+        string_map(&steps[1]["with"])?,
+        map(&[("node-version", "24")]),
+        "setup-node has no `cache:`, which saves on every run"
     );
-    let steps = job.steps()?;
-    let position = |step: &Yaml| steps.iter().position(|other| other == step);
-    assert!(
-        position(pnpm) < position(node),
-        "{name}: setup-node reads the pnpm store, so pnpm comes first"
+
+    // The caches: the store and the browsers, keyed by the lockfile, restored on every run and
+    // saved only by a job that asks, after a miss. No step of the action or of a job that
+    // uses it is the combined `actions/cache`, which saves on every miss.
+    assert_eq!(steps[2]["id"].as_str(), Some("store"));
+    let find = steps[2]["run"].as_str().ok_or("no store step")?;
+    assert!(find.contains("pnpm --dir editor-ui store path"), "{find}");
+    assert!(find.contains("$GITHUB_OUTPUT"), "{find}");
+    let paths = "${{ steps.store.outputs.path }}\n${{ inputs.browsers-path }}\n";
+    let key = "ui-${{ runner.os }}-${{ hashFiles('editor-ui/pnpm-lock.yaml') }}";
+    let restore = &steps[3];
+    assert_eq!(action_name(restore), Some("actions/cache/restore"));
+    assert_eq!(restore["id"].as_str(), Some("cache"));
+    assert_eq!(
+        string_map(&restore["with"])?,
+        map(&[("path", paths), ("key", key)])
+    );
+    let save = &steps[7];
+    assert_eq!(action_name(save), Some("actions/cache/save"));
+    assert_eq!(string_map(&save["with"])?, string_map(&restore["with"])?);
+
+    // The installs: the packages first (`playwright` is one of them), then the browser, with the
+    // system libraries only where the job asks for them.
+    let install = steps[4]["run"].as_str().ok_or("no install step")?;
+    assert_eq!(install, "pnpm --dir editor-ui install --frozen-lockfile");
+    assert_eq!(
+        steps[5]["run"].as_str(),
+        Some("pnpm --dir editor-ui exec playwright install --with-deps chromium")
+    );
+    assert_eq!(
+        steps[6]["run"].as_str(),
+        Some("pnpm --dir editor-ui exec playwright install chromium")
+    );
+    for (file, job) in all_jobs()? {
+        if (file == "ci.yml" && job.name == "ui") || file == "platforms.yml" {
+            for step in job.steps()? {
+                assert_ne!(
+                    action_name(step),
+                    Some("actions/cache"),
+                    "{file}: {}: the combined cache action saves on every miss",
+                    job.name
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+// AC: CE-08.3
+/// Who saves the caches of the UI: the `ui` job on `main` only, and the platform jobs on the
+/// schedule only, as the Rust caches are saved. Every other run only restores.
+#[test]
+fn ui_caches_are_saved_on_main_or_the_schedule_only() -> TestResult {
+    let ci = ci_named("ui")?;
+    let step = step_of_uses(&ci, UI_USES)?;
+    assert_eq!(step["with"]["save-cache"].as_str(), Some(ON_MAIN));
+    assert_eq!(
+        scalar(&step["with"]["browser-deps"]).as_deref(),
+        Some("true")
+    );
+    let platforms = jobs(&workflow("platforms.yml")?)?;
+    for (name, browsers) in [
+        ("windows", "~/AppData/Local/ms-playwright"),
+        ("macos", "~/Library/Caches/ms-playwright"),
+    ] {
+        let job = &platforms[index_of(&platforms, name)?];
+        let step = step_of_uses(job, UI_USES)?;
+        assert_eq!(
+            step["with"]["save-cache"].as_str(),
+            Some(ON_SCHEDULE),
+            "{name}"
+        );
+        assert_eq!(
+            step["with"]["browsers-path"].as_str(),
+            Some(browsers),
+            "{name}"
+        );
+        assert!(
+            step["with"]["browser-deps"].is_badvalue(),
+            "{name}: no root, no system libraries"
+        );
+    }
+    // The action saves only when asked to, and only after a miss; its defaults save nothing.
+    let action = parse(UI_ACTION)?;
+    assert_eq!(
+        scalar(&action["inputs"]["save-cache"]["default"]).as_deref(),
+        Some("false")
     );
     Ok(())
+}
+
+/// The step of a job that uses the local action `action`.
+fn step_of_uses<'a>(job: &'a Job, action: &str) -> TestResult<&'a Yaml> {
+    job.steps()?
+        .iter()
+        .find(|step| step["uses"].as_str() == Some(action))
+        .ok_or_else(|| format!("job {} has no step that uses {action}", job.name).into())
 }
 
 // AC: CE-08.3
@@ -2223,34 +2314,14 @@ fn ci_has_a_ui_job() -> TestResult {
         Yaml::BadValue,
         "the question is always asked"
     );
-    assert_node_and_pnpm(&job)?;
-
-    // The browsers of Playwright are cached by the lockfile.
-    let cache = step_of(&job, "actions/cache")?;
-    assert_eq!(
-        string_map(&cache["with"])?,
-        map(&[
-            ("path", "~/.cache/ms-playwright"),
-            (
-                "key",
-                "playwright-${{ runner.os }}-${{ hashFiles('editor-ui/pnpm-lock.yaml') }}"
-            ),
-        ])
-    );
-
-    // The last step is the check, from the cached binary and only when it is needed; the step
-    // before it installs the browser with its system libraries. Every step after the question
-    // waits for the answer.
+    // The set-up waits for the answer; the check runs unless the answer is `false`, so a missing
+    // answer fails the job instead of skipping `ui`.
+    assert_eq!(steps[3]["uses"].as_str(), Some(UI_USES));
+    assert_eq!(steps[3]["if"].as_str(), Some(UI_EXISTS_IF));
     let last = steps.last().ok_or("the ui job has no steps")?;
     assert_eq!(last["run"].as_str(), Some(UI_CACHED));
     assert_eq!(last["if"].as_str(), Some(UI_RUN_IF));
-    for step in &steps[3..] {
-        let condition = step["if"].as_str().unwrap_or_default();
-        assert!(
-            condition.starts_with("steps.needs.outputs.needed == 'true'"),
-            "a step of the ui job runs without asking whether ui is needed: {condition:?}"
-        );
-    }
+    assert!(UI_RUN_IF.contains("!= 'false'"));
     assert_eq!(job.commands()?, commands_of("ci.yml", "ui"));
     Ok(())
 }
@@ -2367,14 +2438,12 @@ fn platforms_run_ui_on_windows_and_macos() -> TestResult {
                 .contains(&Check::Ui),
             "{name} does not run ui"
         );
-        assert_node_and_pnpm(job)?;
-        // The question comes before the setup of Node, and every step of it waits for the answer.
+        // The question comes before the set-up of the UI, which waits for the answer.
         let steps = job.steps()?;
         assert_eq!(steps[2]["id"].as_str(), Some("needs"));
         assert_eq!(steps[2]["run"].as_str(), Some(NEEDS_UI_CARGO));
-        for step in &steps[3..6] {
-            assert_eq!(step["if"].as_str(), Some(UI_EXISTS_IF), "{name}");
-        }
+        assert_eq!(steps[3]["uses"].as_str(), Some(UI_USES), "{name}");
+        assert_eq!(steps[3]["if"].as_str(), Some(UI_EXISTS_IF), "{name}");
     }
     // Intel macOS runs the tests only.
     let intel = &jobs[index_of(&jobs, "macos-intel")?];

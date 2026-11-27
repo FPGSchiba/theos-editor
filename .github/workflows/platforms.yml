@@ -2,8 +2,8 @@
 # Linux only, and these runners are slower or dearer. This runs the checks that read what the
 # compiler builds on the machine, so they can differ per OS: clippy, the tests, the slow tests,
 # `lints` and `ac-trace` (the last two read the cfg-selected code that `cargo check` builds), and
-# `ui` (Playwright's browser differs per OS; Node and pnpm are set up when `xtask needs ui` says so
-# and `editor-ui/` exists). It
+# `ui` (Playwright's browser differs per OS; the UI is set up when `xtask needs ui` says so and
+# `editor-ui/` exists, and its pnpm store and browsers are cached like the Rust build). It
 # runs every Monday, on demand, and on a pull request that Jann labels `windows` or `macos`, each
 # label starting the job of its own OS. The jobs are not required status checks. A label or manual
 # run is a deliberate request, so xtask runs every selected check even for a pull request that
@@ -62,17 +62,10 @@ jobs:
       - id: needs
         run: cargo xtask needs ui
       - if: steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''
-        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        uses: ./.github/actions/ui
         with:
-          package_json_file: editor-ui/package.json
-      - if: steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: editor-ui/pnpm-lock.yaml
-      - if: steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''
-        run: pnpm --dir editor-ui install --frozen-lockfile && pnpm --dir editor-ui exec playwright install chromium
+          save-cache: ${{ github.event_name == 'schedule' }}
+          browsers-path: ~/AppData/Local/ms-playwright
       - run: cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace,ui
 
   macos:
@@ -95,17 +88,10 @@ jobs:
       - id: needs
         run: cargo xtask needs ui
       - if: steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''
-        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        uses: ./.github/actions/ui
         with:
-          package_json_file: editor-ui/package.json
-      - if: steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: editor-ui/pnpm-lock.yaml
-      - if: steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''
-        run: pnpm --dir editor-ui install --frozen-lockfile && pnpm --dir editor-ui exec playwright install chromium
+          save-cache: ${{ github.event_name == 'schedule' }}
+          browsers-path: ~/Library/Caches/ms-playwright
       - run: cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace,ui
 
   macos-intel:
