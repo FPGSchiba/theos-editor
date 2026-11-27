@@ -1,0 +1,72 @@
+== choir-hall-like [sparse] 5x5 lattice, pitch 40 m, floor 200 m, target 14
+seed rooms conn cyc lock 1way dead% foot% hall% crit_m sight_m ms  cells/room det rooms_hash graph_hash  fails
+   1    14   14   1    2    1  42.9  20.4  42.6    414      98    0.4   1.50 equal e9f73c980672abd8 dea823637e65b782  ok
+     rules (seed 1): {"leaf": 4, "locked_leaf": 1, "main_cycle:lock_key": 1, "rim_leaf": 2} failed_steps=1 rollbacks=0
+   2    14   14   1    2    1  50.0  20.2  41.3    528     148    0.3   1.50 equal d8f3b66b02028031 5b142c5660ee3fa4  ok
+   3    14   15   2    2    1  42.9  20.0  41.8    364     138    0.2   1.50 equal 70458538cc414f7d 4c4e3fe08cefa692  ok
+   4    14   15   2    2    1  35.7  20.4  43.7    230     114    0.2   1.50 equal bfbf0d780e3c9ee9 2801351eb840316c  ok
+   5    14   14   1    2    1  35.7  21.7  46.1    488     154    0.3   1.50 equal 588d9e5a028cfad3 649778b9546c3688  ok
+   6    14   15   2    2    1  42.9  20.7  41.6    328     116    0.2   1.50 equal 0813fc08cef5a484 f30be42bc16a5af1  ok
+   7    14   14   1    2    1  35.7  21.3  40.5    258     114    0.2   1.50 equal 714dab1a6f38a5ef 7fe8909852dc1c2d  ok
+   8    14   14   1    2    1  42.9  20.8  44.7    280     140    0.2   1.50 equal 96d22f01061a158c 2e89e01d95962884  ok
+reached target 8/8; mean footprint 20.7%; mean hall share 42.8%; mean runtime 0.2 ms
+== choir-hall-like [dense] 5x5 lattice, pitch 16 m, floor 80 m, target 14
+seed rooms conn cyc lock 1way dead% foot% hall% crit_m sight_m ms  cells/room det rooms_hash graph_hash  fails
+   1    14   15   2    2    1  42.9  60.0  23.2    116      62    0.1   1.50 equal 692c499416cad11e 5dbdd6f8fbd7ed59  ok
+     rules (seed 1): {"insert_cycle": 1, "leaf": 4, "locked_leaf": 1, "main_cycle:lock_key": 1, "rim_leaf": 2} failed_steps=0 rollbacks=0
+   2    14   16   3    2    1  21.4  60.3  22.4    144      62    0.1   1.50 equal 3588e0cbdf1dd56f 6dab466882896f5f  ok
+   3    14   15   2    2    1  21.4  60.6  22.7    120      60    0.3   1.50 equal a5d0622680a2859f 16eaf42e01112abb  ok
+   4    14   15   2    2    1  42.9  67.8  43.8    104      62    0.1   1.50 equal 6dcbeebac89c2435 2c7fcdadf3682214  ok
+   5    14   17   4    2    1  21.4  67.9  43.9    140      60    0.1   1.50 equal 08436aca2a2f10e5 c8110df139d04619  ok
+   6    14   17   4    2    1  14.3  58.3  23.9     96      78    0.1   1.50 equal 6ba8e92df7e883f7 335a3e23195a6cf1  ok
+   7    14   15   2    2    1  28.6  68.0  44.2    100      76    0.2   1.50 equal dfc78b4526d50a6d 5f796f8a32612fa7  ok
+   8    14   16   3    2    1  21.4  64.2  33.5    104      46    0.2   1.50 equal fd2fee5704d34cb4 224fd965165702a8  ok
+reached target 8/8; mean footprint 63.4%; mean hall share 32.2%; mean runtime 0.2 ms
+== megastructure-150 [sparse] 16x16 lattice, pitch 62 m, floor 992 m, target 150
+seed rooms conn cyc lock 1way dead% foot% hall% crit_m sight_m ms  cells/room det rooms_hash graph_hash  fails
+   1   151  182  32   11   15  13.2   8.4  10.9   2262     248    8.9   1.70 equal 6ee39565302db845 062add24811c7fd3  ok
+     rules (seed 1): {"extend_arc": 19, "insert_cycle": 22, "leaf": 29, "locked_leaf": 5, "main_cycle:lock_key": 1, "rim_leaf": 3, "shortcut": 9} failed_steps=1 rollbacks=0
+   2   150  179  30   10   13  12.0   8.3   7.1   1922     176   10.2   1.71 equal 4ccfbe771134ae86 ce668c9d21989d10  ok
+   3   150  183  34    9   15  16.7   8.2  10.7   1402     216   15.5   1.71 equal a266ec174ab303c9 ac3278e337d46f24  ok
+   4   150  186  37    9   13  12.7   8.3  12.0    926     198    9.9   1.71 equal 64aa673be5b66707 570778a7ec8a94bd  ok
+   5   150  177  28   11   14  11.3   8.5  10.8   1292     204   10.2   1.71 equal bcb7ad68171ed9d7 4e57eece431402c0  ok
+   6   150  181  32   11   15  10.0   8.1   8.3   1332     226   19.6   1.71 equal 5267b988bb1880ce de0a2f328a0019cb  ok
+   7   150  172  23   10   10  16.0   8.2   8.8   1878     190   13.1   1.71 equal 778b7c804267c0bd da78263c13837e06  ok
+   8   151  183  33   10   13  13.9   8.3   9.7    990     338   17.7   1.70 equal c5cc4304830521c8 3be1a776e8d42c44  ok
+reached target 8/8; mean footprint 8.3%; mean hall share 9.8%; mean runtime 13.1 ms
+== megastructure-150 [dense] 15x15 lattice, pitch 16 m, floor 240 m, target 150
+seed rooms conn cyc lock 1way dead% foot% hall% crit_m sight_m ms  cells/room det rooms_hash graph_hash  fails
+   1   150  200  51   10   13  13.3  58.4  21.8    268      72   21.0   1.50 equal 361d046b0d2ae501 b9407bc343421491  ok
+     rules (seed 1): {"extend_arc": 16, "insert_cycle": 42, "leaf": 36, "locked_leaf": 5, "main_cycle:lock_key": 1, "merge_hall": 14, "rim_leaf": 4, "shortcut": 8} failed_steps=0 rollbacks=0
+   2   150  194  45    9   11  12.7  63.4  27.4    244      74    7.6   1.50 equal 24dceb8c0e2e4973 1e4667c936a6f34b  ok
+   3   151  217  67    8   15   9.3  63.1  26.7    344      94   14.7   1.49 equal 2062b4f02b79eb8e b00cfd6e628c976d  ok
+   4   151  200  50   11   13  15.2  62.6  26.1    304      94   11.9   1.49 equal 9b76da1d7cb1e1a9 bcfc39e538005508  ok
+   5   150  194  45   12   19  14.0  63.9  28.4    316      94   12.2   1.50 equal e985898ed7354c82 8f1e28f7c4c8b00d  ok
+   6   151  189  39   10   15  11.3  61.4  24.2    388      78   16.0   1.49 equal fa317c50b89cdf48 7fb2a3efbbe568cd  ok
+   7   150  209  60    9   12   8.7  61.2  24.4    184     102   21.1   1.50 equal 684f8d6bc78ddba2 e1adc9e02bffc373  ok
+   8   151  208  58   10   15   7.9  65.6  28.9    280      94   31.1   1.49 equal e3d57708ebbd9a45 0d57e29a9178bdb0  ok
+reached target 8/8; mean footprint 62.4%; mean hall share 26.0%; mean runtime 16.9 ms
+== cave-circle [sparse] 7x7 lattice, pitch 50 m, floor 350 m, target 22
+seed rooms conn cyc lock 1way dead% foot% hall% crit_m sight_m ms  cells/room det rooms_hash graph_hash  fails
+   1    22   24   3    2    1  27.3  17.9  37.7    372     138    0.5   1.27 equal a268d61057709aa3 cda79d5a625ff073  ok
+     rules (seed 1): {"extend_arc": 2, "insert_cycle": 2, "leaf": 5, "locked_leaf": 1, "main_cycle:two_routes": 1, "rim_leaf": 2} failed_steps=0 rollbacks=0
+   2    22   24   3    1    0  36.4  19.2  37.0    234     186    0.9   1.23 equal df1efb916cb4f8f7 dd21a8229f7df47f  ok
+   3    22   24   3    1    0  27.3  16.8  36.6    218     134    0.8   1.36 equal a86ade73a2c30706 a7520a6b5bbdada3  ok
+   4    13   13   1    1    0  30.8  15.7  50.6    230     138    1.4   1.85 equal bb767d70965835f5 2b4efa562821475c  ok
+   5    22   25   4    1    1  27.3  19.0  39.1    236     172    0.5   1.41 equal 396bda7a98551ce4 ef6ed1f9a6fd987c  ok
+   6    22   24   3    2    1  27.3  17.2  37.8    216     232    1.2   1.36 equal 238cde973fb2abbd 863b7ad7b2943b1a  ok
+   7    22   24   3    3    2  27.3  19.3  36.0    352     178    0.5   1.32 equal 7b288262d1674e1a 1dc56de5b30bf8e0  ok
+   8    20   22   3    2    1  30.0  20.2  43.7    234     196    0.9   1.45 equal 423ab654c797a8ab 66461cf8f6fa3d80  ok
+reached target 6/8; mean footprint 18.2%; mean hall share 39.8%; mean runtime 0.8 ms
+== cave-circle [dense] 7x7 lattice, pitch 16 m, floor 112 m, target 22
+seed rooms conn cyc lock 1way dead% foot% hall% crit_m sight_m ms  cells/room det rooms_hash graph_hash  fails
+   1    19   24   6    3    2  21.1  63.4  40.7     72      62    0.9   1.47 equal 5286120e0ae65954 3b70d45426fd82c1  ok
+     rules (seed 1): {"insert_cycle": 5, "leaf": 7, "locked_leaf": 1, "main_cycle:two_routes": 1, "merge_hall": 3, "rim_leaf": 2} failed_steps=0 rollbacks=0
+   2    20   25   6    1    0  20.0  65.5  39.5     72      46    1.0   1.35 equal 354aa1054c6dea52 42f92eb9b55fd608  ok
+   3    22   25   4    1    0  27.3  60.0  24.9     68      62    0.5   1.36 equal 27b34e3e376c2cb6 65e785d8c577be0e  ok
+   4    17   20   4    1    0  11.8  64.6  45.3     72      78    0.8   1.41 equal ed6af92c79c199e7 0daebf19373efd69  ok
+   5    22   27   6    1    0  27.3  61.5  37.6     80      62    0.4   1.41 equal 41ee7357f71e6224 950bc78360806e8d  ok
+   6    22   27   6    2    1  22.7  63.6  37.4     92      62    0.9   1.36 equal 6b0e289dc1d71380 361955d6d746a93d  ok
+   7    22   28   7    3    2  13.6  65.2  37.8     96      60    0.4   1.32 equal b0efad0c93feb466 f56d13bf305290c9  ok
+   8    20   23   4    2    1  40.0  66.7  46.3     72      60    0.7   1.45 equal d905a0dd8b0679a9 6c2028cfd6bd203a  ok
+reached target 4/8; mean footprint 63.8%; mean hall share 38.7%; mean runtime 0.7 ms
