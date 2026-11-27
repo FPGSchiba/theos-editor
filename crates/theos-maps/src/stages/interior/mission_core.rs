@@ -116,6 +116,47 @@ impl MissionState {
         .filter(|&c| self.is_free(c))
         .collect()
     }
+
+    /// Whether a connection between cells `a` and cells `b` can have a door: some pair, one cell
+    /// from each, shares a wall segment of at least `MIN_SPAN` raster cells (ruling R1). Every
+    /// rule that creates a connection asks this.
+    #[must_use]
+    pub fn joinable(&self, a: &[Cell], b: &[Cell]) -> bool {
+        a.iter().any(|&x| {
+            b.iter()
+                .any(|&y| self.lattice.shared_segment(x, y).is_some())
+        })
+    }
+
+    /// The free cells that `cells` can be joined to, in ascending (row, col) order, each once.
+    #[must_use]
+    pub fn joinable_free(&self, cells: &[Cell]) -> Vec<Cell> {
+        let mut out: Vec<Cell> = cells
+            .iter()
+            .flat_map(|&c| {
+                self.free_neighbours(c)
+                    .into_iter()
+                    .filter(move |&n| self.joinable(&[c], &[n]))
+            })
+            .collect();
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+}
+
+/// Rooms `a` and `b` as (near, far): the near room comes first in `order`, the
+/// [`later_order`](crate::rooms::solve::later_order) of the graph (the fixed point's round, then
+/// the hop distance from the start, then the id). A lock between them faces the far room.
+#[must_use]
+pub fn near_far(order: &[(u16, u32, RoomId)], a: RoomId, b: RoomId) -> (RoomId, RoomId) {
+    let key = |r: RoomId| {
+        order
+            .get(usize::from(r))
+            .copied()
+            .unwrap_or((u16::MAX, u32::MAX, r))
+    };
+    if key(b) < key(a) { (b, a) } else { (a, b) }
 }
 
 /// One place a rule can apply.

@@ -2,6 +2,9 @@
 
 use super::mission_core::Rule;
 
+mod close_loop;
+mod extend_arc;
+mod insert_cycle;
 mod leaf;
 mod locked_leaf;
 mod main_cycle;
@@ -15,5 +18,8 @@ pub fn rules() -> Vec<Box<dyn Rule>> {
         Box::new(main_cycle::MainCycle),
         Box::new(leaf::Leaf),
         Box::new(locked_leaf::LockedLeaf),
+        Box::new(insert_cycle::InsertCycle),
+        Box::new(extend_arc::ExtendArc),
+        Box::new(close_loop::CloseLoop),
     ]
 }

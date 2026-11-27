@@ -13,6 +13,20 @@ pub fn lattice(rows: usize, cols: usize) -> Lattice {
     Lattice::new(rows * 6, cols * 6, 6, 0, Stagger::Rows, &mut rng).unwrap()
 }
 
+/// A synthetic 2 x 3 lattice of 6-cell blocks (staggered by rows) whose vertical neighbours in
+/// columns 0 and 2 share only 3 raster cells of wall, below `MIN_SPAN`, so they have no shared
+/// segment; column 1's vertical pair and every horizontal pair have one. The offsets of ±3
+/// exceed the jitter bound `Lattice::new` allows, so the lattice is read from its serde form.
+pub fn lattice_without_vertical_segments() -> Lattice {
+    let mut value = toml::Value::try_from(lattice(2, 3)).unwrap();
+    let offsets = toml::Value::try_from(vec![0, -3, 3, 0, 0, -3, 3, 0]).unwrap();
+    value
+        .as_table_mut()
+        .unwrap()
+        .insert("offsets".to_owned(), offsets);
+    value.try_into().unwrap()
+}
+
 /// One program room (synthetic fixture types).
 pub fn program_room(ty: &str, role: Role, footprint: (u8, u8), locked: bool) -> ProgramRoom {
     ProgramRoom {
