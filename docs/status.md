@@ -42,7 +42,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
 | P34 | Interiors | theos-editor | todo | | |
 | P45 | Atlas level switcher | theos-editor | todo | | |
-| P46 | Git read | theos-editor | spec-pr | | |
+| P46 | Git read | theos-editor | in-progress | #52, #58 | |
 | P47 | Git write | theos-editor | todo | | |
 | P48 | MCP read | theos-editor | todo | | |
 | P49 | Releases and the check action | theos-editor | todo | | |
