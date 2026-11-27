@@ -169,6 +169,16 @@ pub enum GraphError {
     /// A room type is not lower case with hyphens.
     #[error("room type {0:?} must match ^[a-z][a-z0-9-]*$")]
     BadType(String),
+    /// A drop starts in a room that is neither end of its connection.
+    #[error("drop {a}-{b} starts in room {from}, which is neither end")]
+    DropEnd {
+        /// The first room of the connection.
+        a: RoomId,
+        /// The second room of the connection.
+        b: RoomId,
+        /// The room the drop claims to start in.
+        from: RoomId,
+    },
 }
 
 fn type_ok(ty: &str) -> bool {
@@ -249,6 +259,16 @@ impl RoomGraph {
                 .any(|&x| rb.cells.iter().any(|&y| x.touches(y)));
             if !touching {
                 return Err(GraphError::NotAdjacent { a: c.a, b: c.b });
+            }
+            if let Passage::Drop { from } = c.kind
+                && from != c.a
+                && from != c.b
+            {
+                return Err(GraphError::DropEnd {
+                    a: c.a,
+                    b: c.b,
+                    from,
+                });
             }
         }
         let held: BTreeSet<KeyId> = self
@@ -415,6 +435,23 @@ mod tests {
         assert_eq!(ja, jb);
         assert_eq!(RoomGraph::key_name(1), "key-1");
         assert_eq!(RoomGraph::NAME, "room_graph");
+    }
+
+    // AC: CE-80.3
+    #[test]
+    fn validate_refuses_a_drop_from_neither_end() {
+        let mut g = square();
+        g.connections[0].kind = Passage::Drop { from: 0 };
+        assert_eq!(g.validate(&all), Ok(()));
+        g.connections[0].kind = Passage::Drop { from: 2 };
+        assert_eq!(
+            g.validate(&all),
+            Err(GraphError::DropEnd {
+                a: 0,
+                b: 1,
+                from: 2
+            })
+        );
     }
 
     #[test]
