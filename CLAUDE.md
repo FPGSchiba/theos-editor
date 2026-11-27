@@ -38,9 +38,15 @@ repo column in the umbrella's phase table names it, and for reading fixtures.
 - GitHub Actions minutes are paid (private repository); every push to a pull request starts its
   jobs.
 - Push once when a task or a review round is finished and checked locally (`cargo xtask gate` or
-  the task's checks), never after every commit. Never re-run CI on a commit that did not change, unless its run did
-  not finish (refused, cancelled, a runner failure).
+  the task's checks), never after every commit. Never re-run CI on a commit that did not change,
+  unless its run did not finish (refused, cancelled, a runner failure).
   Subagents never push.
+- Do not push a commit only to write a PR number into `docs/status.md`; add it with the next
+  change that touches the file.
+- Write a pull request's description completely before opening it, and edit it at most once more,
+  at the end: every edit starts `pr` and `approval`.
+- Do not add `needs-jann` to a pull request that touches a protected path: `approval` adds it
+  without starting another run. (The review-cap rule below still labels other pull requests.)
 - Merge `main` into a pull request branch only when it is next to merge (`CONTRIBUTING.md`).
 - Never start `platforms` by hand unless Jann asks. OS checks on a pull request go through the
   labels `windows` and `macos`, and only for the OS whose code the change touches.
