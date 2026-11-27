@@ -397,7 +397,6 @@ mod tests {
         );
     }
 
-    // AC: CE-32.3
     #[test]
     fn editor_ui_adds_no_finding_to_the_tools_check()
     -> std::result::Result<(), Box<dyn std::error::Error>> {
