@@ -176,36 +176,29 @@ impl Named {
         water: &WaterFeatures,
         scheme: IdScheme,
     ) -> Result<Self, FeaturesError> {
-        // Under `ByType` the id counter is the type count, shared with roads, rivers and lakes
-        // so ids stay unique; under `ByKind` the ids count per kind in a map of their own.
+        // Every feature numbers through the one map `numbers`, keyed by the scheme, so ids are
+        // unique by construction; `counts` is the separate per-type tally of the summary.
+        let mut numbers = BTreeMap::new();
         let mut counts = BTreeMap::new();
-        let mut kind_counts = BTreeMap::new();
-        let set_ids: Vec<String> = features
-            .iter()
-            .map(|f| match scheme {
-                IdScheme::ByType => id_of(scheme, f.kind, &f.ty, &mut counts),
-                IdScheme::ByKind => {
-                    *counts.entry(f.ty.clone()).or_insert(0) += 1;
-                    id_of(scheme, f.kind, &f.ty, &mut kind_counts)
-                }
-            })
-            .collect();
+        let mut next = |kind: &str, ty: &str| {
+            *counts.entry(ty.to_owned()).or_insert(0) += 1;
+            id_of(scheme, kind, ty, &mut numbers)
+        };
+        let set_ids: Vec<String> = features.iter().map(|f| next(f.kind, &f.ty)).collect();
         let mut list_ids = BTreeMap::new();
         for (&name, handles) in lists {
+            let by = format!("list `{name}`");
             let ids = handles
                 .iter()
-                .map(|&h| id_at(&set_ids, h, &format!("list `{name}`")).map(str::to_owned))
+                .map(|&h| id_at(&set_ids, h, &by).map(str::to_owned))
                 .collect::<Result<Vec<_>, _>>()?;
             list_ids.insert(name, ids);
         }
-        let road_ids = roads
-            .iter()
-            .map(|r| Self::take(&mut counts, r.class.name()))
-            .collect();
+        let road_ids = roads.iter().map(|r| next("road", r.class.name())).collect();
         let river_ids = water
             .rivers
             .iter()
-            .map(|_| Self::take(&mut counts, "river"))
+            .map(|_| next("water", "river"))
             .collect();
         let mut lake_ids = Vec::new();
         for lake in &water.lakes {
@@ -213,7 +206,7 @@ impl Named {
             if polygons.is_empty() {
                 return Err(FeaturesError::NoOutline { lake: lake.id });
             }
-            lake_ids.push((Self::take(&mut counts, "lake"), polygons));
+            lake_ids.push((next("water", "lake"), polygons));
         }
         Ok(Self {
             set: set_ids,
