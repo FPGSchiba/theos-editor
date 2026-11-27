@@ -45,7 +45,7 @@ also reads git by record: changes, diffs and history. The rest arrives in P07 an
 | `changes`, `Changes`, `RecordChange` | git's status of the project grouped by record: each changed record with its id, kind, title, paths (project and git spelling, also before a rename), staged and unstaged `Change`, `untracked` and `conflict`; `files` holds the changed paths that are no records. Records are told by their bytes, never by the index, so nothing is synced or locked. A path whose bytes cannot be read goes to `files` with a warning |
 | `diff`, `Side`, `FileDiff` | The diff of one file or record: `Staged`, `Unstaged`, a `Commit` against its first parent, or `Between` two versions. A record gives `theos-content`'s field and body diff, any other text file a word diff |
 | `history`, `HistoryEntry` | The commits of a record by id, newest first, across renames of the file and of the id, each with the record's path and id in that commit. A rename not yet committed is followed from its old path |
-| `repo_path` | The one mapping from git's path to a project path (below the project folder, under the repository's `Folding`); `changes`, `history` and the staged check use it |
+| `repo_path` (internal, not public API) | The one mapping from git's path to a project path (below the project folder, under the repository's `Folding`); `changes`, `diff`, `history` and the staged check use it |
 
 ## Who uses what
 
