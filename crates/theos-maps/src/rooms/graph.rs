@@ -181,7 +181,8 @@ pub enum GraphError {
     },
 }
 
-fn type_ok(ty: &str) -> bool {
+/// Whether a room type is lower case with hyphens, `^[a-z][a-z0-9-]*$`.
+pub(crate) fn type_ok(ty: &str) -> bool {
     let mut chars = ty.chars();
     chars.next().is_some_and(|c| c.is_ascii_lowercase())
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')

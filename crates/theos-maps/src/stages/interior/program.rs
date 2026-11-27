@@ -209,21 +209,44 @@ impl ProgramQueue {
     /// Takes the next room of `role`, without cells: from the program in order, else a generic
     /// room (see the type's docs).
     pub fn take(&mut self, role: Role) -> Room {
-        let found = self
+        match self.take_first(role, |_| true) {
+            Some(room) => room,
+            None => self.generic(role),
+        }
+    }
+
+    /// Takes the next room of `role` whose `locked` flag equals `locked`: from the program in
+    /// order, else a generic room with that flag. The `leaf` rule takes open rooms only, so it
+    /// never uses up the `locked` rooms the `locked_leaf` rule places.
+    pub fn take_with_lock(&mut self, role: Role, locked: bool) -> Room {
+        match self.take_first(role, |room| room.locked == locked) {
+            Some(room) => room,
+            None => Room {
+                locked,
+                ..self.generic(role)
+            },
+        }
+    }
+
+    /// Takes the first program room of `role` with rooms left that `fits`, if any.
+    fn take_first(&mut self, role: Role, fits: impl Fn(&ProgramRoom) -> bool) -> Option<Room> {
+        let (room, left) = self
             .entries
             .iter_mut()
-            .find(|(room, left)| room.role == role && *left > 0);
-        if let Some((room, left)) = found {
-            *left -= 1;
-            return Room {
-                ty: room.ty.clone(),
-                role,
-                cells: Vec::new(),
-                shape: room.shape,
-                keys: Vec::new(),
-                locked: room.locked,
-            };
-        }
+            .find(|(room, left)| room.role == role && *left > 0 && fits(room))?;
+        *left -= 1;
+        Some(Room {
+            ty: room.ty.clone(),
+            role,
+            cells: Vec::new(),
+            shape: room.shape,
+            keys: Vec::new(),
+            locked: room.locked,
+        })
+    }
+
+    /// The generic room of `role`; records a used-up `start`, `goal` or `exit`.
+    fn generic(&mut self, role: Role) -> Room {
         let ty = match role {
             Role::Path => "path",
             Role::Leaf => "leaf",
@@ -375,6 +398,24 @@ mod tests {
             assert_eq!((r.shape, r.locked), (Shape::Ragged, true));
         }
         assert_eq!(q.take(Role::Leaf).ty, "leaf");
+    }
+
+    // AC: CE-80.2
+    #[test]
+    fn take_with_lock_keeps_open_and_locked_rooms_apart() {
+        let mut vault = room("vault", Role::Leaf, CountSpec::Fixed(1));
+        vault.locked = true;
+        let program = [vault, room("crypt", Role::Leaf, CountSpec::Fixed(1))];
+        let mut rng = StageRng::for_key(1, "program");
+        let mut q = ProgramQueue::new(&program, &mut rng);
+        assert_eq!(q.take_with_lock(Role::Leaf, false).ty, "crypt");
+        let open = q.take_with_lock(Role::Leaf, false);
+        assert_eq!((open.ty.as_str(), open.locked), ("leaf", false));
+        let locked = q.take_with_lock(Role::Leaf, true);
+        assert_eq!((locked.ty.as_str(), locked.locked), ("vault", true));
+        let generic = q.take_with_lock(Role::Leaf, true);
+        assert_eq!((generic.ty.as_str(), generic.locked), ("leaf", true));
+        assert_eq!(q.exhausted(), None);
     }
 
     // AC: CE-80.3
