@@ -1,11 +1,15 @@
 //! The git runner: starts the `git` program without a shell and returns its stdout.
 
 use std::ffi::{OsStr, OsString};
-use std::io::{ErrorKind, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::thread::ScopedJoinHandle;
+use std::time::Instant;
 
-use crate::GitVersion;
+use crate::tree::Tree;
+use crate::wait::{self, Waited};
+use crate::{Cancel, GitVersion};
 
 /// Why a git command could not give an answer.
 #[derive(Debug, thiserror::Error)]
@@ -173,6 +177,55 @@ impl Git {
         stdin: Option<&[u8]>,
         env: &[(&str, &str)],
     ) -> Result<Vec<u8>, GitError> {
+        self.run_cancellable(args, cwd, stdin, env, &Cancel::new())
+    }
+
+    /// Runs git as [`Git::run`] does, and stops git with every process it started when `cancel`
+    /// is set.
+    ///
+    /// A flag set before the start returns [`GitError::Cancelled`] without starting git. While
+    /// git runs, the flag is checked every few milliseconds; when it is set, git's whole process
+    /// tree is stopped (Windows: the job git runs in is closed; Unix: git's process group gets
+    /// `SIGKILL`), git is waited for, and the answer is [`GitError::Cancelled`].
+    ///
+    /// # Errors
+    ///
+    /// As [`Git::run`], and [`GitError::Cancelled`] when `cancel` is set before git exits.
+    pub fn run_cancellable(
+        &self,
+        args: &[&OsStr],
+        cwd: &Path,
+        stdin: Option<&[u8]>,
+        env: &[(&str, &str)],
+        cancel: &Cancel,
+    ) -> Result<Vec<u8>, GitError> {
+        let started = Instant::now();
+        let result = self.spawn_and_wait(args, cwd, stdin, env, cancel);
+        let (elapsed, cwd) = (started.elapsed(), cwd.display());
+        match &result {
+            Ok(_) => tracing::debug!(?args, %cwd, ?elapsed, "git"),
+            Err(GitError::Cancelled { .. }) => {
+                tracing::debug!(?args, %cwd, ?elapsed, "git cancelled");
+            }
+            Err(error) => tracing::warn!(?args, %cwd, ?elapsed, %error, "git failed"),
+        }
+        result
+    }
+
+    /// The body of [`Git::run_cancellable`], without the logging.
+    fn spawn_and_wait(
+        &self,
+        args: &[&OsStr],
+        cwd: &Path,
+        stdin: Option<&[u8]>,
+        env: &[(&str, &str)],
+        cancel: &Cancel,
+    ) -> Result<Vec<u8>, GitError> {
+        if cancel.is_cancelled() {
+            return Err(GitError::Cancelled {
+                args: args_text(args),
+            });
+        }
         let mut command = Command::new(&self.program);
         command
             .args(args)
@@ -186,9 +239,12 @@ impl Git {
             })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        let mut child = command.spawn().map_err(|source| GitError::Io { source })?;
+        let (tree, mut child) =
+            Tree::spawn(&mut command).map_err(|source| GitError::Io { source })?;
         let pipe = child.stdin.take();
-        let (output, written) = std::thread::scope(|scope| {
+        let stdout = child.stdout.take();
+        let stderr = child.stderr.take();
+        let (waited, stdout, stderr, written) = std::thread::scope(|scope| {
             let writer = scope.spawn(move || match (pipe, stdin) {
                 (Some(mut pipe), Some(bytes)) => match pipe.write_all(bytes) {
                     // git may exit before it reads everything; its exit status tells why.
@@ -197,22 +253,48 @@ impl Git {
                 },
                 _ => Ok(()),
             });
-            let output = child.wait_with_output();
-            (output, writer.join())
+            let stdout = scope.spawn(move || read_all(stdout));
+            let stderr = scope.spawn(move || read_all(stderr));
+            let waited = wait::wait(scope, child, tree, cancel);
+            (waited, joined(stdout), joined(stderr), joined(writer))
         });
-        let output = output.map_err(|source| GitError::Io { source })?;
-        if !output.status.success() {
+        let io = |source| GitError::Io { source };
+        let status = match waited.map_err(io)? {
+            Waited::Cancelled => {
+                return Err(GitError::Cancelled {
+                    args: args_text(args),
+                });
+            }
+            Waited::Exited(status) => status,
+        };
+        let stdout = stdout.map_err(io)?;
+        let stderr = stderr.map_err(io)?;
+        if !status.success() {
             return Err(GitError::Failed {
                 args: args_text(args),
-                code: output.status.code(),
-                stderr: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+                code: status.code(),
+                stderr: String::from_utf8_lossy(&stderr).trim().to_owned(),
             });
         }
-        if let Ok(Err(source)) = written {
-            return Err(GitError::Io { source });
-        }
-        Ok(output.stdout)
+        written.map_err(io)?;
+        Ok(stdout)
     }
+}
+
+/// Reads a pipe of git's to its end; no pipe reads as nothing.
+fn read_all(pipe: Option<impl Read>) -> std::io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    if let Some(mut pipe) = pipe {
+        pipe.read_to_end(&mut bytes)?;
+    }
+    Ok(bytes)
+}
+
+/// The answer of a pipe thread; a thread that panicked is an I/O error.
+fn joined<T>(thread: ScopedJoinHandle<'_, std::io::Result<T>>) -> std::io::Result<T> {
+    thread
+        .join()
+        .map_err(|_| std::io::Error::other("a thread that moves git's bytes panicked"))?
 }
 
 /// The variable that names the git folder.

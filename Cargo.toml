@@ -49,6 +49,8 @@ git-conventional = "0.12"
 globset = "0.4"
 ignore = "0.4"
 libm = "0.2.16"
+# Unix: stops git's process group on a cancel (P46 §5.3).
+nix = { version = "0.31", default-features = false, features = ["signal"] }
 png = { version = "0.18.1", default-features = false }
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 proptest = { version = "1.12", default-features = false, features = ["std"] }
@@ -80,6 +82,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unicode-normalization = "0.1"
 which = "8.0"
+# Windows: a job with kill-on-close stops git's process tree on a cancel (P46 §4.2, §9 R2).
+win32job = "=2.0.3"
 # WOFF2 needs only Brotli; the `z` feature (WOFF 1 through flate2) stays off.
 wuff = { version = "0.2.10", default-features = false, features = ["brotli"] }
 yaml-rust2 = "0.13"
