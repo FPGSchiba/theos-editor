@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use theos_content::{IndexError, KindRegistry, ProjectError, RegistryError};
+use theos_content::{IndexError, KindRegistry, ProjectError, ReadError, RegistryError};
 
 use crate::CommandError;
 use crate::create::CreateError;
@@ -69,6 +69,14 @@ pub enum StudioError {
     UnknownRecord {
         /// What was asked for.
         what: String,
+    },
+    /// A record file could not be read.
+    #[error("{}: {source}", path.display())]
+    Read {
+        /// The file.
+        path: PathBuf,
+        /// What went wrong.
+        source: ReadError,
     },
     /// A filter of a read tool is not valid.
     #[error("{message}")]

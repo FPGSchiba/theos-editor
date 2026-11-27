@@ -5,6 +5,8 @@ use serde::Serialize;
 use theos_content::RecordSummary;
 
 use crate::marks::{MarkView, Marks};
+use crate::views::check::FindingView;
+use crate::views::ledger::TruthView;
 
 /// A record named in a result: who it is, where it lies and what marks it carries.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
@@ -102,6 +104,118 @@ pub struct ListView {
     pub offset: usize,
     /// Whether records follow the page.
     pub truncated: bool,
+}
+
+/// The result of `codex::read`: one record, or every record of a duplicated id.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ReadView {
+    /// The records, ordered by path.
+    pub records: Vec<RecordView>,
+}
+
+/// One record with its text and everything around it.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct RecordView {
+    /// The record itself.
+    #[serde(flatten)]
+    pub record: RecordRef,
+    /// The whole file text.
+    pub text: String,
+    /// The links the record contains, in file order.
+    pub links: Vec<LinkView>,
+    /// The links that name the record.
+    pub backlinks: Vec<LinkView>,
+    /// The records filed under it.
+    pub children: Vec<RecordRef>,
+    /// The findings of the record's file.
+    pub findings: Vec<FindingView>,
+    /// The effective lens, for a record that can hold one.
+    pub lens: Option<LensView>,
+    /// The reveal ledger, for a truth.
+    pub ledger: Option<TruthView>,
+}
+
+/// An id a link names: the record, when there is one.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct TargetRef {
+    /// The record, or the bare id when none has it.
+    #[serde(flatten)]
+    pub record: RecordRef,
+    /// Whether a record has the id.
+    pub exists: bool,
+}
+
+/// One link with both ends.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct LinkView {
+    /// The slot text, such as `field:parent` or `body`.
+    pub slot: String,
+    /// The text after `#` in a body link.
+    pub fragment: Option<String>,
+    /// The line of the link, from 1.
+    pub line: u32,
+    /// The column of the link, from 1.
+    pub column: u32,
+    /// The record the link sits in.
+    pub source: RecordRef,
+    /// The record it names.
+    pub target: TargetRef,
+}
+
+/// The effective lens of a holder.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct LensView {
+    /// The holder, then its parents up to the top.
+    pub chain: Vec<RecordRef>,
+    /// The entries some layer sets.
+    pub fields: Vec<LensFieldView>,
+    /// The beliefs of each layer, holder first.
+    pub beliefs: Vec<BeliefView>,
+}
+
+/// The value of a lens entry.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[serde(untagged)]
+pub enum LensValueView {
+    /// A text or an enum value.
+    Text(String),
+    /// The ids of a list of links.
+    Links(Vec<String>),
+}
+
+/// One lens entry.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct LensFieldView {
+    /// The entry key.
+    pub field: String,
+    /// The value of the nearest layer.
+    pub value: LensValueView,
+    /// The layer that sets it.
+    pub from: RecordRef,
+    /// The values of farther layers it replaces, nearest first.
+    pub overrides: Vec<OverrideView>,
+}
+
+/// A value a nearer layer replaced.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct OverrideView {
+    /// The replaced value.
+    pub value: LensValueView,
+    /// The layer that sets it.
+    pub from: RecordRef,
+}
+
+/// A belief a layer of the lens holds.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct BeliefView {
+    /// The belief record.
+    pub belief: RecordRef,
+    /// The layer whose `held_by` names it.
+    pub through: RecordRef,
+    /// The truth it distorts.
+    pub distorts: Option<TargetRef>,
+    /// The `accuracy` text.
+    pub accuracy: Option<String>,
 }
 
 #[cfg(test)]

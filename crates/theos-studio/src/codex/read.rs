@@ -1,0 +1,383 @@
+//! `codex::read`: one record with its text, links, lens and marks.
+
+use std::collections::HashMap;
+
+use theos_content::{EffectiveLens, Layer, LensData, LinkRef, RecordSummary, read_record};
+
+use crate::views::check::FindingView;
+use crate::views::codex::{
+    BeliefView, LensFieldView, LensValueView, LensView, LinkView, OverrideView, ReadView,
+    RecordRef, RecordView, TargetRef,
+};
+use crate::views::ledger::TruthView;
+use crate::{Marks, StudioError, Workspace};
+
+/// What to read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReadTarget {
+    /// Every record with this id (several when the id is duplicated).
+    Id(String),
+    /// The record at this project-relative path; a backslash counts as `/`.
+    Path(String),
+}
+
+/// Everything one call looks records up in, built once.
+struct Lookup {
+    marks: Marks,
+    by_path: HashMap<String, RecordSummary>,
+    by_id: HashMap<String, RecordSummary>,
+}
+
+impl Lookup {
+    fn load(ws: &Workspace) -> Result<Lookup, StudioError> {
+        let mut by_path = HashMap::new();
+        let mut by_id: HashMap<String, RecordSummary> = HashMap::new();
+        // Ordered by path, so the first record of a duplicated id stays.
+        for summary in ws.index().records()? {
+            by_id
+                .entry(summary.id.clone())
+                .or_insert_with(|| summary.clone());
+            by_path.insert(summary.path.clone(), summary);
+        }
+        Ok(Lookup {
+            marks: Marks::load(ws.index())?,
+            by_path,
+            by_id,
+        })
+    }
+
+    fn of_layer(&self, layer: &Layer) -> RecordRef {
+        self.of_path(&layer.path, &layer.id, Some(&layer.kind))
+    }
+
+    /// The record at `path`; a path the index lacks falls back to the words of the caller.
+    fn of_path(&self, path: &str, id: &str, kind: Option<&str>) -> RecordRef {
+        match self.by_path.get(path) {
+            Some(summary) => RecordRef::from_summary(summary, &self.marks),
+            None => RecordRef {
+                path: Some(path.to_owned()),
+                kind: kind.map(str::to_owned),
+                mark: self.marks.of_path(path),
+                ..RecordRef::missing(id)
+            },
+        }
+    }
+
+    /// The record an id names, with the marks of every record that has the id.
+    fn target(&self, id: &str) -> TargetRef {
+        match self.by_id.get(id) {
+            Some(summary) => TargetRef {
+                record: RecordRef {
+                    mark: self.marks.of_id(id),
+                    ..RecordRef::from_summary(summary, &self.marks)
+                },
+                exists: true,
+            },
+            None => TargetRef {
+                record: RecordRef::missing(id),
+                exists: false,
+            },
+        }
+    }
+
+    fn link(&self, link: &LinkRef) -> LinkView {
+        LinkView {
+            slot: link.slot.as_db(),
+            fragment: link.fragment.clone(),
+            line: saturate(link.position.line),
+            column: saturate(link.position.column),
+            source: self.of_path(&link.source_path, &link.source_id, None),
+            target: self.target(&link.target),
+        }
+    }
+}
+
+/// The record `target` names, with its text, links, backlinks, children, findings, lens and
+/// ledger. The caller syncs the index first.
+///
+/// # Errors
+/// [`StudioError::UnknownRecord`] when no record matches; [`StudioError::Read`] when a file
+/// cannot be read; [`StudioError::Index`] when the index fails.
+pub fn read(ws: &Workspace, target: &ReadTarget) -> Result<ReadView, StudioError> {
+    let lookup = Lookup::load(ws)?;
+    let (summaries, what) = match target {
+        ReadTarget::Id(id) => (ws.index().record(id)?, id),
+        ReadTarget::Path(path) => (
+            lookup
+                .by_path
+                .get(&path.replace('\\', "/"))
+                .cloned()
+                .into_iter()
+                .collect(),
+            path,
+        ),
+    };
+    if summaries.is_empty() {
+        return Err(StudioError::UnknownRecord { what: what.clone() });
+    }
+    let records = summaries
+        .iter()
+        .map(|summary| record_view(ws, &lookup, summary))
+        .collect::<Result<_, _>>()?;
+    Ok(ReadView { records })
+}
+
+fn record_view(
+    ws: &Workspace,
+    lookup: &Lookup,
+    summary: &RecordSummary,
+) -> Result<RecordView, StudioError> {
+    let index = ws.index();
+    let file = ws.project().root().join(&summary.path);
+    let text = read_record(&file)
+        .map_err(|source| StudioError::Read { path: file, source })?
+        .text()
+        .to_owned();
+    let links = index.links_from(&summary.path)?;
+    let backlinks = index.backlinks(&summary.id)?;
+    let children = index.children(&summary.id)?;
+    let ledger = index
+        .ledger_of(&summary.id)?
+        .iter()
+        .find(|truth| truth.path == summary.path)
+        .map(TruthView::from);
+    Ok(RecordView {
+        record: RecordRef::from_summary(summary, &lookup.marks),
+        text,
+        links: links.iter().map(|l| lookup.link(l)).collect(),
+        backlinks: backlinks.iter().map(|l| lookup.link(l)).collect(),
+        children: children
+            .iter()
+            .map(|l| lookup.of_path(&l.source_path, &l.source_id, None))
+            .collect(),
+        findings: index
+            .findings_for(&summary.path)?
+            .iter()
+            .map(FindingView::from)
+            .collect(),
+        lens: index
+            .lens(&summary.id)?
+            .map(|lens| lens_view(ws, lookup, &lens))
+            .transpose()?,
+        ledger,
+    })
+}
+
+fn lens_view(
+    ws: &Workspace,
+    lookup: &Lookup,
+    lens: &EffectiveLens,
+) -> Result<LensView, StudioError> {
+    let distorts = texts(ws, "distorts")?;
+    let accuracy = texts(ws, "accuracy")?;
+    Ok(LensView {
+        chain: lens.chain.iter().map(|l| lookup.of_layer(l)).collect(),
+        fields: lens
+            .fields
+            .iter()
+            .map(|field| LensFieldView {
+                field: field.field.clone(),
+                value: value_view(&field.value),
+                from: lookup.of_layer(&field.origin.layer),
+                overrides: field
+                    .overrides
+                    .iter()
+                    .map(|o| OverrideView {
+                        value: value_view(&o.value),
+                        from: lookup.of_layer(&o.origin.layer),
+                    })
+                    .collect(),
+            })
+            .collect(),
+        beliefs: lens
+            .beliefs
+            .iter()
+            .map(|held| BeliefView {
+                belief: lookup.of_path(&held.path, &held.belief, Some("belief")),
+                through: lookup.of_layer(&held.through),
+                distorts: distorts.get(&held.path).map(|id| lookup.target(id)),
+                accuracy: accuracy.get(&held.path).cloned(),
+            })
+            .collect(),
+    })
+}
+
+/// The valid scalar texts of `field` by path.
+fn texts(ws: &Workspace, field: &str) -> Result<HashMap<String, String>, StudioError> {
+    Ok(ws
+        .index()
+        .field_texts(field)?
+        .into_iter()
+        .map(|row| (row.path, row.text))
+        .collect())
+}
+
+fn value_view(data: &LensData) -> LensValueView {
+    match data {
+        LensData::Text(text) => LensValueView::Text(text.clone()),
+        LensData::Links(ids) => LensValueView::Links(ids.clone()),
+    }
+}
+
+fn saturate(value: usize) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{TestResult, codex_workspace};
+
+    fn id(value: &str) -> ReadTarget {
+        ReadTarget::Id(value.to_owned())
+    }
+
+    fn only(view: ReadView) -> Result<RecordView, Box<dyn std::error::Error>> {
+        let mut records = view.records;
+        if records.len() == 1 {
+            Ok(records.remove(0))
+        } else {
+            Err(format!("{} records", records.len()).into())
+        }
+    }
+
+    // AC: CE-18.2
+    #[test]
+    fn read_mother_ilse_beliefs() -> TestResult {
+        let (_dir, ws) = codex_workspace()?;
+        let record = only(read(&ws, &id("mother-ilse"))?)?;
+        assert!(record.text.contains("role: keeper of the Fates' shrine"));
+        let lens = record.lens.ok_or("no lens")?;
+        let chain: Vec<&str> = lens.chain.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(chain, ["mother-ilse", "fates-cult", "hearth-folk"]);
+        assert_eq!(lens.beliefs.len(), 2);
+        // The lens lists the holder's own beliefs first.
+        let find = |id: &str| lens.beliefs.iter().find(|b| b.belief.id == id);
+        let a = find("B-911").ok_or("B-911")?;
+        assert_eq!(a.belief.id, "B-911");
+        assert_eq!(a.belief.title.as_deref(), Some("Synthetic belief A"));
+        assert_eq!(a.through.id, "fates-cult");
+        assert_eq!(a.distorts.as_ref().ok_or("distorts")?.record.id, "T-912");
+        assert_eq!(a.accuracy.as_deref(), Some("partial"));
+        let b = find("B-912").ok_or("B-912")?;
+        assert_eq!(b.belief.id, "B-912");
+        assert_eq!(b.through.id, "mother-ilse");
+        let distorts = b.distorts.as_ref().ok_or("distorts")?;
+        assert_eq!(distorts.record.id, "T-911");
+        assert!(distorts.record.mark.never);
+        assert_eq!(b.accuracy.as_deref(), Some("false"));
+        let json = serde_json::to_value(&lens)?;
+        let beliefs = json["beliefs"].as_array().ok_or("beliefs")?;
+        let b912 = beliefs.iter().find(|b| b["belief"]["id"] == "B-912");
+        assert_eq!(b912.ok_or("B-912")?["distorts"]["never"], true);
+        Ok(())
+    }
+
+    // AC: CE-18.3
+    #[test]
+    fn read_marks_never_everywhere() -> TestResult {
+        let (_dir, ws) = codex_workspace()?;
+        let truth = only(read(&ws, &id("T-911"))?)?;
+        assert!(truth.record.mark.never);
+        assert!(truth.text.contains("Synthetic statement A"));
+        let back = truth
+            .backlinks
+            .iter()
+            .find(|l| l.source.id == "B-912")
+            .ok_or("no backlink from B-912")?;
+        assert_eq!(back.slot, "field:distorts");
+        let belief = only(read(&ws, &id("B-912"))?)?;
+        let link = belief
+            .links
+            .iter()
+            .find(|l| l.target.record.id == "T-911")
+            .ok_or("no link to T-911")?;
+        assert!(link.target.record.mark.never);
+        assert!(link.target.exists);
+        let json = serde_json::to_value(&belief)?;
+        assert!(
+            json["links"]
+                .as_array()
+                .ok_or("links")?
+                .iter()
+                .any(|l| l["target"]["never"] == true)
+        );
+        Ok(())
+    }
+
+    // AC: CE-18.3
+    #[test]
+    fn read_locked_records_return_text() -> TestResult {
+        let (_dir, ws) = codex_workspace()?;
+        for (target, reason) in [
+            (id("fates-cult"), "canon"),
+            (id("E91"), "formalism"),
+            (ReadTarget::Path("things/dup-911.md".to_owned()), "canon"),
+        ] {
+            let record = only(read(&ws, &target)?)?;
+            assert_ne!(record.text, "");
+            let json = serde_json::to_value(&record)?;
+            let locked = json["locked"].as_array().ok_or("locked")?;
+            assert!(locked.iter().any(|r| r == reason), "{target:?} {locked:?}");
+        }
+        Ok(())
+    }
+
+    // AC: CE-18.1
+    #[test]
+    fn read_missing_link_target() -> TestResult {
+        let (_dir, ws) = codex_workspace()?;
+        let script = only(read(&ws, &id("S-004"))?)?;
+        let link = script
+            .links
+            .iter()
+            .find(|l| l.target.record.id == "ghost-911")
+            .ok_or("no ghost link")?;
+        assert!(!link.target.exists);
+        let json = serde_json::to_value(&link.target)?;
+        assert_eq!(json["path"], serde_json::Value::Null);
+        assert_eq!(json["never"], false);
+        assert_eq!(json["exists"], false);
+        assert!(link.line >= 1);
+        Ok(())
+    }
+
+    // AC: CE-18.1
+    #[test]
+    fn read_duplicated_id_returns_both() -> TestResult {
+        let (_dir, ws) = codex_workspace()?;
+        let view = read(&ws, &id("dup-911"))?;
+        assert_eq!(view.records.len(), 2);
+        Ok(())
+    }
+
+    // AC: CE-18.1
+    #[test]
+    fn read_truth_has_ledger() -> TestResult {
+        let (_dir, ws) = codex_workspace()?;
+        let truth = only(read(&ws, &id("T-912"))?)?;
+        let json = serde_json::to_value(truth.ledger.ok_or("no ledger")?)?;
+        assert!(
+            json["entries"]
+                .as_array()
+                .ok_or("entries")?
+                .iter()
+                .any(|e| e["clue"] == "C-031")
+        );
+        Ok(())
+    }
+
+    // AC: CE-18.1
+    #[test]
+    fn read_unknown_is_error() -> TestResult {
+        let (_dir, ws) = codex_workspace()?;
+        for target in [id("nope"), ReadTarget::Path("lore/nope.md".to_owned())] {
+            let error = read(&ws, &target).err().ok_or("accepted")?;
+            assert!(
+                matches!(error, StudioError::UnknownRecord { .. }),
+                "{error:?}"
+            );
+        }
+        Ok(())
+    }
+}

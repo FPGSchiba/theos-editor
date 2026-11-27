@@ -2,7 +2,9 @@
 //! CE-18.3. P48's MCP tools and P11's Codex screen call them directly.
 
 pub mod list;
+pub mod read;
 pub mod search;
 
 pub use list::{ListFilter, list};
+pub use read::{ReadTarget, read};
 pub use search::search;
