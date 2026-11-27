@@ -160,6 +160,7 @@ pub fn words(old: &str, new: &str) -> WordDiff {
 mod tests {
     use super::*;
     use proptest::prelude::*;
+    use proptest::test_runner::{TestError, TestRunner};
 
     /// The texts behind each op: `(kind, old text, new text)`.
     fn render<'a>(diff: &WordDiff, old: &'a str, new: &'a str) -> Vec<(char, &'a str, &'a str)> {
@@ -273,24 +274,41 @@ mod tests {
         out
     }
 
-    proptest! {
-        // AC: CE-21.2
-        #[test]
-        fn reconstruction(old in text_strategy(), new in text_strategy()) {
+    // AC: CE-21.2
+    #[test]
+    fn reconstruction() -> Result<(), TestError<(String, String)>> {
+        let config = ProptestConfig {
+            source_file: Some(file!()),
+            ..ProptestConfig::default()
+        };
+        let mut runner = TestRunner::new(config);
+        runner.run(&(text_strategy(), text_strategy()), |(old, new)| {
             let diff = words(&old, &new);
-            let new_spans: Vec<Span> = diff.ops.iter().filter_map(|op| match *op {
-                WordOp::Equal { new, .. } | WordOp::Insert { new } => Some(new),
-                WordOp::Delete { .. } => None,
-            }).collect();
-            let old_spans: Vec<Span> = diff.ops.iter().filter_map(|op| match *op {
-                WordOp::Equal { old, .. } | WordOp::Delete { old } => Some(old),
-                WordOp::Insert { .. } => None,
-            }).collect();
+            let new_spans: Vec<Span> = diff
+                .ops
+                .iter()
+                .filter_map(|op| match *op {
+                    WordOp::Equal { new, .. } | WordOp::Insert { new } => Some(new),
+                    WordOp::Delete { .. } => None,
+                })
+                .collect();
+            let old_spans: Vec<Span> = diff
+                .ops
+                .iter()
+                .filter_map(|op| match *op {
+                    WordOp::Equal { old, .. } | WordOp::Delete { old } => Some(old),
+                    WordOp::Insert { .. } => None,
+                })
+                .collect();
             prop_assert_eq!(rebuild(&new, &new_spans), new);
             prop_assert_eq!(rebuild(&old, &old_spans), old);
             for pair in diff.ops.windows(2) {
-                prop_assert_ne!(std::mem::discriminant(&pair[0]), std::mem::discriminant(&pair[1]));
+                prop_assert_ne!(
+                    std::mem::discriminant(&pair[0]),
+                    std::mem::discriminant(&pair[1])
+                );
             }
-        }
+            Ok(())
+        })
     }
 }

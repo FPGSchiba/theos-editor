@@ -2,9 +2,9 @@
 //! its id, made with P06's `Rename`, with `git mv` and by moving the file to another folder.
 
 use theos_studio::history::{HistoryEntry, history};
-use theos_studio::{Rename, Workspace};
-use theos_vcs::Cancel;
+use theos_studio::{Rename, StudioError, Workspace};
 use theos_vcs::history::Page;
+use theos_vcs::{Cancel, GitError};
 
 use crate::common::{Error, TestResult, put};
 use crate::repo::Repo;
@@ -253,5 +253,35 @@ fn a_record_only_in_the_working_tree_has_no_history() -> TestResult {
 fn an_unknown_id_has_no_history() -> TestResult {
     let repo = Repo::committed("")?;
     assert_eq!(shown(&history_of(&repo, "", "T-999")?), []);
+    Ok(())
+}
+
+#[test]
+fn a_cancel_before_the_call_is_cancelled_for_any_id() -> TestResult {
+    let repo = Repo::committed("")?;
+    put(
+        repo.top(),
+        "lore/truths/T-906.md",
+        b"---
+# synthetic fixture (P46), not canon
+id: T-906
+kind: truth
+          title: Synthetic truth not committed
+status: draft
+target: confirmed
+---
+          Synthetic statement.
+",
+    )?;
+    let workspace = Workspace::open(repo.top())?;
+    let cancel = Cancel::new();
+    cancel.cancel();
+    for id in ["T-900", "T-906", "T-999"] {
+        let result = history(&workspace, &repo.git()?, id, ALL, &cancel);
+        assert!(
+            matches!(result, Err(StudioError::Git(GitError::Cancelled { .. }))),
+            "{id}: {result:?}"
+        );
+    }
     Ok(())
 }

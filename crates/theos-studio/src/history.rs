@@ -2,8 +2,7 @@
 
 use theos_content::RecordSummary;
 use theos_vcs::history::{Commit, Page};
-use theos_vcs::staged::{self, Tracked};
-use theos_vcs::{Cancel, Folding, Git};
+use theos_vcs::{Cancel, Folding, Git, GitError, index, repo};
 
 use crate::StudioError;
 use crate::repo_path::project_path;
@@ -28,17 +27,17 @@ pub struct HistoryEntry {
 /// id; `page` picks which of them (see [`theos_vcs::history::history`]).
 ///
 /// The record's path comes from the index ([`Index::record`](theos_content::Index::record)) and
-/// is spelled as git's index spells it, compared under the repository's [`Folding`]. An id the
-/// index does not know, and a record git's index does not hold (only in the working tree, or
-/// added with intent to add), have an empty history; so does a record staged but never
-/// committed. When several records share the id, the first one git tracks, in path order, is
-/// followed. Nothing is locked or written.
+/// is spelled as git's index spells it ([`index::paths`]), compared under the repository's
+/// [`Folding`]. An id the index does not know and a record git's index does not hold (only in the
+/// working tree) have an empty history; so does a record staged, or added with intent to add, but
+/// never committed. When several records share the id, the first one git tracks, in path order,
+/// is followed. Nothing is locked or written.
 ///
 /// # Errors
 ///
 /// [`StudioError::NotInRepository`] when the project folder is in no repository,
 /// [`StudioError::Index`] when the index fails, and [`StudioError::Git`] when git fails, or with
-/// [`GitError::Cancelled`](theos_vcs::GitError::Cancelled) when `cancel` is set.
+/// [`GitError::Cancelled`] when `cancel` is set, also before the call.
 pub fn history(
     workspace: &Workspace,
     git: &Git,
@@ -46,40 +45,46 @@ pub fn history(
     page: Page,
     cancel: &Cancel,
 ) -> Result<Vec<HistoryEntry>, StudioError> {
+    if cancel.is_cancelled() {
+        return Err(GitError::Cancelled {
+            args: CANCELLED_ARGS.map(str::to_owned).to_vec(),
+        }
+        .into());
+    }
     let records = workspace.index().record(id)?;
     if records.is_empty() {
         return Ok(Vec::new());
     }
     let root = workspace.project().root();
-    repo_top(git, root)?;
-    let staged = staged::read(git, root)?;
-    let Some(repo_path) = git_spelling(&records, &staged.tracked, staged.folding, &staged.place)
-    else {
+    let top = repo_top(git, root)?;
+    let place = repo::place(&top, root)?;
+    let folding = Folding::read(git, &top)?;
+    let tracked = index::paths(git, &top, cancel)?;
+    let Some(repo_path) = git_spelling(&records, &tracked, folding, &place) else {
         return Ok(Vec::new());
     };
-    let commits = theos_vcs::history::history(git, &staged.top, repo_path, page, cancel)?;
+    let commits = theos_vcs::history::history(git, &top, repo_path, page, cancel)?;
     Ok(commits
         .into_iter()
-        .map(|commit| entry(commit, staged.folding, &staged.place))
+        .map(|commit| entry(commit, folding, &place))
         .collect())
 }
 
-/// The repository path, in git's spelling, of the first of `records` that `tracked` holds: the
-/// entry whose project path is the record's byte for byte, else the same under `folding`.
+/// The arguments a cancel before the start names: the history's `git log --follow`.
+const CANCELLED_ARGS: [&str; 2] = ["log", "--follow"];
+
+/// The repository path, in git's spelling, of the first of `records` that `tracked` (the paths of
+/// git's index) holds: the entry whose project path is the record's byte for byte, else the same
+/// under `folding`.
 fn git_spelling<'a>(
     records: &[RecordSummary],
-    tracked: &'a [Tracked],
+    tracked: &'a [Vec<u8>],
     folding: Folding,
     place: &str,
 ) -> Option<&'a [u8]> {
     let in_project: Vec<(String, &[u8])> = tracked
         .iter()
-        .filter_map(|entry| {
-            Some((
-                project_path(folding, place, &entry.path)?,
-                entry.path.as_slice(),
-            ))
-        })
+        .filter_map(|path| Some((project_path(folding, place, path)?, path.as_slice())))
         .collect();
     records.iter().find_map(|record| {
         let exact = in_project.iter().find(|(path, _)| *path == record.path);
@@ -130,12 +135,8 @@ mod tests {
         }
     }
 
-    fn tracked(path: &str) -> Tracked {
-        Tracked {
-            path: path.as_bytes().to_vec(),
-            mode: 0o100_644,
-            object: "0".repeat(40),
-        }
+    fn tracked(path: &str) -> Vec<u8> {
+        path.as_bytes().to_vec()
     }
 
     fn commit(path: &[u8]) -> Commit {

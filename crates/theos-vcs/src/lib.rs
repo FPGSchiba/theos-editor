@@ -9,13 +9,15 @@
 //! P46 adds git's version check to [`Git::find`] ([`GitVersion`], [`GitError::TooOld`]), a
 //! [`Cancel`] flag that stops git with its whole process tree ([`Git::run_cancellable`],
 //! [`GitError::Cancelled`]), and the reads: [`read`], a file's bytes at a version, [`status`],
-//! the status with unstaged renames paired, [`history`], a file's commits across renames, and
-//! [`repo::first_parent`]. The writes (commit, worktrees, merge, pull and push) arrive in P47.
+//! the status with unstaged renames paired, [`history`], a file's commits across renames,
+//! [`index`], the paths of git's index in git's spelling, and [`repo::first_parent`]. The writes
+//! (commit, worktrees, merge, pull and push) arrive in P47.
 
 mod cancel;
 mod folding;
 mod git;
 pub mod history;
+pub mod index;
 pub mod read;
 mod read_args;
 pub mod repo;

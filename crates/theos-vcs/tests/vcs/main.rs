@@ -4,6 +4,7 @@ mod cancel;
 mod common;
 mod git;
 mod history;
+mod index;
 mod read;
 mod repo;
 mod settings;
