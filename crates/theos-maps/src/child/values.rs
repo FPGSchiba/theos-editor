@@ -96,43 +96,12 @@ world_value!(ParentFeatureValue, "parent_feature");
 world_value!(ParentFeatures, "parent_features");
 world_value!(ClassFrameValue, "class_frame");
 
-/// The values a child kind seeds into the world before the first stage: one `(name, layer)` per
-/// entry of `plan.seeded`, in that order. `parent` is the parent package of a child run.
+/// The world value `name` (`parent.*`) of `parent` in the child frame of `plan`.
 ///
 /// # Errors
-/// [`RunError::Child`] when a parent value is asked for without a parent or a parent layer
-/// cannot be read or resampled, [`RunError::Cancelled`] when `cancel` is set.
-pub(crate) fn seed(
-    parent: Option<&ParentContext>,
-    plan: &Plan,
-    cancel: &CancelToken,
-) -> Result<Vec<(String, Layer)>, RunError> {
-    let mut seeded = Vec::with_capacity(plan.seeded.len());
-    for spec in &plan.seeded {
-        let name = spec.name;
-        let layer = if name == CLASS_FRAME {
-            plan.class_frame
-                .clone()
-                .map(|v| Layer::Value(Box::new(v)))
-                .ok_or_else(|| no_parent(name))?
-        } else {
-            let parent = parent.ok_or_else(|| no_parent(name))?;
-            parent_value(parent, plan, name, cancel)?
-        };
-        seeded.push((name.to_owned(), layer));
-    }
-    Ok(seeded)
-}
-
-fn no_parent(name: &str) -> RunError {
-    ChildError::NoParent {
-        value: name.to_owned(),
-    }
-    .into()
-}
-
-/// The world value `name` (`parent.*`) of `parent` in the child frame of `plan`.
-fn parent_value(
+/// [`RunError::Child`] when the parent lacks a layer or one cannot be resampled,
+/// [`RunError::Cancelled`] when `cancel` is set.
+pub(crate) fn parent_value(
     parent: &ParentContext,
     plan: &Plan,
     name: &str,
@@ -177,11 +146,11 @@ fn resampled(
         .layers
         .iter()
         .find(|e| e.level.is_none() && e.name == layer)
-        .ok_or_else(|| no_parent(layer))?;
+        .ok_or_else(|| missing(layer))?;
     let data = package
         .layers
         .get(&entry.key())
-        .ok_or_else(|| no_parent(layer))?;
+        .ok_or_else(|| missing(layer))?;
     let shape_error = || ChildError::LayerShape {
         layer: layer.to_owned(),
         rows: entry.shape[0],
@@ -293,4 +262,67 @@ fn touches(geometry: &Geometry, origin: [f64; 2], size: [f64; 2]) -> bool {
         }
     }
     (0..2).all(|axis| hi[axis] >= origin[axis] && lo[axis] <= origin[axis] + size[axis])
+}
+
+/// A stage reads the parent layer `layer`, which the parent package does not hold.
+fn missing(layer: &str) -> RunError {
+    ChildError::MissingLayer {
+        layer: format!("{PARENT_PREFIX}{layer}"),
+    }
+    .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use theos_map_format::LayerKey;
+
+    use super::decode;
+    use crate::child::test_support::package;
+
+    /// The decoded values of the layer `name` of the synthetic parent.
+    fn decoded(name: &str) -> Vec<f64> {
+        let package = package();
+        let entry = package
+            .manifest
+            .layers
+            .iter()
+            .find(|e| e.name == name)
+            .unwrap();
+        let key = LayerKey {
+            level: None,
+            name: name.to_owned(),
+        };
+        decode(entry, &package.layers[&key])
+    }
+
+    // The raw values of the quantised layers are 0, 16, 32, ... 240.
+    #[test]
+    fn a_scaled_layer_decodes_as_raw_times_scale() {
+        let got = decoded("vegetation");
+        for (i, v) in got.iter().enumerate() {
+            let raw = f64::from(u8::try_from(i * 16).unwrap());
+            assert!((v - raw / 255.0).abs() < 1e-15, "{i}: {v}");
+        }
+        assert!((got[15] - 240.0 / 255.0).abs() < 1e-15);
+    }
+
+    #[test]
+    fn a_scaled_layer_with_an_offset_adds_it() {
+        let got = decoded("moisture");
+        assert!((got[0] - 10.0).abs() < 1e-15);
+        assert!((got[3] - (10.0 + 48.0 * 0.5)).abs() < 1e-15);
+    }
+
+    #[test]
+    fn a_class_layer_keeps_its_raw_codes_whatever_its_scale() {
+        let got = decoded("soil");
+        assert_eq!(got[0].to_bits(), 0.0_f64.to_bits());
+        assert_eq!(got[3].to_bits(), 48.0_f64.to_bits());
+    }
+
+    #[test]
+    fn a_float_layer_decodes_exactly() {
+        let got = decoded("height");
+        assert_eq!(got[2].to_bits(), f64::from(2.0_f32 * 1.5 + 0.25).to_bits());
+    }
 }

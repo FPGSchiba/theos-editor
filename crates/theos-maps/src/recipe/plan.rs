@@ -2,12 +2,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{LoadedRecipe, RecipeError};
+use super::{LoadedRecipe, Recipe, RecipeError};
 use crate::child::values::PARENT_PREFIX;
-use crate::child::{
-    ClassFrameValue, ClassSource, ParentContext, child_frame, class_frame_of, describe_frame,
-    standalone_frame,
-};
+use crate::child::{ParentContext, child_frame, describe_frame, standalone_frame};
 use crate::constraints::is_known_path;
 use crate::render::{self, Role};
 use crate::stage::{LayerSpec, MapKind, ParamError, Registry, Runs, StageParams};
@@ -58,8 +55,8 @@ pub struct Plan {
     pub parent: Option<ParentRef>,
     /// The values the runner seeds before the first stage: those that some stage reads, by name.
     pub seeded: Vec<LayerSpec>,
-    /// The class table entry of a settlement plan (`class_frame`).
-    pub class_frame: Option<ClassFrameValue>,
+    /// The recipe the plan was made from; kinds build their own seeded values from it.
+    pub recipe: Recipe,
     /// The stages in order.
     pub stages: Vec<PlannedStage>,
     /// Constraint ranges by summary path; check 5 has made sure that every path is known and
@@ -140,7 +137,7 @@ pub fn plan(
         origin_m: placed.origin_m,
         parent: placed.parent,
         seeded,
-        class_frame: placed.class_frame,
+        recipe: r.clone(),
         stages,
         constraints: r.constraints.clone(),
         renders: r.renders.clone(),
@@ -193,7 +190,6 @@ struct Placed {
     frame: MapFrame,
     origin_m: Option<[f64; 2]>,
     parent: Option<ParentRef>,
-    class_frame: Option<ClassFrameValue>,
 }
 
 /// Check 1: the frame. A map without a parent takes it from the recipe (`standalone_frame`), a
@@ -205,13 +201,11 @@ fn check_frame(recipe: &LoadedRecipe, planning: Planning<'_>) -> Result<Placed, 
             frame: standalone_frame(kind, r)?,
             origin_m: None,
             parent: None,
-            class_frame: class_frame_of(kind, r, ClassSource::Site)?,
         },
         Planning::Describe => Placed {
             frame: describe_frame(kind, r)?,
             origin_m: None,
             parent: None,
-            class_frame: class_frame_of(kind, r, ClassSource::First)?,
         },
         Planning::Child(parent) => {
             let child = child_frame(kind, r, parent)?;
@@ -226,7 +220,6 @@ fn check_frame(recipe: &LoadedRecipe, planning: Planning<'_>) -> Result<Placed, 
                     package_sha256: parent.sha256.clone(),
                     feature: parent.feature.id.clone(),
                 }),
-                class_frame: class_frame_of(kind, r, ClassSource::Parent(&parent.feature.ty))?,
             }
         }
     })
@@ -281,7 +274,7 @@ fn plan_stages(
     registry: &Registry,
     planning: Planning<'_>,
 ) -> Result<(Vec<PlannedStage>, Vec<LayerSpec>), RecipeError> {
-    let offer = offered::Offered::of(recipe.recipe.kind, planning);
+    let offer = offered::Offered::of(&recipe.recipe, planning);
     let mut available: BTreeMap<String, LayerKind> = offer.names.clone();
     let mut seeded: BTreeMap<&'static str, LayerSpec> = BTreeMap::new();
     let mut seen: BTreeMap<&'static str, u32> = BTreeMap::new();
@@ -375,14 +368,21 @@ fn check_read(
         parameter: None,
     };
     match available.get(read.name) {
-        Some(kind) if *kind != read.kind => Err(invalid(
-            recipe,
-            &on_layer,
-            format!(
-                "stage `{id}` reads `{}` as {}, but an earlier stage writes it as {kind}",
-                read.name, read.kind
-            ),
-        )),
+        Some(kind) if *kind != read.kind => {
+            let who = if read.name.starts_with(PARENT_PREFIX) {
+                "the parent offers it"
+            } else {
+                "an earlier stage writes it"
+            };
+            Err(invalid(
+                recipe,
+                &on_layer,
+                format!(
+                    "stage `{id}` reads `{}` as {}, but {who} as {kind}",
+                    read.name, read.kind
+                ),
+            ))
+        }
         Some(_) => Ok(()),
         None if read.optional => Ok(()),
         None => {

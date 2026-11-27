@@ -5,7 +5,7 @@ use serde_json::{Map, Value, json};
 
 use super::{Execution, RunOptions, execute};
 use crate::child::test_support::{open, recipe, registry, settlement_recipe};
-use crate::child::{ClassFrameValue, ParentFeatures};
+use crate::child::{ChildError, ClassFrameValue, ParentContext, ParentFeatures};
 use crate::error::RunError;
 use crate::progress::CancelToken;
 use crate::recipe::{LoadedRecipe, Planning, plan};
@@ -106,28 +106,95 @@ fn the_class_frame_is_seeded_for_a_settlement() {
 
 #[test]
 fn switching_a_stage_off_keeps_the_streams_of_the_others() {
-    let draw = |stages: &[&str]| {
-        let planned = plan(
-            &recipe(stages),
-            &registry(),
-            &inputs(),
-            Planning::Standalone,
-        )
-        .unwrap();
+    let loaded = recipe(&["a", "b"]);
+    let dir = tempfile::tempdir().unwrap();
+    let parent = open(&dir, "town-1");
+    let draw = |planning: Planning<'_>, parent: Option<&ParentContext>| {
+        let planned = plan(&loaded, &registry(), &inputs(), planning).unwrap();
         let run = execute(
             &planned,
             7,
             &registry(),
             &RunOptions::default(),
-            None,
+            parent,
             &mut |_| {},
             &CancelToken::new(),
         )
         .unwrap();
-        run.reports["b"].values["draw"]
+        (
+            run.reports.contains_key("a"),
+            run.reports["b"].values["draw"],
+        )
     };
-    // `a` runs only for a child, so a standalone run switches it off.
-    assert_eq!(draw(&["a", "b"]).to_bits(), draw(&["b"]).to_bits());
+    // `a` runs only for a child: the child run draws for `a` first, the standalone run skips it.
+    let (child_has_a, child_draw) = draw(Planning::Child(&parent), Some(&parent));
+    let (alone_has_a, alone_draw) = draw(Planning::Standalone, None);
+    assert!(child_has_a && !alone_has_a);
+    assert_eq!(child_draw.to_bits(), alone_draw.to_bits());
+}
+
+#[test]
+fn a_run_needs_the_parent_its_plan_was_made_from() {
+    let dir = tempfile::tempdir().unwrap();
+    let parent = open(&dir, "town-1");
+    let planned = plan(
+        &recipe(&["b"]),
+        &registry(),
+        &inputs(),
+        Planning::Child(&parent),
+    )
+    .unwrap();
+    let go = |given: Option<&ParentContext>| {
+        execute(
+            &planned,
+            7,
+            &registry(),
+            &RunOptions::default(),
+            given,
+            &mut |_| {},
+            &CancelToken::new(),
+        )
+    };
+    // Nothing is seeded, but the plan still names its parent.
+    assert!(matches!(
+        go(None),
+        Err(RunError::Child(ChildError::NoParent { .. }))
+    ));
+    let mut other = parent.clone();
+    other.sha256 = "0".repeat(64);
+    assert!(matches!(
+        go(Some(&other)),
+        Err(RunError::Child(ChildError::ParentMismatch { .. }))
+    ));
+    assert!(go(Some(&parent)).is_ok());
+}
+
+#[test]
+fn a_layer_the_parent_lacks_is_a_missing_layer_not_a_missing_parent() {
+    let dir = tempfile::tempdir().unwrap();
+    let parent = open(&dir, "town-1");
+    let mut planned = plan(
+        &recipe(&["ph"]),
+        &registry(),
+        &inputs(),
+        Planning::Child(&parent),
+    )
+    .unwrap();
+    planned.seeded = vec![crate::stage::LayerSpec::f64("parent.discharge")];
+    let err = execute(
+        &planned,
+        7,
+        &registry(),
+        &RunOptions::default(),
+        Some(&parent),
+        &mut |_| {},
+        &CancelToken::new(),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, RunError::Child(ChildError::MissingLayer { layer }) if layer == "parent.discharge"),
+        "{err}"
+    );
 }
 
 #[test]

@@ -171,11 +171,26 @@ fn entry(name: &str, dtype: DType, legend: Option<&[(&str, &str)]>) -> LayerEntr
     }
 }
 
+/// A quantised `u8` layer: `offset + raw * scale`, with a legend when it is a class layer.
+fn scaled(
+    name: &str,
+    scale: f64,
+    offset: Option<f64>,
+    legend: Option<&[(&str, &str)]>,
+) -> LayerEntry {
+    LayerEntry {
+        scale: Some(scale),
+        offset,
+        ..entry(name, DType::U8, legend)
+    }
+}
+
 /// A 4,000 m parent of 4 x 4 cells of 1,000 m: a `height` (`f32`), a class layer `water` with a
 /// legend, a town at (2,000, 2,000), a village inside its window and a hamlet outside it.
 pub(crate) fn package() -> Package {
     let height: Vec<f32> = (0u8..16).map(|i| f32::from(i) * 1.5 + 0.25).collect();
     let water: Vec<u8> = (0u8..16).map(|i| if i % 5 == 0 { 2 } else { 0 }).collect();
+    let codes: Vec<u8> = (0u8..16).map(|i| i * 16).collect();
     let layer = |name: &str| LayerKey {
         level: None,
         name: name.to_owned(),
@@ -202,6 +217,14 @@ pub(crate) fn package() -> Package {
             layers: vec![
                 entry("height", DType::F32, None),
                 entry("water", DType::U8, Some(&[("0", "dry"), ("2", "river")])),
+                scaled("vegetation", 1.0 / 255.0, None, None),
+                scaled("moisture", 0.5, Some(10.0), None),
+                scaled(
+                    "soil",
+                    2.0,
+                    Some(1.0),
+                    Some(&[("1", "clay"), ("3", "sand")]),
+                ),
             ],
             features: String::new(),
             results: serde_json::Map::new(),
@@ -219,6 +242,9 @@ pub(crate) fn package() -> Package {
         layers: [
             (layer("height"), LayerData::F32(height)),
             (layer("water"), LayerData::U8(water)),
+            (layer("vegetation"), LayerData::U8(codes.clone())),
+            (layer("moisture"), LayerData::U8(codes.clone())),
+            (layer("soil"), LayerData::U8(codes)),
         ]
         .into(),
     }

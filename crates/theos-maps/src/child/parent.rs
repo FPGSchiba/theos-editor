@@ -14,7 +14,7 @@ use crate::kernels::num;
 #[derive(Debug, thiserror::Error)]
 pub enum ChildError {
     /// The package is not a readable map package (broken hash, unmet `requires`, other major).
-    #[error("{}: {source}", path.display())]
+    #[error("{}", path.display())]
     Read {
         /// The parent file.
         path: PathBuf,
@@ -22,7 +22,7 @@ pub enum ChildError {
         source: FormatError,
     },
     /// The file could not be read.
-    #[error("{}: {source}", path.display())]
+    #[error("{}", path.display())]
     Io {
         /// The parent file.
         path: PathBuf,
@@ -59,8 +59,22 @@ pub enum ChildError {
         /// The world value that was asked for.
         value: String,
     },
+    /// A stage reads a parent layer the parent package does not hold.
+    #[error("the parent package has no layer `{layer}`")]
+    MissingLayer {
+        /// The world name, `parent.<layer>`.
+        layer: String,
+    },
+    /// The run's parent package is not the one the plan was made from.
+    #[error("the plan was made from the parent {planned}, but the run was given {given}")]
+    ParentMismatch {
+        /// SHA-256 the plan names.
+        planned: String,
+        /// SHA-256 of the package given.
+        given: String,
+    },
     /// A parent layer could not be resampled into the child frame.
-    #[error("parent layer `{layer}`: {source}")]
+    #[error("parent layer `{layer}` could not be resampled")]
     Resample {
         /// The parent layer.
         layer: String,

@@ -118,8 +118,6 @@ pub(crate) enum ClassSource<'a> {
     Site,
     /// The type of the parent feature.
     Parent(&'a str),
-    /// The first of the feature input's `parent_types` (`describe`).
-    First,
 }
 
 /// The class table entry of a settlement map, `None` for the kinds that have none.
@@ -137,7 +135,6 @@ pub(crate) fn class_frame_of(
     let class = match source {
         ClassSource::Site => site_class(recipe)?,
         ClassSource::Parent(ty) => ty.to_owned(),
-        ClassSource::First => first_parent_type(recipe)?,
     };
     let frame = class::resolve(&class, recipe.child.as_ref())
         .map_err(|message| invalid(recipe, Some("child"), message))?;
@@ -157,7 +154,8 @@ fn site_class(recipe: &Recipe) -> Result<String, RecipeError> {
             invalid(
                 recipe,
                 None,
-                "a settlement recipe without a parent needs a `site_terrain` stage                  with a `class`",
+                "a settlement recipe without a parent needs a `site_terrain` stage \
+                 with a `class`",
             )
         })
 }

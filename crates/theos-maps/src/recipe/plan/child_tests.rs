@@ -120,10 +120,6 @@ fn a_settlement_recipe_without_site_terrain_plans_as_a_child_only() {
     let planned = child(&loaded).unwrap();
     // The class of the town: 1,600 m window over 4 m cells.
     assert_eq!((planned.frame.rows, planned.frame.cols), (400, 400));
-    assert_eq!(
-        planned.class_frame.as_ref().map(|c| c.class.as_str()),
-        Some("town")
-    );
     let err = plan(&loaded, &registry(), &inputs(), Planning::Standalone).unwrap_err();
     assert!(err.to_string().contains("site_terrain"), "{err}");
 }

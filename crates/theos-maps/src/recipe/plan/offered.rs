@@ -3,10 +3,11 @@
 
 use std::collections::BTreeMap;
 
+use super::super::Recipe;
 use super::Planning;
 use crate::child::values::{PARENT_FEATURE, PARENT_FEATURES, PARENT_PREFIX};
 use crate::kind;
-use crate::stage::{LayerSpec, MapKind};
+use crate::stage::LayerSpec;
 use crate::world::LayerKind;
 
 /// What is available before the first stage.
@@ -19,11 +20,12 @@ pub(super) struct Offered {
 
 impl Offered {
     /// What `planning` of a `kind` map offers.
-    pub fn of(kind: MapKind, planning: Planning<'_>) -> Self {
+    pub fn of(recipe: &Recipe, planning: Planning<'_>) -> Self {
+        let kind = recipe.kind;
         let mut names: BTreeMap<String, LayerKind> = kind::table(kind)
             .own_seeds
             .iter()
-            .map(|spec| (spec.name.to_owned(), spec.kind))
+            .map(|seed| (seed.spec.name.to_owned(), seed.spec.kind))
             .collect();
         if let Planning::Child(parent) = planning {
             for entry in &parent.package.manifest.layers {
@@ -42,7 +44,7 @@ impl Offered {
         }
         Self {
             names,
-            open: matches!(planning, Planning::Describe),
+            open: matches!(planning, Planning::Describe) && recipe.inputs().feature().is_some(),
         }
     }
 

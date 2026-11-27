@@ -18,7 +18,6 @@ use crate::child::{FrameRule, ParentContext};
 use crate::error::RunError;
 use crate::features::output::FeaturesError;
 use crate::package::PackageLayer;
-use crate::progress::CancelToken;
 use crate::recipe::Plan;
 use crate::render::Render;
 use crate::stage::{LayerSpec, MapKind, Metrics};
@@ -33,10 +32,17 @@ pub enum IdScheme {
     ByKind,
 }
 
-/// The values the runner seeds into the world before the first stage: one `(name, layer)` per
-/// entry of `plan.seeded`, from the parent package of a child run.
-pub(crate) type SeededFn =
-    fn(Option<&ParentContext>, &Plan, &CancelToken) -> Result<Vec<(String, Layer)>, RunError>;
+/// Builds a value a kind seeds into the world, from the plan and the parent of a child run.
+pub(crate) type SeedFn = fn(&Plan, Option<&ParentContext>) -> Result<Layer, RunError>;
+
+/// A world value a kind offers before the first stage besides `parent.*`: its declaration and
+/// the function that builds it.
+pub(crate) struct OwnSeed {
+    /// The name, kind and optionality of the value.
+    pub spec: LayerSpec,
+    /// Builds the value.
+    pub build: SeedFn,
+}
 
 /// The top-level metrics of the summary, from the world and the stages' metrics.
 pub(crate) type MetricsFn = fn(&World, &[(String, Metrics)]) -> Result<Value, FormatError>;
@@ -72,10 +78,8 @@ pub(crate) struct KindTable {
     pub title: TitleFn,
     /// What decides the frame.
     pub frame: FrameRule,
-    /// Builds the values the runner seeds.
-    pub seeded: SeededFn,
     /// The world values the kind offers besides `parent.*`, available before the first stage.
-    pub own_seeds: &'static [LayerSpec],
+    pub own_seeds: &'static [OwnSeed],
 }
 
 /// One entry per [`MapKind`].
