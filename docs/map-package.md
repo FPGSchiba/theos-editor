@@ -199,6 +199,7 @@ ignore layers they do not know.
 | interior | `walkable` | u8 | Mask of walkable floor |
 | interior | `rooms` | u16 | Room number + 1 per cell, 0 for none; the room features carry the number |
 | interior | `corridors`, `cover` | u8 | Masks |
+| interior | `walls` | u8 | Mask of built wall cells (1.1) |
 
 ### 4.5 Snapshot layers
 
@@ -237,10 +238,10 @@ longitude and latitude: an alternative coordinate reference by prior arrangement
 | `landmark` | free text (P29: `market`, `well`, `shrine`, `temple`, `keep`, `inn`, `smithy`, `guardhouse`, `granary`, `archive`, `mill`, `harbour`) | Point | `name` (generated, not canon); 1.1 adds `building` or `parcel` |
 | `wall` | `wall`; `tower` (1.1) | Polygon; Point | wall: `height_m`, `thickness_m` (1.1); tower: `wall` (1.1) |
 | `gate` | `gate`; `water-gate` (1.1) | Point | `wall`, and for `gate` the `street` it carries (1.1) |
-| `room` | room type from the recipe | Polygon | `number` (as in the `rooms` layer), `role`, `keys`, `locked` |
-| `door` | `open`, `locked`, `drop`, … | Point | `rooms` (the two room ids), `key` |
-| `connection` | `open`, `locked`, `oneway` | null | `from`, `to` (room ids), `key` |
-| `route` | `critical` | LineString | `rooms` (ids in order) |
+| `room` | room type from the recipe | Polygon | `number` (as in the `rooms` layer), `role`, `keys`, `locked`; 1.1 adds `shape` (`rect`, `round`, `ragged`, `passage`) and `area_m2` |
+| `door` | `open`, `locked`, `drop`, … | Point | `rooms` (the two room ids), `key`; for a drop, `from` (the room it can be passed from) (1.1) |
+| `connection` | `open`, `locked`, `oneway` | null | `from`, `to` (room ids), `key`; 1.1 adds `door` (the door's id) |
+| `route` | `critical` | LineString | `rooms` (ids in order); 1.1 adds `length_m` |
 | `link` | `stair`, `ladder`, `lift`, `drop` | Point or LineString | `from_level`, `to_level` |
 
 The generator's phase specs (P08, P29, P30) define each type's properties in full. A new kind,
