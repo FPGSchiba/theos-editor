@@ -322,9 +322,11 @@ fn a_path_that_is_not_utf_8_is_an_output_error() -> Result {
         Version::Head,
         &[0xff, b'.', b'm', b'd'],
     );
-    assert!(
-        matches!(result, Err(theos_vcs::GitError::Output { .. })),
-        "{result:?}"
+    let error = result.err().ok_or("expected an error")?;
+    assert_eq!(
+        error.to_string(),
+        "git rev-parse gave an unusable answer: the path `\u{fffd}.md` is not UTF-8; \
+         theos reads only UTF-8 paths"
     );
     Ok(())
 }

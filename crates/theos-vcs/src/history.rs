@@ -97,8 +97,11 @@ pub fn history(
     cancel: &Cancel,
 ) -> Result<Vec<Commit>, GitError> {
     let path = std::str::from_utf8(path).map_err(|_| GitError::Output {
-        args: Vec::new(),
-        message: "the path is not UTF-8".to_owned(),
+        args: vec!["log".to_owned(), "--follow".to_owned()],
+        message: format!(
+            "the path `{}` is not UTF-8; theos reads only UTF-8 paths",
+            String::from_utf8_lossy(path)
+        ),
     })?;
     if !has_commit(git, top, cancel)? {
         return Ok(Vec::new());

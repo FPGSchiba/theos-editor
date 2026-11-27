@@ -45,8 +45,11 @@ pub enum Content {
 /// path is not UTF-8, and [`GitError::Io`] when the working-tree file cannot be read.
 pub fn read(git: &Git, top: &Path, version: Version<'_>, path: &[u8]) -> Result<Content, GitError> {
     let path = std::str::from_utf8(path).map_err(|_| GitError::Output {
-        args: Vec::new(),
-        message: "the path is not UTF-8".to_owned(),
+        args: vec!["rev-parse".to_owned()],
+        message: format!(
+            "the path `{}` is not UTF-8; theos reads only UTF-8 paths",
+            String::from_utf8_lossy(path)
+        ),
     })?;
     match version {
         Version::WorkTree => work_tree(top, path),
@@ -270,7 +273,13 @@ mod tests {
         let git = Git::find()?;
         for version in [Version::WorkTree, Version::Index, Version::Head] {
             let result = read(&git, dir.path(), version, &[0xff, b'.', b'm', b'd']);
-            assert!(matches!(result, Err(GitError::Output { .. })), "{result:?}");
+            let error = result.err().ok_or("expected an error")?;
+            assert!(matches!(error, GitError::Output { .. }), "{error:?}");
+            assert_eq!(
+                error.to_string(),
+                "git rev-parse gave an unusable answer: the path `\u{fffd}.md` is not UTF-8; \
+                 theos reads only UTF-8 paths"
+            );
         }
         Ok(())
     }
