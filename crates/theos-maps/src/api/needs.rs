@@ -13,9 +13,9 @@ use crate::world::LayerKind;
 
 /// The renders of `plan`: the standard ones, then the recipe's extras in its order, each once.
 pub(super) fn render_names(plan: &Plan) -> Vec<&'static str> {
-    let mut names: Vec<&'static str> = render::names(Role::Standard).collect();
+    let mut names: Vec<&'static str> = render::names(plan.kind, Role::Standard).collect();
     for extra in &plan.renders {
-        if let Some(known) = render::names(Role::Extra).find(|e| *e == extra.as_str())
+        if let Some(known) = render::names(plan.kind, Role::Extra).find(|e| *e == extra.as_str())
             && !names.contains(&known)
         {
             names.push(known);
@@ -27,12 +27,12 @@ pub(super) fn render_names(plan: &Plan) -> Vec<&'static str> {
 /// The layers the outputs of `plan` read, each with the output that reads it: the package's
 /// first, then each render's in the order of [`render_names`].
 fn needs(plan: &Plan) -> Vec<(String, LayerSpec)> {
-    let mut out: Vec<(String, LayerSpec)> = package::needs()
+    let mut out: Vec<(String, LayerSpec)> = package::needs(plan.kind)
         .into_iter()
         .map(|spec| ("the package".to_owned(), spec))
         .collect();
     for name in render_names(plan) {
-        let specs = render::needs(name).unwrap_or_default();
+        let specs = render::needs(plan.kind, name).unwrap_or_default();
         out.extend(
             specs
                 .iter()
@@ -80,7 +80,7 @@ mod tests {
 
     use super::*;
     use crate::recipe::{self, RecipeOrigin, parse};
-    use crate::stage::Registry;
+    use crate::stage::{MapKind, Registry};
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -98,8 +98,8 @@ mod tests {
     // render is standard or extra and nothing else, in the table's order.
     #[test]
     fn the_standard_and_extra_renders_are_the_table_of_renders() {
-        let standard: Vec<&str> = render::names(Role::Standard).collect();
-        let extra: Vec<&str> = render::names(Role::Extra).collect();
+        let standard: Vec<&str> = render::names(MapKind::Terrain, Role::Standard).collect();
+        let extra: Vec<&str> = render::names(MapKind::Terrain, Role::Extra).collect();
         assert_eq!(
             standard,
             ["base", "truth", "geology", "resources", "inworld"]
@@ -172,7 +172,7 @@ mod tests {
         let mut plan = planned(text)?;
         plan.renders.push("omega".to_owned());
         let names = render_names(&plan);
-        let standard: Vec<&str> = render::names(Role::Standard).collect();
+        let standard: Vec<&str> = render::names(MapKind::Terrain, Role::Standard).collect();
         assert_eq!(names[..standard.len()], *standard);
         assert_eq!(names[standard.len()..], ["omega"]);
         Ok(())

@@ -10,6 +10,7 @@ use super::{RenderError, RenderInput, encode_png, render};
 use crate::features::{Feature, FeatureSet, Geometry, Prop};
 use crate::grid::Grid;
 use crate::progress::CancelToken;
+use crate::stage::MapKind;
 use crate::stages::terrain::hydrology::{RiverLine, WaterFeatures};
 use crate::stages::terrain::roads::{Road, RoadClass, RoadNetwork, RoadsParams};
 use crate::stages::terrain::rocks::Rock;
@@ -197,12 +198,12 @@ impl TestWorld {
         let mut input = self.input(&cancel);
         input.options = options;
         input.title = title.to_owned();
-        render(name).unwrap()(&input)
+        render(MapKind::Terrain, name).unwrap()(&input)
     }
 
     /// Draws the render `name` with `cancel`.
     pub(crate) fn draw(&self, name: &str, cancel: &CancelToken) -> Result<Pixmap, RenderError> {
-        let draw = render(name).unwrap();
+        let draw = render(MapKind::Terrain, name).unwrap();
         draw(&self.input(cancel))
     }
 

@@ -16,6 +16,11 @@ use crate::stages::terrain::hydrology::{LakeShape, RiverLine, WaterFeatures};
 use crate::stages::terrain::roads::{Road, RoadClass, RoadNetwork, RoadsParams};
 use crate::world::{Layer, MapFrame, ValueType, World};
 
+/// Terrain's build, numbered per type, as the runner calls it.
+fn build(world: &World) -> Result<(FeatureCollection, BTreeMap<String, usize>), FeaturesError> {
+    super::build(world, IdScheme::ByType)
+}
+
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 const WATER_SMALL: &str = include_str!("../../../tests/fixtures/recipes/water-small.toml");
@@ -551,5 +556,23 @@ fn a_road_carries_its_class() -> TestResult {
     let (fc, _) = build(&world_with(three_places())?)?;
     let road = of(&fc, "road", "road")[0];
     assert_eq!(prop(road, "class"), Some(&Value::from("road")));
+    Ok(())
+}
+
+// The ids of a ByKind table count per feature kind, and the set-only output skips the terrain
+// values.
+#[test]
+fn ids_by_kind_count_per_kind() -> TestResult {
+    let mut set = FeatureSet::default();
+    set.add(point("settlement", "town", [1.0, 1.0]));
+    set.add(point("settlement", "village", [2.0, 1.0]));
+    set.add(point("poi", "ruin", [3.0, 1.0]));
+    let world = world_with(set)?;
+    let (fc, counts) = super::build_set(&world, IdScheme::ByKind)?;
+    let ids: Vec<_> = fc.features.iter().filter_map(|f| f.id.clone()).collect();
+    let expected = ["settlement-1", "settlement-2", "poi-1"]
+        .map(|s| geojson::feature::Id::String(s.to_owned()));
+    assert_eq!(ids, expected);
+    assert_eq!(counts.get("settlement"), Some(&2));
     Ok(())
 }

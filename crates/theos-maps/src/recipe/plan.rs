@@ -139,7 +139,7 @@ fn check_constraints(recipe: &LoadedRecipe, stages: &[PlannedStage]) -> Result<(
                 ),
             ));
         }
-        if !is_known_path(path, stages) {
+        if !is_known_path(path, recipe.recipe.kind, stages) {
             return Err(invalid(
                 recipe,
                 &at_parameter(path),
@@ -214,7 +214,7 @@ fn check_frame(recipe: &LoadedRecipe) -> Result<MapFrame, RecipeError> {
 /// Check 2: the extra renders and the render options.
 fn check_renders(recipe: &LoadedRecipe) -> Result<(), RecipeError> {
     let r = &recipe.recipe;
-    let extras: Vec<&str> = render::names(Role::Extra).collect();
+    let extras: Vec<&str> = render::names(r.kind, Role::Extra).collect();
     if let Some(name) = r.renders.iter().find(|n| !extras.contains(&n.as_str())) {
         return Err(invalid(
             recipe,
@@ -226,7 +226,7 @@ fn check_renders(recipe: &LoadedRecipe) -> Result<(), RecipeError> {
         ));
     }
     for id in r.render.keys() {
-        if render::needs(id).is_none() {
+        if render::needs(r.kind, id).is_none() {
             let key = format!("render.{id}");
             return Err(invalid(
                 recipe,

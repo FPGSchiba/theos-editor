@@ -33,6 +33,7 @@ use serde_json::Value;
 
 use super::{Feature, FeatureHandle, FeatureSet, Geometry, Prop};
 use crate::kernels::num::canonical;
+use crate::kind::IdScheme;
 use crate::stages::terrain::hydrology::WaterFeatures;
 use crate::stages::terrain::roads::{Road, RoadNetwork};
 use crate::world::{ValueType, World};
@@ -111,17 +112,27 @@ pub(super) struct Named {
 }
 
 impl Named {
-    fn take(counts: &mut BTreeMap<String, usize>, ty: &str) -> String {
-        let n = counts.entry(ty.to_owned()).or_insert(0);
+    fn take(counts: &mut BTreeMap<String, usize>, key: &str) -> String {
+        let n = counts.entry(key.to_owned()).or_insert(0);
         *n += 1;
-        format!("{ty}-{n}")
+        format!("{key}-{n}")
     }
 
-    fn new(set: &FeatureSet, roads: &[Road], water: &WaterFeatures) -> Result<Self, FeaturesError> {
+    /// The ids of the set by `scheme`; roads, rivers and lakes, which only terrain has, are
+    /// numbered per type.
+    fn new(
+        set: &FeatureSet,
+        roads: &[Road],
+        water: &WaterFeatures,
+        scheme: IdScheme,
+    ) -> Result<Self, FeaturesError> {
         let mut counts = BTreeMap::new();
         let set_ids = set
             .iter()
-            .map(|(_, f)| Self::take(&mut counts, &f.ty))
+            .map(|(_, f)| match scheme {
+                IdScheme::ByType => Self::take(&mut counts, &f.ty),
+                IdScheme::ByKind => Self::take(&mut counts, f.kind),
+            })
             .collect();
         let road_ids = roads
             .iter()
@@ -279,7 +290,7 @@ fn set_feature(f: &Feature, id: &str, named: &Named) -> Result<Gj, FeaturesError
     Ok(assemble(id, props, geometry))
 }
 
-/// The features of `world` and how many of each type there are.
+/// The features of a terrain `world` and how many of each id key there are.
 ///
 /// # Errors
 /// [`FeaturesError`] for a reference that resolves to nothing, a reserved or non-finite
@@ -287,6 +298,28 @@ fn set_feature(f: &Feature, id: &str, named: &Named) -> Result<Gj, FeaturesError
 /// roads but no `height` layer.
 pub(crate) fn build(
     world: &World,
+    scheme: IdScheme,
+) -> Result<(FeatureCollection, BTreeMap<String, usize>), FeaturesError> {
+    assemble_all(world, scheme, true)
+}
+
+/// The features of the set alone: the output of the kinds without roads and water.
+///
+/// # Errors
+/// [`FeaturesError`] for a reference that resolves to nothing or a reserved or non-finite
+/// property.
+pub(crate) fn build_set(
+    world: &World,
+    scheme: IdScheme,
+) -> Result<(FeatureCollection, BTreeMap<String, usize>), FeaturesError> {
+    assemble_all(world, scheme, false)
+}
+
+/// The features of `world`; with `terrain` also its roads, rivers and lakes.
+fn assemble_all(
+    world: &World,
+    scheme: IdScheme,
+    terrain: bool,
 ) -> Result<(FeatureCollection, BTreeMap<String, usize>), FeaturesError> {
     let frame = world.frame();
     let no_set = FeatureSet::default();
@@ -294,12 +327,15 @@ pub(crate) fn build(
     let set = world
         .value::<FeatureSet>(FeatureSet::NAME)
         .unwrap_or(&no_set);
-    let network = world.value::<RoadNetwork>(RoadNetwork::NAME);
+    let network = world
+        .value::<RoadNetwork>(RoadNetwork::NAME)
+        .filter(|_| terrain);
     let water = world
         .value::<WaterFeatures>(WaterFeatures::NAME)
+        .filter(|_| terrain)
         .unwrap_or(&no_water);
     let roads: &[Road] = network.map_or(&[], |n| &n.roads);
-    let named = Named::new(set, roads, water)?;
+    let named = Named::new(set, roads, water, scheme)?;
 
     let mut features = Vec::new();
     for ((_, f), id) in set.iter().zip(&named.set) {
