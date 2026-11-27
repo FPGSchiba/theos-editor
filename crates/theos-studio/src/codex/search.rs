@@ -1,6 +1,8 @@
 //! `codex::search`: full-text search with the marks of each hit.
 
-use theos_content::{Column, Hit, Match, read_record};
+use std::collections::HashMap;
+
+use theos_content::{Column, Hit, Match, RecordSummary, read_record};
 
 use crate::views::codex::{HitView, MatchView, RecordRef, SearchView};
 use crate::{Marks, StudioError, Workspace};
@@ -20,29 +22,53 @@ pub fn search(ws: &Workspace, query: &str, limit: usize) -> Result<SearchView, S
         });
     }
     let marks = Marks::load(ws.index())?;
+    let summaries: HashMap<String, RecordSummary> = ws
+        .index()
+        .records()?
+        .into_iter()
+        .map(|summary| (summary.path.clone(), summary))
+        .collect();
     // One more than asked for tells whether the list was cut.
     let mut hits = ws.index().search(query, limit + 1)?;
     let truncated = hits.len() > limit;
     hits.truncate(limit);
     Ok(SearchView {
         query: query.to_owned(),
-        hits: hits.iter().map(|hit| hit_view(ws, hit, &marks)).collect(),
+        hits: hits
+            .iter()
+            .map(|hit| hit_view(ws, hit, &summaries, &marks))
+            .collect(),
         truncated,
     })
 }
 
-fn hit_view(ws: &Workspace, hit: &Hit, marks: &Marks) -> HitView {
+fn hit_view(
+    ws: &Workspace,
+    hit: &Hit,
+    summaries: &HashMap<String, RecordSummary>,
+    marks: &Marks,
+) -> HitView {
     // The file is read once; a file that cannot be read gives empty `match` texts.
-    let record = read_record(&ws.project().root().join(&hit.path)).ok();
-    HitView {
-        record: RecordRef {
+    let record = match read_record(&ws.project().root().join(&hit.path)) {
+        Ok(record) => Some(record),
+        Err(error) => {
+            tracing::warn!(path = %hit.path, %error, "a hit's record cannot be read");
+            None
+        }
+    };
+    // The index names every hit's record; the hit itself is the fallback, without a status.
+    let summary = summaries
+        .get(&hit.path)
+        .cloned()
+        .unwrap_or_else(|| RecordSummary {
             id: hit.id.clone(),
-            path: Some(hit.path.clone()),
+            path: hit.path.clone(),
             kind: hit.kind.clone(),
             title: hit.title.clone(),
             status: None,
-            mark: marks.of_path(&hit.path),
-        },
+        });
+    HitView {
+        record: RecordRef::from_summary(&summary, marks),
         score: hit.score,
         matches: hit
             .matches
@@ -105,6 +131,28 @@ mod tests {
         assert_ne!(title.r#match, "");
         assert!("Mother Ilse".contains(&title.r#match), "{}", title.r#match);
         assert!(!view.truncated);
+        Ok(())
+    }
+
+    // AC: CE-18.1
+    #[test]
+    fn search_hit_carries_status() -> TestResult {
+        let (_dir, ws) = codex_workspace()?;
+        let view = search(&ws, "Synthetic cult", 20)?;
+        let hit = view
+            .hits
+            .iter()
+            .find(|hit| hit.record.id == "fates-cult")
+            .ok_or("fates-cult not hit")?;
+        assert_eq!(hit.record.status.as_deref(), Some("canon"));
+        let json = serde_json::to_value(&view)?;
+        assert!(
+            json["hits"]
+                .as_array()
+                .ok_or("hits")?
+                .iter()
+                .any(|h| h["status"] == "canon")
+        );
         Ok(())
     }
 

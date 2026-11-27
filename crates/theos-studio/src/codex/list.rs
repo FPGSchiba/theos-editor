@@ -223,17 +223,18 @@ mod tests {
                 ..filter()
             },
         ];
-        for filter in &bad {
+        for filter in &bad[1..] {
             let error = list(&ws, filter).err().ok_or("accepted")?;
             assert!(
-                matches!(
-                    error,
-                    StudioError::InvalidFilter { .. } | StudioError::UnknownKind { .. }
-                ),
+                matches!(error, StudioError::InvalidFilter { .. }),
                 "{error:?}"
             );
         }
         let error = list(&ws, &bad[0]).err().ok_or("accepted")?;
+        assert!(
+            matches!(error, StudioError::UnknownKind { .. }),
+            "{error:?}"
+        );
         assert!(error.to_string().contains("npc"), "{error}");
         Ok(())
     }
