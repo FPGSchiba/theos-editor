@@ -1,4 +1,4 @@
-Theos UI is the one design system for the Theos Editor and every tool that runs inside its shell: scene editing, the review queue, the AI monitor, the Content Studio and the TensionGraph (Magic) sandbox. It is Grid Noir, extended. The base is a cold blue-black, square and lined, with colour that always means something. On top of that base sit two registers: **Instrument**, for operating things, and **Manuscript**, for reading and writing them.
+Theos UI is the one design system for the Theos Editor and every tool that runs inside its shell: scene editing, the review queue, the AI monitor, the Content Studio and the TensionGraph (Magic) sandbox. It is Grid Noir, extended. The base is a cold blue-black, square and lined, with colour that always means something. A second theme, **Grid Light**, carries the same system onto a cool white ground for daylight and bright rooms. On top of that base sit two registers: **Instrument**, for operating things, and **Manuscript**, for reading and writing them.
 
 ## Principles
 
@@ -34,17 +34,17 @@ Theos UI is the one design system for the Theos Editor and every tool that runs 
 
 ### Signals (sacred)
 
-| Token | Alias | Means | Typical use |
-| --- | --- | --- | --- |
-| `amber` #ff8b2e | `sig-attention` | **Primary: human attention needed** | primary button, active tab/rail/selection, pending review, focus ring, hot window |
-| `magenta` #ff3ea5 | `sig-ai` | **AI-origin data** | AI-proposed commands, AI-written values, the `AI` marker |
-| `cyan` #3ef0ff | `sig-info` | info and schema | type names, components, INFO, auto-approved |
-| `green` #29e8a5 | `sig-approve` | approve, healthy | approve, approved, canon, pass, keep |
-| `red` #ff516f | `sig-reject` | reject, error | reject, danger, ERR, broken link, kill |
-| `yellow` #ffd54a | `sig-warn` | warn, idle | WARN, idle pips, mid significance |
-| `violet` #7a6cff | `sig-script` | scripts and behaviour trees | BT nodes, script badges |
+| Token | Grid Noir | Grid Light | Alias | Means | Typical use |
+| --- | --- | --- | --- | --- | --- |
+| `amber` | #ff8b2e | #a35103 | `sig-attention` | **Primary: human attention needed** | primary button, active tab/rail/selection, pending review, focus ring, hot window |
+| `magenta` | #ff3ea5 | #c00476 | `sig-ai` | **AI-origin data** | AI-proposed commands, AI-written values, the `AI` marker |
+| `cyan` | #3ef0ff | #04737c | `sig-info` | info and schema | type names, components, INFO, auto-approved |
+| `green` | #29e8a5 | #016142 | `sig-approve` | approve, healthy | approve, approved, canon, pass, keep |
+| `red` | #ff516f | #b9033e | `sig-reject` | reject, error | reject, danger, ERR, broken link, kill |
+| `yellow` | #ffd54a | #655003 | `sig-warn` | warn, idle | WARN, idle pips, mid significance |
+| `violet` | #7a6cff | #573fd0 | `sig-script` | scripts and behaviour trees | BT nodes, script badges |
 
-- Components reference the `sig-*` aliases, never the hue tokens directly. Text on any solid signal fill is `onFill` (= `bg`).
+- Components reference the `sig-*` aliases, never the hue tokens directly. Text on any solid signal fill is `onFill`: `bg` in Grid Noir (dark ink on a bright fill), white in Grid Light (white ink on a deep fill).
 - Amber is the scarcest colour on screen. One primary button per panel, one hot window per shell.
 - Magenta never appears without the AI marker (`tu-ai`) or an AI source next to it. A significance meter can turn an AI entry amber: high significance raises human attention, it does not change who wrote it.
 - Record status reuses the review set: `proposed` is amber (it waits for a human), `canon` is green, `draft` is an outline.
@@ -79,6 +79,40 @@ The five Spell Appearance bands (`el-earth-*`, `el-water-*`, `el-fire-*`, `el-ai
 3. **Words.** Lightning is always labelled with its band name. Magenta always carries `AI`.
 
 The same three rules separate Fire from amber and Air and Water from cyan.
+
+## Themes
+
+Two themes share every token name. Set one on the root: `<html data-theme="grid-noir">` (the default, also what `:root` gets) or `<html data-theme="grid-light">`. Components never branch on the theme: they read tokens, so a theme switch is one attribute. `components/bundle.js` gives the same switch as a script: `TheosUI.setTheme("grid-light")`, `TheosUI.toggleTheme()`, `TheosUI.getTheme()` and `TheosUI.preferredTheme()` (the OS preference, for apps that want to follow it).
+
+| | Grid Noir | Grid Light |
+| --- | --- | --- |
+| For | the default: long sessions, dim rooms, the 3D stage | daylight, bright rooms, screenshots and print-outs, people who read dark text better |
+| Ground | blue-black, layers get **lighter** as they rise | cool white, `panel` is the whitest; `bg` wells and the shell are a step **darker** |
+| Signals | bright, light on dark | the same hues, deepened until text clears 4.5:1 on every ground |
+| Text on a fill | `onFill` = `bg` (dark) | `onFill` = white |
+| Lines | `border` 1.34:1 | `border` 1.50:1, still structural only |
+| Shadows | glow (`shadow-hot`), deep drop (`shadow-popover`) | a tinted ring for `shadow-hot`, a soft 16% drop for `shadow-popover` |
+
+**How Grid Light was made.** It is a mapping, not a second palette. Every value keeps the hue of its Grid Noir twin (OKLCH); only lightness and chroma move.
+- **Surfaces** run on the same cool hue (H 266) at very low chroma: `panel` #fcfcfe → `panel2` #f0f3fa → `panel3` #e8edf7, shell and wells `bg` #e6e9f2. Raised layers are tinted, not shadowed, exactly as in Noir.
+- **Text**: `text` #0b1120 (18.4:1 on `panel`) is Noir's own panel colour; `textDim` #4e5a77 (6.7:1, 5.7:1 on `bg`); `textProse` #1e2638 (14.8:1).
+- **Signals** were darkened in OKLCH until each passes 4.5:1 on `bg`, the darkest light ground, so they pass on every ground. `green` and `yellow` sit deeper (6.2:1 and 6.4:1 on `bg`) so they separate from `cyan` and `amber` by lightness, not only by hue.
+- **Kind colours** become deep, quiet inks (OKLCH L 0.35, C 0.06, ~11:1 on `panel`). They sit darker than the signals so a kind glyph never reads as a status, and keep ΔE ≈ 0.10 from every signal.
+- **Parchment** stays warm: `ink-inworld` #382b1d on `panel-inworld` #f8efe0 (12.0:1), `ink-inworld-dim` #6f5d47 (5.5:1), edges `line-inworld` #cdbba2. A warm paper inside a cool white app, the mirror of Noir's warm near-black.
+
+**What does not change.** Shape, type, spacing, sizes and every rule in this book.
+
+**The 3D stage stays Grid Noir.** The viewport pins itself with `data-theme="grid-noir"` on its own element, so the scene, its grid, its selection box and its readouts look the same in both themes. Lighting and element ramps are judged on a dark stage. Everything around the viewport follows the app's theme.
+
+**Element bands in charts.** Outside the stage (charts, legends, the band table), the element tokens follow the theme. Only Air changes in Grid Light: `el-air-lo` and `el-air-hi` deepen to steel-teal and blue-grey, because a near-white ramp disappears on white. The other four bands and the white-hot cores keep their values; the cores sit inside a ramp, never on the ground.
+
+**Rules for both.**
+- Pick the theme per app or per person, never per window. One shell, one theme.
+- Never hard-code a hex in a component. A hex works in one theme and breaks the other.
+- Tints are `color-mix()` on a token (as `bundle.css` does), so a wash follows the theme on its own.
+- Check new pairs in both themes: text 4.5:1, large text, icons, control borders and focus rings 3:1.
+- No `filter: brightness()` and no `opacity` to dim text. Both work in one direction only. A hover on a solid fill mixes the fill toward `text` (lighter in Noir, deeper in Light); dim text uses `textDim`.
+- `color-scheme` follows the theme in `bundle.css`, so native scrollbars and form controls match.
 
 ## Typography
 
@@ -153,10 +187,14 @@ These fix places where the Grid Noir mockups broke their own colour rules:
 ## Known flags
 
 Kept from the source and flagged:
-- `textMute` is 2.7:1 on `panel`, which fails AA. Use it only for redundant text such as indices, timestamps and tags. Front-matter keys use `textDim` instead.
-- `violet` is 4.5:1 on `panel2`, borderline. Prefer it on `panel`.
-- `border` is 1.34:1. Lines are structural; nothing relies on a border alone to carry meaning.
+- `textMute` is 2.7:1 on `panel` in Grid Noir and 3.6:1 (3.0:1 on `bg`) in Grid Light. Both fail AA. Use it only for redundant text such as indices, timestamps and tags. Front-matter keys use `textDim` instead.
+- `violet` is 4.5:1 on `panel2` in Grid Noir, borderline. Prefer it on `panel`. In Grid Light it is 6.3:1.
+- `border` is 1.34:1 (Noir) and 1.50:1 (Light). Lines are structural; nothing relies on a border alone to carry meaning.
+
+New with Grid Light:
+- `amber` and `cyan` are 4.6:1 on `bg` in Grid Light: they pass, with little headroom. Text in those colours belongs on `panel` or `panel2` (5.0–5.5:1) where it can.
+- `magenta` and `red` sit close in both themes (ΔE 0.09 Noir, 0.085 Light); `cyan` and `green` sit closer in Light (ΔE 0.096) than in Noir. The words `AI`, `ERR`, `INFO` and `OK` carry the difference, as principle 3 already requires.
 
 ## Consuming
 
-Load `tokens.css` (generated from `tokens.json`), the fonts and `components/bundle.css`, then use the `tu-*` classes. The layer is framework-neutral: each `components/<Name>` maps to one Svelte component, and the classes, `is-*` states and `data-*` attributes are the contract. Use `is-attention`, `is-ai`, `is-info`, `is-approve`, `is-reject`, `is-warn` and `is-script` to set a signal on any chip, badge, pip, meter or filter.
+Load `tokens.css` (generated from `tokens.json`), the fonts and `components/bundle.css`, then use the `tu-*` classes. `components/bundle.js` is optional: it only adds the theme helpers on `window.TheosUI` (types in `components/index.d.ts`). The layer is framework-neutral: each `components/<Name>` maps to one Svelte component, and the classes, `is-*` states and `data-*` attributes are the contract. Use `is-attention`, `is-ai`, `is-info`, `is-approve`, `is-reject`, `is-warn` and `is-script` to set a signal on any chip, badge, pip, meter or filter.
