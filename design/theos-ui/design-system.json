@@ -18,8 +18,8 @@
  },
  "lastChange": {
   "by": "Jann Erhardt",
-  "at": "2026-10-30T18:00:51Z",
+  "at": "2026-11-27T12:00:00Z",
   "via": "Claude (chat)",
-  "note": "First version: Grid Noir tokens, Instrument and Manuscript registers, Content Studio components, two sample screens."
+  "note": "Added components/bundle.js (theme helpers on window.TheosUI) and index.d.ts; tokens.css rebuilt with the grid-light block."
  }
 }

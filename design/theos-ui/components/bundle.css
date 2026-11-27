@@ -6,8 +6,15 @@
 :root {
   --tu-font-i: var(--font-ui);              /* Instrument face; "mono everywhere" swaps it */
   --tu-radius: var(--radius-instrument);    /* register-scoped radius */
-  color-scheme: dark;
 }
+/* Themes. Every colour comes from tokens.css, so a theme is one attribute: data-theme="grid-noir" (default)
+   or "grid-light", on the root or on any element (the 3D stage pins itself to grid-noir).
+   color-scheme is the one per-theme declaration here: it is not a colour token, it tells the browser
+   which native scrollbars, form controls and system colours to draw. */
+:root, [data-theme="grid-noir"] { color-scheme: dark; }
+[data-theme="grid-light"] { color-scheme: light; }
+/* A nested [data-theme] block resets its ink too, so it is complete on its own. */
+[data-theme]:not(html) { color: var(--text); }
 :root[data-tu-font="mono"] { --tu-font-i: var(--font-mono); }
 body {
   margin: 0; background: var(--bg); color: var(--text);
@@ -51,8 +58,11 @@ body {
 .tu-btn--accent   { --fg-: var(--sig-attention); --bd-: var(--sig-attention); }
 .tu-btn--block    { width: 100%; }
 .tu-btn--dashed   { border-style: dashed; }
-.tu-btn:hover { filter: brightness(1.12); }
-.tu-btn--secondary:hover, .tu-btn--ghost:hover { --fg-: var(--text); --bd-: var(--borderHi); filter: none; }
+.tu-btn:hover { --bg-: color-mix(in srgb, var(--bd-) 10%, transparent); }
+/* Solid fills step toward the text colour: lighter on Grid Noir, deeper on Grid Light, so onFill keeps its contrast. */
+.tu-btn--primary:hover { --bg-: color-mix(in srgb, var(--sig-attention) 85%, var(--text)); --bd-: color-mix(in srgb, var(--sig-attention) 85%, var(--text)); }
+.tu-btn--approve:hover { --bg-: color-mix(in srgb, var(--sig-approve) 85%, var(--text)); --bd-: color-mix(in srgb, var(--sig-approve) 85%, var(--text)); }
+.tu-btn--secondary:hover, .tu-btn--ghost:hover { --fg-: var(--text); --bd-: var(--borderHi); --bg-: transparent; }
 .tu-btn[disabled], .tu-btn.is-disabled { opacity: 0.4; pointer-events: none; }
 .tu-btn__icon { font-size: 1.15em; line-height: 1; font-family: var(--font-mono); }
 
@@ -195,9 +205,8 @@ body {
   color: var(--textDim); border-left: 2px solid transparent; cursor: default; }
 .tu-rail__item:hover { color: var(--text); }
 .tu-rail__glyph { font: 400 15px/1 var(--font-mono); }
-.tu-rail__label { font: 700 8px/10px var(--font-mono); letter-spacing: 0.6px; text-transform: uppercase; opacity: 0.7; }
+.tu-rail__label { font: 700 8px/10px var(--font-mono); letter-spacing: 0.6px; text-transform: uppercase; }
 .tu-rail__item.is-active { color: var(--sig-attention); background: color-mix(in srgb, var(--sig-attention) 6%, transparent); border-left-color: var(--sig-attention); }
-.tu-rail__item.is-active .tu-rail__label { opacity: 1; }
 .tu-rail__badge { --c: var(--sig-attention); position: absolute; top: 6px; right: 6px; min-width: 13px; height: 13px; padding: 0 3px; box-sizing: border-box;
   display: flex; align-items: center; justify-content: center; background: var(--c); color: var(--onFill); font: 700 9px/1 var(--font-mono); }
 .tu-rail__spacer { flex: 1; }
@@ -223,7 +232,7 @@ body {
 .tu-prop__val.is-attention { color: var(--sig-attention); }
 .tu-prop__val.is-approve { color: var(--sig-approve); }
 .tu-prop__val.is-ai { color: var(--sig-ai); }
-.tu-prop__type { font-size: 9px; color: var(--sig-info); opacity: 0.85; flex-shrink: 0; }
+.tu-prop__type { font-size: 9px; color: var(--sig-info); flex-shrink: 0; }
 .tu-entity { padding: 10px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border); }
 .tu-entity__name { display: flex; align-items: center; gap: 8px; font: 700 14px/18px var(--tu-font-i); color: var(--text); }
 .tu-entity__meta { display: flex; gap: 10px; flex-wrap: wrap; font: 400 10px/14px var(--font-mono); color: var(--textDim); }

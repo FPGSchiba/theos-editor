@@ -7,13 +7,16 @@
 <!--
   Reference screen 09 of the Theos content editor, exported from the design canvas on 2026-10-31.
   Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  components/bundle.js and the one-line script after it only switch the theme (?theme=grid-light).
   Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
 -->
 <link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
 <link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<script src="../../../design/theos-ui/components/bundle.js"></script>
+<script>TheosUI.setTheme(new URLSearchParams(location.search).get("theme"));</script>
 <style>
-body{margin:0;background:#060810}
-a{color:#3ef0ff}a:hover{color:#e4ecff}
+body{margin:0;background:var(--bg)}
+a{color:var(--sig-info)}a:hover{color:var(--text)}
 .tu-shell.cs{height:900px}
 :where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
 :where(.cs) button.nav{display:flex;align-items:center;gap:10px;width:100%;padding:8px 12px;background:transparent;border:0;border-left:2px solid transparent;font:700 10.5px/14px var(--tu-font-i);letter-spacing:.8px;text-transform:uppercase;color:var(--textDim);text-align:left}
@@ -43,7 +46,7 @@ a{color:#3ef0ff}a:hover{color:#e4ecff}
       <!-- Left: actions, nav, environment -->
       <section class="tu-window" style="flex: 0 1 270px; min-width: 240px;">
         <div style="padding: 22px 16px 18px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--border);">
-          <span style="width: 30px; height: 30px; border: 2px solid var(--sig-attention); box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;"><span style="width: 12px; height: 12px; background: var(--sig-attention); opacity: 0.75;"></span></span>
+          <span style="width: 30px; height: 30px; border: 2px solid var(--sig-attention); box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;"><span style="width: 12px; height: 12px; background: color-mix(in srgb, var(--sig-attention) 75%, transparent);"></span></span>
           <span style="font: 700 20px/24px var(--font-ui); letter-spacing: 1.5px; color: var(--text);">THEOS//EDITOR</span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">v0.4.2 · content build · 9 extensions</span>
         </div>
@@ -146,7 +149,7 @@ a{color:#3ef0ff}a:hover{color:#e4ecff}
               <span class="tu-check is-on"><span class="tu-check__box"></span>Maps</span>
               <span class="tu-check is-on"><span class="tu-check__box"></span>ComfyUI bridge</span>
               <span class="tu-check is-on"><span class="tu-check__box"></span>MCP server</span>
-              <span class="tu-check" style="color: var(--textMute);"><span class="tu-check__box"></span>Engine ⊘ not installed</span>
+              <span class="tu-check" style="color: var(--textDim);"><span class="tu-check__box"></span>Engine ⊘ not installed</span>
             </div>
           </div>
 

@@ -15,4 +15,4 @@ The in-world voice: anything a people, faction, NPC or book author says, set in 
 - Parchment is not amber. Never use `ink-inworld` for UI, and never put a status or kind colour inside the block.
 - Sample text: the lines in the preview are placeholder writing in the binders' voice, built on B-020; they are not canon.
 
-**Why Spectral**: it was drawn for screens yet keeps the calligraphic stress of a book face, so in-world text reads as written by someone and stays legible at 17px on a dark ground, where Garamond-style faces thin out.
+**Why Spectral**: it was drawn for screens yet keeps the calligraphic stress of a book face, so in-world text reads as written by someone and stays legible at 17px on a dark ground, where Garamond-style faces thin out. In Grid Light the block turns into warm paper (`panel-inworld` #f8efe0) with brown ink (`ink-inworld` #382b1d, 12:1); the markup does not change.

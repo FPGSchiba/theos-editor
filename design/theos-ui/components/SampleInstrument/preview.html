@@ -5,7 +5,7 @@
 <style>
   html, body { height: 100%; }
   .vp { flex: 1; position: relative; min-height: 0;
-    background-color: #050810;
+    background-color: var(--bg);
     background-image: linear-gradient(var(--border) 0.5px, transparent 0.5px), linear-gradient(90deg, var(--border) 0.5px, transparent 0.5px);
     background-size: 24px 24px; }
   .vp__sel { position: absolute; left: 46%; top: 30%; width: 44px; height: 96px; border: 1.2px solid var(--sig-attention); background: color-mix(in srgb, var(--sig-attention) 10%, transparent); }
@@ -45,7 +45,7 @@
     <div style="flex:1.05;display:flex;flex-direction:column;gap:4px;min-width:0">
       <section class="tu-window" style="flex:1.4">
         <div class="tu-tabbar"><div class="tu-tabbar__tabs"><div class="tu-tab is-active">Scene</div><div class="tu-tab">Game</div><div class="tu-tab">PIE</div></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
-        <div class="vp">
+        <div class="vp" data-theme="grid-noir">
           <span class="tu-seg vp__views"><button class="tu-seg__opt is-active">Persp</button><button class="tu-seg__opt">Top</button><button class="tu-seg__opt">Front</button></span>
           <div class="vp__sel"></div><div class="vp__tag">▸ CAPT. VESPERA</div>
           <div class="vp__foot"><span>cam (0.00, 4.20, 12.50)</span><span>fov 60°</span><span>tris 61,204 · draws 218</span><span>16.4 ms</span></div>

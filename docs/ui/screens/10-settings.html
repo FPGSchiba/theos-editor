@@ -7,13 +7,16 @@
 <!--
   Reference screen 10 of the Theos content editor, exported from the design canvas on 2026-10-31.
   Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  components/bundle.js and the one-line script after it only switch the theme (?theme=grid-light).
   Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
 -->
 <link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
 <link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<script src="../../../design/theos-ui/components/bundle.js"></script>
+<script>TheosUI.setTheme(new URLSearchParams(location.search).get("theme"));</script>
 <style>
-body{margin:0;background:#060810}
-a{color:#3ef0ff}a:hover{color:#e4ecff}
+body{margin:0;background:var(--bg)}
+a{color:var(--sig-info)}a:hover{color:var(--text)}
 .tu-shell.cs{height:900px}
 :where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
 :where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
@@ -98,9 +101,9 @@ a{color:#3ef0ff}a:hover{color:#e4ecff}
           <div class="tu-tree__row" style="--depth: 1;"><span class="tu-tree__name">Map tools · Python</span></div>
           <div class="tu-tree__row" style="--depth: 1;"><span class="tu-tree__name">Google Drive</span></div>
           <div class="tu-tree__row is-root"><span class="tu-tree__name">Extensions</span><span class="tu-tree__tag">9</span></div>
-          <div class="tu-tree__row"><span class="tu-tree__name" style="color: var(--textMute); font-weight: 700;">Engine ⊘</span><span class="tu-tree__tag">needs engine extension</span></div>
-          <div class="tu-tree__row" style="--depth: 1;"><span class="tu-tree__name" style="color: var(--textMute);">IPC · Reflection · Renderer</span></div>
-          <div class="tu-tree__row" style="--depth: 1;"><span class="tu-tree__name" style="color: var(--textMute);">Engine plugins</span></div>
+          <div class="tu-tree__row"><span class="tu-tree__name" style="color: var(--textDim); font-weight: 700;">Engine ⊘</span><span class="tu-tree__tag">needs engine extension</span></div>
+          <div class="tu-tree__row" style="--depth: 1;"><span class="tu-tree__name" style="color: var(--textDim);">IPC · Reflection · Renderer</span></div>
+          <div class="tu-tree__row" style="--depth: 1;"><span class="tu-tree__name" style="color: var(--textDim);">Engine plugins</span></div>
           <div class="tu-tree__row is-root"><span class="tu-tree__name">About</span><span class="tu-tree__tag">v0.4.2</span></div>
         </div>
         <div style="margin-top: auto; padding: 8px 10px; border-top: 1px solid var(--border); font: 400 10px/14px var(--font-mono); color: var(--textDim);">numbers = settings changed from the default</div>
