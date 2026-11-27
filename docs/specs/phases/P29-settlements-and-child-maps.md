@@ -179,7 +179,7 @@ to it is made in both, in agreement between the two phases.
    parent's edge.
 5. **Parent layers in the world.** Before the first stage the runner puts into the world only the
    parent values that some stage of the plan `reads`:
-   - `parent.<layer>`: a parent package layer resampled into the child frame by
+   - `parent.<layer>`: a parent package layer resampled into the child frame by a new kernel,
      `kernels::resample` (bicubic, Catmull-Rom, every sample point clamped to the parent's grid,
      so cells past the parent's edge read the nearest edge cell);
    - `parent.features`: the parent's features that touch the window, in the child's frame;
