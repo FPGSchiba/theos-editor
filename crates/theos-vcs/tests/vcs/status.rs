@@ -396,31 +396,18 @@ fn status_runs_no_hook_of_the_repository() -> Result {
     // git runs hooks through its own `sh` on every OS (from the top folder); the script needs LF
     // line endings and, on Unix, the executable bit.
     let hook = repo.join(".git").join("hooks").join("post-index-change");
-    Sandbox::write(
-        &hook,
-        "#!/bin/sh
-echo ran > .git/hook-ran
-",
-    )?;
+    Sandbox::write(&hook, "#!/bin/sh\necho ran > .git/hook-ran\n")?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755))?;
     }
     let marker = repo.join(".git").join("hook-ran");
-    Sandbox::write(
-        &repo.join("a.md"),
-        "a
-",
-    )?;
+    Sandbox::write(&repo.join("a.md"), "a\n")?;
     sandbox.commit(&repo, "first")?;
     assert!(marker.exists(), "the hook does not run at all");
     std::fs::remove_file(&marker)?;
-    Sandbox::write(
-        &repo.join("b.md"),
-        "b
-",
-    )?;
+    Sandbox::write(&repo.join("b.md"), "b\n")?;
     let status = status_of(&sandbox, &repo)?;
     assert_eq!(status.entries, vec![untracked("b.md")]);
     assert!(!marker.exists(), "status ran the post-index-change hook");
