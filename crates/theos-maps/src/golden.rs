@@ -57,6 +57,19 @@ pub const GOLDEN_RUNS: &[GoldenSpec] = &[
         inputs: &[],
         from: None,
     },
+    GoldenSpec {
+        recipe: "choir-hall-ruin",
+        seed: 1,
+        inputs: &[],
+        from: None,
+    },
+    // `ruin-1` is the one ruin `fixture-small` seed 1 places.
+    GoldenSpec {
+        recipe: "ruin-undercroft",
+        seed: 1,
+        inputs: &[("feature", "ruin-1")],
+        from: Some(("fixture-small", 1)),
+    },
 ];
 
 /// The golden hashes of one generator version (plan ruling L23): a `[[run]]` table per golden
@@ -345,22 +358,22 @@ mod tests {
 
     #[test]
     fn slow_a_golden_spec_with_a_parent_runs_the_parent_first() {
-        let recipes = tempfile::tempdir().unwrap();
-        std::fs::write(
-            recipes.path().join("child.toml"),
-            "id = \"child\"
-title = \"Child\"
-kind = \"interior\"
-grid = [8, 8]
-             size_km = [0.8, 0.8]
+        // The real interior stages, under the id `child` and with a feature input.
+        let fixture = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/recipes/fixture-interior.toml"),
+        )
+        .unwrap()
+        .replace("fixture-interior", "child")
+        .replace(
+            "size_km = [0.04, 0.04]",
+            "size_km = [0.04, 0.04]
 [inputs.feature]
 type = \"feature\"
-             parent_types = [\"town\", \"village\"]
-[[stage]]
-id = \"ph\"
-",
-        )
-        .unwrap();
+parent_types = [\"town\", \"village\"]",
+        );
+        let recipes = tempfile::tempdir().unwrap();
+        std::fs::write(recipes.path().join("child.toml"), fixture).unwrap();
         let dirs = [
             Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/recipes"),
             recipes.path().to_path_buf(),
@@ -387,7 +400,11 @@ id = \"ph\"
             })
         );
         assert_eq!(run.inputs["feature"], "town-1");
-        assert_eq!(run.stages.first().map(|s| s.key.as_str()), Some("parent#0"));
+        // An interior reads no parent layer, so it seeds nothing and has no `parent#0` stage.
+        assert_eq!(
+            run.stages.first().map(|s| s.key.as_str()),
+            Some("envelope#0")
+        );
         assert!(out.path().join("parent").is_dir());
     }
 }

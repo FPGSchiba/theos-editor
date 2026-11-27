@@ -154,7 +154,7 @@ fn the_manifest_records_recipe_seed_frame_and_empty_requires() -> TestResult {
     let (world, planned, loaded) = run(1)?;
     let package = package_of(&world, &planned, &loaded)?;
     let m = &package.manifest;
-    assert_eq!(m.generator, "theos-maps@1.0.0");
+    assert_eq!(m.generator, "theos-maps@1.1.0");
     assert_eq!(m.requires.len(), 0);
     assert_eq!(m.kind, "terrain");
     assert_eq!(m.recipe_id, "water-small");

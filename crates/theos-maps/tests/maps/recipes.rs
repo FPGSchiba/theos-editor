@@ -89,7 +89,7 @@ fn refusal(outcome: (Result<(), RunError>, bool)) -> Result<RecipeError, String>
 fn describe_lists_the_three_built_in_recipes() -> TestResult {
     let d = describe(&[])?;
     assert_eq!(d.name, "theos-maps");
-    assert_eq!(d.version, "1.0.0");
+    assert_eq!(d.version, "1.1.0");
     assert_eq!(d.produces, ["map"]);
     assert!(!d.accepts_notes);
     assert!(d.problems.is_empty(), "{:?}", d.problems);
