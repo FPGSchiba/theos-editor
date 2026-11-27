@@ -1,8 +1,9 @@
 //! The paths a change touches, read in one place: a pull request, or the working tree of a
 //! developer's machine (`docs/gate.md`).
 //!
-//! `approval`, `slow-tests` and the scope decision of `cargo xtask gate` all ask which files
-//! changed; they ask here, so they cannot disagree. A rename counts as the old path and the new
+//! `approval`, `slow-tests` and the scope decision of `cargo xtask gate` share this one diff
+//! reader (renames, sorting). The scope measures from `origin/main`; `approval` and `slow-tests`
+//! measure from the event's base (spec §5.3). A rename counts as the old path and the new
 //! path ([`Git::diff_name_only_no_renames`]), so moving a file out of a folder still touches that
 //! folder. Paths are repo-relative, `/`-separated (as git writes them), sorted and unique.
 

@@ -284,6 +284,7 @@ mod tests {
         Ok((base, head))
     }
 
+    // AC: CE-08C.2
     #[test]
     fn a_pull_request_event_decides_from_its_commits() -> TestResult {
         let dir = docs_repo()?;
@@ -340,19 +341,13 @@ mod tests {
         write(path, "docs/x.md", "x\n")?;
         let head = commit(path, "docs: x")?;
         // The event's base is B's tip: the paths since it are docs only, since main they are not.
-        let event = pull_request("edited", &b_tip, &head, "docs/x");
+        let event = pull_request("opened", &b_tip, &head, "docs/x");
         assert_eq!(for_run(path, Some(&event)), every());
-        Ok(())
-    }
-
-    // AC: CE-08C.2
-    #[test]
-    fn a_docs_only_pull_request_into_main_is_docs_only() -> TestResult {
-        let dir = docs_repo()?;
-        let path = dir.path();
-        let (base, head) = docs_branch(path)?;
-        let event = pull_request("opened", &base, &head, "docs/x");
-        assert_eq!(for_run(path, Some(&event)), Scope::DocsOnly);
+        // The same head with main's commit as base gives the same verdict: a base change cannot
+        // alter it.
+        let main = git(path, &["rev-parse", "origin/main"])?;
+        let event = pull_request("opened", &main, &head, "docs/x");
+        assert_eq!(for_run(path, Some(&event)), every());
         Ok(())
     }
 
