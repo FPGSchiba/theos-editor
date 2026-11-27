@@ -21,6 +21,7 @@
 //! a command introduces. The rest arrives in P07 and later phases.
 
 pub mod check;
+pub mod codex;
 mod command;
 pub mod create;
 pub mod error;
@@ -45,4 +46,5 @@ pub use introduced::{FindingCounts, introduced};
 pub use marks::{LockReason, MarkView, Marks};
 pub use report::report;
 pub use staged::{StagedCheck, check_staged};
+pub use views::codex::RecordRef;
 pub use workspace::{Workspace, find_root};
