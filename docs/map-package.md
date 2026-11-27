@@ -195,7 +195,7 @@ ignore layers they do not know.
 | settlement | `height`, `water` | f32, u8 | As for terrain |
 | settlement | `streets` | u8 | Street class (legend) |
 | settlement | `buildings` | u8 | Mask of building footprints |
-| settlement | `fields` | u8 | Land use outside the built area (legend) |
+| settlement | `fields` | u8 | Land use: 0 none, 1 field, 2 orchard, 3 pasture, 4 garden, 5 yard, 6 open ground, 7 plaza (legend; 1.1) |
 | interior | `walkable` | u8 | Mask of walkable floor |
 | interior | `rooms` | u16 | Room number + 1 per cell, 0 for none; the room features carry the number |
 | interior | `corridors`, `cover` | u8 | Masks |
@@ -232,10 +232,12 @@ longitude and latitude: an alternative coordinate reference by prior arrangement
 | `road` | `trail`, `track`, `road`, `main` | LineString | `from`, `to` (feature ids), `length_m`, `width_m`, `grade_max` |
 | `water` | `river` | LineString (x, y, bed height) | `width_m`, `depth_m`, `discharge_m3s` per vertex; `order` (Strahler) |
 | `water` | `lake` | Polygon, or MultiPolygon when one lake has several outlines | `surface_m` (water level), `terminal` (no outflow), `outlet` (a point in metres; absent for a terminal lake), `depth_max_m` |
-| `street` | `lane`, `street`, `main-street` | LineString | |
-| `building` | `building` | Polygon | `use`, `storeys` |
-| `landmark` | free text | Point | `name` |
-| `wall`, `gate` | `wall`, `gate` | Polygon, Point | |
+| `street` | `lane`, `street`, `main-street` | LineString | `from`, `to` (street node ids, opaque strings), `width_m`, `length_m`, `bridge` (boolean), `entry` (the parent road's id, main streets only) (1.1) |
+| `parcel` | `house`, `landmark`, `yard`, `garden`, `plaza`, `open` | Polygon | `street` (the street it faces; absent for none), `area_m2` (1.1) |
+| `building` | `building` | Polygon | `use` (`house` or a landmark type), `storeys`; 1.1 adds `height_m` and `parcel` |
+| `landmark` | free text (P29: `market`, `well`, `shrine`, `temple`, `keep`, `inn`, `smithy`, `guardhouse`, `granary`, `archive`, `mill`, `harbour`) | Point | `name` (generated, not canon); 1.1 adds `building` or `parcel` |
+| `wall` | `wall`; `tower` (1.1) | Polygon; Point | wall: `height_m`, `thickness_m` (1.1); tower: `wall` (1.1) |
+| `gate` | `gate`; `water-gate` (1.1) | Point | `wall`, and for `gate` the `street` it carries (1.1) |
 | `room` | room type from the recipe | Polygon | `number` (as in the `rooms` layer), `role`, `keys`, `locked`; 1.1 adds `shape` (`rect`, `round`, `ragged`, `passage`) and `area_m2` |
 | `door` | `open`, `locked`, `drop`, … | Point | `rooms` (the two room ids), `key`; for a drop, `from` (the room it can be passed from) (1.1) |
 | `connection` | `open`, `locked`, `oneway` | null | `from`, `to` (room ids), `key`; 1.1 adds `door` (the door's id) |
