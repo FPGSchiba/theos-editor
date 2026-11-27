@@ -10,6 +10,8 @@ mod folding;
 mod git;
 pub mod repo;
 pub mod staged;
+mod version;
 
 pub use folding::Folding;
 pub use git::{Git, GitError};
+pub use version::GitVersion;
