@@ -11,7 +11,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P02 | Records and grammars | theos-editor | done | #16 | #17 |
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | done | #21 | #28 |
-| P05 | CLI and hook | theos-editor | pr-open | #35, #41 | #42 |
+| P05 | CLI and hook | theos-editor | done | #35, #41 | #42 |
 | P06 | Command layer and repo lock | theos-editor | done | #36 | #39 |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map format and terrain generator | theos-editor | done | #27 | #44 |
@@ -42,11 +42,11 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
 | P34 | Interiors | theos-editor | spec-pr | | |
 | P45 | Atlas level switcher | theos-editor | todo | | |
-| P46 | Git read | theos-editor | todo | | |
+| P46 | Git read | theos-editor | spec-pr | | |
 | P47 | Git write | theos-editor | todo | | |
-| P48 | MCP read | theos-editor | todo | | |
+| P48 | MCP read | theos-editor | spec-pr | #53 | |
 | P49 | Releases and the check action | theos-editor | todo | | |
-| P50 | Leaner CI | theos-editor | pr-open | #45, #46 | draft, branch `phase/P50-leaner-ci-2` |
+| P50 | Leaner CI | theos-editor | done | #45, #46 | #48 |
 
 Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and P23 from version 3
 (decision 0003, #24). Rows P31–P34 and P45, and the new P29 and P30, come from umbrella version 4
@@ -67,25 +67,12 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 - GitHub refused every Actions job from 13 Nov 2026 to 25 Nov: the included $18 was used up on
   3–12 Nov. Jann set an Actions budget of $15 on 25 Nov. P50 (Leaner CI) cuts the gate's
   minutes.
-- P50's build PR (a draft labelled `needs-jann`, branch `phase/P50-leaner-ci-2`) waits for Jann:
-  - The final review loop reached its cap of 5 rounds with one Important open (R5-I1): when a
-    pull request's base changes, `ci.yml` does not run again, so a docs-only verdict made
-    against the old base stays green. Fixing it changes spec §5.3's "changed paths" (decide
-    against `main` instead of the event's base); the PR lays out the options.
-  - Spec §5.5 lists the cached-xtask key's inputs without the root `Cargo.toml`, which the build
-    hashes too ("every input" binds); a one-word spec fix.
-  - When Jann approves the PR, he switches the live ruleset to the required checks `gate`,
-    `test`, `coverage`, `pr` and `approval` (`cargo xtask github apply`); open PRs merge `main`
-    afterwards.
-  - The probe PRs, the speed measurements and the manual Intel run (spec §5.9, §5.10) follow
-    Jann's ruling on R5-I1.
-  - The abandoned first branch `phase/P50-leaner-ci` (its plan commit has the scope `plan`,
-    which `commit-msg` refuses) can be deleted.
-- P05's build PR #42 (a draft labelled `needs-jann`) is ready for Jann's merge.
-  - The final review loop reached its cap of 5 rounds with one Minor open, R5-1. Four `hook
-    install` cases now have binary tests (face6ef), as the merged spec (#41, §5.14) says.
-  - `main` is merged, with P06 (#39). As agreed with P06, `theos new` now writes through P06's
-    `Create` command (171a7d6).
+- P50 is merged (#48), and the `main` ruleset requires `gate`, `test`, `coverage`, `pr` and
+  `approval`. Its proofs after the merge remain: the probe PRs and the speed measurements (spec
+  §5.9, §5.10) and one manual Intel macOS run of `platforms`.
+- P46's spec (§9 R1): history follows renames with git's default threshold. A short record that
+  is renamed and largely rewritten in one commit starts a new history, as in `git log --follow`;
+  a rename in the editor changes one line of the record and keeps it.
 - Follow-up from P06: the class "a command changes which files are records without the verdict
   judging it" (m4-4, m5-1, and N1–N3 of PR #39) needs a general design. One option is a check
   after the write that compares the reindex with the preview and heals the cache; another is a
