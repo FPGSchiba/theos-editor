@@ -107,6 +107,10 @@ enum Command {
     /// without `editor-ui/package.json`. Under GitHub Actions the answer is also appended to
     /// the step outputs as `needed=true` or `needed=false`.
     Needs {
+        /// Also require that `Cargo.lock` names this package: the answer is `false` when it does
+        /// not. The Linux packages of the GUI use `webkit2gtk`.
+        #[arg(long, value_name = "NAME")]
+        requires_package: Option<String>,
         /// The checks to ask about, comma separated.
         #[arg(required = true, value_delimiter = ',', value_parser = gate::parse_selectable)]
         checks: Vec<Check>,
@@ -273,8 +277,12 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
             ac_trace::run_phase(&root, *phase, ci.is_some(), &shared, &mut out)?
         }
         Command::Ui => ui::run(&root, ci.as_ref(), &mut out)?,
-        Command::Needs { checks } => {
-            return Ok(needs::run(&root, ci.as_ref(), checks, &mut out)?);
+        Command::Needs {
+            checks,
+            requires_package,
+        } => {
+            let package = requires_package.as_deref();
+            return Ok(needs::run(&root, ci.as_ref(), checks, package, &mut out)?);
         }
         Command::CommitMsg {
             base: None,
@@ -299,14 +307,7 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         Command::PrBody { body_file: None } => pr_body::run(&root, ci.as_ref(), &mut out)?,
         Command::PrBody {
             body_file: Some(path),
-        } => {
-            let template = pr_body::read_template(&root)?;
-            let body = std::fs::read_to_string(path).map_err(|source| Error::Io {
-                path: path.clone(),
-                source,
-            })?;
-            pr_body::check_body(&template, Some(&body))
-        }
+        } => check_body_file(&root, path)?,
         Command::Approval => approval::run(&root, ci.as_ref(), &mut out)?,
         Command::Gate { only, skip } => {
             let selection = gate::Selection {
@@ -336,6 +337,16 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
     };
     report::emit(&verdict, ci.is_some(), &mut out)?;
     Ok(verdict.passed())
+}
+
+/// The verdict of `pr-body` for the description in the file at `path`, instead of the event's.
+fn check_body_file(root: &Path, path: &Path) -> anyhow::Result<Verdict> {
+    let template = pr_body::read_template(root)?;
+    let body = std::fs::read_to_string(path).map_err(|source| Error::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    Ok(pr_body::check_body(&template, Some(&body)))
 }
 
 /// Publishes the verdicts of a multi-check run under GitHub Actions, with why every check ran

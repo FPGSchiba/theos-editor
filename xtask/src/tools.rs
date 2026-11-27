@@ -14,7 +14,6 @@ use serde::Deserialize;
 
 use crate::ci::CiEvent;
 use crate::process::{CargoCommand, capture_cargo, run_cargo};
-use crate::ui_tools;
 use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
@@ -213,7 +212,6 @@ pub fn check_installed(root: &Path) -> Result<Verdict> {
     for pin in load_pins(root)? {
         findings.extend(judge(&pin, &probe(root, &pin)?));
     }
-    findings.extend(ui_tools::check(root));
     Ok(Verdict::with(Check::Tools, findings))
 }
 
@@ -397,6 +395,31 @@ mod tests {
             matches!(&result, Err(crate::Error::Io { .. })),
             "{result:?}"
         );
+    }
+
+    // AC: CE-32.3
+    #[test]
+    fn editor_ui_adds_no_finding_to_the_tools_check()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        // The real pins, a root with `editor-ui/package.json` that no node or pnpm could satisfy:
+        // the tools check says nothing about them, so a job without Node stays green.
+        let root = tempfile::tempdir()?;
+        std::fs::create_dir_all(root.path().join("gate"))?;
+        std::fs::copy(repo_root().join(TOOLS_FILE), root.path().join(TOOLS_FILE))?;
+        std::fs::create_dir_all(root.path().join("editor-ui"))?;
+        std::fs::write(
+            root.path().join("editor-ui").join("package.json"),
+            r#"{"packageManager":"pnpm@0.0.1"}"#,
+        )?;
+        let verdict = check_installed(root.path())?;
+        for finding in &verdict.findings {
+            assert!(
+                !finding.message.contains("node") && !finding.message.contains("pnpm"),
+                "{}",
+                finding.message
+            );
+        }
+        Ok(())
     }
 
     #[test]

@@ -189,6 +189,23 @@ mod tests {
 
     // AC: CE-08C.2
     #[test]
+    fn the_design_system_the_ui_imports_is_code_but_other_design_files_are_not() {
+        let scope = decide(
+            Ok(changes("docs/x", &["design/theos-ui/tokens.css"])),
+            &lists(),
+        );
+        assert_eq!(scope, every());
+        let scope = decide(
+            Ok(changes("docs/x", &["design/theos-ui/fonts/a.woff2"])),
+            &lists(),
+        );
+        assert_eq!(scope, every());
+        let scope = decide(Ok(changes("docs/x", &["design/notes/ideas.md"])), &lists());
+        assert_eq!(scope, Scope::DocsOnly);
+    }
+
+    // AC: CE-08C.2
+    #[test]
     fn a_code_path_runs_every_check() {
         let scope = decide(
             Ok(changes("docs/x", &["docs/a.md", "xtask/src/x.rs"])),

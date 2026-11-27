@@ -584,6 +584,65 @@ mod tests {
         assert_eq!(covered, expected);
     }
 
+    /// What `run_scoped` makes of every selectable check under `scope`: the check is needed when
+    /// its verdict is not "not needed". `ui` is decided by its own plan, as `ui::run` does.
+    fn gate_needs(scope: &Scope, root: &Path) -> TestResult<Vec<(Check, bool)>> {
+        let order: Vec<Check> = GATE_ORDER
+            .iter()
+            .copied()
+            .filter(|check| parse_selectable(check.name()).is_ok())
+            .collect();
+        let outcome = run_scoped(
+            &order,
+            scope,
+            |check, _| {
+                Ok(match (check, crate::checks::ui::plan(root)) {
+                    (Check::Ui, crate::checks::ui::UiPlan::NotNeeded(reason)) => {
+                        Verdict::not_needed(check, reason)
+                    }
+                    _ => Verdict::pass(check),
+                })
+            },
+            &mut Vec::new(),
+        )?;
+        Ok(outcome
+            .verdicts
+            .iter()
+            .map(|verdict| (verdict.check, !verdict.is_not_needed()))
+            .collect())
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn needs_answers_as_the_gate_decides_for_every_check() -> TestResult {
+        for with_editor_ui in [false, true] {
+            let root = tempfile::tempdir()?;
+            if with_editor_ui {
+                std::fs::create_dir(root.path().join("editor-ui"))?;
+                std::fs::write(root.path().join("editor-ui").join("package.json"), "{}")?;
+            }
+            for scope in [
+                Scope::DocsOnly,
+                Scope::Every { note: None },
+                Scope::Every {
+                    note: Some("why".to_owned()),
+                },
+            ] {
+                let decided = gate_needs(&scope, root.path())?;
+                assert!(decided.iter().any(|(check, _)| *check == Check::Ui));
+                for (check, needed) in decided {
+                    assert_eq!(
+                        crate::needs::needed_under(&scope, root.path(), &[check]),
+                        needed,
+                        "{} under {scope:?}, editor-ui: {with_editor_ui}",
+                        check.name()
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
     // AC: CE-08C.2
     #[test]
     fn docs_only_runs_commit_msg_and_marks_the_rest_not_needed() -> TestResult {

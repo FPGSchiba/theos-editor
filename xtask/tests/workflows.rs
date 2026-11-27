@@ -2304,7 +2304,10 @@ fn setup_installs_packages_from_the_list() -> TestResult {
         string_map(&ask["env"])?,
         map(&[("NEEDS", "${{ inputs.gui-packages }}")])
     );
-    assert_eq!(ask["run"].as_str(), Some("cargo xtask needs \"$NEEDS\""));
+    assert_eq!(
+        ask["run"].as_str(),
+        Some("cargo xtask needs --requires-package webkit2gtk \"$NEEDS\"")
+    );
     let image = &steps[6];
     assert_eq!(image["id"].as_str(), Some("image"));
     let image_command = image["run"].as_str().ok_or("the image step runs nothing")?;

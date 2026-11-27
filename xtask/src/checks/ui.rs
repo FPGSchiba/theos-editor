@@ -5,7 +5,9 @@
 //! needed, otherwise five [`Step`]s. [`execute`] runs them through a runner it is given, so the
 //! tests need no Node, and every step runs even after one has failed, so one run shows all that
 //! is wrong. [`run`] wires in `std::process::Command`, with `pnpm` resolved through `which`
-//! (on Windows it is `pnpm.cmd`).
+//! (on Windows it is `pnpm.cmd`). Its first findings are the probe of node and pnpm
+//! ([`crate::ui_tools`]): only a job that runs `ui` needs them, so the `tools` check leaves them
+//! alone.
 
 use std::io::Write;
 use std::path::Path;
@@ -13,6 +15,7 @@ use std::process::{Command, Output};
 
 use crate::Result;
 use crate::ci::CiEvent;
+use crate::ui_tools;
 use crate::verdict::{Check, Finding, Verdict};
 
 /// The folder of the UI, relative to the repository root.
@@ -109,7 +112,16 @@ pub fn execute(
     Verdict::with(Check::Ui, findings)
 }
 
-/// The `ui` check in `root`. `_ci` and `_out` are not used.
+/// `verdict` with the findings of the probe of node and pnpm in front of the findings of the
+/// steps.
+#[must_use]
+pub fn with_probe(probe: Vec<Finding>, mut verdict: Verdict) -> Verdict {
+    verdict.findings.splice(0..0, probe);
+    verdict
+}
+
+/// The `ui` check in `root`: the probe of node and pnpm, then the steps. `_ci` and `_out` are
+/// not used.
 ///
 /// # Errors
 ///
@@ -121,12 +133,13 @@ pub fn run(root: &Path, _ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<V
         UiPlan::Steps(steps) => steps,
     };
     let dir = root.join(UI_DIR);
-    Ok(execute(&steps, |step| {
+    let steps = execute(&steps, |step| {
         let program = which::which(step.program)
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::NotFound, error))?;
         Command::new(program)
             .args(&step.args)
             .current_dir(&dir)
             .output()
-    }))
+    });
+    Ok(with_probe(ui_tools::check(root), steps))
 }
