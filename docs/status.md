@@ -17,7 +17,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P08 | Map format and terrain generator | theos-editor | done | #27 | #44 |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
 | P10 | Prose editor research | theos-editor | done | #3 | #11 |
-| P11 | Editor shell and Codex | theos-editor | spec-pr | | |
+| P11 | Editor shell and Codex | theos-editor | spec-approved | #56 | |
 | P12 | Manuscript editor | theos-editor | todo | | |
 | P13 | Changes and Review screens | theos-editor | todo | | |
 | P14 | Start and Settings | theos-editor | todo | | |
@@ -35,16 +35,16 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P26 | Style bible and briefs | theos-editor | todo | | |
 | P27 | Asset pipelines | theos-editor | todo | | |
 | P28 | Workflow catalogue and asset guide | tower-of-theos | todo | | |
-| P29 | Settlements and child maps | theos-editor | spec-pr | #54 | |
+| P29 | Settlements and child maps | theos-editor | spec-approved | #54 | |
 | P30 | Levels in the generator | theos-editor | todo | | |
 | P31 | Floor frame and places | theos-editor | todo | | |
 | P32 | Recipe families | theos-editor | todo | | |
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
-| P34 | Interiors | theos-editor | spec-pr | | |
+| P34 | Interiors | theos-editor | spec-approved | #55 | |
 | P45 | Atlas level switcher | theos-editor | todo | | |
-| P46 | Git read | theos-editor | spec-pr | | |
+| P46 | Git read | theos-editor | spec-approved | #52 | |
 | P47 | Git write | theos-editor | todo | | |
-| P48 | MCP read | theos-editor | spec-pr | #53 | |
+| P48 | MCP read | theos-editor | spec-approved | #53 | |
 | P49 | Releases and the check action | theos-editor | todo | | |
 | P50 | Leaner CI | theos-editor | done | #45, #46 | #48 |
 
@@ -146,29 +146,41 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
     fixed states reach at least 4.78:1 (the AI-drafted chip is the lowest). `design/theos-ui/`
     mirrors the artifact, so the fix goes into the artifact and reaches the repo with the next
     refresh.
-  - More states of the design system's components use `textMute` or `border` for text or
-    controls that are not redundant, so the README's `textMute` flag does not cover them.
-    Measured in the screens and the previews (Grid Noir / Grid Light; text needs 4.5:1, icons
-    and controls 3:1): inactive tab labels 2.84 / 3.01; the actions, counts and ⋯ in section
-    headers ("stage all", "58 calls") 2.42–2.46 / 3.29; off filters, property keys, popover key
-    hints and the empty beat value ("+ add") 2.68 / 3.56; the key hint on the LinkAutocomplete
-    create row ("⏎ ⇧", which the footer does not repeat) 2.46 / 3.29; tree tags that are the
-    only place that says a state or a reason ("needs engine extension", "no quest yet", "no maps
-    yet", "needs an npc", "to prove", "you pick", "draft" on the selected row; bundle
-    `.tu-tree__tag`) 2.23–2.68 / 2.96–3.56; input placeholders 2.84 / 3.01; the window controls,
-    the select caret and the input icon 2.84 in Grid Noir (they pass in Grid Light); the
-    `border` of unchecked check boxes, of toggles that are off, of inputs and of selects
-    1.24–1.34 / 1.38–1.50; the knob of a toggle that is off 2.46 in Grid Noir (it passes in Grid
-    Light). Some cards' own preview pages set text that is not redundant in `textMute` too:
-    KindGlyph's labels ("tower", "band", …) and explanatory lines 2.84 / 3.01 on `bg`, the "sig"
-    meter labels of ReviewCard and Themes and the "spawn · theos-game --from-editor" line of
-    SampleInstrument 2.68 / 3.56 on `panel`, and ReviewCard's entry count ("· jsonl · 51
-    entries") 2.46 / 3.29 on `panel2`. Redundant `textMute` text (tree tags that repeat an id, a
-    count or a band, indices, timestamps, separators, popover kind words) stays under the flag.
-    Like the states above, these go to the artifact and are not patched in `design/theos-ui/`.
-  - P12 should not copy the P10 prototype's `textMute` for front matter and raw source lines
-    (`research/P10-prose-editor/app/src/adapters/*/theme.ts`, `harness/styles.css`): 2.68 / 3.56
-    on `panel` for text that is not redundant, where `textDim` gives 5.56 / 6.71.
+  - Measured per `bundle.css` rule in the screens and the previews (Grid Noir / Grid Light; text
+    needs 4.5:1, icons and controls 3:1), the design system's components that set text in `textMute`
+    miss 4.5:1 in both themes: inactive tabs (`.tu-tab`) 2.84 / 3.01; section-header actions and
+    counts (`.tu-section__more`) 2.46 / 3.29; off filters (`.tu-filter.is-off`) and property keys
+    (`.tu-prop__key`) 2.68 / 3.56; popover kind words and key hints (`.tu-pop__kind`)
+    2.02–2.46 / 2.74–3.29 and the popover footer (`.tu-pop__foot`) 2.68 / 3.56; tree tags
+    (`.tu-tree__tag`) and tree indices (`.tu-tree__idx`) 2.23–2.68 / 2.96–3.56; the empty beat value
+    (`.tu-beat__param.is-empty .tu-beat__val`) 2.68 / 3.56; review and console timestamps
+    (`.tu-review__time`, `.tu-console__time`) 2.42–2.68 / 3.19–3.56; input placeholders
+    (`.tu-input input::placeholder`) 2.84 / 3.01; and the `.tu-mute` utility 2.46–2.84 / 3.01–3.56.
+    The components' icons in `textMute` miss 3:1 in Grid Noir only, at 2.42–2.84 / 3.01–3.56: the
+    window controls (`.tu-tabbar__ctrls`), the select caret (`.tu-select::after`), the input icon
+    (`.tu-input__icon`), the ⋯ of section headers and the glyphs in tree tags and in empty beat
+    values; the separators (`.tu-titlebar__sep`, `.tu-beat__sep`) are 2.68–2.84 / 3.01–3.56. Control
+    edges in `border` miss 3:1 in both themes: unchecked check boxes, toggles that are off, inputs
+    and selects, 1.24–1.34 / 1.38–1.50; the `textMute` knob of a toggle that is off misses it in
+    Grid Noir only (2.46 / 3.29). No screen or preview uses the other `textMute` rules
+    (`.tu-section__note`, `.tu-empty__mark`, the console's `DBG` level), so they are not measured.
+    The README allows `textMute` only for redundant text, but a component gets whatever text a
+    screen puts in it: the screens and the cards' previews put state words, reasons, hints and
+    counts into these components ("needs an npc" in a tree tag on screen 15, "stage all" in a
+    section header on screen 08) as well as indices, timestamps and tags that repeat an id. Whether
+    a use is redundant depends on its text, not on the component, so the flag cannot settle a
+    component as a whole. The previews also set text in `textMute` themselves, with `.tu-mute` and
+    with KindGlyph's page style (its kind labels, 2.84 / 3.01). The PR of this branch lists every
+    `textMute` text below its need, by screen and preview. Proposed for the artifact: these
+    components set their text and icons in `textDim` and keep `textMute` for the `.tu-mute` utility
+    and separators, or the README's flag names the components and the content each may hold. The
+    locked tier option (`.tu-tier__opt.is-locked`, 2.68 / 3.56) is an inactive control, which WCAG
+    1.4.3 exempts. Like the states above, these go to the artifact and are not patched in
+    `design/theos-ui/`.
+  - P12 should not copy the P10 prototype's `textMute` for front matter, raw source lines and the
+    beat row's "+ add" (2.68 / 3.56 on `panel`, where `textDim` gives 5.56 / 6.71), in
+    `research/P10-prose-editor/app/src/`: `adapters/codemirror/theme.ts`,
+    `adapters/prosemirror/theme.ts` and `harness/styles.css`.
 
 ## Needs a private session (Confluence, Jira, plugin)
 
