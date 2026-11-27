@@ -38,7 +38,8 @@ repo column in the umbrella's phase table names it, and for reading fixtures.
 - GitHub Actions minutes are paid (private repository); every push to a pull request starts its
   jobs.
 - Push once when a task or a review round is finished and checked locally (`cargo xtask gate` or
-  the task's checks), never after every commit. Never re-run CI on a commit that did not change.
+  the task's checks), never after every commit. Never re-run CI on a commit that did not change, unless its run did
+  not finish (refused, cancelled, a runner failure).
   Subagents never push.
 - Merge `main` into a pull request branch only when it is next to merge (`CONTRIBUTING.md`).
 - Never start `platforms` by hand unless Jann asks. OS checks on a pull request go through the
