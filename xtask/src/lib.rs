@@ -34,6 +34,7 @@
 //! - [`umbrella`]: the umbrella spec's phases and acceptance criteria, which `ac-trace` and
 //!   `commit-msg` read their ids from.
 //! - [`tools`]: the pinned tools (`gate/tools.toml`) and the `tools` check.
+//! - [`ui_tools`]: node and pnpm, which the `tools` check verifies when `editor-ui/` exists.
 //! - [`view`]: the workspace view, the files cargo compiles and what `syn` reads in them, which
 //!   the checks that read code share.
 //! - [`code_paths`]: the paths no check reads (`gate/code-paths.toml`).
@@ -60,6 +61,7 @@ pub mod repo_path;
 pub mod report;
 pub mod scope;
 pub mod tools;
+pub mod ui_tools;
 pub mod umbrella;
 pub mod verdict;
 pub mod view;

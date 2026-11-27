@@ -17,7 +17,7 @@ use std::io::Write;
 use std::path::Path;
 
 use crate::checks::{
-    ac_trace, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title, slow,
+    ac_trace, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title, slow, ui,
 };
 use crate::ci::CiEvent;
 use crate::scope::{self, Scope};
@@ -145,6 +145,7 @@ fn run_pr_check(
         | Check::Coverage
         | Check::Lints
         | Check::AcTrace
+        | Check::Ui
         | Check::CommitMsg
         | Check::Approval
         | Check::Github => Err(Error::Missing {
@@ -209,6 +210,7 @@ fn run_check(
         Check::Lints => lints::run(root, ci, shared, out),
         Check::EngineFree => engine_free::run(root, ci, out),
         Check::AcTrace => ac_trace::run(root, ci, shared, out),
+        Check::Ui => ui::run(root, ci, out),
         Check::CommitMsg => commit_msg::run(root, ci, out),
         Check::Coverage => coverage::run(root, ci, out),
         Check::SlowTests => slow::run(root, ci, out),
@@ -304,6 +306,7 @@ mod tests {
         Coverage => Gate,
         Lints => Gate,
         AcTrace => Gate,
+        Ui => Gate,
         CommitMsg => Gate,
         PrTitle => PrOnly,
         PrBody => PrOnly,

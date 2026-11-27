@@ -20,7 +20,7 @@ use tracing_subscriber::filter::LevelFilter;
 use xtask::branch::Phase;
 use xtask::checks::{
     ac_trace, approval, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title,
-    slow,
+    slow, ui,
 };
 use xtask::gate;
 use xtask::git::Git;
@@ -97,6 +97,9 @@ enum Command {
         #[arg(long, value_name = "PNN")]
         phase: Option<Phase>,
     },
+    /// Check `editor-ui/`: install, svelte-check, eslint, vitest and playwright (not needed
+    /// without `editor-ui/package.json`).
+    Ui,
     /// Check that every commit of the branch is a Conventional Commit.
     ///
     /// Under GitHub Actions the commits and the branch come from the event. Any flag here
@@ -258,6 +261,7 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         Command::AcTrace { phase } => {
             ac_trace::run_phase(&root, *phase, ci.is_some(), &shared, &mut out)?
         }
+        Command::Ui => ui::run(&root, ci.as_ref(), &mut out)?,
         Command::CommitMsg {
             base: None,
             head: None,
