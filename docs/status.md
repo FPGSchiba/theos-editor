@@ -40,7 +40,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P31 | Floor frame and places | theos-editor | todo | | |
 | P32 | Recipe families | theos-editor | todo | | |
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
-| P34 | Interiors | theos-editor | spec-pr | | |
+| P34 | Interiors | theos-editor | in-progress | #55 | |
 | P45 | Atlas level switcher | theos-editor | todo | | |
 | P46 | Git read | theos-editor | spec-pr | | |
 | P47 | Git write | theos-editor | todo | | |
