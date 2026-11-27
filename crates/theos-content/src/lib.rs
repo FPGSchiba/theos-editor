@@ -83,6 +83,7 @@
 
 pub mod body;
 pub mod check;
+pub mod diff;
 pub mod finding;
 pub mod formalism;
 pub mod index;
