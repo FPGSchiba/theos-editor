@@ -1,4 +1,4 @@
-# Map package — format `theos-map` 1.0
+# Map package — format `theos-map` 1.1
 
 Status: proposed with decision 0003 (`docs/decisions/0003-map-generator-in-rust.md`) and umbrella
 spec version 3; binding once Jann merges it. Changes need Jann's approval (`docs/gate.md`).
@@ -16,6 +16,9 @@ Format 1.0 replaces the package of the Python toolset `theos_maps` 0.3.0 (`theos
 changed: one file instead of a folder; raw layers instead of PNG; water as shapes (lake levels,
 river lines); rooms as polygons; stacked levels; no timestamp, so the bytes are reproducible; a
 hash per layer.
+
+Format 1.1 (P29 and P34) only adds: the settlement and interior feature properties and types
+marked "1.1" in §4.4 and §5. It defines no capability, so 1.0 readers read 1.1 packages (§6).
 
 ## 1. Container
 
@@ -53,7 +56,7 @@ hash per layer.
 | Field | Type | Meaning |
 |---|---|---|
 | `format` | `"theos-map"` | |
-| `format_version` | `"MAJOR.MINOR"` | `"1.0"` for this document (§6) |
+| `format_version` | `"MAJOR.MINOR"` | `"1.1"` for this document (§6) |
 | `generator` | `name@version` | As the generator's `describe` reports it, for example `theos-maps@1.0.0` (`docs/generators.md` §6) |
 | `requires` | array of strings | The capabilities a reader must implement to build this map correctly (§6), sorted; empty when the package uses none. Format 1.0 defines none yet |
 | `kind` | text | `terrain`, `settlement`, `interior`, … (the map's `type` in the data model) |
@@ -192,10 +195,11 @@ ignore layers they do not know.
 | settlement | `height`, `water` | f32, u8 | As for terrain |
 | settlement | `streets` | u8 | Street class (legend) |
 | settlement | `buildings` | u8 | Mask of building footprints |
-| settlement | `fields` | u8 | Land use outside the built area (legend) |
+| settlement | `fields` | u8 | Land use: 0 none, 1 field, 2 orchard, 3 pasture, 4 garden, 5 yard, 6 open ground, 7 plaza (legend; 1.1) |
 | interior | `walkable` | u8 | Mask of walkable floor |
 | interior | `rooms` | u16 | Room number + 1 per cell, 0 for none; the room features carry the number |
 | interior | `corridors`, `cover` | u8 | Masks |
+| interior | `walls` | u8 | Mask of built wall cells (1.1) |
 
 ### 4.5 Snapshot layers
 
@@ -228,14 +232,16 @@ longitude and latitude: an alternative coordinate reference by prior arrangement
 | `road` | `trail`, `track`, `road`, `main` | LineString | `from`, `to` (feature ids), `length_m`, `width_m`, `grade_max` |
 | `water` | `river` | LineString (x, y, bed height) | `width_m`, `depth_m`, `discharge_m3s` per vertex; `order` (Strahler) |
 | `water` | `lake` | Polygon, or MultiPolygon when one lake has several outlines | `surface_m` (water level), `terminal` (no outflow), `outlet` (a point in metres; absent for a terminal lake), `depth_max_m` |
-| `street` | `lane`, `street`, `main-street` | LineString | |
-| `building` | `building` | Polygon | `use`, `storeys` |
-| `landmark` | free text | Point | `name` |
-| `wall`, `gate` | `wall`, `gate` | Polygon, Point | |
-| `room` | room type from the recipe | Polygon | `number` (as in the `rooms` layer), `role`, `keys`, `locked` |
-| `door` | `open`, `locked`, `drop`, … | Point | `rooms` (the two room ids), `key` |
-| `connection` | `open`, `locked`, `oneway` | null | `from`, `to` (room ids), `key` |
-| `route` | `critical` | LineString | `rooms` (ids in order) |
+| `street` | `lane`, `street`, `main-street` | LineString | `from`, `to` (street node ids, opaque strings), `width_m`, `length_m`, `bridge` (boolean), `entry` (the parent road's id, main streets only) (1.1) |
+| `parcel` | `house`, `landmark`, `yard`, `garden`, `plaza`, `open` | Polygon | `street` (the street it faces; absent for none), `area_m2` (1.1) |
+| `building` | `building` | Polygon | `use` (`house` or a landmark type), `storeys`; 1.1 adds `height_m` and `parcel` |
+| `landmark` | free text (P29: `market`, `well`, `shrine`, `temple`, `keep`, `inn`, `smithy`, `guardhouse`, `granary`, `archive`, `mill`, `harbour`) | Point | `name` (generated, not canon); 1.1 adds `building` or `parcel` |
+| `wall` | `wall`; `tower` (1.1) | Polygon; Point | wall: `height_m`, `thickness_m` (1.1); tower: `wall` (1.1) |
+| `gate` | `gate`; `water-gate` (1.1) | Point | `wall`, and for `gate` the `street` it carries (1.1) |
+| `room` | room type from the recipe | Polygon | `number` (as in the `rooms` layer), `role`, `keys`, `locked`; 1.1 adds `shape` (`rect`, `round`, `ragged`, `passage`) and `area_m2` |
+| `door` | `open`, `locked`, `drop`, … | Point | `rooms` (the two room ids), `key`; for a drop, `from` (the room it can be passed from) (1.1) |
+| `connection` | `open`, `locked`, `oneway` | null | `from`, `to` (room ids), `key`; 1.1 adds `door` (the door's id) |
+| `route` | `critical` | LineString | `rooms` (ids in order); 1.1 adds `length_m` |
 | `link` | `stair`, `ladder`, `lift`, `drop` | Point or LineString | `from_level`, `to_level` |
 
 The generator's phase specs (P08, P29, P30) define each type's properties in full. A new kind,
