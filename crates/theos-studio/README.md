@@ -53,7 +53,7 @@ also reads git by record: changes, diffs and history. The rest arrives in P07 an
 |---|---|
 | P06 | `Workspace` (`open`, `find`, `index_mut`), extended with its own `impl` blocks for the command layer and the repo lock; `introduced`, in its verdict. In turn `create` writes through P06's `Create` |
 | P07 | `diff` with `Side::Between` for `theos review show`, an agent branch against `main` |
-| P12 | `diff` to compare an unsaved edit with the saved record |
+| P12 | Not `diff`, which reads only versions from git: P12 compares an unsaved edit with the saved record through `theos_content::diff::record` directly |
 | P13 | `changes`, `diff` and `history` for the Changes screen; `Conflicted` entries for conflicts |
 | P47 | `changes`, to stage a record by its paths (both paths of a rename); `check_staged`, so a commit blocks on the same findings as the hook; it holds the repo lock while git runs the hook, and the check never takes it |
 | P48 | `Workspace`, the `views`, `report` and the contended-cache fallback, to serve the same results over MCP |
