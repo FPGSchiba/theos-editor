@@ -272,10 +272,6 @@ const UI_ACTION: &str = ".github/actions/ui/action.yml";
 const UI_EXISTS_IF: &str =
     "steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''";
 
-/// The condition of the step of the `ui` job that runs the check. It fails closed: only an
-/// answer of `false` skips the check, so an answer that is missing runs it and fails the job.
-const UI_RUN_IF: &str = "steps.needs.outputs.needed != 'false'";
-
 /// The conditions inside the set-up action of the UI: the browser with or without its system
 /// libraries, and the save of the caches after a miss when the job saves.
 const UI_DEPS_IF: &str = "inputs.browser-deps == 'true'";
@@ -360,7 +356,7 @@ const CI_JOBS: [CiJob; 4] = [
 /// `gate/linux-packages.txt`, and the checks of each that build: the value of `gui-packages`,
 /// which the setup action asks `xtask needs` about.
 const GUI_JOBS: [(&str, &str); 3] = [
-    ("gate", "clippy,docs,slow-tests"),
+    ("gate", "clippy,docs,slow-tests,lints,ac-trace"),
     ("test", "test"),
     ("coverage", "coverage"),
 ];
@@ -1177,9 +1173,12 @@ const APPROVAL_XTASK_IF: &str = "hashFiles('.github/actions/xtask/action.yml') !
 const APPROVAL_BUILD_IF: &str = "hashFiles('.github/actions/xtask/action.yml') == ''";
 
 /// The conditions of the steps of the workflows that have an `if:`, by the position of the step.
-/// In `approval`: the head checkout, then exactly one of the two ways to get xtask. In the jobs
-/// that run `ui`: the steps that set up Node, pnpm and the browser, which wait for `editor-ui/`.
-/// Every other step of every job has none, so no condition can skip a check.
+/// Two kinds of step may carry one: the head checkout of `approval` and its two ways to get
+/// xtask; and the step that sets up the UI in the jobs that run `ui`, which waits for the answer
+/// of `xtask needs ui` and for `editor-ui/`. The check step of the `ui` job has none: `xtask ui`
+/// applies the scope itself and writes "not needed" for a change that touches no code, so the
+/// job always reports its verdict. Every other step of every job has none, so no condition can
+/// skip a check.
 fn step_condition(file: &str, job: &str, position: usize) -> Option<&'static str> {
     match (file, job, position) {
         ("approval.yml", "approval", 1) => Some(APPROVAL_FALLBACK_IF),
@@ -1188,7 +1187,6 @@ fn step_condition(file: &str, job: &str, position: usize) -> Option<&'static str
         // The set-up of the UI after the question. The `ui` job also runs its check unless the
         // answer is `false`.
         ("ci.yml", "ui", 3) | ("platforms.yml", "windows" | "macos", 3) => Some(UI_EXISTS_IF),
-        ("ci.yml", "ui", 4) => Some(UI_RUN_IF),
         _ => None,
     }
 }
@@ -1242,8 +1240,9 @@ fn no_key_lets_a_job_pass_while_xtask_fails() -> TestResult {
                 assert_eq!(
                     step["if"].as_str(),
                     step_condition(file, name, position),
-                    "{file}: job {name}, step {position}: only the head checkout of approval and \
-                     its two ways to get xtask have an `if:`"
+                    "{file}: job {name}, step {position}: only the head checkout of approval and its \
+                     two ways to get xtask, and the set-up of the UI have an `if:`; the check \
+                     step of the ui job always runs"
                 );
             }
         }
@@ -2178,7 +2177,6 @@ fn ui_action_steps() -> TestResult<Vec<Yaml>> {
         .clone())
 }
 
-// AC: CE-08.3
 /// The set-up of the UI, as the action spells it: pnpm at the version of `editor-ui/package.json`
 /// first, then Node 24 with no cache of its own (setup-node would save one on every run, a pull
 /// request's included), then the store path, the restore of the caches, the installs, the save.
@@ -2247,7 +2245,7 @@ fn the_ui_action_installs_pnpm_node_and_the_browser_and_caches_them_without_savi
     Ok(())
 }
 
-// AC: CE-08.3
+// AC: CE-08C.5
 /// Who saves the caches of the UI: the `ui` job on `main` only, and the platform jobs on the
 /// schedule only, as the Rust caches are saved. Every other run only restores.
 #[test]
@@ -2298,7 +2296,6 @@ fn step_of_uses<'a>(job: &'a Job, action: &str) -> TestResult<&'a Yaml> {
         .ok_or_else(|| format!("job {} has no step that uses {action}", job.name).into())
 }
 
-// AC: CE-08.3
 #[test]
 fn ci_has_a_ui_job() -> TestResult {
     let job = ci_named("ui")?;
@@ -2314,19 +2311,21 @@ fn ci_has_a_ui_job() -> TestResult {
         Yaml::BadValue,
         "the question is always asked"
     );
-    // The set-up waits for the answer; the check runs unless the answer is `false`, so a missing
-    // answer fails the job instead of skipping `ui`.
+    // The set-up waits for the answer; the check always runs and decides by itself (`xtask ui`
+    // applies the scope), so the job reports its verdict on every pull request.
     assert_eq!(steps[3]["uses"].as_str(), Some(UI_USES));
     assert_eq!(steps[3]["if"].as_str(), Some(UI_EXISTS_IF));
     let last = steps.last().ok_or("the ui job has no steps")?;
     assert_eq!(last["run"].as_str(), Some(UI_CACHED));
-    assert_eq!(last["if"].as_str(), Some(UI_RUN_IF));
-    assert!(UI_RUN_IF.contains("!= 'false'"));
+    assert_eq!(
+        last["if"],
+        Yaml::BadValue,
+        "the check step of the ui job has a condition"
+    );
     assert_eq!(job.commands()?, commands_of("ci.yml", "ui"));
     Ok(())
 }
 
-// AC: CE-08.3
 #[test]
 fn rust_jobs_install_the_gui_packages() -> TestResult {
     for (name, checks) in GUI_JOBS {
@@ -2355,7 +2354,6 @@ fn rust_jobs_install_the_gui_packages() -> TestResult {
     Ok(())
 }
 
-// AC: CE-08.3
 #[test]
 fn setup_installs_packages_from_the_list() -> TestResult {
     let list = read("gate/linux-packages.txt")?;
@@ -2455,7 +2453,6 @@ fn platforms_run_ui_on_windows_and_macos() -> TestResult {
     Ok(())
 }
 
-// AC: CE-08.3
 #[test]
 fn ruleset_requires_ui() -> TestResult {
     let ruleset: serde_json::Value = serde_json::from_str(&read("gate/ruleset-main.json")?)?;

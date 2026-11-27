@@ -15,6 +15,7 @@ use std::process::{Command, Output};
 
 use crate::Result;
 use crate::ci::CiEvent;
+use crate::scope::{self, Scope};
 use crate::ui_tools;
 use crate::verdict::{Check, Finding, Verdict};
 
@@ -120,26 +121,65 @@ pub fn with_probe(probe: Vec<Finding>, mut verdict: Verdict) -> Verdict {
     verdict
 }
 
-/// The `ui` check in `root`: the probe of node and pnpm, then the steps. `_ci` and `_out` are
-/// not used.
+/// The verdict of `ui` in `root` under `scope`: not needed (with the reason of the gate) when the
+/// scope does not run it, or when there is no `editor-ui/`; else the probe of node and pnpm, then
+/// the steps. Neither `probe` nor `runner` is called when the check is not needed, so such a run
+/// needs no Node and starts no pnpm.
+#[must_use]
+pub fn verdict_under(
+    scope: &Scope,
+    root: &Path,
+    probe: impl FnOnce() -> Vec<Finding>,
+    runner: impl FnMut(&Step) -> std::io::Result<Output>,
+) -> Verdict {
+    if !scope::runs(scope, Check::Ui) {
+        return Verdict::not_needed(Check::Ui, scope::NOT_NEEDED_REASON);
+    }
+    match plan(root) {
+        UiPlan::NotNeeded(reason) => Verdict::not_needed(Check::Ui, reason),
+        UiPlan::Steps(steps) => with_probe(probe(), execute(&steps, runner)),
+    }
+}
+
+/// Runs the steps of the `ui` plan as real `pnpm` processes in `editor-ui/`.
+fn run_step(root: &Path, step: &Step) -> std::io::Result<Output> {
+    let program = which::which(step.program)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::NotFound, error))?;
+    Command::new(program)
+        .args(&step.args)
+        .current_dir(root.join(UI_DIR))
+        .output()
+}
+
+/// The `ui` check in `root`, for the gate, which has applied the scope already: the probe of node
+/// and pnpm, then the steps. `_ci` and `_out` are not used.
 ///
 /// # Errors
 ///
 /// Never fails today: a step that does not run is a finding. The signature is that of every
 /// check.
 pub fn run(root: &Path, _ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<Verdict> {
-    let steps = match plan(root) {
-        UiPlan::NotNeeded(reason) => return Ok(Verdict::not_needed(Check::Ui, reason)),
-        UiPlan::Steps(steps) => steps,
-    };
-    let dir = root.join(UI_DIR);
-    let steps = execute(&steps, |step| {
-        let program = which::which(step.program)
-            .map_err(|error| std::io::Error::new(std::io::ErrorKind::NotFound, error))?;
-        Command::new(program)
-            .args(&step.args)
-            .current_dir(&dir)
-            .output()
-    });
-    Ok(with_probe(ui_tools::check(root), steps))
+    let every = Scope::Every { note: None };
+    Ok(verdict_under(
+        &every,
+        root,
+        || ui_tools::check(root),
+        |step| run_step(root, step),
+    ))
+}
+
+/// The `ui` check as its own subcommand, `cargo xtask ui`: the scope of the run decides first, as
+/// it does for `cargo xtask gate`, so a pull request that changes no code gets the verdict "not
+/// needed" and the job summary lists it. `_out` is not used.
+///
+/// # Errors
+///
+/// Never fails today, as [`run`].
+pub fn run_scoped(root: &Path, ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<Verdict> {
+    Ok(verdict_under(
+        &scope::for_run(root, ci),
+        root,
+        || ui_tools::check(root),
+        |step| run_step(root, step),
+    ))
 }

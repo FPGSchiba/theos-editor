@@ -72,7 +72,8 @@ runs:
         key: xtask-bin-${{ runner.os }}-${{ hashFiles('xtask/**', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/**') }}
 
     # The Linux packages of the GUI, from the list of gate/linux-packages.txt, only when the run
-    # needs the checks that build them and Cargo.lock names webkit2gtk, the package that links
+    # needs the checks that build them (`lints` and `ac-trace` too, which run `cargo check`) and
+    # Cargo.lock names webkit2gtk, the package that links
     # them: a pull request that changes no code installs nothing.
     # xtask is built by now. It writes `needed=true` or `needed=false` to the step outputs.
     - name: Ask whether the run needs the packages
