@@ -5,13 +5,38 @@ use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use crate::GitVersion;
+
 /// Why a git command could not give an answer.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum GitError {
     /// No `git` program was found.
-    #[error("git was not found on the PATH")]
+    #[error(
+        "git was not found on the PATH. theos needs git {minimum} or newer: install it from https://git-scm.com/downloads, then open a new terminal or restart the editor.",
+        minimum = MinimumShort
+    )]
     NotFound,
+    /// The `git` found is older than [`GitVersion::MINIMUM`].
+    #[error(
+        "git {found} ({}) is too old. theos needs git {} or newer: update it from https://git-scm.com/downloads.",
+        .program.display(),
+        MinimumShort
+    )]
+    TooOld {
+        /// The `git` program that was found.
+        program: PathBuf,
+        /// The version it reported.
+        found: GitVersion,
+        /// The oldest version theos runs with.
+        required: GitVersion,
+    },
+    /// The command was cancelled before it finished.
+    #[error("git {} was cancelled", .args.join(" "))]
+    Cancelled {
+        /// The arguments git was given.
+        args: Vec<String>,
+    },
     /// git ran and exited with a failure.
     #[error("git {} failed ({}): {stderr}", .args.join(" "), exit_text(*.code))]
     Failed {
@@ -38,6 +63,16 @@ pub enum GitError {
     },
 }
 
+/// Displays [`GitVersion::MINIMUM`] as `major.minor`, for the messages.
+struct MinimumShort;
+
+impl std::fmt::Display for MinimumShort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let GitVersion { major, minor, .. } = GitVersion::MINIMUM;
+        write!(f, "{major}.{minor}")
+    }
+}
+
 /// The arguments as text, for error messages.
 pub(crate) fn args_text(args: &[&OsStr]) -> Vec<String> {
     args.iter()
@@ -57,6 +92,7 @@ fn exit_text(code: Option<i32>) -> String {
 pub struct Git {
     program: PathBuf,
     env: Vec<(OsString, OsString)>,
+    version: GitVersion,
 }
 
 impl Git {
@@ -83,14 +119,31 @@ impl Git {
     ///
     /// # Errors
     ///
-    /// [`GitError::NotFound`] when no `git` program is on the `PATH`, and [`GitError::Io`]
-    /// when the current folder cannot be read.
+    /// Then it runs `git --version` once, in the current folder with that environment, and
+    /// refuses a git older than [`GitVersion::MINIMUM`].
+    ///
+    /// # Errors
+    ///
+    /// [`GitError::NotFound`] when no `git` program is on the `PATH`, [`GitError::Io`] when the
+    /// current folder cannot be read or git cannot be started, [`GitError::TooOld`] when git is
+    /// older than the minimum, and [`GitError::Output`] when its version cannot be read.
     pub fn find() -> Result<Git, GitError> {
         let cwd = std::env::current_dir().map_err(|source| GitError::Io { source })?;
-        let mut git = find_in(std::env::var_os("PATH"), &cwd)?;
-        git.env
-            .extend(resolved_env(|name| std::env::var_os(name), &cwd));
+        let program = find_in(std::env::var_os("PATH"), &cwd)?;
+        let mut git = Git {
+            program,
+            env: resolved_env(|name| std::env::var_os(name), &cwd),
+            version: GitVersion::MINIMUM,
+        };
+        let answer = git.run(&[OsStr::new("--version")], &cwd, None, &[])?;
+        git.version = checked(git.program.clone(), &answer)?;
         Ok(git)
+    }
+
+    /// The version `find` read.
+    #[must_use]
+    pub fn version(&self) -> GitVersion {
+        self.version
     }
 
     /// Adds variables to the environment of every command this runner starts.
@@ -199,13 +252,26 @@ fn resolved_env(value: impl Fn(&str) -> Option<OsString>, cwd: &Path) -> Vec<(Os
 
 /// Finds `git` in the search path `path`, a list separated as `PATH` is, with relative entries
 /// resolved from `cwd`. With `None` there is nothing to search and the answer is `NotFound`.
-fn find_in(path: Option<OsString>, cwd: &Path) -> Result<Git, GitError> {
-    which::which_in("git", path, cwd)
-        .map(|program| Git {
+fn find_in(path: Option<OsString>, cwd: &Path) -> Result<PathBuf, GitError> {
+    which::which_in("git", path, cwd).map_err(|_| GitError::NotFound)
+}
+
+/// Reads the answer of `git --version` of `program` and refuses a version below the minimum.
+fn checked(program: PathBuf, answer: &[u8]) -> Result<GitVersion, GitError> {
+    let text = String::from_utf8_lossy(answer);
+    let text = text.trim();
+    let found = GitVersion::parse(text).ok_or_else(|| GitError::Output {
+        args: vec!["--version".to_owned()],
+        message: format!("cannot read a version from {text:?}"),
+    })?;
+    if found < GitVersion::MINIMUM {
+        return Err(GitError::TooOld {
             program,
-            env: Vec::new(),
-        })
-        .map_err(|_| GitError::NotFound)
+            found,
+            required: GitVersion::MINIMUM,
+        });
+    }
+    Ok(found)
 }
 
 #[cfg(test)]
@@ -390,12 +456,86 @@ mod tests {
         Ok(())
     }
 
+    fn version(major: u32, minor: u32, patch: u32) -> GitVersion {
+        GitVersion {
+            major,
+            minor,
+            patch,
+        }
+    }
+
+    // AC: CE-21.3
+    #[test]
+    fn a_version_below_the_minimum_is_too_old() {
+        let program = PathBuf::from("git");
+        let result = checked(program.clone(), b"git version 2.37.9\n");
+        assert!(matches!(
+            result,
+            Err(GitError::TooOld { program: p, found, required })
+                if p == program && found == version(2, 37, 9) && required == GitVersion::MINIMUM
+        ));
+    }
+
+    // AC: CE-21.3
+    #[test]
+    fn the_minimum_version_is_accepted() {
+        let result = checked(PathBuf::from("git"), b"git version 2.38.0\n");
+        assert!(matches!(result, Ok(found) if found == version(2, 38, 0)));
+    }
+
+    // AC: CE-21.3
+    #[test]
+    fn an_unreadable_answer_is_output_with_the_answer() {
+        let result = checked(PathBuf::from("git"), b"nonsense");
+        assert!(
+            matches!(result, Err(GitError::Output { message, .. }) if message.contains("nonsense"))
+        );
+    }
+
+    // AC: CE-21.3
+    #[test]
+    fn not_found_tells_what_to_do() {
+        assert_eq!(
+            GitError::NotFound.to_string(),
+            "git was not found on the PATH. theos needs git 2.38 or newer: install it from \
+             https://git-scm.com/downloads, then open a new terminal or restart the editor."
+        );
+    }
+
+    // AC: CE-21.3
+    #[test]
+    fn too_old_tells_the_version_and_the_program() {
+        let error = GitError::TooOld {
+            program: PathBuf::from("/usr/bin/git"),
+            found: version(2, 34, 1),
+            required: GitVersion::MINIMUM,
+        };
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "git 2.34.1 ({}) is too old. theos needs git 2.38 or newer: update it from \
+                 https://git-scm.com/downloads.",
+                Path::new("/usr/bin/git").display()
+            )
+        );
+    }
+
+    // AC: CE-21.3
+    #[test]
+    fn cancelled_names_the_command() {
+        let error = GitError::Cancelled {
+            args: vec!["log".to_owned(), "--follow".to_owned()],
+        };
+        assert_eq!(error.to_string(), "git log --follow was cancelled");
+    }
+
     #[test]
     fn a_missing_program_is_io() -> Result<(), Box<dyn std::error::Error>> {
         let cwd = tempfile::tempdir()?;
         let git = Git {
             program: cwd.path().join("no-such-git"),
             env: Vec::new(),
+            version: GitVersion::MINIMUM,
         };
         let result = git.run(&[OsStr::new("--version")], cwd.path(), None, &[]);
         assert!(matches!(result, Err(GitError::Io { .. })));
