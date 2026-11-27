@@ -10,8 +10,8 @@ the gate and never merges a waiting PR are part of the gate.
 
 ## 1. Required checks
 
-The required status checks on `main` are five CI jobs: `gate`, `test`, `coverage`, `pr` and
-`approval` (branch protection, administrators included; `ui` joins from P11). Each job runs the
+The required status checks on `main` are six CI jobs: `gate`, `test`, `coverage`, `pr`,
+`approval` and `ui` (branch protection, administrators included). Each job runs the
 checks of the Job column below through `cargo xtask`. A check that fails does not stop the others
 of its job, and the job is red when any of its checks is. The job summary of a run is the table of
 verdicts, one row per check: passed, failed with its findings, or not needed with the reason. A
@@ -23,8 +23,8 @@ none, lists that cannot be read, a detached head), the summary says why above th
 | Check | Job | What it runs | OS |
 |---|---|---|---|
 | `fmt` | `gate` | `cargo fmt --all --check` | Linux |
-| `clippy` | `gate` | `cargo clippy --workspace --all-targets --locked -- -D warnings` | Linux |
-| `test` | `test` | `cargo nextest run --workspace --locked` (profile `ci` in CI, `default` locally; both leave out the slow tests) and `cargo test --doc --workspace --locked` | Linux |
+| `clippy` | `gate` | `cargo clippy --workspace --all-targets --locked -- -D warnings`, and the same for `theos-editor` with `--features engine` | Linux |
+| `test` | `test` | `cargo nextest run --workspace --locked` (profile `ci` in CI, `default` locally; both leave out the slow tests), the same for `theos-editor` with `--features engine`, and `cargo test --doc --workspace --locked` | Linux |
 | `slow-tests` | `gate` | `cargo xtask slow-tests`: `cargo nextest run --workspace --locked --profile slow --no-tests=warn`, only the slow tests; on a pull request only when it can change their outcome (below) | Linux |
 | `docs` | `gate` | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked` | Linux |
 | `deny` | `gate` | `cargo deny --locked check` (licences, advisories, bans, sources) | Linux |
@@ -36,7 +36,13 @@ none, lists that cannot be read, a detached head), the summary says why above th
 | `pr-title` | `pr` | `cargo xtask pr-title`: the title is a Conventional Commit ending with `(PNN)`, `(gate)`, `(docs)` or a release title (`CONTRIBUTING.md` §3) | Linux |
 | `commit-msg` | `gate` | `cargo xtask commit-msg`: every commit of the PR is a Conventional Commit (`CONTRIBUTING.md` §2) | Linux |
 | `approval` | `approval` | fails while the PR touches a protected path and lacks the label `approved` | Linux |
-| `ui` | `ui` | from P11: `pnpm install --frozen-lockfile`, `svelte-check`, `eslint`, `vitest`, Playwright component tests | Linux |
+| `ui` | `ui` | `pnpm install --frozen-lockfile`, `svelte-check`, `eslint`, `vitest`, Playwright tests | Linux |
+
+**Linux packages.** The Tauri crates need system libraries to build. `gate/linux-packages.txt`
+lists them, one per line. The jobs `gate`, `test` and `coverage` install them with
+`apt-get install --no-install-recommends`, through the input `gui-packages` of the setup action.
+The downloaded `.deb` files are cached, keyed by the runner image and the list, so a run installs
+them without downloading. Only a job that saves its caches saves this one.
 
 **Slow tests** are tests that take minutes, such as the map generator's parity and golden runs
 (P08 spec §5.14). A test is slow when a segment of its name, the path nextest shows, starts with
@@ -156,6 +162,7 @@ each check reads, with the place in the code:
 | `lints` | every file name, for `Cargo.toml` and the tool configs in any folder (`xtask/src/checks/lints/config_files.rs:168`, `:243`), and the mirrored files of `gate/` (`:39`) | those names are always code, whatever the folder and the case |
 | `ac-trace` | the umbrella (`xtask/src/umbrella.rs:20`), every `.ts` file (`xtask/src/checks/ac_trace/mod.rs:311`, `:328`) and the branch (`:259`) | the umbrella and `.ts` files are always code, and a `phase/` branch runs every check |
 | `tools` | `gate/tools.toml` (`xtask/src/tools.rs:21`) | code |
+| `ui` | `editor-ui/**` and `editor-ui/e2e/ipc/*.json` (`xtask/src/checks/ui.rs`) | all of it is code: no path of `editor-ui/` is in the first list |
 | `slow-tests` | its own changed-paths rule (`xtask/src/checks/slow.rs:46`) | it only watches workspace crates and the files listed there |
 
 `commit-msg` always runs. `pr-title`, `pr-body` and `approval` always run too, in jobs of their
