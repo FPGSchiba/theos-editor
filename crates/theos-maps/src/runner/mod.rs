@@ -92,6 +92,8 @@ pub(crate) fn execute(
         golden: GoldenRun {
             recipe: plan.recipe_id.clone(),
             seed,
+            inputs: BTreeMap::new(),
+            from: None,
             features: String::new(),
             package: String::new(),
             stages: Vec::new(),

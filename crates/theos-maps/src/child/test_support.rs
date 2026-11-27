@@ -96,7 +96,15 @@ stage!(
 
 /// A registry of the test stages.
 pub(crate) fn registry() -> Registry {
-    let mut registry = Registry::empty();
+    add_test_stages(Registry::empty())
+}
+
+/// The built-in stages and the test stages, for a parent run and a test child in one registry.
+pub(crate) fn registry_with_builtin() -> Registry {
+    add_test_stages(Registry::builtin())
+}
+
+fn add_test_stages(mut registry: Registry) -> Registry {
     registry.add(Box::new(Height));
     registry.add(Box::new(Discharge));
     registry.add(Box::new(Water));

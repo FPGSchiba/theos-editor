@@ -31,10 +31,11 @@ fn main() -> Result<()> {
     }
     let mut out = std::io::stdout().lock();
     let mut runs = Vec::with_capacity(GOLDEN_RUNS.len());
-    for &(recipe, seed) in GOLDEN_RUNS {
+    for spec in GOLDEN_RUNS {
+        let (recipe, seed) = (spec.recipe, spec.seed);
         let started = Instant::now();
         let dir = tempfile::tempdir().context("cannot create a temporary folder")?;
-        let run = compute(recipe, seed, dir.path())
+        let run = compute(spec, dir.path())
             .with_context(|| format!("the golden run {recipe} seed {seed} failed"))?;
         writeln!(
             out,
