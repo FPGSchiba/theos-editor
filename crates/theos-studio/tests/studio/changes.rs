@@ -2,10 +2,10 @@
 
 use std::path::Path;
 
-use theos_studio::Workspace;
 use theos_studio::changes::{Changes, RecordChange, changes};
-use theos_vcs::Cancel;
-use theos_vcs::status::{Change, Entry};
+use theos_studio::{StudioError, Workspace};
+use theos_vcs::status::{Change, Conflict, Entry};
+use theos_vcs::{Cancel, GitError};
 
 use crate::common::{Error, Files, TestResult, files, put};
 use crate::repo::Repo;
@@ -207,5 +207,120 @@ fn changes_neither_sync_nor_write_the_cache() -> TestResult {
     let found = changes(&workspace, &repo.git()?, &Cancel::new())?;
     assert_eq!(record(&found, "T-900")?.unstaged, Change::Modified);
     assert_eq!(cache(repo.top())?, before);
+    Ok(())
+}
+
+/// Commits `path` below `place` with `from` replaced by `side` on a branch and by `main` on
+/// `main`, then merges the branch, which conflicts.
+fn conflict(repo: &Repo, place: &str, path: &str, from: &str, sides: [&str; 2]) -> TestResult {
+    let [side, main] = sides;
+    let folder = repo.top().join(place);
+    repo.run(&["checkout", "-q", "-b", "side"])?;
+    put(&folder, path, edited(&folder, path, from, side)?.as_bytes())?;
+    repo.commit("side")?;
+    repo.run(&["checkout", "-q", "main"])?;
+    put(&folder, path, edited(&folder, path, from, main)?.as_bytes())?;
+    repo.commit("main")?;
+    let merged = repo.run(&[
+        "-c",
+        "user.name=Synthetic",
+        "-c",
+        "user.email=synthetic@example.invalid",
+        "merge",
+        "-q",
+        "side",
+    ]);
+    assert!(merged.is_err(), "the merge did not conflict: {merged:?}");
+    Ok(())
+}
+
+#[test]
+fn a_rename_into_the_project_has_no_project_path_before() -> TestResult {
+    let repo = Repo::committed("content")?;
+    let text =
+        std::fs::read_to_string(repo.top().join("content").join(T901))?.replace("T-901", "T-904");
+    put(repo.top(), "outside.md", text.as_bytes())?;
+    repo.commit("outside")?;
+    let to = "content/lore/truths/T-904.md".to_owned();
+    repo.run(&["mv", "outside.md", &to])?;
+    let found = changes_of(&repo, "content")?;
+    let moved = record(&found, "T-904")?;
+    assert_eq!(moved.path, "lore/truths/T-904.md");
+    assert_eq!(moved.from, None);
+    assert_eq!(moved.repo_path, to.into_bytes());
+    assert_eq!(moved.repo_from.as_deref(), Some(b"outside.md".as_slice()));
+    assert_eq!(moved.staged, Change::Renamed);
+    assert_eq!(found.records.len(), 1, "{:?}", found.records);
+    assert!(found.files.is_empty(), "{:?}", found.files);
+    Ok(())
+}
+
+#[test]
+fn a_rename_out_of_the_project_is_a_file() -> TestResult {
+    let repo = Repo::committed("content")?;
+    let from = format!("content/{T901}");
+    repo.run(&["mv", &from, "moved.md"])?;
+    let found = changes_of(&repo, "content")?;
+    assert!(found.records.is_empty(), "{:?}", found.records);
+    assert!(
+        matches!(
+            found.files.as_slice(),
+            [Entry::Renamed { from: old, to, staged: Change::Renamed, .. }]
+                if *old == from.as_bytes() && to == b"moved.md"
+        ),
+        "{:?}",
+        found.files
+    );
+    Ok(())
+}
+
+#[test]
+fn a_conflict_in_the_body_is_one_record() -> TestResult {
+    let repo = Repo::committed("content")?;
+    let statement = "Synthetic statement A.";
+    conflict(&repo, "content", T900, statement, ["Side.", "Main."])?;
+    let found = changes_of(&repo, "content")?;
+    let conflicted = record(&found, "T-900")?;
+    assert_eq!(conflicted.conflict, Some(Conflict::BothModified));
+    assert_eq!(conflicted.kind.as_deref(), Some("truth"));
+    assert_eq!(conflicted.title.as_deref(), Some("Synthetic truth A"));
+    assert_eq!(found.records.len(), 1, "{:?}", found.records);
+    assert!(found.files.is_empty(), "{:?}", found.files);
+    Ok(())
+}
+
+#[test]
+fn a_conflict_in_the_front_matter_is_named_from_head() -> TestResult {
+    let repo = Repo::committed("content")?;
+    let title = "title: Synthetic truth A";
+    conflict(
+        &repo,
+        "content",
+        T900,
+        title,
+        ["title: Synthetic side title", "title: Synthetic main title"],
+    )?;
+    let working = std::fs::read_to_string(repo.top().join("content").join(T900))?;
+    assert!(working.contains("<<<<<<<"), "{working}");
+    let found = changes_of(&repo, "content")?;
+    let conflicted = record(&found, "T-900")?;
+    assert_eq!(conflicted.conflict, Some(Conflict::BothModified));
+    assert_eq!(conflicted.kind.as_deref(), Some("truth"));
+    assert_eq!(conflicted.title.as_deref(), Some("Synthetic main title"));
+    assert!(found.files.is_empty(), "{:?}", found.files);
+    Ok(())
+}
+
+#[test]
+fn a_cancel_before_the_call_stops_it() -> TestResult {
+    let repo = Repo::committed("")?;
+    let workspace = Workspace::open(repo.top())?;
+    let cancel = Cancel::new();
+    cancel.cancel();
+    let result = changes(&workspace, &repo.git()?, &cancel);
+    assert!(
+        matches!(result, Err(StudioError::Git(GitError::Cancelled { .. }))),
+        "{result:?}"
+    );
     Ok(())
 }

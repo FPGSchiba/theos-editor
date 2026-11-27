@@ -2,7 +2,7 @@
 //! title, renames as one entry, and the changed files that are no records apart.
 
 mod named;
-mod newest;
+mod versions;
 
 use std::path::Path;
 
@@ -14,8 +14,8 @@ use crate::StudioError;
 use crate::repo_path::project_path;
 use crate::top::repo_top;
 use crate::workspace::Workspace;
-use named::named;
-use newest::newest;
+use named::{Named, named};
+use versions::{first_of_conflict, newest};
 
 /// The changes of a project, as git's status shows them.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,7 +60,8 @@ pub struct RecordChange {
 /// Lists the changes of the project of `workspace`: git's status, with each path in the project
 /// folder whose newest version (the working tree; for a path gone from it, the index, else
 /// `HEAD`) is a record of a known kind as a [`RecordChange`], and every other path in
-/// [`Changes::files`].
+/// [`Changes::files`]. A conflicted path is named by the first of its working copy and `HEAD` that
+/// is a record, since conflict markers in the front matter break the working copy.
 ///
 /// Which paths are records is decided from their bytes, not from the index: nothing is synced and
 /// the cache is not written. No lock is taken.
@@ -68,7 +69,8 @@ pub struct RecordChange {
 /// # Errors
 ///
 /// [`StudioError::NotInRepository`] when the project folder is in no repository,
-/// [`StudioError::Git`] when git fails or `cancel` is set while the status is read.
+/// [`StudioError::Git`] when git fails, or with [`GitError::Cancelled`] when `cancel` is set
+/// while the status or the records are read.
 pub fn changes(workspace: &Workspace, git: &Git, cancel: &Cancel) -> Result<Changes, StudioError> {
     let root = workspace.project().root();
     let top = repo_top(git, root)?;
@@ -80,20 +82,44 @@ pub fn changes(workspace: &Workspace, git: &Git, cancel: &Cancel) -> Result<Chan
         top: &top,
     };
     let status = status::status(git, &top, cancel)?;
-    let mut records = Vec::new();
-    let mut files = Vec::new();
-    for entry in status.entries {
-        match project.record(&entry)? {
-            Some(record) => records.push(record),
-            None => files.push(entry),
-        }
-    }
-    records.sort_by(|a, b| a.path.cmp(&b.path));
+    let (records, files) = group(status.entries, cancel, |entry| project.record(entry))?;
     Ok(Changes {
         branch: status.branch,
         records,
         files,
     })
+}
+
+/// The arguments a cancel between the reads of the records names: the reads take their bytes with
+/// `cat-file --batch`.
+const READ_ARGS: [&str; 2] = ["cat-file", "--batch"];
+
+/// Splits `entries` into record changes, sorted by project path, and the other entries, in their
+/// order, with `record`. `cancel` is checked before each entry.
+///
+/// # Errors
+///
+/// [`GitError::Cancelled`] when `cancel` is set, and the errors of `record`.
+fn group(
+    entries: Vec<Entry>,
+    cancel: &Cancel,
+    mut record: impl FnMut(&Entry) -> Result<Option<RecordChange>, GitError>,
+) -> Result<(Vec<RecordChange>, Vec<Entry>), GitError> {
+    let mut records = Vec::new();
+    let mut files = Vec::new();
+    for entry in entries {
+        if cancel.is_cancelled() {
+            return Err(GitError::Cancelled {
+                args: READ_ARGS.map(str::to_owned).to_vec(),
+            });
+        }
+        match record(&entry)? {
+            Some(record) => records.push(record),
+            None => files.push(entry),
+        }
+    }
+    records.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok((records, files))
 }
 
 /// The project in its repository: what turns a status entry into a record change.
@@ -131,10 +157,7 @@ impl InRepo<'_> {
         let Some(path) = project_path(self.folding, &self.place, repo_path) else {
             return Ok(None);
         };
-        let Some(bytes) = newest(self.git, self.top, repo_path)? else {
-            return Ok(None);
-        };
-        let Some(name) = named(&path, &bytes, self.registry) else {
+        let Some(name) = self.name(&path, repo_path, conflict.is_some())? else {
             return Ok(None);
         };
         Ok(Some(RecordChange {
@@ -150,5 +173,88 @@ impl InRepo<'_> {
             untracked,
             conflict,
         }))
+    }
+
+    /// The name of the record at the project path `path` (`repo_path` in git's spelling): from
+    /// its newest version, or for a `conflicted` path from the first of the working copy and
+    /// `HEAD` that is a record.
+    fn name(
+        &self,
+        path: &str,
+        repo_path: &[u8],
+        conflicted: bool,
+    ) -> Result<Option<Named>, GitError> {
+        let of = |bytes: &[u8]| named(path, bytes, self.registry);
+        if conflicted {
+            return first_of_conflict(self.git, self.top, repo_path, of);
+        }
+        Ok(newest(self.git, self.top, repo_path)?.and_then(|bytes| of(&bytes)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::TestResult;
+
+    fn untracked(path: &str) -> Entry {
+        Entry::Untracked {
+            path: path.as_bytes().to_vec(),
+        }
+    }
+
+    #[test]
+    fn a_cancel_between_the_entries_stops_the_grouping() {
+        let cancel = Cancel::new();
+        let mut seen = Vec::new();
+        let result = group(
+            vec![untracked("a.md"), untracked("b.md"), untracked("c.md")],
+            &cancel,
+            |entry| {
+                seen.push(entry.clone());
+                cancel.cancel();
+                Ok(None)
+            },
+        );
+        assert!(
+            matches!(&result, Err(GitError::Cancelled { args }) if args == &READ_ARGS),
+            "{result:?}"
+        );
+        assert_eq!(seen, [untracked("a.md")]);
+    }
+
+    #[test]
+    fn without_a_cancel_every_entry_is_grouped() -> TestResult {
+        let result = group(
+            vec![untracked("b.md"), untracked("x.txt"), untracked("a.md")],
+            &Cancel::new(),
+            |entry| {
+                let Entry::Untracked { path } = entry else {
+                    return Ok(None);
+                };
+                let path = String::from_utf8_lossy(path).into_owned();
+                let Some(id) = path.strip_suffix(".md").map(str::to_owned) else {
+                    return Ok(None);
+                };
+                Ok(Some(RecordChange {
+                    id,
+                    kind: None,
+                    title: None,
+                    repo_path: path.clone().into_bytes(),
+                    path,
+                    from: None,
+                    repo_from: None,
+                    staged: Change::Unchanged,
+                    unstaged: Change::Unchanged,
+                    untracked: true,
+                    conflict: None,
+                }))
+            },
+        );
+        let (records, files) = result?;
+        let ids: Vec<&str> = records.iter().map(|record| record.id.as_str()).collect();
+        assert_eq!(ids, ["a", "b"]);
+        assert_eq!(files, [untracked("x.txt")]);
+        Ok(())
     }
 }
