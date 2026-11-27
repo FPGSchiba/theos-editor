@@ -11,7 +11,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P02 | Records and grammars | theos-editor | done | #16 | #17 |
 | P03 | Kinds, index, search, lenses | theos-editor | done | #18 | #20 |
 | P04 | Validation, lore rules, ledger, formalism mirror | theos-editor | done | #21 | #28 |
-| P05 | CLI and hook | theos-editor | pr-open | #35, #41 | #42 |
+| P05 | CLI and hook | theos-editor | done | #35, #41 | #42 |
 | P06 | Command layer and repo lock | theos-editor | done | #36 | #39 |
 | P07 | Agent sessions, review, MCP propose | theos-editor | todo | | |
 | P08 | Map format and terrain generator | theos-editor | done | #27 | #44 |
@@ -44,7 +44,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P45 | Atlas level switcher | theos-editor | todo | | |
 | P46 | Git read | theos-editor | todo | | |
 | P47 | Git write | theos-editor | todo | | |
-| P48 | MCP read | theos-editor | todo | | |
+| P48 | MCP read | theos-editor | spec-pr | branch `spec/P48-mcp-read` | |
 | P49 | Releases and the check action | theos-editor | todo | | |
 | P50 | Leaner CI | theos-editor | pr-open | #45, #46 | draft, branch `phase/P50-leaner-ci-2` |
 
@@ -81,11 +81,6 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
     Jann's ruling on R5-I1.
   - The abandoned first branch `phase/P50-leaner-ci` (its plan commit has the scope `plan`,
     which `commit-msg` refuses) can be deleted.
-- P05's build PR #42 (a draft labelled `needs-jann`) is ready for Jann's merge.
-  - The final review loop reached its cap of 5 rounds with one Minor open, R5-1. Four `hook
-    install` cases now have binary tests (face6ef), as the merged spec (#41, §5.14) says.
-  - `main` is merged, with P06 (#39). As agreed with P06, `theos new` now writes through P06's
-    `Create` command (171a7d6).
 - Follow-up from P06: the class "a command changes which files are records without the verdict
   judging it" (m4-4, m5-1, and N1–N3 of PR #39) needs a general design. One option is a check
   after the write that compares the reindex with the preview and heals the cache; another is a
