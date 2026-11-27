@@ -156,7 +156,6 @@ mod tests {
         assert!(judge_pnpm("10.4.0", "10.4.1").is_some());
     }
 
-    // AC: CE-32.3
     #[test]
     fn a_wrong_node_major_or_pnpm_version_is_a_finding() {
         let package = r#"{"packageManager":"pnpm@10.4.1"}"#;
