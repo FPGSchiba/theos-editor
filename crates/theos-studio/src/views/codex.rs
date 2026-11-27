@@ -145,6 +145,44 @@ pub struct TargetRef {
     pub exists: bool,
 }
 
+/// The result of `codex::graph`: the records around one record and the links between them.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct GraphView {
+    /// The id the walk started from.
+    pub root: String,
+    /// How many link steps the walk was allowed.
+    pub depth: u8,
+    /// The records reached, by distance, then path.
+    pub nodes: Vec<NodeView>,
+    /// The links between the nodes.
+    pub edges: Vec<EdgeView>,
+    /// Whether more records lie within `depth` than `nodes` holds.
+    pub truncated: bool,
+}
+
+/// One record of a graph.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct NodeView {
+    /// The record, or the bare id of a link target no record has.
+    #[serde(flatten)]
+    pub target: TargetRef,
+    /// The link steps from the root; the root is 0.
+    pub distance: u8,
+}
+
+/// One link between two nodes.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, JsonSchema)]
+pub struct EdgeView {
+    /// The id of the record the link sits in.
+    pub from: String,
+    /// The id the link names.
+    pub to: String,
+    /// The slot text, such as `field:parent` or `beat:with`.
+    pub slot: String,
+    /// The text after `#` in a body link.
+    pub fragment: Option<String>,
+}
+
 /// One link with both ends.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct LinkView {

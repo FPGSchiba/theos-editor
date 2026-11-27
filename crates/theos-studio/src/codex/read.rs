@@ -2,15 +2,17 @@
 
 use std::collections::HashMap;
 
-use theos_content::{EffectiveLens, Layer, LensData, LinkRef, RecordSummary, read_record};
+use theos_content::{EffectiveLens, LensData, RecordSummary, read_record};
+
+use super::lookup::Lookup;
 
 use crate::views::check::FindingView;
 use crate::views::codex::{
-    BeliefView, LensFieldView, LensValueView, LensView, LinkView, OverrideView, ReadView,
-    RecordRef, RecordView, TargetRef,
+    BeliefView, LensFieldView, LensValueView, LensView, OverrideView, ReadView, RecordRef,
+    RecordView,
 };
 use crate::views::ledger::TruthView;
-use crate::{Marks, StudioError, Workspace};
+use crate::{StudioError, Workspace};
 
 /// What to read.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -19,77 +21,6 @@ pub enum ReadTarget {
     Id(String),
     /// The record at this project-relative path; a backslash counts as `/`.
     Path(String),
-}
-
-/// Everything one call looks records up in, built once.
-struct Lookup {
-    marks: Marks,
-    by_path: HashMap<String, RecordSummary>,
-    by_id: HashMap<String, RecordSummary>,
-}
-
-impl Lookup {
-    fn load(ws: &Workspace) -> Result<Lookup, StudioError> {
-        let mut by_path = HashMap::new();
-        let mut by_id: HashMap<String, RecordSummary> = HashMap::new();
-        // Ordered by path, so the first record of a duplicated id stays.
-        for summary in ws.index().records()? {
-            by_id
-                .entry(summary.id.clone())
-                .or_insert_with(|| summary.clone());
-            by_path.insert(summary.path.clone(), summary);
-        }
-        Ok(Lookup {
-            marks: Marks::load(ws.index())?,
-            by_path,
-            by_id,
-        })
-    }
-
-    fn of_layer(&self, layer: &Layer) -> RecordRef {
-        self.of_path(&layer.path, &layer.id, Some(&layer.kind))
-    }
-
-    /// The record at `path`; a path the index lacks falls back to the words of the caller.
-    fn of_path(&self, path: &str, id: &str, kind: Option<&str>) -> RecordRef {
-        match self.by_path.get(path) {
-            Some(summary) => RecordRef::from_summary(summary, &self.marks),
-            None => RecordRef {
-                path: Some(path.to_owned()),
-                kind: kind.map(str::to_owned),
-                mark: self.marks.of_path(path),
-                ..RecordRef::missing(id)
-            },
-        }
-    }
-
-    /// The record an id names, with the marks of every record that has the id.
-    fn target(&self, id: &str) -> TargetRef {
-        match self.by_id.get(id) {
-            Some(summary) => TargetRef {
-                record: RecordRef {
-                    mark: self.marks.of_id(id),
-                    ..RecordRef::from_summary(summary, &self.marks)
-                },
-                exists: true,
-            },
-            None => TargetRef {
-                record: RecordRef::missing(id),
-                exists: false,
-            },
-        }
-    }
-
-    fn link(&self, link: &LinkRef) -> LinkView {
-        LinkView {
-            slot: link.slot.as_db(),
-            fragment: link.fragment.clone(),
-            line: saturate(link.position.line),
-            column: saturate(link.position.column),
-            source: self.of_path(&link.source_path, &link.source_id, None),
-            target: self.target(&link.target),
-        }
-    }
 }
 
 /// The record `target` names, with its text, links, backlinks, children, findings, lens and
@@ -217,10 +148,6 @@ fn value_view(data: &LensData) -> LensValueView {
         LensData::Text(text) => LensValueView::Text(text.clone()),
         LensData::Links(ids) => LensValueView::Links(ids.clone()),
     }
-}
-
-fn saturate(value: usize) -> u32 {
-    u32::try_from(value).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]
