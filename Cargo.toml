@@ -54,11 +54,13 @@ proc-macro2 = { version = "1.0", features = ["span-locations"] }
 proptest = { version = "1.12", default-features = false, features = ["std"] }
 pulldown-cmark = { version = "0.13", default-features = false }
 regex = "1.13"
+rmcp = { version = "3.12", default-features = false, features = ["server", "transport-io", "macros"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
 quick-xml = "0.41"
 rand_core = "0.10"
 rand_pcg = "0.10"
 same-file = "1.0"
+schemars = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_ignored = "0.1.14"
 serde_json = { version = "1.0", features = ["float_roundtrip"] }
@@ -75,6 +77,7 @@ thiserror = "2.0"
 # Scalar only: `simd` uses approximate reciprocals that differ by CPU, `std` brings std
 # trigonometry; `no-std-float` takes the float functions from `libm` (P08 §4.3).
 tiny-skia = { version = "0.12.0", default-features = false, features = ["no-std-float"] }
+tokio = { version = "1", features = ["rt", "io-std", "macros"] }
 toml = "1.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

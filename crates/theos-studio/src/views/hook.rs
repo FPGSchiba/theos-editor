@@ -8,7 +8,7 @@ use crate::hook::{HookFile, Installed};
 
 /// The result of `theos hook install` as JSON: the keys of `pre-commit` at the top, and
 /// `pre_merge_commit` with the same keys.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct HookView {
     #[serde(flatten)]
     pre_commit: HookFileView,
@@ -16,7 +16,7 @@ pub struct HookView {
 }
 
 /// One hook file of [`HookView`].
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct HookFileView {
     hook: String,
     replaced: bool,

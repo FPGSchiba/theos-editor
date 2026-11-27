@@ -2,7 +2,9 @@
 //! is always present; an absent value is `null`.
 
 pub mod check;
+pub mod codex;
 pub mod hook;
 pub mod ledger;
 pub mod new;
+pub mod project;
 pub mod schema;

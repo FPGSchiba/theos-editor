@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use theos_content::{IndexError, KindRegistry, ProjectError, RegistryError};
+use theos_content::{IndexError, KindRegistry, ProjectError, ReadError, RegistryError};
 
 use crate::CommandError;
 use crate::create::CreateError;
@@ -63,6 +63,26 @@ pub enum StudioError {
         kind: String,
         /// The registered kinds, in order.
         known: Vec<String>,
+    },
+    /// A path or id names no record.
+    #[error("no record `{what}`")]
+    UnknownRecord {
+        /// What was asked for.
+        what: String,
+    },
+    /// A record file could not be read.
+    #[error("{}: {source}", path.display())]
+    Read {
+        /// The file.
+        path: PathBuf,
+        /// What went wrong.
+        source: ReadError,
+    },
+    /// A filter of a read tool is not valid.
+    #[error("{message}")]
+    InvalidFilter {
+        /// What is wrong with it.
+        message: String,
     },
     /// `theos new` could not make the record.
     #[error(transparent)]
