@@ -15,6 +15,7 @@ use std::process::{Command, Output};
 
 use crate::Result;
 use crate::ci::CiEvent;
+use crate::report;
 use crate::scope::{self, Scope};
 use crate::ui_tools;
 use crate::verdict::{Check, Finding, Verdict};
@@ -170,16 +171,31 @@ pub fn run(root: &Path, _ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<V
 
 /// The `ui` check as its own subcommand, `cargo xtask ui`: the scope of the run decides first, as
 /// it does for `cargo xtask gate`, so a pull request that changes no code gets the verdict "not
-/// needed" and the job summary lists it. `_out` is not used.
+/// needed" and the job summary lists it. Returns the verdict and why every check runs, when the
+/// scope says so; the note goes to `out` as the gate prints it, and the summary shows it.
 ///
 /// # Errors
 ///
-/// Never fails today, as [`run`].
-pub fn run_scoped(root: &Path, ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<Verdict> {
-    Ok(verdict_under(
-        &scope::for_run(root, ci),
+/// Fails only when `out` cannot be written.
+pub fn run_scoped(
+    root: &Path,
+    ci: Option<&CiEvent>,
+    out: &mut dyn Write,
+) -> Result<(Verdict, Option<String>)> {
+    let scope = scope::for_run(root, ci);
+    let every_because = match &scope {
+        Scope::Every { note } => note.clone(),
+        Scope::DocsOnly => None,
+    };
+    if let Some(note) = &every_because {
+        report::write_note(out, &format!("every check runs: {note}"))
+            .map_err(report::output_error)?;
+    }
+    let verdict = verdict_under(
+        &scope,
         root,
         || ui_tools::check(root),
         |step| run_step(root, step),
-    ))
+    );
+    Ok((verdict, every_because))
 }

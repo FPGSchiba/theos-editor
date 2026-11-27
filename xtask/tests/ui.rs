@@ -186,3 +186,32 @@ fn check_name_round_trips() {
     assert_eq!(Check::from_name("ui"), Some(Check::Ui));
     assert_eq!(Check::Ui.name(), "ui");
 }
+
+// AC: CE-08C.2
+#[test]
+fn the_summary_says_why_every_check_runs() -> TestResult {
+    // A push runs every check for a reason other than a change to code; `gate.md` §1 has the job
+    // summary say why above the table.
+    let root = tempfile::tempdir()?;
+    let event = root.path().join("event.json");
+    fs::write(&event, r#"{"before":"a","after":"b"}"#)?;
+    let summary = root.path().join("summary.md");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_xtask"))
+        .arg("--root")
+        .arg(root.path())
+        .arg("ui")
+        .env("GITHUB_ACTIONS", "true")
+        .env("GITHUB_EVENT_NAME", "push")
+        .env("GITHUB_EVENT_PATH", &event)
+        .env("GITHUB_STEP_SUMMARY", &summary)
+        .output()?;
+    assert!(output.status.success(), "{output:?}");
+    let text = fs::read_to_string(&summary)?;
+    assert!(
+        text.contains(
+            "Why every check ran: this is a push, which has no pull request to narrow by"
+        ),
+        "{text}"
+    );
+    Ok(())
+}

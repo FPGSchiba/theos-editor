@@ -1184,8 +1184,8 @@ fn step_condition(file: &str, job: &str, position: usize) -> Option<&'static str
         ("approval.yml", "approval", 1) => Some(APPROVAL_FALLBACK_IF),
         ("approval.yml", "approval", 2) => Some(APPROVAL_XTASK_IF),
         ("approval.yml", "approval", 3) => Some(APPROVAL_BUILD_IF),
-        // The set-up of the UI after the question. The `ui` job also runs its check unless the
-        // answer is `false`.
+        // The set-up of the UI after the question. The check step of the `ui` job has no
+        // condition: it always runs and reports its verdict.
         ("ci.yml", "ui", 3) | ("platforms.yml", "windows" | "macos", 3) => Some(UI_EXISTS_IF),
         _ => None,
     }

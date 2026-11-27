@@ -276,7 +276,7 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         Command::AcTrace { phase } => {
             ac_trace::run_phase(&root, *phase, ci.is_some(), &shared, &mut out)?
         }
-        Command::Ui => ui::run_scoped(&root, ci.as_ref(), &mut out)?,
+        Command::Ui => return run_ui(&root, ci.as_ref(), &mut out),
         Command::Needs {
             checks,
             requires_package,
@@ -336,6 +336,14 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         } => settings::run_apply(&root, repo.as_deref())?,
     };
     report::emit(&verdict, ci.is_some(), &mut out)?;
+    Ok(verdict.passed())
+}
+
+/// The `ui` check with the scope of the run: the table, and under GitHub Actions the summary with
+/// why every check ran, when the scope says so. Says whether it passed.
+fn run_ui(root: &Path, ci: Option<&ci::CiEvent>, out: &mut dyn Write) -> anyhow::Result<bool> {
+    let (verdict, every_because) = ui::run_scoped(root, ci, out)?;
+    report::emit_because(&verdict, every_because.as_deref(), ci.is_some(), out)?;
     Ok(verdict.passed())
 }
 
