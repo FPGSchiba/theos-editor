@@ -11,16 +11,17 @@ use theos_maps::{CancelToken, RunError, RunRequest, describe, run};
 use crate::support::{TestResult, request};
 
 /// The ids of the recipes built into the crate.
-const BUILT_IN: [&str; 5] = [
+const BUILT_IN: [&str; 6] = [
     "choir-hall-ruin",
     "fixture-small",
     "hearth-valley",
     "hearth-valley-omega",
+    "ruin-undercroft",
     "works-halls",
 ];
 
 /// The built-in interior recipes; their first stage is `envelope`, a terrain's is `grid`.
-const INTERIORS: [&str; 2] = ["choir-hall-ruin", "works-halls"];
+const INTERIORS: [&str; 3] = ["choir-hall-ruin", "ruin-undercroft", "works-halls"];
 
 const GRID: &str = "\n[[stage]]\nid = \"grid\"\nedges = [\"south\"]\n";
 const TECTONICS: &str = "\n[[stage]]\nid = \"tectonics\"\n";
@@ -98,7 +99,14 @@ fn describe_lists_the_three_built_in_recipes() -> TestResult {
             .iter()
             .find(|r| r.id == id)
             .ok_or_else(|| format!("{id} is not described"))?;
-        assert!(info.inputs.is_empty(), "{id}");
+        // Only the child `ruin-undercroft` declares an input: the parent ruin (spec §5.13).
+        if id == "ruin-undercroft" {
+            let keys: Vec<&str> = info.inputs.keys().map(String::as_str).collect();
+            assert_eq!(keys, ["feature"], "{id}");
+            assert_eq!(info.inputs["feature"]["type"], "feature", "{id}");
+        } else {
+            assert!(info.inputs.is_empty(), "{id}");
+        }
         assert!(info.seeded, "{id}");
         assert!(!info.title.is_empty(), "{id}");
         let first = if INTERIORS.contains(&id) {

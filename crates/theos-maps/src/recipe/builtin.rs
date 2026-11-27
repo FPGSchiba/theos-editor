@@ -18,6 +18,10 @@ pub(crate) const BUILTIN: &[(&str, &str)] = &[
         include_str!("../../recipes/hearth-valley-omega.toml"),
     ),
     (
+        "ruin-undercroft.toml",
+        include_str!("../../recipes/ruin-undercroft.toml"),
+    ),
+    (
         "works-halls.toml",
         include_str!("../../recipes/works-halls.toml"),
     ),

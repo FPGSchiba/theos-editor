@@ -2,6 +2,7 @@
 //!
 //! ```text
 //! cargo run -p theos-maps --release --example run -- <recipe>… --seeds 1..8 --out <dir> [--recipes <dir>]
+//!     [--from <parent.theosmap> --input feature=<id>]
 //! ```
 //!
 //! For each recipe and seed it writes the run's outputs and its `manifest.json` (canonical JSON)
@@ -54,6 +55,20 @@ struct Args {
     /// How many runs go at once.
     #[arg(long, default_value_t = 4)]
     jobs: usize,
+    /// The parent package of a child recipe.
+    #[arg(long)]
+    from: Option<PathBuf>,
+    /// A text input of the recipe, `name=value`, such as `feature=ruin-1`; may be given more
+    /// than once.
+    #[arg(long = "input", value_name = "NAME=VALUE", value_parser = input)]
+    inputs: Vec<(String, String)>,
+}
+
+/// Parses `name=value`.
+fn input(text: &str) -> Result<(String, String), String> {
+    text.split_once('=')
+        .map(|(name, value)| (name.trim().to_owned(), value.trim().to_owned()))
+        .ok_or_else(|| format!("`{text}` is not `name=value`"))
 }
 
 /// Parses `first..last` (both included) or a single seed.
@@ -127,8 +142,12 @@ fn run_seed(job: usize, recipe: &str, seed: u64, args: &Args) -> Result<Done> {
     let request = RunRequest {
         recipe: recipe.to_owned(),
         seed,
-        inputs: serde_json::Map::new(),
-        from: None,
+        inputs: args
+            .inputs
+            .iter()
+            .map(|(name, value)| (name.clone(), value.as_str().into()))
+            .collect(),
+        from: args.from.clone(),
         notes: Vec::new(),
         options: RunOptions::default(),
     };

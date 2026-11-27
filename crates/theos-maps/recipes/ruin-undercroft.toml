@@ -1,0 +1,82 @@
+# Intent: the undercroft below a terrain ruin, a child map of the ruin feature (CE-80.4). Entered
+# from the south rim; the crypt in the middle is the goal. One arc reaches the crypt through a
+# lock, the other holds its key and is joined to the crypt only by a drop out of it. Two open
+# passages merge into one hall; leaves and the exit hang off the start, the arcs and the crypt.
+# The frame is the 80 m of spec §5.12, a whole 4 x 4 lattice of 20 m cells, square and dense
+# like `choir-hall-ruin` (R42, R45): with 8 or 9 rooms the plan uses more than half of the
+# floor (a 2 x 2 crypt leaves no loop around it on 4 x 4; a 5 x 5 lattice of 16 m stays near
+# 50 %). The ruin's position decides only where the frame lies in the parent. Room types are
+# ids, not canon.
+id      = "ruin-undercroft"
+title   = "Ruin undercroft"
+kind    = "interior"
+grid    = [80, 80]
+size_km = [0.08, 0.08]
+
+[inputs]
+feature = { type = "feature", parent_types = ["ruin"] }
+
+[[stage]]
+id       = "envelope"
+shape    = "rect"
+margin_m = 0.0
+pitch_m  = 20.0
+jitter_m = 3.0
+
+[[stage]]
+id = "mission"
+  [[stage.room]]
+  type = "entrance"
+  role = "start"
+  [[stage.room]]
+  type      = "crypt"
+  role      = "goal"
+  footprint = [2, 1]
+  [[stage.room]]
+  type  = "passage"
+  role  = "path"
+  count = [4, 5]
+  [[stage.room]]
+  type  = "ossuary"
+  role  = "leaf"
+  count = 2   # with the store, as many leaves as `leaf` places at most: no generic leaf
+  [[stage.room]]
+  type  = "store"
+  role  = "leaf"
+  [[stage.room]]
+  type = "exit"
+  role = "exit"
+  [[stage.rule]]
+  rule    = "main_cycle"
+  side    = "south"
+  cycle   = "lock_key"
+  min_arc = 2
+  [[stage.rule]]
+  rule  = "merge_hall"   # joins two open passages into one hall
+  mode  = "merge"
+  count = 1
+  [[stage.rule]]
+  rule       = "leaf"
+  count      = [2, 3]
+  from_roles = ["start", "path", "goal"]
+  [[stage.rule]]
+  rule       = "leaf"
+  role       = "exit"
+  from_roles = ["start", "path", "goal"]
+
+[[stage]]
+id = "space"
+
+[[stage]]
+id = "cover"
+
+[[stage]]
+id = "playability"
+
+[constraints]
+"stages.mission.short"                  = [0, 0]
+"stages.playability.rooms"              = [6, 9]
+"stages.playability.critical_path_m"    = [150, 340]
+"stages.playability.dead_end_pct"       = [30, 50]
+"stages.playability.cycles"             = [1, 1]
+"stages.playability.footprint_used_pct" = [50, 75]   # R45: the dense floor

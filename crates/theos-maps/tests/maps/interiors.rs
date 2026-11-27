@@ -451,15 +451,48 @@ fn the_summary_holds_the_mission_entries() -> TestResult {
     Ok(())
 }
 
-/// The built-in interior recipes that run on their own (the child `ruin-undercroft` needs a
-/// parent package; ruling R2 keeps it out of these tests).
-const BUILTIN_INTERIORS: [&str; 2] = ["choir-hall-ruin", "works-halls"];
+/// The built-in interior recipes, each with whether it is a child of a terrain ruin: the child
+/// `ruin-undercroft` runs from `fixture-small` seed 1 and its ruin ([`ruin_parent`], ruling R2).
+const BUILTIN_INTERIORS: [(&str, bool); 3] = [
+    ("choir-hall-ruin", false),
+    ("ruin-undercroft", true),
+    ("works-halls", false),
+];
+
+/// Runs the built-in `recipe` with `seed` into a temporary folder, from `parent` (its package
+/// path and ruin id) when `child` is set, and reads back its package.
+fn run_builtin(
+    recipe: &str,
+    seed: u64,
+    child: bool,
+    parent: &(PathBuf, String),
+) -> Result<(theos_map_format::Package, theos_maps::RunManifest), Box<dyn std::error::Error>> {
+    if !child {
+        return Ok(run_package(recipe, seed, &[]).map_err(|e| e.to_string())?);
+    }
+    let out = tempfile::tempdir()?;
+    let mut r = request(recipe, seed);
+    r.from = Some(parent.0.clone());
+    r.inputs
+        .insert("feature".to_owned(), parent.1.as_str().into());
+    let manifest = run(
+        &r,
+        &[],
+        out.path(),
+        &mut |_: &Progress| {},
+        &CancelToken::new(),
+    )?;
+    let package = read_package(&out.path().join(&manifest.outputs["package"]))?;
+    Ok((package, manifest))
+}
 
 // AC: CE-80.1
 #[test]
 fn builtins_produce_all_outputs() -> TestResult {
-    for recipe in BUILTIN_INTERIORS {
-        let (package, manifest) = run_package(recipe, 1, &[]).map_err(|e| e.to_string())?;
+    let parent_dir = tempfile::tempdir()?;
+    let parent = ruin_parent(parent_dir.path())?;
+    for (recipe, child) in BUILTIN_INTERIORS {
+        let (package, manifest) = run_builtin(recipe, 1, child, &parent)?;
         for output in ["base", "blueprint", "graph", "features", "package"] {
             assert!(
                 manifest.outputs.contains_key(output),
@@ -524,16 +557,18 @@ fn fixed_point(package: &theos_map_format::Package) -> std::collections::BTreeSe
 }
 
 // AC: CE-80.2
-// About 5 s in a release build, so not a `slow_` test (`docs/gate.md`).
+// About 6 s in a release build, the child runs included, so not a `slow_` test (`docs/gate.md`).
 #[test]
 fn builtins_pass_playability_on_seeds_1_to_8() -> TestResult {
     use theos_map_format::{LayerData, LayerKey};
-    for recipe in BUILTIN_INTERIORS {
+    let parent_dir = tempfile::tempdir()?;
+    let parent = ruin_parent(parent_dir.path())?;
+    for (recipe, child) in BUILTIN_INTERIORS {
         for seed in 1..=8 {
             let at = format!("{recipe} seed {seed}");
             // A run whose analysis reports a finding fails with an error (spec §5.9).
             let (package, manifest) =
-                run_package(recipe, seed, &[]).map_err(|e| format!("{at}: {e}"))?;
+                run_builtin(recipe, seed, child, &parent).map_err(|e| format!("{at}: {e}"))?;
             assert_eq!(
                 manifest.results.get("pass"),
                 Some(&serde_json::Value::Bool(true)),
@@ -571,5 +606,224 @@ fn builtins_pass_playability_on_seeds_1_to_8() -> TestResult {
             );
         }
     }
+    Ok(())
+}
+
+/// Reads the package at `path`.
+fn read_package(
+    path: &std::path::Path,
+) -> Result<theos_map_format::Package, Box<dyn std::error::Error>> {
+    Ok(theos_map_format::read(std::io::BufReader::new(
+        std::fs::File::open(path)?,
+    ))?)
+}
+
+/// The id of the first feature of `package` whose `type` is `ty`.
+fn id_of_type(package: &theos_map_format::Package, ty: &str) -> Option<String> {
+    package
+        .features
+        .features
+        .iter()
+        .find(|f| text(f, "type") == Some(ty))
+        .map(id_of)
+}
+
+/// Runs `fixture-small` seed 1 into `dir`: the path of its package and the id of its one ruin.
+fn ruin_parent(dir: &std::path::Path) -> Result<(PathBuf, String), Box<dyn std::error::Error>> {
+    let manifest = run(
+        &request("fixture-small", 1),
+        &[],
+        dir,
+        &mut |_: &Progress| {},
+        &CancelToken::new(),
+    )?;
+    let path = dir.join(&manifest.outputs["package"]);
+    let ruin = id_of_type(&read_package(&path)?, "ruin").ok_or("fixture-small places no ruin")?;
+    Ok((path, ruin))
+}
+
+/// A `ruin-undercroft` request with seed 1, from `from`, with `feature` as its feature input.
+fn undercroft(from: Option<&std::path::Path>, feature: Option<&str>) -> theos_maps::RunRequest {
+    let mut r = request("ruin-undercroft", 1);
+    r.from = from.map(std::path::Path::to_path_buf);
+    if let Some(feature) = feature {
+        r.inputs.insert("feature".to_owned(), feature.into());
+    }
+    r
+}
+
+/// Runs `r` into `out`: the manifest or the error, and how many pipeline stages started.
+fn run_counting(
+    r: &theos_maps::RunRequest,
+    out: &std::path::Path,
+) -> (Result<theos_maps::RunManifest, RunError>, u32) {
+    let mut stages_run = 0_u32;
+    let result = run(
+        r,
+        &[],
+        out,
+        &mut |p: &Progress| {
+            if p.done == 0 && p.stage != "constraints" {
+                stages_run += 1;
+            }
+        },
+        &CancelToken::new(),
+    );
+    (result, stages_run)
+}
+
+/// The point of the feature `id` of `package`.
+fn point_of(package: &theos_map_format::Package, id: &str) -> Option<[f64; 2]> {
+    let f = package.features.features.iter().find(|f| id_of(f) == id)?;
+    match f.geometry.as_ref().map(|g| &g.value) {
+        Some(geojson::GeometryValue::Point { coordinates }) => {
+            let xy = coordinates.as_slice();
+            Some([*xy.first()?, *xy.get(1)?])
+        }
+        _ => None,
+    }
+}
+
+// AC: CE-80.4
+#[test]
+fn ruin_child_frame_and_parent() -> TestResult {
+    let (parent_dir, out) = (tempfile::tempdir()?, tempfile::tempdir()?);
+    let (from, ruin) = ruin_parent(parent_dir.path())?;
+    let manifest = run(
+        &undercroft(Some(&from), Some(&ruin)),
+        &[],
+        out.path(),
+        &mut |_: &Progress| {},
+        &CancelToken::new(),
+    )?;
+    assert_eq!(
+        manifest.results.get("pass"),
+        Some(&serde_json::Value::Bool(true)),
+        "{:?}",
+        manifest.results
+    );
+    let package = read_package(&out.path().join(&manifest.outputs["package"]))?;
+    assert_eq!(package.manifest.kind, "interior");
+    let frame = &package.manifest.frame;
+    let parent = frame.parent.as_ref().ok_or("no parent in the frame")?;
+    assert_eq!(
+        parent.package_sha256,
+        theos_map_format::sha256_hex(&std::fs::read(&from)?)
+    );
+    assert_eq!(parent.feature, ruin);
+    // The frame is centred on the ruin's point, its corner snapped to whole 1 m cells with
+    // `child_frame`'s rounding: half to even.
+    let at = point_of(&read_package(&from)?, &ruin).ok_or("the ruin has no point")?;
+    let expected = at.map(|v| (v - 40.0).round_ties_even());
+    assert_eq!(frame.origin_m, Some(expected));
+    assert_eq!(manifest.frame.origin_m, Some(expected));
+    assert_eq!(frame.size_m, [80.0, 80.0]);
+    assert_eq!(frame.cell_m, 1.0);
+    Ok(())
+}
+
+// AC: CE-80.4
+#[test]
+fn ruin_child_repeats() -> TestResult {
+    let parent_dir = tempfile::tempdir()?;
+    let (from, ruin) = ruin_parent(parent_dir.path())?;
+    let mut packages = Vec::new();
+    for _ in 0..2 {
+        let out = tempfile::tempdir()?;
+        let manifest = run(
+            &undercroft(Some(&from), Some(&ruin)),
+            &[],
+            out.path(),
+            &mut |_: &Progress| {},
+            &CancelToken::new(),
+        )?;
+        packages.push(std::fs::read(
+            out.path().join(&manifest.outputs["package"]),
+        )?);
+    }
+    assert!(
+        packages[0] == packages[1],
+        "two runs gave different packages"
+    );
+    Ok(())
+}
+
+// AC: CE-80.4
+#[test]
+fn ruin_child_refusals() -> TestResult {
+    use theos_maps::child::ChildError;
+    let parent_dir = tempfile::tempdir()?;
+    let (from, _) = ruin_parent(parent_dir.path())?;
+    let parent = read_package(&from)?;
+    let town = id_of_type(&parent, "town").ok_or("fixture-small places no town")?;
+    let out = tempfile::tempdir()?;
+
+    let (result, stages_run) = run_counting(&undercroft(Some(&from), Some(&town)), out.path());
+    assert!(
+        matches!(&result, Err(RunError::Child(ChildError::WrongType { id, ty, accepted }))
+            if *id == town && ty == "town" && accepted == &["ruin".to_owned()]),
+        "a settlement: {:?}",
+        result.map(|_| ())
+    );
+    assert_eq!(stages_run, 0, "a settlement: no stage ran");
+
+    let (result, stages_run) = run_counting(&undercroft(Some(&from), Some("ruin-99")), out.path());
+    assert!(
+        matches!(&result, Err(RunError::Child(ChildError::UnknownFeature { id, .. }))
+            if id == "ruin-99"),
+        "an unknown id: {:?}",
+        result.map(|_| ())
+    );
+    assert_eq!(stages_run, 0, "an unknown id: no stage ran");
+
+    let (result, stages_run) = run_counting(&undercroft(None, None), out.path());
+    assert!(
+        matches!(&result, Err(RunError::Recipe(RecipeError::Invalid { parameter, .. }))
+            if parameter.as_deref() == Some("from")),
+        "no from: {:?}",
+        result.map(|_| ())
+    );
+    assert_eq!(stages_run, 0, "no from: no stage ran");
+    assert_eq!(
+        std::fs::read_dir(out.path())?.count(),
+        0,
+        "no file was written"
+    );
+    Ok(())
+}
+
+// Review Focus 5: a ruin at the parent's corner, so the window reaches past the parent's edge
+// (spec §5.2 item 4).
+#[test]
+fn ruin_child_at_parent_corner_runs() -> TestResult {
+    let parent_dir = tempfile::tempdir()?;
+    let (from, ruin) = ruin_parent(parent_dir.path())?;
+    // A synthetic parent: fixture-small seed 1 with its ruin moved 10 m from the north-west
+    // corner (the frame's origin; x east, y south).
+    let mut parent = read_package(&from)?;
+    let feature = parent
+        .features
+        .features
+        .iter_mut()
+        .find(|f| id_of(f) == ruin)
+        .ok_or("no ruin")?;
+    feature.geometry = Some(geojson::Geometry::new(geojson::GeometryValue::new_point(
+        vec![10.0, 10.0],
+    )));
+    let corner = parent_dir.path().join("corner.theosmap");
+    theos_map_format::write(&parent, std::fs::File::create(&corner)?)?;
+
+    let out = tempfile::tempdir()?;
+    let (result, _) = run_counting(&undercroft(Some(&corner), Some(&ruin)), out.path());
+    let manifest = result?;
+    assert_eq!(
+        manifest.results.get("pass"),
+        Some(&serde_json::Value::Bool(true)),
+        "{:?}",
+        manifest.results
+    );
+    assert_eq!(manifest.frame.origin_m, Some([-30.0, -30.0]));
+    let package = read_package(&out.path().join(&manifest.outputs["package"]))?;
+    assert_eq!(package.manifest.frame.origin_m, Some([-30.0, -30.0]));
     Ok(())
 }
