@@ -186,7 +186,8 @@ pub struct EdgeView {
 /// One link with both ends.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct LinkView {
-    /// The slot text, such as `field:parent` or `body`.
+    /// The slot: `field:<key>`, `lens:<key>`, `beat:<key>`, `voice:speaker`, `voice:belief`,
+    /// `note:version`, `note:resolved-by` or `mention` (a body link).
     pub slot: String,
     /// The text after `#` in a body link.
     pub fragment: Option<String>,

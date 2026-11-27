@@ -15,16 +15,14 @@ use crate::{StudioError, Workspace};
 /// rule starts with `lore/` on the paths of those truths and of their clues.
 ///
 /// # Errors
-/// [`StudioError::UnknownRecord`] when `id` is not a truth; [`StudioError::Index`] when the
-/// index fails.
+/// [`StudioError::UnknownRecord`] when no record has the `id`; [`StudioError::InvalidFilter`]
+/// when the `id` names records but none is a truth; [`StudioError::Index`] when the index fails.
 pub fn ledger_check(ws: &Workspace, id: Option<&str>) -> Result<LedgerCheckView, StudioError> {
     let ledger: Vec<TruthLedger> = match id {
         Some(id) => {
             let found = ws.index().ledger_of(id)?;
             if found.is_empty() {
-                return Err(StudioError::UnknownRecord {
-                    what: id.to_owned(),
-                });
+                return Err(not_a_truth(ws, id)?);
             }
             found
         }
@@ -55,6 +53,22 @@ pub fn ledger_check(ws: &Workspace, id: Option<&str>) -> Result<LedgerCheckView,
         findings: findings.iter().map(FindingView::from).collect(),
         errors,
         warnings,
+    })
+}
+
+/// The error for an `id` with no ledger: unknown when no record has it, else not a truth.
+fn not_a_truth(ws: &Workspace, id: &str) -> Result<StudioError, StudioError> {
+    let records = ws.index().record(id)?;
+    Ok(match records.first() {
+        None => StudioError::UnknownRecord {
+            what: id.to_owned(),
+        },
+        Some(record) => StudioError::InvalidFilter {
+            message: format!(
+                "`{id}` is not a truth (kind {})",
+                record.kind.as_deref().unwrap_or("unknown")
+            ),
+        },
     })
 }
 
@@ -187,9 +201,22 @@ mod tests {
         let (_dir, workspace) = codex_workspace()?;
         assert_eq!(ledger_check(&workspace, Some("T-912"))?.truths.len(), 1);
         assert!(matches!(
-            ledger_check(&workspace, Some("B-911")),
+            ledger_check(&workspace, Some("no-such-record")),
             Err(StudioError::UnknownRecord { .. })
         ));
+        let error = ledger_check(&workspace, Some("B-911"))
+            .err()
+            .ok_or("B-911")?;
+        assert!(
+            matches!(error, StudioError::InvalidFilter { .. }),
+            "{error}"
+        );
+        assert!(
+            error
+                .to_string()
+                .contains("`B-911` is not a truth (kind belief)"),
+            "{error}"
+        );
         Ok(())
     }
 

@@ -32,6 +32,19 @@ async fn ledger_unknown_truth_is_an_error_result() -> TestResult {
     Ok(())
 }
 
+// AC: CE-18.1
+#[tokio::test]
+async fn ledger_record_that_is_not_a_truth_is_named() -> TestResult {
+    let (_dir, project) = fixture_copy()?;
+    let client = client(&project, &[]).await?;
+    let result = client
+        .call("ledger_check", json!({ "id": "mother-ilse" }))
+        .await?;
+    assert_error(&result, "`mother-ilse` is not a truth (kind npc)")?;
+    client.cancel().await?;
+    Ok(())
+}
+
 // AC: CE-18.3
 #[tokio::test]
 async fn ledger_clues_carry_marks() -> TestResult {
