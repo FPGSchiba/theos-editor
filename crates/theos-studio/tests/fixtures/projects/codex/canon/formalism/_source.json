@@ -1,0 +1,13 @@
+{
+  "note": "synthetic fixture (P48), not canon",
+  "format": 1,
+  "page": "https://example.invalid/synthetic-formalism",
+  "equations": [
+    {
+      "id": "E91",
+      "title": "Synthetic equation 91",
+      "anchor": "https://example.invalid/synthetic-formalism#E91",
+      "text": "$x_{91} = 91$"
+    }
+  ]
+}

@@ -21,12 +21,16 @@
 //! a command introduces. The rest arrives in P07 and later phases.
 
 pub mod check;
+pub mod codex;
 mod command;
 pub mod create;
 pub mod error;
+pub mod guides;
 pub mod hook;
 pub mod introduced;
 pub mod lock;
+pub mod marks;
+pub mod project;
 pub mod report;
 pub mod schema;
 pub mod staged;
@@ -41,6 +45,8 @@ pub use check::{Binaries, BinariesFolder, Check, binaries_folder, check};
 pub use command::*;
 pub use error::StudioError;
 pub use introduced::{FindingCounts, introduced};
+pub use marks::{LockReason, MarkView, Marks};
 pub use report::report;
 pub use staged::{StagedCheck, check_staged};
+pub use views::codex::RecordRef;
 pub use workspace::{Workspace, find_root};
