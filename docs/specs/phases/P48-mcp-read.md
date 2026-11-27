@@ -64,7 +64,17 @@ Not in scope:
 | Proof of CE-18.2 | An automated stdio test on the `mother-ilse` fixture, plus one recorded Claude Code session attached to the PR |
 | Guides | `project_info` lists them and the server serves each as an MCP prompt now |
 
-### 4.2 Probes (27 Nov 2026, toolchain 1.99.1, Windows 11)
+### 4.2 Agreed with P11's spec session (27 Nov 2026)
+
+P11 (Editor shell and Codex) depends only on P06, so either build may come first.
+- Whichever build reaches `theos_studio::codex` first builds `search`, `read` and `list`, with
+  `Marks` and `RecordRef`, in the shape of §5.5–§5.7. The other merges `origin/main` onto it.
+- P11 changes no key of these views. Its IPC types live in `theos-editor` and map from them, so
+  no IPC derive enters the libraries.
+- What the Codex screen needs beyond them (the body as a typed block tree with resolved link
+  chips, the front matter as ordered rows) P11 adds in its own module of `theos-studio`.
+
+### 4.3 Probes (27 Nov 2026, toolchain 1.99.1, Windows 11)
 
 - **rmcp 3.12.0** (current; P05's research probed 3.9.0) with the features `server`, `transport-io` and
   `macros`, and `tokio` with `rt`, `io-std` and `macros`, builds on the pinned toolchain.
@@ -82,7 +92,7 @@ Not in scope:
 - **`cargo deny check licenses bans`** with this repository's `deny.toml` passes for rmcp, tokio
   and schemars 1 and their 74 crates. `deny.toml` needs no change.
 
-### 4.3 Approaches considered
+### 4.4 Approaches considered
 
 | Part | Chosen | Rejected and why |
 |---|---|---|
@@ -225,7 +235,10 @@ key. `RecordRef` is the shared part:
     after the call's sync, so it matches what the index just read. A file deleted between the
     sync and the read is an error result.
   - `Link` is `{ "slot", "fragment", "line", "column", "source": RecordRef, "target": RecordRef
-    + { "exists" } }`.
+    + { "exists" } }`. `slot` is P03's text form of the place the link sits in (`Slot::as_db`):
+    `field:<key>`, `lens:<key>`, `beat:<key>`, `voice:speaker`, `voice:belief`, `note:version`,
+    `note:resolved-by` or `mention`. Backlinks carry it too, so a reader can show how a record
+    is used ("found at", "where", "about"). Graph edges use the same text.
   - `lens` is set for `people`, `faction` and `npc`: `{ "chain": [RecordRef], "fields": [{
     "field", "value", "from": RecordRef, "overrides": [{ "value", "from" }] }], "beliefs": [{
     "belief": RecordRef, "through": RecordRef, "distorts": RecordRef|null, "accuracy" }] }`.
@@ -341,7 +354,7 @@ P48's server writes nothing in the project. The only file it may change is the c
 |---|---|
 | P07 | The `Server`, its router and the one-module-per-tool layout for the propose tools; `Marks` and its `locked` reasons to refuse agent writes to locked records |
 | P09, P22, P24, P26, P27 | The same layout for `gen_*`, `atlas_read`, `quest_flow`, `brief_compose`, `pipeline_list`; `RecordRef` with the marks in their results |
-| P11 | `theos_studio::codex` (search, read, list, graph) and the views for the Codex screen |
+| P11 | `theos_studio::codex` (search, read, list, graph), `Marks`, `RecordRef` and the views for the Codex screen; built by whichever build comes first (§4.2) |
 | P17 | `Marks::never` to withhold `never` truths from the editor's own prompts (G9) |
 | P28 | Guides in `tools/guides/*.md` are served without an editor change |
 | P49 | `--version` for `theos-mcp` |

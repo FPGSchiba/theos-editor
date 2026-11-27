@@ -44,7 +44,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P45 | Atlas level switcher | theos-editor | todo | | |
 | P46 | Git read | theos-editor | todo | | |
 | P47 | Git write | theos-editor | todo | | |
-| P48 | MCP read | theos-editor | spec-pr | branch `spec/P48-mcp-read-2` | |
+| P48 | MCP read | theos-editor | spec-pr | #53 | |
 | P49 | Releases and the check action | theos-editor | todo | | |
 | P50 | Leaner CI | theos-editor | pr-open | #45, #46 | draft, branch `phase/P50-leaner-ci-2` |
 
