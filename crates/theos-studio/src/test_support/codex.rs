@@ -56,24 +56,15 @@ mod tests {
             .iter()
             .map(|finding| format!("{} {}", finding.rule, finding.path))
             .collect();
-        // Exactly these: the id twice, the unresolved mention, and the style, whose kind the
-        // registry does not know yet (the art part is not built). Every other record is clean.
+        // Exactly these: the id twice, and the unresolved mention. Every other record is clean.
         assert_eq!(
             findings,
             [
-                "schema/kind art/synthetic-style.md",
                 "link/dangling story/scripts/S-004.md",
                 "index/duplicate-id things/dup-911.md",
                 "index/duplicate-id world/synthetic-band/f04-synthetic/dup-911.md",
             ]
         );
-        let style = index
-            .records()?
-            .into_iter()
-            .find(|record| record.path == "art/synthetic-style.md")
-            .ok_or("the style is not indexed")?;
-        // The registry has no `style` kind, so the index stores the record without a kind.
-        assert_eq!(style.kind, None);
         Ok(())
     }
 }
