@@ -126,6 +126,28 @@ fn a_step_that_cannot_start_is_a_finding() -> TestResult {
 }
 
 #[test]
+fn the_probe_findings_come_before_the_step_findings() -> TestResult {
+    let root = root_with_editor_ui()?;
+    let UiPlan::Steps(steps) = ui::plan(root.path()) else {
+        return Err("expected steps".into());
+    };
+    let steps = ui::execute(&steps, |_| Ok(output(false, "boom")));
+    let probe = xtask::ui_tools::judge("{}", Some("v22.0.0"), Some("1.0.0"));
+    assert_eq!(probe.len(), 2, "wrong node and no packageManager pin");
+    let verdict = ui::with_probe(probe, steps);
+    assert_eq!(verdict.findings.len(), 7);
+    assert!(
+        verdict.findings[0]
+            .message
+            .contains("node must be major version 24")
+    );
+    assert!(verdict.findings[1].message.contains("packageManager"));
+    assert!(verdict.findings[2].message.contains("install"));
+    assert!(!verdict.passed());
+    Ok(())
+}
+
+#[test]
 fn check_name_round_trips() {
     assert_eq!(Check::from_name("ui"), Some(Check::Ui));
     assert_eq!(Check::Ui.name(), "ui");

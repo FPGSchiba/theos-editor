@@ -2,7 +2,9 @@
 //!
 //! CI asks before it installs what a job's checks need (Linux packages, Node and Playwright), so
 //! a pull request that changes no code does not pay for them. The answer is the one `gate` gives:
-//! the scope of the run ([`scope::runs`]), and for `ui` also whether `editor-ui/` exists.
+//! the scope of the run ([`scope::runs`]), and for `ui` also whether `editor-ui/` exists. The
+//! Linux packages of the GUI ask one thing more: that `Cargo.lock` names the package that links
+//! them (`--requires-package`), because until the lock names it nothing needs them.
 
 use std::io::Write;
 use std::path::Path;
@@ -25,8 +27,28 @@ pub fn needed_under(scope: &Scope, root: &Path, checks: &[Check]) -> bool {
     })
 }
 
+/// Whether `Cargo.lock` of `root` names a package `name`. A lock that cannot be read or parsed
+/// counts as naming it: every doubt adds work, none removes it.
+#[must_use]
+pub fn lock_names(root: &Path, name: &str) -> bool {
+    let Ok(text) = std::fs::read_to_string(root.join("Cargo.lock")) else {
+        return true;
+    };
+    let Ok(lock) = text.parse::<toml::Table>() else {
+        return true;
+    };
+    let Some(packages) = lock.get("package").and_then(toml::Value::as_array) else {
+        return true;
+    };
+    packages
+        .iter()
+        .any(|package| package.get("name").and_then(toml::Value::as_str) == Some(name))
+}
+
 /// Writes `true` or `false` to `out` and, under GitHub Actions, `needed=<answer>` to the file of
-/// the step outputs. The command itself succeeds whatever the answer, so it returns `true`.
+/// the step outputs. The answer is true when any of `checks` is needed ([`needed_under`]) and,
+/// with `requires_package`, `Cargo.lock` names that package ([`lock_names`]). The command itself
+/// succeeds whatever the answer, so it returns `true`.
 ///
 /// # Errors
 ///
@@ -35,9 +57,11 @@ pub fn run(
     root: &Path,
     ci: Option<&CiEvent>,
     checks: &[Check],
+    requires_package: Option<&str>,
     out: &mut dyn Write,
 ) -> Result<bool> {
-    let answer = needed_under(&scope::for_run(root, ci), root, checks);
+    let answer = needed_under(&scope::for_run(root, ci), root, checks)
+        && requires_package.is_none_or(|name| lock_names(root, name));
     writeln!(out, "{answer}").map_err(|source| Error::Io {
         path: "stdout".into(),
         source,
@@ -113,7 +137,7 @@ mod tests {
 
     fn answer(root: &Path, ci: Option<&CiEvent>, checks: &[Check]) -> TestResult<String> {
         let mut out = Vec::new();
-        assert!(run(root, ci, checks, &mut out)?);
+        assert!(run(root, ci, checks, None, &mut out)?);
         Ok(String::from_utf8(out)?)
     }
 
@@ -196,24 +220,44 @@ mod tests {
 
     // AC: CE-08C.2
     #[test]
-    fn needs_agrees_with_the_scope_the_gate_uses() {
-        let dir = Path::new(".");
-        for scope in [
-            Scope::DocsOnly,
-            Scope::Every { note: None },
-            Scope::Every {
-                note: Some("why".to_owned()),
-            },
-        ] {
-            for check in crate::verdict::GATE_ORDER {
-                if check != Check::Ui {
-                    assert_eq!(
-                        needed_under(&scope, dir, &[check]),
-                        scope::runs(&scope, check)
-                    );
-                }
-            }
-        }
+    fn the_packages_wait_for_a_lock_that_names_the_package_that_links_them() -> TestResult {
+        let (dir, _, _) = docs_branch()?;
+        let path = dir.path();
+        write(path, "crates/a/src/b.rs", "// b\n")?;
+        let asked = |path: &Path| -> TestResult<String> {
+            let mut out = Vec::new();
+            assert!(run(
+                path,
+                None,
+                &[Check::Clippy],
+                Some("webkit2gtk"),
+                &mut out
+            )?);
+            Ok(String::from_utf8(out)?)
+        };
+        // No lock, or one that cannot be read: doubt adds the install.
+        assert_eq!(asked(path)?, "true\n");
+        write(path, "Cargo.lock", "this is not toml [")?;
+        assert_eq!(asked(path)?, "true\n");
+        // A lock without the package: nothing links the libraries yet.
+        write(
+            path,
+            "Cargo.lock",
+            "version = 4\n\n[[package]]\nname = \"serde\"\nversion = \"1.0.0\"\n",
+        )?;
+        assert_eq!(asked(path)?, "false\n");
+        // A lock with it, and a code change: install.
+        write(
+            path,
+            "Cargo.lock",
+            "version = 4\n\n[[package]]\nname = \"webkit2gtk\"\nversion = \"2.0.0\"\n",
+        )?;
+        assert_eq!(asked(path)?, "true\n");
+        // The scope still decides first: a docs-only change installs nothing.
+        git(path, &["checkout", "-q", "--", "."])?;
+        git(path, &["clean", "-fdq"])?;
+        assert_eq!(asked(path)?, "false\n");
+        Ok(())
     }
 
     // AC: CE-08C.2

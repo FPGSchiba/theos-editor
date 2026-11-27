@@ -1,9 +1,10 @@
-//! The tools of the `ui` check, which the `tools` check verifies only when `editor-ui/` exists:
-//! Node (major version 24) and pnpm (the version of the `packageManager` pin of
-//! `editor-ui/package.json`).
+//! The tools of the `ui` check, which it verifies before its steps, so only a job that runs `ui`
+//! needs them: Node (major version 24) and pnpm (the version of the `packageManager` pin of
+//! `editor-ui/package.json`). The `tools` check does not read them: it runs first in every gate
+//! job, and most jobs have no Node.
 //!
-//! The judging is pure ([`judge_node`], [`judge_pnpm`], [`package_manager_pin`]); [`check`] asks
-//! the real `node` and `pnpm`, found through `which`, for their versions.
+//! The judging is pure ([`judge_node`], [`judge_pnpm`], [`package_manager_pin`], [`judge`]);
+//! [`check`] asks the real `node` and `pnpm`, found through `which`, for their versions.
 
 use std::path::Path;
 use std::process::Command;
@@ -71,6 +72,29 @@ fn version_of(program: &str, dir: &Path) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
+/// The findings about node and pnpm, given the `package.json` text and what `node --version` and
+/// `pnpm --version` printed (`None` when the program is not installed or fails).
+#[must_use]
+pub fn judge(package_json: &str, node: Option<&str>, pnpm: Option<&str>) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    match node {
+        Some(output) => findings.extend(judge_node(output)),
+        None => findings.push(Finding::new(format!(
+            "node is not installed; editor-ui needs major version {NODE_MAJOR}"
+        ))),
+    }
+    match (pnpm, package_manager_pin(package_json)) {
+        (_, None) => findings.push(Finding::new(
+            "editor-ui/package.json has no `packageManager` field pinning pnpm@<version>",
+        )),
+        (None, Some(pin)) => findings.push(Finding::new(format!(
+            "pnpm is not installed; editor-ui/package.json pins {pin}"
+        ))),
+        (Some(output), Some(pin)) => findings.extend(judge_pnpm(output, &pin)),
+    }
+    findings
+}
+
 /// The findings about node and pnpm in the repository at `root`: none when there is no
 /// `editor-ui/package.json`.
 #[must_use]
@@ -80,23 +104,11 @@ pub fn check(root: &Path) -> Vec<Finding> {
         return Vec::new();
     };
     let dir = root.join("editor-ui");
-    let mut findings = Vec::new();
-    match version_of("node", &dir) {
-        Some(output) => findings.extend(judge_node(&output)),
-        None => findings.push(Finding::new(format!(
-            "node is not installed; editor-ui needs major version {NODE_MAJOR}"
-        ))),
-    }
-    match (version_of("pnpm", &dir), package_manager_pin(&package_json)) {
-        (_, None) => findings.push(Finding::new(
-            "editor-ui/package.json has no `packageManager` field pinning pnpm@<version>",
-        )),
-        (None, Some(pin)) => findings.push(Finding::new(format!(
-            "pnpm is not installed; editor-ui/package.json pins {pin}"
-        ))),
-        (Some(output), Some(pin)) => findings.extend(judge_pnpm(&output, &pin)),
-    }
-    findings
+    judge(
+        &package_json,
+        version_of("node", &dir).as_deref(),
+        version_of("pnpm", &dir).as_deref(),
+    )
 }
 
 #[cfg(test)]
@@ -142,6 +154,26 @@ mod tests {
     fn pnpm_must_equal_the_pin() {
         assert_eq!(judge_pnpm("10.4.1\n", "10.4.1"), None);
         assert!(judge_pnpm("10.4.0", "10.4.1").is_some());
+    }
+
+    // AC: CE-32.3
+    #[test]
+    fn a_wrong_node_major_or_pnpm_version_is_a_finding() {
+        let package = r#"{"packageManager":"pnpm@10.4.1"}"#;
+        assert_eq!(judge(package, Some("v24.1.0"), Some("10.4.1")), Vec::new());
+        let wrong_node = judge(package, Some("v22.1.0"), Some("10.4.1"));
+        assert_eq!(wrong_node.len(), 1);
+        assert!(
+            wrong_node[0]
+                .message
+                .contains("node must be major version 24")
+        );
+        let wrong_pnpm = judge(package, Some("v24.1.0"), Some("9.0.0"));
+        assert_eq!(wrong_pnpm.len(), 1);
+        assert!(wrong_pnpm[0].message.contains("pnpm 10.4.1 is pinned"));
+        // Missing programs and a missing pin are findings too.
+        assert_eq!(judge(package, None, None).len(), 2);
+        assert_eq!(judge("{}", Some("v24.1.0"), Some("10.4.1")).len(), 1);
     }
 
     #[test]

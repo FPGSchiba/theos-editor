@@ -28,8 +28,10 @@ pub fn fmt() -> Vec<CargoCommand> {
     vec![cargo(&["fmt", "--all", "--check"])]
 }
 
-/// `cargo clippy --workspace --all-targets --locked -- -D warnings`, then the same for
-/// `theos-editor` alone with `--features engine`, so the feature is built too (CE-32.3).
+/// `cargo clippy --workspace --all-targets --locked -- -D warnings`, then the same with
+/// `--features theos-editor/engine`, so the feature is built too (CE-32.3). The feature is
+/// switched on across the workspace, not with `-p`, so the dependencies are unified as in the
+/// first run and nothing shared is built twice.
 #[must_use]
 pub fn clippy() -> Vec<CargoCommand> {
     vec![
@@ -44,11 +46,10 @@ pub fn clippy() -> Vec<CargoCommand> {
         ]),
         cargo(&[
             "clippy",
-            "-p",
-            "theos-editor",
+            "--workspace",
             "--all-targets",
             "--features",
-            "engine",
+            "theos-editor/engine",
             "--locked",
             "--",
             "-D",
@@ -58,8 +59,9 @@ pub fn clippy() -> Vec<CargoCommand> {
 }
 
 /// `cargo nextest run --workspace --locked --profile <ci|default>`, then
-/// `cargo nextest run -p theos-editor --features engine --locked --profile <same>` (CE-32.3), then
-/// `cargo test --doc --workspace --locked`. The profile is `ci` when `ci` is true. Both profiles
+/// `cargo nextest run --workspace --features theos-editor/engine --locked --profile <same> -E
+/// 'package(theos-editor)'` (CE-32.3: the feature across the workspace, so nothing shared is
+/// rebuilt, and only the tests of `theos-editor`), then `cargo test --doc --workspace --locked`. The profile is `ci` when `ci` is true. Both profiles
 /// leave out the slow tests, which [`slow_tests`] runs.
 #[must_use]
 pub fn test(ci: bool) -> Vec<CargoCommand> {
@@ -76,13 +78,14 @@ pub fn test(ci: bool) -> Vec<CargoCommand> {
         cargo(&[
             "nextest",
             "run",
-            "-p",
-            "theos-editor",
+            "--workspace",
             "--features",
-            "engine",
+            "theos-editor/engine",
             "--locked",
             "--profile",
             profile,
+            "-E",
+            "package(theos-editor)",
         ]),
         cargo(&["test", "--doc", "--workspace", "--locked"]),
     ]
@@ -232,11 +235,10 @@ mod tests {
                 cmd(
                     &[
                         "clippy",
-                        "-p",
-                        "theos-editor",
+                        "--workspace",
                         "--all-targets",
                         "--features",
-                        "engine",
+                        "theos-editor/engine",
                         "--locked",
                         "--",
                         "-D",
@@ -269,13 +271,14 @@ mod tests {
                     &[
                         "nextest",
                         "run",
-                        "-p",
-                        "theos-editor",
+                        "--workspace",
                         "--features",
-                        "engine",
+                        "theos-editor/engine",
                         "--locked",
                         "--profile",
-                        "ci"
+                        "ci",
+                        "-E",
+                        "package(theos-editor)"
                     ],
                     &[]
                 ),
@@ -300,13 +303,14 @@ mod tests {
                     &[
                         "nextest",
                         "run",
-                        "-p",
-                        "theos-editor",
+                        "--workspace",
                         "--features",
-                        "engine",
+                        "theos-editor/engine",
                         "--locked",
                         "--profile",
-                        "default"
+                        "default",
+                        "-E",
+                        "package(theos-editor)"
                     ],
                     &[]
                 ),
@@ -345,11 +349,10 @@ mod tests {
             Some(&cmd(
                 &[
                     "clippy",
-                    "-p",
-                    "theos-editor",
+                    "--workspace",
                     "--all-targets",
                     "--features",
-                    "engine",
+                    "theos-editor/engine",
                     "--locked",
                     "--",
                     "-D",
@@ -369,13 +372,14 @@ mod tests {
                     &[
                         "nextest",
                         "run",
-                        "-p",
-                        "theos-editor",
+                        "--workspace",
                         "--features",
-                        "engine",
+                        "theos-editor/engine",
                         "--locked",
                         "--profile",
-                        profile
+                        profile,
+                        "-E",
+                        "package(theos-editor)"
                     ],
                     &[]
                 ))
@@ -422,7 +426,8 @@ mod tests {
         let mut seen = Vec::new();
         let verdict = run_commands(Check::Test, &cmds, |command| {
             seen.push(command.args[0].clone());
-            Ok(!command.args.contains(&"--workspace".to_owned()) || command.args[0] != "nextest")
+            // The first nextest run fails: the one without a filter expression.
+            Ok(command.args[0] != "nextest" || command.args.contains(&"-E".to_owned()))
         })?;
         assert_eq!(seen, ["nextest", "nextest", "test"]);
         assert_eq!(verdict.check, Check::Test);
