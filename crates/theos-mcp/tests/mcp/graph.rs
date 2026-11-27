@@ -10,20 +10,20 @@ use crate::common::{TestResult, assert_error, client, fixture_copy, json, studio
 async fn graph_equals_the_studio_function() -> TestResult {
     let (_dir, project) = fixture_copy()?;
     let client = client(&project, &[]).await?;
-    let ws = studio(&project)?;
     let defaults = client
         .structured("codex_graph", json!({ "id": "B-912" }))
         .await?;
-    assert_eq!(
-        defaults,
-        json(&codex::graph(&ws, "B-912", 1, Direction::Both)?)?
-    );
     let wide = client
         .structured(
             "codex_graph",
             json!({ "id": "mother-ilse", "depth": 3, "direction": "out" }),
         )
         .await?;
+    let ws = studio(&project)?;
+    assert_eq!(
+        defaults,
+        json(&codex::graph(&ws, "B-912", 1, Direction::Both)?)?
+    );
     assert_eq!(
         wide,
         json(&codex::graph(&ws, "mother-ilse", 3, Direction::Out)?)?

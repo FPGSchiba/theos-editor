@@ -2,11 +2,12 @@
 
 use schemars::JsonSchema;
 use serde::Serialize;
+use theos_content::TruthLedger;
 
 use crate::guides::Guide;
-use crate::marks::MarkView;
+use crate::marks::{MarkView, Marks};
 use crate::views::check::FindingView;
-use crate::views::ledger::TruthView;
+use crate::views::ledger::EntryView;
 
 /// Where the index cache lives.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, JsonSchema)]
@@ -66,15 +67,55 @@ pub struct ProjectInfoView {
     pub tools: Vec<String>,
 }
 
-/// A truth with its marks.
+/// A truth with its marks and the clues that reveal it, each with its marks.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct MarkedTruthView {
-    /// The truth and the clues that reveal it.
-    #[serde(flatten)]
-    pub truth: TruthView,
+    /// The truth id.
+    pub id: String,
+    /// The project-relative path of the truth.
+    pub path: String,
+    /// The `title` text.
+    pub title: Option<String>,
+    /// The `target` text.
+    pub target: Option<String>,
+    /// The clues that reveal the truth, each with its marks.
+    pub entries: Vec<MarkedEntryView>,
     /// The marks of the truth, flattened next to its `id` (spec 5.6).
     #[serde(flatten)]
     pub mark: MarkView,
+}
+
+/// One clue of a truth: P05's entry plus the marks of the clue, flattened next to `clue`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct MarkedEntryView {
+    /// P05's entry, keys unchanged.
+    #[serde(flatten)]
+    pub entry: EntryView,
+    /// The marks of the clue record.
+    #[serde(flatten)]
+    pub mark: MarkView,
+}
+
+impl MarkedTruthView {
+    /// The view of `truth`, with the marks of its path and of each clue's path.
+    #[must_use]
+    pub fn new(truth: &TruthLedger, marks: &Marks) -> MarkedTruthView {
+        MarkedTruthView {
+            id: truth.id.clone(),
+            path: truth.path.clone(),
+            title: truth.title.clone(),
+            target: truth.target.clone(),
+            entries: truth
+                .entries
+                .iter()
+                .map(|entry| MarkedEntryView {
+                    entry: EntryView::from(entry),
+                    mark: marks.of_path(&entry.clue_path),
+                })
+                .collect(),
+            mark: marks.of_path(&truth.path),
+        }
+    }
 }
 
 /// What `ledger_check` returns.

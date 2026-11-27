@@ -6,7 +6,6 @@ use theos_content::TruthLedger;
 
 use crate::check::counts;
 use crate::views::check::FindingView;
-use crate::views::ledger::TruthView;
 use crate::views::project::{LedgerCheckView, MarkedTruthView};
 use crate::{Marks, StudioError, Workspace};
 
@@ -49,10 +48,7 @@ pub fn ledger_check(ws: &Workspace, id: Option<&str>) -> Result<LedgerCheckView,
     Ok(LedgerCheckView {
         truths: ledger
             .iter()
-            .map(|truth| MarkedTruthView {
-                truth: TruthView::from(truth),
-                mark: marks.of_path(&truth.path),
-            })
+            .map(|truth| MarkedTruthView::new(truth, &marks))
             .collect(),
         findings: findings.iter().map(FindingView::from).collect(),
         errors,
@@ -112,6 +108,39 @@ mod tests {
             ledger_check(&workspace, Some("B-911")),
             Err(StudioError::UnknownRecord { .. })
         ));
+        Ok(())
+    }
+
+    // AC: CE-18.3
+    #[test]
+    fn ledger_clues_carry_their_marks() -> TestResult {
+        let (dir, _) = codex_workspace()?;
+        std::fs::write(
+            dir.path().join("lore/clues/C-935.md"),
+            "---
+# synthetic fixture (P48), not canon
+id: C-935
+kind: clue
+title: Synthetic clue
+status: canon
+reveals: T-912
+moves_to: hinted
+where: [fates-shrine]
+gate: T1
+vector: synthetic
+---
+Text
+",
+        )?;
+        let workspace = Workspace::open(dir.path())?;
+        let view = serde_json::to_value(ledger_check(&workspace, Some("T-912"))?)?;
+        let entries = view["truths"][0]["entries"]
+            .as_array()
+            .ok_or("no entries")?;
+        let entry = |clue: &str| entries.iter().find(|e| e["clue"] == clue).ok_or("no entry");
+        assert_eq!(entry("C-935")?["locked"], serde_json::json!(["canon"]));
+        assert_eq!(entry("C-935")?["never"], false);
+        assert_eq!(entry("C-031")?["locked"], serde_json::json!([]));
         Ok(())
     }
 }

@@ -11,7 +11,6 @@ use crate::views::codex::{
     BeliefView, LensFieldView, LensValueView, LensView, OverrideView, ReadView, RecordRef,
     RecordView,
 };
-use crate::views::ledger::TruthView;
 use crate::views::project::MarkedTruthView;
 use crate::{StudioError, Workspace};
 
@@ -72,10 +71,7 @@ fn record_view(
         .ledger_of(&summary.id)?
         .iter()
         .find(|truth| truth.path == summary.path)
-        .map(|truth| MarkedTruthView {
-            truth: TruthView::from(truth),
-            mark: lookup.marks.of_path(&truth.path),
-        });
+        .map(|truth| MarkedTruthView::new(truth, &lookup.marks));
     Ok(RecordView {
         record: RecordRef::from_summary(summary, &lookup.marks),
         text,

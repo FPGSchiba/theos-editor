@@ -10,10 +10,15 @@ fn walk(value: &Value, at: &str, bad: &mut Vec<String>) {
     match value {
         Value::Object(map) => {
             // A finding also has an `id` and a `path`, but it is not one of the record references
-            // spec 5.6 lists; it is told apart by its `rule`.
-            let names_record = map.get("id").is_some_and(Value::is_string)
-                && map.contains_key("path")
-                && !map.contains_key("rule");
+            // spec 5.6 lists; its shape (`rule`, `severity`, `message`) tells it apart. A ledger
+            // clue names a record with `clue` and `clue_path`.
+            let finding = ["rule", "severity", "message"]
+                .iter()
+                .all(|key| map.contains_key(*key));
+            let names_record = !finding
+                && ((map.get("id").is_some_and(Value::is_string) && map.contains_key("path"))
+                    || (map.get("clue").is_some_and(Value::is_string)
+                        && map.contains_key("clue_path")));
             let marked = map.get("never").is_some_and(Value::is_boolean)
                 && map.get("locked").is_some_and(Value::is_array);
             if names_record && !marked {

@@ -10,8 +10,16 @@ use crate::common::{TestResult, assert_error, client, fixture_copy, json, studio
 async fn list_equals_the_studio_function() -> TestResult {
     let (_dir, project) = fixture_copy()?;
     let client = client(&project, &[]).await?;
-    let ws = studio(&project)?;
     let all = client.structured("codex_list", json!({})).await?;
+    let got = client
+        .structured(
+            "codex_list",
+            json!({
+                "kind": "belief", "status": "draft", "folder": "lore", "offset": 1, "limit": 5
+            }),
+        )
+        .await?;
+    let ws = studio(&project)?;
     let filter = ListFilter {
         kind: None,
         status: None,
@@ -27,14 +35,6 @@ async fn list_equals_the_studio_function() -> TestResult {
         offset: 1,
         limit: 5,
     };
-    let got = client
-        .structured(
-            "codex_list",
-            json!({
-                "kind": "belief", "status": "draft", "folder": "lore", "offset": 1, "limit": 5
-            }),
-        )
-        .await?;
     assert_eq!(got, json(&codex::list(&ws, &filter)?)?);
     client.cancel().await?;
     Ok(())

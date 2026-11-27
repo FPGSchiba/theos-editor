@@ -10,16 +10,16 @@ use crate::common::{TestResult, assert_error, client, fixture_copy, json, studio
 async fn read_by_id_and_by_path_equal_the_studio_function() -> TestResult {
     let (_dir, project) = fixture_copy()?;
     let client = client(&project, &[]).await?;
-    let ws = studio(&project)?;
     let by_id = client
         .structured("codex_read", json!({ "id": "mother-ilse" }))
         .await?;
-    let want = json(&codex::read(&ws, &ReadTarget::Id("mother-ilse".into()))?)?;
-    assert_eq!(by_id, want);
     let path = "lore/beliefs/B-911.md";
     let by_path = client
         .structured("codex_read", json!({ "path": path }))
         .await?;
+    let ws = studio(&project)?;
+    let want = json(&codex::read(&ws, &ReadTarget::Id("mother-ilse".into()))?)?;
+    assert_eq!(by_id, want);
     let want = json(&codex::read(&ws, &ReadTarget::Path(path.into()))?)?;
     assert_eq!(by_path, want);
     client.cancel().await?;
