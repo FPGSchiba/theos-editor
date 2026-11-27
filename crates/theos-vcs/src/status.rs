@@ -216,8 +216,9 @@ fn attempt(
     let copy = copy.to_str().ok_or_else(|| GitError::Io {
         source: std::io::Error::other("the temporary folder's path is not UTF-8"),
     })?;
+    let no_hooks = format!("core.hooksPath={}", folder.path().display());
     let env = [(GIT_INDEX_FILE, copy)];
-    match intend_to_add(git, top, cancel, &env, &untracked) {
+    match intend_to_add(git, top, cancel, &env, &no_hooks, &untracked) {
         Ok(()) => {}
         Err(error @ GitError::Failed { .. }) => return Ok(Attempt::AddFailed(error)),
         Err(error) => return Err(error),
@@ -299,15 +300,22 @@ fn copy_index(index: &Path, copy: &Path) -> Result<(), GitError> {
 
 /// Adds `paths` with intent to add to the index `env` names; the paths go on stdin, so no command
 /// line grows with them. The copy is written whole (`core.splitIndex=false`), so no shared index
-/// file is added to the repository.
+/// file is added to the repository. `no_hooks` (`core.hooksPath=<a folder without hooks>`) keeps
+/// the repository's `post-index-change` hook from running: status is a pure read.
 fn intend_to_add(
     git: &Git,
     top: &Path,
     cancel: &Cancel,
     env: &[(&str, &str)],
+    no_hooks: &str,
     paths: &[Vec<u8>],
 ) -> Result<(), GitError> {
-    let mut args: Vec<&OsStr> = vec![OsStr::new("-c"), OsStr::new("core.splitIndex=false")];
+    let mut args: Vec<&OsStr> = vec![
+        OsStr::new("-c"),
+        OsStr::new("core.splitIndex=false"),
+        OsStr::new("-c"),
+        OsStr::new(no_hooks),
+    ];
     args.extend(read_args(
         "add",
         &[
