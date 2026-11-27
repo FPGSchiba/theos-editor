@@ -77,3 +77,7 @@ Each check is also a subcommand of its own name, such as `cargo xtask clippy`.
 - `cargo xtask github check` compares the rulesets, merge settings and labels of the repository on
   GitHub with `gate/` and reports every difference. It only reads and needs the `gh` command line.
   Changing them (`cargo xtask github apply`) is for Jann to agree to first.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
