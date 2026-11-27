@@ -18,9 +18,9 @@ use crate::child::{FrameRule, ParentContext};
 use crate::error::RunError;
 use crate::features::output::FeaturesError;
 use crate::package::PackageLayer;
-use crate::recipe::Plan;
+use crate::recipe::{Plan, PlannedStage};
 use crate::render::Render;
-use crate::stage::{LayerSpec, MapKind, Metrics};
+use crate::stage::{LayerSpec, MapKind, Metrics, ParamError};
 use crate::world::{Layer, MapFrame, World};
 
 /// How the ids of a kind's features are numbered.
@@ -46,6 +46,10 @@ pub(crate) struct OwnSeed {
 
 /// Refuses a frame a kind cannot use, with the reason.
 pub(crate) type FrameCheck = fn(&MapFrame) -> Result<(), String>;
+
+/// Refuses planned stages whose parameters do not fit together, naming the stage and the
+/// parameter to blame.
+pub(crate) type PlanCheck = fn(&[PlannedStage], &MapFrame) -> Result<(), ParamError>;
 
 /// The top-level metrics of the summary, from the world and the stages' metrics.
 pub(crate) type MetricsFn = fn(&World, &[(String, Metrics)]) -> Result<Value, FormatError>;
@@ -86,6 +90,9 @@ pub(crate) struct KindTable {
     /// Refuses a frame the kind cannot use, with the reason; the plan names `size_km`. `None`
     /// for a kind that takes every frame the recipe checks allow.
     pub check_frame: Option<FrameCheck>,
+    /// Refuses planned stages whose parameters do not fit together (an interior's walls and its
+    /// lattice); `None` for a kind whose stages are checked one by one only.
+    pub check_plan: Option<PlanCheck>,
 }
 
 /// One entry per [`MapKind`].

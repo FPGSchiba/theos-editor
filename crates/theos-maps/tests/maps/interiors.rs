@@ -66,7 +66,7 @@ type Refusal = (
 // Spec §5.16: the recipe loader refuses what the stages cannot build.
 #[test]
 fn loader_refusals() -> TestResult {
-    let cases: [Refusal; 5] = [
+    let cases: [Refusal; 6] = [
         (
             "an underscore in a room type",
             |t| t.replace("type = \"store\"", "type = \"store_room\""),
@@ -102,6 +102,15 @@ fn loader_refusals() -> TestResult {
             |t| t.replacen("rule = \"leaf\"", "rule = \"attic\"", 1),
             Some("mission"),
             "rule[1].rule",
+        ),
+        (
+            "walls of 3 m in a block of 8 m with a jitter of 2 m",
+            |t| {
+                t.replace("pitch_m  = 8.0", "pitch_m  = 8.0\njitter_m = 2.0")
+                    .replace("id = \"space\"", "id = \"space\"\nwall_m = 3.0")
+            },
+            Some("space"),
+            "wall_m",
         ),
     ];
     for (what, edit, stage, parameter) in cases {

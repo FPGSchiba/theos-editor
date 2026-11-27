@@ -130,6 +130,7 @@ pub fn plan(
     check_renders(recipe)?;
     check_inputs(recipe, inputs)?;
     let (stages, seeded) = plan_stages(recipe, registry, planning, &placed.frame)?;
+    check_kind_plan(recipe, &stages, &placed.frame)?;
     check_constraints(recipe, &stages)?;
     let r = &recipe.recipe;
     Ok(Plan {
@@ -237,6 +238,30 @@ fn check_kind_frame(recipe: &LoadedRecipe, frame: &MapFrame) -> Result<(), Recip
         }
         None => Ok(()),
     }
+}
+
+/// Check 4, the kind's part: the planned stages' parameters fit together under the rule of the
+/// recipe's kind (an interior's walls fit its lattice, ruling R22). The refusal names the stage
+/// and the parameter the kind blames.
+fn check_kind_plan(
+    recipe: &LoadedRecipe,
+    stages: &[PlannedStage],
+    frame: &MapFrame,
+) -> Result<(), RecipeError> {
+    let Some(check) = kind::table(recipe.recipe.kind).check_plan else {
+        return Ok(());
+    };
+    check(stages, frame).map_err(|e| {
+        invalid(
+            recipe,
+            &Spot {
+                stage: Some(&e.stage),
+                layer: None,
+                parameter: e.parameter.as_deref(),
+            },
+            e.message.clone(),
+        )
+    })
 }
 
 /// Check 2: the extra renders and the render options.

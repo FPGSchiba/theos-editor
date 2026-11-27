@@ -28,6 +28,7 @@ pub(super) const TABLE: KindTable = KindTable {
         build: class_frame,
     }],
     check_frame: None,
+    check_plan: None,
 };
 
 /// The class table entry of the map (`class_frame`): the class of the parent feature, or of the

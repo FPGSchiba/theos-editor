@@ -4,6 +4,7 @@
 pub mod cover;
 pub mod cover_core;
 pub mod envelope;
+pub(crate) mod fit;
 #[cfg(test)]
 mod hand_graph;
 pub mod mission;

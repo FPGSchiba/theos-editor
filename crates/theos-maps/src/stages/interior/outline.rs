@@ -117,7 +117,6 @@ mod tests {
         mask.as_slice().iter().filter(|&&m| m).count()
     }
 
-    // AC: CE-80.3
     #[test]
     fn rect_is_the_frame_minus_the_margin() {
         let mask = rect(10, 12, 2);
@@ -127,7 +126,6 @@ mod tests {
         assert_eq!(count(&rect(4, 4, 3)), 0);
     }
 
-    // AC: CE-80.1
     #[test]
     fn circle_is_centred_symmetric_and_inside_the_margin() {
         let mask = circle(20, 20, 1);
@@ -144,7 +142,6 @@ mod tests {
         assert!((1200..1300).contains(&full), "{full}");
     }
 
-    // AC: CE-80.1
     #[test]
     fn ragged_circle_erodes_only_its_rim_and_stays_one_piece() {
         let (n, margin) = (48, 2);
