@@ -24,6 +24,13 @@ inputs:
       need xtask: `true` or `false`. Only the gate job on `main` passes `true`.
     required: false
     default: 'false'
+  gui-packages:
+    description: >-
+      Whether to install the Linux packages of gate/linux-packages.txt that the Tauri crates need
+      to build: `true` or `false`. The downloaded `.deb` files are cached by the runner image and
+      the list.
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -62,3 +69,41 @@ runs:
       with:
         path: target/xtask-bin/debug/xtask
         key: xtask-bin-${{ runner.os }}-${{ hashFiles('xtask/**', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/**') }}
+
+    # The Linux packages of the GUI, from the list of gate/linux-packages.txt. The downloaded
+    # `.deb` files are cached; the image goes into the key because a new runner image has other
+    # versions of the packages.
+    - name: Read the runner image
+      id: image
+      if: inputs.gui-packages == 'true'
+      shell: bash
+      run: echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+
+    # The folder belongs to root, and the cache action restores as the runner user.
+    - name: Open the package folder
+      if: inputs.gui-packages == 'true'
+      shell: bash
+      run: sudo chown "$(id -u)" /var/cache/apt/archives
+
+    - name: Restore the Linux packages
+      id: packages
+      if: inputs.gui-packages == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: /var/cache/apt/archives/*.deb
+        key: linux-packages-${{ runner.os }}-${{ steps.image.outputs.image }}-${{ hashFiles('gate/linux-packages.txt') }}
+
+    - name: Install the Linux packages
+      if: inputs.gui-packages == 'true'
+      shell: bash
+      run: |
+        sudo apt-get update
+        xargs -a gate/linux-packages.txt sudo apt-get install --no-install-recommends --yes
+
+    # Only a job that saves its caches saves this one, and only after a miss.
+    - name: Save the Linux packages
+      if: inputs.gui-packages == 'true' && inputs.save-cache == 'true' && steps.packages.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: /var/cache/apt/archives/*.deb
+        key: linux-packages-${{ runner.os }}-${{ steps.image.outputs.image }}-${{ hashFiles('gate/linux-packages.txt') }}
