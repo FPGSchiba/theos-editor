@@ -44,7 +44,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P45 | Atlas level switcher | theos-editor | todo | | |
 | P46 | Git read | theos-editor | spec-pr | | |
 | P47 | Git write | theos-editor | todo | | |
-| P48 | MCP read | theos-editor | in-progress | #53 | |
+| P48 | MCP read | theos-editor | pr-open | #53 | draft, branch `phase/P48-mcp-read` |
 | P49 | Releases and the check action | theos-editor | todo | | |
 | P50 | Leaner CI | theos-editor | done | #45, #46 | #48 |
 
@@ -56,6 +56,19 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
+- P48's build PR (a draft labelled `needs-jann`, branch `phase/P48-mcp-read`) waits for Jann:
+  - The final review loop reached its cap of 5 rounds with one Minor open (R5-1): after the
+    handshake, rmcp 3.12 treats a failed stdin read as closed input and only logs a failed
+    stdout write, so `theos-mcp` exits 0 there, not 2 as spec §5.2 and the crate README say.
+    The fix is the README line and a spec erratum; no code change.
+  - The recorded Claude Code session that spec §5.14 asks for as CE-18.1/CE-18.2 evidence is
+    blocked: "MCP server blocked by enterprise policy: theos". Jann allows the server in the
+    managed MCP policy, or runs the session himself. The stdio tests prove all three ACs.
+  - Spec errata from the build, for a docs PR: §4.3 (rmcp still needs
+    `#[expect(clippy::unused_async_trait_impl)]` with a hand-written `ServerHandler`), §5.2
+    (exit code after the handshake, R5-1), §5.11 (an unknown parameter is an `isError` result,
+    not a protocol error), §5.13 (the fixture lives in `theos-studio`).
+  - P11 merged P48's early commits (257fd87) and opens its PR after P48's has merged.
 - P08's build PR #44 is a draft labelled `needs-jann`. The final review loop reached its cap of
   five rounds with 6 Minor findings open. A targeted fix and review round, which Jann asked for
   on 25 Nov 2026, closed them. Its spec changes reached main with #40 (rulings 51–75) and #47
