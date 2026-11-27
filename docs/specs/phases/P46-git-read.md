@@ -1,6 +1,10 @@
 # P46 · Git read — phase spec
 
-Status: waiting for Jann's approval · 27 Nov 2026 · repo of the build: `theos-editor`
+Status: approved (#52) · 27 Nov 2026 · repo of the build: `theos-editor`
+Changes: 27 Nov 2026 — process trees through a `win32job` job on Windows and a process group with
+`nix`'s `killpg` on Unix, not `process-wrap` (§4.2, §4.3, §5.1, §5.3, §7, §9 R2, R3; Jann). Why:
+the plan's re-probe measured `process-wrap`'s job object at about 70 ms more per git start on
+Windows, which breaks §5.3's limit.
 Source: `docs/specs/00-umbrella.md` §3 P46, umbrella version 8. Version 5 (#33) split the old
 "Command layer and git" into P06, P46 Git read and P47 Git write. Scope and acceptance criteria
 come from there; this spec decides how. It starts from P05's interfaces (P05 spec §5.2, §6) and
@@ -79,10 +83,20 @@ The diff itself lives in `theos-content` and needs no git, so P07 can show a pro
 - **The rename threshold.** A short truth (9 lines) renamed `T-012` → `T-013` in one commit that
   also rewrites its title and its one body line: `git log --follow` with git's default threshold
   (50 %) loses the history (`A T-013.md` only); with `-M30%` it keeps it (`R046`). §9 R1 decides.
-- **process-wrap.** P06's probe (12 Nov, 10.0.1): `Child::kill` on git, run through an alias that
-  starts `sh` and `sleep`, left all three running; process-wrap's `JobObject` (Windows) killed
-  them all, `ProcessGroup` does the same on Unix. Versions today: 10.0.1 (23 Sep 2026), 10.0.2
-  and 11.0.0 (both 24 Nov 2026, three days old). §9 R2 decides.
+- **Process trees.** P06's probe (12 Nov): `Child::kill` on git, run through an alias that starts
+  `sh` and `sleep`, left all three running. The plan's re-probe (27 Nov, toolchain 1.99.1), with
+  that alias writing a marker file after `sleep 2`; three ways stop the whole tree (no marker
+  appears):
+
+  | Way (Windows) | `git --version`, start to exit | Stopping the tree |
+  |---|---|---|
+  | `std::process::Command`, no tree handling | 8–10 ms | – (the tree lives on) |
+  | `process-wrap` 10.0.1 `JobObject` | 80–84 ms: the spawn alone takes 75 ms, because the process starts suspended and is resumed by scanning every thread of the system (Toolhelp snapshot) | yes |
+  | `win32job` 2.0.3: a job with kill-on-close, git assigned right after `spawn` | 9–11 ms | 1.6 ms (the job is closed) |
+  | `taskkill /T /F /PID` on cancel only | 8–10 ms | 380 ms; misses a process whose parent already exited |
+
+  Jann chose `win32job` (§9 R2). On Unix, std's `CommandExt::process_group(0)` starts git in its
+  own group, and `nix`'s `killpg` (nix 0.31 is already in `Cargo.lock`) stops it.
 - From P06 §11: `similar`'s `capture_diff_slices` over whitespace-free word tokens gives exactly
   `git diff --word-diff --word-diff-regex='[^[:space:]]+'`; `from_words` and
   `from_unicode_words` count whitespace as tokens, so a re-wrap shows as changes.
@@ -96,7 +110,7 @@ The diff itself lives in `theos-content` and needs no git, so P07 can show a pro
 | Field diff | Compare P02's parsed front matter by value | A line diff of the front matter (shows quoting and list style as changes, not old and new per field) |
 | Unstaged renames | `git add -N` on a temporary copy of the index, then git's own rename detection | Pairing deleted and new records in theos (re-implements git's similarity); showing them unpaired (Jann chose pairing) |
 | History across renames | `git log --follow` | theos's own walk over rename pairs (re-implements `--follow`); a rename trailer written by P47's commit (misses renames made outside the editor, and the journal that knows renames lives in memory only) |
-| Process trees | `process-wrap` (`JobObject`, `ProcessGroup`) | `Child::kill` (leaves grandchildren running, probe); own Win32 job code (`unsafe`, forbidden by G3) |
+| Process trees | Windows: `win32job` (a job with kill-on-close); Unix: std `process_group(0)` and `nix::sys::signal::killpg` | `Child::kill` (leaves grandchildren running, probe); `process-wrap` (+70 ms per git start on Windows, probe); `taskkill`/`kill` on cancel (380 ms, misses orphans); own Win32 job code (`unsafe`, forbidden by G3) |
 | Version parsing | A small parser of `git version X.Y.Z…` | `semver` (rejects `2.56.1.windows.1` and `2.39.3 (Apple Git-146)`) |
 
 ## 5. Design
@@ -106,7 +120,7 @@ The diff itself lives in `theos-content` and needs no git, so P07 can show a pro
 | Part | Crate | Tool or crate | Custom code, and why |
 |---|---|---|---|
 | Version check | `theos-vcs` | `git --version` | Parsing the leading `X.Y.Z` of git's answer: no crate reads git's version string (§4.3) |
-| Cancellable run, process trees | `theos-vcs` | `process-wrap` (`std`, `job-object`, `process-group`) | The wait loop that watches the cancel flag |
+| Cancellable run, process trees | `theos-vcs` | `win32job` (Windows), std `process_group` and `nix` `killpg` with the `signal` feature (Unix) | The wait loop that watches the cancel flag |
 | Read options | `theos-vcs` | git's `-c` and its flags | One list (§5.3) |
 | Status | `theos-vcs` | `ls-files`, `add -N`, `status --porcelain=v2 -z` | Parsing git's `-z` porcelain v2 lines, as P05 parses `-z` name-status and `ls-files -s` |
 | History | `theos-vcs` | `log --follow --name-status -z` | Parsing the format §5.6 asks for |
@@ -189,10 +203,16 @@ impl Git {
 
 - **One spawn path.** `run` keeps its signature (P05 §6) and calls `run_cancellable` with a flag
   nobody sets, so every git command, the hook's included, runs the same way.
-- **Process trees.** git is started through `process-wrap`'s `std` API, in a job object on
-  Windows (`JobObject`) and in a new process group on Unix (`ProcessGroup::leader()`). On cancel
-  the whole group or job is killed, then waited for, and the run returns `Cancelled`. This is the
-  per-OS code of the phase (§5.10).
+- **Process trees.** git is started with `std::process::Command`.
+  - Windows: a `win32job::Job` with kill-on-close is made for the run, and git is assigned to it
+    right after `spawn` returns, before anything else; every process git starts afterwards joins
+    the job. On cancel the job is closed, which ends every process in it. A failed assignment
+    kills git and is `GitError::Io`.
+  - Unix: git starts in its own process group (`CommandExt::process_group(0)`); on cancel the group
+    gets `SIGKILL` through `nix::sys::signal::killpg`.
+
+  Then git is waited for, and the run returns `Cancelled`. This is the per-OS code of the phase
+  (§5.10).
 - **The wait.** stdout and stderr are read on their own threads, stdin is written on a third (as
   in P05). The calling thread waits for the process and checks the flag. A cancel is noticed
   within 50 ms, and a command that finishes in a few milliseconds is not slowed by more than a
@@ -545,6 +565,8 @@ files than fit on one Windows command line.
 | `split-index` or a sparse index in the copied index | The temporary index cannot be read, or reads differently | A test with `core.splitIndex=true`. A failure is a `GitError`, never a wrong answer. Sparse checkouts are not tested (content projects do not use them) |
 | User settings that change git's output | Parsing fails or misreads | The read options of §5.3 and the hostile-settings test |
 | A job object inside a job object (theos in a hook, run by an IDE that uses jobs) | Creating the job fails on old Windows | Windows 8 and later nest jobs; G2's Windows is 11 |
+| A process git starts before it is assigned to the job (Windows) | That process survives a cancel | git loads for milliseconds before it starts anything, and the assignment follows `spawn` at once; the cancel test proves the tree stops |
+| git in its own process group (Unix) | Ctrl+C in a terminal reaches theos, not git | theos's reads end in milliseconds; P47 decides for pull and push, which can wait on the network |
 | Myers and git's xdiff choose different alignments when several are minimal | The editor marks other words than `git diff --word-diff` | Both are minimal; the oracle test uses pairs with one alignment |
 | A huge record or a rewrite of all of it | A slow diff | The deadline of §5.7 |
 | `log --follow` follows only one path and simplifies merges | A history through a merge that renamed the file on one side may lose the older part | Tests cover renames on a branch merged into `main`; a loss there is a `--follow` limit, listed for Jann if the build finds one |
@@ -577,12 +599,14 @@ files than fit on one Windows command line.
    the editor's own rename changes one line of the record — cost if wrong: a short record renamed
    and rewritten in one commit loses its older history in the editor, as it does in `git log
    --follow`; a lower threshold is then a one-line change.
-2. Ruling: `process-wrap` 10.0.1, not 11.0.0 or 10.0.2 — P06 probed 10.0.1, and the newer two
-   were released three days ago; the plan re-probes it on the pinned toolchain before the build
-   uses it — cost if wrong: a later upgrade.
+2. Ruling (Jann, 27 Nov 2026): `win32job` 2.0.3 on Windows and a process group with `nix`'s
+   `killpg` on Unix, not `process-wrap` — `process-wrap` adds about 70 ms to every git start on
+   Windows (§4.2), and 2.0.3 is the version probed (2.1.0 is 17 days old) — cost if wrong: a
+   process started in the microseconds before the assignment survives a cancel.
 3. Ruling: one spawn path for every git command, `run` included — two paths would test the
-   process-tree code only on the reads — cost if wrong: the hook also starts git in a job object,
-   which a policy that forbids nested jobs would break.
+   process-tree code only on the reads; with `win32job` a start costs no measurable time — cost if
+   wrong: the hook also starts git in a job object, which a policy that forbids nested jobs would
+   break.
 4. Ruling: fields are compared by value, and a byte change without a field or word change is
    `layout_only` — CE-21.2 asks for old and new per field, which is the value; a reformat is not a
    content change — cost if wrong: a comment edit is visible only as "layout only".

@@ -35,7 +35,8 @@ body { min-height: 100vh; display: flex; flex-direction: column; }
 .hx-callout[data-callout="design"] { border-left-color: var(--sig-info); }
 .hx-callout[data-callout="note"] { border-left-color: var(--sig-attention); }
 .hx-callout[data-note-state="resolved"] { border-left-color: var(--sig-approve); }
-.hx-callout[data-note-state="dropped"] { border-left-color: var(--textMute); opacity: 0.7; }
+.hx-callout[data-note-state="dropped"] { border-left-color: var(--textMute); }
+.hx-callout[data-note-state="dropped"] .hx-note__id { color: var(--textDim); }
 .hx-note__head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font: 400 10.5px/16px var(--font-mono); color: var(--textDim); }
 .hx-note__id { font-weight: 600; color: var(--text); }
 .hx-note__state { display: inline-flex; align-items: center; gap: 6px; }

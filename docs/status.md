@@ -17,7 +17,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P08 | Map format and terrain generator | theos-editor | done | #27 | #44 |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
 | P10 | Prose editor research | theos-editor | done | #3 | #11 |
-| P11 | Editor shell and Codex | theos-editor | todo | | |
+| P11 | Editor shell and Codex | theos-editor | spec-pr | | |
 | P12 | Manuscript editor | theos-editor | todo | | |
 | P13 | Changes and Review screens | theos-editor | todo | | |
 | P14 | Start and Settings | theos-editor | todo | | |
@@ -35,16 +35,16 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P26 | Style bible and briefs | theos-editor | todo | | |
 | P27 | Asset pipelines | theos-editor | todo | | |
 | P28 | Workflow catalogue and asset guide | tower-of-theos | todo | | |
-| P29 | Settlements and child maps | theos-editor | todo | | |
+| P29 | Settlements and child maps | theos-editor | spec-pr | #54 | |
 | P30 | Levels in the generator | theos-editor | todo | | |
 | P31 | Floor frame and places | theos-editor | todo | | |
 | P32 | Recipe families | theos-editor | todo | | |
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
-| P34 | Interiors | theos-editor | todo | | |
+| P34 | Interiors | theos-editor | spec-pr | | |
 | P45 | Atlas level switcher | theos-editor | todo | | |
 | P46 | Git read | theos-editor | spec-pr | | |
 | P47 | Git write | theos-editor | todo | | |
-| P48 | MCP read | theos-editor | pr-open | #53 | draft, branch `phase/P48-mcp-read` |
+| P48 | MCP read | theos-editor | pr-open | #53 | #61 |
 | P49 | Releases and the check action | theos-editor | todo | | |
 | P50 | Leaner CI | theos-editor | done | #45, #46 | #48 |
 
@@ -56,7 +56,7 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
-- P48's build PR (a draft labelled `needs-jann`, branch `phase/P48-mcp-read`) waits for Jann:
+- P48's build PR #61 (labelled `needs-jann`, ready for review) waits for Jann's merge:
   - The final review loop reached its cap of 5 rounds with one Minor open (R5-1, the exit code
     after the handshake). On Jann's word, a targeted fix round fixed the crate README; the spec
     erratum for §5.2 is in the list below.
@@ -68,6 +68,13 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
     (exit code after the handshake, R5-1), §5.11 (an unknown parameter is an `isError` result,
     not a protocol error), §5.13 (the fixture lives in `theos-studio`).
   - P11 merged P48's early commits (257fd87) and opens its PR after P48's has merged.
+- P11 (spec PR, 27 Nov 2026):
+  - Theos UI's light mode: Jann hands it over once it is final, as a change to
+    `design/theos-ui/`. P11 takes every colour from tokens and sets `data-theme` on the root, so
+    the light theme needs new tokens and a switch only (P11 spec §5.7).
+  - P11's gate PR (`ci(gate): the ui check and the editor's build needs (gate)`) waits for Jann
+    and must merge before the build PR. When Jann merges it, he switches the live ruleset to add
+    `ui` to the required checks (`cargo xtask github apply`).
 - P08's build PR #44 is a draft labelled `needs-jann`. The final review loop reached its cap of
   five rounds with 6 Minor findings open. A targeted fix and review round, which Jann asked for
   on 25 Nov 2026, closed them. Its spec changes reached main with #40 (rulings 51–75) and #47

@@ -119,7 +119,9 @@ that map's frame:
 
 An input of type `feature` asks for one feature of the source version: the editor offers the
 features of the `features` output of the version given as `from`, and sends the chosen feature's
-id as a string, for example `{"feature": "town-2"}`. A child map (a settlement inside a region, an
+id as a string, for example `{"feature": "town-2"}`. The input may list the feature types it accepts,
+`{"type": "feature", "parent_types": ["town", "city"]}`; the editor then offers only features of
+those types, and the generator refuses any other. A child map (a settlement inside a region, an
 interior inside a ruin) is made this way. Its seed is the request's seed, like any other run, so
 several seeds give several candidates for the same place.
 
