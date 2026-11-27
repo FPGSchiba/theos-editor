@@ -5,12 +5,13 @@
 //! folder, a folder's place in it, its boolean settings and its hooks folder, [`Folding`], how the repository compares paths (`core.ignorecase`,
 //! `core.precomposeunicode`), and [`staged`], a reader of the staged snapshot: the changes, the
 //! tracked paths in git's spelling, the staged bytes of edited files and of any object, and
-//! [`read`], a file's bytes at a version, and [`status`], the status with unstaged renames
-//! paired.
+//! [`read`], a file's bytes at a version, [`status`], the status with unstaged renames
+//! paired, and [`history`], a file's commits across renames.
 
 mod cancel;
 mod folding;
 mod git;
+pub mod history;
 pub mod read;
 mod read_args;
 pub mod repo;

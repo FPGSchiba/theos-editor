@@ -5,7 +5,7 @@
 //! with `git add --intent-to-add` to a temporary copy of the index, and the status is read from
 //! that copy; the real index is never written.
 
-mod parse;
+pub(crate) mod parse;
 
 use std::collections::HashMap;
 use std::ffi::OsStr;

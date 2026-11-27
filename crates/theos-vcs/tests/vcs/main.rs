@@ -3,6 +3,7 @@
 mod cancel;
 mod common;
 mod git;
+mod history;
 mod read;
 mod repo;
 mod staged;

@@ -114,8 +114,8 @@ fn split(rest: &[u8], count: usize) -> Result<Vec<&[u8]>, String> {
     }
 }
 
-/// One side of an `XY` field.
-fn change(letter: u8) -> Result<Change, String> {
+/// The change a letter names: one side of an `XY` field, or the letter of a `--name-status` line.
+pub(crate) fn change(letter: u8) -> Result<Change, String> {
     Ok(match letter {
         b'.' => Change::Unchanged,
         b'M' => Change::Modified,
