@@ -195,7 +195,7 @@ to it is made in both, in agreement between the two phases.
    package layer table, the standard renders, the feature types (the constraint paths
    `features.<type>`) and the `needs` check are looked up per kind: one table per kind, chosen by
    `MapKind`, with terrain's unchanged. `base` is standard for every kind and lies on the child's
-   frame. Settlement: P29 §5.14–§5.15; interior: P34 §….
+   frame. Settlement: P29 §5.14–§5.15; interior: P34 §5.10–§5.11.
 8. **Features without geometry.** `Geometry` gets `None`, written as GeoJSON `"geometry": null`
    (`docs/map-package.md` §5, `connection`).
 9. **Golden runs.** A golden run is `{recipe, seed, inputs, from: Option<(recipe, seed)>}`; the
