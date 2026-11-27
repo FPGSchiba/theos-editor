@@ -94,6 +94,47 @@ fn orientation_and_crossings_use_integers() {
         Crossing::Touch(q(2, 0, 1))
     );
     assert_eq!(segments(p(2, 1), p(2, 1), p(0, 0), p(4, 0)), Crossing::None);
+    // Collinear on a vertical and a diagonal line, with reversed endpoints and arguments.
+    assert_eq!(
+        segments(p(0, 0), p(0, 4), p(0, 2), p(0, 8)),
+        Crossing::Overlap
+    );
+    assert_eq!(
+        segments(p(0, 4), p(0, 0), p(0, 8), p(0, 2)),
+        Crossing::Overlap
+    );
+    assert_eq!(
+        segments(p(0, 2), p(0, 8), p(0, 0), p(0, 4)),
+        Crossing::Overlap
+    );
+    assert_eq!(
+        segments(p(0, 0), p(4, 4), p(4, 4), p(8, 8)),
+        Crossing::Touch(q(4, 4, 1))
+    );
+    assert_eq!(
+        segments(p(8, 8), p(4, 4), p(4, 4), p(0, 0)),
+        Crossing::Touch(q(4, 4, 1))
+    );
+    assert_eq!(
+        segments(p(4, 4), p(0, 0), p(8, 8), p(4, 4)),
+        Crossing::Touch(q(4, 4, 1))
+    );
+    assert_eq!(segments(p(0, 0), p(2, 2), p(3, 3), p(5, 5)), Crossing::None);
+    assert_eq!(
+        segments(p(0, 0), p(6, 6), p(2, 2), p(9, 9)),
+        Crossing::Overlap
+    );
+    // An endpoint of either segment lying on the other.
+    let touch = Crossing::Touch(q(2, 0, 1));
+    assert_eq!(segments(p(0, 0), p(4, 0), p(2, 5), p(2, 0)), touch);
+    assert_eq!(segments(p(2, 0), p(2, 5), p(0, 0), p(4, 0)), touch);
+    assert_eq!(segments(p(2, 5), p(2, 0), p(0, 0), p(4, 0)), touch);
+    assert_eq!(segments(p(0, 0), p(4, 0), p(2, 0), p(2, 5)), touch);
+    // A large crossing whose coordinates do not cancel: x = m / (2m - 1).
+    assert_eq!(
+        segments(p(-m, -m), p(m, m), p(-m, 0), p(m, 1)),
+        Crossing::Proper(q(i128::from(m), i128::from(m), 2 * i128::from(m) - 1))
+    );
     // Near i32::MAX: proper crossing with huge numerators, and a touch.
     assert_eq!(
         segments(p(-m, -m), p(m, m), p(-m, m), p(m, -m)),
@@ -128,4 +169,26 @@ fn contains_tells_inside_outside_boundary_and_holes() {
     assert_eq!(contains(&poly, p(20, 8)), Containment::Outside);
     assert_eq!(contains(&poly, p(-1, 8)), Containment::Outside);
     assert_eq!(contains(&poly, p(10, 8)), Containment::Inside);
+}
+
+#[test]
+fn contains_handles_vertices_and_rays_through_vertices() {
+    let poly = Polygon {
+        outer: vec![p(0, 0), p(16, 0), p(16, 16), p(0, 16)],
+        holes: vec![vec![p(4, 4), p(4, 8), p(8, 8), p(8, 4)]],
+    };
+    assert_eq!(contains(&poly, p(4, 4)), Containment::Boundary);
+    assert_eq!(contains(&poly, p(8, 8)), Containment::Boundary);
+    assert_eq!(contains(&poly, p(16, 16)), Containment::Boundary);
+    // A diamond: rays at y = 8 pass exactly through the vertices (0, 8) and (16, 8).
+    let diamond = Polygon {
+        outer: vec![p(8, 0), p(16, 8), p(8, 16), p(0, 8)],
+        holes: vec![],
+    };
+    assert!(twice_area(&diamond.outer) > 0);
+    assert_eq!(contains(&diamond, p(4, 8)), Containment::Inside);
+    assert_eq!(contains(&diamond, p(-4, 8)), Containment::Outside);
+    assert_eq!(contains(&diamond, p(20, 8)), Containment::Outside);
+    assert_eq!(contains(&diamond, p(8, 8)), Containment::Inside);
+    assert_eq!(contains(&diamond, p(0, 8)), Containment::Boundary);
 }

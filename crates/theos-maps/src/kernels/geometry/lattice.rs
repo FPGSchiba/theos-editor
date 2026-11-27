@@ -1,8 +1,8 @@
 //! The integer lattice of map geometry: points in 1/16 m units, rings and polygons on it.
 //!
 //! Coordinates are `i32` units of 1/16 m, x east and y south. Values entering through [`snap`]
-//! are capped at `|c| <= 2^30` units (about 67,108 km), so that sums and differences of two
-//! lattice values stay far inside `i32` and the predicates have wide headroom in `i128`.
+//! are capped at `|c| <= 2^30` units (about 67,108 km). Differences of two lattice values fit
+//! `i64` and `i128`, not `i32`: never add or subtract lattice values in `i32`.
 
 use serde::{Deserialize, Serialize};
 
@@ -65,16 +65,7 @@ pub fn snap(m: f64) -> Result<i32, LatticeError> {
     if !units.is_finite() || units.abs() > f64::from(COORD_LIMIT) {
         return Err(LatticeError::OutOfRange { metres: m });
     }
-    Ok(to_units(num::round_half_away(units)))
-}
-
-/// A rounded, range-checked float as `i32`.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "the value is an integer within +-2^30, checked by snap"
-)]
-fn to_units(rounded: f64) -> i32 {
-    rounded as i32
+    Ok(num::to_i32(num::round_half_away(units)))
 }
 
 /// Lattice units as metres; exact, as `n / 16` is representable.
