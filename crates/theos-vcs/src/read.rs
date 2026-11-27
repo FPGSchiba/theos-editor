@@ -56,10 +56,25 @@ pub fn read(git: &Git, top: &Path, version: Version<'_>, path: &[u8]) -> Result<
 }
 
 fn work_tree(top: &Path, path: &str) -> Result<Content, GitError> {
+    work_tree_with(top, path, |file| std::fs::read(file))
+}
+
+/// [`work_tree`] with the read of the bytes as a parameter, so a test can make a file vanish
+/// between the metadata and the read.
+fn work_tree_with(
+    top: &Path,
+    path: &str,
+    read: impl FnOnce(&Path) -> std::io::Result<Vec<u8>>,
+) -> Result<Content, GitError> {
     let file = top.join(path);
     let io = |source| GitError::Io { source };
     match std::fs::symlink_metadata(&file) {
-        Ok(meta) if meta.is_file() => std::fs::read(&file).map(Content::File).map_err(io),
+        Ok(meta) if meta.is_file() => match read(&file) {
+            Ok(bytes) => Ok(Content::File(bytes)),
+            // The file vanished between the metadata and the read.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Content::Absent),
+            Err(error) => Err(io(error)),
+        },
         Ok(_) => Ok(Content::NotAFile),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Content::Absent),
         Err(error) => Err(io(error)),
@@ -182,4 +197,45 @@ fn index(git: &Git, top: &Path, path: &str) -> Result<Content, GitError> {
             message: format!("the index has no entry for {path}"),
         })?;
     bytes(git, top, entry.mode, &object)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{Error, ErrorKind};
+
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    // A file that vanishes between the metadata and the read is absent, not an error. The OS cannot
+    // make that race deterministic, so the read is a seam that fails as a vanished file does.
+    #[test]
+    fn a_file_gone_before_the_read_is_absent() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        std::fs::write(dir.path().join("a.md"), b"x")?;
+        let content = work_tree_with(dir.path(), "a.md", |_| {
+            Err(Error::from(ErrorKind::NotFound))
+        })?;
+        assert_eq!(content, Content::Absent);
+        Ok(())
+    }
+
+    #[test]
+    fn another_read_error_stays_an_error() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        std::fs::write(dir.path().join("a.md"), b"x")?;
+        let content = work_tree_with(dir.path(), "a.md", |_| {
+            Err(Error::from(ErrorKind::PermissionDenied))
+        });
+        assert!(matches!(content, Err(GitError::Io { .. })), "{content:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn a_readable_file_is_its_bytes() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        std::fs::write(dir.path().join("a.md"), b"x")?;
+        assert_eq!(work_tree(dir.path(), "a.md")?, Content::File(b"x".to_vec()));
+        Ok(())
+    }
 }
