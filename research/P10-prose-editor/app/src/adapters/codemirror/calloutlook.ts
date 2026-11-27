@@ -69,5 +69,7 @@ export const calloutLook = EditorView.theme({
   ...aside('design', 'var(--sig-info)'),
   ...aside('note', 'var(--sig-attention)'),
   '.cm-line.cm-callout-note[data-note-state="resolved"]': { borderLeftColor: 'var(--sig-approve)' },
-  '.cm-line.cm-callout-note[data-note-state="dropped"]': { borderLeftColor: 'var(--textMute)', opacity: 0.7 },
+  // A dropped note recedes by its edge and a dimmed id; its text keeps `textDim`, never an opacity.
+  '.cm-line.cm-callout-note[data-note-state="dropped"]': { borderLeftColor: 'var(--textMute)' },
+  '.cm-line.cm-callout-note[data-note-state="dropped"] .hx-note__id': { color: 'var(--textDim)' },
 });
