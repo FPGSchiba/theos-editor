@@ -239,6 +239,15 @@ impl ProgramQueue {
         }
     }
 
+    /// Whether the program has a room of `role` left whose `locked` flag equals `locked`, so
+    /// that [`ProgramQueue::take_with_lock`] takes it from the program, not a generic room.
+    #[must_use]
+    pub fn has(&self, role: Role, locked: bool) -> bool {
+        self.entries
+            .iter()
+            .any(|(room, left)| room.role == role && room.locked == locked && *left > 0)
+    }
+
     /// Takes the first program room of `role` with rooms left that `fits`, if any.
     fn take_first(&mut self, role: Role, fits: impl Fn(&ProgramRoom) -> bool) -> Option<Room> {
         let (room, left) = self

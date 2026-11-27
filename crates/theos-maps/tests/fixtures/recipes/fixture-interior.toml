@@ -3,7 +3,7 @@
 # with two open routes and one leaf. Tests only; not a built-in, so `describe` does not list it.
 # The program names six rooms (start, goal, two galleries, a store, an exit). The arcs from the
 # south rim to the centre need at least four path rooms, so the cycle adds generic `path` rooms
-# after the two galleries (7 to 12 rooms in all); no P34 rule places an `exit` room yet.
+# after the two galleries (8 to 13 rooms in all, the exit included).
 id      = "fixture-interior"
 title   = "A small interior, 40 squared"
 kind    = "interior"
@@ -41,6 +41,9 @@ id = "mission"
   min_arc = 1
   [[stage.rule]]
   rule = "leaf"
+  [[stage.rule]]
+  rule = "leaf"
+  role = "exit"
 
 [[stage]]
 id = "space"
@@ -53,4 +56,4 @@ id = "playability"
 
 [constraints]
 "stages.mission.short"      = [0, 0]
-"stages.playability.rooms"  = [7, 12]
+"stages.playability.rooms"  = [8, 13]

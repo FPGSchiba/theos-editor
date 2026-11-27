@@ -15,17 +15,16 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::recipe::{Planning, RecipeOrigin, parse, plan};
+use crate::RunError;
 use crate::rooms::lattice::Lattice;
 use crate::rooms::{Cell, Connection, LatticeRef, Passage, Role, Room, RoomGraph, Shape};
-use crate::runner::{Execution, RunOptions, execute};
+use crate::runner::Execution;
 use crate::stage::{
     LayerSpec, MapKind, Registry, StageContext, StageError, StageReport, TypedStage,
 };
 use crate::stages::interior::playability_core::Analysis;
-use crate::stages::interior::support::ROOM_GRAPH;
+use crate::stages::interior::support::{ROOM_GRAPH, execute_recipe};
 use crate::world::{Layer, ValueType};
-use crate::{CancelToken, RunError};
 
 /// The parameters of `hand_graph`.
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -132,22 +131,7 @@ fn recipe(key_behind_lock: bool) -> String {
 fn run(key_behind_lock: bool) -> Result<Execution, RunError> {
     let mut registry = Registry::builtin();
     registry.add(Box::new(HandGraph));
-    let loaded = parse(&recipe(key_behind_lock), RecipeOrigin::Builtin)?;
-    let planned = plan(
-        &loaded,
-        &registry,
-        &serde_json::Map::new(),
-        Planning::Standalone,
-    )?;
-    execute(
-        &planned,
-        1,
-        &registry,
-        &RunOptions::default(),
-        None,
-        &mut |_| {},
-        &CancelToken::new(),
-    )
+    execute_recipe(&recipe(key_behind_lock), &registry, 1)
 }
 
 // AC: CE-80.3

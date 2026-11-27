@@ -96,13 +96,32 @@ impl TypedStage for Mission {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stage::Stage;
+    use crate::rooms::{Role, RoomGraph};
+    use crate::stage::{Registry, Stage};
+    use crate::stages::interior::support::execute_recipe;
 
     fn refusal(text: &str) -> Option<(String, Option<String>)> {
         Mission
             .params(&toml::from_str(text).unwrap())
             .err()
             .map(|e| (e.stage, e.parameter))
+    }
+
+    // AC: CE-80.2
+    #[test]
+    fn the_fixture_places_exactly_its_one_exit() {
+        let text = include_str!("../../../tests/fixtures/recipes/fixture-interior.toml");
+        for seed in 1..=3 {
+            let done = execute_recipe(text, &Registry::builtin(), seed).unwrap();
+            let g = done.world.value::<RoomGraph>("room_graph").unwrap();
+            let exits: Vec<&str> = g
+                .rooms
+                .iter()
+                .filter(|r| r.role == Role::Exit)
+                .map(|r| r.ty.as_str())
+                .collect();
+            assert_eq!(exits, ["gate"], "seed {seed}");
+        }
     }
 
     #[test]

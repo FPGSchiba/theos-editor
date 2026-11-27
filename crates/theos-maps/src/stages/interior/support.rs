@@ -19,6 +19,33 @@ pub(super) const SPACE_LAYERS: [LayerSpec; 5] = [
 /// The room graph's declaration, as `mission` writes it and the later stages read it.
 pub(super) const ROOM_GRAPH: LayerSpec = LayerSpec::value("room_graph", RoomGraph::NAME);
 
+/// Plans `text` (a recipe) with `registry` and runs it with seed `seed`, for the tests that need
+/// the world of a run.
+#[cfg(test)]
+pub(super) fn execute_recipe(
+    text: &str,
+    registry: &crate::stage::Registry,
+    seed: u64,
+) -> Result<crate::runner::Execution, crate::RunError> {
+    use crate::recipe::{Planning, RecipeOrigin, parse, plan};
+    let loaded = parse(text, RecipeOrigin::Builtin)?;
+    let planned = plan(
+        &loaded,
+        registry,
+        &serde_json::Map::new(),
+        Planning::Standalone,
+    )?;
+    crate::runner::execute(
+        &planned,
+        seed,
+        registry,
+        &crate::runner::RunOptions::default(),
+        None,
+        &mut |_| {},
+        &crate::CancelToken::new(),
+    )
+}
+
 /// `metres` of `parameter` in raster cells at run time. The plan has checked it with the same
 /// [`units::cells`], so an error here means the frame changed after planning.
 ///

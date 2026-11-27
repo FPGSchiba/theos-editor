@@ -20,7 +20,7 @@ fn result(manifest: &theos_maps::RunManifest, key: &str) -> Option<f64> {
 #[test]
 fn fixture_interior_runs_and_passes() -> TestResult {
     for seed in 1..=3 {
-        let (_, manifest) =
+        let (package, manifest) =
             run_package("fixture-interior", seed, &recipes()).map_err(|e| e.to_string())?;
         assert_eq!(
             manifest.results.get("pass"),
@@ -30,7 +30,16 @@ fn fixture_interior_runs_and_passes() -> TestResult {
         );
         let rooms =
             result(&manifest, "stages_playability_rooms").ok_or("the room count is a result")?;
-        assert!((7.0..=12.0).contains(&rooms), "seed {seed}: {rooms} rooms");
+        assert!((8.0..=13.0).contains(&rooms), "seed {seed}: {rooms} rooms");
+        // The exit distances exist only when the graph has an exit room the party reaches
+        // (ruling R29: `leaf` with `role = "exit"` places the program's exit).
+        let playability = &package.manifest.summary["stages"]["playability"];
+        for metric in ["start_to_exit_min_m", "goal_to_exit_min_m"] {
+            let m = playability[metric]
+                .as_f64()
+                .ok_or(format!("seed {seed}: no {metric}"))?;
+            assert!(m > 0.0, "seed {seed}: {metric} = {m}");
+        }
         assert_eq!(manifest.frame.size_m, [40.0, 40.0]);
     }
     Ok(())
@@ -67,9 +76,10 @@ fn loader_refusals() -> TestResult {
         (
             "17 keys",
             |t| {
-                t.replace(
+                t.replacen(
                     "  [[stage.rule]]\n  rule = \"leaf\"",
                     "  [[stage.rule]]\n  rule = \"locked_leaf\"\n  count = 17",
+                    1,
                 )
             },
             Some("mission"),
@@ -89,7 +99,7 @@ fn loader_refusals() -> TestResult {
         ),
         (
             "an unknown rule",
-            |t| t.replace("rule = \"leaf\"", "rule = \"attic\""),
+            |t| t.replacen("rule = \"leaf\"", "rule = \"attic\"", 1),
             Some("mission"),
             "rule[1].rule",
         ),

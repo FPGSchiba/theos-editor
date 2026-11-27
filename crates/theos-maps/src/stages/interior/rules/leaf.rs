@@ -1,5 +1,8 @@
 //! Rule `leaf` (spec §5.6): attaches an open dead-end room of the program to a room that does
 //! not lie behind a lock.
+//!
+//! With `role = "exit"` (ruling R29) it attaches the program's open exit rooms the same way. An
+//! exit has no generic room, so the rule has no match once the program has no open exit left.
 
 use serde::Deserialize;
 
@@ -18,12 +21,35 @@ fn every_role() -> Vec<Role> {
     vec![Role::Start, Role::Goal, Role::Path, Role::Leaf, Role::Exit]
 }
 
+/// The role of the rooms the rule attaches.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum Attach {
+    /// Dead ends, from the program or generic `leaf` rooms.
+    #[default]
+    Leaf,
+    /// Exit rooms, from the program only.
+    Exit,
+}
+
+impl Attach {
+    fn role(self) -> Role {
+        match self {
+            Self::Leaf => Role::Leaf,
+            Self::Exit => Role::Exit,
+        }
+    }
+}
+
 /// The parameters of `leaf`.
 #[derive(Debug, Deserialize)]
 struct Params {
     /// The roles a host may have; locked rooms are never hosts.
     #[serde(default = "every_role")]
     from_roles: Vec<Role>,
+    /// The role of the attached rooms; `leaf` when left out.
+    #[serde(default)]
+    role: Attach,
 }
 
 /// Every (free cell, host room) pair where the cell borders the host and `host_ok` accepts the
@@ -73,19 +99,25 @@ impl Rule for Leaf {
         let Some(p) = params_of::<Params>(p) else {
             return Vec::new();
         };
+        if p.role == Attach::Exit && !s.program.has(Role::Exit, false) {
+            return Vec::new();
+        }
         attach_matches(s, |_, room| {
             !room.locked && p.from_roles.contains(&room.role)
         })
     }
 
-    /// Places the next open leaf room of the program on the match cell, joined open to the host.
-    fn apply(&self, s: &mut MissionState, m: &Match, _: &dyn RuleParams, _: &mut StageRng) {
-        let (Some(&cell), Some(&host)) = (m.cells.first(), m.rooms.first()) else {
+    /// Places the next open room of the program of the rule's role on the match cell, joined
+    /// open to the host.
+    fn apply(&self, s: &mut MissionState, m: &Match, p: &dyn RuleParams, _: &mut StageRng) {
+        let (Some(&cell), Some(&host), Some(p)) =
+            (m.cells.first(), m.rooms.first(), params_of::<Params>(p))
+        else {
             return;
         };
         let room = Room {
             cells: vec![cell],
-            ..s.program.take_with_lock(Role::Leaf, false)
+            ..s.program.take_with_lock(p.role.role(), false)
         };
         let id = s.add_room(room);
         s.connect(host, id, Passage::Open, false);
@@ -172,11 +204,64 @@ mod tests {
 
     // AC: CE-80.2
     #[test]
+    fn leaf_places_exit_rooms() {
+        let more = [
+            program_room("strongroom", Role::Exit, (1, 1), true),
+            program_room("gate", Role::Exit, (1, 1), false),
+            program_room("crypt", Role::Leaf, (1, 1), false),
+        ];
+        let mut s = with_vault(&more);
+        let exits = parsed("role = \"exit\"");
+        assert_eq!(
+            Leaf.matches(&s, exits.as_ref()),
+            Leaf.matches(&s, parsed("").as_ref()),
+            "exits attach where leaves do"
+        );
+        let r = run(&mut s, &[entry("leaf", 3, false, "role = \"exit\"")], 2);
+        assert_eq!(
+            r.applied, 1,
+            "one open exit in the program, no generic exit"
+        );
+        assert_eq!(s.program.exhausted(), None);
+        assert_eq!(solvable(&s.graph), Ok(()));
+        let placed = &s.graph.rooms[3];
+        assert_eq!(
+            (placed.ty.as_str(), placed.role, placed.locked),
+            ("gate", Role::Exit, false)
+        );
+        assert_eq!(s.graph.rooms.len(), 4);
+        let c = s.graph.connections.iter().find(|c| c.b == 3).unwrap();
+        assert_eq!((c.kind, c.main), (Passage::Open, false));
+        assert_ne!(c.a, 2, "nothing hangs off the vault");
+        // The plain rule still takes the leaf, not the exit left behind its lock.
+        run(&mut s, &[entry("leaf", 1, true, "")], 3);
+        assert_eq!(s.graph.rooms[4].ty, "crypt");
+    }
+
+    // AC: CE-80.2
+    #[test]
+    fn exit_leaf_without_program_exit_has_no_match() {
+        let more = [program_room("strongroom", Role::Exit, (1, 1), true)];
+        let mut s = with_vault(&more);
+        let exits = parsed("role = \"exit\"");
+        assert_eq!(Leaf.matches(&s, exits.as_ref()), []);
+        let r = run(&mut s, &[entry("leaf", 2, true, "role = \"exit\"")], 1);
+        assert_eq!((r.applied, r.short), (0, 2));
+        assert_eq!(s.program.exhausted(), None);
+        assert_eq!(s.graph.rooms.len(), 3);
+    }
+
+    // AC: CE-80.2
+    #[test]
     fn leaf_refuses_unknown_roles() {
         let err = Leaf
             .params(&toml::from_str("from_roles = [\"attic\"]").unwrap())
             .unwrap_err();
         assert_eq!(err.parameter.as_deref(), Some("from_roles[0]"));
+        let err = Leaf
+            .params(&toml::from_str("role = \"goal\"").unwrap())
+            .unwrap_err();
+        assert_eq!(err.parameter.as_deref(), Some("role"));
         assert_eq!(Leaf.makes_keys(parsed("").as_ref(), 9), 0);
     }
 }
