@@ -72,6 +72,19 @@ async fn never_and_locked_in_every_result() -> TestResult {
         beliefs.iter().any(|b| b["distorts"]["id"] == "T-911"),
         "{holder}"
     );
+    // As a value of a lens entry a parent layer sets, which the holder's entry replaces.
+    let fields = holder["records"][0]["lens"]["fields"]
+        .as_array()
+        .ok_or("no lens fields")?;
+    let unaware = fields
+        .iter()
+        .find(|f| f["field"] == "unaware_of")
+        .ok_or("no unaware_of")?;
+    assert_eq!(unaware["value"][0]["id"], "T-912", "{unaware}");
+    let replaced = &unaware["overrides"][0]["value"][0];
+    assert_eq!(replaced["id"], "T-911", "{unaware}");
+    assert_eq!(replaced["never"], true, "{unaware}");
+    assert_eq!(replaced["locked"], json!(["never"]), "{unaware}");
     let link_targets: Vec<&Value> = belief["records"][0]["links"]
         .as_array()
         .ok_or("no links")?

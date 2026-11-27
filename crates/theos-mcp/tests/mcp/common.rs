@@ -22,7 +22,9 @@ pub fn fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../theos-studio/tests/fixtures/projects/codex")
 }
 
-/// Copies the folder `from` into `to`, recursively.
+/// Copies the folder `from` into `to`, recursively, except a `.theos/cache` that a local run left
+/// in the fixture folder. `theos-studio`'s `copy_tree` (`src/test_support/codex.rs`) follows the
+/// same rule; keep the two in step.
 pub fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {

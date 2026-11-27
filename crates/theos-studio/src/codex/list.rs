@@ -1,5 +1,7 @@
 //! `codex::list`: the records of the project, filtered and paged, with their marks.
 
+use theos_content::{FieldSpec, FieldType};
+
 use crate::views::codex::{ListView, RecordRef};
 use crate::{Marks, StudioError, Workspace};
 
@@ -11,7 +13,7 @@ const MAX_LIMIT: usize = 500;
 pub struct ListFilter {
     /// Only records of this registered kind.
     pub kind: Option<String>,
-    /// Only records with this status, `draft` or `canon`.
+    /// Only records with this status, one the registry allows (`draft` or `canon`).
     pub status: Option<String>,
     /// Only records under this project-relative folder, written with `/`.
     pub folder: Option<String>,
@@ -39,12 +41,15 @@ pub fn list(ws: &Workspace, filter: &ListFilter) -> Result<ListView, StudioError
     {
         return Err(StudioError::unknown_kind(ws.registry(), kind));
     }
-    if let Some(status) = &filter.status
-        && !matches!(status.as_str(), "draft" | "canon")
-    {
-        return Err(invalid(format!(
-            "status must be `draft` or `canon`, not `{status}`"
-        )));
+    if let Some(status) = &filter.status {
+        let allowed = status_values(ws);
+        if !allowed.contains(&status.as_str()) {
+            let names: Vec<String> = allowed.iter().map(|name| format!("`{name}`")).collect();
+            return Err(invalid(format!(
+                "status must be one of {}, not `{status}`",
+                names.join(", ")
+            )));
+        }
     }
     let prefix = filter.folder.as_deref().map(folder_prefix).transpose()?;
 
@@ -74,6 +79,25 @@ pub fn list(ws: &Workspace, filter: &ListFilter) -> Result<ListView, StudioError
         total,
         offset: filter.offset,
     })
+}
+
+/// The values the registry allows for `status`, in registration order, without repeats.
+fn status_values(ws: &Workspace) -> Vec<&'static str> {
+    let mut values: Vec<&'static str> = Vec::new();
+    for spec in ws.registry().kinds() {
+        if let Some(FieldSpec {
+            ty: FieldType::Enum(allowed),
+            ..
+        }) = spec.field("status")
+        {
+            for value in *allowed {
+                if !values.contains(value) {
+                    values.push(value);
+                }
+            }
+        }
+    }
+    values
 }
 
 /// The path prefix of a folder filter: the folder with one trailing `/`.

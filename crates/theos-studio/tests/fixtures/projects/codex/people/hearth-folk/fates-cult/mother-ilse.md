@@ -8,4 +8,5 @@ home: fates-shrine
 role: keeper of the Fates' shrine
 lens:
   speaks_to: children and newcomers; calls the player "stair-child"
+  unaware_of: [T-912]
 ---

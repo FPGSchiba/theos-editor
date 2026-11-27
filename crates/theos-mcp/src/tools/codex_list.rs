@@ -32,7 +32,7 @@ impl Server {
     #[tool(
         name = "codex_list",
         input_schema = super::input_schema::<Params>(),
-        description = concat!("List the records of the Theos project that match all given filters (kind, status, folder), ordered by path, one page at a time. ", marks_note!()),
+        description = concat!("List the records of the Theos project that match all given filters (kind, status, folder), ordered by path, one page at a time. ", marks_note!(), " ", read_only_note!()),
         annotations(read_only_hint = true)
     )]
     fn codex_list(&self, Parameters(params): Parameters<Params>) -> Result<Json<ListView>, String> {

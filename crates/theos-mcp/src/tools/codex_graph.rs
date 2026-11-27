@@ -28,7 +28,7 @@ impl Server {
     #[tool(
         name = "codex_graph",
         input_schema = super::input_schema::<Params>(),
-        description = concat!("Return the records within a few links of one record, by distance, and the links between them. ", marks_note!()),
+        description = concat!("Return the records within a few links of one record, by distance, and the links between them. ", marks_note!(), " ", read_only_note!()),
         annotations(read_only_hint = true)
     )]
     fn codex_graph(

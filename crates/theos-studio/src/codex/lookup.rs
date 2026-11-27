@@ -79,6 +79,6 @@ impl Lookup {
     }
 }
 
-fn saturate(value: usize) -> u32 {
+pub(super) fn saturate(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
 }

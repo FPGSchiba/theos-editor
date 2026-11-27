@@ -37,7 +37,7 @@ impl Server {
     #[tool(
         name = "codex_read",
         input_schema = super::input_schema::<Params>(),
-        description = concat!("Read one record by id or path: its full text, links, backlinks, children, findings, effective lens with beliefs and, for a truth, its reveal ledger. ", marks_note!()),
+        description = concat!("Read one record by id or path: its full text, links, backlinks, children, findings, effective lens with beliefs and, for a truth, its reveal ledger. ", marks_note!(), " ", read_only_note!()),
         annotations(read_only_hint = true)
     )]
     fn codex_read(&self, Parameters(params): Parameters<Params>) -> Result<Json<ReadView>, String> {

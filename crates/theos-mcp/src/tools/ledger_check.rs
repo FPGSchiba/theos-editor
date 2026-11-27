@@ -24,7 +24,7 @@ impl Server {
     #[tool(
         name = "ledger_check",
         input_schema = super::input_schema::<Params>(),
-        description = concat!("Return the reveal ledger (each truth with the clues that reveal it) and the findings of the lore rules on those records. ", marks_note!()),
+        description = concat!("Return the reveal ledger (each truth with the clues that reveal it) and the findings of the lore rules on those records. ", marks_note!(), " ", read_only_note!()),
         annotations(read_only_hint = true)
     )]
     fn ledger_check(

@@ -42,8 +42,11 @@ pub struct Marks {
     paths_of_id: HashMap<String, Vec<String>>,
 }
 
-/// The folder of the generated formalism mirror.
-const FORMALISM: &str = "canon/formalism/";
+/// The path prefix of the generated formalism mirror: the folder of `theos_content::formalism`
+/// and a `/`, so a sibling folder such as `canon/formalism-notes/` does not match.
+fn formalism_prefix() -> String {
+    format!("{}/", theos_content::formalism::FOLDER)
+}
 
 impl Marks {
     /// Reads the marks from `index`.
@@ -52,9 +55,10 @@ impl Marks {
     /// [`StudioError::Index`] when the index fails.
     pub fn load(index: &Index) -> Result<Marks, StudioError> {
         let mut marks = Marks::default();
+        let formalism = formalism_prefix();
         let mut kinds: HashMap<String, Option<String>> = HashMap::new();
         for record in index.records()? {
-            if record.path.starts_with(FORMALISM) {
+            if record.path.starts_with(&formalism) {
                 marks.formalism.insert(record.path.clone());
             }
             marks

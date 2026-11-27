@@ -23,7 +23,7 @@ use crate::state::{Locator, State};
 
 /// The read tools of a Theos content project, as an MCP server over stdio.
 #[derive(Parser)]
-#[command(version, about)]
+#[command(about)]
 struct Args {
     /// The project folder. It must hold `theos.toml` and is never searched upward. Without it,
     /// the nearest folder at or above the current one that holds `theos.toml` is used.

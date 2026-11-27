@@ -2,12 +2,14 @@
 
 use std::collections::HashSet;
 
-use theos_content::TruthLedger;
+use theos_content::{BeatRef, LedgerEntry, TruthLedger};
+
+use super::lookup::Lookup;
 
 use crate::check::counts;
 use crate::views::check::FindingView;
-use crate::views::project::{LedgerCheckView, MarkedTruthView};
-use crate::{Marks, StudioError, Workspace};
+use crate::views::project::{LedgerCheckView, MarkedBeatView, MarkedEntryView, MarkedTruthView};
+use crate::{StudioError, Workspace};
 
 /// The ledger of every truth, or of the truth `id`, each with its marks, and the findings whose
 /// rule starts with `lore/` on the paths of those truths and of their clues.
@@ -28,7 +30,7 @@ pub fn ledger_check(ws: &Workspace, id: Option<&str>) -> Result<LedgerCheckView,
         }
         None => ws.index().ledger()?,
     };
-    let marks = Marks::load(ws.index())?;
+    let lookup = Lookup::load(ws)?;
     let paths: HashSet<&str> = ledger
         .iter()
         .flat_map(|truth| {
@@ -48,12 +50,52 @@ pub fn ledger_check(ws: &Workspace, id: Option<&str>) -> Result<LedgerCheckView,
     Ok(LedgerCheckView {
         truths: ledger
             .iter()
-            .map(|truth| MarkedTruthView::new(truth, &marks))
+            .map(|truth| marked_truth(truth, &lookup))
             .collect(),
         findings: findings.iter().map(FindingView::from).collect(),
         errors,
         warnings,
     })
+}
+
+/// The view of `truth`: the marks of its path, and of each clue's path, place and script.
+pub(super) fn marked_truth(truth: &TruthLedger, lookup: &Lookup) -> MarkedTruthView {
+    MarkedTruthView {
+        id: truth.id.clone(),
+        path: truth.path.clone(),
+        title: truth.title.clone(),
+        target: truth.target.clone(),
+        entries: truth
+            .entries
+            .iter()
+            .map(|entry| marked_entry(entry, lookup))
+            .collect(),
+        mark: lookup.marks.of_path(&truth.path),
+    }
+}
+
+fn marked_entry(entry: &LedgerEntry, lookup: &Lookup) -> MarkedEntryView {
+    MarkedEntryView {
+        state: entry.state.clone(),
+        floor: entry.floor,
+        place: entry.place.as_deref().map(|id| lookup.target(id)),
+        gate: entry.gate.clone(),
+        clue: entry.clue.clone(),
+        clue_path: entry.clue_path.clone(),
+        placed_by: entry
+            .placed_by
+            .iter()
+            .map(|beat| marked_beat(beat, lookup))
+            .collect(),
+        mark: lookup.marks.of_path(&entry.clue_path),
+    }
+}
+
+fn marked_beat(beat: &BeatRef, lookup: &Lookup) -> MarkedBeatView {
+    MarkedBeatView {
+        script: lookup.target(&beat.script),
+        beat: beat.beat,
+    }
 }
 
 #[cfg(test)]
@@ -96,6 +138,28 @@ mod tests {
             "{findings}"
         );
         assert!(view.errors >= 1);
+        Ok(())
+    }
+
+    // AC: CE-18.3
+    #[test]
+    fn ledger_entries_name_marked_places_and_scripts() -> TestResult {
+        let (_dir, workspace) = codex_workspace()?;
+        let view = serde_json::to_value(ledger_check(&workspace, Some("T-912"))?)?;
+        let entry = view["truths"][0]["entries"]
+            .as_array()
+            .and_then(|all| all.iter().find(|e| e["clue"] == "C-031"))
+            .ok_or("no entry")?;
+        assert_eq!(entry["place"]["id"], "f04-synthetic");
+        assert_eq!(entry["place"]["exists"], true);
+        assert_eq!(entry["place"]["never"], false);
+        assert_eq!(entry["place"]["locked"], serde_json::json!([]));
+        assert_eq!(entry["placed_by"][0]["script"]["id"], "S-004");
+        assert_eq!(
+            entry["placed_by"][0]["script"]["locked"],
+            serde_json::json!([])
+        );
+        assert_eq!(entry["placed_by"][0]["beat"], 2);
         Ok(())
     }
 

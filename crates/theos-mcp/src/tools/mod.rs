@@ -8,6 +8,13 @@ macro_rules! marks_note {
     };
 }
 
+/// The sentence every tool description ends with: the server never writes.
+macro_rules! read_only_note {
+    () => {
+        "This server is read-only: it never changes a record."
+    };
+}
+
 mod codex_graph;
 mod codex_list;
 mod codex_read;
@@ -38,8 +45,9 @@ pub fn router() -> ToolRouter<Server> {
 }
 
 /// The input schema of a tool whose parameters are `T`. The derived schema of a plain struct
-/// is always valid (the `schema_walk` test checks every tool's), so an invalid one cannot
-/// reach a client; it would show there as an empty schema.
+/// is always valid, so an invalid one cannot reach a client; it would show there as an empty
+/// schema, which the `tools/list` test (`tests/mcp/project_info.rs`) rejects: it checks that
+/// every tool's input schema is an object schema with the expected properties.
 pub fn input_schema<T: JsonSchema + std::any::Any>() -> Arc<JsonObject> {
     schema_for_input::<T>().unwrap_or_default()
 }

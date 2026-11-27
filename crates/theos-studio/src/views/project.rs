@@ -2,12 +2,11 @@
 
 use schemars::JsonSchema;
 use serde::Serialize;
-use theos_content::TruthLedger;
 
 use crate::guides::Guide;
-use crate::marks::{MarkView, Marks};
+use crate::marks::MarkView;
 use crate::views::check::FindingView;
-use crate::views::ledger::EntryView;
+use crate::views::codex::TargetRef;
 
 /// Where the index cache lives.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, JsonSchema)]
@@ -67,7 +66,8 @@ pub struct ProjectInfoView {
     pub tools: Vec<String>,
 }
 
-/// A truth with its marks and the clues that reveal it, each with its marks.
+/// A truth with its marks and the clues that reveal it, each with its marks. P48's own view:
+/// `theos ledger --json` keeps the unmarked views of `views::ledger`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct MarkedTruthView {
     /// The truth id.
@@ -85,37 +85,35 @@ pub struct MarkedTruthView {
     pub mark: MarkView,
 }
 
-/// One clue of a truth: P05's entry plus the marks of the clue, flattened next to `clue`.
+/// One clue of a truth, with the marks of the clue record flattened next to `clue`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct MarkedEntryView {
-    /// P05's entry, keys unchanged.
-    #[serde(flatten)]
-    pub entry: EntryView,
+    /// The reveal state the clue moves the truth to.
+    pub state: String,
+    /// The floor the clue lies on.
+    pub floor: Option<u32>,
+    /// The location the clue lies in, with its marks; `null` when it names none.
+    pub place: Option<TargetRef>,
+    /// The gate tier.
+    pub gate: Option<String>,
+    /// The clue id.
+    pub clue: String,
+    /// The project-relative path of the clue.
+    pub clue_path: String,
+    /// The beats that place the clue.
+    pub placed_by: Vec<MarkedBeatView>,
     /// The marks of the clue record.
     #[serde(flatten)]
     pub mark: MarkView,
 }
 
-impl MarkedTruthView {
-    /// The view of `truth`, with the marks of its path and of each clue's path.
-    #[must_use]
-    pub fn new(truth: &TruthLedger, marks: &Marks) -> MarkedTruthView {
-        MarkedTruthView {
-            id: truth.id.clone(),
-            path: truth.path.clone(),
-            title: truth.title.clone(),
-            target: truth.target.clone(),
-            entries: truth
-                .entries
-                .iter()
-                .map(|entry| MarkedEntryView {
-                    entry: EntryView::from(entry),
-                    mark: marks.of_path(&entry.clue_path),
-                })
-                .collect(),
-            mark: marks.of_path(&truth.path),
-        }
-    }
+/// A beat that places a clue, with the script's marks.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct MarkedBeatView {
+    /// The script that holds the beat.
+    pub script: TargetRef,
+    /// The beat number.
+    pub beat: u32,
 }
 
 /// What `ledger_check` returns.

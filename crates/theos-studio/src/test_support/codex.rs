@@ -6,12 +6,17 @@ use tempfile::TempDir;
 
 use crate::Workspace;
 
-/// Copies `from` to `to`, folders and files.
+/// Copies `from` to `to`, folders and files, except a `.theos/cache` that a local run left in
+/// the fixture folder: it is not part of the fixture. `theos-mcp`'s `copy_dir`
+/// (`tests/mcp/common.rs`) follows the same rule; keep the two in step.
 fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {
         let entry = entry?;
         let target = to.join(entry.file_name());
+        if entry.file_name() == "cache" && from.ends_with(".theos") {
+            continue;
+        }
         if entry.file_type()?.is_dir() {
             copy_tree(&entry.path(), &target)?;
         } else {

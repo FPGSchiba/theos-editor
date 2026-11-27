@@ -217,8 +217,8 @@ pub struct LensView {
 pub enum LensValueView {
     /// A text or an enum value.
     Text(String),
-    /// The ids of a list of links.
-    Links(Vec<String>),
+    /// The records a list of links names, each with its marks.
+    Links(Vec<TargetRef>),
 }
 
 /// One lens entry.

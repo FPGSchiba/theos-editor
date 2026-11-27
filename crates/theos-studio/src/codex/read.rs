@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use theos_content::{EffectiveLens, LensData, RecordSummary, read_record};
 
+use super::ledger::marked_truth;
 use super::lookup::Lookup;
 
 use crate::views::check::FindingView;
@@ -11,7 +12,6 @@ use crate::views::codex::{
     BeliefView, LensFieldView, LensValueView, LensView, OverrideView, ReadView, RecordRef,
     RecordView,
 };
-use crate::views::project::MarkedTruthView;
 use crate::{StudioError, Workspace};
 
 /// What to read.
@@ -71,7 +71,7 @@ fn record_view(
         .ledger_of(&summary.id)?
         .iter()
         .find(|truth| truth.path == summary.path)
-        .map(|truth| MarkedTruthView::new(truth, &lookup.marks));
+        .map(|truth| marked_truth(truth, lookup));
     Ok(RecordView {
         record: RecordRef::from_summary(summary, &lookup.marks),
         text,
@@ -108,13 +108,13 @@ fn lens_view(
             .iter()
             .map(|field| LensFieldView {
                 field: field.field.clone(),
-                value: value_view(&field.value),
+                value: value_view(lookup, &field.value),
                 from: lookup.of_layer(&field.origin.layer),
                 overrides: field
                     .overrides
                     .iter()
                     .map(|o| OverrideView {
-                        value: value_view(&o.value),
+                        value: value_view(lookup, &o.value),
                         from: lookup.of_layer(&o.origin.layer),
                     })
                     .collect(),
@@ -143,10 +143,12 @@ fn texts(ws: &Workspace, field: &str) -> Result<HashMap<String, String>, StudioE
         .collect())
 }
 
-fn value_view(data: &LensData) -> LensValueView {
+fn value_view(lookup: &Lookup, data: &LensData) -> LensValueView {
     match data {
         LensData::Text(text) => LensValueView::Text(text.clone()),
-        LensData::Links(ids) => LensValueView::Links(ids.clone()),
+        LensData::Links(ids) => {
+            LensValueView::Links(ids.iter().map(|id| lookup.target(id)).collect())
+        }
     }
 }
 
@@ -229,6 +231,57 @@ mod tests {
                 .iter()
                 .any(|l| l["target"]["never"] == true)
         );
+        Ok(())
+    }
+
+    // AC: CE-18.3
+    #[test]
+    fn lens_links_carry_marks() -> TestResult {
+        let (dir, ws) = codex_workspace()?;
+        let fields =
+            |record: &RecordView| -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+                let lens = serde_json::to_value(record.lens.as_ref().ok_or("no lens")?)?;
+                lens["fields"]
+                    .as_array()
+                    .and_then(|all| all.iter().find(|f| f["field"] == "unaware_of"))
+                    .cloned()
+                    .ok_or_else(|| "no unaware_of".into())
+            };
+        // The fixture: fates-cult names the never truth, mother-ilse replaces it.
+        let field = fields(&only(read(&ws, &id("mother-ilse"))?)?)?;
+        assert_eq!(field["value"][0]["id"], "T-912");
+        assert_eq!(field["value"][0]["never"], false);
+        let replaced = &field["overrides"][0]["value"][0];
+        assert_eq!(replaced["id"], "T-911");
+        assert_eq!(replaced["never"], true);
+        assert_eq!(replaced["locked"], serde_json::json!(["never"]));
+        assert_eq!(replaced["exists"], true);
+
+        // The nearest layer's own value names the never truth, and a missing id is bare.
+        let path = dir
+            .path()
+            .join("people/hearth-folk/fates-cult/mother-ilse.md");
+        let text = std::fs::read_to_string(&path)?;
+        std::fs::write(&path, text.replace("[T-912]", "[T-911, T-000]"))?;
+        let ws = Workspace::open(dir.path())?;
+        let field = fields(&only(read(&ws, &id("mother-ilse"))?)?)?;
+        assert_eq!(field["value"][0]["id"], "T-911");
+        assert_eq!(field["value"][0]["never"], true);
+        assert_eq!(field["value"][1]["id"], "T-000");
+        assert_eq!(field["value"][1]["exists"], false);
+        Ok(())
+    }
+
+    // AC: CE-18.1
+    #[test]
+    fn read_by_a_backslash_path() -> TestResult {
+        let (_dir, ws) = codex_workspace()?;
+        let record = only(read(
+            &ws,
+            &ReadTarget::Path(r"lore\beliefs\B-911.md".to_owned()),
+        )?)?;
+        assert_eq!(record.record.id, "B-911");
+        assert_eq!(record.record.path.as_deref(), Some("lore/beliefs/B-911.md"));
         Ok(())
     }
 

@@ -26,7 +26,7 @@ impl Server {
     #[tool(
         name = "codex_search",
         input_schema = super::input_schema::<Params>(),
-        description = concat!("Search the records of the Theos project for words and return the best hits with where they match. ", marks_note!()),
+        description = concat!("Search the records of the Theos project for words and return the best hits with where they match. ", marks_note!(), " ", read_only_note!()),
         annotations(read_only_hint = true)
     )]
     fn codex_search(

@@ -5,12 +5,29 @@ use std::process::{Command, Stdio};
 
 use rmcp::model::CallToolRequestParams;
 
+use serde_json::{Value, json};
+use theos_studio::project;
+
 use crate::common::{
-    TestResult, assert_error, client, copy_dir, fixture, fixture_copy, structured,
+    TestResult, assert_error, client, copy_dir, fixture, fixture_copy, json, structured, studio,
 };
 
 /// The records of the `codex` fixture.
 const FIXTURE_RECORDS: u64 = 18;
+
+/// The parameters of every tool (spec 5.8): its properties, and which of them are required.
+const TOOL_PARAMS: [(&str, &[&str], &[&str]); 6] = [
+    ("project_info", &[], &[]),
+    ("codex_search", &["query", "limit"], &["query"]),
+    ("codex_read", &["id", "path"], &[]),
+    (
+        "codex_list",
+        &["kind", "status", "folder", "offset", "limit"],
+        &[],
+    ),
+    ("codex_graph", &["id", "depth", "direction"], &["id"]),
+    ("ledger_check", &["id"], &[]),
+];
 
 // AC: CE-18.1
 #[tokio::test]
@@ -41,10 +58,43 @@ async fn lists_exactly_the_six_tools() -> TestResult {
             "{name}"
         );
         assert!(tool.output_schema.is_some(), "{name}: no output schema");
+        assert_description_says_read_only(name, tool.description.as_deref());
+        assert_input_schema(name, &Value::Object((*tool.input_schema).clone()))?;
         let read_only = tool.annotations.as_ref().and_then(|a| a.read_only_hint);
         assert_eq!(read_only, Some(true), "{name}");
     }
     client.cancel().await?;
+    Ok(())
+}
+
+fn assert_description_says_read_only(name: &str, description: Option<&str>) {
+    let description = description.unwrap_or_default();
+    assert!(description.contains("read-only"), "{name}: {description}");
+}
+
+/// Asserts that `schema` is the object schema of `name`'s parameters: exactly the expected
+/// properties, the required keys, and no unknown key accepted.
+fn assert_input_schema(name: &str, schema: &Value) -> TestResult {
+    let (_, properties, required) = TOOL_PARAMS
+        .iter()
+        .find(|(tool, _, _)| *tool == name)
+        .ok_or_else(|| format!("{name}: not a known tool"))?;
+    assert_eq!(schema["type"], "object", "{name}: {schema}");
+    let mut found: Vec<&str> = schema["properties"]
+        .as_object()
+        .map(|map| map.keys().map(String::as_str).collect())
+        .unwrap_or_default();
+    found.sort_unstable();
+    let mut wanted = properties.to_vec();
+    wanted.sort_unstable();
+    assert_eq!(found, wanted, "{name}: {schema}");
+    let mut found: Vec<&str> = schema["required"]
+        .as_array()
+        .map(|list| list.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    found.sort_unstable();
+    assert_eq!(found, *required, "{name}: {schema}");
+    assert_eq!(schema["additionalProperties"], false, "{name}: {schema}");
     Ok(())
 }
 
@@ -53,6 +103,8 @@ async fn lists_exactly_the_six_tools() -> TestResult {
 async fn project_info_over_stdio() -> TestResult {
     let (_dir, project) = fixture_copy()?;
     let client = client(&project, &[]).await?;
+    let tools = client.list_all_tools().await?;
+    let tools: Vec<&str> = tools.iter().map(|tool| &*tool.name).collect();
     let result = client
         .call_tool(CallToolRequestParams::new("project_info"))
         .await?;
@@ -60,6 +112,19 @@ async fn project_info_over_stdio() -> TestResult {
     let value = structured(&result)?;
     assert_eq!(value["cache"], "file");
     assert_eq!(value["records"], FIXTURE_RECORDS);
+    let ws = studio(&project)?;
+    assert_eq!(value, json(&project::info(&ws, &tools)?)?);
+    client.cancel().await?;
+    Ok(())
+}
+
+// AC: CE-18.1
+#[tokio::test]
+async fn project_info_refuses_an_argument() -> TestResult {
+    let (_dir, project) = fixture_copy()?;
+    let client = client(&project, &[]).await?;
+    let result = client.call("project_info", json!({ "bogus": 1 })).await?;
+    assert_error(&result, "bogus")?;
     client.cancel().await?;
     Ok(())
 }

@@ -41,8 +41,12 @@ async fn ledger_clues_carry_marks() -> TestResult {
     let read = client
         .structured("codex_read", json!({ "id": "T-912" }))
         .await?;
+    let truth = ledger["truths"]
+        .as_array()
+        .and_then(|all| all.iter().find(|t| t["id"] == "T-912"))
+        .ok_or("no truth T-912")?;
     for (tool, entries) in [
-        ("ledger_check", &ledger["truths"][1]["entries"]),
+        ("ledger_check", &truth["entries"]),
         ("codex_read T-912", &read["records"][0]["ledger"]["entries"]),
     ] {
         let entry = entries
@@ -51,6 +55,17 @@ async fn ledger_clues_carry_marks() -> TestResult {
             .ok_or_else(|| format!("{tool}: no entry for C-031"))?;
         assert_eq!(entry["never"], false, "{tool}: {entry}");
         assert_eq!(entry["locked"], json!([]), "{tool}: {entry}");
+        // The place and the script it names are records, so they carry marks too.
+        let place = &entry["place"];
+        assert_eq!(place["id"], "f04-synthetic", "{tool}: {entry}");
+        assert_eq!(place["exists"], true, "{tool}: {entry}");
+        assert_eq!(place["never"], false, "{tool}: {entry}");
+        assert!(place["locked"].is_array(), "{tool}: {entry}");
+        let script = &entry["placed_by"][0];
+        assert_eq!(script["script"]["id"], "S-004", "{tool}: {entry}");
+        assert_eq!(script["script"]["never"], false, "{tool}: {entry}");
+        assert!(script["script"]["locked"].is_array(), "{tool}: {entry}");
+        assert!(script["beat"].is_u64(), "{tool}: {entry}");
     }
     client.cancel().await?;
     Ok(())

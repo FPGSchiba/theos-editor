@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use theos_content::{Column, Hit, Match, RecordSummary, read_record};
 
+use super::lookup::saturate;
 use crate::views::codex::{HitView, MatchView, RecordRef, SearchView};
 use crate::{Marks, StudioError, Workspace};
 
@@ -103,10 +104,6 @@ fn column_name(column: &Column) -> String {
             entry: Some(entry),
         } => format!("field:{key}.{entry}"),
     }
-}
-
-fn saturate(value: usize) -> u32 {
-    u32::try_from(value).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]
