@@ -25,6 +25,7 @@ pub mod progress;
 pub mod recipe;
 pub mod render;
 pub mod rng;
+pub mod rooms;
 pub mod runner;
 pub mod stage;
 pub mod stages;
