@@ -28,21 +28,37 @@ pub fn fmt() -> Vec<CargoCommand> {
     vec![cargo(&["fmt", "--all", "--check"])]
 }
 
-/// `cargo clippy --workspace --all-targets --locked -- -D warnings`.
+/// `cargo clippy --workspace --all-targets --locked -- -D warnings`, then the same for
+/// `theos-editor` alone with `--features engine`, so the feature is built too (CE-32.3).
 #[must_use]
 pub fn clippy() -> Vec<CargoCommand> {
-    vec![cargo(&[
-        "clippy",
-        "--workspace",
-        "--all-targets",
-        "--locked",
-        "--",
-        "-D",
-        "warnings",
-    ])]
+    vec![
+        cargo(&[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--locked",
+            "--",
+            "-D",
+            "warnings",
+        ]),
+        cargo(&[
+            "clippy",
+            "-p",
+            "theos-editor",
+            "--all-targets",
+            "--features",
+            "engine",
+            "--locked",
+            "--",
+            "-D",
+            "warnings",
+        ]),
+    ]
 }
 
 /// `cargo nextest run --workspace --locked --profile <ci|default>`, then
+/// `cargo nextest run -p theos-editor --features engine --locked --profile <same>` (CE-32.3), then
 /// `cargo test --doc --workspace --locked`. The profile is `ci` when `ci` is true. Both profiles
 /// leave out the slow tests, which [`slow_tests`] runs.
 #[must_use]
@@ -53,6 +69,17 @@ pub fn test(ci: bool) -> Vec<CargoCommand> {
             "nextest",
             "run",
             "--workspace",
+            "--locked",
+            "--profile",
+            profile,
+        ]),
+        cargo(&[
+            "nextest",
+            "run",
+            "-p",
+            "theos-editor",
+            "--features",
+            "engine",
             "--locked",
             "--profile",
             profile,
@@ -189,19 +216,41 @@ mod tests {
         assert_eq!(fmt(), [cmd(&["fmt", "--all", "--check"], &[])]);
         assert_eq!(
             clippy(),
-            [cmd(
-                &[
-                    "clippy",
-                    "--workspace",
-                    "--all-targets",
-                    "--locked",
-                    "--",
-                    "-D",
-                    "warnings"
-                ],
-                &[]
-            )]
+            [
+                cmd(
+                    &[
+                        "clippy",
+                        "--workspace",
+                        "--all-targets",
+                        "--locked",
+                        "--",
+                        "-D",
+                        "warnings"
+                    ],
+                    &[]
+                ),
+                cmd(
+                    &[
+                        "clippy",
+                        "-p",
+                        "theos-editor",
+                        "--all-targets",
+                        "--features",
+                        "engine",
+                        "--locked",
+                        "--",
+                        "-D",
+                        "warnings"
+                    ],
+                    &[]
+                ),
+            ]
         );
+    }
+
+    // AC: CE-08.4
+    #[test]
+    fn test_and_other_commands_match_gate_md() {
         assert_eq!(
             test(true),
             [
@@ -210,6 +259,20 @@ mod tests {
                         "nextest",
                         "run",
                         "--workspace",
+                        "--locked",
+                        "--profile",
+                        "ci"
+                    ],
+                    &[]
+                ),
+                cmd(
+                    &[
+                        "nextest",
+                        "run",
+                        "-p",
+                        "theos-editor",
+                        "--features",
+                        "engine",
                         "--locked",
                         "--profile",
                         "ci"
@@ -227,6 +290,20 @@ mod tests {
                         "nextest",
                         "run",
                         "--workspace",
+                        "--locked",
+                        "--profile",
+                        "default"
+                    ],
+                    &[]
+                ),
+                cmd(
+                    &[
+                        "nextest",
+                        "run",
+                        "-p",
+                        "theos-editor",
+                        "--features",
+                        "engine",
                         "--locked",
                         "--profile",
                         "default"
@@ -259,6 +336,51 @@ mod tests {
             )]
         );
         assert_eq!(deny(), [cmd(&["deny", "--locked", "check"], &[])]);
+    }
+
+    #[test]
+    fn clippy_also_builds_the_engine_feature() {
+        assert_eq!(
+            clippy().get(1),
+            Some(&cmd(
+                &[
+                    "clippy",
+                    "-p",
+                    "theos-editor",
+                    "--all-targets",
+                    "--features",
+                    "engine",
+                    "--locked",
+                    "--",
+                    "-D",
+                    "warnings"
+                ],
+                &[]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_also_runs_the_engine_feature() {
+        for (ci, profile) in [(true, "ci"), (false, "default")] {
+            assert_eq!(
+                test(ci).get(1),
+                Some(&cmd(
+                    &[
+                        "nextest",
+                        "run",
+                        "-p",
+                        "theos-editor",
+                        "--features",
+                        "engine",
+                        "--locked",
+                        "--profile",
+                        profile
+                    ],
+                    &[]
+                ))
+            );
+        }
     }
 
     #[test]
@@ -300,9 +422,9 @@ mod tests {
         let mut seen = Vec::new();
         let verdict = run_commands(Check::Test, &cmds, |command| {
             seen.push(command.args[0].clone());
-            Ok(command.args[0] != "nextest")
+            Ok(!command.args.contains(&"--workspace".to_owned()) || command.args[0] != "nextest")
         })?;
-        assert_eq!(seen, ["nextest", "test"]);
+        assert_eq!(seen, ["nextest", "nextest", "test"]);
         assert_eq!(verdict.check, Check::Test);
         assert_eq!(verdict.findings.len(), 1);
         let message = &verdict.findings[0].message;
