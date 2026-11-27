@@ -5,14 +5,16 @@ use std::ffi::OsStr;
 
 /// The options that come before the command of every read: no optional locks, literal pathspecs
 /// (a path with `*`, `?`, `[` or `:` is a path, never a pattern), and the settings that would
-/// change the output (colour, signatures, quoting, encoding).
-const OPTIONS: [&str; 10] = [
+/// change the output (colour, signatures, the root commit, quoting, encoding).
+const OPTIONS: [&str; 12] = [
     "--no-optional-locks",
     "--literal-pathspecs",
     "-c",
     "color.ui=never",
     "-c",
     "log.showSignature=false",
+    "-c",
+    "log.showRoot=true",
     "-c",
     "core.quotePath=false",
     "-c",
@@ -47,6 +49,8 @@ mod tests {
                 "color.ui=never",
                 "-c",
                 "log.showSignature=false",
+                "-c",
+                "log.showRoot=true",
                 "-c",
                 "core.quotePath=false",
                 "-c",

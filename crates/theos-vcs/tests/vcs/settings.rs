@@ -14,7 +14,7 @@ type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Every setting of P46 §5.10 that could change an answer, plus the ones a later read could meet.
 const HOSTILE: &str = "[color]\n\tui = always\n\tstatus = always\n\
-    [log]\n\tshowSignature = true\n\tfollow = false\n\tdecorate = full\n\
+    [log]\n\tshowRoot = false\n\tshowSignature = true\n\tfollow = false\n\tdecorate = full\n\
     [core]\n\tquotePath = true\n\tprecomposeUnicode = false\n\
     [status]\n\trenames = false\n\tshowUntrackedFiles = no\n\tbranch = false\n\
     [diff]\n\trenames = false\n\texternal = false-diff-tool\n\
