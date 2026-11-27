@@ -137,8 +137,16 @@ pub struct ProgramRoom {
     pub locked: bool,
 }
 
-/// Checks the program: room types match `^[a-z][a-z0-9-]*$`, ranges have `min <= max`, and
-/// both sides of a footprint are at least 1. Paths read `room[i].<key>`.
+/// Room types a program may not name: the interior's static feature types (doors,
+/// connections, the route) and the generic room types. A room type of one of these names would
+/// share its `features.<type>` count with them.
+pub const RESERVED_TYPES: &[&str] = &[
+    "open", "locked", "drop", "oneway", "critical", "path", "leaf",
+];
+
+/// Checks the program: room types match `^[a-z][a-z0-9-]*$` and are not
+/// [`RESERVED_TYPES`], ranges have `min <= max`, and both sides of a footprint are at least 1.
+/// Paths read `room[i].<key>`.
 ///
 /// # Errors
 /// [`ParamError`] of `stage` for the first entry that breaks a rule.
@@ -152,6 +160,16 @@ pub fn check_program(stage: &str, program: &[ProgramRoom]) -> Result<(), ParamEr
                 stage,
                 format!("room[{i}].type"),
                 "must match ^[a-z][a-z0-9-]*$",
+            ));
+        }
+        if RESERVED_TYPES.contains(&room.ty.as_str()) {
+            return Err(ParamError::at(
+                stage,
+                format!("room[{i}].type"),
+                format!(
+                    "`{}` is reserved for the interior's door, connection, route or generic room types",
+                    room.ty
+                ),
             ));
         }
         room.count.check(stage, &format!("room[{i}].count"))?;
@@ -456,6 +474,25 @@ mod tests {
         ] {
             let err = check_program("mission", &[ok.clone(), r]).unwrap_err();
             assert_eq!(err.parameter.as_deref(), Some(path), "{err}");
+        }
+    }
+
+    // AC: CE-80.1
+    #[test]
+    fn check_program_refuses_reserved_room_types() {
+        let ok = room("crypt", Role::Leaf, CountSpec::Fixed(1));
+        for name in [
+            "open", "locked", "drop", "oneway", "critical", "path", "leaf",
+        ] {
+            let mut reserved = ok.clone();
+            reserved.ty = name.to_owned();
+            let err = check_program("mission", &[ok.clone(), reserved]).unwrap_err();
+            assert_eq!(
+                err.parameter.as_deref(),
+                Some("room[1].type"),
+                "{name}: {err}"
+            );
+            assert!(err.to_string().contains(name), "{name}: {err}");
         }
     }
 }
