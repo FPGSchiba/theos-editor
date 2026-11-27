@@ -14,6 +14,7 @@ pub mod morphology;
 pub mod mst;
 pub mod noise;
 pub mod num;
+pub mod outline;
 pub mod paths;
 pub mod reflect;
 pub mod routing;
