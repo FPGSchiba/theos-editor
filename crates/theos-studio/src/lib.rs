@@ -20,8 +20,9 @@
 //! with [`Scope::Record`], the newest entry of one file; and [`introduced()`], the count of errors
 //! a command introduces.
 //!
-//! P46 adds [`changes()`], git's status of a project grouped by record, and [`diff()`], a record's
-//! or a file's diff between two versions. The rest arrives in P07 and later phases.
+//! P46 adds [`changes()`], git's status of a project grouped by record, [`diff()`], a record's
+//! or a file's diff between two versions, and [`history()`], a record's commits by id across
+//! renames of its file and its id. The rest arrives in P07 and later phases.
 
 pub mod changes;
 pub mod check;
@@ -29,6 +30,7 @@ mod command;
 pub mod create;
 pub mod diff;
 pub mod error;
+pub mod history;
 pub mod hook;
 pub mod introduced;
 pub mod lock;
@@ -48,6 +50,7 @@ pub use check::{Binaries, BinariesFolder, Check, binaries_folder, check};
 pub use command::*;
 pub use diff::{FileDiff, Side, diff};
 pub use error::StudioError;
+pub use history::{HistoryEntry, history};
 pub use introduced::{FindingCounts, introduced};
 pub use report::report;
 pub use staged::{StagedCheck, check_staged};

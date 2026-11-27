@@ -7,6 +7,7 @@ mod check;
 mod common;
 mod diff;
 mod helper;
+mod history;
 mod hook;
 mod lock;
 mod log;
