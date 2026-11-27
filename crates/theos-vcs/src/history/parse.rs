@@ -115,7 +115,8 @@ fn raw_date(date: &[u8]) -> Result<(i64, i32), String> {
     Ok((seconds, sign * (hours * 60 + minutes)))
 }
 
-/// The trailers of `%(trailers:separator=%x1d,key_value_separator=%x1c)`; empty when none.
+/// The trailers of `%(trailers:only,unfold,separator=%x1d,key_value_separator=%x1c)`; empty when
+/// none.
 fn trailer_list(trailers: &[u8]) -> Result<Vec<Trailer>, String> {
     if trailers.is_empty() {
         return Ok(Vec::new());

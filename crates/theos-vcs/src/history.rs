@@ -22,9 +22,13 @@ pub struct Commit {
     pub offset_minutes: i32,
     /// The first line of the message.
     pub subject: String,
-    /// The trailers (`Approved-by`, `Co-Authored-By`, …), unfolded, in order.
+    /// The trailers (`Approved-by`, `Co-Authored-By`, …), unfolded, in order; other lines of the
+    /// trailer block, such as `(cherry picked from commit …)`, are left out.
     pub trailers: Vec<Trailer>,
-    /// How this commit changed the followed file; a merge against its first parent.
+    /// How this commit changed the followed file. A merge shows its change against its first
+    /// parent. A rename made on a branch that was merged with a merge commit shows on that branch
+    /// as [`Change::Deleted`] of the old path, with no `from`: `--follow` already switched to the
+    /// old path at the merge, which carries the [`Change::Renamed`].
     pub change: Change,
     /// The file's path in this commit (git's bytes, relative to the top, with `/`).
     pub path: Vec<u8>,
@@ -61,9 +65,10 @@ pub struct Page {
 
 /// The format of one commit: a record separator (`0x1e`), then the id, the author's name and
 /// email, the raw date (`<seconds> <±hhmm>`), the subject and the trailers, separated by unit
-/// separators (`0x1f`). Trailers are separated by `0x1d`, a key from its value by `0x1c`.
+/// separators (`0x1f`). Trailers are separated by `0x1d`, a key from its value by `0x1c`; `only`
+/// leaves out the lines of the trailer block that are not trailers.
 const FORMAT: &str = "--format=%x1e%H%x1f%aN%x1f%aE%x1f%ad%x1f%s%x1f\
-                      %(trailers:unfold,separator=%x1d,key_value_separator=%x1c)";
+                      %(trailers:only,unfold,separator=%x1d,key_value_separator=%x1c)";
 
 /// The largest `--max-count` git reads (an `int`).
 const GIT_INT_MAX: usize = 2_147_483_647;
@@ -71,7 +76,10 @@ const GIT_INT_MAX: usize = 2_147_483_647;
 /// The commits that changed the file at `path` (git's bytes: relative to `top`, with `/`,
 /// UTF-8), newest first, following its renames with git's default threshold (50 %).
 ///
-/// A listed merge shows its change against its first parent. A path never committed, and every
+/// Every merge whose result for the file differs from its first parent is listed (`--follow`
+/// does not drop a merge that took one side unchanged): a resolved conflict, and also a change
+/// merged from a branch, which then lists twice, as the branch commit and as the merge. A listed
+/// merge shows its change against its first parent. A path never committed, and every
 /// path before the first commit, has an empty history. Names, subjects and trailers that are not
 /// UTF-8 are read lossily.
 ///

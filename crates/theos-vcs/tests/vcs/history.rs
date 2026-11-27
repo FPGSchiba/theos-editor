@@ -317,7 +317,115 @@ fn a_rename_merged_from_a_branch_keeps_the_older_commits() -> Result {
             Some("synthetic-ilse.md"),
         )]
     );
-    assert_eq!(commits[2].path, b"synthetic-ilse.md");
+    // git lists the branch's rename commit as a deletion of the old path: `--follow` already
+    // switched to that path at the merge.
+    assert_eq!(
+        summary(&commits[1..]),
+        [
+            line(
+                "rename synthetic-ilse to synthetic-ilsa",
+                Change::Deleted,
+                "synthetic-ilse.md",
+                None,
+            ),
+            line(
+                "add synthetic-ilse",
+                Change::Added,
+                "synthetic-ilse.md",
+                None
+            ),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn an_edit_merged_from_a_branch_lists_the_branch_commit_and_the_merge() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    let path = repo.join("synthetic-ilse.md");
+    Sandbox::write(&path, &record("synthetic-ilse", ""))?;
+    sandbox.commit(&repo, "add synthetic-ilse")?;
+    sandbox.run(&repo, &["checkout", "-q", "-b", "agent/edit"])?;
+    Sandbox::write(&path, &record("synthetic-ilse", "She keeps the ledger.\n"))?;
+    sandbox.commit(&repo, "edit synthetic-ilse")?;
+    sandbox.run(&repo, &["checkout", "-q", "main"])?;
+    Sandbox::write(&repo.join("other.md"), "Unrelated.\n")?;
+    sandbox.commit(&repo, "unrelated")?;
+    merge(&sandbox, &repo, "agent/edit", "merge agent/edit")?;
+    let commits = history_of(&sandbox, &repo, "synthetic-ilse.md", ALL)?;
+    assert_eq!(
+        summary(&commits),
+        [
+            line(
+                "merge agent/edit",
+                Change::Modified,
+                "synthetic-ilse.md",
+                None
+            ),
+            line(
+                "edit synthetic-ilse",
+                Change::Modified,
+                "synthetic-ilse.md",
+                None
+            ),
+            line(
+                "add synthetic-ilse",
+                Change::Added,
+                "synthetic-ilse.md",
+                None
+            ),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_cherry_picked_commit_keeps_only_its_trailers() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    Sandbox::write(
+        &repo.join("synthetic-ilse.md"),
+        &record("synthetic-ilse", ""),
+    )?;
+    sandbox.commit(
+        &repo,
+        "add synthetic-ilse\n\nSome prose about the change.\n\nSome text line\n\
+         Signed-off-by: Synthetic <synthetic@example.invalid>\n\
+         (cherry picked from commit 9ba7ef97af7f1dd1a92bc20e28dfab34affc423d)",
+    )?;
+    let commits = history_of(&sandbox, &repo, "synthetic-ilse.md", ALL)?;
+    assert_eq!(commits.len(), 1);
+    assert_eq!(
+        commits[0].trailers,
+        [Trailer {
+            key: "Signed-off-by".to_owned(),
+            value: "Synthetic <synthetic@example.invalid>".to_owned(),
+        }]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_folded_trailer_comes_back_unfolded() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    Sandbox::write(
+        &repo.join("synthetic-ilse.md"),
+        &record("synthetic-ilse", ""),
+    )?;
+    sandbox.commit(
+        &repo,
+        "add synthetic-ilse\n\nApproved-by: Jann\n  after review",
+    )?;
+    let commits = history_of(&sandbox, &repo, "synthetic-ilse.md", ALL)?;
+    assert_eq!(
+        commits[0].trailers,
+        [Trailer {
+            key: "Approved-by".to_owned(),
+            value: "Jann after review".to_owned(),
+        }]
+    );
     Ok(())
 }
 
