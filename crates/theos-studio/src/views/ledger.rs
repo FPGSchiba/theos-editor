@@ -4,11 +4,11 @@ use serde::Serialize;
 use theos_content::{BeatRef, LedgerEntry, TruthLedger};
 
 /// The reveal ledger as JSON: one element per truth.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct LedgerView(Vec<TruthView>);
 
 /// One truth and the clues that reveal it.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct TruthView {
     id: String,
     path: String,
@@ -18,7 +18,7 @@ pub struct TruthView {
 }
 
 /// One clue of a truth.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct EntryView {
     state: String,
     floor: Option<u32>,
@@ -30,14 +30,14 @@ pub struct EntryView {
 }
 
 /// A beat that reveals a clue.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct PlacedByView {
     script: String,
     beat: u32,
 }
 
 /// The paths a Shared Formalism regeneration wrote, as JSON.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct FormalismView {
     written: Vec<String>,
 }

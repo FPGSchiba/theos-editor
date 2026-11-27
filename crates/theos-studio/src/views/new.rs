@@ -6,7 +6,7 @@ use crate::create::Created;
 use crate::views::check::FindingView;
 
 /// The result of `theos new` as JSON.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct NewView {
     path: String,
     id: String,

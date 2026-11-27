@@ -7,7 +7,7 @@ use crate::check::{Binaries, Check, counts};
 use crate::staged::StagedCheck;
 
 /// A finding as JSON: every key is present, an absent one is `null`.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct FindingView {
     rule: String,
     severity: &'static str,
@@ -20,14 +20,14 @@ pub struct FindingView {
 }
 
 /// A byte range as JSON.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct SpanView {
     start: usize,
     end: usize,
 }
 
 /// Whether binaries were checked, as JSON.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct BinariesView {
     checked: bool,
     folder: Option<String>,
@@ -35,7 +35,7 @@ pub struct BinariesView {
 }
 
 /// The result of a check as JSON.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct CheckView {
     findings: Vec<FindingView>,
     errors: usize,
@@ -44,7 +44,7 @@ pub struct CheckView {
 }
 
 /// The result of a staged check as JSON.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct StagedView {
     findings: Vec<FindingView>,
     errors: usize,

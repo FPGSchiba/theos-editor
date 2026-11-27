@@ -64,6 +64,18 @@ pub enum StudioError {
         /// The registered kinds, in order.
         known: Vec<String>,
     },
+    /// A path or id names no record.
+    #[error("no record `{what}`")]
+    UnknownRecord {
+        /// What was asked for.
+        what: String,
+    },
+    /// A filter of a read tool is not valid.
+    #[error("{message}")]
+    InvalidFilter {
+        /// What is wrong with it.
+        message: String,
+    },
     /// `theos new` could not make the record.
     #[error(transparent)]
     Create(#[from] CreateError),
