@@ -165,14 +165,10 @@ fn run_scoped(
     mut run_one: impl FnMut(Check, &mut dyn Write) -> Result<Verdict>,
     out: &mut dyn Write,
 ) -> Result<Outcome> {
-    let every_because = match scope {
-        Scope::Every { note } => note.clone(),
-        Scope::DocsOnly => None,
-    };
+    let every_because = scope::every_note(scope);
     if let Some(note) = &every_because {
         // The note can hold git's stderr, so it is marked line by line like any other text.
-        report::write_note(out, &format!("every check runs: {note}"))
-            .map_err(report::output_error)?;
+        report::write_every_note(out, note)?;
     }
     let verdicts = run_checks(
         order,

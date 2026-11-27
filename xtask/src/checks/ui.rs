@@ -183,13 +183,9 @@ pub fn run_scoped(
     out: &mut dyn Write,
 ) -> Result<(Verdict, Option<String>)> {
     let scope = scope::for_run(root, ci);
-    let every_because = match &scope {
-        Scope::Every { note } => note.clone(),
-        Scope::DocsOnly => None,
-    };
+    let every_because = scope::every_note(&scope);
     if let Some(note) = &every_because {
-        report::write_note(out, &format!("every check runs: {note}"))
-            .map_err(report::output_error)?;
+        report::write_every_note(out, note)?;
     }
     let verdict = verdict_under(
         &scope,

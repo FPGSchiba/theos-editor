@@ -117,6 +117,15 @@ pub fn write_note(out: &mut dyn Write, note: &str) -> io::Result<()> {
     write_labelled(out, "note: ", note)
 }
 
+/// Writes the note "every check runs: `why`" to `out`, marked line by line like any note.
+///
+/// # Errors
+///
+/// Fails when `out` cannot be written to.
+pub fn write_every_note(out: &mut dyn Write, why: &str) -> Result<()> {
+    write_note(out, &format!("every check runs: {why}")).map_err(output_error)
+}
+
 /// Writes `text`, its first line after `label` and every further line after `  | `.
 fn write_labelled(out: &mut dyn Write, label: &str, text: &str) -> io::Result<()> {
     let mut lines = lines_of(text).into_iter();

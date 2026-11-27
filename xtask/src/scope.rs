@@ -30,6 +30,16 @@ pub enum Scope {
     DocsOnly,
 }
 
+/// Why every check runs under `scope`, when it says so; the gate and `ui` print it and show it in
+/// the job summary.
+#[must_use]
+pub fn every_note(scope: &Scope) -> Option<String> {
+    match scope {
+        Scope::Every { note } => note.clone(),
+        Scope::DocsOnly => None,
+    }
+}
+
 /// Whether `check` runs under `scope`: every check does, but for a change that touches no code
 /// only `commit-msg`. `gate` and `needs` both ask here, so they cannot disagree.
 #[must_use]

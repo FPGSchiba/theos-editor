@@ -187,7 +187,6 @@ fn check_name_round_trips() {
     assert_eq!(Check::Ui.name(), "ui");
 }
 
-// AC: CE-08C.2
 #[test]
 fn the_summary_says_why_every_check_runs() -> TestResult {
     // A push runs every check for a reason other than a change to code; `gate.md` §1 has the job
