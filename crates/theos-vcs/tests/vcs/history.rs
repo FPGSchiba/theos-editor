@@ -536,3 +536,28 @@ fn subjects_authors_and_trailers_with_any_text_keep_the_history() -> Result {
     );
     Ok(())
 }
+
+#[test]
+fn a_path_that_is_not_utf_8_is_an_output_error() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    let result = history::history(
+        &sandbox.git()?,
+        &repo,
+        &[0xff, b'.', b'm', b'd'],
+        ALL,
+        &Cancel::new(),
+    );
+    assert!(matches!(result, Err(GitError::Output { .. })), "{result:?}");
+    Ok(())
+}
+
+#[test]
+fn a_folder_that_is_no_repository_is_a_git_failure() -> Result {
+    let sandbox = Sandbox::new()?;
+    let folder = sandbox.path().join("plain");
+    std::fs::create_dir_all(&folder)?;
+    let result = history::history(&sandbox.git()?, &folder, b"a.md", ALL, &Cancel::new());
+    assert!(matches!(result, Err(GitError::Failed { .. })), "{result:?}");
+    Ok(())
+}

@@ -311,3 +311,35 @@ fn a_committed_link_is_not_a_file_in_head() -> Result {
     );
     Ok(())
 }
+
+#[test]
+fn a_path_that_is_not_utf_8_is_an_output_error() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    let result = read::read(
+        &sandbox.git()?,
+        &repo,
+        Version::Head,
+        &[0xff, b'.', b'm', b'd'],
+    );
+    assert!(
+        matches!(result, Err(theos_vcs::GitError::Output { .. })),
+        "{result:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_folder_that_is_no_repository_is_a_git_failure_for_the_index_and_a_commit() -> Result {
+    let sandbox = Sandbox::new()?;
+    let folder = sandbox.path().join("plain");
+    std::fs::create_dir_all(&folder)?;
+    for version in [Version::Index, Version::Head, Version::Rev("main")] {
+        let result = read::read(&sandbox.git()?, &folder, version, b"a.md");
+        assert!(
+            matches!(result, Err(theos_vcs::GitError::Failed { .. })),
+            "{result:?}"
+        );
+    }
+    Ok(())
+}
