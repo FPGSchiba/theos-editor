@@ -133,6 +133,18 @@ pub(crate) struct Assembly {
     pub lists: BTreeMap<&'static str, Vec<FeatureHandle>>,
 }
 
+/// The id of the feature `handle` among `ids` (indexed by handle).
+fn id_at<'a>(ids: &'a [String], handle: FeatureHandle, by: &str) -> Result<&'a str, FeaturesError> {
+    usize::try_from(handle.0)
+        .ok()
+        .and_then(|i| ids.get(i))
+        .map(String::as_str)
+        .ok_or_else(|| FeaturesError::UnknownFeature {
+            handle: handle.0,
+            by: by.to_owned(),
+        })
+}
+
 /// The next id of a feature of `kind` and type `ty` under `scheme`, numbering per id key in
 /// `counts`.
 pub(crate) fn id_of(
@@ -164,29 +176,25 @@ impl Named {
         water: &WaterFeatures,
         scheme: IdScheme,
     ) -> Result<Self, FeaturesError> {
-        let mut by_scheme = BTreeMap::new();
+        // Under `ByType` the id counter is the type count, shared with roads, rivers and lakes
+        // so ids stay unique; under `ByKind` the ids count per kind in a map of their own.
         let mut counts = BTreeMap::new();
+        let mut kind_counts = BTreeMap::new();
         let set_ids: Vec<String> = features
             .iter()
-            .map(|f| {
-                *counts.entry(f.ty.clone()).or_insert(0) += 1;
-                id_of(scheme, f.kind, &f.ty, &mut by_scheme)
+            .map(|f| match scheme {
+                IdScheme::ByType => id_of(scheme, f.kind, &f.ty, &mut counts),
+                IdScheme::ByKind => {
+                    *counts.entry(f.ty.clone()).or_insert(0) += 1;
+                    id_of(scheme, f.kind, &f.ty, &mut kind_counts)
+                }
             })
             .collect();
         let mut list_ids = BTreeMap::new();
         for (&name, handles) in lists {
             let ids = handles
                 .iter()
-                .map(|h| {
-                    usize::try_from(h.0)
-                        .ok()
-                        .and_then(|i| set_ids.get(i))
-                        .cloned()
-                        .ok_or_else(|| FeaturesError::UnknownFeature {
-                            handle: h.0,
-                            by: format!("list `{name}`"),
-                        })
-                })
+                .map(|&h| id_at(&set_ids, h, &format!("list `{name}`")).map(str::to_owned))
                 .collect::<Result<Vec<_>, _>>()?;
             list_ids.insert(name, ids);
         }
@@ -218,14 +226,7 @@ impl Named {
     }
 
     pub(super) fn feature(&self, handle: FeatureHandle, by: &str) -> Result<&str, FeaturesError> {
-        usize::try_from(handle.0)
-            .ok()
-            .and_then(|i| self.set.get(i))
-            .map(String::as_str)
-            .ok_or_else(|| FeaturesError::UnknownFeature {
-                handle: handle.0,
-                by: by.to_owned(),
-            })
+        id_at(&self.set, handle, by)
     }
 
     fn item(&self, list: &str, index: u32, by: &str) -> Result<&str, FeaturesError> {

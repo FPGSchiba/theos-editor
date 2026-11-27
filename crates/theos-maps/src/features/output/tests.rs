@@ -659,3 +659,16 @@ fn an_item_reference_becomes_the_items_id() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn ids_stay_unique_when_a_set_type_is_a_water_or_road_type() -> TestResult {
+    let mut set = three_places();
+    set.add(point("water", "lake", [10.0, 10.0]));
+    set.add(point("water", "river", [20.0, 10.0]));
+    set.add(point("road", "road", [30.0, 10.0]));
+    let (fc, _) = build(&world_with(set)?)?;
+    let ids = ids_of(&fc);
+    let unique: std::collections::BTreeSet<_> = ids.iter().collect();
+    assert_eq!(unique.len(), ids.len(), "{ids:?}");
+    Ok(())
+}
