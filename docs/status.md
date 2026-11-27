@@ -35,7 +35,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P26 | Style bible and briefs | theos-editor | todo | | |
 | P27 | Asset pipelines | theos-editor | todo | | |
 | P28 | Workflow catalogue and asset guide | tower-of-theos | todo | | |
-| P29 | Settlements and child maps | theos-editor | todo | | |
+| P29 | Settlements and child maps | theos-editor | spec-pr | | |
 | P30 | Levels in the generator | theos-editor | todo | | |
 | P31 | Floor frame and places | theos-editor | todo | | |
 | P32 | Recipe families | theos-editor | todo | | |
