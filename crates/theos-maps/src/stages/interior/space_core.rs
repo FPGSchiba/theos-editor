@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 use serde::Serialize;
 
 use crate::grid::Grid;
+use crate::kernels::labels::{Connectivity, labels};
 use crate::rng::StageRng;
 use crate::rooms::lattice::Lattice;
 use crate::rooms::{Connection, Passage, RoomGraph, RoomId, Shape};
@@ -465,6 +466,13 @@ impl Shaping<'_> {
                 shapes::carve(&mut mask, &room, (lr, lc), centre, rows_first);
             }
         }
+        // One walkable piece per room: whatever the shape and the carving left apart from the
+        // centre has no way to a door.
+        let (pieces, _) = labels(&mask, Connectivity::Four);
+        let home = pieces.get(centre.0, centre.1);
+        for (m, &piece) in mask.as_mut_slice().iter_mut().zip(pieces.as_slice()) {
+            *m = *m && piece == home;
+        }
         for i in 0..mask.len() {
             if mask.as_slice()[i] {
                 let (r, c) = mask.cell(i);
@@ -560,14 +568,17 @@ fn to_u32(v: usize) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kernels::labels::{Connectivity, labels};
     use crate::kernels::noise::spectral_noise;
     use crate::rooms::lattice::Stagger;
     use crate::rooms::{Cell, LatticeRef, Role, Room};
 
     fn lattice(n: usize, pitch: u32, jitter: u32, seed: u64) -> Lattice {
+        staggered(n, pitch, jitter, seed, Stagger::Rows)
+    }
+
+    fn staggered(n: usize, pitch: u32, jitter: u32, seed: u64, stagger: Stagger) -> Lattice {
         let mut rng = StageRng::for_key(seed, "lattice");
-        Lattice::new(n, n, pitch, jitter, Stagger::Rows, &mut rng).unwrap()
+        Lattice::new(n, n, pitch, jitter, stagger, &mut rng).unwrap()
     }
 
     fn room(cells: &[(u16, u16)], shape: Shape) -> Room {
@@ -754,8 +765,8 @@ mod tests {
         }
         assert!(out.walls.get(0, 8) && out.walls.get(8, 8) && out.walls.get(4, 16));
         // Staggered halls spanning lattice rows never leak into a neighbour.
-        for seed in 1..=10 {
-            let lat = lattice(24, 8, 2, seed);
+        for (seed, stagger) in (1..=10).flat_map(|s| [(s, Stagger::Rows), (s, Stagger::Columns)]) {
+            let lat = staggered(24, 8, 2, seed, stagger);
             let rooms = vec![
                 room(&[(0, 0), (1, 0)], Shape::Rect),
                 room(&[(0, 1), (0, 2)], Shape::Rect),
@@ -772,6 +783,80 @@ mod tests {
             let (_, n) = labels(&out.walkable, Connectivity::Four);
             assert_eq!(n, 1, "seed {seed}");
         }
+    }
+
+    // AC: CE-80.1
+    #[test]
+    fn shaped_l_hall_keeps_one_piece() {
+        let ells: [[(u16, u16); 3]; 4] = [
+            [(0, 0), (0, 1), (1, 0)],
+            [(0, 0), (0, 1), (1, 1)],
+            [(0, 0), (1, 0), (1, 1)],
+            [(0, 1), (1, 0), (1, 1)],
+        ];
+        for shape in [Shape::Round, Shape::Passage] {
+            for cells in ells {
+                for (seed, pitch) in [
+                    (1, 8),
+                    (2, 9),
+                    (3, 12),
+                    (4, 16),
+                    (5, 8),
+                    (6, 8),
+                    (7, 9),
+                    (8, 10),
+                ] {
+                    for door in [1, 2] {
+                        let n = 3 * pitch as usize;
+                        let lat = lattice(n, pitch, 2, seed);
+                        let rooms = vec![
+                            room(&cells, shape),
+                            room(&[(0, 2)], Shape::Rect),
+                            room(&[(2, 0)], Shape::Rect),
+                            room(&[(2, 2)], Shape::Rect),
+                        ];
+                        let g = graph(rooms, vec![open(0, 1), open(0, 2), open(0, 3)], &lat);
+                        let env = Grid::filled(n, n, true);
+                        let p = SpaceParams { door, ..params() };
+                        let Ok(out) = build(&g, &lat, &env, &p, &noise(n, seed), seed) else {
+                            continue;
+                        };
+                        let own = out.rooms.map(|v| v == 1);
+                        let (_, parts) = labels(&own, Connectivity::Four);
+                        assert_eq!(parts, 1, "{shape:?} {cells:?} seed {seed} door {door}");
+                    }
+                }
+            }
+        }
+    }
+
+    // AC: CE-80.1
+    #[test]
+    fn shaping_keeps_only_the_piece_with_the_centre() {
+        // A one-cell-wide hall along the top and left edges: the round shape cuts the bend off
+        // and leaves two pieces, of which only the one with the centre may stay.
+        let base = Grid::from_vec(
+            15,
+            15,
+            (0..225)
+                .map(|i| u32::from(i / 15 == 1 || i % 15 == 1))
+                .collect(),
+        )
+        .unwrap();
+        let p = params();
+        let z = Grid::filled(15, 15, 0.0);
+        let shaping = Shaping {
+            base: &base,
+            p: &p,
+            noise: &z,
+        };
+        let mut rooms = Grid::filled(15, 15, 0_u32);
+        let centre = shaping
+            .room(&mut rooms, (0, 15, 0, 15), 1, Shape::Round, &[])
+            .unwrap();
+        assert_eq!(rooms.get(centre.0 as usize, centre.1 as usize), 1);
+        let (_, parts) = labels(&rooms.map(|v| v == 1), Connectivity::Four);
+        assert_eq!(parts, 1);
     }
 
     // AC: CE-80.3
