@@ -87,6 +87,88 @@ fn hook_names(out: &[u8]) -> Result<Vec<String>, String> {
 mod tests {
     use super::*;
 
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    /// An isolated runner and a fresh repository in `dir`.
+    fn repo(dir: &Path) -> Result<(Git, std::path::PathBuf), Box<dyn std::error::Error>> {
+        let config = dir.join("gitconfig");
+        std::fs::write(&config, "")?;
+        let git = Git::find()?.with_env(&[
+            ("GIT_CONFIG_GLOBAL", config.to_str().ok_or("config path")?),
+            ("GIT_CONFIG_NOSYSTEM", "1"),
+        ]);
+        let repo = dir.join("repo");
+        std::fs::create_dir_all(&repo)?;
+        git.run(
+            &[OsStr::new("init"), OsStr::new("-q"), OsStr::new(".")],
+            &repo,
+            None,
+            &[],
+        )?;
+        Ok((git, repo))
+    }
+
+    fn set(git: &Git, repo: &Path, key: &str, value: &str) -> Result<(), GitError> {
+        git.run(
+            &[OsStr::new("config"), OsStr::new(key), OsStr::new(value)],
+            repo,
+            None,
+            &[],
+        )
+        .map(drop)
+    }
+
+    #[test]
+    fn a_repository_without_configured_hooks_only_moves_the_hooks_folder() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        let (git, repo) = repo(dir.path())?;
+        let settings = no_hooks(&git, &repo, &Cancel::new(), Path::new("empty"))?;
+        assert_eq!(settings, ["core.hooksPath=empty"]);
+        Ok(())
+    }
+
+    #[test]
+    fn every_configured_hook_is_turned_off() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        let (git, repo) = repo(dir.path())?;
+        set(&git, &repo, "hook.probe.event", "post-index-change")?;
+        set(&git, &repo, "hook.Theos.probe.event", "pre-commit")?;
+        let settings = no_hooks(&git, &repo, &Cancel::new(), Path::new("empty"))?;
+        assert_eq!(
+            settings,
+            [
+                "core.hooksPath=empty",
+                "hook.probe.enabled=false",
+                "hook.Theos.probe.enabled=false"
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_hook_that_cannot_be_turned_off_is_an_output_error() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        let (git, repo) = repo(dir.path())?;
+        set(&git, &repo, "hook.a=b.event", "post-index-change")?;
+        let result = no_hooks(&git, &repo, &Cancel::new(), Path::new("empty"));
+        assert!(matches!(result, Err(GitError::Output { .. })), "{result:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn a_cancel_is_an_error() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        let (git, repo) = repo(dir.path())?;
+        let cancel = Cancel::new();
+        cancel.cancel();
+        let result = no_hooks(&git, &repo, &cancel, Path::new("empty"));
+        assert!(
+            matches!(result, Err(GitError::Cancelled { .. })),
+            "{result:?}"
+        );
+        Ok(())
+    }
+
     #[test]
     fn no_answer_names_no_hook() {
         assert_eq!(hook_names(b""), Ok(Vec::new()));
