@@ -1,7 +1,8 @@
 //! The table of interior maps. Empty except for its frame rule; phase P34 fills it. Interior
 //! features are numbered per feature kind.
 
-use super::{FrameRule, IdScheme, KindTable, no_metrics, plain_title, seeds_nothing};
+use super::{FrameRule, IdScheme, KindTable, no_metrics, plain_title};
+use crate::child::seed;
 use crate::features::output;
 use crate::stage::MapKind;
 
@@ -18,5 +19,6 @@ pub(super) const TABLE: KindTable = KindTable {
     features: output::build_set,
     title: plain_title,
     frame: FrameRule::RecipeChild,
-    seeded: seeds_nothing,
+    seeded: seed,
+    own_seeds: &[],
 };

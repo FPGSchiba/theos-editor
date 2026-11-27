@@ -8,7 +8,13 @@ fn no_inputs() -> serde_json::Map<String, serde_json::Value> {
 }
 
 fn refusal(extra: &str, stages: &[&str]) -> RecipeError {
-    plan(&recipe(extra, stages), &registry(), &no_inputs()).unwrap_err()
+    plan(
+        &recipe(extra, stages),
+        &registry(),
+        &no_inputs(),
+        Planning::Standalone,
+    )
+    .unwrap_err()
 }
 
 fn fields(err: &RecipeError) -> (Option<&str>, Option<&str>, Option<&str>, &str) {
@@ -35,7 +41,7 @@ fn a_valid_recipe_plans_frame_stages_and_keys() {
         "renders = [\"omega\"]\n[constraints]\nlake_pct = [1.0, 2.0]\n[render.base]\nk = 1\n",
         &["a", "b", "a", "c"],
     );
-    let planned = plan(&loaded, &registry(), &no_inputs()).unwrap();
+    let planned = plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).unwrap();
     assert_eq!(planned.recipe_id, "t");
     assert_eq!((planned.frame.rows, planned.frame.cols), (4, 8));
     assert!((planned.frame.cell_m - 125.0).abs() < 1e-9);
@@ -75,7 +81,15 @@ fn an_optional_write_does_not_satisfy_a_required_read() {
 
 #[test]
 fn an_optional_read_may_be_missing() {
-    assert!(plan(&recipe("", &["c"]), &registry(), &no_inputs()).is_ok());
+    assert!(
+        plan(
+            &recipe("", &["c"]),
+            &registry(),
+            &no_inputs(),
+            Planning::Standalone
+        )
+        .is_ok()
+    );
 }
 
 #[test]
@@ -93,7 +107,7 @@ fn a_stage_without_an_id_fails() {
         RecipeOrigin::Builtin,
     )
     .unwrap();
-    let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+    let err = plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).unwrap_err();
     assert!(fields(&err).3.contains("no `id`"), "{err}");
 }
 
@@ -104,7 +118,7 @@ fn an_unknown_parameter_fails_naming_it() {
         RecipeOrigin::Builtin,
     )
     .unwrap();
-    let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+    let err = plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).unwrap_err();
     let (stage, _, parameter, message) = fields(&err);
     assert_eq!((stage, parameter), (Some("a"), Some("bogus")));
     assert!(message.contains("unknown parameter"), "{message}");
@@ -116,7 +130,15 @@ fn check_order_failures_name_the_stage_and_step() {
     let (stage, _, parameter, message) = fields(&err);
     assert_eq!((stage, parameter), (Some("ord"), Some("process[0]")));
     assert!(message.contains("needs `x`"), "{message}");
-    assert!(plan(&recipe("", &["a", "ord"]), &registry(), &no_inputs()).is_ok());
+    assert!(
+        plan(
+            &recipe("", &["a", "ord"]),
+            &registry(),
+            &no_inputs(),
+            Planning::Standalone
+        )
+        .is_ok()
+    );
 }
 
 #[test]
@@ -145,7 +167,13 @@ fn a_stage_of_another_kind_is_refused() {
     }
     let mut registry = registry();
     registry.add(Box::new(Never));
-    let err = plan(&recipe("", &["never"]), &registry, &no_inputs()).unwrap_err();
+    let err = plan(
+        &recipe("", &["never"]),
+        &registry,
+        &no_inputs(),
+        Planning::Standalone,
+    )
+    .unwrap_err();
     assert!(fields(&err).3.contains("does not apply"), "{err}");
 }
 
@@ -154,7 +182,13 @@ fn a_stage_of_another_kind_is_refused() {
 fn an_undeclared_input_is_refused_before_the_run() {
     let mut inputs = no_inputs();
     inputs.insert("floor".to_owned(), serde_json::json!(2));
-    let err = plan(&recipe("", &["a"]), &registry(), &inputs).unwrap_err();
+    let err = plan(
+        &recipe("", &["a"]),
+        &registry(),
+        &inputs,
+        Planning::Standalone,
+    )
+    .unwrap_err();
     let (_, _, parameter, message) = fields(&err);
     assert_eq!(parameter, Some("floor"));
     assert_eq!(message, "unknown recipe input `floor`");
@@ -176,12 +210,12 @@ floor = { type = \"number\", min = 1, max = 10, integer = true }
     ] {
         let mut inputs = no_inputs();
         inputs.insert("floor".to_owned(), bad.clone());
-        let err = plan(&loaded, &registry(), &inputs).unwrap_err();
+        let err = plan(&loaded, &registry(), &inputs, Planning::Standalone).unwrap_err();
         assert_eq!(fields(&err).2, Some("floor"), "{bad}");
     }
     let mut inputs = no_inputs();
     inputs.insert("floor".to_owned(), serde_json::json!(3));
-    assert!(plan(&loaded, &registry(), &inputs).is_ok());
+    assert!(plan(&loaded, &registry(), &inputs, Planning::Standalone).is_ok());
 }
 
 fn parse_refusal(text: &str) -> String {
@@ -224,7 +258,7 @@ fn a_settlement_recipe_with_grid_is_refused() {
         RecipeOrigin::Builtin,
     )
     .unwrap();
-    let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+    let err = plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).unwrap_err();
     assert_eq!(fields(&err).2, Some("grid"));
     let loaded = parse(
         &settlement_text(
@@ -234,7 +268,7 @@ fn a_settlement_recipe_with_grid_is_refused() {
         RecipeOrigin::Builtin,
     )
     .unwrap();
-    let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+    let err = plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).unwrap_err();
     assert_eq!(fields(&err).2, Some("size_km"));
 }
 
@@ -246,7 +280,7 @@ kind = \"terrain\"
 size_km = [1.0, 0.5]
 ";
     let loaded = parse(without_grid, RecipeOrigin::Builtin).unwrap();
-    let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+    let err = plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).unwrap_err();
     assert_eq!(fields(&err).2, Some("grid"));
     let without_size = "id = \"t\"
 title = \"T\"
@@ -254,7 +288,7 @@ kind = \"terrain\"
 grid = [4, 8]
 ";
     let loaded = parse(without_size, RecipeOrigin::Builtin).unwrap();
-    let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+    let err = plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).unwrap_err();
     assert_eq!(fields(&err).2, Some("size_km"));
 }
 
@@ -265,7 +299,7 @@ fn non_square_cells_are_refused() {
         RecipeOrigin::Builtin,
     )
     .unwrap();
-    let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+    let err = plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).unwrap_err();
     assert!(fields(&err).3.contains("square"), "{err}");
 }
 
@@ -289,7 +323,7 @@ fn degenerate_frames_are_refused() {
         ),
     ] {
         let loaded = parse(&text("", &[]).replace(from, to), RecipeOrigin::Builtin).unwrap();
-        let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+        let err = plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).unwrap_err();
         assert!(fields(&err).3.contains(word), "{err}");
     }
 }
@@ -306,7 +340,7 @@ fn a_grid_whose_cell_count_overflows_is_refused() {
             .replace("grid = [4, 8]", &format!("grid = {grid}"))
             .replace("size_km = [1.0, 0.5]", &format!("size_km = {size}"));
         let loaded = parse(&edited, RecipeOrigin::Builtin).unwrap();
-        let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+        let err = plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).unwrap_err();
         let (stage, layer, parameter, message) = fields(&err);
         assert_eq!(
             (stage, layer, parameter),
@@ -332,7 +366,7 @@ fn a_cell_edge_out_of_range_is_refused() {
             .replace("grid = [4, 8]", &format!("grid = {grid}"))
             .replace("size_km = [1.0, 0.5]", &format!("size_km = {size}"));
         let loaded = parse(&edited, RecipeOrigin::Builtin).unwrap();
-        let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+        let err = plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).unwrap_err();
         let (_, _, parameter, message) = fields(&err);
         assert_eq!(parameter, Some("size_km"), "{err}");
         assert!(
@@ -343,7 +377,7 @@ fn a_cell_edge_out_of_range_is_refused() {
     for size in ["[0.0000801, 0.00004005]", "[800.0, 400.0]"] {
         let edited = text("", &[]).replace("size_km = [1.0, 0.5]", &format!("size_km = {size}"));
         let loaded = parse(&edited, RecipeOrigin::Builtin).unwrap();
-        let planned = plan(&loaded, &registry(), &no_inputs()).unwrap();
+        let planned = plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).unwrap();
         assert!((0.01..=100_000.0).contains(&planned.frame.cell_m), "{size}");
     }
 }
@@ -364,7 +398,15 @@ fn render_options_may_name_a_standard_or_extra_render() {
 k = 1
 "
         );
-        assert!(plan(&recipe(&extra, &["a"]), &registry(), &no_inputs()).is_ok());
+        assert!(
+            plan(
+                &recipe(&extra, &["a"]),
+                &registry(),
+                &no_inputs(),
+                Planning::Standalone
+            )
+            .is_ok()
+        );
     }
 }
 
@@ -396,7 +438,15 @@ fn a_read_of_another_layer_kind_fails_naming_both_kinds() {
 
 #[test]
 fn the_later_write_decides_the_kind() {
-    assert!(plan(&recipe("", &["u", "a", "b"]), &registry(), &no_inputs()).is_ok());
+    assert!(
+        plan(
+            &recipe("", &["u", "a", "b"]),
+            &registry(),
+            &no_inputs(),
+            Planning::Standalone
+        )
+        .is_ok()
+    );
     let err = refusal("", &["a", "u", "b"]);
     assert_eq!(fields(&err).0, Some("b"));
 }
@@ -409,7 +459,7 @@ fn recipe_ids_are_folder_safe() {
             RecipeOrigin::Builtin,
         )
         .unwrap();
-        let err = plan(&loaded, &registry(), &no_inputs()).unwrap_err();
+        let err = plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).unwrap_err();
         assert_eq!(fields(&err).2, Some("id"), "{bad:?}");
     }
     for good in ["t", "0a", "a-b-1"] {
@@ -418,7 +468,10 @@ fn recipe_ids_are_folder_safe() {
             RecipeOrigin::Builtin,
         )
         .unwrap();
-        assert!(plan(&loaded, &registry(), &no_inputs()).is_ok(), "{good}");
+        assert!(
+            plan(&loaded, &registry(), &no_inputs(), Planning::Standalone).is_ok(),
+            "{good}"
+        );
     }
 }
 

@@ -53,6 +53,30 @@ pub enum ChildError {
         /// The feature id.
         id: String,
     },
+    /// A stage reads a parent value, but the run has no parent package.
+    #[error("`{value}` needs a parent package, and this run has none")]
+    NoParent {
+        /// The world value that was asked for.
+        value: String,
+    },
+    /// A parent layer could not be resampled into the child frame.
+    #[error("parent layer `{layer}`: {source}")]
+    Resample {
+        /// The parent layer.
+        layer: String,
+        /// What the kernel said.
+        source: crate::kernels::KernelError,
+    },
+    /// A parent layer's values do not fit the shape its manifest entry gives.
+    #[error("parent layer `{layer}` does not hold {rows} x {cols} values")]
+    LayerShape {
+        /// The parent layer.
+        layer: String,
+        /// Rows of its entry.
+        rows: u32,
+        /// Columns of its entry.
+        cols: u32,
+    },
     /// The request value of the feature input is not a string.
     #[error("input `{input}` must be a feature id (a string)")]
     NotAFeatureId {
@@ -135,6 +159,20 @@ impl ParentContext {
         })
     }
 
+    /// Every feature of the parent that has a string id, in the parent file's order.
+    #[must_use]
+    pub fn features(&self) -> Vec<ParentFeature> {
+        self.package
+            .features
+            .features
+            .iter()
+            .filter_map(|f| match &f.id {
+                Some(geojson::feature::Id::String(id)) => Some(feature_of(f, id)),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The feature anchor in the parent frame, metres: a point, or the centre of the bounding
     /// box of a polygon outline.
     ///
@@ -184,6 +222,11 @@ fn find_feature(package: &Package, id: &str) -> Option<ParentFeature> {
         .features
         .iter()
         .find(|f| matches!(&f.id, Some(geojson::feature::Id::String(s)) if s == id))?;
+    Some(feature_of(found, id))
+}
+
+/// The feature `found`, which has the id `id`.
+fn feature_of(found: &geojson::Feature, id: &str) -> ParentFeature {
     let properties = found.properties.clone().unwrap_or_default();
     let text = |key: &str| {
         properties
@@ -192,7 +235,7 @@ fn find_feature(package: &Package, id: &str) -> Option<ParentFeature> {
             .unwrap_or_default()
             .to_owned()
     };
-    Some(ParentFeature {
+    ParentFeature {
         id: id.to_owned(),
         kind: text("kind"),
         ty: text("type"),
@@ -201,7 +244,7 @@ fn find_feature(package: &Package, id: &str) -> Option<ParentFeature> {
             .as_ref()
             .map_or(Geometry::None, |g| geometry_of(&g.value)),
         properties,
-    })
+    }
 }
 
 /// The `[x, y]` of a position, `None` when it has fewer than two numbers.

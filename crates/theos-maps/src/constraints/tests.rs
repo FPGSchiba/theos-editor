@@ -60,7 +60,12 @@ fn no_constraints_pass() {
 }
 
 fn parameter_of(extra: &str, stages: &[&str]) -> Result<(), Option<String>> {
-    match plan(&recipe(extra, stages), &registry(), &serde_json::Map::new()) {
+    match plan(
+        &recipe(extra, stages),
+        &registry(),
+        &serde_json::Map::new(),
+        crate::recipe::Planning::Standalone,
+    ) {
         Ok(_) => Ok(()),
         Err(RecipeError::Invalid { parameter, .. }) => Err(parameter),
         Err(other) => panic!("{other:?}"),

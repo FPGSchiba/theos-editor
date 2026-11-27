@@ -304,8 +304,13 @@ fn every_built_in_recipe_plans() -> TestResult {
     assert_eq!(ids, BUILT_IN);
     let registry = Registry::builtin();
     for (id, loaded) in &catalog.recipes {
-        recipe::plan(loaded, &registry, &serde_json::Map::new())
-            .map_err(|e| format!("{id}: {e}"))?;
+        recipe::plan(
+            loaded,
+            &registry,
+            &serde_json::Map::new(),
+            theos_maps::recipe::Planning::Standalone,
+        )
+        .map_err(|e| format!("{id}: {e}"))?;
     }
     Ok(())
 }

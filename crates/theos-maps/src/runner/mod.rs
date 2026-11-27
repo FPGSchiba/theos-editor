@@ -6,7 +6,10 @@
 //! record). Before the first stage it refuses a plan whose memory
 //! [`estimate`] is above the budget.
 
+#[cfg(test)]
+mod child_tests;
 mod memory;
+mod seed;
 #[cfg(test)]
 mod tests;
 
@@ -18,13 +21,14 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 pub use self::memory::{DEFAULT_MEMORY_BUDGET, MemoryEstimate, estimate};
+use crate::child::ParentContext;
 use crate::error::RunError;
 use crate::golden::{GoldenRun, GoldenStage};
 use crate::kernels::num::to_u32;
 use crate::progress::{CancelToken, Progress};
 use crate::recipe::{Plan, PlannedStage};
 use crate::stage::{Metrics, Registry, Severity, Stage, StageContext, StageError, StageReport};
-use crate::world::{LayerBytesError, World, layer_sha256};
+use crate::world::{Layer, LayerBytesError, World, layer_sha256};
 
 /// How a run is carried out.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,7 +64,9 @@ pub(crate) struct Execution {
     pub timing_s: BTreeMap<String, f64>,
 }
 
-/// Runs `plan` with `seed` over a new world.
+/// Runs `plan` with `seed` over a new world. A child plan's `parent` supplies the values the
+/// world is seeded with before the first stage (`seed` module); their hashes are the golden
+/// pseudo stage `parent#0` (L12).
 ///
 /// # Errors
 /// [`RunError::OverBudget`] before any stage when the memory estimate exceeds the budget;
@@ -72,6 +78,7 @@ pub(crate) fn execute(
     seed: u64,
     registry: &Registry,
     options: &RunOptions,
+    parent: Option<&ParentContext>,
     progress: &mut dyn FnMut(&Progress),
     cancel: &CancelToken,
 ) -> Result<Execution, RunError> {
@@ -91,6 +98,9 @@ pub(crate) fn execute(
         },
         timing_s: BTreeMap::new(),
     };
+    if let Some(stage) = seed::seed_world(&mut world, plan, parent, cancel)? {
+        out.golden.stages.push(stage);
+    }
     let total = to_u32(plan.stages.len());
     for (index, planned) in plan.stages.iter().enumerate() {
         progress(&Progress {
@@ -263,25 +273,30 @@ fn hash_writes(
                 },
             });
         };
-        let hash = layer_sha256(layer).map_err(|error| match error {
-            LayerBytesError::NonFinite { cell } => RunError::NonFinite {
-                stage: planned.id.to_owned(),
-                layer: spec.name.to_owned(),
-                cell,
-            },
-            LayerBytesError::ValueNotFinite => RunError::NonFiniteValue {
-                stage: planned.id.to_owned(),
-                layer: spec.name.to_owned(),
-            },
-            LayerBytesError::Json(source) => RunError::StageFailed {
-                stage: planned.id.to_owned(),
-                source: StageError::Failed {
-                    stage: planned.id.to_owned(),
-                    message: format!("layer `{}` has no canonical bytes: {source}", spec.name),
-                },
-            },
-        })?;
+        let hash = hash_layer(planned.id, spec.name, layer)?;
         layers.insert(spec.name.to_owned(), hash);
     }
     Ok(layers)
+}
+
+/// The SHA-256 of `layer`, which `stage` wrote under `name`.
+fn hash_layer(stage: &str, name: &str, layer: &Layer) -> Result<String, RunError> {
+    layer_sha256(layer).map_err(|error| match error {
+        LayerBytesError::NonFinite { cell } => RunError::NonFinite {
+            stage: stage.to_owned(),
+            layer: name.to_owned(),
+            cell,
+        },
+        LayerBytesError::ValueNotFinite => RunError::NonFiniteValue {
+            stage: stage.to_owned(),
+            layer: name.to_owned(),
+        },
+        LayerBytesError::Json(source) => RunError::StageFailed {
+            stage: stage.to_owned(),
+            source: StageError::Failed {
+                stage: stage.to_owned(),
+                message: format!("layer `{name}` has no canonical bytes: {source}"),
+            },
+        },
+    })
 }

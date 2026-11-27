@@ -3,10 +3,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{LoadedRecipe, RecipeError};
-use crate::child::standalone_frame;
+use crate::child::values::PARENT_PREFIX;
+use crate::child::{
+    ClassFrameValue, ClassSource, ParentContext, child_frame, class_frame_of, describe_frame,
+    standalone_frame,
+};
 use crate::constraints::is_known_path;
 use crate::render::{self, Role};
-use crate::stage::{LayerSpec, MapKind, ParamError, Registry, StageParams};
+use crate::stage::{LayerSpec, MapKind, ParamError, Registry, Runs, StageParams};
 use crate::world::{LayerKind, MapFrame};
 
 /// The smallest cell edge of a map, m: a centimetre, below any floor plan's need.
@@ -14,6 +18,30 @@ pub const MIN_CELL_M: f64 = 0.01;
 
 /// The largest cell edge of a map, m: 100 km, beyond any world map's need.
 pub const MAX_CELL_M: f64 = 100_000.0;
+
+mod offered;
+
+/// What a plan is made for: it decides the frame, which stages take part and which parent
+/// values are offered (spec P29 section 5.2 items 4 and 5).
+#[derive(Debug, Clone, Copy)]
+pub enum Planning<'a> {
+    /// A run without a parent: stages that run only for a child are left out.
+    Standalone,
+    /// A run from the given parent: stages that run only without a parent are left out, and
+    /// the parent's values are offered.
+    Child(&'a ParentContext),
+    /// `describe`: every stage is kept and every `parent.*` read counts as available.
+    Describe,
+}
+
+/// The parent package and feature a child plan was made from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParentRef {
+    /// SHA-256 of the parent file.
+    pub package_sha256: String,
+    /// The id of the feature the child details.
+    pub feature: String,
+}
 
 /// A validated recipe: the frame and the stages with their parsed parameters.
 #[derive(Debug)]
@@ -24,6 +52,14 @@ pub struct Plan {
     pub kind: MapKind,
     /// The frame the recipe's grid and size give.
     pub frame: MapFrame,
+    /// Where the frame lies in the parent frame, m; `None` without a parent.
+    pub origin_m: Option<[f64; 2]>,
+    /// The parent package and feature of a child plan.
+    pub parent: Option<ParentRef>,
+    /// The values the runner seeds before the first stage: those that some stage reads, by name.
+    pub seeded: Vec<LayerSpec>,
+    /// The class table entry of a settlement plan (`class_frame`).
+    pub class_frame: Option<ClassFrameValue>,
     /// The stages in order.
     pub stages: Vec<PlannedStage>,
     /// Constraint ranges by summary path; check 5 has made sure that every path is known and
@@ -88,18 +124,23 @@ pub fn plan(
     recipe: &LoadedRecipe,
     registry: &Registry,
     inputs: &serde_json::Map<String, serde_json::Value>,
+    planning: Planning<'_>,
 ) -> Result<Plan, RecipeError> {
     check_id(recipe)?;
-    let frame = check_frame(recipe)?;
+    let placed = check_frame(recipe, planning)?;
     check_renders(recipe)?;
     check_inputs(recipe, inputs)?;
-    let stages = plan_stages(recipe, registry)?;
+    let (stages, seeded) = plan_stages(recipe, registry, planning)?;
     check_constraints(recipe, &stages)?;
     let r = &recipe.recipe;
     Ok(Plan {
         recipe_id: r.id.clone(),
         kind: r.kind,
-        frame,
+        frame: placed.frame,
+        origin_m: placed.origin_m,
+        parent: placed.parent,
+        seeded,
+        class_frame: placed.class_frame,
         stages,
         constraints: r.constraints.clone(),
         renders: r.renders.clone(),
@@ -147,9 +188,48 @@ fn check_constraints(recipe: &LoadedRecipe, stages: &[PlannedStage]) -> Result<(
     Ok(())
 }
 
-/// Check 1: the frame of a map without a parent (`child::standalone_frame`).
-fn check_frame(recipe: &LoadedRecipe) -> Result<MapFrame, RecipeError> {
-    standalone_frame(recipe.recipe.kind, &recipe.recipe)
+/// The frame check's result: where and how big the map is.
+struct Placed {
+    frame: MapFrame,
+    origin_m: Option<[f64; 2]>,
+    parent: Option<ParentRef>,
+    class_frame: Option<ClassFrameValue>,
+}
+
+/// Check 1: the frame. A map without a parent takes it from the recipe (`standalone_frame`), a
+/// child from its place in the parent (`child_frame`), `describe` from the first parent type.
+fn check_frame(recipe: &LoadedRecipe, planning: Planning<'_>) -> Result<Placed, RecipeError> {
+    let (kind, r) = (recipe.recipe.kind, &recipe.recipe);
+    Ok(match planning {
+        Planning::Standalone => Placed {
+            frame: standalone_frame(kind, r)?,
+            origin_m: None,
+            parent: None,
+            class_frame: class_frame_of(kind, r, ClassSource::Site)?,
+        },
+        Planning::Describe => Placed {
+            frame: describe_frame(kind, r)?,
+            origin_m: None,
+            parent: None,
+            class_frame: class_frame_of(kind, r, ClassSource::First)?,
+        },
+        Planning::Child(parent) => {
+            let child = child_frame(kind, r, parent)?;
+            Placed {
+                frame: MapFrame {
+                    rows: child.rows,
+                    cols: child.cols,
+                    cell_m: child.cell_m,
+                },
+                origin_m: Some(child.origin_m),
+                parent: Some(ParentRef {
+                    package_sha256: parent.sha256.clone(),
+                    feature: parent.feature.id.clone(),
+                }),
+                class_frame: class_frame_of(kind, r, ClassSource::Parent(&parent.feature.ty))?,
+            }
+        }
+    })
 }
 
 /// Check 2: the extra renders and the render options.
@@ -192,11 +272,18 @@ fn check_inputs(
 }
 
 /// Check 4: the stages, in order, with the layers available before each.
+///
+/// A stage that does not run in this planning is parsed (so a wrong table is still refused) and
+/// then left out: it is not counted for the random-stream keys and writes nothing. Returns the
+/// stages and the offered values that some stage reads.
 fn plan_stages(
     recipe: &LoadedRecipe,
     registry: &Registry,
-) -> Result<Vec<PlannedStage>, RecipeError> {
-    let mut available: BTreeMap<&'static str, LayerKind> = BTreeMap::new();
+    planning: Planning<'_>,
+) -> Result<(Vec<PlannedStage>, Vec<LayerSpec>), RecipeError> {
+    let offer = offered::Offered::of(recipe.recipe.kind, planning);
+    let mut available: BTreeMap<String, LayerKind> = offer.names.clone();
+    let mut seeded: BTreeMap<&'static str, LayerSpec> = BTreeMap::new();
     let mut seen: BTreeMap<&'static str, u32> = BTreeMap::new();
     let mut stages = Vec::new();
     for table in &recipe.recipe.stages {
@@ -229,48 +316,33 @@ fn plan_stages(
             )
         };
         let params = stage.params(table).map_err(param_error)?;
-        let names: BTreeSet<&str> = available.keys().copied().collect();
+        let skipped = matches!(
+            (planning, stage.runs()),
+            (Planning::Standalone, Runs::Child) | (Planning::Child(_), Runs::Standalone)
+        );
+        if skipped {
+            continue;
+        }
+        let names: BTreeSet<&str> = available.keys().map(String::as_str).collect();
         stage
             .check_order(params.as_ref(), &names)
             .map_err(param_error)?;
         let reads = stage.reads(params.as_ref());
         for read in &reads {
-            let on_layer = Spot {
-                stage: Some(id),
-                layer: Some(read.name),
-                parameter: None,
-            };
-            match available.get(read.name) {
-                Some(kind) if *kind != read.kind => {
-                    return Err(invalid(
-                        recipe,
-                        &on_layer,
-                        format!(
-                            "stage `{id}` reads `{}` as {}, but an earlier stage writes it as {kind}",
-                            read.name, read.kind
-                        ),
-                    ));
-                }
-                Some(_) => {}
-                None if read.optional => {}
-                None => {
-                    return Err(invalid(
-                        recipe,
-                        &on_layer,
-                        format!(
-                            "stage `{id}` reads `{}`, which no earlier stage writes",
-                            read.name
-                        ),
-                    ));
-                }
+            if offer.accepts(read) {
+                available.entry(read.name.to_owned()).or_insert(read.kind);
             }
+            if offer.names.contains_key(read.name) {
+                seeded.entry(read.name).or_insert(*read);
+            }
+            check_read(recipe, id, read, &available)?;
         }
         let writes = stage.writes(params.as_ref());
         available.extend(
             writes
                 .iter()
                 .filter(|w| !w.optional)
-                .map(|w| (w.name, w.kind)),
+                .map(|w| (w.name.to_owned(), w.kind)),
         );
         let stage_id = stage.id();
         let occurrence = seen.entry(stage_id).or_insert(0);
@@ -285,8 +357,50 @@ fn plan_stages(
             writes,
         });
     }
-    Ok(stages)
+    let mut seeded: Vec<LayerSpec> = seeded.into_values().collect();
+    seeded.sort_by_key(|spec| spec.name);
+    Ok((stages, seeded))
 }
 
+/// Check 4, one read of stage `id`: written before, of the kind read, or optional.
+fn check_read(
+    recipe: &LoadedRecipe,
+    id: &str,
+    read: &LayerSpec,
+    available: &BTreeMap<String, LayerKind>,
+) -> Result<(), RecipeError> {
+    let on_layer = Spot {
+        stage: Some(id),
+        layer: Some(read.name),
+        parameter: None,
+    };
+    match available.get(read.name) {
+        Some(kind) if *kind != read.kind => Err(invalid(
+            recipe,
+            &on_layer,
+            format!(
+                "stage `{id}` reads `{}` as {}, but an earlier stage writes it as {kind}",
+                read.name, read.kind
+            ),
+        )),
+        Some(_) => Ok(()),
+        None if read.optional => Ok(()),
+        None => {
+            let what = if read.name.starts_with(PARENT_PREFIX) {
+                "which the parent does not have"
+            } else {
+                "which no earlier stage writes"
+            };
+            Err(invalid(
+                recipe,
+                &on_layer,
+                format!("stage `{id}` reads `{}`, {what}", read.name),
+            ))
+        }
+    }
+}
+
+#[cfg(test)]
+mod child_tests;
 #[cfg(test)]
 mod tests;

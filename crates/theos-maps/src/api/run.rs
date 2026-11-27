@@ -20,7 +20,7 @@ use crate::error::RunError;
 use crate::golden::GoldenRun;
 use crate::package::RunRecord;
 use crate::progress::{CancelToken, Progress};
-use crate::recipe::{self, LoadedRecipe, RecipeError};
+use crate::recipe::{self, LoadedRecipe, Planning, RecipeError};
 use crate::runner::execute;
 use crate::stage::Registry;
 
@@ -89,14 +89,22 @@ pub(crate) fn run_inner(
     cancel: &CancelToken,
 ) -> Result<(RunManifest, GoldenRun), RunError> {
     let loaded = find(request, recipe_dirs)?;
-    let plan = recipe::plan(&loaded, registry, &request.inputs)?;
+    let plan = recipe::plan(&loaded, registry, &request.inputs, Planning::Standalone)?;
     needs::check(&plan)?;
     let renders = needs::render_names(&plan);
     let mut roles: Vec<String> = renders.iter().map(|r| (*r).to_owned()).collect();
     roles.extend([FEATURES.to_owned(), PACKAGE.to_owned()]);
     let mut outputs = Outputs::claim(out_dir, request.seed, &roles)?;
     let seed = request.seed;
-    let execution = execute(&plan, seed, registry, &request.options, progress, cancel)?;
+    let execution = execute(
+        &plan,
+        seed,
+        registry,
+        &request.options,
+        None,
+        progress,
+        cancel,
+    )?;
     let world = &execution.world;
     let mut post = Steps::new(progress, cancel, execution.timing_s.clone());
 

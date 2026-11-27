@@ -1,7 +1,7 @@
 //! The frame of a map: where a child map lies in its parent, and the frame of a map that has no
 //! parent (spec P29 §5.2 item 4, plan rulings L7 to L9).
 
-use super::ParentContext;
+use super::{ClassFrameValue, ParentContext};
 use crate::kernels::num;
 use crate::kind;
 use crate::recipe::{Recipe, RecipeError, check_cell, grid_frame, invalid};
@@ -89,24 +89,86 @@ pub fn standalone_frame(kind: MapKind, recipe: &Recipe) -> Result<MapFrame, Reci
         FrameRule::Recipe | FrameRule::RecipeChild => grid_frame(recipe),
         FrameRule::SettlementClass => {
             refuse_grid_keys(recipe)?;
-            let class = recipe
-                .stages
-                .iter()
-                .find(|t| t.get("id").and_then(toml::Value::as_str) == Some("site_terrain"))
-                .and_then(|t| t.get("class"))
-                .and_then(toml::Value::as_str)
-                .ok_or_else(|| {
-                    invalid(
-                        recipe,
-                        None,
-                        "a settlement recipe without a parent needs a `site_terrain` stage \
-                         with a `class`",
-                    )
-                })?;
-            let (rows, cols, cell_m) = class_grid(recipe, class)?;
+            let (rows, cols, cell_m) = class_grid(recipe, &site_class(recipe)?)?;
             Ok(MapFrame { rows, cols, cell_m })
         }
     }
+}
+
+/// The frame `describe` shows for a recipe it plans without a parent: like [`standalone_frame`],
+/// but a settlement map takes the class of the first of the feature input's `parent_types`.
+///
+/// # Errors
+/// [`RecipeError::Invalid`] naming the key that is wrong or missing.
+pub(crate) fn describe_frame(kind: MapKind, recipe: &Recipe) -> Result<MapFrame, RecipeError> {
+    match kind::table(kind).frame {
+        FrameRule::SettlementClass => {
+            refuse_grid_keys(recipe)?;
+            let (rows, cols, cell_m) = class_grid(recipe, &first_parent_type(recipe)?)?;
+            Ok(MapFrame { rows, cols, cell_m })
+        }
+        FrameRule::Recipe | FrameRule::RecipeChild => grid_frame(recipe),
+    }
+}
+
+/// Where the class of a settlement map comes from.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ClassSource<'a> {
+    /// The `class` of the recipe's `site_terrain` stage (a map without a parent).
+    Site,
+    /// The type of the parent feature.
+    Parent(&'a str),
+    /// The first of the feature input's `parent_types` (`describe`).
+    First,
+}
+
+/// The class table entry of a settlement map, `None` for the kinds that have none.
+///
+/// # Errors
+/// [`RecipeError::Invalid`] when the class is missing, unknown or its table is wrong.
+pub(crate) fn class_frame_of(
+    kind: MapKind,
+    recipe: &Recipe,
+    source: ClassSource<'_>,
+) -> Result<Option<ClassFrameValue>, RecipeError> {
+    if kind::table(kind).frame != FrameRule::SettlementClass {
+        return Ok(None);
+    }
+    let class = match source {
+        ClassSource::Site => site_class(recipe)?,
+        ClassSource::Parent(ty) => ty.to_owned(),
+        ClassSource::First => first_parent_type(recipe)?,
+    };
+    let frame = class::resolve(&class, recipe.child.as_ref())
+        .map_err(|message| invalid(recipe, Some("child"), message))?;
+    Ok(Some(ClassFrameValue { class, frame }))
+}
+
+/// The `class` of the `site_terrain` stage of a recipe without a parent.
+fn site_class(recipe: &Recipe) -> Result<String, RecipeError> {
+    recipe
+        .stages
+        .iter()
+        .find(|t| t.get("id").and_then(toml::Value::as_str) == Some("site_terrain"))
+        .and_then(|t| t.get("class"))
+        .and_then(toml::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            invalid(
+                recipe,
+                None,
+                "a settlement recipe without a parent needs a `site_terrain` stage                  with a `class`",
+            )
+        })
+}
+
+/// The first parent type of the recipe's feature input.
+fn first_parent_type(recipe: &Recipe) -> Result<String, RecipeError> {
+    recipe
+        .inputs()
+        .feature()
+        .and_then(|(_, types)| types.first().cloned())
+        .ok_or_else(|| invalid(recipe, None, "a settlement recipe needs a `feature` input"))
 }
 
 /// A settlement recipe has neither `grid` nor `size_km` (L7): its frame comes from the class.

@@ -29,12 +29,18 @@ const WATER_SMALL: &str = include_str!("../../../tests/fixtures/recipes/water-sm
 fn run_and_build(text: &str, seed: u64) -> Result<FeatureCollection, Box<dyn std::error::Error>> {
     let loaded = parse(text, RecipeOrigin::Builtin)?;
     let registry = Registry::builtin();
-    let planned = plan(&loaded, &registry, &serde_json::Map::new())?;
+    let planned = plan(
+        &loaded,
+        &registry,
+        &serde_json::Map::new(),
+        crate::recipe::Planning::Standalone,
+    )?;
     let run = execute(
         &planned,
         seed,
         &registry,
         &RunOptions::default(),
+        None,
         &mut |_| {},
         &CancelToken::new(),
     )?;

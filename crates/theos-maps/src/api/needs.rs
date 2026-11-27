@@ -91,6 +91,7 @@ mod tests {
             &loaded,
             &Registry::builtin(),
             &serde_json::Map::new(),
+            recipe::Planning::Standalone,
         )?)
     }
 
@@ -119,7 +120,12 @@ mod tests {
         assert!(catalog.problems.is_empty(), "{:?}", catalog.problems);
         assert!(catalog.recipes.len() >= 10, "{:?}", catalog.recipes.keys());
         for (id, loaded) in &catalog.recipes {
-            let plan = recipe::plan(loaded, &Registry::builtin(), &serde_json::Map::new())?;
+            let plan = recipe::plan(
+                loaded,
+                &Registry::builtin(),
+                &serde_json::Map::new(),
+                crate::recipe::Planning::Standalone,
+            )?;
             let result = check(&plan);
             if id == "evolution-384" {
                 match result {

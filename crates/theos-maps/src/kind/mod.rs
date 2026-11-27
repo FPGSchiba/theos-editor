@@ -14,12 +14,15 @@ use geojson::FeatureCollection;
 use serde_json::Value;
 use theos_map_format::FormatError;
 
-use crate::child::FrameRule;
+use crate::child::{FrameRule, ParentContext};
+use crate::error::RunError;
 use crate::features::output::FeaturesError;
 use crate::package::PackageLayer;
+use crate::progress::CancelToken;
+use crate::recipe::Plan;
 use crate::render::Render;
-use crate::stage::{MapKind, Metrics};
-use crate::world::World;
+use crate::stage::{LayerSpec, MapKind, Metrics};
+use crate::world::{Layer, World};
 
 /// How the ids of a kind's features are numbered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,9 +33,10 @@ pub enum IdScheme {
     ByKind,
 }
 
-/// The values the runner seeds into the world before the first stage; Task 6 gives it a
-/// meaning. Until then no kind seeds anything.
-pub(crate) type SeededFn = fn(seed: u64) -> BTreeMap<String, Value>;
+/// The values the runner seeds into the world before the first stage: one `(name, layer)` per
+/// entry of `plan.seeded`, from the parent package of a child run.
+pub(crate) type SeededFn =
+    fn(Option<&ParentContext>, &Plan, &CancelToken) -> Result<Vec<(String, Layer)>, RunError>;
 
 /// The top-level metrics of the summary, from the world and the stages' metrics.
 pub(crate) type MetricsFn = fn(&World, &[(String, Metrics)]) -> Result<Value, FormatError>;
@@ -68,9 +72,10 @@ pub(crate) struct KindTable {
     pub title: TitleFn,
     /// What decides the frame.
     pub frame: FrameRule,
-    /// The values the runner seeds.
-    #[expect(dead_code, reason = "wired in by Task 6")]
+    /// Builds the values the runner seeds.
     pub seeded: SeededFn,
+    /// The world values the kind offers besides `parent.*`, available before the first stage.
+    pub own_seeds: &'static [LayerSpec],
 }
 
 /// One entry per [`MapKind`].
@@ -92,9 +97,4 @@ pub(super) fn no_metrics(_: &World, _: &[(String, Metrics)]) -> Result<Value, Fo
 /// The title line of a kind without numbers of its own: recipe and seed.
 pub(super) fn plain_title(recipe: &str, seed: u64, _: &Value) -> String {
     format!("{recipe} \u{b7} seed {seed}")
-}
-
-/// Seeds nothing.
-pub(super) fn seeds_nothing(_: u64) -> BTreeMap<String, Value> {
-    BTreeMap::new()
 }

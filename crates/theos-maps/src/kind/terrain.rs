@@ -3,7 +3,8 @@
 use serde_json::Value;
 use theos_map_format::FormatError;
 
-use super::{FrameRule, IdScheme, KindTable, seeds_nothing};
+use super::{FrameRule, IdScheme, KindTable};
+use crate::child::seed;
 use crate::features::TYPES;
 use crate::features::output;
 use crate::metrics;
@@ -26,7 +27,8 @@ pub(super) const TABLE: KindTable = KindTable {
     features: output::build,
     title: render::title_line,
     frame: FrameRule::Recipe,
-    seeded: seeds_nothing,
+    seeded: seed,
+    own_seeds: &[],
 };
 
 /// The parity metrics; the Chime walk comes from the `travel` stage's metrics.
