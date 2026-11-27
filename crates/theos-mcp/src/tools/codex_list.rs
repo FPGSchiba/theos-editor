@@ -16,7 +16,8 @@ use crate::server::Server;
 pub struct Params {
     /// Only records of this kind.
     kind: Option<String>,
-    /// Only records with this status, `draft` or `canon`.
+    /// Only records with this status, a value of the `status` field (an invalid one is rejected
+    /// with an error that lists the allowed values).
     status: Option<String>,
     /// Only records under this project-relative folder, written with `/`.
     folder: Option<String>,

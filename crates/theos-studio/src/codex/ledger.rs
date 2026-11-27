@@ -59,42 +59,60 @@ pub fn ledger_check(ws: &Workspace, id: Option<&str>) -> Result<LedgerCheckView,
 }
 
 /// The view of `truth`: the marks of its path, and of each clue's path, place and script.
+///
+/// Each builder destructures its source exhaustively, so a field added to the ledger types in
+/// `theos-content` is a compile error here until the view carries it.
 pub(super) fn marked_truth(truth: &TruthLedger, lookup: &Lookup) -> MarkedTruthView {
+    let TruthLedger {
+        id,
+        path,
+        title,
+        target,
+        entries,
+    } = truth;
     MarkedTruthView {
-        id: truth.id.clone(),
-        path: truth.path.clone(),
-        title: truth.title.clone(),
-        target: truth.target.clone(),
-        entries: truth
-            .entries
+        id: id.clone(),
+        path: path.clone(),
+        title: title.clone(),
+        target: target.clone(),
+        entries: entries
             .iter()
             .map(|entry| marked_entry(entry, lookup))
             .collect(),
-        mark: lookup.marks.of_path(&truth.path),
+        mark: lookup.marks.of_path(path),
     }
 }
 
 fn marked_entry(entry: &LedgerEntry, lookup: &Lookup) -> MarkedEntryView {
+    let LedgerEntry {
+        state,
+        floor,
+        place,
+        gate,
+        clue,
+        clue_path,
+        placed_by,
+    } = entry;
     MarkedEntryView {
-        state: entry.state.clone(),
-        floor: entry.floor,
-        place: entry.place.as_deref().map(|id| lookup.target(id)),
-        gate: entry.gate.clone(),
-        clue: entry.clue.clone(),
-        clue_path: entry.clue_path.clone(),
-        placed_by: entry
-            .placed_by
+        state: state.clone(),
+        floor: *floor,
+        place: place.as_deref().map(|id| lookup.target(id)),
+        gate: gate.clone(),
+        clue: clue.clone(),
+        clue_path: clue_path.clone(),
+        placed_by: placed_by
             .iter()
             .map(|beat| marked_beat(beat, lookup))
             .collect(),
-        mark: lookup.marks.of_path(&entry.clue_path),
+        mark: lookup.marks.of_path(clue_path),
     }
 }
 
 fn marked_beat(beat: &BeatRef, lookup: &Lookup) -> MarkedBeatView {
+    let BeatRef { script, beat } = beat;
     MarkedBeatView {
-        script: lookup.target(&beat.script),
-        beat: beat.beat,
+        script: lookup.target(script),
+        beat: *beat,
     }
 }
 

@@ -13,7 +13,7 @@ const MAX_LIMIT: usize = 500;
 pub struct ListFilter {
     /// Only records of this registered kind.
     pub kind: Option<String>,
-    /// Only records with this status, one the registry allows (`draft` or `canon`).
+    /// Only records with this status, a value of the registry's `status` enum.
     pub status: Option<String>,
     /// Only records under this project-relative folder, written with `/`.
     pub folder: Option<String>,
@@ -260,6 +260,13 @@ mod tests {
             "{error:?}"
         );
         assert!(error.to_string().contains("npc"), "{error}");
+        // The status error names every allowed value (spec 5.8).
+        let error = list(&ws, &bad[1]).err().ok_or("accepted")?;
+        let text = error.to_string();
+        assert!(
+            text.contains("`draft`") && text.contains("`canon`") && text.contains("`Canon`"),
+            "{text}"
+        );
         Ok(())
     }
 }
