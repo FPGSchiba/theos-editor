@@ -573,6 +573,89 @@ fn ids_by_kind_count_per_kind() -> TestResult {
     let expected = ["settlement-1", "settlement-2", "poi-1"]
         .map(|s| geojson::feature::Id::String(s.to_owned()));
     assert_eq!(ids, expected);
-    assert_eq!(counts.get("settlement"), Some(&2));
+    // The counts are per type in both schemes: they feed `features.<type>`.
+    assert_eq!(counts.get("town"), Some(&1));
+    assert_eq!(counts.get("ruin"), Some(&1));
+    Ok(())
+}
+
+fn assembly(features: Vec<Feature>) -> Assembly {
+    Assembly {
+        features,
+        lists: BTreeMap::new(),
+    }
+}
+
+#[test]
+fn a_feature_without_geometry_is_written_as_null() -> TestResult {
+    let mut f = point("connection", "open", [0.0, 0.0]);
+    f.geometry = Geometry::None;
+    let (fc, _) = assemble(&assembly(vec![f]), IdScheme::ByKind)?;
+    let json = serde_json::to_value(&fc.features[0])?;
+    assert_eq!(json["geometry"], Value::Null);
+    assert_eq!(json["id"], "connection-1");
+    assert_eq!(json["properties"]["kind"], "connection");
+    assert_eq!(json["properties"]["type"], "open");
+    Ok(())
+}
+
+#[test]
+fn ids_by_type_number_each_type_from_one() -> TestResult {
+    let features = ["street", "lane", "street"]
+        .map(|t| point("street", t, [0.0, 0.0]))
+        .to_vec();
+    let (fc, counts) = assemble(&assembly(features), IdScheme::ByType)?;
+    assert_eq!(ids_of(&fc), ["street-1", "lane-1", "street-2"]);
+    assert_eq!(counts.get("street"), Some(&2));
+    Ok(())
+}
+
+#[test]
+fn ids_by_kind_number_each_kind_from_one() -> TestResult {
+    let features = vec![
+        point("room", "hall", [0.0, 0.0]),
+        point("door", "open", [0.0, 0.0]),
+        point("room", "cell", [0.0, 0.0]),
+    ];
+    let (fc, counts) = assemble(&assembly(features), IdScheme::ByKind)?;
+    assert_eq!(ids_of(&fc), ["room-1", "door-1", "room-2"]);
+    let expected: BTreeMap<String, usize> = [("hall", 1), ("cell", 1), ("open", 1)]
+        .map(|(k, n)| (k.to_owned(), n))
+        .into();
+    assert_eq!(counts, expected);
+    Ok(())
+}
+
+#[test]
+fn an_item_reference_becomes_the_items_id() -> TestResult {
+    let item = |index| Prop::Item {
+        list: "parcels",
+        index,
+    };
+    let mut block = point("block", "block", [0.0, 0.0]);
+    block.props.insert("parcel".into(), item(1));
+    let features = vec![
+        point("parcel", "plot", [1.0, 0.0]),
+        point("parcel", "plot", [2.0, 0.0]),
+        block,
+    ];
+    let lists = BTreeMap::from([("parcels", vec![FeatureHandle(0), FeatureHandle(1)])]);
+    let good = Assembly { features, lists };
+    let (fc, _) = assemble(&good, IdScheme::ByType)?;
+    assert_eq!(
+        prop(&fc.features[2], "parcel"),
+        Some(&Value::from("plot-2"))
+    );
+
+    let mut bad = good.clone();
+    bad.features[2].props.insert("parcel".into(), item(5));
+    let err = assemble(&bad, IdScheme::ByType)
+        .err()
+        .map(|e| e.to_string());
+    let text = err.unwrap_or_default();
+    assert!(
+        text.contains("parcels") && text.contains("block-1.parcel"),
+        "{text}"
+    );
     Ok(())
 }

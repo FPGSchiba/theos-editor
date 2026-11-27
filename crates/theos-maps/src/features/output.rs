@@ -79,6 +79,16 @@ pub enum FeaturesError {
         /// The layer.
         name: &'static str,
     },
+    /// A reference names an item that is not in its list.
+    #[error("{by} refers to item {index} of list `{list}`, which does not exist")]
+    UnknownItem {
+        /// The list's name.
+        list: String,
+        /// The item's index.
+        index: u32,
+        /// What holds the reference, as text.
+        by: String,
+    },
     /// A lake has no exterior ring.
     #[error("lake {lake} has no outline")]
     NoOutline {
@@ -107,8 +117,35 @@ pub(super) struct Named {
     rivers: Vec<String>,
     /// The id of each lake with its polygons.
     lakes: Vec<(String, Vec<Polygon>)>,
+    /// The id of each item of each named list.
+    lists: BTreeMap<&'static str, Vec<String>>,
     /// How many features each type has.
     counts: BTreeMap<String, usize>,
+}
+
+/// The features of a map and the named lists its [`Prop::Item`] references point into.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Assembly {
+    /// The features, in output order; a [`Prop::Ref`] names one by its index.
+    pub features: Vec<Feature>,
+    /// Named lists of handles (a stage's parcels, rooms); a [`Prop::Item`] names an item by
+    /// list and index and is written as that feature's id.
+    pub lists: BTreeMap<&'static str, Vec<FeatureHandle>>,
+}
+
+/// The next id of a feature of `kind` and type `ty` under `scheme`, numbering per id key in
+/// `counts`.
+pub(crate) fn id_of(
+    scheme: IdScheme,
+    kind: &str,
+    ty: &str,
+    counts: &mut BTreeMap<String, usize>,
+) -> String {
+    let key = match scheme {
+        IdScheme::ByType => ty,
+        IdScheme::ByKind => kind,
+    };
+    Named::take(counts, key)
 }
 
 impl Named {
@@ -118,22 +155,41 @@ impl Named {
         format!("{key}-{n}")
     }
 
-    /// The ids of the set by `scheme`; roads, rivers and lakes, which only terrain has, are
-    /// numbered per type.
+    /// The ids of `features` by `scheme`, then of roads, rivers and lakes, which only terrain
+    /// has and which are numbered per type. `counts` holds how many features each type has.
     fn new(
-        set: &FeatureSet,
+        features: &[&Feature],
+        lists: &BTreeMap<&'static str, Vec<FeatureHandle>>,
         roads: &[Road],
         water: &WaterFeatures,
         scheme: IdScheme,
     ) -> Result<Self, FeaturesError> {
+        let mut by_scheme = BTreeMap::new();
         let mut counts = BTreeMap::new();
-        let set_ids = set
+        let set_ids: Vec<String> = features
             .iter()
-            .map(|(_, f)| match scheme {
-                IdScheme::ByType => Self::take(&mut counts, &f.ty),
-                IdScheme::ByKind => Self::take(&mut counts, f.kind),
+            .map(|f| {
+                *counts.entry(f.ty.clone()).or_insert(0) += 1;
+                id_of(scheme, f.kind, &f.ty, &mut by_scheme)
             })
             .collect();
+        let mut list_ids = BTreeMap::new();
+        for (&name, handles) in lists {
+            let ids = handles
+                .iter()
+                .map(|h| {
+                    usize::try_from(h.0)
+                        .ok()
+                        .and_then(|i| set_ids.get(i))
+                        .cloned()
+                        .ok_or_else(|| FeaturesError::UnknownFeature {
+                            handle: h.0,
+                            by: format!("list `{name}`"),
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            list_ids.insert(name, ids);
+        }
         let road_ids = roads
             .iter()
             .map(|r| Self::take(&mut counts, r.class.name()))
@@ -156,6 +212,7 @@ impl Named {
             roads: road_ids,
             rivers: river_ids,
             lakes: lake_ids,
+            lists: list_ids,
             counts,
         })
     }
@@ -167,6 +224,18 @@ impl Named {
             .map(String::as_str)
             .ok_or_else(|| FeaturesError::UnknownFeature {
                 handle: handle.0,
+                by: by.to_owned(),
+            })
+    }
+
+    fn item(&self, list: &str, index: u32, by: &str) -> Result<&str, FeaturesError> {
+        self.lists
+            .get(list)
+            .and_then(|ids| ids.get(usize::try_from(index).ok()?))
+            .map(String::as_str)
+            .ok_or_else(|| FeaturesError::UnknownItem {
+                list: list.to_owned(),
+                index,
                 by: by.to_owned(),
             })
     }
@@ -231,10 +300,10 @@ pub(super) fn base(kind: &str, ty: &str) -> JsonObject {
     props
 }
 
-pub(super) fn assemble(id: &str, props: JsonObject, geometry: GeometryValue) -> Gj {
+pub(super) fn gj_feature(id: &str, props: JsonObject, geometry: Option<GeometryValue>) -> Gj {
     Gj {
         bbox: None,
-        geometry: Some(GjGeometry::new(geometry)),
+        geometry: geometry.map(GjGeometry::new),
         id: Some(geojson::feature::Id::String(id.to_owned())),
         properties: Some(props),
         foreign_members: None,
@@ -257,6 +326,7 @@ fn prop_value(p: &Prop, id: &str, name: &str, named: &Named) -> Result<Value, Fe
                 .collect::<Result<_, _>>()?,
         ),
         Prop::Road(i) => Value::from(named.road(*i, &by)?),
+        Prop::Item { list, index } => Value::from(named.item(list, *index, &by)?),
     })
 }
 
@@ -273,21 +343,22 @@ fn set_feature(f: &Feature, id: &str, named: &Named) -> Result<Gj, FeaturesError
     }
     props.extend(base(f.kind, &f.ty));
     let geometry = match &f.geometry {
-        Geometry::Point(p) => GeometryValue::new_point(position(p, id)?),
-        Geometry::Line(points) => GeometryValue::new_line_string(
+        Geometry::Point(p) => Some(GeometryValue::new_point(position(p, id)?)),
+        Geometry::Line(points) => Some(GeometryValue::new_line_string(
             points
                 .iter()
                 .map(|p| position(p, id))
                 .collect::<Result<Vec<_>, _>>()?,
-        ),
-        Geometry::Polygon(rings) => GeometryValue::new_polygon(
+        )),
+        Geometry::Polygon(rings) => Some(GeometryValue::new_polygon(
             rings
                 .iter()
                 .map(|r| ring(r, id))
                 .collect::<Result<Vec<_>, _>>()?,
-        ),
+        )),
+        Geometry::None => None,
     };
-    Ok(assemble(id, props, geometry))
+    Ok(gj_feature(id, props, geometry))
 }
 
 /// The features of a terrain `world` and how many of each id key there are.
@@ -300,7 +371,7 @@ pub(crate) fn build(
     world: &World,
     scheme: IdScheme,
 ) -> Result<(FeatureCollection, BTreeMap<String, usize>), FeaturesError> {
-    assemble_all(world, scheme, true)
+    assemble_terrain(world, scheme)
 }
 
 /// The features of the set alone: the output of the kinds without roads and water.
@@ -312,14 +383,47 @@ pub(crate) fn build_set(
     world: &World,
     scheme: IdScheme,
 ) -> Result<(FeatureCollection, BTreeMap<String, usize>), FeaturesError> {
-    assemble_all(world, scheme, false)
+    let features = world
+        .value::<FeatureSet>(FeatureSet::NAME)
+        .map(|set| set.iter().map(|(_, f)| f.clone()).collect())
+        .unwrap_or_default();
+    assemble(
+        &Assembly {
+            features,
+            lists: BTreeMap::new(),
+        },
+        scheme,
+    )
 }
 
-/// The features of `world`; with `terrain` also its roads, rivers and lakes.
-fn assemble_all(
+/// The features of `assembly`, numbered by `ids`, and how many features each type has.
+///
+/// # Errors
+/// [`FeaturesError`] for a reference that resolves to nothing or a reserved or non-finite
+/// property.
+pub(crate) fn assemble(
+    assembly: &Assembly,
+    ids: IdScheme,
+) -> Result<(FeatureCollection, BTreeMap<String, usize>), FeaturesError> {
+    let refs: Vec<&Feature> = assembly.features.iter().collect();
+    let named = Named::new(&refs, &assembly.lists, &[], &WaterFeatures::default(), ids)?;
+    let features = refs
+        .iter()
+        .zip(&named.set)
+        .map(|(f, id)| set_feature(f, id, &named))
+        .collect::<Result<_, _>>()?;
+    let collection = FeatureCollection {
+        bbox: None,
+        features,
+        foreign_members: None,
+    };
+    Ok((collection, named.counts))
+}
+
+/// The features of the terrain `world`: its set, roads, rivers and lakes.
+fn assemble_terrain(
     world: &World,
     scheme: IdScheme,
-    terrain: bool,
 ) -> Result<(FeatureCollection, BTreeMap<String, usize>), FeaturesError> {
     let frame = world.frame();
     let no_set = FeatureSet::default();
@@ -327,18 +431,16 @@ fn assemble_all(
     let set = world
         .value::<FeatureSet>(FeatureSet::NAME)
         .unwrap_or(&no_set);
-    let network = world
-        .value::<RoadNetwork>(RoadNetwork::NAME)
-        .filter(|_| terrain);
+    let network = world.value::<RoadNetwork>(RoadNetwork::NAME);
     let water = world
         .value::<WaterFeatures>(WaterFeatures::NAME)
-        .filter(|_| terrain)
         .unwrap_or(&no_water);
     let roads: &[Road] = network.map_or(&[], |n| &n.roads);
-    let named = Named::new(set, roads, water, scheme)?;
+    let refs: Vec<&Feature> = set.iter().map(|(_, f)| f).collect();
+    let named = Named::new(&refs, &BTreeMap::new(), roads, water, scheme)?;
 
     let mut features = Vec::new();
-    for ((_, f), id) in set.iter().zip(&named.set) {
+    for (f, id) in refs.iter().zip(&named.set) {
         features.push(set_feature(f, id, &named)?);
     }
     if let Some(network) = network.filter(|n| !n.roads.is_empty()) {

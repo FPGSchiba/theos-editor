@@ -25,6 +25,9 @@ pub enum Geometry {
     Line(Vec<[f64; 3]>),
     /// A polygon: rings of `[x, y]`, the first the outline.
     Polygon(Vec<Vec<[f64; 2]>>),
+    /// No geometry: the feature is written with `"geometry": null` (a connection between
+    /// places, an open door).
+    None,
 }
 
 /// The value of a feature property.
@@ -49,6 +52,14 @@ pub enum Prop {
     /// A reference to a road: its index in the world value `road_network`. Roads are not in the
     /// feature list; the features output resolves this to the road's id, like a [`Prop::Ref`].
     Road(u32),
+    /// A reference to an item of a named list of the assembly (a parcel of `parcels`): its
+    /// index in that list. The features output resolves this to the item's id.
+    Item {
+        /// The list's name.
+        list: &'static str,
+        /// The item's index in the list.
+        index: u32,
+    },
 }
 
 /// A feature: a kind, a type, a geometry and properties.
