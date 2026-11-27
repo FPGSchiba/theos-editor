@@ -133,8 +133,8 @@ impl Index {
         )
     }
 
-    /// The texts of the valid scalar values of the front-matter field `field`, ordered by path.
-    /// Map entries and invalid values are left out.
+    /// The texts of the valid scalar values of the front-matter field `field`, one row per record
+    /// that sets it, ordered by path. Map entries, list items and invalid values are left out.
     ///
     /// # Errors
     ///
@@ -143,6 +143,7 @@ impl Index {
         let mut stmt = self.store.conn.prepare_cached(
             "SELECT path, text FROM field_values \
              WHERE field = ?1 AND shape = 'scalar' AND valid = 1 AND entry IS NULL \
+             AND item IS NULL \
              ORDER BY path",
         )?;
         let rows = stmt.query_map([field], |row| {
@@ -360,6 +361,29 @@ mod tests {
                 ("lore/truths/T-901.md", "never"),
                 ("lore/truths/T-902.md", "hinted"),
             ]
+        );
+        Ok(())
+    }
+
+    // AC: CE-18.3
+    #[test]
+    fn field_texts_skips_list_items() -> TestResult {
+        let belief = "---\n# synthetic fixture (P48), not canon\nid: B-901\nkind: belief\n\
+             title: synthetic\nstatus: draft\nheld_by: [synthetic-a, synthetic-b]\n---\n";
+        let (_dir, index) = indexed(&[("lore/beliefs/B-901.md", belief)])?;
+        let items: i64 = index.store.conn.query_row(
+            "SELECT COUNT(*) FROM field_values WHERE field = 'held_by' AND item IS NOT NULL",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(
+            items, 2,
+            "the list items must be stored, or the test proves nothing"
+        );
+        assert_eq!(index.field_texts("held_by")?, []);
+        assert_eq!(
+            texts(&index.field_texts("title")?),
+            [("lore/beliefs/B-901.md", "synthetic")]
         );
         Ok(())
     }
