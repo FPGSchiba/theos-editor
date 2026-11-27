@@ -2228,6 +2228,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+ "which",
  "yaml-rust2",
 ]
 

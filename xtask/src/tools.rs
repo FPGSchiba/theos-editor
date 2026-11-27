@@ -14,6 +14,7 @@ use serde::Deserialize;
 
 use crate::ci::CiEvent;
 use crate::process::{CargoCommand, capture_cargo, run_cargo};
+use crate::ui_tools;
 use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
@@ -212,6 +213,7 @@ pub fn check_installed(root: &Path) -> Result<Verdict> {
     for pin in load_pins(root)? {
         findings.extend(judge(&pin, &probe(root, &pin)?));
     }
+    findings.extend(ui_tools::check(root));
     Ok(Verdict::with(Check::Tools, findings))
 }
 
