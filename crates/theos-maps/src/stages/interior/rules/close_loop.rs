@@ -7,7 +7,7 @@ use serde::Deserialize;
 use crate::rng::StageRng;
 use crate::rooms::measure::hop_distance;
 use crate::rooms::solve::fixed_point;
-use crate::rooms::{Cell, Passage, RoomId};
+use crate::rooms::{Passage, RoomId};
 use crate::stage::ParamError;
 use crate::stages::interior::mission_core::{
     Match, MissionState, Rule, RuleParams, params_of, parse_params,
@@ -35,14 +35,6 @@ struct Params {
     /// The largest hop distance of a pair.
     #[serde(default = "seven")]
     max_dist: u32,
-}
-
-/// Whether rooms `a < b` are joined already.
-fn connected(s: &MissionState, a: RoomId, b: RoomId) -> bool {
-    s.graph
-        .connections
-        .binary_search_by(|c| (c.a, c.b).cmp(&(a, b)))
-        .is_ok()
 }
 
 impl Rule for CloseLoop {
@@ -93,11 +85,11 @@ impl Rule for CloseLoop {
                 if in_range
                     && !rb.locked
                     && round.get(i) == round.get(j)
-                    && !connected(s, a, b)
+                    && !s.connected(a, b)
                     && s.joinable(&ra.cells, &rb.cells)
                 {
                     out.push(Match {
-                        cells: cells_of(s, a, b),
+                        cells: s.cells_of(&[a, b]),
                         rooms: vec![a, b],
                         weight: 1,
                     });
@@ -117,17 +109,6 @@ impl Rule for CloseLoop {
     fn makes_keys(&self, _: &dyn RuleParams, _: u32) -> u32 {
         0
     }
-}
-
-/// The sorted cells of rooms `a` and `b`.
-fn cells_of(s: &MissionState, a: RoomId, b: RoomId) -> Vec<Cell> {
-    let mut cells: Vec<Cell> = [a, b]
-        .iter()
-        .filter_map(|&r| s.graph.rooms.get(usize::from(r)))
-        .flat_map(|r| r.cells.iter().copied())
-        .collect();
-    cells.sort_unstable();
-    cells
 }
 
 #[cfg(test)]
@@ -184,7 +165,7 @@ mod tests {
             .matches(s, p.as_ref())
             .into_iter()
             .map(|m| {
-                assert_eq!(m.cells, cells_of(s, m.rooms[0], m.rooms[1]));
+                assert_eq!(m.cells, s.cells_of(&m.rooms));
                 m.rooms
             })
             .collect()

@@ -13,7 +13,7 @@ use crate::rooms::solve::later_order;
 use crate::rooms::{Cell, Passage, Role, Room, RoomId};
 use crate::stage::ParamError;
 use crate::stages::interior::mission_core::{
-    Match, MissionState, Rule, RuleParams, near_far, params_of, parse_params,
+    Match, MissionState, Rule, RuleParams, near_far, params_of, parse_params, sorted,
 };
 
 /// The rule `insert_cycle`.
@@ -117,13 +117,6 @@ fn detours(s: &MissionState, u: RoomId, v: RoomId) -> Vec<Vec<Cell>> {
         }
     }
     Vec::new()
-}
-
-/// `cells` sorted: the cells of a match. Shared by the rules that place a path of rooms.
-pub(super) fn sorted(cells: &[Cell]) -> Vec<Cell> {
-    let mut out = cells.to_vec();
-    out.sort_unstable();
-    out
 }
 
 impl Rule for InsertCycle {

@@ -8,6 +8,8 @@ mod insert_cycle;
 mod leaf;
 mod locked_leaf;
 mod main_cycle;
+mod merge_hall;
+mod shortcut;
 #[cfg(test)]
 mod testkit;
 
@@ -21,5 +23,7 @@ pub fn rules() -> Vec<Box<dyn Rule>> {
         Box::new(insert_cycle::InsertCycle),
         Box::new(extend_arc::ExtendArc),
         Box::new(close_loop::CloseLoop),
+        Box::new(shortcut::Shortcut),
+        Box::new(merge_hall::MergeHall),
     ]
 }

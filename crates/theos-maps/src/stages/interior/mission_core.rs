@@ -128,6 +128,26 @@ impl MissionState {
         })
     }
 
+    /// Whether rooms `a < b` are joined already.
+    #[must_use]
+    pub fn connected(&self, a: RoomId, b: RoomId) -> bool {
+        self.graph
+            .connections
+            .binary_search_by(|c| (c.a, c.b).cmp(&(a, b)))
+            .is_ok()
+    }
+
+    /// The cells of `rooms`, sorted: the cells of a match that names existing rooms.
+    #[must_use]
+    pub fn cells_of(&self, rooms: &[RoomId]) -> Vec<Cell> {
+        let cells: Vec<Cell> = rooms
+            .iter()
+            .filter_map(|&r| self.graph.rooms.get(usize::from(r)))
+            .flat_map(|r| r.cells.iter().copied())
+            .collect();
+        sorted(&cells)
+    }
+
     /// The free cells that `cells` can be joined to, in ascending (row, col) order, each once.
     #[must_use]
     pub fn joinable_free(&self, cells: &[Cell]) -> Vec<Cell> {
@@ -157,6 +177,14 @@ pub fn near_far(order: &[(u16, u32, RoomId)], a: RoomId, b: RoomId) -> (RoomId, 
             .unwrap_or((u16::MAX, u32::MAX, r))
     };
     if key(b) < key(a) { (b, a) } else { (a, b) }
+}
+
+/// `cells` sorted: the cells of a match. Shared by the rules that place a path of rooms.
+#[must_use]
+pub fn sorted(cells: &[Cell]) -> Vec<Cell> {
+    let mut out = cells.to_vec();
+    out.sort_unstable();
+    out
 }
 
 /// One place a rule can apply.

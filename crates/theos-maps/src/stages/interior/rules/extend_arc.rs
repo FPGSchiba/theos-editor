@@ -9,9 +9,8 @@ use crate::rooms::solve::later_order;
 use crate::rooms::{Cell, Passage, Role, Room, RoomId};
 use crate::stage::ParamError;
 use crate::stages::interior::mission_core::{
-    Match, MissionState, Rule, RuleParams, near_far, parse_params,
+    Match, MissionState, Rule, RuleParams, near_far, parse_params, sorted,
 };
-use crate::stages::interior::rules::insert_cycle::sorted;
 
 /// The rule `extend_arc`.
 pub struct ExtendArc;

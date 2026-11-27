@@ -206,6 +206,17 @@ impl ProgramQueue {
             .map(|(room, _)| room)
     }
 
+    /// The footprint of the room type `ty`, from its first program entry, whether or not rooms
+    /// of it are left; `None` for a type the program does not name (a generic room). The
+    /// `merge_hall` rule grows a placed room to it.
+    #[must_use]
+    pub fn footprint(&self, ty: &str) -> Option<(u8, u8)> {
+        self.entries
+            .iter()
+            .find(|(room, _)| room.ty == ty)
+            .map(|(room, _)| room.footprint)
+    }
+
     /// Takes the next room of `role`, without cells: from the program in order, else a generic
     /// room (see the type's docs).
     pub fn take(&mut self, role: Role) -> Room {
