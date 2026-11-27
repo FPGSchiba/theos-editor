@@ -205,7 +205,8 @@ fn an_added_record_has_every_field_added_and_every_word_inserted() {
 // AC: CE-21.2
 #[test]
 fn a_removed_record_has_every_field_removed_and_every_word_deleted() {
-    let (_, new, fields, body, _) = parts(record(Some(SCRIPT), None));
+    let (old, new, fields, body, _) = parts(record(Some(SCRIPT), None));
+    assert_eq!(old, SCRIPT);
     assert_eq!(new, "");
     let c = changes(fields);
     assert_eq!(c.len(), 5);
@@ -233,4 +234,76 @@ fn body_spans_are_offsets_into_the_whole_record_text() {
         op,
         WordOp::Insert { new: s } if s.get(&new) == Some("second")
     )));
+}
+
+const BLOCK: &str = "---
+id: S-004
+where:
+  - f04-choir-hall
+---
+Text.
+";
+
+// AC: CE-21.2
+#[test]
+fn breaking_the_yaml_by_whitespace_alone_is_not_layout_only() {
+    let tabbed = BLOCK.replace("  - ", "	- ");
+    for (old, new) in [(BLOCK, tabbed.as_str()), (tabbed.as_str(), BLOCK)] {
+        let (_, _, fields, _, layout_only) = parts(record(Some(old), Some(new)));
+        assert!(matches!(fields, FieldsDiff::Text(_)));
+        assert!(!layout_only);
+    }
+}
+
+// AC: CE-21.2
+#[test]
+fn identical_inputs_have_no_change() {
+    let (_, _, fields, body, layout_only) = parts(record(Some(SCRIPT), Some(SCRIPT)));
+    assert_eq!(changes(fields), vec![]);
+    assert!(body.ops.iter().all(|o| matches!(o, WordOp::Equal { .. })));
+    assert!(!layout_only);
+    let (old, new, fields, body, layout_only) = parts(record(None, None));
+    assert_eq!((old.as_str(), new.as_str()), ("", ""));
+    assert_eq!(changes(fields), vec![]);
+    assert_eq!(body.ops, vec![]);
+    assert!(!layout_only);
+}
+
+// AC: CE-21.2
+#[test]
+fn an_added_or_removed_record_is_never_layout_only() {
+    assert!(
+        !parts(record(
+            None,
+            Some(
+                "---
+---
+"
+            )
+        ))
+        .4
+    );
+    assert!(
+        !parts(record(
+            Some(
+                "---
+---
+"
+            ),
+            None
+        ))
+        .4
+    );
+}
+
+// AC: CE-21.2
+#[test]
+fn a_reordered_list_is_changed_with_an_empty_item_delta() {
+    let old_text = SCRIPT.replace("[f04-choir-hall]", "[a, b]");
+    let new_text = SCRIPT.replace("[f04-choir-hall]", "[b, a]");
+    let c = changes(parts(record(Some(&old_text), Some(&new_text))).2);
+    let FieldDelta::Changed { items, .. } = &c[0].delta else {
+        panic!("expected Changed");
+    };
+    assert_eq!(*items, Some(ItemDelta::default()));
 }

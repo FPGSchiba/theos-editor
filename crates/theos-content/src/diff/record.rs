@@ -150,8 +150,13 @@ pub fn record(old: Option<&str>, new: Option<&str>) -> RecordDiff {
         FieldsDiff::Fields(changes) => changes.is_empty(),
         FieldsDiff::Text(diff) => unchanged(diff),
     };
-    let layout_only =
-        old.unwrap_or_default() != new.unwrap_or_default() && fields_same && unchanged(&body);
+    // Whitespace alone can break the restricted YAML, so a side that parses against one that
+    // does not is a real change; an added or removed record is never a layout change.
+    let validity_same = old_side.front.is_some() == new_side.front.is_some();
+    let layout_only = matches!((old, new), (Some(o), Some(n)) if o != n)
+        && validity_same
+        && fields_same
+        && unchanged(&body);
     RecordDiff::Record {
         old: old_side.text,
         new: new_side.text,

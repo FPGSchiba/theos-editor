@@ -31,12 +31,14 @@ pub enum FieldDelta {
         old: Field,
         /// The new field.
         new: Field,
-        /// The items added and removed, when both values are lists.
+        /// The items added and removed, when both values are lists; an empty delta means the
+        /// same items in a new order.
         items: Option<ItemDelta>,
     },
 }
 
-/// The items of a list field that were added and removed, by value.
+/// The items of a list field that were added and removed, by value. Both empty: the same items
+/// in a new order.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct ItemDelta {
     /// Items only in the new list.
