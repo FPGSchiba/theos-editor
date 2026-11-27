@@ -6,7 +6,7 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 use theos_map_format::Package;
-use theos_maps::golden::{self, GoldenRun};
+use theos_maps::golden::{self, GoldenRun, GoldenSpec};
 use theos_maps::kernels::stats;
 use theos_maps::{CancelToken, Progress, RunManifest, RunOptions, RunRequest, run};
 
@@ -74,8 +74,8 @@ pub fn median(values: impl IntoIterator<Item = f64>) -> f64 {
     stats::median(&values).unwrap_or(f64::NAN)
 }
 
-/// The golden record of the built-in `recipe` with `seed`, run into a temporary folder.
-pub fn golden_run(recipe: &str, seed: u64) -> Result<GoldenRun, Box<dyn std::error::Error>> {
+/// The golden record of the golden run `spec`, run into a temporary folder.
+pub fn golden_run(spec: &GoldenSpec) -> Result<GoldenRun, Box<dyn std::error::Error>> {
     let dir = tempfile::tempdir()?;
-    Ok(golden::compute(recipe, seed, dir.path())?)
+    Ok(golden::compute(spec, dir.path())?)
 }

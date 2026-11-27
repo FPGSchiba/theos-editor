@@ -1,6 +1,7 @@
 //! `run`: one recipe and seed, from the catalog to the files in the output folder (spec §5.6).
 //!
-//! The order: find the recipe in the catalog, refuse `from`, plan with the request's inputs,
+//! The order: find the recipe in the catalog, check the inputs, decide standalone or child (open
+//! the parent of `from`), plan with the request's inputs,
 //! check that the stages write every layer the outputs read (ledger ruling P3), claim the output
 //! names (nothing is written when one is taken), run the pipeline, then the
 //! steps `constraints`, `features`, `renders` and `package`, each with its own progress event
@@ -16,13 +17,14 @@ use super::needs;
 use super::outputs::{FEATURES, Outputs, PACKAGE};
 use super::steps::{self, Steps};
 use super::{GENERATOR, ManifestFrame, RunManifest, RunRequest, VERSION};
+use crate::child::{ParentContext, feature_id};
 use crate::error::RunError;
 use crate::golden::GoldenRun;
 use crate::package::RunRecord;
 use crate::progress::{CancelToken, Progress};
-use crate::recipe::{self, LoadedRecipe, RecipeError};
+use crate::recipe::{self, LoadedRecipe, Planning, RecipeError};
 use crate::runner::execute;
-use crate::stage::Registry;
+use crate::stage::{Registry, Runs};
 
 /// Runs the recipe `request.recipe` (from the built-ins and `recipe_dirs`, later folders winning
 /// by id) with `request.seed`, and writes its outputs into the existing folder `out_dir`: the
@@ -40,8 +42,10 @@ use crate::stage::Registry;
 ///
 /// # Errors
 /// [`RunError::Recipe`] when a recipe folder or file cannot be read, the recipe is unknown or a
-/// broken file with its id hides it, `from` is set, an input is given, the recipe is invalid, or
+/// broken file with its id hides it, `from` is set for a recipe without a `feature` input or
+/// missing for a child recipe that has no standalone stage, an input is given, the recipe is invalid, or
 /// its stages do not write a layer the package or a render reads (or write it as another kind);
+/// [`RunError::Child`] when the parent package or its feature is refused;
 /// [`RunError::OutputExists`] when an output's name or its `.part` name is taken in `out_dir`,
 /// at the claim or before the final rename; [`RunError::OverBudget`]; [`RunError::Cancelled`];
 /// the stage errors of the pipeline ([`RunError::StageFailed`], [`RunError::StagePanicked`],
@@ -89,14 +93,26 @@ pub(crate) fn run_inner(
     cancel: &CancelToken,
 ) -> Result<(RunManifest, GoldenRun), RunError> {
     let loaded = find(request, recipe_dirs)?;
-    let plan = recipe::plan(&loaded, registry, &request.inputs)?;
+    let parent = open_parent(&loaded, registry, request)?;
+    let planning = parent
+        .as_ref()
+        .map_or(Planning::Standalone, Planning::Child);
+    let plan = recipe::plan(&loaded, registry, &request.inputs, planning)?;
     needs::check(&plan)?;
     let renders = needs::render_names(&plan);
     let mut roles: Vec<String> = renders.iter().map(|r| (*r).to_owned()).collect();
     roles.extend([FEATURES.to_owned(), PACKAGE.to_owned()]);
     let mut outputs = Outputs::claim(out_dir, request.seed, &roles)?;
     let seed = request.seed;
-    let execution = execute(&plan, seed, registry, &request.options, progress, cancel)?;
+    let execution = execute(
+        &plan,
+        seed,
+        registry,
+        &request.options,
+        parent.as_ref(),
+        progress,
+        cancel,
+    )?;
     let world = &execution.world;
     let mut post = Steps::new(progress, cancel, execution.timing_s.clone());
 
@@ -141,6 +157,7 @@ pub(crate) fn run_inner(
         inputs: request.inputs.clone(),
         frame: ManifestFrame {
             size_m: plan.frame.size_m(),
+            origin_m: plan.origin_m,
         },
         outputs: files,
         results: checked.results,
@@ -152,8 +169,7 @@ pub(crate) fn run_inner(
     Ok((manifest, golden))
 }
 
-/// The recipe of `request` from the catalog of the built-ins and `recipe_dirs`, refused when the
-/// request starts from another map.
+/// The recipe of `request` from the catalog of the built-ins and `recipe_dirs`.
 fn find(request: &RunRequest, recipe_dirs: &[PathBuf]) -> Result<LoadedRecipe, RecipeError> {
     let mut catalog = recipe::catalog(recipe_dirs)?;
     let Some(loaded) = catalog.recipes.remove(&request.recipe) else {
@@ -172,17 +188,71 @@ fn find(request: &RunRequest, recipe_dirs: &[PathBuf]) -> Result<LoadedRecipe, R
             },
         );
     };
-    if request.from.is_some() {
-        return Err(RecipeError::Invalid {
-            recipe: loaded.recipe.id.clone(),
-            stage: None,
-            layer: None,
-            parameter: Some("from".to_owned()),
-            message: "a terrain recipe starts from no other map, so `from` must be empty"
-                .to_owned(),
-        });
-    }
     Ok(loaded)
+}
+
+/// Decides how the run starts (ledger ruling L5) and opens the parent of a child run.
+///
+/// A request with `from` needs a recipe with a `feature` input; the parent is opened and the
+/// feature checked. A request without `from` for such a recipe runs standalone only when its
+/// plan has a `Runs::Standalone` stage and the request gives no feature input.
+fn open_parent(
+    loaded: &LoadedRecipe,
+    registry: &Registry,
+    request: &RunRequest,
+) -> Result<Option<ParentContext>, RunError> {
+    let id = &loaded.recipe.id;
+    let refuse = |parameter: &str, message: String| RecipeError::Invalid {
+        recipe: id.clone(),
+        stage: None,
+        layer: None,
+        parameter: Some(parameter.to_owned()),
+        message,
+    };
+    let inputs = loaded.recipe.inputs();
+    inputs
+        .check(&request.inputs)
+        .map_err(|e| refuse(&e.input, e.message))?;
+    match (&request.from, inputs.feature()) {
+        (Some(from), Some((input, parent_types))) => {
+            let feature = feature_id(&request.inputs, input)?;
+            Ok(Some(ParentContext::open(
+                from,
+                input,
+                feature,
+                parent_types,
+            )?))
+        }
+        (Some(_), None) => Err(refuse(
+            "from",
+            format!("recipe `{id}` starts from no other map, so `from` must be empty"),
+        )
+        .into()),
+        (None, Some((input, _))) => {
+            let plan = recipe::plan(loaded, registry, &request.inputs, Planning::Standalone)?;
+            let standalone = plan.stages.iter().any(|s| {
+                registry
+                    .get(s.id)
+                    .is_some_and(|st| st.runs() == Runs::Standalone)
+            });
+            match (standalone, request.inputs.contains_key(input)) {
+                (true, false) => Ok(None),
+                (true, true) => Err(refuse(
+                    input,
+                    format!(
+                        "recipe `{id}` runs standalone without `from`, so input `{input}` must be absent"
+                    ),
+                )
+                .into()),
+                (false, _) => Err(refuse(
+                    "from",
+                    format!("recipe `{id}` is a child recipe and needs `from`"),
+                )
+                .into()),
+            }
+        }
+        (None, None) => Ok(None),
+    }
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-//! Building the map package of a terrain run (spec §5.10, `docs/map-package.md` §3-§4).
+//! Building the map package of a run (spec §5.10, `docs/map-package.md` §3-§4).
 
 mod encode;
 mod table;
@@ -7,14 +7,16 @@ mod tests;
 
 use std::collections::BTreeMap;
 
-use theos_map_format::{FORMAT, FORMAT_VERSION, Frame, LayerEntry, LayerKey, Manifest, Package};
+use theos_map_format::{
+    FORMAT, FORMAT_VERSION, Frame, LayerEntry, LayerKey, Manifest, Package, Parent,
+};
 
 use self::encode::encode;
-use self::table::OMEGA_LAYER;
-use self::table::{PackageLayer, TERRAIN_LAYERS};
+pub(crate) use self::table::{OMEGA_LAYER, PackageLayer, TERRAIN_LAYERS};
 use crate::api::{GENERATOR, VERSION};
+use crate::kind;
 use crate::recipe::Plan;
-use crate::stage::LayerSpec;
+use crate::stage::{LayerSpec, MapKind};
 use crate::world::World;
 
 /// Why a package could not be built.
@@ -84,11 +86,15 @@ fn entry(layer: &PackageLayer, shape: [u32; 2]) -> LayerEntry {
 /// The world layers the package reads whatever the recipe (ledger ruling P3): those of every
 /// standard layer; `roads` is all zeros without the `roads` stage (Task 42) and `omega` is
 /// written only when the world holds it, so neither is needed.
-pub(crate) fn needs() -> Vec<LayerSpec> {
-    TERRAIN_LAYERS.iter().flat_map(encode::needs).collect()
+pub(crate) fn needs(kind: MapKind) -> Vec<LayerSpec> {
+    kind::table(kind)
+        .layers
+        .iter()
+        .flat_map(encode::needs)
+        .collect()
 }
 
-/// The package of a finished terrain run: the standard layers in order (`omega` last, when the
+/// The package of a finished run: the standard layers in order (`omega` last, when the
 /// world holds it), the manifest with the recipe as it ran, and the features.
 ///
 /// `generator` is `theos-maps@` plus the generator's version, and `requires` is always empty
@@ -111,10 +117,14 @@ pub(crate) fn build(
         u32::try_from(frame.rows).map_err(|_| too_large())?,
         u32::try_from(frame.cols).map_err(|_| too_large())?,
     ];
-    let omega = world.f64("omega").is_some().then_some(&OMEGA_LAYER);
+    let table = kind::table(plan.kind);
+    let optional = table
+        .optional_layers
+        .iter()
+        .filter(|layer| world.f64(layer.name).is_some());
     let mut entries = Vec::new();
     let mut layers = BTreeMap::new();
-    for layer in TERRAIN_LAYERS.iter().chain(omega) {
+    for layer in table.layers.iter().chain(optional) {
         layers.insert(
             LayerKey {
                 level: None,
@@ -129,7 +139,7 @@ pub(crate) fn build(
         format_version: FORMAT_VERSION.to_owned(),
         generator: format!("{GENERATOR}@{VERSION}"),
         requires: Vec::new(),
-        kind: "terrain".to_owned(),
+        kind: plan.kind.to_string(),
         recipe_id: plan.recipe_id.clone(),
         recipe: theos_map_format::json::to_checked_value(run.raw_recipe)?,
         seed: run.seed,
@@ -138,8 +148,11 @@ pub(crate) fn build(
             size_m: frame.size_m(),
             cell_m: frame.cell_m,
             grid: shape,
-            origin_m: None,
-            parent: None,
+            origin_m: plan.origin_m,
+            parent: plan.parent.as_ref().map(|parent| Parent {
+                package_sha256: parent.package_sha256.clone(),
+                feature: parent.feature.clone(),
+            }),
             levels: None,
         },
         layers: entries,

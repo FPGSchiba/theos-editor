@@ -41,8 +41,9 @@ use tiny_skia::Pixmap;
 
 use crate::features::FeatureSet;
 use crate::grid::Grid;
+use crate::kind;
 use crate::progress::CancelToken;
-use crate::stage::LayerSpec;
+use crate::stage::{LayerSpec, MapKind};
 use crate::stages::terrain::hydrology::WaterFeatures;
 use crate::world::{ValueType, World};
 
@@ -243,20 +244,23 @@ pub(crate) const RENDERS: &[Render] = &[
     },
 ];
 
-/// The names of the renders of `role`, in table order.
-pub(crate) fn names(role: Role) -> impl Iterator<Item = &'static str> {
-    RENDERS
+/// The names of the renders of `kind` with `role`, in table order.
+pub(crate) fn names(kind: MapKind, role: Role) -> impl Iterator<Item = &'static str> {
+    kind::table(kind)
+        .renders
         .iter()
         .filter(move |r| r.role == role)
         .map(|r| r.name)
 }
 
-/// The render `name`, if there is one.
-pub(crate) fn render(name: &str) -> Option<RenderFn> {
-    RENDERS.iter().find(|r| r.name == name).map(|r| r.draw)
+/// The render `name` of `kind`, if there is one.
+pub(crate) fn render(kind: MapKind, name: &str) -> Option<RenderFn> {
+    let renders = kind::table(kind).renders;
+    renders.iter().find(|r| r.name == name).map(|r| r.draw)
 }
 
-/// The layers the render `name` reads, if there is such a render.
-pub(crate) fn needs(name: &str) -> Option<&'static [LayerSpec]> {
-    RENDERS.iter().find(|r| r.name == name).map(|r| r.needs)
+/// The layers the render `name` of `kind` reads, if there is such a render.
+pub(crate) fn needs(kind: MapKind, name: &str) -> Option<&'static [LayerSpec]> {
+    let renders = kind::table(kind).renders;
+    renders.iter().find(|r| r.name == name).map(|r| r.needs)
 }

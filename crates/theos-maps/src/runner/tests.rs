@@ -152,7 +152,13 @@ fn recipe_text(grid: usize, stages: &[&str]) -> String {
 
 fn planned(registry: &Registry, grid: usize, stages: &[&str]) -> Plan {
     let loaded = parse(&recipe_text(grid, stages), RecipeOrigin::Builtin).unwrap();
-    plan(&loaded, registry, &serde_json::Map::new()).unwrap()
+    plan(
+        &loaded,
+        registry,
+        &serde_json::Map::new(),
+        crate::recipe::Planning::Standalone,
+    )
+    .unwrap()
 }
 
 fn go(
@@ -167,6 +173,7 @@ fn go(
         5,
         registry,
         options,
+        None,
         &mut |p| events.push(p.clone()),
         cancel,
     );
@@ -217,6 +224,7 @@ fn cancel_between_stages_returns_cancelled() {
         5,
         &reg,
         &RunOptions::default(),
+        None,
         &mut |p| {
             events.push(p.stage.clone());
             if p.done == 1 {

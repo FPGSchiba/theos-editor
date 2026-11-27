@@ -16,6 +16,11 @@ use crate::stages::terrain::hydrology::{LakeShape, RiverLine, WaterFeatures};
 use crate::stages::terrain::roads::{Road, RoadClass, RoadNetwork, RoadsParams};
 use crate::world::{Layer, MapFrame, ValueType, World};
 
+/// Terrain's build, numbered per type, as the runner calls it.
+fn build(world: &World) -> Result<(FeatureCollection, BTreeMap<String, usize>), FeaturesError> {
+    super::build(world, IdScheme::ByType)
+}
+
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 const WATER_SMALL: &str = include_str!("../../../tests/fixtures/recipes/water-small.toml");
@@ -24,12 +29,18 @@ const WATER_SMALL: &str = include_str!("../../../tests/fixtures/recipes/water-sm
 fn run_and_build(text: &str, seed: u64) -> Result<FeatureCollection, Box<dyn std::error::Error>> {
     let loaded = parse(text, RecipeOrigin::Builtin)?;
     let registry = Registry::builtin();
-    let planned = plan(&loaded, &registry, &serde_json::Map::new())?;
+    let planned = plan(
+        &loaded,
+        &registry,
+        &serde_json::Map::new(),
+        crate::recipe::Planning::Standalone,
+    )?;
     let run = execute(
         &planned,
         seed,
         &registry,
         &RunOptions::default(),
+        None,
         &mut |_| {},
         &CancelToken::new(),
     )?;
@@ -551,5 +562,131 @@ fn a_road_carries_its_class() -> TestResult {
     let (fc, _) = build(&world_with(three_places())?)?;
     let road = of(&fc, "road", "road")[0];
     assert_eq!(prop(road, "class"), Some(&Value::from("road")));
+    Ok(())
+}
+
+// The ids of a ByKind table count per feature kind, and the set-only output skips the terrain
+// values.
+#[test]
+fn ids_by_kind_count_per_kind() -> TestResult {
+    let mut set = FeatureSet::default();
+    set.add(point("settlement", "town", [1.0, 1.0]));
+    set.add(point("settlement", "village", [2.0, 1.0]));
+    set.add(point("poi", "ruin", [3.0, 1.0]));
+    let world = world_with(set)?;
+    let (fc, counts) = super::build_set(&world, IdScheme::ByKind)?;
+    let ids: Vec<_> = fc.features.iter().filter_map(|f| f.id.clone()).collect();
+    let expected = ["settlement-1", "settlement-2", "poi-1"]
+        .map(|s| geojson::feature::Id::String(s.to_owned()));
+    assert_eq!(ids, expected);
+    // The counts are per type in both schemes: they feed `features.<type>`.
+    assert_eq!(counts.get("town"), Some(&1));
+    assert_eq!(counts.get("ruin"), Some(&1));
+    Ok(())
+}
+
+fn assembly(features: Vec<Feature>) -> Assembly {
+    Assembly {
+        features,
+        lists: BTreeMap::new(),
+    }
+}
+
+#[test]
+fn a_feature_without_geometry_is_written_as_null() -> TestResult {
+    let mut f = point("connection", "open", [0.0, 0.0]);
+    f.geometry = Geometry::None;
+    let (fc, _) = assemble(&assembly(vec![f]), IdScheme::ByKind)?;
+    let json = serde_json::to_value(&fc.features[0])?;
+    assert_eq!(json["geometry"], Value::Null);
+    assert_eq!(json["id"], "connection-1");
+    assert_eq!(json["properties"]["kind"], "connection");
+    assert_eq!(json["properties"]["type"], "open");
+    Ok(())
+}
+
+#[test]
+fn ids_by_type_number_each_type_from_one() -> TestResult {
+    let features = ["street", "lane", "street"]
+        .map(|t| point("street", t, [0.0, 0.0]))
+        .to_vec();
+    let (fc, counts) = assemble(&assembly(features), IdScheme::ByType)?;
+    assert_eq!(ids_of(&fc), ["street-1", "lane-1", "street-2"]);
+    assert_eq!(counts.get("street"), Some(&2));
+    Ok(())
+}
+
+#[test]
+fn ids_by_kind_number_each_kind_from_one() -> TestResult {
+    let features = vec![
+        point("room", "hall", [0.0, 0.0]),
+        point("door", "open", [0.0, 0.0]),
+        point("room", "cell", [0.0, 0.0]),
+    ];
+    let (fc, counts) = assemble(&assembly(features), IdScheme::ByKind)?;
+    assert_eq!(ids_of(&fc), ["room-1", "door-1", "room-2"]);
+    let expected: BTreeMap<String, usize> = [("hall", 1), ("cell", 1), ("open", 1)]
+        .map(|(k, n)| (k.to_owned(), n))
+        .into();
+    assert_eq!(counts, expected);
+    Ok(())
+}
+
+#[test]
+fn an_item_reference_becomes_the_items_id() -> TestResult {
+    let item = |index| Prop::Item {
+        list: "parcels",
+        index,
+    };
+    let mut block = point("block", "block", [0.0, 0.0]);
+    block.props.insert("parcel".into(), item(1));
+    let features = vec![
+        point("parcel", "plot", [1.0, 0.0]),
+        point("parcel", "plot", [2.0, 0.0]),
+        block,
+    ];
+    let lists = BTreeMap::from([("parcels", vec![FeatureHandle(0), FeatureHandle(1)])]);
+    let good = Assembly { features, lists };
+    let (fc, _) = assemble(&good, IdScheme::ByType)?;
+    assert_eq!(
+        prop(&fc.features[2], "parcel"),
+        Some(&Value::from("plot-2"))
+    );
+
+    let mut bad = good.clone();
+    bad.features[2].props.insert("parcel".into(), item(5));
+    let err = assemble(&bad, IdScheme::ByType)
+        .err()
+        .map(|e| e.to_string());
+    let text = err.unwrap_or_default();
+    assert!(
+        text.contains("parcels") && text.contains("block-1.parcel"),
+        "{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn ids_stay_unique_when_a_set_type_is_a_water_or_road_type() -> TestResult {
+    let mut set = three_places();
+    set.add(point("water", "lake", [10.0, 10.0]));
+    set.add(point("water", "river", [20.0, 10.0]));
+    set.add(point("road", "road", [30.0, 10.0]));
+    let (fc, _) = build(&world_with(set)?)?;
+    let ids = ids_of(&fc);
+    let unique: std::collections::BTreeSet<_> = ids.iter().collect();
+    assert_eq!(unique.len(), ids.len(), "{ids:?}");
+    Ok(())
+}
+
+#[test]
+fn ids_by_kind_stay_unique_across_set_roads_and_water() -> TestResult {
+    let mut set = three_places();
+    set.add(point("road", "ford", [30.0, 10.0]));
+    set.add(point("water", "spring", [10.0, 10.0]));
+    let (fc, _) = super::build(&world_with(set)?, IdScheme::ByKind)?;
+    let ids = ids_of(&fc);
+    let unique: std::collections::BTreeSet<_> = ids.iter().collect();
+    assert_eq!(unique.len(), ids.len(), "{ids:?}");
     Ok(())
 }

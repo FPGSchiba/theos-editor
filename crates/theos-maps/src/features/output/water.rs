@@ -4,7 +4,7 @@
 use geojson::{Feature as Gj, GeometryValue};
 use serde_json::Value;
 
-use super::{FeaturesError, Polygon, assemble, base, number, numbers, position, ring};
+use super::{FeaturesError, Polygon, base, gj_feature, number, numbers, position, ring};
 use crate::stages::terrain::hydrology::{LakeShape, RiverLine};
 
 /// The feature of the river line `river` with id `id`: `[x, y, bed]` vertices and the per-vertex
@@ -32,7 +32,11 @@ pub(super) fn river(river: &RiverLine, id: &str) -> Result<Gj, FeaturesError> {
         .iter()
         .map(|p| position(p, id))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(assemble(id, props, GeometryValue::new_line_string(line)))
+    Ok(gj_feature(
+        id,
+        props,
+        Some(GeometryValue::new_line_string(line)),
+    ))
 }
 
 /// The feature with id `id` of `lake`: `surface_m`, `terminal`, `outlet` (when the lake has one)
@@ -63,5 +67,5 @@ pub(super) fn lake(lake: &LakeShape, id: &str, polygons: &[Polygon]) -> Result<G
         Ok([only]) => GeometryValue::new_polygon(only),
         Err(parts) => GeometryValue::new_multi_polygon(parts),
     };
-    Ok(assemble(id, props, geometry))
+    Ok(gj_feature(id, props, Some(geometry)))
 }

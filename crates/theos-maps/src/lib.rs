@@ -13,12 +13,14 @@
 
 pub mod api;
 
+pub mod child;
 pub mod constraints;
 pub mod error;
 pub mod features;
 pub mod golden;
 pub mod grid;
 pub mod kernels;
+mod kind;
 pub mod metrics;
 mod package;
 pub mod progress;

@@ -211,7 +211,13 @@ fn the_plan_refuses_a_process_before_its_input() {
         listing(&["erode", "route"]).replace("[[process]]", "[[stage.process]]")
     );
     let recipe = parse(&text, RecipeOrigin::Builtin).unwrap();
-    let err = plan(&recipe, &registry, &serde_json::Map::new()).unwrap_err();
+    let err = plan(
+        &recipe,
+        &registry,
+        &serde_json::Map::new(),
+        crate::recipe::Planning::Standalone,
+    )
+    .unwrap_err();
     match err {
         RecipeError::Invalid {
             stage,
@@ -328,12 +334,19 @@ fn a_panicking_process_fails_the_run_as_a_stage_panic() {
                 [[stage]]\nid = \"landscape_evolution\"\nsteps = 3\n\
                 [[stage.process]]\nid = \"boom\"\n";
     let recipe = parse(text, RecipeOrigin::Builtin).unwrap();
-    let plan = plan(&recipe, &registry, &serde_json::Map::new()).unwrap();
+    let plan = plan(
+        &recipe,
+        &registry,
+        &serde_json::Map::new(),
+        crate::recipe::Planning::Standalone,
+    )
+    .unwrap();
     let result = execute(
         &plan,
         1,
         &registry,
         &RunOptions::default(),
+        None,
         &mut |_| {},
         &CancelToken::new(),
     );
@@ -351,7 +364,13 @@ fn a_panicking_process_fails_the_run_as_a_stage_panic() {
 fn evolution_384_plans() {
     let text = include_str!("../../../tests/fixtures/recipes/evolution-384.toml");
     let loaded = parse(text, RecipeOrigin::Builtin).unwrap();
-    let planned = plan(&loaded, &Registry::builtin(), &serde_json::Map::new()).unwrap();
+    let planned = plan(
+        &loaded,
+        &Registry::builtin(),
+        &serde_json::Map::new(),
+        crate::recipe::Planning::Standalone,
+    )
+    .unwrap();
     assert_eq!(planned.frame.rows, 384);
     assert_eq!(planned.frame.cols, 384);
     let ids: Vec<&str> = planned.stages.iter().map(|s| s.id).collect();

@@ -696,7 +696,12 @@ fn missing_thresholds_are_parameter_errors() {
                   id = \"climate_model\"\n[[stage]]\nid = \"landscape_evolution\"\nsteps = 1\n\
                   [[stage]]\nid = \"hydrology\"\nbig_river_q = 2.0\n";
     let loaded = parse(recipe, RecipeOrigin::Builtin).unwrap();
-    match plan(&loaded, &Registry::builtin(), &serde_json::Map::new()) {
+    match plan(
+        &loaded,
+        &Registry::builtin(),
+        &serde_json::Map::new(),
+        crate::recipe::Planning::Standalone,
+    ) {
         Err(RecipeError::Invalid {
             stage, parameter, ..
         }) => {
