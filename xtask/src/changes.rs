@@ -41,6 +41,20 @@ pub fn of_pull_request(git: &Git, pr: &PullRequestEvent) -> Result<Changes> {
     })
 }
 
+/// What `pr` changes since the merge base of `origin/main` and its head commit: the event's base
+/// is not read, because it can change later without a new run.
+///
+/// # Errors
+///
+/// Fails when `origin/main` or the head commit is not in the repository or git cannot be run.
+pub fn of_pull_request_against_main(git: &Git, pr: &PullRequestEvent) -> Result<Changes> {
+    let merge_base = git.merge_base("origin/main", &pr.head_sha)?;
+    Ok(Changes {
+        branch: Some(pr.head_ref.clone()),
+        paths: paths_between(git, &merge_base, &pr.head_sha)?,
+    })
+}
+
 /// What the working tree changes since the merge base of `HEAD` and `origin/main`: committed,
 /// staged, unstaged and untracked files. Files git ignores are not changes.
 ///

@@ -73,7 +73,8 @@ const LABEL_NOTE: &str =
     "a label started this run, a deliberate request: every selected check runs";
 
 /// The scope of this run in the checkout at `root`: a push or any other event runs every check, a
-/// pull request decides from its commits, and a run outside CI decides from the working tree.
+/// pull request decides from its commits since `origin/main` (not its base, which can change
+/// without a new run), and a run outside CI decides from the working tree.
 /// Every run of every check for a reason other than a code change carries a note that says why.
 ///
 /// A pull request run that a label started (`platforms`, §5.6) runs every check, with a note: the
@@ -89,7 +90,7 @@ pub fn for_run(root: &Path, ci: Option<&CiEvent>) -> Scope {
         ),
         Some(CiEvent::PullRequest(pr)) if pr.action == "labeled" => every_because(LABEL_NOTE),
         Some(CiEvent::PullRequest(pr)) => with_lists(root, |git, paths| {
-            decide(changes::of_pull_request(git, pr), paths)
+            decide(changes::of_pull_request_against_main(git, pr), paths)
         }),
         None => with_lists(root, |git, paths| match changes::of_worktree(git) {
             Ok(Changes { branch: None, .. }) => {
@@ -329,15 +330,56 @@ mod tests {
 
     // AC: CE-08C.2
     #[test]
-    fn a_pull_request_whose_base_is_missing_runs_every_check_with_a_note() -> TestResult {
+    fn a_retargeted_pull_request_is_judged_against_main() -> TestResult {
         let dir = docs_repo()?;
         let path = dir.path();
-        let (_, head) = docs_branch(path)?;
+        git(path, &["switch", "-q", "-c", "feature/b"])?;
+        write(path, "crates/a/src/lib.rs", "// a\n")?;
+        let b_tip = commit(path, "feat: a")?;
+        git(path, &["switch", "-q", "-c", "docs/x"])?;
+        write(path, "docs/x.md", "x\n")?;
+        let head = commit(path, "docs: x")?;
+        // The event's base is B's tip: the paths since it are docs only, since main they are not.
+        let event = pull_request("edited", &b_tip, &head, "docs/x");
+        assert_eq!(for_run(path, Some(&event)), every());
+        Ok(())
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn a_docs_only_pull_request_into_main_is_docs_only() -> TestResult {
+        let dir = docs_repo()?;
+        let path = dir.path();
+        let (base, head) = docs_branch(path)?;
+        let event = pull_request("opened", &base, &head, "docs/x");
+        assert_eq!(for_run(path, Some(&event)), Scope::DocsOnly);
+        Ok(())
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn a_pull_request_without_origin_main_runs_every_check_with_a_note() -> TestResult {
+        let dir = docs_repo()?;
+        let path = dir.path();
+        let (base, head) = docs_branch(path)?;
+        git(path, &["update-ref", "-d", "refs/remotes/origin/main"])?;
+        let event = pull_request("opened", &base, &head, "docs/x");
+        let scope = for_run(path, Some(&event));
+        assert!(note_of(&scope).contains("could not be read"), "{scope:?}");
+        Ok(())
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn a_pull_request_whose_head_is_missing_runs_every_check_with_a_note() -> TestResult {
+        let dir = docs_repo()?;
+        let path = dir.path();
+        let (base, _) = docs_branch(path)?;
         let missing = "0123456789abcdef0123456789abcdef01234567";
-        let event = pull_request("opened", missing, &head, "docs/x");
+        let event = pull_request("opened", &base, missing, "docs/x");
         assert!(
             matches!(for_run(path, Some(&event)), Scope::Every { note: Some(_) }),
-            "a base that is not in the repository"
+            "a head that is not in the repository"
         );
         Ok(())
     }
