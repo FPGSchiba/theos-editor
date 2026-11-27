@@ -6,4 +6,5 @@ pub mod codex;
 pub mod hook;
 pub mod ledger;
 pub mod new;
+pub mod project;
 pub mod schema;

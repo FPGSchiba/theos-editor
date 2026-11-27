@@ -1370,6 +1370,7 @@ dependencies = [
  "dirs",
  "ignore",
  "proptest",
+ "pulldown-cmark",
  "rusqlite",
  "schemars",
  "serde",
