@@ -78,7 +78,7 @@ fn ruleset_contexts_equal_gate_md_checks() -> TestResult {
     let gate_md = fs::read_to_string(root.join("docs").join("gate.md"))?;
     let required = required_contexts_from_gate_md(&gate_md);
     assert_eq!(contexts, required);
-    let expected: BTreeSet<String> = ["gate", "test", "coverage", "pr", "approval"]
+    let expected: BTreeSet<String> = ["gate", "test", "coverage", "pr", "approval", "ui"]
         .into_iter()
         .map(String::from)
         .collect();
@@ -200,7 +200,7 @@ fn repo_settings_encode_section_6() -> TestResult {
 
 // AC: CE-08.3
 #[test]
-fn required_contexts_are_the_job_column_of_section_1_without_ui() {
+fn required_contexts_are_the_job_column_of_section_1() {
     let text = "# The gate
 
 ## 1. Required checks
@@ -221,7 +221,10 @@ Text after the table, and `not-a-check` in it.
 |---|---|---|---|
 | `other` | `other` | not in section 1 | Linux |
 ";
-    let expected: BTreeSet<String> = ["gate", "test"].into_iter().map(String::from).collect();
+    let expected: BTreeSet<String> = ["gate", "test", "ui"]
+        .into_iter()
+        .map(String::from)
+        .collect();
     assert_eq!(required_contexts_from_gate_md(text), expected);
     assert_eq!(
         required_contexts_from_gate_md("no table here"),

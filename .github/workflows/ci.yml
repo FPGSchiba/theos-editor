@@ -1,5 +1,6 @@
-# Three jobs side by side, so the run takes as long as the slowest one: `gate` runs the cheap
-# checks of docs/gate.md section 1, `test` and `coverage` the two long ones. Each job checks out,
+# Four jobs side by side, so the run takes as long as the slowest one: `gate` runs the cheap
+# checks of docs/gate.md section 1, `test` and `coverage` the two long ones, and `ui` the checks of
+# editor-ui/ (the only job with Node, so `gate` needs none). Each job checks out,
 # sets up and runs `cargo xtask gate` with the checks it owns; xtask decides every verdict. The
 # job name is the required status check of `main` (gate/ruleset-main.json), and `cargo xtask gate`
 # runs all of the checks locally.
@@ -43,8 +44,9 @@ jobs:
         with:
           cache-key: gate
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+          gui-packages: true
           save-xtask: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo xtask gate --skip test,coverage
+      - run: cargo xtask gate --skip test,coverage,ui
 
   test:
     name: test
@@ -59,6 +61,7 @@ jobs:
         with:
           cache-key: test
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+          gui-packages: true
       - run: cargo xtask gate --only test
 
   # The baseline of `main` is measured at the merge base and is cached by commit: a pull request
@@ -76,9 +79,43 @@ jobs:
         with:
           cache-key: coverage
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+          gui-packages: true
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/xtask/coverage/cache
           key: coverage-${{ github.event.pull_request.base.sha || github.sha }}-${{ hashFiles('rust-toolchain.toml', 'gate/tools.toml') }}
           restore-keys: coverage-
       - run: cargo xtask gate --only coverage
+
+  # The cached xtask, like `pr` and `approval`. Node, pnpm and Chromium are set up only while
+  # `editor-ui/` exists, so the job stays green, with `ui` not needed, until it does. pnpm comes
+  # first because setup-node reads its store; its version is the `packageManager` of editor-ui.
+  # Playwright's browsers are cached by the lockfile.
+  ui:
+    name: ui
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/xtask
+      - if: hashFiles('editor-ui/package.json') != ''
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: editor-ui/package.json
+      - if: hashFiles('editor-ui/package.json') != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: editor-ui/pnpm-lock.yaml
+      - if: hashFiles('editor-ui/package.json') != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('editor-ui/pnpm-lock.yaml') }}
+      - if: hashFiles('editor-ui/package.json') != ''
+        run: pnpm --dir editor-ui install --frozen-lockfile && pnpm --dir editor-ui exec playwright install --with-deps chromium
+      - run: cargo xtask gate --only ui

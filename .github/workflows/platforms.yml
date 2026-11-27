@@ -1,7 +1,8 @@
 # Windows and macOS are not in the per-pull-request checks (docs/gate.md section 1): CI runs on
 # Linux only, and these runners are slower or dearer. This runs the checks that read what the
 # compiler builds on the machine, so they can differ per OS: clippy, the tests, the slow tests,
-# `lints` and `ac-trace` (the last two read the cfg-selected code that `cargo check` builds). It
+# `lints` and `ac-trace` (the last two read the cfg-selected code that `cargo check` builds), and
+# `ui` (Playwright's browser differs per OS; Node and pnpm are set up while `editor-ui/` exists). It
 # runs every Monday, on demand, and on a pull request that Jann labels `windows` or `macos`, each
 # label starting the job of its own OS. The jobs are not required status checks. A label or manual
 # run is a deliberate request, so xtask runs every selected check even for a pull request that
@@ -57,7 +58,19 @@ jobs:
         with:
           cache-key: windows
           save-cache: ${{ github.event_name == 'schedule' }}
-      - run: cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace
+      - if: hashFiles('editor-ui/package.json') != ''
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: editor-ui/package.json
+      - if: hashFiles('editor-ui/package.json') != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: editor-ui/pnpm-lock.yaml
+      - if: hashFiles('editor-ui/package.json') != ''
+        run: pnpm --dir editor-ui install --frozen-lockfile && pnpm --dir editor-ui exec playwright install chromium
+      - run: cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace,ui
 
   macos:
     name: macos
@@ -76,7 +89,19 @@ jobs:
         with:
           cache-key: macos
           save-cache: ${{ github.event_name == 'schedule' }}
-      - run: cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace
+      - if: hashFiles('editor-ui/package.json') != ''
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: editor-ui/package.json
+      - if: hashFiles('editor-ui/package.json') != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: editor-ui/pnpm-lock.yaml
+      - if: hashFiles('editor-ui/package.json') != ''
+        run: pnpm --dir editor-ui install --frozen-lockfile && pnpm --dir editor-ui exec playwright install chromium
+      - run: cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace,ui
 
   macos-intel:
     name: macos-intel
