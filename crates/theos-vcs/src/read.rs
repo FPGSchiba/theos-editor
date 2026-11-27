@@ -36,8 +36,8 @@ pub enum Content {
 ///
 /// A path with `*`, `?`, `[`, `:` or a leading `-` is a path, never a pattern or an option. An
 /// intent-to-add entry (`git add -N`) reads as [`Content::Absent`] from the index, as a commit
-/// does not record it. A revision that does not exist reads every path as `Absent`, as a missing
-/// `HEAD` does before the first commit. The bytes are the stored ones: no line-ending change.
+/// does not record it. A path the version lacks, and every path of `HEAD` before the first commit, read as
+/// `Absent`; a revision that does not exist is an error with git's message. The bytes are the stored ones: no line-ending change.
 ///
 /// # Errors
 ///
@@ -51,8 +51,7 @@ pub fn read(git: &Git, top: &Path, version: Version<'_>, path: &[u8]) -> Result<
     match version {
         Version::WorkTree => work_tree(top, path),
         Version::Index => index(git, top, path),
-        Version::Head => commit(git, top, "HEAD", path),
-        Version::Rev(rev) => commit(git, top, rev, path),
+        Version::Head | Version::Rev(_) => commit(git, top, version, path),
     }
 }
 
@@ -104,24 +103,59 @@ fn bytes(git: &Git, top: &Path, mode: u32, object: &str) -> Result<Content, GitE
         })
 }
 
-/// A file of a commit: `ls-tree` gives the mode, `cat-file` the bytes.
-fn commit(git: &Git, top: &Path, rev: &str, path: &str) -> Result<Content, GitError> {
+/// A file of a commit: `ls-tree` of its folder gives the mode, `cat-file` the bytes.
+///
+/// The mode is read without a pathspec, so a name git would take for something else (on Windows
+/// `1:notes.md`, read as a drive) is still found: the entry is matched by its exact name.
+fn commit(git: &Git, top: &Path, version: Version<'_>, path: &str) -> Result<Content, GitError> {
+    let rev = match version {
+        Version::Rev(rev) => rev,
+        _ => "HEAD",
+    };
     let Some(object) = object(git, top, &format!("{rev}:{path}"))? else {
+        if let Version::Rev(rev) = version {
+            // A path an existing revision lacks is absent; a revision that does not exist is an
+            // error with git's own message.
+            let commit = format!("{rev}^{{commit}}");
+            git.run(
+                &read_args("rev-parse", &["--verify", "--end-of-options", &commit]),
+                top,
+                None,
+                &[],
+            )?;
+        }
         return Ok(Content::Absent);
+    };
+    let (folder, name) = match path.rsplit_once('/') {
+        Some((folder, name)) => (format!("{rev}:{folder}"), name),
+        None => (format!("{rev}^{{tree}}"), path),
     };
     let mode = staged::query(
         git,
         top,
         "ls-tree",
-        &["-z", "--end-of-options", rev, "--", path],
+        &["-z", "--end-of-options", &folder],
         None,
-        |out| {
-            let text = std::str::from_utf8(out).map_err(|_| "the answer is not UTF-8")?;
-            let (mode, _) = text.split_once(' ').ok_or("the answer has no mode")?;
-            u32::from_str_radix(mode, 8).map_err(|_| format!("`{mode}` is not an octal mode"))
-        },
+        |out| entry_mode(out, name),
     )?;
     bytes(git, top, mode, &object)
+}
+
+/// The mode of the entry called `name` in `ls-tree -z` output: `<mode> SP <type> SP <oid> TAB
+/// <name> NUL` per entry.
+fn entry_mode(out: &[u8], name: &str) -> Result<u32, String> {
+    for record in out.split(|byte| *byte == 0) {
+        let Some(tab) = record.iter().position(|byte| *byte == b'\t') else {
+            continue;
+        };
+        if &record[tab + 1..] == name.as_bytes() {
+            let head = std::str::from_utf8(&record[..tab]).map_err(|_| "an entry is not UTF-8")?;
+            let (mode, _) = head.split_once(' ').ok_or("an entry has no mode")?;
+            return u32::from_str_radix(mode, 8)
+                .map_err(|_| format!("`{mode}` is not an octal mode"));
+        }
+    }
+    Err(format!("the folder has no entry called {name}"))
 }
 
 /// A file of the index at stage 0: `ls-files -s` gives the mode, `cat-file` the bytes.

@@ -1,15 +1,14 @@
 //! Questions about a repository: its top folder, a folder's place in it, its boolean settings and
 //! its hooks folder.
 
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use crate::git::{Git, GitError, args_text};
+use crate::read_args::read_args;
 
 /// Runs a `rev-parse` in `cwd` and reads the answer as one line of UTF-8 text.
 fn rev_parse(git: &Git, cwd: &Path, extra: &[&str]) -> Result<String, GitError> {
-    let mut args: Vec<&OsStr> = vec![OsStr::new("rev-parse")];
-    args.extend(extra.iter().map(OsStr::new));
+    let args = read_args("rev-parse", extra);
     let out = git.run(&args, cwd, None, &[])?;
     let text = String::from_utf8(out).map_err(|_| GitError::Output {
         args: args_text(&args),
@@ -74,7 +73,7 @@ pub fn place(top: &Path, folder: &Path) -> Result<String, GitError> {
 ///
 /// [`GitError::Failed`] when the value is not a boolean, and the errors of [`Git::run`].
 pub fn flag(git: &Git, top: &Path, key: &str) -> Result<bool, GitError> {
-    let args = ["config", "--bool", "--get", key].map(OsStr::new);
+    let args = read_args("config", &["--bool", "--get", key]);
     match git.run(&args, top, None, &[]) {
         // With `--bool` git answers `true` or `false`.
         Ok(out) => Ok(out.trim_ascii() == b"true"),

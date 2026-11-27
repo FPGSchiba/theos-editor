@@ -134,10 +134,8 @@ fn an_intent_to_add_entry_of_a_committed_path_reads_absent_from_the_index() -> R
     Ok(())
 }
 
-/// The names a commit made from objects can hold on every OS. `1:notes.md` is left out: on Windows
-/// git reads `1:` as a drive and refuses the pathspec of `ls-tree`, and no work tree there can
-/// hold the file; the Unix test below covers it.
-const COMMITTED: [&str; 3] = ["*.md", "?.md", "a b:c.md"];
+/// The names a commit made from objects can hold on every OS, although no Windows work tree can.
+const COMMITTED: [&str; 5] = ["*.md", "?.md", "a b:c.md", "1:notes.md", "d/1:n.md"];
 
 /// A commit holding `COMMITTED` as paths, built from objects so that no file on disk, and no index
 /// entry, has to carry names that NTFS refuses.
@@ -146,11 +144,17 @@ fn colon_and_glob_names_in_a_commit_are_literal() -> Result {
     let sandbox = Sandbox::new()?;
     let repo = sandbox.init("repo")?;
     let blob = sandbox.run_input(&repo, &["hash-object", "-w", "--stdin"], b"x\n")?;
-    let mut listing = String::new();
+    // `mktree` takes one folder at a time: the names below `d/` go into their own tree.
+    let mut listings = [String::new(), String::new()];
     for name in COMMITTED {
-        writeln!(listing, "100644 blob {}\t{name}", blob.trim())?;
+        match name.strip_prefix("d/") {
+            Some(inner) => writeln!(listings[1], "100644 blob {}\t{inner}", blob.trim())?,
+            None => writeln!(listings[0], "100644 blob {}\t{name}", blob.trim())?,
+        }
     }
-    let tree = sandbox.run_input(&repo, &["mktree"], listing.as_bytes())?;
+    let inner = sandbox.run_input(&repo, &["mktree"], listings[1].as_bytes())?;
+    writeln!(listings[0], "040000 tree {}\td", inner.trim())?;
+    let tree = sandbox.run_input(&repo, &["mktree"], listings[0].as_bytes())?;
     let commit = sandbox.run(
         &repo,
         &[
@@ -178,6 +182,18 @@ fn colon_and_glob_names_in_a_commit_are_literal() -> Result {
             );
         }
     }
+    Ok(())
+}
+
+#[test]
+fn a_revision_that_does_not_exist_is_an_error_but_a_missing_path_is_absent() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = three_versions(&sandbox)?;
+    assert!(read_at(&sandbox, &repo, Version::Rev("nosuch"), "a.md").is_err());
+    assert_eq!(
+        read_at(&sandbox, &repo, Version::Rev("main"), "none.md")?,
+        Content::Absent
+    );
     Ok(())
 }
 
