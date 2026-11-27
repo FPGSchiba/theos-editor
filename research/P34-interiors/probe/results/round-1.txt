@@ -1,0 +1,52 @@
+== choir-hall-like (5x5 lattice, 40 m cells, target 14)
+seed rooms conn cyc lock 1way dead% foot% crit_m sight_m ms  rollbk det rooms_hash graph_hash  fails
+   1    14   14   1    2    1  42.9  20.4    414      98    0.3      0 equal e9f73c980672abd8 60b2aaddeb12a044  ok
+     rules applied (seed 1): {"leaf": 4, "locked_leaf": 1, "main_cycle:lock_key": 1, "rim_leaf": 2} failed_steps=1
+   2    14   14   1    2    1  50.0  20.2    528     148    0.3      0 equal d8f3b66b02028031 555cf32ab91cb479  ok
+   3    14   15   2    2    1  42.9  20.0    364     138    0.2      0 equal 70458538cc414f7d 9f08258784edcebc  ok
+   4    14   15   2    2    1  35.7  20.4    230     114    0.1      0 equal bfbf0d780e3c9ee9 e5efddd7b6fbadc3  ok
+   5    14   14   1    2    1  35.7  21.7    488     154    0.3      0 equal 588d9e5a028cfad3 10b71ef3d32f17f0  ok
+   6    14   15   2    2    1  42.9  20.7    328     116    0.2      0 equal 0813fc08cef5a484 5ec0b5e26e410544  ok
+   7    14   14   1    2    1  35.7  21.3    258     114    0.2      0 equal 714dab1a6f38a5ef 44fff9ff39769557  ok
+   8    14   14   1    2    1  42.9  20.8    280     140    0.2      0 equal 96d22f01061a158c 4e3b21958409e69d  ok
+mean runtime 0.2 ms
+== megastructure-150 (16x16 lattice, 62 m cells, target 150)
+seed rooms conn cyc lock 1way dead% foot% crit_m sight_m ms  rollbk det rooms_hash graph_hash  fails
+   1   151  182  32   11   15  13.2   8.4   2262     248    8.9      0 equal 6ee39565302db845 0165821fd767b4d4  ok
+     rules applied (seed 1): {"extend_arc": 19, "insert_cycle": 22, "leaf": 29, "locked_leaf": 5, "main_cycle:lock_key": 1, "rim_leaf": 3, "shortcut": 9} failed_steps=1
+   2   150  179  30   10   13  12.0   8.3   1922     176    7.3      0 equal 4ccfbe771134ae86 e735f73d32f4703c  ok
+   3   150  183  34    9   15  16.7   8.2   1402     216    9.3      0 equal a266ec174ab303c9 ce1278736bdbba62  ok
+   4   150  186  37    9   13  12.7   8.3    926     198   10.1      0 equal 64aa673be5b66707 4cfbf99c0853169d  ok
+   5   150  177  28   11   14  11.3   8.5   1292     204    8.5      0 equal bcb7ad68171ed9d7 16b05eda7f03ac6c  ok
+   6   150  181  32   11   15  10.0   8.1   1332     226    8.5      0 equal 5267b988bb1880ce a4790a4e941ba870  ok
+   7   150  172  23   10   10  16.0   8.2   1878     190    8.0      0 equal 778b7c804267c0bd 0f91f45ee3286a72  ok
+   8   151  183  33   10   13  13.9   8.3    990     338    9.9      0 equal c5cc4304830521c8 4a632c8b1d1a2f43  ok
+mean runtime 8.8 ms
+== cave-circle (7x7 lattice, 50 m cells, target 22)
+seed rooms conn cyc lock 1way dead% foot% crit_m sight_m ms  rollbk det rooms_hash graph_hash  fails
+   1    22   24   3    2    1  27.3  17.9    372     138    0.5      0 equal a268d61057709aa3 2c5023c569f7d10f  ok
+     rules applied (seed 1): {"extend_arc": 2, "insert_cycle": 2, "leaf": 5, "locked_leaf": 1, "main_cycle:two_routes": 1, "rim_leaf": 2} failed_steps=0
+   2    22   24   3    1    0  36.4  19.2    234     186    0.7      0 equal df1efb916cb4f8f7 ebf8e8a9c3583992  ok
+   3    22   24   3    1    0  27.3  16.8    218     134    0.6      0 equal a86ade73a2c30706 6a415e39ac854aa6  ok
+   4    13   13   1    1    0  30.8  15.7    230     138    0.8      0 equal bb767d70965835f5 db0725ce883809cc  ok
+ ##  ##   .   .  ##  ##  ## 
+ ##   .  ##   9x ##   .  ## 
+ 12l ##   0G  0G  7v  .   . 
+ 11l 10l  0G  0G  6p  8x  . 
+ ##  ##   3p  2p  5p ##   . 
+ ##  ##  ##   1S  4p ##  ## 
+ ##  ##  ##  ##  ##  ##  ## 
+     rules applied (seed 4): {"leaf": 3, "locked_leaf": 1, "main_cycle:two_routes": 1, "rim_leaf": 2} failed_steps=2
+   5    22   25   4    1    1  27.3  19.0    236     172    0.4      0 equal 396bda7a98551ce4 2a19ed36b761458d  ok
+   6    22   24   3    2    1  27.3  17.2    216     232    2.5      0 equal 238cde973fb2abbd f3f5686aa03e32ec  ok
+   7    22   24   3    3    2  27.3  19.3    352     178    0.4      0 equal 7b288262d1674e1a aaf504f9eed58f04  ok
+   8    20   22   3    2    1  30.0  20.2    234     196    1.8      0 equal 423ab654c797a8ab 4184548282dbc989  ok
+ ##  ##   .   .   .  ##  ## 
+ ##  ##  ##  13x ##  ##  ## 
+ 17l ##   0G  0G 11p ##   . 
+  4p  5p  0G  0G 10p 19l ## 
+  1S  2p  3p  8p  9p 12v  . 
+ ##   6p  7p 15l ##   .  ## 
+ ##  ##  14x 16l 18l ##  ## 
+     rules applied (seed 8): {"insert_cycle": 2, "leaf": 5, "locked_leaf": 1, "main_cycle:two_routes": 1, "rim_leaf": 2} failed_steps=0
+mean runtime 0.9 ms
