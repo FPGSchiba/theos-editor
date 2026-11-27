@@ -138,9 +138,8 @@ does no changed path at all. Only non-code paths run `commit-msg` and nothing el
 runs every check. The changed paths are those of the whole pull request since its merge base with
 `main`, never those of the last push or of its base, and a rename counts as a deletion and an
 addition. The base is not used because a base change starts no `ci` run, so a verdict made against
-an old base could stay green. A push to `main`,
-a manual run, a `platforms` run started by a label and a detached head have no rule: every check
-runs. Every doubt adds checks; none removes one.
+an old base could stay green. A push to `main`, a manual run, a `platforms` run started by a label
+and a detached head have no rule: every check runs. Every doubt adds checks; none removes one.
 
 A non-code change cannot alter a skipped check, because no check reads such a path. This is what
 each check reads, with the place in the code:
