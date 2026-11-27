@@ -7,6 +7,7 @@
 <!--
   Reference screen 05 of the Theos content editor, exported from the design canvas on 2026-10-31.
   Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  components/bundle.js and the one-line script after it only switch the theme (?theme=grid-light).
   Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
 -->
 <link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
@@ -23,7 +24,7 @@ a{color:var(--sig-info)}a:hover{color:var(--text)}
 .g-node .g-t{font:400 11px/16px var(--font-ui);color:var(--textDim)}
 .g-node.is-focus{border-color:var(--sig-attention);background:color-mix(in srgb,var(--sig-attention) 13%,var(--panel));box-shadow:var(--shadow-hot);padding:6px 10px}
 .g-node.is-focus .g-t{color:var(--text);font-weight:600}
-.g-lbl{position:absolute;transform:translate(-50%,-50%);padding:0 4px;background:var(--bg);font:400 9px/12px var(--font-mono);color:var(--textMute)}
+.g-lbl{position:absolute;transform:translate(-50%,-50%);padding:0 4px;background:var(--bg);font:400 9px/12px var(--font-mono);color:var(--textDim)}
 @media (max-width:1000px){
 .tu-shell.cs{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:var(--h-titlebar) auto auto minmax(0,1fr) var(--h-statusbar)}
 .cs .tu-rail{flex-direction:row;width:auto;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}

@@ -7,6 +7,7 @@
 <!--
   Reference screen 08 of the Theos content editor, exported from the design canvas on 2026-10-31.
   Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  components/bundle.js and the one-line script after it only switch the theme (?theme=grid-light).
   Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
 -->
 <link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
@@ -20,7 +21,7 @@ a{color:var(--sig-info)}a:hover{color:var(--text)}
 :where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
 :where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
 .d-ins{background:color-mix(in srgb,var(--text) 12%,transparent);color:var(--text);text-decoration:underline;text-decoration-color:var(--textDim);text-underline-offset:3px}
-.d-del{color:var(--textMute);text-decoration:line-through}
+.d-del{color:var(--textDim);text-decoration:line-through}
 @media (max-width:1000px){
 .tu-shell.cs{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:var(--h-titlebar) auto auto minmax(0,1fr) var(--h-statusbar)}
 .cs .tu-rail{flex-direction:row;width:auto;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}

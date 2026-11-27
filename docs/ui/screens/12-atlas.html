@@ -7,6 +7,7 @@
 <!--
   Reference screen 12 of the Theos content editor, exported from the design canvas on 2026-11-05.
   Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  components/bundle.js and the one-line script after it only switch the theme (?theme=grid-light).
   Sample content is illustrative; docs/specs/data-model.md wins where they disagree.
 -->
 <link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
@@ -138,8 +139,8 @@ a{color:var(--sig-info)}a:hover{color:var(--text)}
             <div style="position: absolute; left: 124px; top: 236px; width: 36px; height: 36px; box-sizing: border-box; border-radius: 50%; border: 1px dashed var(--sig-reject); background: color-mix(in srgb, var(--sig-reject) 18%, transparent);"></div>
             <div style="position: absolute; left: 516px; top: 270px; width: 28px; height: 28px; box-sizing: border-box; border-radius: 50%; border: 1px dashed var(--sig-reject); background: color-mix(in srgb, var(--sig-reject) 18%, transparent);"></div>
             <div style="position: absolute; left: 495px; top: 170px; width: 24px; height: 24px; box-sizing: border-box; border-radius: 50%; border: 1px dashed var(--sig-reject); background: color-mix(in srgb, var(--sig-reject) 22%, transparent);"></div>
-            <div style="position: absolute; left: 112px; top: 276px; padding: 1px 4px; white-space: nowrap; font: 700 9.5px/12px var(--font-mono); color: var(--text); background: color-mix(in srgb, var(--sig-reject) 50%, var(--bg));">⊛ marsh-lurker · 2</div>
-            <div style="position: absolute; left: 470px; top: 300px; padding: 1px 4px; white-space: nowrap; font: 700 9.5px/12px var(--font-mono); color: var(--text); background: color-mix(in srgb, var(--sig-reject) 50%, var(--bg));">⊛ raiders · 2</div>
+            <div style="position: absolute; left: 112px; top: 276px; padding: 1px 4px; white-space: nowrap; font: 700 9.5px/12px var(--font-mono); color: var(--text); background: color-mix(in srgb, var(--sig-reject) 45%, var(--bg));">⊛ marsh-lurker · 2</div>
+            <div style="position: absolute; left: 470px; top: 300px; padding: 1px 4px; white-space: nowrap; font: 700 9.5px/12px var(--font-mono); color: var(--text); background: color-mix(in srgb, var(--sig-reject) 45%, var(--bg));">⊛ raiders · 2</div>
 
             <div style="position: absolute; left: 412px; top: 175px; width: 26px; height: 26px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--sig-attention); box-shadow: 0 0 10px color-mix(in srgb, var(--sig-attention) 60%, transparent);"></div>
             <div style="position: absolute; left: 336px; top: 148px; padding: 2px 5px; white-space: nowrap; font: 600 10px/13px var(--font-mono); color: var(--text); background: color-mix(in srgb, var(--bg) 86%, transparent); border: 1px solid var(--borderHi);">⌂ Choir-hall nave · ◔ 2</div>
@@ -150,10 +151,10 @@ a{color:var(--sig-info)}a:hover{color:var(--text)}
             <div style="position: absolute; left: 482px; top: 392px; width: 8px; height: 8px; border-radius: 50%; background: var(--kind-world); border: 1px solid var(--bg);"></div>
             <div style="position: absolute; left: 432px; top: 194px; width: 8px; height: 8px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--kind-world); background: transparent;"></div>
 
-            <div style="position: absolute; left: 160px; top: 228px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: var(--bg); background: var(--sig-info); box-shadow: 0 0 10px color-mix(in srgb, var(--sig-info) 80%, transparent);">1</div>
-            <div style="position: absolute; left: 392px; top: 172px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: var(--bg); background: var(--sig-script);">2</div>
-            <div style="position: absolute; left: 488px; top: 360px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: var(--bg); background: var(--sig-script);">3</div>
-            <div style="position: absolute; left: 452px; top: 290px; padding: 0 3px; font: 600 9.5px/12px var(--font-mono); color: color-mix(in srgb, var(--sig-script) 70%, var(--text)); background: color-mix(in srgb, var(--bg) 80%, transparent);">pay</div>
+            <div style="position: absolute; left: 160px; top: 228px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: var(--onFill); background: var(--sig-info); box-shadow: 0 0 10px color-mix(in srgb, var(--sig-info) 80%, transparent);">1</div>
+            <div style="position: absolute; left: 392px; top: 172px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: var(--onFill); background: var(--sig-script);">2</div>
+            <div style="position: absolute; left: 488px; top: 360px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: var(--onFill); background: var(--sig-script);">3</div>
+            <div style="position: absolute; left: 452px; top: 290px; padding: 0 3px; font: 600 9.5px/12px var(--font-mono); color: color-mix(in srgb, var(--sig-script) 30%, var(--text)); background: color-mix(in srgb, var(--bg) 80%, transparent);">pay</div>
 
             <div style="position: absolute; left: 236px; top: 452px; padding: 4px 7px; display: flex; gap: 6px; align-items: center; font: 600 10px/13px var(--font-mono); color: var(--text); background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px dashed var(--sig-attention);"><span>∷ ◉ Brother Aldo</span><span style="color: var(--textDim);">drop to place</span></div>
           </div>

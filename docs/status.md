@@ -131,14 +131,31 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
     P15, and settings are CE-39 (P14, `10-settings.html`), so CE-39.5 may be the better home.
     Jann decides the place and the wording; no phase builds it before that.
   - Four component states in the design system's `bundle.css` put signal-coloured text on a
-    tint of the same signal and miss 4.5:1. The design system's own previews show them too:
-    the active rail label (amber 4.3:1 in Grid Light), tinted chips (magenta 4.1, cyan 4.3,
-    amber 4.3 in Grid Light), the review summary (amber 4.3 in Grid Light) and a violet filter
-    (4.2:1 in Grid Noir, below the README's violet flag because the tint darkens `panel2`).
-    Tested fix for the artifact: text on those tints mixes 10 % toward `text`, for example
-    `color-mix(in srgb, var(--c) 90%, var(--text))`. Every screen and preview then passes in
-    both themes, the lowest at 4.8:1. `design/theos-ui/` mirrors the artifact, so the fix goes
-    into the artifact and reaches the repo with the next refresh.
+    tint of the same signal and miss 4.5:1: the active rail label (amber 4.30:1 in Grid Light),
+    tinted chips (magenta 4.13 and cyan 4.27 in Grid Light), the review summary (amber 4.29 and
+    cyan 4.27, "12 AUTO", in Grid Light) and a violet filter (4.22:1 in Grid Noir). The violet
+    filter sits on the toolbar's `panel`, where plain violet reaches 4.86:1; its 13 % violet
+    tint lightens the ground toward the violet text. The design system's own previews show the
+    rail label, the magenta chip and the review summary. Only screens 12 and 13 use a violet
+    filter, and the cyan chip fails only on the selected row's amber tint on screen 13 (Q-104);
+    Q-101 and Q-103 on plain `panel` pass at 4.74:1. Tested fix for the artifact: text on those
+    tints mixes 10 % toward `text`, for example `color-mix(in srgb, var(--c) 90%, var(--text))`.
+    With it no text outside `textMute` fails in any screen or preview, in either theme, and the
+    fixed states reach at least 4.78:1 (the AI-drafted chip is the lowest). `design/theos-ui/`
+    mirrors the artifact, so the fix goes into the artifact and reaches the repo with the next
+    refresh.
+  - More states of the design system's components use `textMute` or `border` for text or
+    controls that are not redundant, so the README's `textMute` flag does not cover them.
+    Measured in the screens and the previews (Grid Noir / Grid Light; text needs 4.5:1, icons
+    and controls 3:1): inactive tab labels 2.84 / 3.01; the actions, counts and ⋯ in section
+    headers ("stage all", "58 calls") 2.42–2.46 / 3.29; off filters, property keys, popover key
+    hints and the empty beat value ("+ add") 2.68 / 3.56; input placeholders 2.84 / 3.01; the
+    window controls, the select caret and the input icon 2.84 in Grid Noir (they pass in Grid
+    Light); the `border` of unchecked check boxes, of toggles that are off, of inputs and of
+    selects 1.24–1.34 / 1.38–1.50; the knob of a toggle that is off 2.46 in Grid Noir (it passes
+    in Grid Light). Redundant `textMute` text (tree tags and indices, timestamps, separators,
+    popover kind words) stays under the flag. Like the states above, these go to the artifact
+    and are not patched in `design/theos-ui/`.
 
 ## Needs a private session (Confluence, Jira, plugin)
 
