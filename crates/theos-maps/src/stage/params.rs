@@ -64,6 +64,18 @@ pub(crate) fn parse<P: DeserializeOwned>(
 ) -> Result<P, ParamError> {
     let mut table = table.clone();
     table.remove("id");
+    parse_table(stage, table)
+}
+
+/// [`parse`] for a table in which every key is a parameter (no `id`), such as the parameters of
+/// one mission rule; `stage` is the name its errors carry.
+///
+/// # Errors
+/// As [`parse`].
+pub(crate) fn parse_table<P: DeserializeOwned>(
+    stage: &str,
+    table: toml::Table,
+) -> Result<P, ParamError> {
     let mut unknown = Vec::new();
     let parsed = serde_path_to_error::deserialize(serde_ignored::Deserializer::new(
         toml::Value::Table(table),

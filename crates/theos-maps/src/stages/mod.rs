@@ -3,6 +3,7 @@
 use crate::stage::Registry;
 
 pub mod evolution;
+pub mod interior;
 pub mod terrain;
 #[cfg(test)]
 mod unknown_keys;
