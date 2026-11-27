@@ -1,6 +1,7 @@
 # P50 · Leaner CI — phase spec
 
-Status: approved 25 Nov 2026 (#45); amended the same day for CI speed (umbrella version 8) ·
+Status: approved 25 Nov 2026 (#45); amended the same day for CI speed (umbrella version 8);
+amended in #48 (changed paths against `main`; key inputs) ·
 repo of the build: `theos-editor`
 Source: `docs/specs/00-umbrella.md` §3 P50, added by umbrella version 7 together with this spec
 and reworded by version 8. Scope and acceptance criteria come from there; this spec decides how.
@@ -155,7 +156,7 @@ Wall-clock of successful PR runs of 3–12 Nov (warm caches; estimates from the 
 
 | Part | Tool or crate | Custom code, and why |
 |---|---|---|
-| Changed paths of a pull request | `git` CLI: merge base of the event's base and head, `git diff --name-only --no-renames` (what `approval` and `slow-tests` do) | One shared module instead of three copies |
+| Changed paths of a pull request | `git` CLI: merge base, `git diff --name-only --no-renames`: the scope decision uses the merge base of `origin/main` and the head; `approval` and `slow-tests` keep the event's base | One shared module instead of three copies |
 | Path lists and matching | `toml` + `globset` with `literal_separator(true)`, as `gate/protected-paths.toml` | Only the two-list rule (§5.3) |
 | The docs-only decision | xtask, in the gate's runner, which every CI job uses | The rule itself; small and unit-tested |
 | Job summary | GitHub's `$GITHUB_STEP_SUMMARY` (Markdown) | Writing the existing verdict table as Markdown |
@@ -209,7 +210,8 @@ protected PR.
 The same rule decides in CI and locally, so `cargo xtask gate` gives the same verdicts in both
 places (CE-08.4). Its inputs:
 - **pull request in CI:** the event's head branch, and the paths changed between the merge base
-  of the event's base and head and the head;
+  of `origin/main` and the event's head and the head — not the event's base: a base change starts
+  no `ci` run, so a verdict against an old base could stay green (Jann, 25 Nov 2026);
 - **local run:** the current branch (`git symbolic-ref`), and every path changed since the merge
   base with `origin/main`: committed, staged, unstaged and untracked (not ignored) — a local run
   judges the working tree, so uncommitted code counts;
@@ -258,8 +260,8 @@ pull request, not files.
   open pull requests cannot evict `main`'s caches from the 10 GB.
 - **Cached xtask.** On a push to `main`, `gate` saves the xtask it built
   (`target/xtask-bin/debug/xtask`) with `actions/cache` under a key made of the OS and the hash
-  of every input of the xtask build (`xtask/**`, `Cargo.lock`, `rust-toolchain.toml`,
-  `.cargo/**`). `pr` computes the key from the pull request's checkout and `approval` from the
+  of every input of the xtask build (`xtask/**`, `Cargo.toml`, `Cargo.lock`,
+  `rust-toolchain.toml`, `.cargo/**`). `pr` computes the key from the pull request's checkout and `approval` from the
   base commit it checks out (spec D3: it runs `main`'s gate). Both restore by that exact key,
   with no fallback keys, and run the binary with `--root .`: on a hit they need neither the
   toolchain nor a build cache. On a miss (an xtask change not yet on `main`, an evicted cache)
@@ -409,9 +411,12 @@ numbers and the options.
 - **R11** `pr` and `approval` run a cached xtask binary, restored by an exact key that hashes
   every input of the xtask build, and fall back to building on a miss — the check itself takes
   about a second; the toolchain and the build take the rest — cost if wrong: a stale binary is
-  impossible while the key covers every input; a missing one costs today's time.
+  impossible while the key covers every input (including the root `Cargo.toml`); a missing one
+  costs today's time.
 - **R12** All three `ci` jobs apply the docs-only rule themselves, through the same runner — one
   rule in one place; no job waits for another — cost if wrong: none.
+- **R13** The scope of a pull request is decided against `main`, not its base — Jann's ruling on
+  the final review's R5-I1 — cost if wrong: a stacked pull request runs every check.
 
 ## 10. Left to the builder
 
