@@ -1,4 +1,4 @@
-//! Building the map package of a terrain run (spec §5.10, `docs/map-package.md` §3-§4).
+//! Building the map package of a run (spec §5.10, `docs/map-package.md` §3-§4).
 
 mod encode;
 mod table;
@@ -7,7 +7,9 @@ mod tests;
 
 use std::collections::BTreeMap;
 
-use theos_map_format::{FORMAT, FORMAT_VERSION, Frame, LayerEntry, LayerKey, Manifest, Package};
+use theos_map_format::{
+    FORMAT, FORMAT_VERSION, Frame, LayerEntry, LayerKey, Manifest, Package, Parent,
+};
 
 use self::encode::encode;
 pub(crate) use self::table::{OMEGA_LAYER, PackageLayer, TERRAIN_LAYERS};
@@ -92,7 +94,7 @@ pub(crate) fn needs(kind: MapKind) -> Vec<LayerSpec> {
         .collect()
 }
 
-/// The package of a finished terrain run: the standard layers in order (`omega` last, when the
+/// The package of a finished run: the standard layers in order (`omega` last, when the
 /// world holds it), the manifest with the recipe as it ran, and the features.
 ///
 /// `generator` is `theos-maps@` plus the generator's version, and `requires` is always empty
@@ -146,8 +148,11 @@ pub(crate) fn build(
             size_m: frame.size_m(),
             cell_m: frame.cell_m,
             grid: shape,
-            origin_m: None,
-            parent: None,
+            origin_m: plan.origin_m,
+            parent: plan.parent.as_ref().map(|parent| Parent {
+                package_sha256: parent.package_sha256.clone(),
+                feature: parent.feature.clone(),
+            }),
             levels: None,
         },
         layers: entries,

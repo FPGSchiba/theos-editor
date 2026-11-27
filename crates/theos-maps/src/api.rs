@@ -34,7 +34,7 @@ pub struct RunRequest {
     pub inputs: serde_json::Map<String, serde_json::Value>,
     /// The path of a source output (`docs/generators.md` §3): the output a refinement run
     /// refines, or the parent map of a child-map run, whose `feature` input names the feature
-    /// it details; `None` for a fresh run. `run` refuses one for the terrain recipes of P08.
+    /// it details; `None` for a fresh run. `run` refuses one for a recipe without a `feature` input.
     pub from: Option<PathBuf>,
     /// Notes that steer the run.
     pub notes: Vec<Note>,
@@ -81,6 +81,9 @@ pub struct RunManifest {
 pub struct ManifestFrame {
     /// Width and height in metres.
     pub size_m: [f64; 2],
+    /// Where a child map lies in its parent's frame, m; absent for a map without a parent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_m: Option<[f64; 2]>,
 }
 
 /// What the generator can do.
@@ -173,6 +176,7 @@ mod tests {
             inputs: serde_json::Map::new(),
             frame: ManifestFrame {
                 size_m: [1000.0, 500.0],
+                origin_m: None,
             },
             outputs: BTreeMap::from([("map".to_owned(), "m.theosmap".to_owned())]),
             results: serde_json::Map::new(),
