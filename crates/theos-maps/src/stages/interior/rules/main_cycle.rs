@@ -14,6 +14,7 @@ use serde::Deserialize;
 
 use crate::rng::StageRng;
 use crate::rooms::graph::type_ok;
+use crate::rooms::lattice::Lattice;
 use crate::rooms::{Cell, Passage, Role, Room, RoomId, Shape};
 use crate::stage::ParamError;
 use crate::stages::interior::mission_core::{
@@ -117,35 +118,38 @@ impl Free {
     }
 }
 
-/// The free cells of the lattice's outermost row or column on `side`, in (row, col) order.
-fn rim_cells(free: &Free, side: Side) -> Vec<Cell> {
-    let (rows, cols) = (free.rows, free.cols);
-    let cells: Vec<Cell> = match side {
-        Side::North => (0..cols).map(|col| Cell { row: 0, col }).collect(),
+/// The rim of the enabled shape on `side` (ruling R9): per column (north, south) or row (east,
+/// west), the enabled cell with no enabled cell further towards `side`, kept when it is free; in
+/// (row, col) order. The lattice's edge row need not be enabled, so round and ragged envelopes
+/// have a rim too.
+fn rim_cells(lattice: &Lattice, free: &Free, side: Side) -> Vec<Cell> {
+    let (rows, cols) = (lattice.rows, lattice.cols);
+    let column = |col: u16| (0..rows).map(move |row| Cell { row, col });
+    let row = |row: u16| (0..cols).map(move |col| Cell { row, col });
+    let enabled = |c: &Cell| lattice.is_enabled(*c);
+    let mut cells: Vec<Cell> = match side {
+        Side::North => (0..cols).filter_map(|c| column(c).find(enabled)).collect(),
         Side::South => (0..cols)
-            .map(|col| Cell {
-                row: rows.saturating_sub(1),
-                col,
-            })
+            .filter_map(|c| column(c).rev().find(enabled))
             .collect(),
-        Side::West => (0..rows).map(|row| Cell { row, col: 0 }).collect(),
+        Side::West => (0..rows).filter_map(|r| row(r).find(enabled)).collect(),
         Side::East => (0..rows)
-            .map(|row| Cell {
-                row,
-                col: cols.saturating_sub(1),
-            })
+            .filter_map(|r| row(r).rev().find(enabled))
             .collect(),
     };
-    cells.into_iter().filter(|&c| free.get(c)).collect()
+    cells.retain(|&c| free.get(c));
+    cells.sort_unstable();
+    cells
 }
 
-/// The free blocks of `footprint` (rows, cols) whose top-left cell is nearest the lattice
-/// centre by integer squared distance (in doubled coordinates), in (row, col) order of the
-/// top-left cell. Each block's cells are sorted.
+/// The free blocks of `footprint` (rows, cols) whose centre is nearest the lattice centre by
+/// integer squared distance (ruling R11), in (row, col) order of the top-left cell. In the doubled
+/// frame a block's centre is `2 * top_left + side - 1` per axis and the lattice centre is
+/// `lattice side - 1`. Each block's cells are sorted.
 fn goal_blocks(free: &Free, footprint: (u8, u8)) -> Vec<Vec<Cell>> {
     let (h, w) = (u16::from(footprint.0), u16::from(footprint.1));
-    let squared = |a: u16, b: u16| {
-        let d = (2 * i64::from(a) + 1) - i64::from(b);
+    let squared = |top_left: u16, side: u16, lattice_side: u16| {
+        let d = (2 * i64::from(top_left) + i64::from(side) - 1) - (i64::from(lattice_side) - 1);
         d * d
     };
     let mut best: Option<i64> = None;
@@ -158,7 +162,7 @@ fn goal_blocks(free: &Free, footprint: (u8, u8)) -> Vec<Vec<Cell>> {
             if !cells.iter().all(|&c| free.get(c)) {
                 continue;
             }
-            let d = squared(row, free.rows) + squared(col, free.cols);
+            let d = squared(row, h, free.rows) + squared(col, w, free.cols);
             if best.is_none_or(|b| d < b) {
                 best = Some(d);
                 blocks.clear();
@@ -347,7 +351,7 @@ impl Rule for MainCycle {
         if s.graph.rooms.iter().any(|r| r.role == Role::Start) {
             return Vec::new();
         }
-        rim_cells(&Free::of(s), p.side)
+        rim_cells(&s.lattice, &Free::of(s), p.side)
             .into_iter()
             .filter(|&c| !layouts(s, c, p).is_empty())
             .map(|c| Match {
@@ -530,17 +534,57 @@ mod tests {
     // AC: CE-80.2
     #[test]
     fn main_cycle_reports_short_without_rim_cell() {
-        for (side, disable) in [("south", true), ("east", false)] {
-            let mut l = lattice(6, 6);
-            for i in 0..6 {
-                let at = if disable { 5 * 6 + i } else { i * 6 + 5 };
-                l.enabled[at] = false;
+        // Envelopes whose enabled cells cannot hold two disjoint arcs: one enabled row in a
+        // 6x6 lattice, and a lattice of one row.
+        let mut one_row = lattice(6, 6);
+        for (i, on) in one_row.enabled.iter_mut().enumerate() {
+            *on = i / 6 == 2;
+        }
+        for l in [one_row, lattice(1, 6)] {
+            for side in ["south", "north", "east", "west"] {
+                let mut s = state_on(l.clone(), &program(&[]));
+                let params = format!(
+                    "side = \"{side}\"
+cycle = \"lock_key\""
+                );
+                let r = run(&mut s, &[entry("main_cycle", 1, true, &params)], 1);
+                assert_eq!((r.applied, r.short), (0, 1), "{side}");
+                assert_eq!(s.graph.rooms.len(), 0);
             }
-            let mut s = state_on(l, &program(&[]));
-            let params = format!("side = \"{side}\"\ncycle = \"lock_key\"");
-            let r = run(&mut s, &[entry("main_cycle", 1, true, &params)], 1);
-            assert_eq!((r.applied, r.short), (0, 1), "{side}");
-            assert_eq!(s.graph.rooms.len(), 0);
+        }
+    }
+
+    /// An 8x8 lattice with only a circle of cells enabled; rows 0 and 7 are fully disabled.
+    fn round_lattice() -> Lattice {
+        let mut l = lattice(8, 8);
+        for (i, on) in l.enabled.iter_mut().enumerate() {
+            let (r, c) = (i64::try_from(i / 8).unwrap(), i64::try_from(i % 8).unwrap());
+            *on = (2 * r - 7).pow(2) + (2 * c - 7).pow(2) <= 49;
+        }
+        l
+    }
+
+    // AC: CE-80.2
+    #[test]
+    fn main_cycle_starts_on_a_round_envelope_rim() {
+        let l = round_lattice();
+        assert!((0..8).all(|col| !l.is_enabled(Cell { row: 0, col })));
+        assert!((0..8).all(|col| !l.is_enabled(Cell { row: 7, col })));
+        for seed in 1..=8 {
+            let mut s = state_on(l.clone(), &program(&[]));
+            let r = run(&mut s, &[entry("main_cycle", 1, true, LOCK_KEY)], seed);
+            assert_eq!((r.applied, r.short), (1, 0));
+            valid_and_solvable(&s);
+            let start = s.graph.rooms[usize::from(room_of(&s, Role::Start))].cells[0];
+            assert!(s.lattice.is_enabled(start));
+            assert!(
+                (start.row + 1..8).all(|row| !s.lattice.is_enabled(Cell {
+                    row,
+                    col: start.col
+                })),
+                "{start:?} lies on the south rim"
+            );
+            assert!(start.row < 7);
         }
     }
 
@@ -574,15 +618,11 @@ mod tests {
             valid_and_solvable(&s);
             let goal = &s.graph.rooms[usize::from(room_of(&s, Role::Goal))];
             assert_eq!(goal.ty, "choir-hall");
-            let tl = goal.cells[0];
-            assert!(
-                (2..=3).contains(&tl.row) && (2..=3).contains(&tl.col),
-                "{tl:?}"
-            );
-            let block: Vec<Cell> = (tl.row..tl.row + 2)
-                .flat_map(|row| (tl.col..tl.col + 2).map(move |col| Cell { row, col }))
+            // The block's centre is the lattice centre: the centre four cells.
+            let centre: Vec<Cell> = (2..4)
+                .flat_map(|row| (2..4).map(move |col| Cell { row, col }))
                 .collect();
-            assert_eq!(goal.cells, block);
+            assert_eq!(goal.cells, centre);
         }
     }
 
