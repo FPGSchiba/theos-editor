@@ -45,19 +45,45 @@ pub fn lock_names(root: &Path, name: &str) -> bool {
         .any(|package| package.get("name").and_then(toml::Value::as_str) == Some(name))
 }
 
-/// Writes `true` or `false` to `out` and, under GitHub Actions, `needed=<answer>` to the file of
-/// the step outputs. The answer is true when any of `checks` is needed ([`needed_under`]) and,
-/// with `requires_package`, `Cargo.lock` names that package ([`lock_names`]). The command itself
-/// succeeds whatever the answer, so it returns `true`.
+/// [`run_with`] with the step output file that GitHub Actions names in `GITHUB_OUTPUT`.
 ///
 /// # Errors
 ///
-/// Fails when `out` or the step output file cannot be written.
+/// The errors of [`run_with`].
 pub fn run(
     root: &Path,
     ci: Option<&CiEvent>,
     checks: &[Check],
     requires_package: Option<&str>,
+    out: &mut dyn Write,
+) -> Result<bool> {
+    let output_file = std::env::var_os(OUTPUT_FILE);
+    run_with(
+        root,
+        ci,
+        checks,
+        requires_package,
+        output_file.as_deref(),
+        out,
+    )
+}
+
+/// Writes `true` or `false` to `out` and, under GitHub Actions, `needed=<answer>` to
+/// `output_file`, the file of the step outputs. The answer is true when any of `checks` is needed
+/// ([`needed_under`]) and, with `requires_package`, `Cargo.lock` names that package
+/// ([`lock_names`]). The command itself succeeds whatever the answer, so it returns `true`.
+///
+/// # Errors
+///
+/// Fails when `out` or the step output file cannot be written, and under GitHub Actions when
+/// there is no step output file: the steps that wait for the answer would all be skipped, and a
+/// required job would end green without running its check.
+pub fn run_with(
+    root: &Path,
+    ci: Option<&CiEvent>,
+    checks: &[Check],
+    requires_package: Option<&str>,
+    output_file: Option<&std::ffi::OsStr>,
     out: &mut dyn Write,
 ) -> Result<bool> {
     let answer = needed_under(&scope::for_run(root, ci), root, checks)
@@ -66,10 +92,11 @@ pub fn run(
         path: "stdout".into(),
         source,
     })?;
-    if ci.is_some()
-        && let Some(file) = std::env::var_os(OUTPUT_FILE)
-    {
-        append(Path::new(&file), answer)?;
+    if ci.is_some() {
+        let file = output_file.ok_or_else(|| Error::Missing {
+            what: format!("the file of the step outputs: ${OUTPUT_FILE} is not set"),
+        })?;
+        append(Path::new(file), answer)?;
     }
     Ok(true)
 }
@@ -136,8 +163,18 @@ mod tests {
     }
 
     fn answer(root: &Path, ci: Option<&CiEvent>, checks: &[Check]) -> TestResult<String> {
+        // Under CI the step output file is needed; the answer is read from stdout.
+        let folder = tempfile::tempdir()?;
+        let file = folder.path().join("output");
         let mut out = Vec::new();
-        assert!(run(root, ci, checks, None, &mut out)?);
+        assert!(run_with(
+            root,
+            ci,
+            checks,
+            None,
+            Some(file.as_os_str()),
+            &mut out
+        )?);
         Ok(String::from_utf8(out)?)
     }
 
@@ -257,6 +294,48 @@ mod tests {
         git(path, &["checkout", "-q", "--", "."])?;
         git(path, &["clean", "-fdq"])?;
         assert_eq!(asked(path)?, "false\n");
+        Ok(())
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn under_ci_a_missing_step_output_file_is_an_error() -> TestResult {
+        let (dir, base, head) = docs_branch()?;
+        let event = pull_request("opened", &base, &head);
+        let mut out = Vec::new();
+        let error = run_with(
+            dir.path(),
+            Some(&event),
+            &[Check::Test],
+            None,
+            None,
+            &mut out,
+        )
+        .err()
+        .ok_or("no error")?;
+        assert!(error.to_string().contains("GITHUB_OUTPUT"), "{error}");
+
+        // With the file, the same run writes the answer there; outside CI no file is needed.
+        let folder = tempfile::tempdir()?;
+        let file = folder.path().join("output");
+        let mut out = Vec::new();
+        run_with(
+            dir.path(),
+            Some(&event),
+            &[Check::Test],
+            None,
+            Some(file.as_os_str()),
+            &mut out,
+        )?;
+        assert_eq!(fs::read_to_string(&file)?, "needed=false\n");
+        assert!(run_with(
+            dir.path(),
+            None,
+            &[Check::Test],
+            None,
+            None,
+            &mut out
+        )?);
         Ok(())
     }
 

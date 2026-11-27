@@ -24,7 +24,7 @@ none, lists that cannot be read, a detached head), the summary says why above th
 |---|---|---|---|
 | `fmt` | `gate` | `cargo fmt --all --check` | Linux |
 | `clippy` | `gate` | `cargo clippy --workspace --all-targets --locked -- -D warnings`, and the same with `--features theos-editor/engine` | Linux |
-| `test` | `test` | `cargo nextest run --workspace --locked` (profile `ci` in CI, `default` locally; both leave out the slow tests), the same with `--features theos-editor/engine` and `-E 'package(theos-editor)'`, and `cargo test --doc --workspace --locked` | Linux |
+| `test` | `test` | `cargo nextest run --workspace --features theos-editor/engine --locked -E 'package(theos-editor)'`, then `cargo nextest run --workspace --locked` (profile `ci` in CI, `default` locally; both leave out the slow tests; the full run comes last, so its report is the one `ac-trace` reads), and `cargo test --doc --workspace --locked` | Linux |
 | `slow-tests` | `gate` | `cargo xtask slow-tests`: `cargo nextest run --workspace --locked --profile slow --no-tests=warn`, only the slow tests; on a pull request only when it can change their outcome (below) | Linux |
 | `docs` | `gate` | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked` | Linux |
 | `deny` | `gate` | `cargo deny --locked check` (licences, advisories, bans, sources) | Linux |
@@ -159,9 +159,9 @@ each check reads, with the place in the code:
 |---|---|---|
 | `fmt` | the workspace `.rs` files (`xtask/src/checks/cargo_cmds.rs:28`) | no non-code path is Rust code |
 | `clippy` | the workspace, and by `include_str!` the umbrella (`xtask/src/umbrella.rs:287`) and the PR template (`xtask/src/checks/pr_body.rs:129`, `xtask/tests/pr_body.rs:10`) | the umbrella is always code, and `.github/**` is code |
-| `test`, `coverage` | `docs/gate.md` (`xtask/tests/settings.rs:78`, `xtask/tests/workflows.rs:931`, `xtask/tests/approval.rs:579`), `CONTRIBUTING.md` (`xtask/tests/commit_msg.rs:436`), the workflows, and the files `clippy` includes; no crate takes a doc file into its docs (no `doc = include_str!`), so no doc test reads one | `docs/gate.md` is always code, and the others are code |
-| `docs` | the workspace sources, through rustdoc (`xtask/src/checks/cargo_cmds.rs:114`) | no non-code path is Rust code |
-| `deny` | the Cargo files, `deny.toml` and the advisory database (`xtask/src/checks/cargo_cmds.rs:123`) | Cargo files and `deny.toml` are code; a new advisory is not caused by the pull request and shows at the next code PR and the next push to `main` |
+| `test`, `coverage` | `docs/gate.md` (`xtask/tests/settings.rs:78`, `xtask/tests/workflows.rs:933`, `xtask/tests/approval.rs:579`), `CONTRIBUTING.md` (`xtask/tests/commit_msg.rs:436`), the workflows, and the files `clippy` includes; no crate takes a doc file into its docs (no `doc = include_str!`), so no doc test reads one | `docs/gate.md` is always code, and the others are code |
+| `docs` | the workspace sources, through rustdoc (`xtask/src/checks/cargo_cmds.rs:117`) | no non-code path is Rust code |
+| `deny` | the Cargo files, `deny.toml` and the advisory database (`xtask/src/checks/cargo_cmds.rs:126`) | Cargo files and `deny.toml` are code; a new advisory is not caused by the pull request and shows at the next code PR and the next push to `main` |
 | `engine-free` | `cargo metadata` and `gate/engine-crates.toml` (`xtask/src/checks/engine_free.rs:42`) | both are code |
 | `lints` | every file name, for `Cargo.toml` and the tool configs in any folder (`xtask/src/checks/lints/config_files.rs:168`, `:243`), and the mirrored files of `gate/` (`:39`) | those names are always code, whatever the folder and the case |
 | `ac-trace` | the umbrella (`xtask/src/umbrella.rs:20`), every `.ts` file (`xtask/src/checks/ac_trace/mod.rs:311`, `:328`) and the branch (`:259`) | the umbrella and `.ts` files are always code, and a `phase/` branch runs every check |

@@ -1,0 +1,76 @@
+name: Set up the UI
+description: >-
+  Installs pnpm (the version of `packageManager` in editor-ui/package.json), Node 24, the pnpm
+  packages and the Chromium of Playwright, for the jobs that run the `ui` check. The pnpm store
+  and the browsers are cached by the lockfile. Jobs run it only when `xtask needs ui` says so.
+
+inputs:
+  save-cache:
+    description: >-
+      Whether the job saves the pnpm store and the browsers after a cache miss: `true` or `false`.
+      A job that only restores passes `false`. Every run restores.
+    required: false
+    default: 'false'
+  browser-deps:
+    description: >-
+      Whether to install the system libraries of the browser too: `true` or `false`. Only Linux
+      needs them, and installing them needs root.
+    required: false
+    default: 'false'
+  browsers-path:
+    description: Where Playwright keeps its browsers on this OS, which is cached with the store.
+    required: false
+    default: '~/.cache/ms-playwright'
+
+runs:
+  using: composite
+  steps:
+    # pnpm comes first because the store path below is asked of it. Node needs no cache of its
+    # own: setup-node would save one on every run, a pull request's included.
+    - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      with:
+        package_json_file: editor-ui/package.json
+
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: 24
+
+    - name: Find the pnpm store
+      id: store
+      shell: bash
+      run: echo "path=$(pnpm --dir editor-ui store path --silent)" >> "$GITHUB_OUTPUT"
+
+    # Every run restores; only the jobs that pass `save-cache: true` save, below.
+    - name: Restore the pnpm store and the browsers
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ${{ steps.store.outputs.path }}
+          ${{ inputs.browsers-path }}
+        key: ui-${{ runner.os }}-${{ hashFiles('editor-ui/pnpm-lock.yaml') }}
+
+    # `pnpm exec playwright` needs the packages, so they are installed first; the `ui` check
+    # installs them again and finds them there.
+    - name: Install the packages
+      shell: bash
+      run: pnpm --dir editor-ui install --frozen-lockfile
+
+    - name: Install the browser with its system libraries
+      if: inputs.browser-deps == 'true'
+      shell: bash
+      run: pnpm --dir editor-ui exec playwright install --with-deps chromium
+
+    - name: Install the browser
+      if: inputs.browser-deps != 'true'
+      shell: bash
+      run: pnpm --dir editor-ui exec playwright install chromium
+
+    - name: Save the pnpm store and the browsers
+      if: inputs.save-cache == 'true' && steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ${{ steps.store.outputs.path }}
+          ${{ inputs.browsers-path }}
+        key: ui-${{ runner.os }}-${{ hashFiles('editor-ui/pnpm-lock.yaml') }}
