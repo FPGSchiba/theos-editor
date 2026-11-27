@@ -138,7 +138,9 @@ const GIT_INDEX_FILE: &str = "GIT_INDEX_FILE";
 /// names, such as a hook's `GIT_INDEX_FILE`), which is deleted when `status` returns, also on an
 /// error or a cancel; the real index is never written. A file the user added with `git add -N`
 /// stays [`Entry::Changed`] with `unstaged: Added`, as git shows it. Ignored files are not listed;
-/// untracked files are listed one by one, also inside an untracked folder.
+/// untracked files are listed one by one, also inside an untracked folder. An untracked file that
+/// vanishes while `status` runs (an editor's save through a temporary file) is left out; when
+/// adding the untracked files still fails, they are listed again and the adding is repeated once.
 ///
 /// # Errors
 ///
@@ -156,17 +158,54 @@ pub(crate) fn status_in(
     cancel: &Cancel,
     temp: &Path,
 ) -> Result<Status, GitError> {
-    let untracked: Vec<Vec<u8>> = query(
-        git,
-        top,
-        cancel,
-        &read_args("ls-files", &["--others", "--exclude-standard", "-z"]),
-        None,
-        &[],
-        |out| Ok(fields(out)?.into_iter().map(<[u8]>::to_vec).collect()),
-    )?;
+    let untracked = untracked_files(git, top, cancel)?;
+    status_from(git, top, cancel, temp, untracked)
+}
+
+/// [`status_in`] from the untracked files `untracked` that step 1 listed.
+///
+/// A file may vanish or change after it was listed (an editor saves through a temporary file
+/// and a rename), and `add` fails on a path that no longer matches. So a failed `add` is
+/// repeated once from step 1 with a fresh list; a second failure is the error.
+fn status_from(
+    git: &Git,
+    top: &Path,
+    cancel: &Cancel,
+    temp: &Path,
+    untracked: Vec<Vec<u8>>,
+) -> Result<Status, GitError> {
+    match attempt(git, top, cancel, temp, untracked)? {
+        Attempt::Done(status) => Ok(status),
+        Attempt::AddFailed(error) => {
+            tracing::debug!(%error, "the untracked files changed; reading them again");
+            match attempt(git, top, cancel, temp, untracked_files(git, top, cancel)?)? {
+                Attempt::Done(status) => Ok(status),
+                Attempt::AddFailed(error) => Err(error),
+            }
+        }
+    }
+}
+
+/// How one attempt of steps 2 to 5 ended.
+enum Attempt {
+    /// The status.
+    Done(Status),
+    /// `add --intent-to-add` failed, most likely because an untracked file changed.
+    AddFailed(GitError),
+}
+
+/// Steps 2 to 5 of [`status`] with the untracked files `untracked`; those gone from disk by now
+/// are left out first.
+fn attempt(
+    git: &Git,
+    top: &Path,
+    cancel: &Cancel,
+    temp: &Path,
+    untracked: Vec<Vec<u8>>,
+) -> Result<Attempt, GitError> {
+    let untracked = existing(top, untracked);
     if untracked.is_empty() {
-        return porcelain(git, top, cancel, &[]);
+        return porcelain(git, top, cancel, &[]).map(Attempt::Done);
     }
     let folder = tempfile::Builder::new()
         .prefix("theos-status-")
@@ -178,9 +217,41 @@ pub(crate) fn status_in(
         source: std::io::Error::other("the temporary folder's path is not UTF-8"),
     })?;
     let env = [(GIT_INDEX_FILE, copy)];
-    intend_to_add(git, top, cancel, &env, &untracked)?;
+    match intend_to_add(git, top, cancel, &env, &untracked) {
+        Ok(()) => {}
+        Err(error @ GitError::Failed { .. }) => return Ok(Attempt::AddFailed(error)),
+        Err(error) => return Err(error),
+    }
     let status = porcelain(git, top, cancel, &env)?;
-    Ok(paired(status, &untracked))
+    Ok(Attempt::Done(paired(status, &untracked)))
+}
+
+/// Step 1: the files git does not track and does not ignore, in git's spelling.
+fn untracked_files(git: &Git, top: &Path, cancel: &Cancel) -> Result<Vec<Vec<u8>>, GitError> {
+    query(
+        git,
+        top,
+        cancel,
+        &read_args("ls-files", &["--others", "--exclude-standard", "-z"]),
+        None,
+        &[],
+        |out| Ok(fields(out)?.into_iter().map(<[u8]>::to_vec).collect()),
+    )
+}
+
+/// The paths of `paths` that still exist under `top`. A path that is not UTF-8 is kept; if it is
+/// gone, `add` fails and the attempt is repeated.
+fn existing(top: &Path, paths: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+    paths
+        .into_iter()
+        .filter(|path| match std::str::from_utf8(path) {
+            Ok(text) => !matches!(
+                std::fs::symlink_metadata(top.join(text)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound
+            ),
+            Err(_) => true,
+        })
+        .collect()
 }
 
 /// Runs git with `args` in `top` and reads its answer with `parse`, naming the command when it is
@@ -443,6 +514,62 @@ mod tests {
             matches!(result, Err(GitError::Cancelled { .. })),
             "{result:?}"
         );
+        assert_eq!(fixture.temp_entries()?, Vec::<PathBuf>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn a_listed_file_gone_before_add_is_left_out() -> TestResult {
+        let fixture = Fixture::new()?;
+        std::fs::write(fixture.repo.join("new.md"), "new\n")?;
+        // Listed by step 1, then removed (an editor's temporary file renamed over a record).
+        let listed = vec![b"gone.md".to_vec(), b"new.md".to_vec()];
+        let status = status_from(
+            &fixture.git,
+            &fixture.repo,
+            &Cancel::new(),
+            &fixture.temp,
+            listed,
+        )?;
+        assert_eq!(status.entries, vec![untracked(b"new.md")]);
+        assert_eq!(fixture.temp_entries()?, Vec::<PathBuf>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn a_failed_add_is_repeated_once_with_a_fresh_list() -> TestResult {
+        let fixture = Fixture::new()?;
+        std::fs::write(fixture.repo.join(".gitignore"), "*.tmp\n")?;
+        std::fs::write(fixture.repo.join("scratch.tmp"), "ignored\n")?;
+        std::fs::write(fixture.repo.join("new.md"), "new\n")?;
+        // `scratch.tmp` still exists but is ignored by now, so `add` refuses it.
+        let listed = vec![b"scratch.tmp".to_vec(), b"new.md".to_vec()];
+        let status = status_from(
+            &fixture.git,
+            &fixture.repo,
+            &Cancel::new(),
+            &fixture.temp,
+            listed,
+        )?;
+        assert_eq!(
+            status.entries,
+            vec![untracked(b".gitignore"), untracked(b"new.md")]
+        );
+        assert_eq!(fixture.temp_entries()?, Vec::<PathBuf>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn every_listed_file_gone_reads_the_real_index() -> TestResult {
+        let fixture = Fixture::new()?;
+        let status = status_from(
+            &fixture.git,
+            &fixture.repo,
+            &Cancel::new(),
+            &fixture.temp,
+            vec![b"gone.md".to_vec()],
+        )?;
+        assert_eq!(status.entries, Vec::new());
         assert_eq!(fixture.temp_entries()?, Vec::<PathBuf>::new());
         Ok(())
     }
