@@ -120,6 +120,7 @@ async fn locked_records_are_readable_with_their_reasons() -> TestResult {
         ("fates-cult", "people/hearth-folk/fates-cult.md", "canon"),
         ("dup-911", "things/dup-911.md", "canon"),
         ("E91", "canon/formalism/E91.md", "formalism"),
+        ("T-911", "lore/truths/T-911.md", "never"),
     ] {
         let read = client.structured("codex_read", json!({ "id": id })).await?;
         let record = read["records"]
@@ -129,7 +130,9 @@ async fn locked_records_are_readable_with_their_reasons() -> TestResult {
         let locked = record["locked"].as_array().ok_or("no locked")?;
         assert!(locked.iter().any(|r| r == reason), "{id}: {record}");
         let text = record["text"].as_str().ok_or("no text")?;
-        assert!(!text.is_empty(), "{id}: empty text");
+        // The full text of the file, as written (LF).
+        let file = std::fs::read_to_string(project.join(path))?.replace("\r\n", "\n");
+        assert_eq!(text, file, "{id}: the text is not the file's");
     }
     client.cancel().await?;
     Ok(())

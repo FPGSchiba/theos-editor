@@ -288,14 +288,25 @@ mod tests {
     // AC: CE-18.3
     #[test]
     fn read_locked_records_return_text() -> TestResult {
-        let (_dir, ws) = codex_workspace()?;
-        for (target, reason) in [
-            (id("fates-cult"), "canon"),
-            (id("E91"), "formalism"),
-            (ReadTarget::Path("things/dup-911.md".to_owned()), "canon"),
+        let (dir, ws) = codex_workspace()?;
+        for (target, path, reason) in [
+            (
+                id("fates-cult"),
+                "people/hearth-folk/fates-cult.md",
+                "canon",
+            ),
+            (id("E91"), "canon/formalism/E91.md", "formalism"),
+            (
+                ReadTarget::Path("things/dup-911.md".to_owned()),
+                "things/dup-911.md",
+                "canon",
+            ),
+            (id("T-911"), "lore/truths/T-911.md", "never"),
         ] {
             let record = only(read(&ws, &target)?)?;
-            assert_ne!(record.text, "");
+            // The full text of the file, as written (LF).
+            let file = std::fs::read_to_string(dir.path().join(path))?.replace("\r\n", "\n");
+            assert_eq!(record.text, file, "{target:?}");
             let json = serde_json::to_value(&record)?;
             let locked = json["locked"].as_array().ok_or("locked")?;
             assert!(locked.iter().any(|r| r == reason), "{target:?} {locked:?}");

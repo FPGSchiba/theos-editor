@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use theos_content::{Layer, LinkRef, RecordSummary};
+use theos_content::{Hit, Layer, LinkRef, RecordSummary};
 
 use crate::views::codex::{LinkView, RecordRef, TargetRef};
 use crate::{Marks, StudioError, Workspace};
@@ -39,14 +39,32 @@ impl Lookup {
 
     /// The record at `path`; a path the index lacks falls back to the words of the caller.
     pub(super) fn of_path(&self, path: &str, id: &str, kind: Option<&str>) -> RecordRef {
-        match self.by_path.get(path) {
-            Some(summary) => RecordRef::from_summary(summary, &self.marks),
-            None => RecordRef {
-                path: Some(path.to_owned()),
-                kind: kind.map(str::to_owned),
-                mark: self.marks.of_path(path),
-                ..RecordRef::missing(id)
-            },
+        self.resolve(path, id, kind, None)
+    }
+
+    /// The record of a search hit; a path the index lacks falls back to the hit's own words.
+    pub(super) fn of_hit(&self, hit: &Hit) -> RecordRef {
+        self.resolve(
+            &hit.path,
+            &hit.id,
+            hit.kind.as_deref(),
+            hit.title.as_deref(),
+        )
+    }
+
+    /// The one fallback for a path the index lacks: id, kind and title as the caller knew
+    /// them, the marks of the path, and no status.
+    fn resolve(&self, path: &str, id: &str, kind: Option<&str>, title: Option<&str>) -> RecordRef {
+        if let Some(summary) = self.by_path.get(path) {
+            return RecordRef::from_summary(summary, &self.marks);
+        }
+        tracing::warn!(path, id, "the index lacks a path that it named");
+        RecordRef {
+            path: Some(path.to_owned()),
+            kind: kind.map(str::to_owned),
+            title: title.map(str::to_owned),
+            mark: self.marks.of_path(path),
+            ..RecordRef::missing(id)
         }
     }
 

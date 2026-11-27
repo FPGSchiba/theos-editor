@@ -1,12 +1,10 @@
 //! `codex::search`: full-text search with the marks of each hit.
 
-use std::collections::HashMap;
+use theos_content::{Column, Hit, Match, read_record};
 
-use theos_content::{Column, Hit, Match, RecordSummary, read_record};
-
-use super::lookup::saturate;
-use crate::views::codex::{HitView, MatchView, RecordRef, SearchView};
-use crate::{Marks, StudioError, Workspace};
+use super::lookup::{Lookup, saturate};
+use crate::views::codex::{HitView, MatchView, SearchView};
+use crate::{StudioError, Workspace};
 
 /// The most hits one search returns.
 const MAX_LIMIT: usize = 100;
@@ -22,33 +20,19 @@ pub fn search(ws: &Workspace, query: &str, limit: usize) -> Result<SearchView, S
             message: format!("limit must be between 1 and {MAX_LIMIT}, not {limit}"),
         });
     }
-    let marks = Marks::load(ws.index())?;
-    let summaries: HashMap<String, RecordSummary> = ws
-        .index()
-        .records()?
-        .into_iter()
-        .map(|summary| (summary.path.clone(), summary))
-        .collect();
+    let lookup = Lookup::load(ws)?;
     // One more than asked for tells whether the list was cut.
     let mut hits = ws.index().search(query, limit + 1)?;
     let truncated = hits.len() > limit;
     hits.truncate(limit);
     Ok(SearchView {
         query: query.to_owned(),
-        hits: hits
-            .iter()
-            .map(|hit| hit_view(ws, hit, &summaries, &marks))
-            .collect(),
+        hits: hits.iter().map(|hit| hit_view(ws, hit, &lookup)).collect(),
         truncated,
     })
 }
 
-fn hit_view(
-    ws: &Workspace,
-    hit: &Hit,
-    summaries: &HashMap<String, RecordSummary>,
-    marks: &Marks,
-) -> HitView {
+fn hit_view(ws: &Workspace, hit: &Hit, lookup: &Lookup) -> HitView {
     // The file is read once; a file that cannot be read gives empty `match` texts.
     let record = match read_record(&ws.project().root().join(&hit.path)) {
         Ok(record) => Some(record),
@@ -57,19 +41,8 @@ fn hit_view(
             None
         }
     };
-    // The index names every hit's record; the hit itself is the fallback, without a status.
-    let summary = summaries
-        .get(&hit.path)
-        .cloned()
-        .unwrap_or_else(|| RecordSummary {
-            id: hit.id.clone(),
-            path: hit.path.clone(),
-            kind: hit.kind.clone(),
-            title: hit.title.clone(),
-            status: None,
-        });
     HitView {
-        record: RecordRef::from_summary(&summary, marks),
+        record: lookup.of_hit(hit),
         score: hit.score,
         matches: hit
             .matches
