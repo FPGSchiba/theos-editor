@@ -121,8 +121,6 @@ impl Git {
     /// - `GIT_INDEX_FILE` is left as it is, since git resolves it in the top, where every read of
     ///   the index runs; so is the list `GIT_ALTERNATE_OBJECT_DIRECTORIES`.
     ///
-    /// # Errors
-    ///
     /// Then it runs `git --version` once, in the current folder with that environment, and
     /// refuses a git older than [`GitVersion::MINIMUM`].
     ///
