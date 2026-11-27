@@ -7,6 +7,7 @@ mod ledger;
 mod list;
 mod marks;
 mod project_info;
+mod prompts;
 mod read;
 mod schema_walk;
 mod search;

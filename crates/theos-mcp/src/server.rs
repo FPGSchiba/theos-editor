@@ -2,9 +2,15 @@
 
 use std::sync::{Arc, Mutex};
 
-use rmcp::model::{Implementation, ServerCapabilities, ServerConfig};
+use rmcp::model::{
+    GetPromptRequestParams, GetPromptResponse, Implementation, ListPromptsResult,
+    PaginatedRequestParams, ServerCapabilities, ServerConfig,
+};
+use rmcp::service::RequestContext;
+use rmcp::{ErrorData, RoleServer};
 use rmcp::{ServerHandler, tool_handler};
 
+use crate::prompts;
 use crate::state::State;
 use crate::tools;
 
@@ -39,8 +45,31 @@ impl Server {
 )]
 impl ServerHandler for Server {
     fn get_info(&self) -> ServerConfig {
-        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("theos-mcp", env!("CARGO_PKG_VERSION")))
-            .with_instructions(INSTRUCTIONS)
+        ServerConfig::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_prompts()
+                .build(),
+        )
+        .with_server_info(Implementation::new("theos-mcp", env!("CARGO_PKG_VERSION")))
+        .with_instructions(INSTRUCTIONS)
+    }
+
+    async fn list_prompts(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListPromptsResult, ErrorData> {
+        Ok(ListPromptsResult::with_all_items(prompts::list(
+            &self.state,
+        )))
+    }
+
+    async fn get_prompt(
+        &self,
+        request: GetPromptRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<GetPromptResponse, ErrorData> {
+        prompts::get(&self.state, &request.name).map(GetPromptResponse::from)
     }
 }

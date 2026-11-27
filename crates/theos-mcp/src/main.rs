@@ -4,6 +4,7 @@
 //! client over stdin and stdout. stdout carries only the protocol; logs go to stderr, filtered
 //! by `THEOS_LOG` (default `warn`).
 
+mod prompts;
 mod server;
 mod state;
 mod tools;

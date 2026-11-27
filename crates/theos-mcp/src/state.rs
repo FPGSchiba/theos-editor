@@ -1,6 +1,6 @@
 //! The project the server answers about, opened on the first call that needs it.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use theos_content::Index;
 use theos_studio::{StudioError, Workspace, find_root, report};
@@ -42,6 +42,19 @@ impl State {
         f: impl FnOnce(&mut Workspace) -> Result<T, StudioError>,
     ) -> Result<T, String> {
         self.try_with(f).map_err(|error| report(&error))
+    }
+
+    /// The project folder, opening the workspace when none is open. The index is not synced:
+    /// the caller reads files only.
+    ///
+    /// # Errors
+    /// The `report` of the error that stopped the open.
+    pub fn root(&mut self) -> Result<PathBuf, String> {
+        let workspace = match &mut self.workspace {
+            Some(workspace) => workspace,
+            slot @ None => slot.insert(open(&self.locator).map_err(|error| report(&error))?),
+        };
+        Ok(Path::to_path_buf(workspace.project().root()))
     }
 
     fn try_with<T>(
