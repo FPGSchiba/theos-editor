@@ -1,7 +1,7 @@
 //! git's status of a project grouped by record: each changed record named by its id, kind and
 //! title, renames as one entry, and the changed files that are no records apart.
 
-mod named;
+pub(crate) mod named;
 mod versions;
 
 use std::path::Path;

@@ -1,5 +1,5 @@
-//! Questions about a repository: its top folder, a folder's place in it, its boolean settings and
-//! its hooks folder.
+//! Questions about a repository: its top folder, a folder's place in it, its boolean settings,
+//! its hooks folder and a commit's first parent.
 
 use std::path::{Path, PathBuf};
 
@@ -103,6 +103,33 @@ pub fn hooks_dir(git: &Git, top: &Path) -> Result<PathBuf, GitError> {
 pub fn common_dir(git: &Git, top: &Path) -> Result<PathBuf, GitError> {
     rev_parse(git, top, &["--path-format=absolute", "--git-common-dir"])
         .map(|path| native(Path::new(&path)))
+}
+
+/// The id of the first parent of `commit` (any revision git accepts), or `None` for a root
+/// commit.
+///
+/// # Errors
+///
+/// [`GitError::Failed`] when `commit` names no commit, [`GitError::Output`] when the answer is not
+/// UTF-8, and the errors of [`Git::run`].
+pub fn first_parent(git: &Git, top: &Path, commit: &str) -> Result<Option<String>, GitError> {
+    let args = read_args(
+        "rev-list",
+        &[
+            "--parents",
+            "--max-count=1",
+            "--end-of-options",
+            commit,
+            "--",
+        ],
+    );
+    let out = git.run(&args, top, None, &[])?;
+    let text = String::from_utf8(out).map_err(|_| GitError::Output {
+        args: args_text(&args),
+        message: "the answer is not UTF-8".to_owned(),
+    })?;
+    // One line: the commit's id, then the ids of its parents.
+    Ok(text.split_ascii_whitespace().nth(1).map(str::to_owned))
 }
 
 #[cfg(test)]

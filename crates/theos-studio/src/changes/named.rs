@@ -5,7 +5,7 @@ use theos_content::{KindRegistry, Record, is_record_path};
 
 /// What names a record in a list of changes.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Named {
+pub(crate) struct Named {
     /// The file name without `.md` (the data model: the id equals the file name).
     pub id: String,
     /// The kind, one the registry knows.
@@ -18,7 +18,7 @@ pub(super) struct Named {
 /// is no record: the path is not a record path ([`is_record_path`]: settings, templates, tools),
 /// the bytes are not UTF-8 or no record ([`Record::parse`]), the front matter does not parse, or
 /// its `kind` is not a scalar the registry knows.
-pub(super) fn named(path: &str, bytes: &[u8], registry: &KindRegistry) -> Option<Named> {
+pub(crate) fn named(path: &str, bytes: &[u8], registry: &KindRegistry) -> Option<Named> {
     if !is_record_path(path) {
         return None;
     }

@@ -125,3 +125,26 @@ fn a_linked_worktree_shares_the_common_hooks() -> Result<(), Box<dyn std::error:
     assert_eq!(canonicalize(hooks)?, canonicalize(common.join("hooks"))?);
     Ok(())
 }
+
+#[test]
+fn the_first_parent_of_a_root_commit_is_none() -> Result<(), Box<dyn std::error::Error>> {
+    let sandbox = Sandbox::new()?;
+    let top = sandbox.init("repo")?;
+    Sandbox::write(&top.join("file.txt"), "synthetic\n")?;
+    sandbox.commit(&top, "first")?;
+    let first = sandbox.run(&top, &["rev-parse", "HEAD"])?.trim().to_owned();
+    Sandbox::write(&top.join("file.txt"), "synthetic two\n")?;
+    sandbox.commit(&top, "second")?;
+    let second = sandbox.run(&top, &["rev-parse", "HEAD"])?.trim().to_owned();
+    let git = sandbox.git()?;
+    assert_eq!(
+        repo::first_parent(&git, &top, &second)?,
+        Some(first.clone())
+    );
+    assert_eq!(repo::first_parent(&git, &top, &first)?, None);
+    assert!(matches!(
+        repo::first_parent(&git, &top, "no-such-commit"),
+        Err(GitError::Failed { .. })
+    ));
+    Ok(())
+}

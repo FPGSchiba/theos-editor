@@ -5,6 +5,7 @@ mod boundary;
 mod changes;
 mod check;
 mod common;
+mod diff;
 mod helper;
 mod hook;
 mod lock;
