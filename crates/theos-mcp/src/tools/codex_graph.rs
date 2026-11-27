@@ -27,6 +27,7 @@ impl Server {
     /// The link graph around a record.
     #[tool(
         name = "codex_graph",
+        input_schema = super::input_schema::<Params>(),
         description = concat!("Return the records within a few links of one record, by distance, and the links between them. ", marks_note!()),
         annotations(read_only_hint = true)
     )]

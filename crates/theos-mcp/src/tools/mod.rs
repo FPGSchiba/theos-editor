@@ -15,8 +15,13 @@ mod codex_search;
 mod ledger_check;
 mod project_info;
 
+use std::sync::Arc;
+
+use rmcp::handler::server::common::schema_for_input;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Json;
+use rmcp::model::JsonObject;
+use schemars::JsonSchema;
 use serde::Serialize;
 use theos_studio::{StudioError, Workspace};
 
@@ -30,6 +35,13 @@ pub fn router() -> ToolRouter<Server> {
         + Server::codex_list_router()
         + Server::codex_graph_router()
         + Server::ledger_check_router()
+}
+
+/// The input schema of a tool whose parameters are `T`. The derived schema of a plain struct
+/// is always valid (the `schema_walk` test checks every tool's), so an invalid one cannot
+/// reach a client; it would show there as an empty schema.
+pub fn input_schema<T: JsonSchema + std::any::Any>() -> Arc<JsonObject> {
+    schema_for_input::<T>().unwrap_or_default()
 }
 
 /// The names of all tools.

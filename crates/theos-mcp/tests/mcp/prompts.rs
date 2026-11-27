@@ -86,3 +86,32 @@ async fn new_guide_appears_without_restart() -> TestResult {
     client.cancel().await?;
     Ok(())
 }
+
+// AC: CE-18.1
+#[tokio::test]
+async fn without_a_project_there_are_no_prompts_and_get_names_the_reason() -> TestResult {
+    let empty = tempfile::tempdir()?;
+    let folder = empty.path().to_string_lossy().into_owned();
+    let client = client(empty.path(), &["--project", &folder]).await?;
+    let names: Vec<String> = client
+        .list_all_prompts()
+        .await?
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
+    assert_eq!(names, Vec::<String>::new());
+    let error = client
+        .get_prompt(GetPromptRequestParams::new("atlas"))
+        .await
+        .err()
+        .ok_or("a missing project must fail")?;
+    match error {
+        ServiceError::McpError(data) => {
+            assert_eq!(data.code, ErrorCode::INVALID_PARAMS);
+            assert!(data.message.contains("theos.toml"), "{}", data.message);
+        }
+        other => return Err(format!("not an MCP error: {other:?}").into()),
+    }
+    client.cancel().await?;
+    Ok(())
+}

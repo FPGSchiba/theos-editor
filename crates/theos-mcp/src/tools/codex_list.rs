@@ -31,6 +31,7 @@ impl Server {
     /// The records that match every given filter, ordered by path.
     #[tool(
         name = "codex_list",
+        input_schema = super::input_schema::<Params>(),
         description = concat!("List the records of the Theos project that match all given filters (kind, status, folder), ordered by path, one page at a time. ", marks_note!()),
         annotations(read_only_hint = true)
     )]

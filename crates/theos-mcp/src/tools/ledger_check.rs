@@ -23,6 +23,7 @@ impl Server {
     /// The ledger of the truths with their clues, and the `lore/` findings on them.
     #[tool(
         name = "ledger_check",
+        input_schema = super::input_schema::<Params>(),
         description = concat!("Return the reveal ledger (each truth with the clues that reveal it) and the findings of the lore rules on those records. ", marks_note!()),
         annotations(read_only_hint = true)
     )]

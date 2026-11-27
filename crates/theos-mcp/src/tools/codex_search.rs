@@ -25,6 +25,7 @@ impl Server {
     /// The records that match words, best first.
     #[tool(
         name = "codex_search",
+        input_schema = super::input_schema::<Params>(),
         description = concat!("Search the records of the Theos project for words and return the best hits with where they match. ", marks_note!()),
         annotations(read_only_hint = true)
     )]

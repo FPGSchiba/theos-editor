@@ -11,3 +11,4 @@ mod prompts;
 mod read;
 mod schema_walk;
 mod search;
+mod startup;

@@ -2,7 +2,7 @@
 //!
 //! Each call reads the folder, so a guide written while the server runs shows up at once.
 
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use rmcp::ErrorData;
 use rmcp::model::{GetPromptResult, Prompt, PromptMessage, Role};
@@ -13,9 +13,7 @@ use crate::state::State;
 /// One prompt per guide: the name is the file stem, the description the guide's title. Without
 /// a project the list is empty.
 pub fn list(state: &Mutex<State>) -> Vec<Prompt> {
-    let Ok(mut state) = state.lock() else {
-        return Vec::new();
-    };
+    let mut state = state.lock().unwrap_or_else(PoisonError::into_inner);
     let root = match state.root() {
         Ok(root) => root,
         Err(reason) => {
@@ -36,7 +34,7 @@ pub fn list(state: &Mutex<State>) -> Vec<Prompt> {
 pub fn get(state: &Mutex<State>, name: &str) -> Result<GetPromptResult, ErrorData> {
     let root = state
         .lock()
-        .map_err(|_| ErrorData::internal_error("the project state is poisoned", None))?
+        .unwrap_or_else(PoisonError::into_inner)
         .root()
         .map_err(|reason| ErrorData::invalid_params(reason, None))?;
     let text = guides::read(&root, name)
