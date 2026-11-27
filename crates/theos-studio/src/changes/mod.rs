@@ -285,7 +285,7 @@ mod tests {
             },
         );
         let (records, files) = result?;
-        assert!(records.is_empty());
+        assert_eq!(records.len(), 0);
         assert_eq!(files, [untracked("a.md"), untracked("locked.md")]);
         Ok(())
     }
