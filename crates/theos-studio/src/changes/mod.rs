@@ -99,7 +99,8 @@ const READ_ARGS: [&str; 2] = ["cat-file", "--batch"];
 ///
 /// # Errors
 ///
-/// [`GitError::Cancelled`] when `cancel` is set, and the errors of `record`.
+/// [`GitError::Cancelled`] when `cancel` is set, and the errors of `record` other than
+/// [`GitError::Io`], which lists the entry as a file.
 fn group(
     entries: Vec<Entry>,
     cancel: &Cancel,
@@ -113,9 +114,16 @@ fn group(
                 args: READ_ARGS.map(str::to_owned).to_vec(),
             });
         }
-        match record(&entry)? {
-            Some(record) => records.push(record),
-            None => files.push(entry),
+        match record(&entry) {
+            Ok(Some(record)) => records.push(record),
+            Ok(None) => files.push(entry),
+            // A path whose bytes cannot be read (a sharing violation) is listed as a file, so one
+            // locked file does not fail the whole list.
+            Err(GitError::Io { source }) => {
+                tracing::warn!(?entry, %source, "a changed path could not be read; listed as a file");
+                files.push(entry);
+            }
+            Err(error) => return Err(error),
         }
     }
     records.sort_by(|a, b| a.path.cmp(&b.path));
@@ -258,6 +266,27 @@ mod tests {
         let ids: Vec<&str> = records.iter().map(|record| record.id.as_str()).collect();
         assert_eq!(ids, ["a", "b"]);
         assert_eq!(files, [untracked("x.txt")]);
+        Ok(())
+    }
+
+    // A path whose bytes cannot be read (a Windows sharing violation, say) cannot be made to
+    // happen on every OS, so the record reader is a seam that fails as such a read does.
+    #[test]
+    fn an_unreadable_path_goes_to_the_files_and_the_rest_is_listed() -> TestResult {
+        let result = group(
+            vec![untracked("a.md"), untracked("locked.md")],
+            &Cancel::new(),
+            |entry| {
+                if entry == &untracked("locked.md") {
+                    let source = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+                    return Err(GitError::Io { source });
+                }
+                Ok(None)
+            },
+        );
+        let (records, files) = result?;
+        assert!(records.is_empty());
+        assert_eq!(files, [untracked("a.md"), untracked("locked.md")]);
         Ok(())
     }
 }
