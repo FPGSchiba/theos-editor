@@ -198,6 +198,50 @@ fn a_record_renamed_twice_keeps_its_whole_history() -> TestResult {
     Ok(())
 }
 
+/// Renames `id` to `to` with P06's `Rename` in the project at the top of `repo`; git is not
+/// touched.
+fn rename_on_disk(repo: &Repo, id: &str, to: &str) -> TestResult {
+    let mut workspace = Workspace::open(repo.top())?;
+    let outcome = workspace.run(&Rename {
+        id: id.to_owned(),
+        to: to.to_owned(),
+    })?;
+    assert_eq!(outcome.introduced, Vec::new(), "{id} → {to}");
+    Ok(())
+}
+
+// AC: CE-21.1
+#[test]
+fn a_record_renamed_but_not_staged_keeps_its_history() -> TestResult {
+    let repo = Repo::committed("")?;
+    edit(
+        repo.top(),
+        T900,
+        "Synthetic statement A.",
+        "Synthetic statement A, edited.",
+    )?;
+    repo.commit("edit T-900")?;
+    rename_on_disk(&repo, "T-900", "T-903")?;
+    assert_eq!(
+        shown(&history_of(&repo, "", "T-903")?),
+        [("T-900", T900, "edit T-900"), ("T-900", T900, "fixture"),]
+    );
+    Ok(())
+}
+
+// AC: CE-21.1
+#[test]
+fn a_record_renamed_and_staged_but_not_committed_keeps_its_history() -> TestResult {
+    let repo = Repo::committed("")?;
+    rename_on_disk(&repo, "T-900", "T-903")?;
+    repo.run(&["add", "-A"])?;
+    assert_eq!(
+        shown(&history_of(&repo, "", "T-903")?),
+        [("T-900", T900, "fixture")]
+    );
+    Ok(())
+}
+
 // AC: CE-21.1
 #[test]
 fn a_project_in_a_subfolder_shows_project_paths_and_keeps_paths_outside_it() -> TestResult {

@@ -2,6 +2,7 @@
 
 use theos_content::RecordSummary;
 use theos_vcs::history::{Commit, Page};
+use theos_vcs::status::{Change, Entry};
 use theos_vcs::{Cancel, Folding, Git, GitError, index, repo};
 
 use crate::StudioError;
@@ -28,10 +29,13 @@ pub struct HistoryEntry {
 ///
 /// The record's path comes from the index ([`Index::record`](theos_content::Index::record)) and
 /// is spelled as git's index spells it ([`index::paths`]), compared under the repository's
-/// [`Folding`]. An id the index does not know and a record git's index does not hold (only in the
-/// working tree) have an empty history; so does a record staged, or added with intent to add, but
-/// never committed. When several records share the id, the first one git tracks, in path order,
-/// is followed. Nothing is locked or written.
+/// [`Folding`]. When git's index does not hold the path, or no commit holds it yet, a rename not
+/// yet committed (staged or not, paired by [`theos_vcs::status::status`]) whose new path is the
+/// record's is followed from its old path, so a record renamed with P06's `Rename` keeps its
+/// history before the commit. An id the index does not know and a record only in the working
+/// tree, or staged but never committed, without such a rename have an empty history. When several
+/// records share the id, the first one git tracks, in path order, is followed. Nothing is locked
+/// or written.
 ///
 /// # Errors
 ///
@@ -60,10 +64,17 @@ pub fn history(
     let place = repo::place(&top, root)?;
     let folding = Folding::read(git, &top)?;
     let tracked = index::paths(git, &top, cancel)?;
-    let Some(repo_path) = git_spelling(&records, &tracked, folding, &place) else {
-        return Ok(Vec::new());
+    let mut commits = match git_spelling(&records, &tracked, folding, &place) {
+        Some(repo_path) => theos_vcs::history::history(git, &top, repo_path, page, cancel)?,
+        None => Vec::new(),
     };
-    let commits = theos_vcs::history::history(git, &top, repo_path, page, cancel)?;
+    if commits.is_empty() {
+        let status = theos_vcs::status::status(git, &top, cancel)?;
+        let renames = renames(&status.entries);
+        if let Some(from) = matching(&records, &renames, folding, &place) {
+            commits = theos_vcs::history::history(git, &top, from, page, cancel)?;
+        }
+    }
     Ok(commits
         .into_iter()
         .map(|commit| entry(commit, folding, &place))
@@ -82,9 +93,45 @@ fn git_spelling<'a>(
     folding: Folding,
     place: &str,
 ) -> Option<&'a [u8]> {
-    let in_project: Vec<(String, &[u8])> = tracked
+    let pairs: Vec<(&[u8], &[u8])> = tracked
         .iter()
-        .filter_map(|path| Some((project_path(folding, place, path)?, path.as_slice())))
+        .map(|path| (path.as_slice(), path.as_slice()))
+        .collect();
+    matching(records, &pairs, folding, place)
+}
+
+/// The renames of `entries` not yet committed, staged or in the working tree, as (new path, old
+/// path) in git's spelling.
+fn renames(entries: &[Entry]) -> Vec<(&[u8], &[u8])> {
+    entries
+        .iter()
+        .filter_map(|entry| match entry {
+            Entry::Renamed {
+                from,
+                to,
+                staged,
+                unstaged,
+                ..
+            } if *staged == Change::Renamed || *unstaged == Change::Renamed => {
+                Some((to.as_slice(), from.as_slice()))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// For the first of `records` that a pair's key names, the pair's value: the pairs are
+/// (repository path, path to answer) in git's spelling; a key matches when its project path is
+/// the record's byte for byte, else the same under `folding`.
+fn matching<'a>(
+    records: &[RecordSummary],
+    pairs: &[(&[u8], &'a [u8])],
+    folding: Folding,
+    place: &str,
+) -> Option<&'a [u8]> {
+    let in_project: Vec<(String, &[u8])> = pairs
+        .iter()
+        .filter_map(|(key, value)| Some((project_path(folding, place, key)?, *value)))
         .collect();
     records.iter().find_map(|record| {
         let exact = in_project.iter().find(|(path, _)| *path == record.path);
@@ -111,7 +158,6 @@ fn entry(commit: Commit, folding: Folding, place: &str) -> HistoryEntry {
 #[cfg(test)]
 mod tests {
     use theos_vcs::history::Person;
-    use theos_vcs::status::Change;
 
     use super::*;
 
@@ -198,5 +244,41 @@ mod tests {
         );
         let top = entry(commit(b"T-3"), EXACT, "");
         assert_eq!((top.path.as_str(), top.id.as_str()), ("T-3", "T-3"));
+    }
+
+    #[test]
+    fn renames_pair_the_new_path_with_the_old_one_staged_or_not() {
+        let renamed = |from: &str, to: &str, staged, unstaged| Entry::Renamed {
+            from: tracked(from),
+            to: tracked(to),
+            staged,
+            unstaged,
+            score: 90,
+        };
+        let entries = [
+            renamed("a.md", "b.md", Change::Unchanged, Change::Renamed),
+            renamed("c.md", "d.md", Change::Renamed, Change::Modified),
+            renamed("e.md", "f.md", Change::Copied, Change::Unchanged),
+            Entry::Untracked {
+                path: tracked("g.md"),
+            },
+        ];
+        assert_eq!(
+            renames(&entries),
+            [
+                (b"b.md".as_slice(), b"a.md".as_slice()),
+                (b"d.md".as_slice(), b"c.md".as_slice()),
+            ]
+        );
+        let records = [summary("lore/D.md")];
+        let pairs = [(
+            b"content/lore/d.md".as_slice(),
+            b"content/lore/c.md".as_slice(),
+        )];
+        assert_eq!(
+            matching(&records, &pairs, CASE, "content"),
+            Some(b"content/lore/c.md".as_slice())
+        );
+        assert_eq!(matching(&records, &pairs, EXACT, "content"), None);
     }
 }
