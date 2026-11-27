@@ -27,7 +27,7 @@ use xtask::git::Git;
 use xtask::github::settings;
 use xtask::verdict::{Check, Verdict};
 use xtask::view::Shared;
-use xtask::{Error, ci, report, tools};
+use xtask::{Error, ci, needs, report, tools};
 
 /// Gate tooling for the theos-editor workspace (`docs/gate.md`).
 #[derive(Parser)]
@@ -100,6 +100,17 @@ enum Command {
     /// Check `editor-ui/`: install, svelte-check, eslint, vitest and playwright (not needed
     /// without `editor-ui/package.json`).
     Ui,
+    /// Say whether a run needs any of the checks: `true` or `false`.
+    ///
+    /// Decides as `gate` does (`docs/gate.md` §1, pull requests that change no code), so CI can
+    /// skip installing what a check needs when the check is not needed. `ui` is also not needed
+    /// without `editor-ui/package.json`. Under GitHub Actions the answer is also appended to
+    /// the step outputs as `needed=true` or `needed=false`.
+    Needs {
+        /// The checks to ask about, comma separated.
+        #[arg(required = true, value_delimiter = ',', value_parser = gate::parse_selectable)]
+        checks: Vec<Check>,
+    },
     /// Check that every commit of the branch is a Conventional Commit.
     ///
     /// Under GitHub Actions the commits and the branch come from the event. Any flag here
@@ -262,6 +273,9 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
             ac_trace::run_phase(&root, *phase, ci.is_some(), &shared, &mut out)?
         }
         Command::Ui => ui::run(&root, ci.as_ref(), &mut out)?,
+        Command::Needs { checks } => {
+            return Ok(needs::run(&root, ci.as_ref(), checks, &mut out)?);
+        }
         Command::CommitMsg {
             base: None,
             head: None,

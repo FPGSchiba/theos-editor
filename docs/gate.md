@@ -42,7 +42,9 @@ none, lists that cannot be read, a detached head), the summary says why above th
 lists them, one per line. The jobs `gate`, `test` and `coverage` install them with
 `apt-get install --no-install-recommends`, through the input `gui-packages` of the setup action.
 The downloaded `.deb` files are cached, keyed by the runner image and the list, so a run installs
-them without downloading. Only a job that saves its caches saves this one.
+them without downloading. A pull request that changes no code installs nothing: the setup action
+asks `cargo xtask needs`, which decides as the gate does. Only a job that saves its build
+cache, on `main`, saves it.
 
 **Slow tests** are tests that take minutes, such as the map generator's parity and golden runs
 (P08 spec §5.14). A test is slow when a segment of its name, the path nextest shows, starts with

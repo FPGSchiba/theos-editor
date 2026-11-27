@@ -12,6 +12,7 @@ use crate::changes::{self, Changes};
 use crate::ci::CiEvent;
 use crate::code_paths::CodePaths;
 use crate::git::Git;
+use crate::verdict::Check;
 
 /// Why a skipped check is not needed, for the verdict table.
 pub const NOT_NEEDED_REASON: &str = "the change touches only paths of the non-code list of \
@@ -27,6 +28,13 @@ pub enum Scope {
     },
     /// Only `commit-msg` runs: the change touches no path a check reads.
     DocsOnly,
+}
+
+/// Whether `check` runs under `scope`: every check does, but for a change that touches no code
+/// only `commit-msg`. `gate` and `needs` both ask here, so they cannot disagree.
+#[must_use]
+pub fn runs(scope: &Scope, check: Check) -> bool {
+    *scope != Scope::DocsOnly || check == Check::CommitMsg
 }
 
 fn every() -> Scope {
@@ -138,6 +146,16 @@ mod tests {
         }
         fs::write(full, text)?;
         Ok(())
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn a_docs_only_scope_runs_only_commit_msg() {
+        assert!(runs(&Scope::DocsOnly, Check::CommitMsg));
+        assert!(!runs(&Scope::DocsOnly, Check::Clippy));
+        assert!(!runs(&Scope::DocsOnly, Check::Ui));
+        assert!(runs(&every(), Check::Clippy));
+        assert!(runs(&every_because("x"), Check::Ui));
     }
 
     // AC: CE-08C.2
