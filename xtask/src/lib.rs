@@ -11,6 +11,12 @@
 //! - [`conventional`]: the commit message rules of `CONTRIBUTING.md` §2, as a parser and the
 //!   list of what it forbids; `commit-msg` and `pr-title` share it.
 //! - [`git`], [`files`] and [`process`]: the only places that start git and cargo or walk the tree.
+//! - [`changes`]: the paths a pull request or the working tree changes, which `approval`,
+//!   `slow-tests` and the scope of the gate all read.
+//! - [`globs`]: the glob lists of the `gate/*.toml` files, read by `globset` the same way
+//!   everywhere.
+//! - [`markdown`] and [`repo_path`]: the one place that reads Markdown, and lexical paths from
+//!   the text other tools print.
 //! - [`github`]: the labels and comments of a pull request, and the rulesets, settings and labels
 //!   of the repository, through the `gh` command line; [`github::settings`] keeps the latter as
 //!   files in `gate/` and compares them with the live repository.
@@ -30,22 +36,29 @@
 //! - [`tools`]: the pinned tools (`gate/tools.toml`) and the `tools` check.
 //! - [`view`]: the workspace view, the files cargo compiles and what `syn` reads in them, which
 //!   the checks that read code share.
+//! - [`code_paths`]: the paths no check reads (`gate/code-paths.toml`).
+//! - [`scope`]: whether a run needs every check or, for a change that touches no code, only
+//!   `commit-msg`.
 //! - [`gate`]: `cargo xtask gate`, which runs the checks above that need no pull request, in
 //!   order, and writes one verdict table.
 
 pub mod branch;
+pub mod changes;
 pub mod checks;
 pub mod ci;
+pub mod code_paths;
 pub mod conventional;
 pub mod error;
 pub mod files;
 pub mod gate;
 pub mod git;
 pub mod github;
+pub mod globs;
 pub mod markdown;
 pub mod process;
 pub mod repo_path;
 pub mod report;
+pub mod scope;
 pub mod tools;
 pub mod umbrella;
 pub mod verdict;

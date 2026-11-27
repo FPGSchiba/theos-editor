@@ -1,12 +1,14 @@
 //! `cargo xtask gate`: every local check of `docs/gate.md` §1, in a fixed order, and one table.
 //!
-//! The gate calls the same per-check runners as the subcommands do, with no override flags, so a
-//! check gives the same verdict here as in its CI job (CE-08.4); only where the inputs come from
-//! differs (the repository instead of the event payload). It leaves out the checks that need a
-//! pull request (`pr-title`, `pr-body`, `approval`) and the settings check, which needs GitHub.
-//! `slow-tests` always runs its tests here, as on a push to `main`; only on a pull request that
-//! cannot change their outcome does it pass without running them ([`slow`]), so the gate is never
-//! more lenient than CI.
+//! The gate calls the same per-check runners as the subcommands do, with no override flags, and
+//! the CI jobs run the gate itself, each with its `--only` or `--skip`, so a check gives the same
+//! verdict locally as in its CI job (CE-08.4). Each runner reads the GitHub Actions event when
+//! there is one and the repository otherwise. The gate leaves out the checks that need a pull
+//! request (`pr-title`, `pr-body`, `approval`) and the settings check, which needs GitHub.
+//! Outside CI `slow-tests` runs its tests whenever the change touches code, as on a push to
+//! `main`; on a pull request in CI it is reported as not needed, without running them, when the
+//! pull request cannot change their outcome ([`slow`]), so a local gate is never more lenient than
+//! CI. Before any check, [`scope`] decides whether the change needs them at all.
 //!
 //! Versions decide verdicts, so a gate whose tools are not the pinned ones would give verdicts
 //! that CI does not. When the `tools` check fails, nothing else runs.
@@ -14,30 +16,179 @@
 use std::io::Write;
 use std::path::Path;
 
-use crate::checks::{ac_trace, cargo_cmds, commit_msg, coverage, engine_free, lints, slow};
+use crate::checks::{
+    ac_trace, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title, slow,
+};
 use crate::ci::CiEvent;
-use crate::verdict::{Check, Finding, GATE_ORDER, Verdict};
+use crate::scope::{self, Scope};
+use crate::verdict::{Check, Finding, GATE_ORDER, PR_ONLY, Verdict};
 use crate::view::Shared;
 use crate::{Error, Result, report, tools};
 
-/// Runs every check of [`GATE_ORDER`] in `root`, and writes the verdict table to `out` after the
-/// output of the checks themselves. Returns the verdicts; the gate passes when all of them do.
+/// Which checks of [`GATE_ORDER`] a run covers: the CI jobs split the gate with this.
+#[derive(Clone, Default, PartialEq, Eq, Debug)]
+pub struct Selection {
+    /// Run only these checks (and `tools`); empty means every check.
+    pub only: Vec<Check>,
+    /// Leave these checks out.
+    pub skip: Vec<Check>,
+}
+
+impl Selection {
+    /// The checks to run, in order: `tools` first, then [`GATE_ORDER`] without it, each kept when
+    /// `only` is empty or names it, and dropped when `skip` names it.
+    #[must_use]
+    pub fn checks(&self) -> Vec<Check> {
+        let rest = GATE_ORDER
+            .iter()
+            .copied()
+            .filter(|&check| check != Check::Tools)
+            .filter(|check| self.only.is_empty() || self.only.contains(check))
+            .filter(|check| !self.skip.contains(check));
+        std::iter::once(Check::Tools).chain(rest).collect()
+    }
+}
+
+/// Parses a check name of `--only` or `--skip`: the checks of the gate, not `tools` (it is always
+/// the first check) and not the checks that need a pull request or GitHub.
 ///
-/// A check that fails does not stop the others, and a check that cannot run is a failing verdict
-/// that carries the error. Only a failing `tools` check stops the gate, as the module
-/// documentation says: the checks after it are not run, and its verdict notes which.
+/// # Errors
+///
+/// Returns the message to show when `name` is not a check or is not selectable.
+pub fn parse_selectable(name: &str) -> std::result::Result<Check, String> {
+    let check = Check::from_name(name).ok_or_else(|| format!("`{name}` is not a check"))?;
+    if check == Check::Tools {
+        return Err("`tools` is always the first check and cannot be selected".to_owned());
+    }
+    if PR_ONLY.contains(&check) || check == Check::Github {
+        return Err(format!(
+            "`{name}` is not part of the gate: it needs a pull request or GitHub"
+        ));
+    }
+    Ok(check)
+}
+
+/// What a run of the gate found.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Outcome {
+    /// The verdict of every check, run or not needed, in order.
+    pub verdicts: Vec<Verdict>,
+    /// Why every check ran, when the scope says so ([`Scope::Every`]); the job summary shows it.
+    pub every_because: Option<String>,
+}
+
+/// Runs the checks of `selection` in `root`, and writes the verdict table to `out` after the
+/// output of the checks themselves. Returns the verdicts, which pass when all of them do, and why
+/// every check ran if the scope gives a reason.
+///
+/// The scope is decided once ([`scope::for_run`]): when the change touches only paths no check
+/// reads, every selected check but `commit-msg` is not needed and is not run. A check that fails
+/// does not stop the others, and a check that cannot run is a failing verdict that carries the
+/// error. Only a failing `tools` check stops the gate, as the module documentation says: the
+/// checks after it are not run, and its verdict notes which.
 ///
 /// # Errors
 ///
 /// Fails only when `out` cannot be written.
-pub fn run(root: &Path, ci: Option<&CiEvent>, out: &mut dyn Write) -> Result<Vec<Verdict>> {
+pub fn run(
+    root: &Path,
+    ci: Option<&CiEvent>,
+    selection: &Selection,
+    out: &mut dyn Write,
+) -> Result<Outcome> {
     // The checks that read code share one view, built when the first of them asks for it.
     let shared = Shared::new();
-    run_checks(
-        &GATE_ORDER,
+    run_scoped(
+        &selection.checks(),
+        &scope::for_run(root, ci),
         |check, out| run_check(check, root, ci, &shared, out),
         out,
     )
+}
+
+/// The checks that need a pull request and are run by `cargo xtask pr`.
+pub const PR_CHECKS: [Check; 2] = [Check::PrTitle, Check::PrBody];
+
+/// Runs `pr-title` and `pr-body` and writes one table. Needs no `tools` check and has no scope.
+///
+/// # Errors
+///
+/// Fails only when `out` cannot be written.
+pub fn run_pr(root: &Path, ci: Option<&CiEvent>, out: &mut dyn Write) -> Result<Vec<Verdict>> {
+    run_checks(
+        &PR_CHECKS,
+        |check, out| run_pr_check(check, root, ci, out),
+        out,
+    )
+}
+
+/// The runner of one check of [`PR_CHECKS`]; any other check is an error.
+///
+/// There is no wildcard arm, so a new [`Check`] does not compile until it is decided here.
+fn run_pr_check(
+    check: Check,
+    root: &Path,
+    ci: Option<&CiEvent>,
+    out: &mut dyn Write,
+) -> Result<Verdict> {
+    match check {
+        Check::PrTitle => pr_title::run(root, ci, out),
+        Check::PrBody => pr_body::run(root, ci, out),
+        Check::Tools
+        | Check::Fmt
+        | Check::Clippy
+        | Check::Test
+        | Check::SlowTests
+        | Check::Docs
+        | Check::Deny
+        | Check::EngineFree
+        | Check::Coverage
+        | Check::Lints
+        | Check::AcTrace
+        | Check::CommitMsg
+        | Check::Approval
+        | Check::Github => Err(Error::Missing {
+            what: format!(
+                "a way to run the `{}` check in `cargo xtask pr`: it runs `pr-title` and \
+                 `pr-body` only",
+                check.name()
+            ),
+        }),
+    }
+}
+
+/// Applies `scope` to `run_one`, then runs the checks. See [`run`].
+fn run_scoped(
+    order: &[Check],
+    scope: &Scope,
+    mut run_one: impl FnMut(Check, &mut dyn Write) -> Result<Verdict>,
+    out: &mut dyn Write,
+) -> Result<Outcome> {
+    let every_because = match scope {
+        Scope::Every { note } => note.clone(),
+        Scope::DocsOnly => None,
+    };
+    if let Some(note) = &every_because {
+        // The note can hold git's stderr, so it is marked line by line like any other text.
+        report::write_note(out, &format!("every check runs: {note}"))
+            .map_err(report::output_error)?;
+    }
+    let docs_only = *scope == Scope::DocsOnly;
+    let verdicts = run_checks(
+        order,
+        |check, out| {
+            if docs_only && check != Check::CommitMsg {
+                Ok(Verdict::not_needed(check, scope::NOT_NEEDED_REASON))
+            } else {
+                run_one(check, out)
+            }
+        },
+        out,
+    )?;
+    Ok(Outcome {
+        verdicts,
+        every_because,
+    })
 }
 
 /// The runner of one gate check: the function its subcommand calls.
@@ -112,7 +263,6 @@ fn could_not_run(check: Check, error: &Error) -> Verdict {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::verdict::PR_ONLY;
 
     type TestResult<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -379,6 +529,221 @@ mod tests {
             out,
             Vec::<u8>::new(),
             "nothing is written for a check that is not run"
+        );
+    }
+
+    fn selection(only: &[Check], skip: &[Check]) -> Selection {
+        Selection {
+            only: only.to_vec(),
+            skip: skip.to_vec(),
+        }
+    }
+
+    // AC: CE-08C.1
+    #[test]
+    fn only_and_skip_choose_the_checks_after_tools() {
+        assert_eq!(Selection::default().checks(), GATE_ORDER);
+        assert_eq!(
+            selection(&[Check::Test], &[]).checks(),
+            [Check::Tools, Check::Test]
+        );
+        let expected: Vec<Check> = GATE_ORDER
+            .iter()
+            .copied()
+            .filter(|check| !matches!(check, Check::Test | Check::Coverage))
+            .collect();
+        assert_eq!(
+            selection(&[], &[Check::Test, Check::Coverage]).checks(),
+            expected
+        );
+        assert_eq!(expected.first(), Some(&Check::Tools));
+    }
+
+    // AC: CE-08C.1
+    #[test]
+    fn the_three_ci_jobs_cover_the_gate_once() {
+        let jobs = [
+            selection(&[], &[Check::Test, Check::Coverage]),
+            selection(&[Check::Test], &[]),
+            selection(&[Check::Coverage], &[]),
+        ];
+        let mut covered: Vec<Check> = jobs
+            .iter()
+            .flat_map(Selection::checks)
+            .filter(|check| *check != Check::Tools)
+            .collect();
+        let mut expected: Vec<Check> = GATE_ORDER
+            .iter()
+            .copied()
+            .filter(|check| *check != Check::Tools)
+            .collect();
+        covered.sort_by_key(|check| check.name());
+        expected.sort_by_key(|check| check.name());
+        assert_eq!(covered, expected);
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn docs_only_runs_commit_msg_and_marks_the_rest_not_needed() -> TestResult {
+        let mut ran = Vec::new();
+        let mut out = Vec::new();
+        let outcome = run_scoped(
+            &GATE_ORDER,
+            &Scope::DocsOnly,
+            |check, _| {
+                ran.push(check);
+                Ok(Verdict::pass(check))
+            },
+            &mut out,
+        )?;
+        assert_eq!(ran, [Check::CommitMsg]);
+        assert_eq!(outcome.every_because, None);
+        let verdicts = outcome.verdicts;
+        assert_eq!(checks_of(&verdicts), GATE_ORDER);
+        for verdict in &verdicts {
+            assert_eq!(
+                verdict.is_not_needed(),
+                verdict.check != Check::CommitMsg,
+                "{}",
+                verdict.check.name()
+            );
+        }
+        assert!(String::from_utf8(out)?.contains("not needed"));
+        Ok(())
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn docs_only_in_a_test_job_runs_nothing() -> TestResult {
+        let mut out = Vec::new();
+        let outcome = run_scoped(
+            &selection(&[Check::Test], &[]).checks(),
+            &Scope::DocsOnly,
+            |check, _| {
+                Err(Error::Missing {
+                    what: format!("a run of {}", check.name()),
+                })
+            },
+            &mut out,
+        )?;
+        assert_eq!(checks_of(&outcome.verdicts), [Check::Tools, Check::Test]);
+        assert!(outcome.verdicts.iter().all(Verdict::is_not_needed));
+        Ok(())
+    }
+
+    #[test]
+    fn a_scope_with_a_note_prints_it_before_the_table() -> TestResult {
+        let scope = Scope::Every {
+            note: Some("HEAD is detached".to_owned()),
+        };
+        let mut out = Vec::new();
+        let outcome = run_scoped(
+            &[Check::Fmt],
+            &scope,
+            |check, _| Ok(Verdict::pass(check)),
+            &mut out,
+        )?;
+        let out = String::from_utf8(out)?;
+        assert_eq!(checks_of(&outcome.verdicts), [Check::Fmt]);
+        assert_eq!(outcome.every_because.as_deref(), Some("HEAD is detached"));
+        assert!(
+            out.starts_with("note: every check runs: HEAD is detached\n"),
+            "{out}"
+        );
+        Ok(())
+    }
+
+    /// Lines a reader of the output could take for a workflow command: they start with `::` once
+    /// leading whitespace is gone.
+    fn command_lines(text: &str) -> Vec<&str> {
+        text.lines()
+            .filter(|line| line.trim_start().starts_with("::"))
+            .collect()
+    }
+
+    #[test]
+    fn a_multi_line_note_is_marked_on_every_line() -> TestResult {
+        // The note can hold the stderr of git, which can quote what a pull request controls.
+        let scope = Scope::Every {
+            note: Some("the changed paths could not be read: first\n::error::x".to_owned()),
+        };
+        let mut out = Vec::new();
+        let outcome = run_scoped(
+            &[Check::Fmt],
+            &scope,
+            |check, _| Ok(Verdict::pass(check)),
+            &mut out,
+        )?;
+        let out = String::from_utf8(out)?;
+        assert!(
+            out.starts_with(
+                "note: every check runs: the changed paths could not be read: first\n  | \
+                 ::error::x\n"
+            ),
+            "{out}"
+        );
+        assert_eq!(command_lines(&out), Vec::<&str>::new(), "{out}");
+        // The summary gets the note as it is; `report` keeps it to one line there.
+        assert_eq!(
+            outcome.every_because.as_deref(),
+            Some("the changed paths could not be read: first\n::error::x")
+        );
+        Ok(())
+    }
+
+    // AC: CE-08C.1
+    #[test]
+    fn pr_runs_no_other_check() -> TestResult {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .ok_or("xtask has no parent folder")?;
+        let event = CiEvent::PullRequest(crate::ci::PullRequestEvent {
+            action: "opened".to_owned(),
+            number: 1,
+            title: "docs(gate): x (gate)".to_owned(),
+            body: Some("## Summary\n\nx\n".to_owned()),
+            base_sha: "a".to_owned(),
+            head_sha: "b".to_owned(),
+            head_ref: "docs/x".to_owned(),
+            label: None,
+        });
+        for &check in ALL.iter().filter(|check| !PR_CHECKS.contains(check)) {
+            let mut out = Vec::new();
+            let result = run_pr_check(check, root, Some(&event), &mut out);
+            assert!(
+                matches!(result, Err(Error::Missing { .. })),
+                "{}: {result:?}",
+                check.name()
+            );
+        }
+        Ok(())
+    }
+
+    // AC: CE-08C.1
+    #[test]
+    fn pr_runs_title_and_body_in_one_table() -> TestResult {
+        // Outside a pull request neither check can read its input: both are failing verdicts.
+        let mut out = Vec::new();
+        let verdicts = run_pr(Path::new("."), None, &mut out)?;
+        assert_eq!(checks_of(&verdicts), PR_CHECKS);
+        let out = String::from_utf8(out)?;
+        assert!(
+            out.contains("==> pr-title") && out.contains("==> pr-body"),
+            "{out}"
+        );
+        assert_eq!(out.matches("==> gate").count(), 1, "{out}");
+        Ok(())
+    }
+
+    #[test]
+    fn unknown_or_pr_only_names_are_rejected() {
+        assert_eq!(parse_selectable("test"), Ok(Check::Test));
+        for name in ["approval", "pr-title", "pr-body", "github", "tools"] {
+            assert!(parse_selectable(name).is_err(), "{name}");
+        }
+        assert_eq!(
+            parse_selectable("nope"),
+            Err("`nope` is not a check".to_owned())
         );
     }
 

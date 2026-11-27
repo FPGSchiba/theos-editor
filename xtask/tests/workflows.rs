@@ -10,8 +10,10 @@ use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 
+use xtask::gate::{PR_CHECKS, Selection};
 use xtask::github::settings::required_contexts_from_gate_md;
-use xtask::verdict::{GATE_ORDER, PR_ONLY};
+use xtask::markdown;
+use xtask::verdict::{Check, GATE_ORDER, PR_ONLY};
 use yaml_rust2::{Yaml, YamlLoader};
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
@@ -32,6 +34,17 @@ const SETUP_ACTION: &str = ".github/actions/setup/action.yml";
 
 /// The step that runs the setup action, as a job names it.
 const SETUP_USES: &str = "./.github/actions/setup";
+
+const XTASK_ACTION: &str = ".github/actions/xtask/action.yml";
+
+/// The step that runs the xtask action: the binary `main` built and cached, or a fresh build.
+const XTASK_USES: &str = "./.github/actions/xtask";
+
+/// The binary the xtask action leaves behind, which `pr`, `approval` and `settings` run.
+const XTASK_BIN: &str = "target/xtask-bin/debug/xtask";
+
+/// The condition of the one step of the xtask action that has one: build only on a cache miss.
+const BUILD_ON_MISS_IF: &str = "steps.restore.outputs.cache-hit != 'true'";
 
 /// The expression that is the workflow token.
 const TOKEN: &str = "${{ github.token }}";
@@ -186,37 +199,178 @@ fn map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         .collect()
 }
 
-/// The suffixes GitHub adds to the name of a job that runs on one OS of a matrix.
-const OS_SUFFIXES: [&str; 3] = [" (windows)", " (macos)", " (macos intel)"];
-
-/// The check a job runs: its name without the OS suffix.
-fn check_of(name: &str) -> &str {
-    OS_SUFFIXES
-        .iter()
-        .find_map(|suffix| name.strip_suffix(suffix))
-        .unwrap_or(name)
+/// One job of `platforms.yml`: one per OS, which runs its checks through `cargo xtask gate
+/// --only`, so an OS is set up and built once.
+struct PlatformJob {
+    name: &'static str,
+    runner: &'static str,
+    command: &'static str,
+    timeout: i64,
+    /// The label of a pull request that starts the job, if any.
+    label: Option<&'static str>,
+    /// The `workflow_dispatch` input that starts the job.
+    input: &'static str,
+    /// The condition the job spells.
+    condition: &'static str,
 }
 
-/// The runner a job of this name needs: its OS suffix says which.
-fn runner_of(name: &str) -> &'static str {
-    if name.ends_with(" (windows)") {
-        "windows-latest"
-    } else if name.ends_with(" (macos)") {
-        "macos-latest"
-    } else if name.ends_with(" (macos intel)") {
-        "macos-15-intel"
+/// The jobs of `platforms.yml`.
+const PLATFORM_JOBS: [PlatformJob; 3] = [
+    PlatformJob {
+        name: "windows",
+        runner: "windows-latest",
+        command: "cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace",
+        timeout: 150,
+        label: Some("windows"),
+        input: "windows",
+        condition: "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' \
+                    && inputs.windows) || (github.event_name == 'pull_request' && \
+                    github.event.label.name == 'windows')",
+    },
+    PlatformJob {
+        name: "macos",
+        runner: "macos-latest",
+        command: "cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace",
+        timeout: 150,
+        label: Some("macos"),
+        input: "macos",
+        condition: "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' \
+                    && inputs.macos) || (github.event_name == 'pull_request' && \
+                    github.event.label.name == 'macos')",
+    },
+    PlatformJob {
+        name: "macos-intel",
+        runner: "macos-15-intel",
+        command: "cargo xtask gate --only test,slow-tests",
+        timeout: 150,
+        label: None,
+        input: "macos_intel",
+        condition: "github.event_name == 'workflow_dispatch' && inputs.macos_intel",
+    },
+];
+
+/// The `platforms.yml` job of this name in [`PLATFORM_JOBS`].
+fn platform_job(name: &str) -> Option<&'static PlatformJob> {
+    PLATFORM_JOBS.iter().find(|job| job.name == name)
+}
+
+/// The expression that is true on the schedule only: the one case where `platforms` saves a build
+/// cache.
+const ON_SCHEDULE: &str = "${{ github.event_name == 'schedule' }}";
+
+/// The runner of a job of `file`.
+fn runner_for(file: &str, name: &str) -> &'static str {
+    if file == "platforms.yml" {
+        platform_job(name).map_or("", |job| job.runner)
     } else {
-        "ubuntu-latest"
+        ci_job(name)
+            .filter(|_| file == "ci.yml")
+            .map_or("ubuntu-latest", |job| job.runner)
     }
 }
 
-/// The command a job runs: `cargo xtask <check>`, and for `settings` the settings check.
-fn command_of(name: &str) -> String {
-    if name == "settings" {
-        "cargo xtask github check".to_owned()
+/// One job of `ci.yml`: its name (the required status check), its runner, its one command and
+/// its timeout in minutes.
+struct CiJob {
+    name: &'static str,
+    runner: &'static str,
+    command: &'static str,
+    timeout: i64,
+}
+
+/// The jobs of `ci.yml`, side by side: the gate without the two long checks, and each long check
+/// on a runner of its own.
+const CI_JOBS: [CiJob; 3] = [
+    CiJob {
+        name: "gate",
+        runner: "ubuntu-latest",
+        command: "cargo xtask gate --skip test,coverage",
+        timeout: 150,
+    },
+    CiJob {
+        name: "test",
+        runner: "ubuntu-latest",
+        command: "cargo xtask gate --only test",
+        timeout: 60,
+    },
+    CiJob {
+        name: "coverage",
+        runner: "ubuntu-latest",
+        command: "cargo xtask gate --only coverage",
+        timeout: 60,
+    },
+];
+
+/// The `ci.yml` job of this name in [`CI_JOBS`].
+fn ci_job(name: &str) -> Option<&'static CiJob> {
+    CI_JOBS.iter().find(|job| job.name == name)
+}
+
+/// The command a job runs: the one of [`CI_JOBS`] for `ci.yml`, of [`PLATFORM_JOBS`] for
+/// `platforms.yml`, for `pr`, `approval` and `settings` the cached xtask binary.
+fn command_of(file: &str, name: &str) -> String {
+    if file == "ci.yml" {
+        ci_job(name).map_or_else(String::new, |job| job.command.to_owned())
+    } else if file == "platforms.yml" {
+        platform_job(name).map_or_else(String::new, |job| job.command.to_owned())
     } else {
-        format!("cargo xtask {}", check_of(name))
+        cached_xtask_command(name).map_or_else(String::new, str::to_owned)
     }
+}
+
+/// The command of a job that runs the xtask binary `main` cached, by the name of the job.
+fn cached_xtask_command(name: &str) -> Option<&'static str> {
+    match name {
+        "pr" => Some("target/xtask-bin/debug/xtask --root . pr"),
+        "approval" => Some("target/xtask-bin/debug/xtask --root . approval"),
+        "settings" => Some("target/xtask-bin/debug/xtask --root . github check"),
+        _ => None,
+    }
+}
+
+/// The selection a `cargo xtask gate` command spells with `--only` and `--skip`, read from the
+/// command itself so the test does not repeat what the workflow says.
+fn selection_of(command: &str) -> TestResult<Selection> {
+    let rest = command
+        .strip_prefix("cargo xtask gate")
+        .ok_or_else(|| format!("`{command}` is not `cargo xtask gate`"))?;
+    let mut selection = Selection::default();
+    let mut words = rest.split_whitespace();
+    while let Some(flag) = words.next() {
+        let value = words
+            .next()
+            .ok_or_else(|| format!("`{command}`: {flag} has no value"))?;
+        let checks = value
+            .split(',')
+            .map(|name| {
+                Check::from_name(name).ok_or_else(|| format!("`{command}`: {name} is no check"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        match flag {
+            "--only" => selection.only.extend(checks),
+            "--skip" => selection.skip.extend(checks),
+            _ => return Err(format!("`{command}`: unknown flag {flag}").into()),
+        }
+    }
+    Ok(selection)
+}
+
+/// The checks the `ci.yml` jobs run between them, `tools` (which every job runs) left out.
+fn ci_checks() -> TestResult<Vec<Check>> {
+    let mut checks = Vec::new();
+    for job in jobs(&workflow("ci.yml")?)? {
+        let [command] = job
+            .commands()?
+            .try_into()
+            .map_err(|_| format!("job {} does not run exactly one command", job.name))?;
+        checks.extend(
+            selection_of(&command)?
+                .checks()
+                .into_iter()
+                .filter(|check| *check != Check::Tools),
+        );
+    }
+    Ok(checks)
 }
 
 /// What a step is, for the shape of a job: the checkout, the setup action, the cache, or a command.
@@ -226,8 +380,14 @@ fn step_kind(step: &Yaml) -> TestResult<&'static str> {
             Ok("checkout")
         } else if uses == SETUP_USES {
             Ok("setup")
+        } else if uses == XTASK_USES {
+            Ok("xtask")
         } else if uses.starts_with("actions/cache@") {
             Ok("cache")
+        } else if uses.starts_with("actions/cache/save@") {
+            Ok("cache-save")
+        } else if uses.starts_with("actions/cache/restore@") {
+            Ok("cache-restore")
         } else {
             Err(format!("a step uses {uses}, which no job needs").into())
         };
@@ -242,11 +402,74 @@ fn step_kind(step: &Yaml) -> TestResult<&'static str> {
 // AC: CE-08.1
 #[test]
 fn ci_builds_and_tests_on_linux() -> TestResult {
+    let checks = ci_checks()?;
+    for check in [Check::Clippy, Check::Test, Check::SlowTests] {
+        assert!(checks.contains(&check), "no ci job runs {}", check.name());
+    }
+    for job in jobs(&workflow("ci.yml")?)? {
+        assert_eq!(job.runs_on()?, "ubuntu-latest", "{}", job.name);
+    }
+    Ok(())
+}
+
+// AC: CE-08C.1
+#[test]
+fn ci_runs_three_jobs_side_by_side() -> TestResult {
     let jobs = jobs(&workflow("ci.yml")?)?;
-    for check in ["clippy", "test", "slow-tests"] {
-        let job = &jobs[index_of(&jobs, check)?];
-        assert_eq!(job.runs_on()?, "ubuntu-latest", "{check}");
-        assert_eq!(job.commands()?, [format!("cargo xtask {check}")], "{check}");
+    let found: Vec<(&str, &str)> = jobs
+        .iter()
+        .map(|job| (job.id.as_str(), job.name.as_str()))
+        .collect();
+    assert_eq!(
+        found,
+        [("gate", "gate"), ("test", "test"), ("coverage", "coverage")]
+    );
+    for job in &jobs {
+        let expected = ci_job(&job.name).ok_or("an unexpected job")?;
+        assert_eq!(job.runs_on()?, expected.runner, "{}", job.name);
+        assert_eq!(job.commands()?, [expected.command], "{}", job.name);
+        // Side by side: no job waits for another, so the wall time is the slowest job.
+        assert_eq!(job.node["needs"], Yaml::BadValue, "{} has needs", job.name);
+    }
+    Ok(())
+}
+
+// AC: CE-08.4
+#[test]
+fn ci_jobs_run_the_gate_runner() -> TestResult {
+    // Every `ci` command is `cargo xtask gate` with `--only` or `--skip`, and between them the
+    // jobs run every check of the gate once.
+    let mut checks = ci_checks()?;
+    checks.sort_by_key(|check| GATE_ORDER.iter().position(|other| other == check));
+    let gate: Vec<Check> = GATE_ORDER
+        .iter()
+        .copied()
+        .filter(|check| *check != Check::Tools)
+        .collect();
+    assert_eq!(
+        checks, gate,
+        "the ci jobs and cargo xtask gate run different checks, or one twice"
+    );
+
+    // The pull-request-only checks have their jobs in the other workflows: `pr` runs the title
+    // and the body, `approval` the approval.
+    let mut pr_jobs = BTreeSet::new();
+    for file in ["pr.yml", "approval.yml"] {
+        for job in jobs(&workflow(file)?)? {
+            pr_jobs.insert(job.name);
+        }
+    }
+    for pr_only in PR_ONLY {
+        let job = if pr_only == Check::Approval {
+            "approval"
+        } else {
+            "pr"
+        };
+        assert!(
+            pr_jobs.contains(job),
+            "{} is a PR-only check without a job",
+            pr_only.name()
+        );
     }
     Ok(())
 }
@@ -254,16 +477,328 @@ fn ci_builds_and_tests_on_linux() -> TestResult {
 // AC: CE-08.1
 #[test]
 fn platforms_builds_and_tests_on_windows_and_macos() -> TestResult {
+    // The Windows and the Apple silicon job build with clippy and run the tests and the slow
+    // tests; each runs them in the one gate command of its job.
     let jobs = jobs(&workflow("platforms.yml")?)?;
-    for (os, runner) in [("windows", "windows-latest"), ("macos", "macos-latest")] {
-        for check in ["clippy", "test", "slow-tests"] {
-            let name = format!("{check} ({os})");
-            let job = &jobs[index_of(&jobs, &name)?];
-            assert_eq!(job.runs_on()?, runner, "{name}");
+    for (name, runner) in [("windows", "windows-latest"), ("macos", "macos-latest")] {
+        let job = &jobs[index_of(&jobs, name)?];
+        assert_eq!(job.runs_on()?, runner, "{name}");
+        let [command] = job
+            .commands()?
+            .try_into()
+            .map_err(|_| format!("job {name} does not run exactly one command"))?;
+        let checks = selection_of(&command)?.checks();
+        for check in [Check::Clippy, Check::Test, Check::SlowTests] {
+            assert!(
+                checks.contains(&check),
+                "{name} does not run {}",
+                check.name()
+            );
+        }
+    }
+    Ok(())
+}
+
+// AC: CE-08C.6
+#[test]
+fn platforms_runs_one_job_per_os() -> TestResult {
+    let jobs = jobs(&workflow("platforms.yml")?)?;
+    let found: Vec<(&str, &str)> = jobs
+        .iter()
+        .map(|job| (job.id.as_str(), job.name.as_str()))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            ("windows", "windows"),
+            ("macos", "macos"),
+            ("macos-intel", "macos-intel")
+        ]
+    );
+    for job in &jobs {
+        let expected = platform_job(&job.name).ok_or("an unexpected job")?;
+        assert_eq!(job.runs_on()?, expected.runner, "{}", job.name);
+        assert_eq!(job.commands()?, [expected.command], "{}", job.name);
+        assert_eq!(job.node["needs"], Yaml::BadValue, "{} has needs", job.name);
+    }
+    Ok(())
+}
+
+/// What starts a run of `platforms`: the event, the label of a `labeled` pull request, and the
+/// `workflow_dispatch` inputs that are on.
+struct Event {
+    name: &'static str,
+    label: &'static str,
+    inputs: &'static [&'static str],
+}
+
+/// Whether a job runs for an event, by its condition. Only the conditions of [`PLATFORM_JOBS`]
+/// are known, and an unknown one fails the test, so a changed condition is a changed test.
+fn runs(job: &PlatformJob, condition: &str, event: &Event) -> TestResult<bool> {
+    if condition != job.condition {
+        return Err(format!("job {} has the unknown condition `{condition}`", job.name).into());
+    }
+    let on_demand = event.name == "workflow_dispatch" && event.inputs.contains(&job.input);
+    Ok(match job.label {
+        // The scheduled run, the manual run that asks for it, and its own label.
+        Some(label) => {
+            event.name == "schedule"
+                || on_demand
+                || (event.name == "pull_request" && event.label == label)
+        }
+        // Only on demand: the Intel runner is dear and its tests rarely differ.
+        None => on_demand,
+    })
+}
+
+/// The condition of a job as the workflow spells it.
+fn condition_of(job: &Job) -> TestResult<&str> {
+    job.node["if"]
+        .as_str()
+        .ok_or_else(|| format!("job {} has no `if:`", job.name).into())
+}
+
+/// What follows each occurrence of `marker` in `text` up to the closing `quote` or the end of the
+/// identifier: the labels after `label.name == '` and the inputs after `inputs.`.
+fn after_marker(text: &str, marker: &str, stop: fn(char) -> bool) -> Vec<String> {
+    text.split(marker)
+        .skip(1)
+        .map(|rest| rest.chars().take_while(|c| !stop(*c)).collect())
+        .collect()
+}
+
+/// Pins the text of the condition of a job as the workflow spells it, independent of the table's
+/// model of it: the labels and inputs it names, and the events it mentions. A condition that
+/// names another job's label or input, or an event it should not start on, fails here.
+fn assert_condition_text(job: &Job) -> TestResult {
+    let expected = platform_job(&job.name).ok_or("an unexpected job")?;
+    let condition = condition_of(job)?;
+    let labels = after_marker(condition, "github.event.label.name == '", |c| c == '\'');
+    let inputs = after_marker(condition, "inputs.", |c| {
+        !(c.is_ascii_alphanumeric() || c == '_')
+    });
+    let name = &job.name;
+    assert_eq!(
+        inputs,
+        [expected.input],
+        "{name}: the inputs its condition names"
+    );
+    let events = |event: &str| condition.contains(&format!("github.event_name == '{event}'"));
+    if let Some(label) = expected.label {
+        // The schedule, its own manual input and its own label, and no other.
+        assert_eq!(labels, [label], "{name}: the labels its condition names");
+        assert!(events("schedule"), "{name}: not run by the schedule");
+        assert!(events("workflow_dispatch"), "{name}: not run on demand");
+        assert!(events("pull_request"), "{name}: not run by its label");
+    } else {
+        // On demand only: no schedule, no label, no pull request.
+        assert!(events("workflow_dispatch"), "{name}: not run on demand");
+        for word in ["schedule", "label", "pull_request"] {
+            assert!(
+                !condition.contains(word),
+                "{name}: the condition mentions {word}, but the job runs only on demand"
+            );
+        }
+    }
+    Ok(())
+}
+
+// AC: CE-08C.6, CE-08.12
+#[test]
+fn macos_runs_weekly_on_demand_and_by_label_on_apple_silicon() -> TestResult {
+    let platforms = workflow("platforms.yml")?;
+    let on = &platforms["on"];
+    assert_eq!(
+        keys(on)?,
+        set(&["schedule", "workflow_dispatch", "pull_request"])
+    );
+    let schedule = on["schedule"].as_vec().ok_or("schedule is not a list")?;
+    assert_eq!(schedule.len(), 1, "one schedule");
+    // Monday, 04:00 UTC.
+    assert_eq!(schedule[0]["cron"].as_str(), Some("0 4 * * 1"));
+    assert_eq!(strings(&on["pull_request"]["types"])?, ["labeled"]);
+
+    let inputs = &on["workflow_dispatch"]["inputs"];
+    assert_eq!(keys(inputs)?, set(&["windows", "macos", "macos_intel"]));
+    for (input, default) in [
+        ("windows", "true"),
+        ("macos", "true"),
+        ("macos_intel", "false"),
+    ] {
+        assert_eq!(inputs[input]["type"].as_str(), Some("boolean"), "{input}");
+        assert_eq!(
+            scalar(&inputs[input]["default"]).as_deref(),
+            Some(default),
+            "{input}"
+        );
+    }
+
+    let jobs = jobs(&platforms)?;
+    let macos = &jobs[index_of(&jobs, "macos")?];
+    assert_eq!(macos.runs_on()?, "macos-latest");
+    assert_condition_text(macos)?;
+    let job = platform_job("macos").ok_or("no macos job")?;
+    for (event, expected) in [
+        (
+            Event {
+                name: "schedule",
+                label: "",
+                inputs: &[],
+            },
+            true,
+        ),
+        (
+            Event {
+                name: "workflow_dispatch",
+                label: "",
+                inputs: &["macos"],
+            },
+            true,
+        ),
+        (
+            Event {
+                name: "workflow_dispatch",
+                label: "",
+                inputs: &["windows"],
+            },
+            false,
+        ),
+        (
+            Event {
+                name: "pull_request",
+                label: "macos",
+                inputs: &[],
+            },
+            true,
+        ),
+    ] {
+        assert_eq!(
+            runs(job, condition_of(macos)?, &event)?,
+            expected,
+            "{} {} {:?}",
+            event.name,
+            event.label,
+            event.inputs
+        );
+    }
+    Ok(())
+}
+
+// AC: CE-08C.6
+#[test]
+fn intel_runs_only_on_demand() -> TestResult {
+    let jobs = jobs(&workflow("platforms.yml")?)?;
+    let intel = &jobs[index_of(&jobs, "macos-intel")?];
+    assert_eq!(intel.runs_on()?, "macos-15-intel");
+    assert_condition_text(intel)?;
+    let job = platform_job("macos-intel").ok_or("no macos-intel job")?;
+    for (event, expected) in [
+        (
+            Event {
+                name: "schedule",
+                label: "",
+                inputs: &[],
+            },
+            false,
+        ),
+        (
+            Event {
+                name: "pull_request",
+                label: "macos",
+                inputs: &[],
+            },
+            false,
+        ),
+        (
+            Event {
+                name: "pull_request",
+                label: "macos-intel",
+                inputs: &[],
+            },
+            false,
+        ),
+        (
+            Event {
+                name: "workflow_dispatch",
+                label: "",
+                inputs: &["macos"],
+            },
+            false,
+        ),
+        (
+            Event {
+                name: "workflow_dispatch",
+                label: "",
+                inputs: &["macos_intel"],
+            },
+            true,
+        ),
+    ] {
+        assert_eq!(
+            runs(job, condition_of(intel)?, &event)?,
+            expected,
+            "{} {} {:?}",
+            event.name,
+            event.label,
+            event.inputs
+        );
+    }
+    // Its input is off unless asked for.
+    let on = &workflow("platforms.yml")?["on"];
+    assert_eq!(
+        scalar(&on["workflow_dispatch"]["inputs"]["macos_intel"]["default"]).as_deref(),
+        Some("false")
+    );
+    Ok(())
+}
+
+// AC: CE-08C.6
+#[test]
+fn a_newer_label_run_cancels_the_older_one() -> TestResult {
+    for job in jobs(&workflow("platforms.yml")?)? {
+        let concurrency = &job.node["concurrency"];
+        // Per pull request and per job, so labels of two OSes do not cancel each other.
+        assert_eq!(
+            concurrency["group"].as_str(),
+            Some(
+                format!(
+                    "platforms-${{{{ github.event.pull_request.number || github.run_id }}}}-{}",
+                    job.id
+                )
+                .as_str()
+            ),
+            "{}",
+            job.name
+        );
+        // Only a pull request run is cancelled: a schedule or manual run has its own run id.
+        assert_eq!(
+            concurrency["cancel-in-progress"].as_str(),
+            Some("${{ github.event_name == 'pull_request' }}"),
+            "{}",
+            job.name
+        );
+    }
+    Ok(())
+}
+
+// AC: CE-08C.6
+#[test]
+fn platforms_starts_no_job_for_another_label() -> TestResult {
+    let labels = ["windows", "macos", "macos-intel", "needs-jann", "approved"];
+    for job in jobs(&workflow("platforms.yml")?)? {
+        let expected = platform_job(&job.name).ok_or("an unexpected job")?;
+        assert_condition_text(&job)?;
+        for label in labels {
+            let event = Event {
+                name: "pull_request",
+                label,
+                inputs: &[],
+            };
             assert_eq!(
-                job.commands()?,
-                [format!("cargo xtask {}", check_of(&name))],
-                "{name}"
+                runs(expected, condition_of(&job)?, &event)?,
+                expected.label == Some(label),
+                "{}: label {label}",
+                job.name
             );
         }
     }
@@ -278,10 +813,10 @@ fn engine_free_runs_on_every_pr() -> TestResult {
         keys(&ci["on"])?.contains("pull_request"),
         "ci.yml does not run on pull requests"
     );
-    let jobs = jobs(&ci)?;
-    let engine_free = &jobs[index_of(&jobs, "engine-free")?];
-    assert_eq!(engine_free.runs_on()?, "ubuntu-latest");
-    assert_eq!(engine_free.commands()?, ["cargo xtask engine-free"]);
+    assert!(
+        ci_checks()?.contains(&Check::EngineFree),
+        "no ci job runs engine-free"
+    );
     Ok(())
 }
 
@@ -330,17 +865,100 @@ fn required_contexts_are_pr_jobs() -> TestResult {
     Ok(())
 }
 
+/// The check and the job of every row of the first table of `docs/gate.md` §1, read through
+/// `xtask::markdown`.
+fn gate_md_check_rows() -> TestResult<Vec<(String, String)>> {
+    let gate_md = read("docs/gate.md")?;
+    let sections = markdown::sections(&gate_md, 2);
+    let section = sections
+        .iter()
+        .find(|section| section.heading.text.starts_with("1."))
+        .ok_or("docs/gate.md has no §1")?;
+    let tables = markdown::tables(section.body);
+    let table = tables.first().ok_or("docs/gate.md §1 has no table")?;
+    let column = |name: &str| {
+        table
+            .header
+            .iter()
+            .position(|cell| cell == name)
+            .ok_or_else(|| format!("the table of docs/gate.md §1 has no column {name}"))
+    };
+    let (check, job) = (column("Check")?, column("Job")?);
+    table
+        .rows
+        .iter()
+        .map(|row| match (row.get(check), row.get(job)) {
+            (Some(check), Some(job)) => Ok((check.clone(), job.clone())),
+            _ => Err(format!("a row of docs/gate.md §1 has no check or job: {row:?}").into()),
+        })
+        .collect()
+}
+
+// AC: CE-08.3
+#[test]
+fn gate_md_names_the_job_that_runs_each_check() -> TestResult {
+    let rows = gate_md_check_rows()?;
+
+    // The table lists every check of the gate and every pull-request check once, and nothing
+    // else; `ui` joins from P11.
+    let mut listed: Vec<String> = rows
+        .iter()
+        .map(|(check, _)| check.clone())
+        .filter(|check| check != "ui")
+        .collect();
+    let mut expected: Vec<String> = GATE_ORDER
+        .iter()
+        .filter(|check| **check != Check::Tools)
+        .chain(PR_ONLY.iter())
+        .map(|check| check.name().to_owned())
+        .collect();
+    listed.sort();
+    expected.sort();
+    assert_eq!(
+        listed, expected,
+        "the Check column of docs/gate.md §1 is not the checks of the gate and the PR checks"
+    );
+
+    // The job of each row runs that check: a `ci.yml` job by the selection of its command, `pr`
+    // by the checks of `cargo xtask pr`, `approval` only the approval.
+    let ci = jobs(&workflow("ci.yml")?)?;
+    for (name, job_name) in rows.iter().filter(|(check, _)| check != "ui") {
+        let check = Check::from_name(name).ok_or_else(|| format!("`{name}` is no check"))?;
+        let runs = match job_name.as_str() {
+            "pr" => PR_CHECKS.contains(&check),
+            "approval" => check == Check::Approval,
+            _ => {
+                let job = &ci[index_of(&ci, job_name)?];
+                let [command] = job
+                    .commands()?
+                    .try_into()
+                    .map_err(|_| format!("job {job_name} does not run exactly one command"))?;
+                selection_of(&command)?.checks().contains(&check)
+            }
+        };
+        assert!(
+            runs,
+            "docs/gate.md §1 says the job {job_name} runs {name}, and it does not"
+        );
+    }
+    Ok(())
+}
+
 // AC: CE-08.4
 #[test]
-fn every_job_only_runs_its_own_check() -> TestResult {
+fn every_job_runs_only_its_command_on_its_runner() -> TestResult {
     for (file, job) in all_jobs()? {
         let name = &job.name;
         assert_eq!(
             job.commands()?,
-            [command_of(name)],
+            [command_of(file, name)],
             "{file}: job {name} runs more or other than its check"
         );
-        assert_eq!(job.runs_on()?, runner_of(name), "{file}: job {name}");
+        let runner = match cached_xtask_command(name) {
+            Some(_) => "ubuntu-latest",
+            None => runner_for(file, name),
+        };
+        assert_eq!(job.runs_on()?, runner, "{file}: job {name}");
 
         let kinds = job
             .steps()?
@@ -348,8 +966,9 @@ fn every_job_only_runs_its_own_check() -> TestResult {
             .map(step_kind)
             .collect::<TestResult<Vec<_>>>()?;
         let expected: &[&str] = match name.as_str() {
-            "approval" => &["checkout", "checkout", "setup", "run"],
-            "coverage" => &["checkout", "setup", "cache", "run"],
+            "approval" => &["checkout", "checkout", "xtask", "setup", "run"],
+            "pr" | "settings" => &["checkout", "xtask", "run"],
+            "coverage" if file == "ci.yml" => &["checkout", "setup", "cache", "run"],
             _ => &["checkout", "setup", "run"],
         };
         assert_eq!(kinds, expected, "{file}: the steps of job {name}");
@@ -377,6 +996,12 @@ fn every_job_only_runs_its_own_check() -> TestResult {
     );
     assert_eq!(head["fetch-depth"].as_i64(), Some(0));
     assert_eq!(steps[1]["if"].as_str(), Some(APPROVAL_FALLBACK_IF));
+    // Then xtask: the cached-xtask action where the checkout has one, else a build through the
+    // checkout's own setup action, which bases older than P50 have.
+    assert_eq!(steps[2]["uses"].as_str(), Some(XTASK_USES));
+    assert_eq!(steps[2]["if"].as_str(), Some(APPROVAL_XTASK_IF));
+    assert_eq!(steps[3]["uses"].as_str(), Some(SETUP_USES));
+    assert_eq!(steps[3]["if"].as_str(), Some(APPROVAL_BUILD_IF));
     // `cargo xtask approval` fetches the pull request refs with `git fetch origin`, which needs
     // the credentials the checkout leaves behind.
     for step in &steps[..2] {
@@ -395,7 +1020,7 @@ const WORKFLOW_KEYS: [&str; 5] = ["name", "on", "permissions", "concurrency", "j
 
 /// What a job may spell. Left out on purpose: `continue-on-error` (a failed check passes),
 /// `defaults` (another shell or folder), `strategy` and `needs` (a job that is skipped or
-/// tolerated), `container` and `services`.
+/// tolerated), `container`, `services` and `concurrency` (a job that a newer run cancels).
 const JOB_KEYS: [&str; 6] = [
     "name",
     "runs-on",
@@ -405,17 +1030,56 @@ const JOB_KEYS: [&str; 6] = [
     "steps",
 ];
 
+/// What a job of `platforms.yml` may spell: the keys of [`JOB_KEYS`] and `concurrency`, the
+/// cancelling of an older label run, which `a_newer_label_run_cancels_the_older_one` pins. Those
+/// jobs are not required checks.
+const PLATFORM_JOB_KEYS: [&str; 7] = [
+    "name",
+    "runs-on",
+    "timeout-minutes",
+    "permissions",
+    "if",
+    "steps",
+    "concurrency",
+];
+
 /// What a step of a job may spell. `env` is the token of the two steps that call GitHub, which
 /// `token_reaches_only_the_steps_that_call_github` pins. Left out on purpose:
 /// `continue-on-error`, `working-directory`, `shell`, `timeout-minutes` and `id`.
 const STEP_KEYS: [&str; 5] = ["uses", "with", "run", "if", "env"];
 
 /// What a step of the setup action may spell on top of the keys of a job's step.
-const SETUP_STEP_KEYS: [&str; 6] = ["name", "id", "uses", "with", "run", "shell"];
+const SETUP_STEP_KEYS: [&str; 7] = ["name", "id", "uses", "with", "run", "shell", "if"];
 
-/// The expression of the one step of the workflows that has an `if:`: the checkout of the head of
-/// the pull request, which runs only while the base commit has no xtask.
+/// The one condition of the setup action: the step that saves the built xtask.
+const SAVE_XTASK_IF: &str = "inputs.save-xtask == 'true'";
+
+/// The condition of the checkout of the head of the pull request in `approval`, which runs only
+/// while the base commit has no xtask.
 const APPROVAL_FALLBACK_IF: &str = "hashFiles('xtask/Cargo.toml') == ''";
+
+/// The condition of the step of `approval` that takes the cached xtask: only where the checkout
+/// has the cached-xtask action.
+const APPROVAL_XTASK_IF: &str = "hashFiles('.github/actions/xtask/action.yml') != ''";
+
+/// The condition of the step of `approval` that builds xtask with the checkout's setup action
+/// instead: bases older than P50 have no cached-xtask action.
+const APPROVAL_BUILD_IF: &str = "hashFiles('.github/actions/xtask/action.yml') == ''";
+
+/// The conditions of the steps of the workflows that have an `if:`, all in `approval`, by the
+/// position of the step: the head checkout, then exactly one of the two ways to get xtask.
+/// Every other step of every job has none, so no condition can skip a check.
+fn step_condition(file: &str, job: &str, position: usize) -> Option<&'static str> {
+    if file != "approval.yml" || job != "approval" {
+        return None;
+    }
+    match position {
+        1 => Some(APPROVAL_FALLBACK_IF),
+        2 => Some(APPROVAL_XTASK_IF),
+        3 => Some(APPROVAL_BUILD_IF),
+        _ => None,
+    }
+}
 
 /// The keys of a mapping that are not in `allowed`.
 fn unexpected_keys(node: &Yaml, allowed: &[&str]) -> TestResult<Vec<String>> {
@@ -435,10 +1099,15 @@ fn no_key_lets_a_job_pass_while_xtask_fails() -> TestResult {
             Vec::<String>::new(),
             "{file}: a key at the top of the workflow that no check needs"
         );
+        let allowed: &[&str] = if file == "platforms.yml" {
+            &PLATFORM_JOB_KEYS
+        } else {
+            &JOB_KEYS
+        };
         for job in jobs(&workflow)? {
             let name = &job.name;
             assert_eq!(
-                unexpected_keys(&job.node, &JOB_KEYS)?,
+                unexpected_keys(&job.node, allowed)?,
                 Vec::<String>::new(),
                 "{file}: job {name} has keys that can make it pass while xtask fails, or run \
                  somewhere else than the root of the repository"
@@ -458,12 +1127,11 @@ fn no_key_lets_a_job_pass_while_xtask_fails() -> TestResult {
                     "{file}: job {name}, step {position}: keys that can make the step pass while \
                      xtask fails, or run it somewhere else than the root of the repository"
                 );
-                let fallback = file == "approval.yml" && name == "approval" && position == 1;
                 assert_eq!(
                     step["if"].as_str(),
-                    fallback.then_some(APPROVAL_FALLBACK_IF),
-                    "{file}: job {name}, step {position}: only the head checkout of approval has \
-                     an `if:`"
+                    step_condition(file, name, position),
+                    "{file}: job {name}, step {position}: only the head checkout of approval and \
+                     its two ways to get xtask have an `if:`"
                 );
             }
         }
@@ -471,142 +1139,101 @@ fn no_key_lets_a_job_pass_while_xtask_fails() -> TestResult {
     Ok(())
 }
 
+/// The local actions, the action whose step may carry a condition in each, and that condition.
+/// Every other step of them runs always: a condition anywhere else could skip a check.
+const LOCAL_ACTIONS: [(&str, &str, &str); 2] = [
+    (SETUP_ACTION, "actions/cache/save", SAVE_XTASK_IF),
+    (XTASK_ACTION, SETUP_USES, BUILD_ON_MISS_IF),
+];
+
+/// Whether a step uses `action`, with or without a version.
+fn step_uses(step: &Yaml, action: &str) -> bool {
+    step["uses"]
+        .as_str()
+        .is_some_and(|uses| uses == action || action_name(step) == Some(action))
+}
+
 // AC: CE-08.3, CE-08.4
 #[test]
-fn no_key_lets_a_step_of_the_setup_action_fail_silently() -> TestResult {
-    let action = parse(SETUP_ACTION)?;
-    // `inputs` are pinned by `setup_action_passes_the_cache_inputs_to_rust_cache`.
-    assert_eq!(
-        unexpected_keys(&action, &["name", "description", "inputs", "runs"])?,
-        Vec::<String>::new(),
-        "the setup action has a key it does not need"
-    );
-    assert_eq!(
-        unexpected_keys(&action["runs"], &["using", "steps"])?,
-        Vec::<String>::new(),
-        "the runs of the setup action has a key it does not need"
-    );
-    for (position, step) in action["runs"]["steps"]
-        .as_vec()
-        .ok_or("the setup action has no steps")?
-        .iter()
-        .enumerate()
-    {
+fn no_key_lets_a_step_of_a_local_action_fail_silently() -> TestResult {
+    for (file, _, _) in LOCAL_ACTIONS {
+        let action = parse(file)?;
+        // The inputs of the setup action are pinned by
+        // `setup_action_passes_the_cache_inputs_to_rust_cache`; the xtask action has none.
         assert_eq!(
-            unexpected_keys(step, &SETUP_STEP_KEYS)?,
+            unexpected_keys(&action, &["name", "description", "inputs", "runs"])?,
             Vec::<String>::new(),
-            "setup action, step {position}: keys that can make the step pass when it fails (such \
-             as `continue-on-error`), skip it or run it elsewhere than the root of the repository"
+            "{file} has a key it does not need"
+        );
+        assert_eq!(
+            unexpected_keys(&action["runs"], &["using", "steps"])?,
+            Vec::<String>::new(),
+            "{file}: the runs has a key it does not need"
+        );
+        for (position, step) in action["runs"]["steps"]
+            .as_vec()
+            .ok_or_else(|| format!("{file} has no steps"))?
+            .iter()
+            .enumerate()
+        {
+            assert_eq!(
+                unexpected_keys(step, &SETUP_STEP_KEYS)?,
+                Vec::<String>::new(),
+                "{file}, step {position}: keys that can make the step pass when it fails (such as \
+                 `continue-on-error`), skip it or run it elsewhere than the root of the repository"
+            );
+        }
+    }
+    Ok(())
+}
+
+// AC: CE-08.3
+#[test]
+fn no_step_condition_except_the_cache_ones() -> TestResult {
+    for (file, action, condition) in LOCAL_ACTIONS {
+        let parsed = parse(file)?;
+        let steps = parsed["runs"]["steps"]
+            .as_vec()
+            .ok_or_else(|| format!("{file} has no steps"))?;
+        for (position, step) in steps.iter().enumerate() {
+            assert_eq!(
+                step["if"].as_str(),
+                step_uses(step, action).then_some(condition),
+                "{file}, step {position}: only the step that uses {action} has an `if:`"
+            );
+        }
+        assert!(
+            steps.iter().any(|step| step_uses(step, action)),
+            "{file} has no step that uses {action}"
         );
     }
     Ok(())
 }
 
-/// The minutes a job may run before GitHub cancels it. The default is six hours. The builds and
-/// the tests of one platform and the coverage run take the longest, the slow tests longer still:
-/// map-scale generator runs of a minute each, on every OS.
-fn timeout_of(name: &str) -> i64 {
-    match name {
-        _ if check_of(name) == "slow-tests" => 120,
-        "test" | "coverage" => 60,
-        _ if OS_SUFFIXES.iter().any(|suffix| name.ends_with(suffix)) => 60,
-        _ => 30,
-    }
+/// The minutes a job may run before GitHub cancels it. The default is six hours. The jobs of
+/// `ci.yml` and `platforms.yml` have their own: a platform job builds once and runs its checks,
+/// slow tests included, one after the other.
+fn timeout_of(file: &str, name: &str) -> TestResult<i64> {
+    let known = match (file, name) {
+        ("ci.yml", _) => ci_job(name).map(|job| job.timeout),
+        ("platforms.yml", _) => platform_job(name).map(|job| job.timeout),
+        // These run a binary `main` cached, so a label change is checked in seconds.
+        ("pr.yml", "pr") | ("approval.yml", "approval") | ("settings.yml", "settings") => Some(15),
+        _ => None,
+    };
+    known.ok_or_else(|| format!("{file}: job {name} has no expected timeout").into())
 }
 
 // AC: CE-08.3, CE-08.4
 #[test]
 fn every_job_has_a_timeout() -> TestResult {
     for (file, job) in all_jobs()? {
+        let expected = timeout_of(file, &job.name)?;
         assert_eq!(
             job.node["timeout-minutes"].as_i64(),
-            Some(timeout_of(&job.name)),
-            "{file}: job {} has no `timeout-minutes` of {}, and a hung job runs for six hours",
-            job.name,
-            timeout_of(&job.name)
-        );
-    }
-    Ok(())
-}
-
-// AC: CE-08.4
-#[test]
-fn gate_list_equals_ci_jobs_minus_pr_only() -> TestResult {
-    let mut checks = BTreeSet::new();
-    for file in PR_WORKFLOWS {
-        for job in jobs(&workflow(file)?)? {
-            checks.insert(check_of(&job.name).to_owned());
-        }
-    }
-    for pr_only in PR_ONLY {
-        assert!(
-            checks.remove(pr_only.name()),
-            "{} is a PR-only check without a job",
-            pr_only.name()
-        );
-    }
-    let gate: BTreeSet<String> = GATE_ORDER
-        .iter()
-        .map(|check| check.name())
-        .filter(|name| *name != "tools")
-        .map(str::to_owned)
-        .collect();
-    assert_eq!(
-        checks, gate,
-        "cargo xtask gate and CI run different checks (`tools` is the gate's own version check)"
-    );
-    Ok(())
-}
-
-// AC: CE-08.12
-#[test]
-fn platforms_runs_weekly_on_demand_and_by_label() -> TestResult {
-    let platforms = workflow("platforms.yml")?;
-    let on = &platforms["on"];
-    assert_eq!(
-        keys(on)?,
-        set(&["schedule", "workflow_dispatch", "pull_request"])
-    );
-    let schedule = on["schedule"].as_vec().ok_or("schedule is not a list")?;
-    assert_eq!(schedule.len(), 1, "one schedule");
-    // Monday, 04:00 UTC.
-    assert_eq!(schedule[0]["cron"].as_str(), Some("0 4 * * 1"));
-    assert_eq!(strings(&on["pull_request"]["types"])?, ["labeled"]);
-
-    let jobs = jobs(&platforms)?;
-    let names: BTreeSet<String> = jobs.iter().map(|job| job.name.clone()).collect();
-    assert_eq!(
-        names,
-        set(&[
-            "clippy (windows)",
-            "test (windows)",
-            "slow-tests (windows)",
-            "lints (windows)",
-            "ac-trace (windows)",
-            "clippy (macos)",
-            "test (macos)",
-            "test (macos intel)",
-            "slow-tests (macos)",
-            "slow-tests (macos intel)",
-            "lints (macos)",
-            "ac-trace (macos)",
-        ])
-    );
-    for job in &jobs {
-        let os = if job.name.ends_with(" (windows)") {
-            "windows"
-        } else {
-            "macos"
-        };
-        assert_eq!(job.runs_on()?, runner_of(&job.name), "{}", job.name);
-        // On a pull request only the label of the job's own OS starts it; the schedule and a
-        // manual run always do.
-        let expected =
-            format!("github.event_name != 'pull_request' || github.event.label.name == '{os}'");
-        assert_eq!(
-            job.node["if"].as_str(),
-            Some(expected.as_str()),
-            "{}",
+            Some(expected),
+            "{file}: job {} has no `timeout-minutes` of {expected}, and a hung job runs for six \
+             hours",
             job.name
         );
     }
@@ -643,6 +1270,15 @@ fn required_jobs_always_report() -> TestResult {
                 job.node["if"],
                 Yaml::BadValue,
                 "{file}: job {} can be skipped, and a skipped check is not a passed one",
+                job.name
+            );
+            // The workflow's own `concurrency` decides which run is cancelled (see
+            // `triggers_and_concurrency_follow_the_spec`); a job-level one could cancel a required
+            // check that the workflow keeps.
+            assert_eq!(
+                job.node["concurrency"],
+                Yaml::BadValue,
+                "{file}: job {} has a `concurrency` of its own",
                 job.name
             );
         }
@@ -701,8 +1337,11 @@ fn no_pull_request_target_and_least_privilege() -> TestResult {
 
 /// The step of each job that calls GitHub, the only one that gets the token.
 const TOKEN_STEPS: [(&str, &str); 2] = [
-    ("approval", "cargo xtask approval"),
-    ("settings", "cargo xtask github check"),
+    ("approval", "target/xtask-bin/debug/xtask --root . approval"),
+    (
+        "settings",
+        "target/xtask-bin/debug/xtask --root . github check",
+    ),
 ];
 
 #[test]
@@ -777,6 +1416,7 @@ fn uses_lines() -> TestResult<Vec<(String, String)>> {
         .map(|file| workflow_path(file))
         .collect();
     files.push(SETUP_ACTION.to_owned());
+    files.push(XTASK_ACTION.to_owned());
     let mut found = Vec::new();
     for file in files {
         for line in read(&file)?.lines() {
@@ -803,11 +1443,13 @@ fn actions_pinned_by_sha() -> TestResult {
             .filter(|step| step["uses"].as_str().is_some())
             .count();
     }
-    for step in parse(SETUP_ACTION)?["runs"]["steps"]
-        .as_vec()
-        .ok_or("the setup action has no steps")?
-    {
-        parsed += usize::from(step["uses"].as_str().is_some());
+    for (file, _, _) in LOCAL_ACTIONS {
+        for step in parse(file)?["runs"]["steps"]
+            .as_vec()
+            .ok_or_else(|| format!("{file} has no steps"))?
+        {
+            parsed += usize::from(step["uses"].as_str().is_some());
+        }
     }
     assert_eq!(
         found.len(),
@@ -852,41 +1494,61 @@ fn no_expressions_in_run_steps() -> TestResult {
             );
         }
     }
-    let action = parse(SETUP_ACTION)?;
-    let steps = action["runs"]["steps"].as_vec().ok_or("no steps")?;
-    for command in run_values(steps) {
-        assert!(
-            !command.contains("${{"),
-            "the setup action has an expression in `run: {command}`"
-        );
+    for (file, _, _) in LOCAL_ACTIONS {
+        let action = parse(file)?;
+        let steps = action["runs"]["steps"].as_vec().ok_or("no steps")?;
+        for command in run_values(steps) {
+            assert!(
+                !command.contains("${{"),
+                "{file} has an expression in `run: {command}`"
+            );
+        }
     }
     Ok(())
 }
 
-/// The checks that read history: the commits of a pull request, or the merge base with its base.
-/// `slow-tests` reads the changes since the merge base to decide whether its tests run.
-const READ_HISTORY: [&str; 3] = ["commit-msg", "coverage", "slow-tests"];
+/// The checks of `platforms.yml` that read history: the commits of a pull request, or the merge
+/// base with its base. `slow-tests` reads the changes since the merge base to decide whether its
+/// tests run.
+const READ_HISTORY: [Check; 3] = [Check::CommitMsg, Check::Coverage, Check::SlowTests];
 
 #[test]
 fn history_is_fetched_where_commits_or_the_merge_base_are_read() -> TestResult {
-    for file in ["ci.yml", "platforms.yml"] {
-        for job in jobs(&workflow(file)?)? {
-            let depth = &job.steps()?[0]["with"]["fetch-depth"];
-            if READ_HISTORY.contains(&check_of(&job.name)) {
-                assert_eq!(
-                    depth.as_i64(),
-                    Some(0),
-                    "{file}: {} reads history",
-                    job.name
-                );
-            } else {
-                assert_eq!(
-                    *depth,
-                    Yaml::BadValue,
-                    "{file}: {} fetches more than the commit it checks",
-                    job.name
-                );
-            }
+    // Every `ci.yml` job reads the changed paths since the merge base to decide whether the
+    // change needs its checks.
+    for job in jobs(&workflow("ci.yml")?)? {
+        let depth = &job.steps()?[0]["with"]["fetch-depth"];
+        assert_eq!(
+            depth.as_i64(),
+            Some(0),
+            "ci.yml: {} reads history",
+            job.name
+        );
+    }
+    for job in jobs(&workflow("platforms.yml")?)? {
+        let depth = &job.steps()?[0]["with"]["fetch-depth"];
+        let [command] = job
+            .commands()?
+            .try_into()
+            .map_err(|_| format!("job {} does not run exactly one command", job.name))?;
+        let reads_history = selection_of(&command)?
+            .checks()
+            .iter()
+            .any(|check| READ_HISTORY.contains(check));
+        if reads_history {
+            assert_eq!(
+                depth.as_i64(),
+                Some(0),
+                "platforms.yml: {} reads history",
+                job.name
+            );
+        } else {
+            assert_eq!(
+                *depth,
+                Yaml::BadValue,
+                "platforms.yml: {} fetches more than the commit it checks",
+                job.name
+            );
         }
     }
     Ok(())
@@ -1005,7 +1667,7 @@ fn setup_action_installs_the_toolchain_the_cache_and_the_pinned_tools() -> TestR
     let steps = action["runs"]["steps"]
         .as_vec()
         .ok_or("the action has no steps")?;
-    assert_eq!(steps.len(), 4);
+    assert_eq!(steps.len(), 5);
 
     // Every command step names its shell: a composite action has no default.
     for step in steps.iter().filter(|step| step["run"].as_str().is_some()) {
@@ -1039,18 +1701,43 @@ fn setup_action_installs_the_toolchain_the_cache_and_the_pinned_tools() -> TestR
         steps[3]["with"]["tool"].as_str(),
         Some("${{ steps.tools.outputs.spec }}")
     );
+
+    // The last step saves the xtask the tools step built, keyed by what goes into it, and only
+    // when the job asks for it. xtask is a member of the workspace, so the root `Cargo.toml` goes
+    // into it too: its edition, the versions and features of its dependencies, its profiles.
+    assert_eq!(action_name(&steps[4]), Some("actions/cache/save"));
+    assert_eq!(steps[4]["if"].as_str(), Some(SAVE_XTASK_IF));
+    assert_eq!(
+        string_map(&steps[4]["with"])?,
+        map(&[
+            ("path", "target/xtask-bin/debug/xtask"),
+            (
+                "key",
+                "xtask-bin-${{ runner.os }}-${{ hashFiles('xtask/**', 'Cargo.toml', \
+                 'Cargo.lock', 'rust-toolchain.toml', '.cargo/**') }}"
+            ),
+        ])
+    );
     Ok(())
 }
 
-/// The two inputs of the setup action reach rust-cache and nothing else: the key of jobs that
-/// build the same thing and share one cache, and whether the job saves the cache. Their defaults
-/// keep rust-cache's own behaviour, a cache per job that every run saves.
+/// The inputs of the setup action: the key of jobs that build the same thing and share one cache,
+/// and whether the job saves the cache, reach rust-cache and nothing else; `save-xtask` reaches
+/// only the step that saves the xtask binary. Their defaults keep rust-cache's own behaviour, a
+/// cache per job that every run saves, and save no xtask.
 #[test]
 fn setup_action_passes_the_cache_inputs_to_rust_cache() -> TestResult {
     let action = parse(SETUP_ACTION)?;
     let inputs = &action["inputs"];
-    assert_eq!(keys(inputs)?, set(&["cache-key", "save-cache"]));
-    for (input, default) in [("cache-key", ""), ("save-cache", "true")] {
+    assert_eq!(
+        keys(inputs)?,
+        set(&["cache-key", "save-cache", "save-xtask"])
+    );
+    for (input, default) in [
+        ("cache-key", ""),
+        ("save-cache", "true"),
+        ("save-xtask", "false"),
+    ] {
         assert_eq!(
             scalar(&inputs[input]["default"]).as_deref(),
             Some(default),
@@ -1069,47 +1756,269 @@ fn setup_action_passes_the_cache_inputs_to_rust_cache() -> TestResult {
     Ok(())
 }
 
-/// `approval` runs on pull requests only, so a cache of its own is never saved on `main`, the one
-/// place every pull request restores from, and each of its runs built xtask from scratch. It
-/// restores the cache of `fmt` instead, which builds the same xtask, and saves nothing. `fmt`
-/// saves that cache on `main` only: a pull request is searched first, so a cache a pull request
-/// saved would win over the one of `main`, in the one job that holds a token that can label.
+/// The expression that is true on `main` only.
+const ON_MAIN: &str = "${{ github.ref == 'refs/heads/main' }}";
+
+/// The inputs a job passes to its setup step, or `None` when the job has no setup step (the jobs
+/// that run the xtask action).
+fn setup_inputs(job: &Job) -> TestResult<Option<BTreeMap<String, String>>> {
+    let Some(setup) = job
+        .steps()?
+        .iter()
+        .find(|step| step["uses"].as_str() == Some(SETUP_USES))
+    else {
+        return Ok(None);
+    };
+    if setup["with"].is_badvalue() {
+        Ok(Some(BTreeMap::new()))
+    } else {
+        string_map(&setup["with"]).map(Some)
+    }
+}
+
+/// The value of an input of the setup action: what the step passes, else the default of the
+/// action, so a step that leaves an input out is not taken to save nothing.
+fn setup_input(inputs: &BTreeMap<String, String>, input: &str) -> TestResult<String> {
+    if let Some(value) = inputs.get(input) {
+        return Ok(value.clone());
+    }
+    let action = parse(SETUP_ACTION)?;
+    scalar(&action["inputs"][input]["default"])
+        .ok_or_else(|| format!("the setup action has no default for {input}").into())
+}
+
+/// The jobs of the workflows that run on `pull_request`, which may not save a build cache.
+fn pull_request_jobs() -> TestResult<Vec<(&'static str, Job)>> {
+    let mut found = Vec::new();
+    for (file, job) in all_jobs()? {
+        if keys(&workflow(file)?["on"])?.contains("pull_request") {
+            found.push((file, job));
+        }
+    }
+    Ok(found)
+}
+
+// AC: CE-08C.5
 #[test]
-fn approval_restores_the_xtask_cache_that_main_saves() -> TestResult {
+fn no_pull_request_job_saves_a_build_cache() -> TestResult {
+    // A pull request is searched first, so a cache it saved would win over the one of `main`.
+    for (file, job) in pull_request_jobs()? {
+        let Some(inputs) = setup_inputs(&job)? else {
+            continue;
+        };
+        // `platforms` runs on a label as well as on the schedule: it saves on the schedule only.
+        let cache_ok = if file == "platforms.yml" {
+            ON_SCHEDULE
+        } else {
+            ON_MAIN
+        };
+        let value = setup_input(&inputs, "save-cache")?;
+        assert!(
+            value == cache_ok || (value == "false" && file != "platforms.yml"),
+            "{file}: job {} saves with save-cache: {value}, which a pull request does",
+            job.name
+        );
+        let value = setup_input(&inputs, "save-xtask")?;
+        assert!(
+            value == "false" || value == ON_MAIN,
+            "{file}: job {} saves with save-xtask: {value}, which a pull request does",
+            job.name
+        );
+    }
+    Ok(())
+}
+
+// AC: CE-08C.5
+#[test]
+fn only_gate_on_main_saves_the_cached_xtask() -> TestResult {
+    for (file, job) in all_jobs()? {
+        let inputs = setup_inputs(&job)?.unwrap_or_default();
+        let saves = inputs
+            .get("save-xtask")
+            .is_some_and(|value| value != "false");
+        assert_eq!(
+            saves,
+            file == "ci.yml" && job.name == "gate",
+            "{file}: job {}: only the gate job saves the xtask binary",
+            job.name
+        );
+        if saves {
+            assert_eq!(inputs["save-xtask"], ON_MAIN);
+        }
+    }
+    Ok(())
+}
+
+/// The inputs each job passes to the setup action. The jobs that run the xtask action have no
+/// setup step of their own, but `approval`, whose base may predate the xtask action, builds xtask
+/// there as the action's fallback does: restoring `main`'s `gate` cache and saving nothing.
+#[test]
+fn setup_inputs_of_every_job() -> TestResult {
+    let long = |key: &str| map(&[("cache-key", key), ("save-cache", ON_MAIN)]);
+    let mut gate = long("gate");
+    gate.insert("save-xtask".to_owned(), ON_MAIN.to_owned());
+    let platform = |key: &str| map(&[("cache-key", key), ("save-cache", ON_SCHEDULE)]);
     let shared = [
-        (
-            "ci.yml",
-            "fmt",
-            map(&[
-                ("cache-key", "xtask"),
-                ("save-cache", "${{ github.ref == 'refs/heads/main' }}"),
-            ]),
-        ),
+        ("ci.yml", "gate", gate),
+        ("ci.yml", "test", long("test")),
+        ("ci.yml", "coverage", long("coverage")),
+        ("platforms.yml", "windows", platform("windows")),
+        ("platforms.yml", "macos", platform("macos")),
+        ("platforms.yml", "macos-intel", platform("macos-intel")),
         (
             "approval.yml",
             "approval",
-            map(&[("cache-key", "xtask"), ("save-cache", "false")]),
+            map(&[("cache-key", "gate"), ("save-cache", "false")]),
         ),
     ];
     for (file, job) in all_jobs()? {
         let name = &job.name;
-        let setup = job
+        let expected = if cached_xtask_command(name).is_some() && name != "approval" {
+            None
+        } else {
+            Some(
+                shared
+                    .iter()
+                    .find(|(in_file, job_name, _)| *in_file == file && job_name == name)
+                    .map(|(_, _, with)| with.clone())
+                    .unwrap_or_default(),
+            )
+        };
+        assert_eq!(setup_inputs(&job)?, expected, "{file}: job {name}");
+    }
+    Ok(())
+}
+
+/// The one key of the cached xtask binary, as a step spells it.
+fn xtask_key(step: &Yaml) -> TestResult<String> {
+    step["with"]["key"]
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| "the step has no key".into())
+}
+
+/// The steps of the xtask action.
+fn xtask_action_steps() -> TestResult<Vec<Yaml>> {
+    Ok(parse(XTASK_ACTION)?["runs"]["steps"]
+        .as_vec()
+        .ok_or("the xtask action has no steps")?
+        .clone())
+}
+
+// AC: CE-08C.5
+#[test]
+fn pr_and_approval_take_xtask_from_main_s_cache() -> TestResult {
+    // The xtask action restores the binary by its exact key, without `restore-keys`, so it never
+    // takes a stale one, and saves nothing: `main` is the only job that saves it.
+    let steps = xtask_action_steps()?;
+    let restore = &steps[0];
+    assert_eq!(action_name(restore), Some("actions/cache/restore"));
+    assert_eq!(restore["id"].as_str(), Some("restore"));
+    assert_eq!(
+        string_map(&restore["with"])?,
+        map(&[("path", XTASK_BIN), ("key", &xtask_key(restore)?)]),
+        "the restore step has `restore-keys` or other inputs"
+    );
+    assert!(
+        steps
+            .iter()
+            .all(|step| action_name(step) != Some("actions/cache/save")),
+        "the xtask action saves a cache"
+    );
+
+    // On a miss it builds xtask as before, and saves nothing, so a pull request never writes the
+    // cache `main` is searched for.
+    assert_eq!(steps.len(), 2);
+    assert_eq!(steps[1]["if"].as_str(), Some(BUILD_ON_MISS_IF));
+    assert_eq!(steps[1]["uses"].as_str(), Some(SETUP_USES));
+    assert_eq!(
+        string_map(&steps[1]["with"])?,
+        map(&[("cache-key", "gate"), ("save-cache", "false")]),
+        "the fallback build of xtask"
+    );
+
+    for (file, name) in [("pr.yml", "pr"), ("approval.yml", "approval")] {
+        let jobs = jobs(&workflow(file)?)?;
+        let job = &jobs[index_of(&jobs, name)?];
+        let kinds = job
             .steps()?
             .iter()
-            .find(|step| step["uses"].as_str() == Some(SETUP_USES))
-            .ok_or_else(|| format!("{file}: job {name} has no setup step"))?;
-        let expected = shared
+            .map(step_kind)
+            .collect::<TestResult<Vec<_>>>()?;
+        assert!(kinds.contains(&"xtask"), "{file}: {name} has no xtask step");
+        assert!(
+            !kinds.iter().any(|kind| kind.starts_with("cache")),
+            "{file}: {name} touches a cache itself"
+        );
+    }
+    Ok(())
+}
+
+// AC: CE-08C.5
+#[test]
+fn the_cached_xtask_has_one_key() -> TestResult {
+    let setup = parse(SETUP_ACTION)?;
+    let saved = setup["runs"]["steps"]
+        .as_vec()
+        .ok_or("the setup action has no steps")?
+        .iter()
+        .find(|step| action_name(step) == Some("actions/cache/save"))
+        .ok_or("the setup action saves no xtask")?;
+    let restored = &xtask_action_steps()?[0];
+    assert_eq!(
+        xtask_key(saved)?,
+        xtask_key(restored)?,
+        "the key that saves the xtask binary is not the key that restores it"
+    );
+    assert_eq!(saved["with"]["path"], restored["with"]["path"]);
+    Ok(())
+}
+
+// AC: CE-08.5
+#[test]
+fn approval_keys_the_cached_xtask_on_the_base_checkout() -> TestResult {
+    // The key hashes `xtask/**`, so the xtask step comes after every checkout: it then hashes the
+    // checkout `approval` runs, the base commit (D3), and a head checkout (only while the base
+    // has no xtask) is hashed too. The build that stands in for it on a base without the xtask
+    // action comes after every checkout as well, so it builds the xtask that runs.
+    let approval = jobs(&workflow("approval.yml")?)?;
+    let steps = approval[index_of(&approval, "approval")?].steps()?;
+    let position_of = |uses: &str| {
+        steps
             .iter()
-            .find(|(in_file, job_name, _)| *in_file == file && job_name == name)
-            .map(|(_, _, with)| with);
-        match expected {
-            Some(with) => assert_eq!(&string_map(&setup["with"])?, with, "{file}: job {name}"),
-            None => assert_eq!(
-                setup["with"],
-                Yaml::BadValue,
-                "{file}: job {name} passes inputs to the setup action"
-            ),
+            .position(|step| step["uses"].as_str() == Some(uses))
+            .ok_or_else(|| format!("approval has no step that uses {uses}"))
+    };
+    let xtask = position_of(XTASK_USES)?.min(position_of(SETUP_USES)?);
+    for (position, step) in steps.iter().enumerate() {
+        if step_kind(step)? == "checkout" {
+            assert!(
+                position < xtask,
+                "step {position}: a checkout after a step that gets xtask changes what the key \
+                 hashed or what is built"
+            );
+            // The checkouts that always run are the base commit; the head only on the fallback.
+            if step["if"].is_badvalue() {
+                assert_eq!(
+                    step["with"]["ref"].as_str(),
+                    Some("${{ github.event.pull_request.base.sha }}"),
+                    "step {position}: a checkout that always runs is not the base commit"
+                );
+            }
         }
     }
+    assert!(xtask > 0, "the xtask step is the first step");
+    Ok(())
+}
+
+// AC: CE-08C.1
+#[test]
+fn pr_runs_both_checks_in_one_job() -> TestResult {
+    let jobs = jobs(&workflow("pr.yml")?)?;
+    assert_eq!(jobs.len(), 1, "pr.yml has more than the one job `pr`");
+    let job = &jobs[0];
+    assert_eq!((job.id.as_str(), job.name.as_str()), ("pr", "pr"));
+    assert_eq!(job.commands()?, [command_of("pr.yml", "pr")]);
+    assert_eq!(job.node["timeout-minutes"].as_i64(), Some(15));
     Ok(())
 }

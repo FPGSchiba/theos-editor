@@ -8,14 +8,18 @@
 //!
 //! On a pull request the check runs the slow tests only when the pull request can change their
 //! outcome ([`needed_by`]): when it changes a file of a workspace member with slow tests, of a
-//! member such a member depends on, or one of [`ALWAYS`]. Otherwise it passes with a note and
-//! runs nothing, so a pull request that cannot affect them does not pay for their build. The job
-//! still runs and reports, so the required status check is never missing. A push to `main`, a
-//! manual or scheduled run and `cargo xtask gate` always run them.
+//! member such a member depends on, or one of [`ALWAYS`]. Otherwise it is reported as not needed,
+//! with the reason, and runs nothing, so a pull request that cannot affect them does not pay for
+//! their build. The job still runs and reports, so the required status check is never missing. A
+//! push to `main` and a manual or scheduled run always run them; so does `cargo xtask gate`
+//! outside CI, unless the change touches no code (`docs/gate.md` §1) and the gate reports every
+//! check as not needed first. Inside a CI job the gate hands this check the event, so a pull
+//! request decides as above.
 //!
 //! A member has slow tests when one of its `.rs` files contains `slow_` ([`has_slow_tests`]).
 //! That over-counts (a variable `slow_path` counts too), which only makes the tests run more
-//! often. A pull request that removes the last slow test of a member leaves none there to run.
+//! often. The gate's own package [`GATE_PACKAGE`] is left out: it holds the marker as text. A pull
+//! request that removes the last slow test of a member leaves none there to run.
 //!
 //! The module is not called `slow_tests`: its own tests would be `checks::slow_tests::tests::…`,
 //! which the profiles take for slow tests.
@@ -25,6 +29,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
+use crate::changes;
 use crate::checks::cargo_cmds;
 use crate::ci::{CiEvent, PullRequestEvent};
 use crate::files::{extension, repo_files};
@@ -37,26 +42,31 @@ use crate::{Error, Result};
 /// The text that marks a member as one with slow tests: the start of a slow test's name segment.
 pub const MARKER: &str = "slow_";
 
-/// The paths outside the members whose change can change the outcome of any test: the
-/// workspace manifest and lock file, the toolchain, the cargo and nextest configuration, and the
-/// gate itself (its files, xtask and the workflows). An entry that ends with `/` is a folder and
-/// covers everything in it; any other entry is one file.
-pub const ALWAYS: [&str; 8] = [
+/// The package of the gate itself. It never counts as a member with slow tests: its sources hold
+/// [`MARKER`] as text (this module, its tests) and it has no map-scale tests, so counting it
+/// would run the slow tests on every change to the gate.
+pub const GATE_PACKAGE: &str = "xtask";
+
+/// The paths outside the members whose change can change the outcome of a slow test: the
+/// workspace manifest and lock file (dependencies), the toolchain (the compiler), the cargo
+/// configuration, and the nextest profiles that pick the slow tests (`.config/nextest.toml` and
+/// its original `gate/nextest.toml`). The rest of the gate, xtask and the workflows are not here:
+/// they do not change what a slow test does. An entry that ends with `/` is a folder and covers
+/// everything in it; any other entry is one file.
+pub const ALWAYS: [&str; 6] = [
     "Cargo.toml",
     "Cargo.lock",
     "rust-toolchain.toml",
     ".cargo/",
-    ".config/",
-    ".github/",
-    "gate/",
-    "xtask/",
+    ".config/nextest.toml",
+    "gate/nextest.toml",
 ];
 
-/// The note of a pull request whose changes cannot change the outcome of a slow test.
+/// The reason for a pull request whose changes cannot change the outcome of a slow test.
 pub const NOT_NEEDED: &str = "the slow tests did not run: the pull request changes no workspace \
                               member with slow tests, no member they depend on, and none of the \
-                              workspace manifest, the lock file, the toolchain, the cargo and \
-                              nextest configuration and the gate";
+                              workspace manifest, the lock file, the toolchain, the cargo \
+                              configuration and the nextest profiles";
 
 /// A member of the workspace, as far as the slow tests are concerned.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -70,8 +80,8 @@ pub struct Member {
     pub has_slow_tests: bool,
 }
 
-/// Runs the slow tests in `root`, or, on a pull request that cannot change their outcome, passes
-/// with the note [`NOT_NEEDED`] without running them.
+/// Runs the slow tests in `root`, or, on a pull request that cannot change their outcome,
+/// reports it as not needed with the reason [`NOT_NEEDED`], without running them.
 ///
 /// `_out` is not written to: cargo's own output goes straight to the terminal and the caller
 /// writes the verdict.
@@ -85,9 +95,7 @@ pub fn run(root: &Path, ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<Ve
     if let Some(CiEvent::PullRequest(pull_request)) = ci
         && !needed_by(root, pull_request)?
     {
-        let mut verdict = Verdict::pass(Check::SlowTests);
-        verdict.notes.push(NOT_NEEDED.to_owned());
-        return Ok(verdict);
+        return Ok(Verdict::not_needed(Check::SlowTests, NOT_NEEDED));
     }
     cargo_cmds::run_cargo_check(root, Check::SlowTests, &cargo_cmds::slow_tests())
 }
@@ -101,9 +109,7 @@ pub fn run(root: &Path, ci: Option<&CiEvent>, _out: &mut dyn Write) -> Result<Ve
 /// Fails when either commit is not in the repository, cargo cannot give the metadata, or a source
 /// file cannot be read.
 pub fn needed_by(root: &Path, pull_request: &PullRequestEvent) -> Result<bool> {
-    let git = Git::new(root);
-    let merge_base = git.merge_base(&pull_request.base_sha, &pull_request.head_sha)?;
-    let changed = git.diff_name_only_no_renames(&merge_base, &pull_request.head_sha)?;
+    let changed = changes::of_pull_request(&Git::new(root), pull_request)?.paths;
     let dirs = watched_dirs(&members(root)?);
     Ok(changed.iter().any(|path| watched(path, &dirs)))
 }
@@ -142,7 +148,8 @@ pub fn members(root: &Path) -> Result<Vec<Member>> {
                 .map(|path| repo_relative(workspace, path.as_str()))
                 .filter(|path| dirs.contains(path))
                 .collect();
-            let has_slow_tests = has_slow_tests(workspace, &dir, &sources)?;
+            let has_slow_tests =
+                package.name != GATE_PACKAGE && has_slow_tests(workspace, &dir, &sources)?;
             Ok(Member {
                 dir,
                 depends_on,
@@ -287,13 +294,16 @@ mod tests {
             "rust-toolchain.toml",
             ".cargo/config.toml",
             ".config/nextest.toml",
-            ".github/workflows/ci.yml",
             "gate/nextest.toml",
-            "xtask/src/main.rs",
         ] {
             assert!(watched(path, &none), "{path}");
         }
         for path in [
+            ".github/workflows/ci.yml",
+            "gate/tools.toml",
+            "gate/nextest.toml.orig",
+            ".config/other.toml",
+            "xtask/src/main.rs",
             "crates/vcs/Cargo.toml",
             "docs/Cargo.toml",
             "Cargo.toml.orig",

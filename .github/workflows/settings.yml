@@ -15,7 +15,7 @@ jobs:
   settings:
     name: settings
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     # Listing the labels needs `issues: read` in a private repository. A job-level `permissions:`
     # replaces the top-level one, so `contents` is named again. Nothing here writes.
     permissions:
@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: cargo xtask github check
+      - uses: ./.github/actions/xtask
+      - run: target/xtask-bin/debug/xtask --root . github check
         env:
           GH_TOKEN: ${{ github.token }}

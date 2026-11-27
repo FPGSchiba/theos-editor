@@ -6,7 +6,9 @@
 //! Adding a check is one arm in `run`: call the check's `run(root, ci, out)`, which gathers its
 //! own inputs and returns a verdict, and let `report::emit` write it. Also add it to
 //! `gate::run_check`, which the compiler asks for. `gate` is the one subcommand with many
-//! verdicts: `gate::run` writes its own table, so its arm does not go through `report::emit`.
+//! verdicts: `gate::run` (like `gate::run_pr` for `pr`) writes its own table, so its arm does not
+//! go through `report::emit`; under GitHub Actions it hands all verdicts to `report::publish`
+//! (annotations and the step summary) instead.
 
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
@@ -61,7 +63,9 @@ enum Command {
     ///
     /// On a pull request under GitHub Actions they run only when the pull request changes a crate
     /// with slow tests, a crate it depends on, or a build input or file of the gate; otherwise
-    /// the check passes with a note. Everywhere else they always run.
+    /// the check is reported as not needed, with the reason. Run as this subcommand anywhere else
+    /// they always run; `cargo xtask gate` can still report them as not needed for a change that
+    /// touches no code (`docs/gate.md` §1).
     SlowTests,
     /// Build the documentation of every crate with warnings denied.
     Docs,
@@ -142,13 +146,28 @@ enum Command {
     Approval,
     /// Run every check that needs no pull request, in order, and print one verdict table.
     ///
-    /// Runs `tools`, `fmt`, `lints`, `engine-free`, `ac-trace`, `commit-msg`, `clippy`, `docs`,
-    /// `deny`, `test`, `coverage` and `slow-tests` with the same code as their CI jobs (the slow
-    /// tests always run here, as on a push to `main`), and goes on after a
-    /// check fails. It leaves out `pr-title`, `pr-body` and `approval`. When a tool is not the
-    /// pinned version, nothing but `tools` runs, because versions decide verdicts. Exit code 1
-    /// when any check failed.
-    Gate,
+    /// Runs `tools`, `fmt`, `lints`, `engine-free`, `commit-msg`, `clippy`, `docs`, `deny`,
+    /// `test`, `coverage`, `slow-tests` and `ac-trace` with the same code as their subcommands
+    /// (the CI jobs run this command too), and goes on after a check fails. Outside GitHub Actions
+    /// the slow tests run whenever the change touches code, as on a push to `main`; on a pull
+    /// request in CI `slow-tests` decides by its own rule. It leaves out `pr-title`, `pr-body` and
+    /// `approval`. When a tool is not the pinned version, nothing but `tools` runs, because
+    /// versions decide verdicts. Exit code 1 when any check failed.
+    ///
+    /// `--only` and `--skip` choose checks (`tools` is always the first check); when a pull
+    /// request or the working tree changes only paths no check reads, every selected check but
+    /// `commit-msg` is reported as not needed, except on a `phase/` branch and in a run that a
+    /// label started (`docs/gate.md` §1 has the full rule).
+    Gate {
+        /// Run only these checks, comma separated.
+        #[arg(long, value_delimiter = ',', value_parser = gate::parse_selectable, conflicts_with = "skip")]
+        only: Vec<Check>,
+        /// Run every check except these, comma separated.
+        #[arg(long, value_delimiter = ',', value_parser = gate::parse_selectable)]
+        skip: Vec<Check>,
+    },
+    /// Run `pr-title` and `pr-body` and print one table.
+    Pr,
     /// Check or apply the repository settings: the rulesets, the merge settings and the labels
     /// kept in `gate/` (`docs/gate.md` §6).
     Github {
@@ -271,9 +290,22 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
             pr_body::check_body(&template, Some(&body))
         }
         Command::Approval => approval::run(&root, ci.as_ref(), &mut out)?,
-        Command::Gate => {
-            let verdicts = gate::run(&root, ci.as_ref(), &mut out)?;
-            return Ok(verdicts.iter().all(Verdict::passed));
+        Command::Gate { only, skip } => {
+            let selection = gate::Selection {
+                only: only.clone(),
+                skip: skip.clone(),
+            };
+            let outcome = gate::run(&root, ci.as_ref(), &selection, &mut out)?;
+            return finish(
+                &outcome.verdicts,
+                outcome.every_because.as_deref(),
+                ci.is_some(),
+                &mut out,
+            );
+        }
+        Command::Pr => {
+            let verdicts = gate::run_pr(&root, ci.as_ref(), &mut out)?;
+            return finish(&verdicts, None, ci.is_some(), &mut out);
         }
         Command::Github {
             repo,
@@ -286,6 +318,20 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
     };
     report::emit(&verdict, ci.is_some(), &mut out)?;
     Ok(verdict.passed())
+}
+
+/// Publishes the verdicts of a multi-check run under GitHub Actions, with why every check ran
+/// when the gate says so, and says whether all passed.
+fn finish(
+    verdicts: &[Verdict],
+    every_because: Option<&str>,
+    in_ci: bool,
+    out: &mut dyn Write,
+) -> anyhow::Result<bool> {
+    if in_ci {
+        report::publish(verdicts, every_because, out)?;
+    }
+    Ok(verdicts.iter().all(Verdict::passed))
 }
 
 /// The workspace root: the parent of the directory this xtask was built from.

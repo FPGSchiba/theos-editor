@@ -97,6 +97,30 @@ impl Git {
             .collect())
     }
 
+    /// The tracked files that differ from `base` in the work tree: committed, staged and unstaged
+    /// changes, with renames shown as a delete and an add (`git diff --name-only --no-renames`).
+    /// Paths are repo-relative with `/`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `base` is unknown.
+    pub fn diff_name_only_worktree(&self, base: &str) -> Result<Vec<String>> {
+        refuse_option(base)?;
+        let names = self.run(&["diff", "--name-only", "--no-renames", "-z", base])?;
+        Ok(split_nul(&names))
+    }
+
+    /// The files git does not track and does not ignore (`git ls-files --others`). Paths are
+    /// repo-relative with `/`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git cannot run or the root is not a repository.
+    pub fn untracked(&self) -> Result<Vec<String>> {
+        let names = self.run(&["ls-files", "--others", "--exclude-standard", "-z"])?;
+        Ok(split_nul(&names))
+    }
+
     /// The raw diff between two revisions: one line per changed file with modes, full object
     /// ids and status (`git diff --raw --no-renames --no-abbrev`).
     ///
@@ -225,11 +249,7 @@ impl Git {
             "--exclude-standard",
             "-z",
         ])?;
-        Ok(names
-            .split('\0')
-            .filter(|name| !name.is_empty())
-            .map(str::to_owned)
-            .collect())
+        Ok(split_nul(&names))
     }
 
     /// Runs git and returns its stdout, or the failure as an [`Error::Command`].
@@ -273,6 +293,13 @@ impl Git {
 fn arg_strings<S: AsRef<OsStr>>(args: &[S]) -> Vec<String> {
     args.iter()
         .map(|arg| arg.as_ref().to_string_lossy().into_owned())
+        .collect()
+}
+
+fn split_nul(text: &str) -> Vec<String> {
+    text.split('\0')
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
         .collect()
 }
 
@@ -650,6 +677,10 @@ mod tests {
         assert!(matches!(repo.message(&flag), Err(Error::Parse { .. })));
         assert!(matches!(
             repo.diff_name_only_no_renames(&flag, "HEAD"),
+            Err(Error::Parse { .. })
+        ));
+        assert!(matches!(
+            repo.diff_name_only_worktree(&flag),
             Err(Error::Parse { .. })
         ));
         assert!(matches!(

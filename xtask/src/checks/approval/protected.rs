@@ -23,11 +23,13 @@
 use std::fs;
 use std::path::Path;
 
-use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
+use globset::GlobSet;
 use serde::Deserialize;
 
+use crate::changes;
 use crate::checks::lints;
 use crate::git::Git;
+use crate::globs;
 use crate::{Error, Result};
 
 /// The rules file, relative to the root of the checkout the check runs from.
@@ -130,8 +132,7 @@ pub fn touched(
     merge_base: &str,
     head: &str,
 ) -> Result<Vec<String>> {
-    let mut touched: Vec<String> = git
-        .diff_name_only_no_renames(merge_base, head)?
+    let mut touched: Vec<String> = changes::paths_between(git, merge_base, head)?
         .into_iter()
         .filter(|path| rules.matches(path))
         .collect();
@@ -189,25 +190,9 @@ fn lookup(text: Option<&str>, rule: &TableRule) -> Lookup {
         .map_or(Lookup::Absent, |table| Lookup::Found(table.clone()))
 }
 
-/// The globs of one list. A bad pattern is named by its place in the list, not quoted.
+/// The globs of one list, with errors that name this file.
 fn glob_set(list: &str, patterns: &[String], ignore_case: bool) -> Result<GlobSet> {
-    let mut set = GlobSetBuilder::new();
-    for (index, pattern) in patterns.iter().enumerate() {
-        let glob = GlobBuilder::new(pattern)
-            .literal_separator(true)
-            .backslash_escape(true)
-            .case_insensitive(ignore_case)
-            .build()
-            .map_err(|_| {
-                config_error(format!(
-                    "`{list}` pattern {} is not a valid glob",
-                    index + 1
-                ))
-            })?;
-        set.add(glob);
-    }
-    set.build()
-        .map_err(|_| config_error(format!("`{list}` cannot be read as globs")))
+    globs::glob_set(list, patterns, ignore_case).map_err(|error| globs::in_file(error, CONFIG))
 }
 
 fn config_error(message: impl Into<String>) -> Error {

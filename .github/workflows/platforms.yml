@@ -3,15 +3,36 @@
 # compiler builds on the machine, so they can differ per OS: clippy, the tests, the slow tests,
 # `lints` and `ac-trace` (the last two read the cfg-selected code that `cargo check` builds). It
 # runs every Monday, on demand, and on a pull request that Jann labels `windows` or `macos`, each
-# label starting the jobs of its own OS. The jobs are not required status checks. On a pull
-# request `slow-tests` decides from the changes since the merge base whether its tests run, as in
-# ci.yml, so its jobs fetch the history.
+# label starting the job of its own OS. The jobs are not required status checks. A label or manual
+# run is a deliberate request, so xtask runs every selected check even for a pull request that
+# changes no code.
+#
+# One job per OS, running its checks through `cargo xtask gate --only`: a macOS minute costs about
+# ten Linux minutes, so each OS is set up and built once, not once per check. The Intel macOS
+# runner runs the tests and the slow tests, and only when asked for in a manual run
+# (`macos_intel`): it is the dearest and its tests rarely differ from Apple silicon. A newer label
+# run for the same pull request and OS cancels the older one. Only the schedule saves a build
+# cache: a label or manual run restores the one of the last scheduled run and saves nothing. The
+# gate reads history for `slow-tests`, so the checkout fetches it.
 name: platforms
 
 on:
   schedule:
     - cron: "0 4 * * 1"
   workflow_dispatch:
+    inputs:
+      windows:
+        description: Run the Windows checks
+        type: boolean
+        default: true
+      macos:
+        description: Run the macOS checks on Apple silicon
+        type: boolean
+        default: true
+      macos_intel:
+        description: Run the tests on Intel macOS
+        type: boolean
+        default: false
   pull_request:
     types: [labeled]
 
@@ -19,149 +40,59 @@ permissions:
   contents: read
 
 jobs:
-  clippy-windows:
-    name: clippy (windows)
-    if: github.event_name != 'pull_request' || github.event.label.name == 'windows'
+  windows:
+    name: windows
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.windows) || (github.event_name == 'pull_request' && github.event.label.name == 'windows')
     runs-on: windows-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: cargo xtask clippy
-
-  test-windows:
-    name: test (windows)
-    if: github.event_name != 'pull_request' || github.event.label.name == 'windows'
-    runs-on: windows-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: cargo xtask test
-
-  slow-tests-windows:
-    name: slow-tests (windows)
-    if: github.event_name != 'pull_request' || github.event.label.name == 'windows'
-    runs-on: windows-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
+    concurrency:
+      group: platforms-${{ github.event.pull_request.number || github.run_id }}-windows
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - run: cargo xtask slow-tests
-
-  lints-windows:
-    name: lints (windows)
-    if: github.event_name != 'pull_request' || github.event.label.name == 'windows'
-    runs-on: windows-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: cargo xtask lints
+          cache-key: windows
+          save-cache: ${{ github.event_name == 'schedule' }}
+      - run: cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace
 
-  ac-trace-windows:
-    name: ac-trace (windows)
-    if: github.event_name != 'pull_request' || github.event.label.name == 'windows'
-    runs-on: windows-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: cargo xtask ac-trace
-
-  clippy-macos:
-    name: clippy (macos)
-    if: github.event_name != 'pull_request' || github.event.label.name == 'macos'
+  macos:
+    name: macos
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.macos) || (github.event_name == 'pull_request' && github.event.label.name == 'macos')
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 150
+    concurrency:
+      group: platforms-${{ github.event.pull_request.number || github.run_id }}-macos
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - run: cargo xtask clippy
-
-  test-macos:
-    name: test (macos)
-    if: github.event_name != 'pull_request' || github.event.label.name == 'macos'
-    runs-on: macos-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: cargo xtask test
+          cache-key: macos
+          save-cache: ${{ github.event_name == 'schedule' }}
+      - run: cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace
 
-  test-macos-intel:
-    name: test (macos intel)
-    if: github.event_name != 'pull_request' || github.event.label.name == 'macos'
+  macos-intel:
+    name: macos-intel
+    if: github.event_name == 'workflow_dispatch' && inputs.macos_intel
     runs-on: macos-15-intel
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: cargo xtask test
-
-  slow-tests-macos:
-    name: slow-tests (macos)
-    if: github.event_name != 'pull_request' || github.event.label.name == 'macos'
-    runs-on: macos-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
+    concurrency:
+      group: platforms-${{ github.event.pull_request.number || github.run_id }}-macos-intel
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - run: cargo xtask slow-tests
-
-  slow-tests-macos-intel:
-    name: slow-tests (macos intel)
-    if: github.event_name != 'pull_request' || github.event.label.name == 'macos'
-    runs-on: macos-15-intel
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: cargo xtask slow-tests
-
-  lints-macos:
-    name: lints (macos)
-    if: github.event_name != 'pull_request' || github.event.label.name == 'macos'
-    runs-on: macos-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: cargo xtask lints
-
-  ac-trace-macos:
-    name: ac-trace (macos)
-    if: github.event_name != 'pull_request' || github.event.label.name == 'macos'
-    runs-on: macos-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: cargo xtask ac-trace
+          cache-key: macos-intel
+          save-cache: ${{ github.event_name == 'schedule' }}
+      - run: cargo xtask gate --only test,slow-tests

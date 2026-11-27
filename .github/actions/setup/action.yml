@@ -1,7 +1,8 @@
 name: Set up the gate
 description: >-
   Installs the Rust toolchain of rust-toolchain.toml, restores the build cache and installs the
-  tools at the versions of gate/tools.toml. Every job of the gate runs it after the checkout.
+  tools at the versions of gate/tools.toml. Jobs that build or test run it after the checkout; jobs
+  that only run xtask get it through .github/actions/xtask, which runs it on a cache miss.
 
 # Without inputs a job gets rust-cache's own behaviour: a cache of its own, saved by every run.
 inputs:
@@ -17,6 +18,12 @@ inputs:
       `false`.
     required: false
     default: 'true'
+  save-xtask:
+    description: >-
+      Whether the job saves the xtask binary that the tools step built, for the jobs that only
+      need xtask: `true` or `false`. Only the gate job on `main` passes `true`.
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -46,3 +53,12 @@ runs:
       uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
       with:
         tool: ${{ steps.tools.outputs.spec }}
+
+    # The tools step built xtask into this path through the alias of `.cargo/config.toml`. The key
+    # names everything that goes into the binary.
+    - name: Save the xtask binary
+      if: inputs.save-xtask == 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: target/xtask-bin/debug/xtask
+        key: xtask-bin-${{ runner.os }}-${{ hashFiles('xtask/**', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/**') }}

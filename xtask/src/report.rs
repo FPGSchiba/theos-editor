@@ -11,24 +11,32 @@ use std::path::{Path, PathBuf};
 use crate::verdict::{Check, Finding, Verdict};
 use crate::{Error, Result};
 
-/// Writes one line per check, `pass` or `FAIL` and the check's name, and under each failing
-/// check its findings as `  - path:line: message`. Notes follow as `  note: …`.
+/// Writes one line per check, `pass`, `not needed` or `FAIL` and the check's name. Under it come
+/// the reason a check was not needed as `  reason: …`, its findings as `  - path:line: message`
+/// and its notes as `  note: …`.
 ///
 /// A finding or note that spans several lines continues on lines that start with `    | `.
 ///
 /// Finding and note text can come from a pull request, and the runner reads a line as a workflow
 /// command when it starts with `::` once leading whitespace is gone. So no line of the table
-/// starts with the text itself: each one starts with a marker (`- `, `note:` or `| `), and the
-/// text is split into lines at every kind of line break first, so a break cannot hide a
-/// line start in the middle of one of ours.
+/// starts with the text itself: each one starts with a marker (`- `, `note: `, `reason: ` or
+/// `| `), and the text is split into lines at every kind of line break first, so a break cannot
+/// hide a line start in the middle of one of ours.
 ///
 /// # Errors
 ///
 /// Fails when `out` cannot be written.
 pub fn write_table(verdicts: &[Verdict], out: &mut dyn Write) -> io::Result<()> {
     for verdict in verdicts {
-        let status = if verdict.passed() { "pass" } else { "FAIL" };
-        writeln!(out, "{status}  {}", verdict.check.name())?;
+        writeln!(
+            out,
+            "{}  {}",
+            Status::of(verdict).word(),
+            verdict.check.name()
+        )?;
+        if let Some(reason) = &verdict.not_needed {
+            write_marked(out, "reason: ", reason)?;
+        }
         for finding in &verdict.findings {
             let text = match location(finding) {
                 Some(place) => format!("{place}: {}", finding.message),
@@ -41,6 +49,38 @@ pub fn write_table(verdicts: &[Verdict], out: &mut dyn Write) -> io::Result<()> 
         }
     }
     Ok(())
+}
+
+/// What a verdict says, in the table and in the summary alike. A finding fails it, even one of a
+/// check that was not needed, so a failure never hides behind another word.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Status {
+    /// The verdict has findings.
+    Fail,
+    /// The check was left out because the change does not need it, and found nothing.
+    NotNeeded,
+    /// The check ran and found nothing.
+    Pass,
+}
+
+impl Status {
+    fn of(verdict: &Verdict) -> Self {
+        if !verdict.passed() {
+            Self::Fail
+        } else if verdict.is_not_needed() {
+            Self::NotNeeded
+        } else {
+            Self::Pass
+        }
+    }
+
+    const fn word(self) -> &'static str {
+        match self {
+            Self::Fail => "FAIL",
+            Self::NotNeeded => "not needed",
+            Self::Pass => "pass",
+        }
+    }
 }
 
 /// Writes `text` indented, its first line after `marker` and every further line after `| `.
@@ -62,8 +102,25 @@ fn write_marked(out: &mut dyn Write, marker: &str, text: &str) -> io::Result<()>
 ///
 /// Fails when `out` cannot be written to.
 pub fn write_error(out: &mut dyn Write, error: &dyn std::fmt::Display) -> io::Result<()> {
-    let mut lines = lines_of(&error.to_string()).into_iter();
-    writeln!(out, "error: {}", lines.next().unwrap_or_default())?;
+    write_labelled(out, "error: ", &error.to_string())
+}
+
+/// Writes `note` for the output, marked as [`write_error`] marks an error: the first line after
+/// `note: `, every further line after `  | `.
+///
+/// A note may hold text a pull request controls, such as the stderr of git quoting a revision.
+///
+/// # Errors
+///
+/// Fails when `out` cannot be written to.
+pub fn write_note(out: &mut dyn Write, note: &str) -> io::Result<()> {
+    write_labelled(out, "note: ", note)
+}
+
+/// Writes `text`, its first line after `label` and every further line after `  | `.
+fn write_labelled(out: &mut dyn Write, label: &str, text: &str) -> io::Result<()> {
+    let mut lines = lines_of(text).into_iter();
+    writeln!(out, "{label}{}", lines.next().unwrap_or_default())?;
     for line in lines {
         writeln!(out, "  | {line}")?;
     }
@@ -116,22 +173,35 @@ pub fn annotation(check: Check, finding: &Finding) -> String {
     command
 }
 
-/// The verdicts as markdown: a table with a row per check, then a section for every check that
-/// has findings or notes. This is what goes to `$GITHUB_STEP_SUMMARY`.
+/// The verdicts as markdown: why every check ran, when `every_because` says so, then a table with
+/// a row per check, then a section for every check that has findings or notes or was not needed.
+/// This is what goes to `$GITHUB_STEP_SUMMARY`.
 #[must_use]
-pub fn summary_markdown(verdicts: &[Verdict]) -> String {
-    let mut text = String::from("### xtask\n\n| Check | Result |\n|---|---|\n");
-    for verdict in verdicts {
-        let status = if verdict.passed() { "pass" } else { "**FAIL**" };
+pub fn summary_markdown(verdicts: &[Verdict], every_because: Option<&str>) -> String {
+    let mut text = String::from("### xtask\n\n");
+    if let Some(note) = every_because {
+        let note = note.lines().collect::<Vec<_>>().join(" ");
         // Writing to a `String` cannot fail.
+        let _ = write!(text, "Why every check ran: {note}\n\n");
+    }
+    text.push_str("| Check | Result |\n|---|---|\n");
+    for verdict in verdicts {
+        let status = match Status::of(verdict) {
+            Status::Fail => "**FAIL**",
+            other => other.word(),
+        };
         let _ = writeln!(text, "| `{}` | {status} |", verdict.check.name());
     }
     text.push('\n');
     for verdict in verdicts {
-        if verdict.findings.is_empty() && verdict.notes.is_empty() {
+        if verdict.findings.is_empty() && verdict.notes.is_empty() && !verdict.is_not_needed() {
             continue;
         }
         let _ = write!(text, "#### `{}`\n\n", verdict.check.name());
+        if let Some(reason) = &verdict.not_needed {
+            let reason = reason.lines().collect::<Vec<_>>().join(" ");
+            let _ = write!(text, "{reason}\n\n");
+        }
         for finding in &verdict.findings {
             let message = finding.message.lines().collect::<Vec<_>>().join(" ");
             match location(finding) {
@@ -165,10 +235,7 @@ pub fn summary_markdown(verdicts: &[Verdict]) -> String {
 ///
 /// Fails when `out` or the summary file cannot be written.
 pub fn emit(verdict: &Verdict, ci: bool, out: &mut dyn Write) -> Result<()> {
-    let summary = std::env::var_os("GITHUB_STEP_SUMMARY")
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from);
-    emit_with(verdict, ci, summary.as_deref(), out)
+    emit_with(verdict, ci, summary_path().as_deref(), out)
 }
 
 fn emit_with(
@@ -180,14 +247,47 @@ fn emit_with(
     let verdicts = std::slice::from_ref(verdict);
     write_table(verdicts, out).map_err(output_error)?;
     if ci {
+        publish_with(verdicts, None, summary, out)?;
+    }
+    Ok(())
+}
+
+/// Writes the annotation of every finding of `verdicts` to `out`, and appends one markdown
+/// summary of all of them, with why every check ran when `every_because` says so, to the file
+/// named by `$GITHUB_STEP_SUMMARY` when it is set.
+///
+/// # Errors
+///
+/// Fails when `out` or the summary file cannot be written.
+pub fn publish(
+    verdicts: &[Verdict],
+    every_because: Option<&str>,
+    out: &mut dyn Write,
+) -> Result<()> {
+    publish_with(verdicts, every_because, summary_path().as_deref(), out)
+}
+
+fn publish_with(
+    verdicts: &[Verdict],
+    every_because: Option<&str>,
+    summary: Option<&Path>,
+    out: &mut dyn Write,
+) -> Result<()> {
+    for verdict in verdicts {
         for finding in &verdict.findings {
             writeln!(out, "{}", annotation(verdict.check, finding)).map_err(output_error)?;
         }
-        if let Some(path) = summary {
-            append(path, &summary_markdown(verdicts))?;
-        }
+    }
+    if let Some(path) = summary {
+        append(path, &summary_markdown(verdicts, every_because))?;
     }
     Ok(())
+}
+
+fn summary_path() -> Option<PathBuf> {
+    std::env::var_os("GITHUB_STEP_SUMMARY")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
 }
 
 fn append(path: &Path, text: &str) -> Result<()> {
@@ -365,6 +465,7 @@ mod tests {
                 "note first\n::error::in a note".to_owned(),
                 "::notice::note".to_owned(),
             ],
+            not_needed: None,
         }
     }
 
@@ -420,7 +521,7 @@ mod tests {
 
     #[test]
     fn summary_markdown_has_a_row_per_check_and_a_section_per_finding_list() {
-        let text = summary_markdown(&[Verdict::pass(Check::Fmt), failing()]);
+        let text = summary_markdown(&[Verdict::pass(Check::Fmt), failing()], None);
         assert_eq!(
             text,
             "### xtask\n\
@@ -442,7 +543,7 @@ mod tests {
     fn summary_markdown_puts_notes_in_a_text_block() {
         let mut verdict = Verdict::pass(Check::AcTrace);
         verdict.notes.push("CE-08.1 -> a_test".to_owned());
-        let text = summary_markdown(&[verdict]);
+        let text = summary_markdown(&[verdict], None);
         assert!(
             text.contains("#### `ac-trace`\n\n```text\nCE-08.1 -> a_test\n```\n"),
             "{text}"
@@ -451,10 +552,13 @@ mod tests {
 
     #[test]
     fn summary_markdown_keeps_a_finding_on_one_line() {
-        let text = summary_markdown(&[Verdict::with(
-            Check::PrBody,
-            vec![Finding::new("first\nsecond")],
-        )]);
+        let text = summary_markdown(
+            &[Verdict::with(
+                Check::PrBody,
+                vec![Finding::new("first\nsecond")],
+            )],
+            None,
+        );
         assert!(text.contains("- first second\n"), "{text}");
     }
 
@@ -543,6 +647,109 @@ mod tests {
         let mut out = Vec::new();
         let result = emit_with(&failing(), true, Some(dir.path()), &mut out);
         assert!(matches!(result, Err(crate::Error::Io { .. })), "{result:?}");
+        Ok(())
+    }
+
+    fn not_needed() -> Verdict {
+        Verdict::not_needed(Check::Test, "docs only")
+    }
+
+    // AC: CE-08C.1
+    #[test]
+    fn summary_lists_every_check_with_its_verdict() {
+        let clippy = Verdict::with(Check::Clippy, vec![Finding::new("unused")]);
+        let text = summary_markdown(&[Verdict::pass(Check::Fmt), clippy, not_needed()], None);
+        assert!(text.contains("| `fmt` | pass |\n"), "{text}");
+        assert!(text.contains("| `clippy` | **FAIL** |\n"), "{text}");
+        assert!(text.contains("| `test` | not needed |\n"), "{text}");
+        assert!(text.contains("#### `test`\n\ndocs only\n"), "{text}");
+    }
+
+    #[test]
+    fn a_finding_fails_a_not_needed_verdict_in_the_table_and_the_summary() -> TestResult {
+        let mut verdict = not_needed();
+        verdict.findings.push(Finding::new("broken"));
+        assert!(!verdict.passed());
+        let text = table(std::slice::from_ref(&verdict))?;
+        assert!(text.starts_with("FAIL  test\n"), "{text}");
+        let summary = summary_markdown(&[verdict], None);
+        assert!(summary.contains("| `test` | **FAIL** |\n"), "{summary}");
+        Ok(())
+    }
+
+    #[test]
+    fn a_not_needed_verdict_passes_and_says_so_in_the_table() -> TestResult {
+        let verdict = not_needed();
+        assert!(verdict.passed());
+        assert_eq!(
+            table(&[verdict])?,
+            "not needed  test\n  reason: docs only\n"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn publish_appends_one_summary_for_all_verdicts() -> TestResult {
+        let summary = tempfile::NamedTempFile::new()?;
+        std::fs::write(summary.path(), "earlier step\n")?;
+        let mut out = Vec::new();
+        publish_with(
+            &[Verdict::pass(Check::Fmt), failing(), not_needed()],
+            None,
+            Some(summary.path()),
+            &mut out,
+        )?;
+        assert_eq!(
+            String::from_utf8(out)?,
+            "::error file=crates/a/src/lib.rs,line=3,title=lints::allow attribute\n\
+             ::error title=lints::no clippy.toml\n"
+        );
+        let written = std::fs::read_to_string(summary.path())?;
+        assert_eq!(written.matches("### xtask").count(), 1, "{written}");
+        assert!(
+            written.starts_with("earlier step\n### xtask\n"),
+            "{written}"
+        );
+        assert!(written.contains("| `test` | not needed |"), "{written}");
+        assert!(!written.contains("Why every check ran"), "{written}");
+        Ok(())
+    }
+
+    #[test]
+    fn a_note_continues_on_marked_lines() -> TestResult {
+        let mut out = Vec::new();
+        write_note(
+            &mut out,
+            "every check runs: git failed\n::error::x\r\nlast\n",
+        )?;
+        let text = String::from_utf8(out)?;
+        assert_eq!(
+            text,
+            "note: every check runs: git failed\n  | ::error::x\n  | last\n"
+        );
+        assert_eq!(command_lines(&text), Vec::<&str>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn publish_says_in_the_summary_why_every_check_ran() -> TestResult {
+        let summary = tempfile::NamedTempFile::new()?;
+        let mut out = Vec::new();
+        publish_with(
+            &[Verdict::pass(Check::Fmt)],
+            Some("the changed paths could not be read: first\n::error::x"),
+            Some(summary.path()),
+            &mut out,
+        )?;
+        let written = std::fs::read_to_string(summary.path())?;
+        assert!(
+            written.starts_with(
+                "### xtask\n\nWhy every check ran: the changed paths could not be read: first \
+                 ::error::x\n\n| Check | Result |\n"
+            ),
+            "{written}"
+        );
+        assert_eq!(String::from_utf8(out)?, "", "a note is no annotation");
         Ok(())
     }
 }

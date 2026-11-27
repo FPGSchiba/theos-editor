@@ -47,6 +47,9 @@ Start only when the spec PR is merged.
 
 superpowers:subagent-driven-development over the plan, with superpowers:test-driven-development
 in every implementer. Tests carry `// AC: <id>`. Never change protected paths on this branch.
+Commit as often as the work needs, but push when a task or a review round is finished, not after
+every commit: every push starts CI runs that cost money. Likewise merge `main` into the branch
+only when the PR is ready to merge and next in line, not after every merge to `main`.
 
 ## 4. Final review loop
 

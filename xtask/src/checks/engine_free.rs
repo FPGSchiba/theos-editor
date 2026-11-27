@@ -170,6 +170,7 @@ pub fn check(root: &Path, engine: &EngineCrates, locked: bool, offline: bool) ->
         check: Check::EngineFree,
         findings,
         notes,
+        not_needed: None,
     })
 }
 
