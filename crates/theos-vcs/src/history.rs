@@ -23,7 +23,8 @@ pub struct Commit {
     /// The first line of the message.
     pub subject: String,
     /// The trailers (`Approved-by`, `Co-Authored-By`, …), unfolded, in order; other lines of the
-    /// trailer block, such as `(cherry picked from commit …)`, are left out.
+    /// trailer block, such as `(cherry picked from commit …)`, are left out. Empty when a trailer
+    /// value holds `0x1c` or `0x1d`, so the block cannot be split.
     pub trailers: Vec<Trailer>,
     /// How this commit changed the followed file. A merge shows its change against its first
     /// parent. A rename made on a branch that was merged with a merge commit shows on that branch
@@ -64,11 +65,12 @@ pub struct Page {
 }
 
 /// The format of one commit: a record separator (`0x1e`), then the id, the author's name and
-/// email, the raw date (`<seconds> <±hhmm>`), the subject and the trailers, separated by unit
-/// separators (`0x1f`). Trailers are separated by `0x1d`, a key from its value by `0x1c`; `only`
-/// leaves out the lines of the trailer block that are not trailers.
-const FORMAT: &str = "--format=%x1e%H%x1f%aN%x1f%aE%x1f%ad%x1f%s%x1f\
-                      %(trailers:only,unfold,separator=%x1d,key_value_separator=%x1c)";
+/// email, the raw date (`<seconds> <±hhmm>`), the trailers and the subject, each ended by a NUL
+/// (the subject by the one `-z` adds). No field can hold a NUL, so a name, an email or a subject
+/// may hold any other byte. Trailers are separated by `0x1d`, a key from its value by `0x1c`;
+/// `only` leaves out the lines of the trailer block that are not trailers.
+const FORMAT: &str = "--format=%x1e%H%x00%aN%x00%aE%x00%ad%x00\
+                      %(trailers:only,unfold,separator=%x1d,key_value_separator=%x1c)%x00%s";
 
 /// The largest `--max-count` git reads (an `int`).
 const GIT_INT_MAX: usize = 2_147_483_647;

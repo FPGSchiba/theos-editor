@@ -477,3 +477,62 @@ fn a_cancelled_history_is_cancelled() -> Result {
     );
     Ok(())
 }
+
+/// Commits everything with `message` on stdin and the author `name`.
+fn commit_as(sandbox: &Sandbox, repo: &Path, name: &str, message: &str) -> Result {
+    sandbox.run(repo, &["add", "-A"])?;
+    let user = format!("user.name={name}");
+    sandbox.run_input(
+        repo,
+        &[
+            "-c",
+            &user,
+            "-c",
+            "user.email=synthetic@example.invalid",
+            "commit",
+            "-q",
+            "-F",
+            "-",
+        ],
+        message.as_bytes(),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn subjects_authors_and_trailers_with_any_text_keep_the_history() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    let plain = "fix 100% \"quoted\"\tand 'single' \u{e9}t\u{e9} \u{732b}";
+    Sandbox::write(&repo.join("a.md"), &record("a", ""))?;
+    commit_as(&sandbox, &repo, "Synthetic", plain)?;
+    Sandbox::write(&repo.join("a.md"), &record("a", "two\n"))?;
+    commit_as(&sandbox, &repo, "Syn\u{1f}thetic", "a\u{1f}b\u{1e}c")?;
+    Sandbox::write(&repo.join("a.md"), &record("a", "three\n"))?;
+    commit_as(
+        &sandbox,
+        &repo,
+        "Synthetic",
+        "odd trailer\n\nApproved-by: a\u{1c}b\u{1d}c\n",
+    )?;
+    let commits = history_of(&sandbox, &repo, "a.md", ALL)?;
+    let read: Vec<(&str, &str, usize)> = commits
+        .iter()
+        .map(|commit| {
+            (
+                commit.subject.as_str(),
+                commit.author.name.as_str(),
+                commit.trailers.len(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        read,
+        [
+            ("odd trailer", "Synthetic", 0),
+            ("a\u{1f}b\u{1e}c", "Syn\u{1f}thetic", 0),
+            (plain, "Synthetic", 0),
+        ]
+    );
+    Ok(())
+}

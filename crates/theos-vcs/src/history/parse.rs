@@ -1,10 +1,11 @@
 //! Reader for the answer of `git log --name-status -z` with the format of [`super::FORMAT`].
 //!
-//! Each commit is, as git 2.56 writes it: `0x1e`, six fields separated by `0x1f`, a NUL (the
-//! end of the format under `-z`), a newline, then its name-status line as NUL-terminated
+//! Each commit is, as git 2.56 writes it: `0x1e`, six NUL-terminated header fields (the last NUL
+//! is the end of the format under `-z`), a newline, then its name-status line as NUL-terminated
 //! fields: the letter with its score (`R083`), the path, and for a rename or copy the new path.
-//! The answer is read in that order, so a path may hold any byte but NUL; a header with the
-//! wrong number of fields is an error, never a guess.
+//! The answer is read in that order, so a header field or a path may hold any byte but NUL. A
+//! trailer block that cannot be split (a value holding `0x1c` or `0x1d`) leaves the commit
+//! without trailers rather than failing the history.
 
 use super::{Commit, Person, Trailer};
 use crate::status::Change;
@@ -12,13 +13,11 @@ use crate::status::parse::change;
 
 /// Starts a commit.
 const RECORD: u8 = 0x1e;
-/// Separates the fields of a commit's header.
-const UNIT: u8 = 0x1f;
 /// Separates two trailers.
 const TRAILERS: u8 = 0x1d;
 /// Separates a trailer's key from its value.
 const KEY_VALUE: u8 = 0x1c;
-/// The fields of a header: id, name, email, date, subject, trailers.
+/// The fields of a header: id, name, email, date, trailers, subject.
 const HEADER_FIELDS: usize = 6;
 
 /// Reads every commit of the answer.
@@ -38,13 +37,15 @@ fn commit(input: &[u8]) -> Result<(Commit, &[u8]), String> {
     let input = input
         .strip_prefix(&[RECORD])
         .ok_or("a commit does not start with 0x1e")?;
-    let (header, rest) = field(input)?;
-    let rest = rest
-        .strip_prefix(
-            b"
-",
-        )
-        .unwrap_or(rest);
+    let mut header = [&[][..]; HEADER_FIELDS];
+    let mut rest = input;
+    for (index, slot) in header.iter_mut().enumerate() {
+        let (value, after) = field(rest)
+            .map_err(|_| format!("a commit has {index} header fields, not {HEADER_FIELDS}"))?;
+        *slot = value;
+        rest = after;
+    }
+    let rest = rest.strip_prefix(b"\n").unwrap_or(rest);
     let (letters, rest) = field(rest)?;
     let letter = *letters.first().ok_or("a commit has an empty change")?;
     let change = change(letter)?;
@@ -55,13 +56,7 @@ fn commit(input: &[u8]) -> Result<(Commit, &[u8]), String> {
     } else {
         (first, None, rest)
     };
-    let fields: Vec<&[u8]> = header.split(|byte| *byte == UNIT).collect();
-    let [id, name, email, date, subject, trailers] = fields[..] else {
-        return Err(format!(
-            "a commit has {} header fields, not {HEADER_FIELDS}",
-            fields.len()
-        ));
-    };
+    let [id, name, email, date, trailers, subject] = header;
     let (time, offset_minutes) = raw_date(date)?;
     let commit = Commit {
         id: String::from_utf8(id.to_vec()).map_err(|_| "a commit id is not UTF-8")?,
@@ -72,7 +67,10 @@ fn commit(input: &[u8]) -> Result<(Commit, &[u8]), String> {
         time,
         offset_minutes,
         subject: text(subject),
-        trailers: trailer_list(trailers)?,
+        trailers: trailer_list(trailers).unwrap_or_else(|message| {
+            tracing::debug!(%message, "a commit's trailers are left out");
+            Vec::new()
+        }),
         change,
         path: path.to_vec(),
         from,
@@ -149,7 +147,7 @@ mod tests {
     /// One commit as git writes it: the format, its NUL, a newline, then the name-status fields.
     fn record(id: &str, date: &str, subject: &str, trailers: &str, status: &[&str]) -> Vec<u8> {
         let mut out = format!(
-            "\x1e{id}\x1fSynthetic\x1fsynthetic@example.invalid\x1f{date}\x1f{subject}\x1f{trailers}\0\n"
+            "\x1e{id}\0Synthetic\0synthetic@example.invalid\0{date}\0{trailers}\0{subject}\0\n"
         )
         .into_bytes();
         for field in status {
@@ -285,16 +283,43 @@ mod tests {
     }
 
     #[test]
-    fn a_commit_with_the_wrong_number_of_fields_is_an_error() {
-        let out =
-            b"\x1eabc\x1fSynthetic\x1fsynthetic@example.invalid\x1f1 +0000\x1fsubject\0\nM\0a.md\0";
-        assert!(commits(out).is_err());
+    fn a_commit_with_too_few_header_fields_is_an_error() {
+        let out = b"\x1eabc\0Synthetic\0synthetic@example.invalid\x001 +0000";
+        assert_eq!(
+            commits(out),
+            Err("a commit has 3 header fields, not 6".to_owned())
+        );
     }
 
     #[test]
-    fn a_subject_with_a_unit_separator_is_an_error_not_a_guess() {
-        let out = record(ID_A, "1 +0000", "a\x1fb", "", &["M", "a.md"]);
-        assert!(commits(&out).is_err());
+    fn a_name_and_a_subject_with_separator_bytes_are_read_whole() -> Result<(), String> {
+        let mut out = format!(
+            "\x1e{ID_A}\0Syn\x1fthe\x1etic\0synthetic@example.invalid\x001 +0000\0\0a\x1fb\x1ec\0\n"
+        )
+        .into_bytes();
+        out.extend_from_slice(b"M\0a.md\0");
+        let read = commits(&out)?;
+        assert_eq!(read.len(), 1);
+        assert_eq!(read[0].author.name, "Syn\x1fthe\x1etic");
+        assert_eq!(read[0].subject, "a\x1fb\x1ec");
+        Ok(())
+    }
+
+    #[test]
+    fn a_trailer_block_that_cannot_be_split_leaves_the_commit_without_trailers()
+    -> Result<(), String> {
+        let out = record(
+            ID_A,
+            "1 +0000",
+            "edit",
+            "Approved-by\x1ca\x1cb\x1dc",
+            &["M", "a.md"],
+        );
+        let read = commits(&out)?;
+        assert_eq!(read.len(), 1);
+        assert_eq!(read[0].trailers, Vec::new());
+        assert_eq!(read[0].subject, "edit");
+        Ok(())
     }
 
     #[test]
