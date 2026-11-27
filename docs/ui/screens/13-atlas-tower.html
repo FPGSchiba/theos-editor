@@ -11,9 +11,11 @@
 -->
 <link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
 <link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<script src="../../../design/theos-ui/components/bundle.js"></script>
+<script>TheosUI.setTheme(new URLSearchParams(location.search).get("theme"));</script>
 <style>
-body{margin:0;background:#060810}
-a{color:#3ef0ff}a:hover{color:#e4ecff}
+body{margin:0;background:var(--bg)}
+a{color:var(--sig-info)}a:hover{color:var(--text)}
 .tu-shell.cs{height:900px}
 :where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
 :where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
@@ -122,7 +124,7 @@ a{color:#3ef0ff}a:hover{color:#e4ecff}
         </div>
 
         <div style="display: grid; grid-template-columns: 34px 190px 150px 96px 150px 1fr; align-items: center; padding: 0 10px; min-height: 38px; border-bottom: 1px solid var(--border);">
-          <div style="align-self: stretch; display: flex; justify-content: center; position: relative;"><div style="width: 2px; background: var(--sig-attention); opacity: 0.4; margin-top: 19px;"></div><div style="position: absolute; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: var(--sig-attention);"></div></div>
+          <div style="align-self: stretch; display: flex; justify-content: center; position: relative;"><div style="width: 2px; background: color-mix(in srgb, var(--sig-attention) 40%, transparent); margin-top: 19px;"></div><div style="position: absolute; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: var(--sig-attention);"></div></div>
           <div class="tu-row"><span class="tu-kind" data-kind="floor"></span><span class="tu-mono" style="font-size: 10.5px; color: var(--text);">F00 The Hem</span><span class="tu-chip is-neutral">hub</span></div>
           <span class="tu-mono tu-dim" style="font-size: 10px;">—</span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">—</span>
@@ -131,7 +133,7 @@ a{color:#3ef0ff}a:hover{color:#e4ecff}
         </div>
 
         <div style="display: grid; grid-template-columns: 34px 190px 150px 96px 150px 1fr; align-items: center; padding: 0 10px; min-height: 38px; border-bottom: 1px solid var(--border);">
-          <div style="align-self: stretch; display: flex; justify-content: center; position: relative;"><div style="width: 2px; background: var(--sig-attention); opacity: 0.4;"></div><div style="position: absolute; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: var(--sig-attention);"></div></div>
+          <div style="align-self: stretch; display: flex; justify-content: center; position: relative;"><div style="width: 2px; background: color-mix(in srgb, var(--sig-attention) 40%, transparent);"></div><div style="position: absolute; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: var(--sig-attention);"></div></div>
           <div class="tu-row"><span class="tu-kind" data-kind="floor"></span><span class="tu-mono" style="font-size: 10.5px; color: var(--text);">F01 Tutorial</span></div>
           <span class="tu-row"><span class="tu-chip is-info">Q-101</span><span class="tu-mono" style="font-size: 10px; color: var(--sig-approve);">✓ placed</span></span>
           <span class="tu-mono" style="font-size: 10px; color: var(--text);">1</span>
@@ -139,9 +141,9 @@ a{color:#3ef0ff}a:hover{color:#e4ecff}
           <span class="tu-mono" style="font-size: 10px; color: var(--textDim);">tutorial-v2 picked</span>
         </div>
 
-        <div style="display: grid; grid-template-columns: 34px 190px 150px 96px 150px 1fr; align-items: center; padding: 0 10px; min-height: 38px; border-bottom: 1px solid var(--border); opacity: 0.6;">
-          <div style="align-self: stretch; display: flex; justify-content: center;"><div style="width: 2px; background: var(--sig-attention); opacity: 0.4;"></div></div>
-          <div class="tu-row"><span class="tu-kind" data-kind="floor"></span><span class="tu-mono" style="font-size: 10.5px; color: var(--text);">F02–F03</span></div>
+        <div style="display: grid; grid-template-columns: 34px 190px 150px 96px 150px 1fr; align-items: center; padding: 0 10px; min-height: 38px; border-bottom: 1px solid var(--border);">
+          <div style="align-self: stretch; display: flex; justify-content: center;"><div style="width: 2px; background: color-mix(in srgb, var(--sig-attention) 40%, transparent);"></div></div>
+          <div class="tu-row"><span class="tu-kind" data-kind="floor"></span><span class="tu-mono" style="font-size: 10.5px; color: var(--textDim);">F02–F03</span></div>
           <span class="tu-row"><span class="tu-chip is-info">Q-103</span><span class="tu-mono tu-dim" style="font-size: 10px;">draft · no route</span></span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">0</span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">⌂ 1 · ◉ 0</span>
@@ -149,7 +151,7 @@ a{color:#3ef0ff}a:hover{color:#e4ecff}
         </div>
 
         <div style="display: grid; grid-template-columns: 34px 190px 150px 96px 150px 1fr; align-items: center; padding: 0 10px; min-height: 44px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--sig-attention) 8%, transparent); box-shadow: inset 2px 0 0 var(--sig-attention);">
-          <div style="align-self: stretch; display: flex; justify-content: center; position: relative;"><div style="width: 2px; background: var(--sig-attention); opacity: 0.4;"></div><div style="position: absolute; top: 17px; width: 10px; height: 10px; border-radius: 50%; background: var(--sig-attention);"></div></div>
+          <div style="align-self: stretch; display: flex; justify-content: center; position: relative;"><div style="width: 2px; background: color-mix(in srgb, var(--sig-attention) 40%, transparent);"></div><div style="position: absolute; top: 17px; width: 10px; height: 10px; border-radius: 50%; background: var(--sig-attention);"></div></div>
           <div class="tu-row"><span class="tu-kind" data-kind="floor"></span><span class="tu-mono" style="font-size: 10.5px; color: var(--text); font-weight: 700;">F04 The Choir-hall</span></div>
           <span class="tu-row"><span class="tu-chip is-info">Q-104</span><span class="tu-mono" style="font-size: 10px; color: var(--sig-approve);">✓ placed</span></span>
           <span class="tu-row"><span class="tu-mono" style="font-size: 10px; color: var(--text);">2</span><span class="tu-mono" style="font-size: 10px; color: var(--sig-warn);">1 unplaced step</span></span>
@@ -157,18 +159,18 @@ a{color:#3ef0ff}a:hover{color:#e4ecff}
           <span class="tu-row"><span class="tu-mono" style="font-size: 10px; color: var(--textDim);">hearth-valley-v1</span><span class="tu-chip is-warn">⚠ 2</span></span>
         </div>
 
-        <div style="display: grid; grid-template-columns: 34px 190px 150px 96px 150px 1fr; align-items: center; padding: 0 10px; min-height: 38px; border-bottom: 1px solid var(--border); opacity: 0.6;">
-          <div style="align-self: stretch; display: flex; justify-content: center;"><div style="width: 2px; background: var(--sig-attention); opacity: 0.4;"></div></div>
-          <div class="tu-row"><span class="tu-kind" data-kind="floor"></span><span class="tu-mono" style="font-size: 10.5px; color: var(--text);">F05–F09</span></div>
+        <div style="display: grid; grid-template-columns: 34px 190px 150px 96px 150px 1fr; align-items: center; padding: 0 10px; min-height: 38px; border-bottom: 1px solid var(--border);">
+          <div style="align-self: stretch; display: flex; justify-content: center;"><div style="width: 2px; background: color-mix(in srgb, var(--sig-attention) 40%, transparent);"></div></div>
+          <div class="tu-row"><span class="tu-kind" data-kind="floor"></span><span class="tu-mono" style="font-size: 10.5px; color: var(--textDim);">F05–F09</span></div>
           <span class="tu-mono tu-dim" style="font-size: 10px;">not started</span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">—</span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">—</span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">—</span>
         </div>
 
-        <div style="display: grid; grid-template-columns: 34px 190px 150px 96px 150px 1fr; align-items: center; padding: 0 10px; min-height: 38px; border-bottom: 1px solid var(--border); opacity: 0.6;">
-          <div style="align-self: stretch; display: flex; justify-content: center; position: relative;"><div style="width: 2px; background: var(--sig-attention); opacity: 0.4; margin-bottom: 19px;"></div><div style="position: absolute; top: 14px; width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--sig-attention);"></div></div>
-          <div class="tu-row"><span class="tu-kind" data-kind="floor"></span><span class="tu-mono" style="font-size: 10.5px; color: var(--text);">F10</span></div>
+        <div style="display: grid; grid-template-columns: 34px 190px 150px 96px 150px 1fr; align-items: center; padding: 0 10px; min-height: 38px; border-bottom: 1px solid var(--border);">
+          <div style="align-self: stretch; display: flex; justify-content: center; position: relative;"><div style="width: 2px; background: color-mix(in srgb, var(--sig-attention) 40%, transparent); margin-bottom: 19px;"></div><div style="position: absolute; top: 14px; width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--sig-attention);"></div></div>
+          <div class="tu-row"><span class="tu-kind" data-kind="floor"></span><span class="tu-mono" style="font-size: 10.5px; color: var(--textDim);">F10</span></div>
           <span class="tu-mono tu-dim" style="font-size: 10px;">band trial · planned</span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">—</span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">—</span>
@@ -185,9 +187,9 @@ a{color:#3ef0ff}a:hover{color:#e4ecff}
           <span style="font: 700 11px/14px var(--font-ui); color: var(--text);">Band 3</span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">F21–F30 · 1 script · no maps yet</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); background: var(--panel2); opacity: 0.6;">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); background: var(--panel2);">
           <span class="tu-section__caret">▸</span><span class="tu-kind" data-kind="band"></span>
-          <span style="font: 700 11px/14px var(--font-ui); color: var(--text);">Bands 4–5</span>
+          <span style="font: 700 11px/14px var(--font-ui); color: var(--textDim);">Bands 4–5</span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">F31–F50 · not started</span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); background: var(--panel2);">
@@ -195,12 +197,12 @@ a{color:#3ef0ff}a:hover{color:#e4ecff}
           <span style="font: 700 11px/14px var(--font-ui); color: var(--text);">Band 6</span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">F51–F60 · 1 script · no maps yet</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); background: var(--panel2); opacity: 0.6;">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); background: var(--panel2);">
           <span class="tu-section__caret">▸</span><span class="tu-kind" data-kind="band"></span>
-          <span style="font: 700 11px/14px var(--font-ui); color: var(--text);">Bands 7–10</span>
+          <span style="font: 700 11px/14px var(--font-ui); color: var(--textDim);">Bands 7–10</span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">F61–F100 · not started</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); opacity: 0.45;">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border);">
           <span class="tu-mono tu-dim">◌</span>
           <span style="font: 700 11px/14px var(--font-ui); color: var(--textDim);">After the Tower · the Abyss</span>
           <span class="tu-mono tu-dim" style="font-size: 10px;">endgame · later</span>

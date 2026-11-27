@@ -123,6 +123,22 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 - tower-of-theos#3 (P20, merged) locks `markdown-it-py` 4.3.0 in `tools/repo_checks`, which was
   released the day it was locked. Pinning an older 4.x is a one-line follow-up if Jann prefers a
   cool-down.
+- Theos UI with Grid Light (branch `docs/theos-ui-grid-light`, 27 Nov 2026):
+  - A user-facing theme setting is new scope: the umbrella has none (G13 only says the UI uses
+    `design/theos-ui/`). Proposed AC, under CE-42 as Jann asked: "CE-42.3 The user picks Grid
+    Noir, Grid Light or the system's preference; the choice is a user setting, applies to every
+    window at once, and 3D viewports and map stages stay Grid Noir." CE-42 is the Graph story of
+    P15, and settings are CE-39 (P14, `10-settings.html`), so CE-39.5 may be the better home.
+    Jann decides the place and the wording; no phase builds it before that.
+  - Four component states in the design system's `bundle.css` put signal-coloured text on a
+    tint of the same signal and miss 4.5:1. The design system's own previews show them too:
+    the active rail label (amber 4.3:1 in Grid Light), tinted chips (magenta 4.1, cyan 4.3,
+    amber 4.3 in Grid Light), the review summary (amber 4.3 in Grid Light) and a violet filter
+    (4.2:1 in Grid Noir, below the README's violet flag because the tint darkens `panel2`).
+    Tested fix for the artifact: text on those tints mixes 10 % toward `text`, for example
+    `color-mix(in srgb, var(--c) 90%, var(--text))`. Every screen and preview then passes in
+    both themes, the lowest at 4.8:1. `design/theos-ui/` mirrors the artifact, so the fix goes
+    into the artifact and reaches the repo with the next refresh.
 
 ## Needs a private session (Confluence, Jira, plugin)
 

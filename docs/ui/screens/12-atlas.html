@@ -11,9 +11,11 @@
 -->
 <link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
 <link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<script src="../../../design/theos-ui/components/bundle.js"></script>
+<script>TheosUI.setTheme(new URLSearchParams(location.search).get("theme"));</script>
 <style>
-body{margin:0;background:#060810}
-a{color:#3ef0ff}a:hover{color:#e4ecff}
+body{margin:0;background:var(--bg)}
+a{color:var(--sig-info)}a:hover{color:var(--text)}
 .tu-shell.cs{height:900px}
 :where(.cs) button.tu-rail__item{width:100%;padding:0;background:transparent;border:0;border-left:2px solid transparent}
 :where(.cs) button.tu-tab{background:transparent;border:0;border-right:1px solid var(--border);border-top:2px solid transparent}
@@ -119,41 +121,41 @@ a{color:#3ef0ff}a:hover{color:#e4ecff}
       <div class="tu-window__bar" style="flex-wrap: wrap; font: 400 10px/14px var(--font-mono); color: var(--textDim);">
         <span style="color: var(--text);">24 × 24 km · frame 24 000 m</span>
         <span class="tu-spacer"></span>
-        <span style="color: var(--sig-attention);">━ main</span>
-        <span style="color: var(--sig-info);">━ trial</span>
-        <span style="color: var(--sig-script);">┅ side</span>
-        <span style="color: var(--sig-reject);">◌ spawn · threat</span>
+        <span><span style="color: var(--sig-attention);">━</span> main</span>
+        <span><span style="color: var(--sig-info);">━</span> trial</span>
+        <span><span style="color: var(--sig-script);">┅</span> side</span>
+        <span><span style="color: var(--sig-reject);">◌</span> spawn · threat</span>
       </div>
       <div class="tu-window__body" style="padding: 10px; gap: 10px;">
         <div style="display: flex; gap: 8px; justify-content: center; align-items: flex-start;">
-          <div style="position: relative; width: 560px; height: 560px; flex-shrink: 0; border: 1px solid var(--border); background: var(--bg); overflow: hidden;">
+          <div data-theme="grid-noir" style="position: relative; width: 560px; height: 560px; flex-shrink: 0; border: 1px solid var(--border); background: var(--bg); overflow: hidden;">
             <img src="../assets/hearth-valley_s1_truth.webp" alt="F04 terrain, truth render with settlements, roads, lake and ruins" style="position: absolute; left: 0; top: 0; width: 560px; height: 560px; display: block;">
 
-            <svg width="560" height="560" viewBox="0 0 560 560" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 560px; height: 560px; fill: none; stroke: #ff8b2e; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.45"><polyline points="212,381 234,342 300,341 322,250 368,209 425,188 462,120 498,36"></polyline></svg>
-            <svg width="560" height="560" viewBox="0 0 560 560" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 560px; height: 560px; fill: none; stroke: #3ef0ff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.45"><polyline points="212,381 292,344 366,354 430,372 476,381 500,300 507,182 498,36"></polyline></svg>
-            <svg width="560" height="560" viewBox="0 0 560 560" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 560px; height: 560px; fill: none; stroke: #7a6cff; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 7 5"><polyline points="425,188 368,209 300,232 237,240 175,250 142,254"></polyline><polyline points="425,188 446,262 470,330 476,381"></polyline></svg>
+            <svg width="560" height="560" viewBox="0 0 560 560" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 560px; height: 560px; fill: none; stroke: color-mix(in srgb, var(--sig-attention) 45%, transparent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round"><polyline points="212,381 234,342 300,341 322,250 368,209 425,188 462,120 498,36"></polyline></svg>
+            <svg width="560" height="560" viewBox="0 0 560 560" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 560px; height: 560px; fill: none; stroke: color-mix(in srgb, var(--sig-info) 45%, transparent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round"><polyline points="212,381 292,344 366,354 430,372 476,381 500,300 507,182 498,36"></polyline></svg>
+            <svg width="560" height="560" viewBox="0 0 560 560" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 560px; height: 560px; fill: none; stroke: var(--sig-script); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 7 5"><polyline points="425,188 368,209 300,232 237,240 175,250 142,254"></polyline><polyline points="425,188 446,262 470,330 476,381"></polyline></svg>
 
-            <div style="position: absolute; left: 124px; top: 236px; width: 36px; height: 36px; box-sizing: border-box; border-radius: 50%; border: 1px dashed #ff516f; background: rgba(255, 81, 111, 0.18);"></div>
-            <div style="position: absolute; left: 516px; top: 270px; width: 28px; height: 28px; box-sizing: border-box; border-radius: 50%; border: 1px dashed #ff516f; background: rgba(255, 81, 111, 0.18);"></div>
-            <div style="position: absolute; left: 495px; top: 170px; width: 24px; height: 24px; box-sizing: border-box; border-radius: 50%; border: 1px dashed #ff516f; background: rgba(255, 81, 111, 0.22);"></div>
-            <div style="position: absolute; left: 112px; top: 276px; padding: 1px 4px; white-space: nowrap; font: 700 9.5px/12px var(--font-mono); color: #ffffff; background: rgba(140, 20, 45, 0.92);">⊛ marsh-lurker · 2</div>
-            <div style="position: absolute; left: 470px; top: 300px; padding: 1px 4px; white-space: nowrap; font: 700 9.5px/12px var(--font-mono); color: #ffffff; background: rgba(140, 20, 45, 0.92);">⊛ raiders · 2</div>
+            <div style="position: absolute; left: 124px; top: 236px; width: 36px; height: 36px; box-sizing: border-box; border-radius: 50%; border: 1px dashed var(--sig-reject); background: color-mix(in srgb, var(--sig-reject) 18%, transparent);"></div>
+            <div style="position: absolute; left: 516px; top: 270px; width: 28px; height: 28px; box-sizing: border-box; border-radius: 50%; border: 1px dashed var(--sig-reject); background: color-mix(in srgb, var(--sig-reject) 18%, transparent);"></div>
+            <div style="position: absolute; left: 495px; top: 170px; width: 24px; height: 24px; box-sizing: border-box; border-radius: 50%; border: 1px dashed var(--sig-reject); background: color-mix(in srgb, var(--sig-reject) 22%, transparent);"></div>
+            <div style="position: absolute; left: 112px; top: 276px; padding: 1px 4px; white-space: nowrap; font: 700 9.5px/12px var(--font-mono); color: var(--text); background: color-mix(in srgb, var(--sig-reject) 50%, var(--bg));">⊛ marsh-lurker · 2</div>
+            <div style="position: absolute; left: 470px; top: 300px; padding: 1px 4px; white-space: nowrap; font: 700 9.5px/12px var(--font-mono); color: var(--text); background: color-mix(in srgb, var(--sig-reject) 50%, var(--bg));">⊛ raiders · 2</div>
 
-            <div style="position: absolute; left: 412px; top: 175px; width: 26px; height: 26px; box-sizing: border-box; border-radius: 50%; border: 2px solid #ff8b2e; box-shadow: 0 0 10px rgba(255, 139, 46, 0.6);"></div>
-            <div style="position: absolute; left: 336px; top: 148px; padding: 2px 5px; white-space: nowrap; font: 600 10px/13px var(--font-mono); color: #e4ecff; background: rgba(6, 8, 16, 0.86); border: 1px solid #2b3a63;">⌂ Choir-hall nave · ◔ 2</div>
-            <div style="position: absolute; left: 380px; top: 398px; padding: 2px 5px; white-space: nowrap; font: 600 10px/13px var(--font-mono); color: #e4ecff; background: rgba(6, 8, 16, 0.86); border: 1px solid #2b3a63;">⌂ Fates' shrine · ◔ 1</div>
-            <div style="position: absolute; left: 140px; top: 392px; padding: 2px 5px; white-space: nowrap; font: 600 10px/13px var(--font-mono); color: #3ef0ff; background: rgba(6, 8, 16, 0.86); border: 1px solid #2b3a63;">◇ portal from F03</div>
-            <div style="position: absolute; left: 392px; top: 48px; padding: 2px 5px; white-space: nowrap; font: 600 10px/13px var(--font-mono); color: #3ef0ff; background: rgba(6, 8, 16, 0.86); border: 1px solid #2b3a63;">◇ portal to F05</div>
+            <div style="position: absolute; left: 412px; top: 175px; width: 26px; height: 26px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--sig-attention); box-shadow: 0 0 10px color-mix(in srgb, var(--sig-attention) 60%, transparent);"></div>
+            <div style="position: absolute; left: 336px; top: 148px; padding: 2px 5px; white-space: nowrap; font: 600 10px/13px var(--font-mono); color: var(--text); background: color-mix(in srgb, var(--bg) 86%, transparent); border: 1px solid var(--borderHi);">⌂ Choir-hall nave · ◔ 2</div>
+            <div style="position: absolute; left: 380px; top: 398px; padding: 2px 5px; white-space: nowrap; font: 600 10px/13px var(--font-mono); color: var(--text); background: color-mix(in srgb, var(--bg) 86%, transparent); border: 1px solid var(--borderHi);">⌂ Fates' shrine · ◔ 1</div>
+            <div style="position: absolute; left: 140px; top: 392px; padding: 2px 5px; white-space: nowrap; font: 600 10px/13px var(--font-mono); color: var(--sig-info); background: color-mix(in srgb, var(--bg) 86%, transparent); border: 1px solid var(--borderHi);">◇ portal from F03</div>
+            <div style="position: absolute; left: 392px; top: 48px; padding: 2px 5px; white-space: nowrap; font: 600 10px/13px var(--font-mono); color: var(--sig-info); background: color-mix(in srgb, var(--bg) 86%, transparent); border: 1px solid var(--borderHi);">◇ portal to F05</div>
 
-            <div style="position: absolute; left: 482px; top: 392px; width: 8px; height: 8px; border-radius: 50%; background: #a2caa6; border: 1px solid #060810;"></div>
-            <div style="position: absolute; left: 432px; top: 194px; width: 8px; height: 8px; box-sizing: border-box; border-radius: 50%; border: 2px solid #a2caa6; background: transparent;"></div>
+            <div style="position: absolute; left: 482px; top: 392px; width: 8px; height: 8px; border-radius: 50%; background: var(--kind-world); border: 1px solid var(--bg);"></div>
+            <div style="position: absolute; left: 432px; top: 194px; width: 8px; height: 8px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--kind-world); background: transparent;"></div>
 
-            <div style="position: absolute; left: 160px; top: 228px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: #060810; background: #3ef0ff; box-shadow: 0 0 10px rgba(62, 240, 255, 0.8);">1</div>
-            <div style="position: absolute; left: 392px; top: 172px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: #060810; background: #7a6cff;">2</div>
-            <div style="position: absolute; left: 488px; top: 360px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: #060810; background: #7a6cff;">3</div>
-            <div style="position: absolute; left: 452px; top: 290px; padding: 0 3px; font: 600 9.5px/12px var(--font-mono); color: #c9c3ff; background: rgba(6, 8, 16, 0.8);">pay</div>
+            <div style="position: absolute; left: 160px; top: 228px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: var(--bg); background: var(--sig-info); box-shadow: 0 0 10px color-mix(in srgb, var(--sig-info) 80%, transparent);">1</div>
+            <div style="position: absolute; left: 392px; top: 172px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: var(--bg); background: var(--sig-script);">2</div>
+            <div style="position: absolute; left: 488px; top: 360px; width: 18px; height: 18px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--font-mono); color: var(--bg); background: var(--sig-script);">3</div>
+            <div style="position: absolute; left: 452px; top: 290px; padding: 0 3px; font: 600 9.5px/12px var(--font-mono); color: color-mix(in srgb, var(--sig-script) 70%, var(--text)); background: color-mix(in srgb, var(--bg) 80%, transparent);">pay</div>
 
-            <div style="position: absolute; left: 236px; top: 452px; padding: 4px 7px; display: flex; gap: 6px; align-items: center; font: 600 10px/13px var(--font-mono); color: #e4ecff; background: rgba(11, 17, 32, 0.92); border: 1px dashed #ff8b2e;"><span>∷ ◉ Brother Aldo</span><span style="color: #7d8bb1;">drop to place</span></div>
+            <div style="position: absolute; left: 236px; top: 452px; padding: 4px 7px; display: flex; gap: 6px; align-items: center; font: 600 10px/13px var(--font-mono); color: var(--text); background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px dashed var(--sig-attention);"><span>∷ ◉ Brother Aldo</span><span style="color: var(--textDim);">drop to place</span></div>
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -174,13 +176,13 @@ a{color:#3ef0ff}a:hover{color:#e4ecff}
             <button class="tu-btn tu-btn--ghost tu-btn--sm" type="button">Open flow ▸</button>
           </div>
           <div style="padding: 8px; display: flex; align-items: center; gap: 6px; overflow-x: auto;">
-            <div style="flex: 0 0 auto; padding: 6px 8px; border: 1px solid #3ef0ff; background: var(--panel); box-shadow: 0 0 8px rgba(62, 240, 255, 0.35); display: flex; flex-direction: column; gap: 2px;"><span class="tu-mono" style="font-size: 10px; color: var(--text); font-weight: 700;">1 · Find the lost choir-boy</span><span class="tu-mono tu-dim" style="font-size: 9.5px;">⌂ reed marsh · fights ⊛ marsh-lurker</span></div>
+            <div style="flex: 0 0 auto; padding: 6px 8px; border: 1px solid var(--sig-info); background: var(--panel); box-shadow: 0 0 8px color-mix(in srgb, var(--sig-info) 35%, transparent); display: flex; flex-direction: column; gap: 2px;"><span class="tu-mono" style="font-size: 10px; color: var(--text); font-weight: 700;">1 · Find the lost choir-boy</span><span class="tu-mono tu-dim" style="font-size: 9.5px;">⌂ reed marsh · fights ⊛ marsh-lurker</span></div>
             <span class="tu-mono tu-dim">→</span>
             <div style="flex: 0 0 auto; padding: 6px 8px; border: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; gap: 2px;"><span class="tu-mono" style="font-size: 10px; color: var(--text); font-weight: 700;">2 · Bring him home</span><span class="tu-mono tu-dim" style="font-size: 9.5px;">⌂ Thornstead · ◉ Elder Vass</span></div>
             <span class="tu-mono tu-dim">→</span>
             <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px;">
-              <div style="padding: 4px 8px; border: 1px solid var(--border); background: var(--panel); display: flex; gap: 8px; align-items: center;"><span class="tu-mono" style="font-size: 9.5px; color: #c9c3ff;">pay</span><span class="tu-mono" style="font-size: 10px; color: var(--text); font-weight: 700;">3 · The naming-song</span><span class="tu-chip is-approve" style="--c: var(--sig-approve);">ends success</span></div>
-              <div style="padding: 4px 8px; border: 1px solid var(--border); background: var(--panel); display: flex; gap: 8px; align-items: center;"><span class="tu-mono" style="font-size: 9.5px; color: #c9c3ff;">refuse</span><span class="tu-mono" style="font-size: 10px; color: var(--text); font-weight: 700;">4 · Turned away</span><span class="tu-chip" style="--c: var(--sig-reject);">ends failure</span></div>
+              <div style="padding: 4px 8px; border: 1px solid var(--border); background: var(--panel); display: flex; gap: 8px; align-items: center;"><span class="tu-mono" style="font-size: 9.5px; color: color-mix(in srgb, var(--sig-script) 70%, var(--text));">pay</span><span class="tu-mono" style="font-size: 10px; color: var(--text); font-weight: 700;">3 · The naming-song</span><span class="tu-chip is-approve" style="--c: var(--sig-approve);">ends success</span></div>
+              <div style="padding: 4px 8px; border: 1px solid var(--border); background: var(--panel); display: flex; gap: 8px; align-items: center;"><span class="tu-mono" style="font-size: 9.5px; color: color-mix(in srgb, var(--sig-script) 70%, var(--text));">refuse</span><span class="tu-mono" style="font-size: 10px; color: var(--text); font-weight: 700;">4 · Turned away</span><span class="tu-chip" style="--c: var(--sig-reject);">ends failure</span></div>
             </div>
           </div>
         </div>
