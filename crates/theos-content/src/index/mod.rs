@@ -32,7 +32,7 @@ pub use ledger::{BeatRef, LedgerEntry, TruthLedger};
 pub use lens::{
     EffectiveLens, HeldBelief, IgnoredEntry, Layer, LensData, LensValue, Origin, Overridden,
 };
-pub use query::{LinkRef, RecordSummary};
+pub use query::{FieldText, LinkRef, RecordSummary};
 pub use search::{Column, Hit, Match};
 pub use slots::Slot;
 pub use sync::{Change, Preview, Update};

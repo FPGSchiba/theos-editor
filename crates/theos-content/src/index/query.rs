@@ -26,6 +26,15 @@ pub struct RecordSummary {
     pub status: Option<String>,
 }
 
+/// The text of a valid scalar front-matter field, with the record it sits in.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FieldText {
+    /// The project-relative path of the record with `/`.
+    pub path: String,
+    /// The scalar's text.
+    pub text: String,
+}
+
 /// One link of a record, with the record it sits in.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LinkRef {
@@ -122,6 +131,27 @@ impl Index {
             &format!("{RECORD_COLUMNS} WHERE kind = ?1 ORDER BY path"),
             [kind],
         )
+    }
+
+    /// The texts of the valid scalar values of the front-matter field `field`, ordered by path.
+    /// Map entries and invalid values are left out.
+    ///
+    /// # Errors
+    ///
+    /// Fails when SQLite fails.
+    pub fn field_texts(&self, field: &str) -> Result<Vec<FieldText>, IndexError> {
+        let mut stmt = self.store.conn.prepare_cached(
+            "SELECT path, text FROM field_values \
+             WHERE field = ?1 AND shape = 'scalar' AND valid = 1 AND entry IS NULL \
+             ORDER BY path",
+        )?;
+        let rows = stmt.query_map([field], |row| {
+            Ok(FieldText {
+                path: row.get(0)?,
+                text: row.get(1)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
     /// The links whose target is `id`, ordered by source path and position.
@@ -292,4 +322,60 @@ pub(super) fn offset(row: &Row<'_>, column: usize) -> rusqlite::Result<Option<us
     usize::try_from(value)
         .map(Some)
         .map_err(|_| rusqlite::Error::IntegralValueOutOfRange(column, value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::indexed;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn truth(id: &str, target: &str) -> String {
+        format!(
+            "---\n# synthetic fixture (P48), not canon\nid: {id}\nkind: truth\ntitle: synthetic\n\
+             status: draft\ntarget: {target}\n---\n"
+        )
+    }
+
+    fn texts(found: &[FieldText]) -> Vec<(&str, &str)> {
+        found
+            .iter()
+            .map(|row| (row.path.as_str(), row.text.as_str()))
+            .collect()
+    }
+
+    // AC: CE-18.3
+    #[test]
+    fn field_texts_returns_valid_scalars() -> TestResult {
+        let never = truth("T-901", "never");
+        let hinted = truth("T-902", "hinted");
+        let (_dir, index) = indexed(&[
+            ("lore/truths/T-902.md", hinted.as_str()),
+            ("lore/truths/T-901.md", never.as_str()),
+        ])?;
+        assert_eq!(
+            texts(&index.field_texts("target")?),
+            [
+                ("lore/truths/T-901.md", "never"),
+                ("lore/truths/T-902.md", "hinted"),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn field_texts_skips_invalid_and_map_values() -> TestResult {
+        let invalid = truth("T-903", "Never");
+        let faction = "---\n# synthetic fixture (P48), not canon\nid: F-901\nkind: faction\n\
+             title: synthetic\nstatus: draft\nlens:\n  stance: x\n---\n";
+        let (_dir, index) = indexed(&[
+            ("lore/truths/T-903.md", invalid.as_str()),
+            ("factions/F-901.md", faction),
+        ])?;
+        assert_eq!(index.field_texts("target")?, []);
+        assert_eq!(index.field_texts("stance")?, []);
+        assert_eq!(index.field_texts("lens")?, []);
+        Ok(())
+    }
 }
