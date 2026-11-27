@@ -20,9 +20,10 @@ use crate::render::truth::{TRUTH_BOTTOM_PX, TRUTH_TOP_PX, draw_scale_bar, draw_t
 use crate::render::view::View;
 use crate::render::{RenderError, RenderInput, text};
 use crate::rooms::lattice::Lattice;
-use crate::rooms::{Role, RoomGraph};
+use crate::rooms::{Role, Room, RoomGraph};
 use crate::stage::LayerSpec;
 use crate::stages::interior::playability_core::Analysis;
+use crate::stages::interior::program::GENERIC_TYPES;
 use crate::stages::interior::space_core::Doors;
 use crate::world::ValueType;
 
@@ -164,9 +165,11 @@ fn rooms(
         let Some(centre) = centre else { continue };
         let at = place.px(*centre);
         let width = f64::from(lattice.pitch) * 2.0 * LABEL_OVERHANG;
-        let size = text::fit(face, &room.ty, LABEL_PX, to_f32(width));
-        if size >= LABEL_MIN_PX {
-            geo::centred_text(pixmap, face, &room.ty, size, at, theme.ink.label)?;
+        if let Some(name) = label(room) {
+            let size = text::fit(face, name, LABEL_PX, to_f32(width));
+            if size >= LABEL_MIN_PX {
+                geo::centred_text(pixmap, face, name, size, at, theme.ink.label)?;
+            }
         }
         let has_key = !room.keys.is_empty();
         let has_exit = room.role == Role::Exit;
@@ -184,6 +187,12 @@ fn rooms(
         }
     }
     Ok((keys, exits))
+}
+
+/// The label of `room`: its type, or none for a generic room ([`GENERIC_TYPES`]), whose type
+/// says nothing the plan does not show (ruling R43).
+fn label(room: &Room) -> Option<&str> {
+    (!GENERIC_TYPES.contains(&room.ty.as_str())).then_some(room.ty.as_str())
 }
 
 /// A kind of symbol or patch that may be present, for the legend.
@@ -274,5 +283,22 @@ mod tests {
             ..none
         };
         assert_eq!(labels(&some), ["floor", "wall", "key", "critical route"]);
+    }
+
+    // R43: the generic rooms the program queue makes get no type label.
+    #[test]
+    fn generic_rooms_get_no_label() {
+        let room = |ty: &str, role| Room {
+            ty: ty.to_owned(),
+            role,
+            cells: Vec::new(),
+            shape: crate::rooms::Shape::Rect,
+            keys: Vec::new(),
+            locked: false,
+        };
+        assert_eq!(label(&room("path", Role::Path)), None);
+        assert_eq!(label(&room("leaf", Role::Leaf)), None);
+        assert_eq!(label(&room("store", Role::Leaf)), Some("store"));
+        assert_eq!(label(&room("choir-hall", Role::Goal)), Some("choir-hall"));
     }
 }

@@ -2,19 +2,21 @@
 # goal. One arc reaches the hall through a lock, the other holds its key and is joined to the
 # hall only by a drop out of it. The echo vault lies behind its own lock. Leaves and exits hang
 # off the start, the arcs and the hall, never off other leaves, which keeps the chokepoints
-# within 0.3.0's range. Room types are ids, not canon.
+# within 0.3.0's range. The frame fits the program (R42): a 6 x 6 lattice of 14 m cells, so the
+# rooms use more than half of the floor; a circle wastes its rim on so few rooms. The choir
+# hall is 3 x 3 cells (42 m), near 0.3.0's 40-52 m. Room types are ids, not canon.
 id      = "choir-hall-ruin"
 title   = "Choir hall ruin"
 kind    = "interior"
-grid    = [100, 100]
-size_km = [0.1, 0.1]
+grid    = [84, 84]
+size_km = [0.084, 0.084]
 
 [[stage]]
 id       = "envelope"
-shape    = "circle"
-margin_m = 1.0
-pitch_m  = 10.0
-jitter_m = 2.0
+shape    = "rect"
+margin_m = 0.0
+pitch_m  = 14.0
+jitter_m = 3.0
 
 [[stage]]
 id = "mission"
@@ -24,14 +26,12 @@ id = "mission"
   [[stage.room]]
   type      = "choir-hall"
   role      = "goal"
-  footprint = [2, 2]
+  footprint = [3, 3]
   shape     = "round"
   [[stage.room]]
   type      = "tuning-gallery"
   role      = "path"
   count     = [2, 3]
-  footprint = [1, 2]
-  shape     = "passage"
   [[stage.room]]
   type  = "junction"
   role  = "path"
@@ -65,17 +65,18 @@ id = "mission"
   rule    = "main_cycle"
   side    = "south"
   cycle   = "lock_key"
-  min_arc = 2
-  [[stage.rule]]
-  rule  = "merge_hall"
-  count = 2
+  min_arc = 3
   [[stage.rule]]
   rule = "insert_cycle"
+  [[stage.rule]]
+  rule  = "merge_hall"   # joins two open path rooms into one hall, after the detour
+  mode  = "merge"
+  count = 1
   [[stage.rule]]
   rule = "locked_leaf"
   [[stage.rule]]
   rule       = "leaf"
-  count      = [3, 5]
+  count      = [4, 6]
   from_roles = ["start", "path", "goal"]
   [[stage.rule]]
   rule       = "leaf"
@@ -95,9 +96,10 @@ id = "playability"
 
 [constraints]
 "stages.mission.short"                   = [0, 0]
-"stages.playability.rooms"               = [13, 22]
-"stages.playability.critical_path_m"     = [90, 220]   # ruling 11: the dense floor, not 0.3.0's [90, 260]
-"stages.playability.dead_end_pct"        = [25, 55]
+"stages.playability.rooms"               = [15, 22]
+"stages.playability.critical_path_m"     = [140, 300]  # ruling 11: retuned, not 0.3.0's [90, 260]
+"stages.playability.dead_end_pct"        = [35, 55]
 "stages.playability.cycles"              = [2, 3]
 "stages.playability.longest_sightline_m" = [10, 45]    # 0.3.0's
 "stages.playability.chokepoints"         = [1, 6]      # 0.3.0's
+"stages.playability.footprint_used_pct"  = [50, 80]    # R42: the dense floor

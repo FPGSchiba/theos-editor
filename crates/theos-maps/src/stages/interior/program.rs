@@ -137,6 +137,10 @@ pub struct ProgramRoom {
     pub locked: bool,
 }
 
+/// The types of the generic rooms the queue makes when the program has used up `path` or
+/// `leaf` rooms (spec §5.6). Renders draw no type label for them (ruling R43).
+pub const GENERIC_TYPES: &[&str] = &["path", "leaf"];
+
 /// Room types a program may not name: the interior's static feature types (doors,
 /// connections, the route) and the generic room types. A room type of one of these names would
 /// share its `features.<type>` count with them.

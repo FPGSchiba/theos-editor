@@ -115,3 +115,4 @@ id = "playability"
 "stages.playability.dead_end_pct"     = [15, 35]
 "stages.playability.cycles"           = [15, 35]
 "stages.playability.hall_share_pct"   = [20, 50]
+"stages.playability.footprint_used_pct" = [40, 70]   # R42: measured 43.8-52.8 on seeds 1-8
