@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 repository.workspace = true
+license.workspace = true
 
 [features]
 # Reserved for the engine part. It must stay empty until the engine part is built.
