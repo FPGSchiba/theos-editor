@@ -413,3 +413,31 @@ fn status_runs_no_hook_of_the_repository() -> Result {
     assert!(!marker.exists(), "status ran the post-index-change hook");
     Ok(())
 }
+
+#[test]
+fn status_runs_no_hook_the_repository_configures() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    Sandbox::write(&repo.join("a.md"), "a\n")?;
+    sandbox.commit(&repo, "first")?;
+    // git 2.54 and later run hooks named in the configuration (`hook.<name>.event` and
+    // `hook.<name>.command`, from the top folder); older gits ignore these keys, and the test
+    // passes there trivially. The second name has a dot and capitals, as a subsection may.
+    let names = ["probe", "Theos.probe"];
+    for name in names {
+        let event = format!("hook.{name}.event");
+        let command = format!("hook.{name}.command");
+        let script = format!("echo ran > .git/{name}-ran");
+        sandbox.run(&repo, &["config", &event, "post-index-change"])?;
+        sandbox.run(&repo, &["config", &command, &script])?;
+    }
+    Sandbox::write(&repo.join("b.md"), "b\n")?;
+    let status = status_of(&sandbox, &repo)?;
+    assert_eq!(status.entries, vec![untracked("b.md")]);
+    let ran: Vec<&str> = names
+        .into_iter()
+        .filter(|name| repo.join(".git").join(format!("{name}-ran")).exists())
+        .collect();
+    assert_eq!(ran, Vec::<&str>::new(), "status ran these configured hooks");
+    Ok(())
+}

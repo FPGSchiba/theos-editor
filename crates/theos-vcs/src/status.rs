@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 
 use crate::Cancel;
 use crate::git::{Git, GitError, args_text};
+use crate::no_hooks::{config_args, no_hooks};
 use crate::read_args::read_args;
 use crate::staged::parse::fields;
 
@@ -216,7 +217,7 @@ fn attempt(
     let copy = copy.to_str().ok_or_else(|| GitError::Io {
         source: std::io::Error::other("the temporary folder's path is not UTF-8"),
     })?;
-    let no_hooks = format!("core.hooksPath={}", folder.path().display());
+    let no_hooks = no_hooks(git, top, cancel, folder.path())?;
     let env = [(GIT_INDEX_FILE, copy)];
     match intend_to_add(git, top, cancel, &env, &no_hooks, &untracked) {
         Ok(()) => {}
@@ -300,22 +301,20 @@ fn copy_index(index: &Path, copy: &Path) -> Result<(), GitError> {
 
 /// Adds `paths` with intent to add to the index `env` names; the paths go on stdin, so no command
 /// line grows with them. The copy is written whole (`core.splitIndex=false`), so no shared index
-/// file is added to the repository. `no_hooks` (`core.hooksPath=<a folder without hooks>`) keeps
-/// the repository's `post-index-change` hook from running: status is a pure read.
+/// file is added to the repository. `no_hooks` (from [`no_hooks`]) keeps the repository's
+/// `post-index-change` hooks from running, both kinds: the hook file (`core.hooksPath=<a folder
+/// without hooks>`) and every hook the configuration names (`hook.<name>.enabled=false`, git 2.54
+/// and later). status is a pure read.
 fn intend_to_add(
     git: &Git,
     top: &Path,
     cancel: &Cancel,
     env: &[(&str, &str)],
-    no_hooks: &str,
+    no_hooks: &[String],
     paths: &[Vec<u8>],
 ) -> Result<(), GitError> {
-    let mut args: Vec<&OsStr> = vec![
-        OsStr::new("-c"),
-        OsStr::new("core.splitIndex=false"),
-        OsStr::new("-c"),
-        OsStr::new(no_hooks),
-    ];
+    let mut args: Vec<&OsStr> = vec![OsStr::new("-c"), OsStr::new("core.splitIndex=false")];
+    args.extend(config_args(no_hooks));
     args.extend(read_args(
         "add",
         &[
