@@ -6,11 +6,11 @@ use tiny_skia::{Color, Pixmap};
 
 use super::geo::{self, Cell2, Placement};
 use super::skin::{self, BLUEPRINT, GRAPH_BACKGROUND, NODE_EDGE, ROLES};
-use super::{canvas_with_margins, critical_path_title};
+use super::{canvas_with_margins, critical_path_title, legend_beside};
 use crate::kernels::num::to_f32;
 use crate::render::canvas::{self, LineStyle};
 use crate::render::fonts::{Face, fonts};
-use crate::render::legend::{self, Entry, Swatch};
+use crate::render::legend::{Entry, Swatch};
 use crate::render::truth::{MARGIN, TRUTH_TOP_PX, draw_title};
 use crate::render::{RenderError, RenderInput, text};
 use crate::rooms::lattice::Lattice;
@@ -71,8 +71,7 @@ pub(crate) fn graph(input: &RenderInput<'_>) -> Result<Pixmap, RenderError> {
     draw_edges(&mut pixmap, input, face, rooms, &at)?;
     draw_nodes(&mut pixmap, input, rooms, &centres, place)?;
     draw_title(&mut pixmap, face, &critical_path_title(input, analysis))?;
-    legend::draw(&mut pixmap, face, &entries(rooms))?;
-    Ok(pixmap)
+    legend_beside(&pixmap, face, &entries(rooms))
 }
 
 /// Paints the title margin.

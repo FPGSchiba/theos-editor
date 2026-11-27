@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use theos_map_format::{LayerData, LayerKey};
 
-use super::skin::BASE;
+use super::skin::{BASE, BLUEPRINT};
 use crate::render::test_support::{TestResult, decode};
 use crate::{CancelToken, Progress, RunManifest, RunOptions, RunRequest, run};
 
@@ -127,5 +127,48 @@ fn blueprint_ruin_is_extra_only() -> TestResult {
     let blue = output(dir.path(), &manifest, "blueprint")?;
     assert_eq!(decode(&ruin).width, decode(&blue).width);
     assert_ne!(ruin, blue);
+    Ok(())
+}
+
+// AC: CE-80.1
+#[test]
+fn choir_hall_blueprint_draws_locked_doors_in_red() -> TestResult {
+    let (dir, manifest) = run_recipe("choir-hall-ruin", &[])?;
+    let png = decode(&output(dir.path(), &manifest, "blueprint")?);
+    // Only the plan counts, not the legend's swatch beside it: the plan is as wide as `base`.
+    let plan = usize::try_from(decode(&output(dir.path(), &manifest, "base")?).width)?;
+    let height = usize::try_from(png.height)?;
+    let red = (0..height)
+        .flat_map(|y| (0..plan).map(move |x| (x, y)))
+        .filter(|&(x, y)| png.rgb(x, y) == BLUEPRINT.ink.locked)
+        .count();
+    assert!(red > 0, "no pixel of the plan in the locked-door red");
+    Ok(())
+}
+
+#[test]
+fn the_legend_sits_beside_the_plan() -> TestResult {
+    use crate::render::fonts::fonts;
+    use crate::render::legend::{Entry, Swatch};
+    let mut plan = tiny_skia::Pixmap::new(120, 90).ok_or("no pixmap")?;
+    plan.fill(tiny_skia::Color::from_rgba8(10, 20, 30, 255));
+    let entries: Vec<Entry> = (0..6)
+        .map(|i| Entry::new(Swatch::Patch([200, 20, 20]), format!("entry {i}")))
+        .collect();
+    let out = super::legend_beside(&plan, &fonts()?.inter, &entries)?;
+    assert!(out.width() > plan.width(), "a strip for the legend");
+    assert_eq!(out.height(), plan.height());
+    let png = decode(&crate::render::canvas::encode_png(&out)?);
+    for y in 0..90 {
+        for x in 0..120 {
+            assert_eq!(
+                png.rgb(x, y),
+                [10, 20, 30],
+                "the plan is covered at ({x}, {y})"
+            );
+        }
+    }
+    let none = super::legend_beside(&plan, &fonts()?.inter, &[])?;
+    assert_eq!(none.width(), plan.width(), "no strip without entries");
     Ok(())
 }

@@ -11,7 +11,16 @@ use theos_maps::{CancelToken, RunError, RunRequest, describe, run};
 use crate::support::{TestResult, request};
 
 /// The ids of the recipes built into the crate.
-const BUILT_IN: [&str; 3] = ["fixture-small", "hearth-valley", "hearth-valley-omega"];
+const BUILT_IN: [&str; 5] = [
+    "choir-hall-ruin",
+    "fixture-small",
+    "hearth-valley",
+    "hearth-valley-omega",
+    "works-halls",
+];
+
+/// The built-in interior recipes; their first stage is `envelope`, a terrain's is `grid`.
+const INTERIORS: [&str; 2] = ["choir-hall-ruin", "works-halls"];
 
 const GRID: &str = "\n[[stage]]\nid = \"grid\"\nedges = [\"south\"]\n";
 const TECTONICS: &str = "\n[[stage]]\nid = \"tectonics\"\n";
@@ -92,7 +101,16 @@ fn describe_lists_the_three_built_in_recipes() -> TestResult {
         assert!(info.inputs.is_empty(), "{id}");
         assert!(info.seeded, "{id}");
         assert!(!info.title.is_empty(), "{id}");
-        assert_eq!(info.stages.first().map(|s| s.id.as_str()), Some("grid"));
+        let first = if INTERIORS.contains(&id) {
+            "envelope"
+        } else {
+            "grid"
+        };
+        assert_eq!(
+            info.stages.first().map(|s| s.id.as_str()),
+            Some(first),
+            "{id}"
+        );
         assert!(info.stages.iter().all(|s| !s.summary.is_empty()), "{id}");
     }
     let ids: Vec<&str> = d.recipes.iter().map(|r| r.id.as_str()).collect();

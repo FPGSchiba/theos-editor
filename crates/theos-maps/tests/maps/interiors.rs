@@ -450,3 +450,126 @@ fn the_summary_holds_the_mission_entries() -> TestResult {
     }
     Ok(())
 }
+
+/// The built-in interior recipes that run on their own (the child `ruin-undercroft` needs a
+/// parent package; ruling R2 keeps it out of these tests).
+const BUILTIN_INTERIORS: [&str; 2] = ["choir-hall-ruin", "works-halls"];
+
+// AC: CE-80.1
+#[test]
+fn builtins_produce_all_outputs() -> TestResult {
+    for recipe in BUILTIN_INTERIORS {
+        let (package, manifest) = run_package(recipe, 1, &[]).map_err(|e| e.to_string())?;
+        for output in ["base", "blueprint", "graph", "features", "package"] {
+            assert!(
+                manifest.outputs.contains_key(output),
+                "{recipe}: no {output} in {:?}",
+                manifest.outputs.keys()
+            );
+        }
+        assert_eq!(package.manifest.kind, "interior", "{recipe}");
+    }
+    Ok(())
+}
+
+/// The text of a feature property.
+fn text<'a>(f: &'a geojson::Feature, key: &str) -> Option<&'a str> {
+    prop(f, key).and_then(serde_json::Value::as_str)
+}
+
+/// The rooms the key fixed point of §5.9 reaches in `package`, read from its features alone:
+/// start with no keys at the start room, walk open connections, locked ones whose key is held
+/// and one-way ones in their direction, pick up every key of the rooms reached, repeat.
+fn fixed_point(package: &theos_map_format::Package) -> std::collections::BTreeSet<String> {
+    use std::collections::BTreeSet;
+    let rooms = of_kind(package, "room");
+    let connections = of_kind(package, "connection");
+    let mut reached: BTreeSet<String> = rooms
+        .iter()
+        .filter(|r| text(r, "role") == Some("start"))
+        .map(|r| id_of(r))
+        .collect();
+    let mut keys: BTreeSet<String> = BTreeSet::new();
+    loop {
+        let before = (reached.len(), keys.len());
+        for r in &rooms {
+            if reached.contains(&id_of(r)) {
+                let held = prop(r, "keys").and_then(serde_json::Value::as_array);
+                keys.extend(
+                    held.into_iter()
+                        .flatten()
+                        .filter_map(|k| k.as_str().map(str::to_owned)),
+                );
+            }
+        }
+        for c in &connections {
+            let (Some(from), Some(to)) = (text(c, "from"), text(c, "to")) else {
+                continue;
+            };
+            let ty = text(c, "type");
+            if ty == Some("locked") && !text(c, "key").is_some_and(|k| keys.contains(k)) {
+                continue;
+            }
+            if reached.contains(from) {
+                reached.insert(to.to_owned());
+            }
+            if ty != Some("oneway") && reached.contains(to) {
+                reached.insert(from.to_owned());
+            }
+        }
+        if (reached.len(), keys.len()) == before {
+            return reached;
+        }
+    }
+}
+
+// AC: CE-80.2
+// About 5 s in a release build, so not a `slow_` test (`docs/gate.md`).
+#[test]
+fn builtins_pass_playability_on_seeds_1_to_8() -> TestResult {
+    use theos_map_format::{LayerData, LayerKey};
+    for recipe in BUILTIN_INTERIORS {
+        for seed in 1..=8 {
+            let at = format!("{recipe} seed {seed}");
+            // A run whose analysis reports a finding fails with an error (spec §5.9).
+            let (package, manifest) =
+                run_package(recipe, seed, &[]).map_err(|e| format!("{at}: {e}"))?;
+            assert_eq!(
+                manifest.results.get("pass"),
+                Some(&serde_json::Value::Bool(true)),
+                "{at}: {:?}",
+                manifest.results
+            );
+            let key = LayerKey {
+                level: None,
+                name: "rooms".to_owned(),
+            };
+            let Some(LayerData::U16(numbers)) = package.layers.get(&key) else {
+                return Err(format!("{at}: no u16 rooms layer").into());
+            };
+            let carved: std::collections::BTreeSet<u16> = numbers.iter().copied().collect();
+            let rooms = of_kind(&package, "room");
+            let reached = fixed_point(&package);
+            for room in &rooms {
+                let id = id_of(room);
+                let number = prop(room, "number")
+                    .and_then(serde_json::Value::as_u64)
+                    .ok_or(format!("{at}: {id} has no number"))?;
+                assert!(
+                    carved.contains(&u16::try_from(number + 1)?),
+                    "{at}: {id} is not carved"
+                );
+                assert!(reached.contains(&id), "{at}: {id} is not reached");
+            }
+            let goal = rooms
+                .iter()
+                .find(|r| text(r, "role") == Some("goal"))
+                .ok_or(format!("{at}: no goal"))?;
+            assert!(
+                reached.contains(&id_of(goal)),
+                "{at}: the goal is not reached"
+            );
+        }
+    }
+    Ok(())
+}

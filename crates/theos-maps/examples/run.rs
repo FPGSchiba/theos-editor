@@ -1,14 +1,16 @@
-//! The developer example (spec §5.15): runs terrain recipes over a range of seeds.
+//! The developer example (spec §5.15): runs recipes over a range of seeds.
 //!
 //! ```text
 //! cargo run -p theos-maps --release --example run -- <recipe>… --seeds 1..8 --out <dir> [--recipes <dir>]
 //! ```
 //!
 //! For each recipe and seed it writes the run's outputs and its `manifest.json` (canonical JSON)
-//! into `<out>/<recipe>/s<seed>/`, and for each recipe a contact sheet of the seeds' `truth`
-//! renders as `<out>/<recipe>/contact-sheet.png`. On stdout it writes a Markdown table of the
-//! parity metrics per seed, their medians and the number of seeds that pass the recipe's
-//! constraints. `--seeds` includes both ends; the runs go in `--jobs` threads, one world each.
+//! into `<out>/<recipe>/s<seed>/`, and for each recipe a contact sheet of the seeds' sheet
+//! renders (`truth` for terrain, `blueprint` for an interior, the first of [`SHEET_RENDERS`]
+//! a run wrote) as `<out>/<recipe>/contact-sheet.png`. On stdout it writes a Markdown table of
+//! the parity metrics per seed, their medians and the number of seeds that pass the recipe's
+//! constraints, then a table of each run's constraint results. `--seeds` includes both ends;
+//! the runs go in `--jobs` threads, one world each.
 
 use std::fs::File;
 use std::io::{BufReader, Write};
@@ -30,9 +32,12 @@ use theos_maps::{
 /// The tiles in one row of a contact sheet.
 const SHEET_COLUMNS: usize = 4;
 
+/// The renders a contact sheet is made of, in order of preference: the first one a run wrote.
+const SHEET_RENDERS: [&str; 2] = ["truth", "blueprint"];
+
 /// The command line.
 #[derive(Debug, Parser)]
-#[command(about = "Runs terrain recipes and writes each seed's outputs and a contact sheet")]
+#[command(about = "Runs recipes and writes each seed's outputs and a contact sheet")]
 struct Args {
     /// The ids of the recipes to run.
     #[arg(required = true)]
@@ -248,18 +253,70 @@ fn write_table(out: &mut impl Write, recipes: &[String], done: &[Done]) -> Resul
     Ok(())
 }
 
-/// Writes `<out>/<recipe>/contact-sheet.png` from the `truth` render of every seed of each
-/// recipe and names each sheet on `out`.
+/// The suffixes of the result keys that only restate a constraint's range or verdict.
+const RANGE_SUFFIXES: [&str; 3] = ["_min", "_max", "_ok"];
+
+/// Writes the constraint results of every run: a row per run, a column per constrained value of
+/// the recipe's first run (`pass` last), `-` where a run has no such key, and the value marked
+/// `(out)` where its `_ok` result is false.
+fn write_results(out: &mut impl Write, recipes: &[String], done: &[Done]) -> Result<()> {
+    for recipe in recipes {
+        let runs: Vec<&Done> = done.iter().filter(|d| d.recipe == *recipe).collect();
+        let Some(first) = runs.first() else {
+            continue;
+        };
+        let mut keys: Vec<&str> = first
+            .manifest
+            .results
+            .keys()
+            .map(String::as_str)
+            .filter(|k| *k != "pass" && !RANGE_SUFFIXES.iter().any(|s| k.ends_with(s)))
+            .collect();
+        keys.push("pass");
+        writeln!(out, "| recipe | seed | {} |", keys.join(" | "))?;
+        writeln!(out, "|---|---|{}", "---|".repeat(keys.len()))?;
+        for d in runs {
+            let cells: Vec<String> = keys
+                .iter()
+                .map(|k| {
+                    let value = match d.manifest.results.get(*k) {
+                        Some(Value::Number(n)) => cell(n.as_f64()),
+                        Some(v) => v.to_string(),
+                        None => "-".to_owned(),
+                    };
+                    let ok = d.manifest.results.get(&format!("{k}_ok"));
+                    if ok == Some(&Value::Bool(false)) {
+                        format!("{value} (out)")
+                    } else {
+                        value
+                    }
+                })
+                .collect();
+            writeln!(out, "| {recipe} | {} | {} |", d.seed, cells.join(" | "))?;
+        }
+        writeln!(out)?;
+    }
+    Ok(())
+}
+
+/// Writes `<out>/<recipe>/contact-sheet.png` from the sheet render (see [`SHEET_RENDERS`]) of
+/// every seed of each recipe and names each sheet on `out`.
 fn write_sheets(out: &mut impl Write, args: &Args, done: &[Done]) -> Result<()> {
     for recipe in &args.recipe {
         let tiles = done
             .iter()
             .filter(|d| d.recipe == *recipe)
             .map(|d| {
-                let truth = d.manifest.outputs.get("truth").with_context(|| {
-                    format!("{recipe} seed {}: the run wrote no truth render", d.seed)
-                })?;
-                Ok((format!("{recipe} s{}", d.seed), d.dir.join(truth)))
+                let render = SHEET_RENDERS
+                    .iter()
+                    .find_map(|name| d.manifest.outputs.get(*name))
+                    .with_context(|| {
+                        format!(
+                            "{recipe} seed {}: the run wrote none of the renders {SHEET_RENDERS:?}",
+                            d.seed
+                        )
+                    })?;
+                Ok((format!("{recipe} s{}", d.seed), d.dir.join(render)))
             })
             .collect::<Result<Vec<_>>>()?;
         let path = args.out.join(recipe).join("contact-sheet.png");
@@ -279,6 +336,7 @@ fn main() -> Result<()> {
     writeln!(out)?;
     write_table(&mut out, &args.recipe, &done)?;
     writeln!(out)?;
+    write_results(&mut out, &args.recipe, &done)?;
     write_sheets(&mut out, &args, &done)?;
     writeln!(
         out,

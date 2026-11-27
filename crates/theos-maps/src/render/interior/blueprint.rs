@@ -10,11 +10,11 @@ use super::cells::{self, Masks};
 use super::doors::{self, Present};
 use super::geo::{self, Cell2, Placement};
 use super::skin::{BLUEPRINT, RUIN, Theme};
-use super::{canvas_with_margins, critical_path_title};
+use super::{canvas_with_margins, critical_path_title, legend_beside};
 use crate::kernels::num::to_f32;
 use crate::render::canvas::{self, LineStyle};
 use crate::render::fonts::{Face, fonts};
-use crate::render::legend::{self, Entry, Swatch};
+use crate::render::legend::{Entry, Swatch};
 use crate::render::marks::{Mark, Shape};
 use crate::render::truth::{TRUTH_BOTTOM_PX, TRUTH_TOP_PX, draw_scale_bar, draw_title};
 use crate::render::view::View;
@@ -122,8 +122,7 @@ fn draw(input: &RenderInput<'_>, theme: &Theme) -> Result<Pixmap, RenderError> {
             .collect(),
         doors: present,
     };
-    legend::draw(&mut pixmap, face, &entries(theme, &found))?;
-    Ok(pixmap)
+    legend_beside(&pixmap, face, &entries(theme, &found))
 }
 
 /// Whether the map has any cover cell.
