@@ -46,16 +46,23 @@ Start only when the spec PR is merged.
 ## 3. Build
 
 superpowers:subagent-driven-development over the plan, with superpowers:test-driven-development
-in every implementer. Tests carry `// AC: <id>`. Never change protected paths on this branch.
+in every implementer. Tests carry `// AC: <id>`. Never change protected paths on this branch,
+not in the fixes of the final review loop either (`CLAUDE.md` hard rule 3).
 Commit as often as the work needs, but push when a task or a review round is finished, not after
 every commit: every push starts CI runs that cost money. Likewise merge `main` into the branch
 only when the PR is ready to merge and next in line, not after every merge to `main`.
 
 ## 4. Final review loop
 
-As defined in `CLAUDE.md` ("Final review is a loop"): fresh whole-branch reviewer each round,
-one fix subagent per round with the complete findings list, until a fresh reviewer finds nothing;
-cap 5 rounds.
+As defined in `CLAUDE.md` ("Final review is a judged loop"): fresh whole-branch reviewer each
+round; every finding is fixed or ruled not worth fixing (`Ruling:` line), and Minor findings that
+change no behaviour and risk nothing are ruled; one fix subagent per round with the complete list
+of findings to fix; stop when a fresh reviewer reports nothing worth fixing. After 5 rounds: one
+last fix wave and a targeted review of it, then open the PR ready (not draft) with its open
+findings listed; the cap is no reason to stop and ask Jann.
+
+A spec, gate or docs PR, which touches protected paths anyway, may change protected paths in its
+fix waves without asking Jann; its PR lists every protected path it changes.
 
 ## 5. Verify
 
@@ -68,7 +75,8 @@ on) and read the output. Every phase AC must show at least one passing test in
 1. Set the phase to `pr-open` in `docs/status.md`; add anything for Jann under "Needs Jann".
 2. Push, open the PR with a Conventional Commit title ending in the phase
    (`feat(content): <name> (PNN)`, see `CONTRIBUTING.md` §3) and the template filled: ACs met,
-   final review rounds and last verdict, every ruling, gate output summary.
+   final review rounds and last verdict, every ruling, open findings if the loop hit its cap,
+   gate output summary.
 3. Enable auto-merge if the PR touches no protected path; otherwise leave it for Jann.
 4. When it is merged, set the phase to `done` in a follow-up commit on the next branch, and
    start over at step 0 if Jann asked for more than one phase.

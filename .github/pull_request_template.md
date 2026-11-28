@@ -11,7 +11,8 @@
 
 ## Final review
 
-<!-- Rounds: N · last verdict: clean (or: cap reached, open findings listed below) -->
+<!-- Rounds: N · last verdict: nothing worth fixing (or: cap reached after a last fix wave and a
+     targeted review; best effort, open findings listed below) -->
 
 ## Rulings
 
@@ -23,4 +24,5 @@
 
 ## Protected paths
 
-<!-- "none", or the protected paths this PR changes (then it waits for Jann). -->
+<!-- "none", or every protected path this PR changes, including those its review fixes changed
+     (then it waits for Jann). -->

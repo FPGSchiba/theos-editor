@@ -22,7 +22,7 @@ are added here as numbered records (`NNNN-<slug>.md`) in a PR that waits for Jan
 | 2026-10-31 | Generators are reached only through the generator protocol (`docs/generators.md`), so the map renderer can change or move into the engine. |
 | 2026-10-31 | Specs in this repo are binding for the build; Confluence holds readable copies. |
 | 2026-10-31 | Umbrella spec with phases; each phase runs spec → plan → subagent-driven build with superpowers. |
-| 2026-10-31 | The final whole-branch review loops with fresh reviewers until clean (cap 5 rounds). |
+| 2026-10-31 | The final whole-branch review loops with fresh reviewers until clean (cap 5 rounds). Replaced by [0005](0005-judged-review-loop.md). |
 | 2026-10-31 | Code PRs merge automatically on green CI; documentation and gate changes wait for Jann; enforced by CLAUDE.md under a shared GitHub identity. |
 | 2026-10-31 | UI references are standalone HTML built only from the design system; PNGs are previews rendered from it. |
 | 2026-10-31 | Conventional Commits for every commit and PR title; branch names per `CONTRIBUTING.md`. |
@@ -33,3 +33,5 @@ are added here as numbered records (`NNNN-<slug>.md`) in a PR that waits for Jan
 | 2026-11-05 | Comments on text sections live beside the content, one TOML file per record under `.theos/comments/`, anchored by a text quote; agents reply with comments and change records only by proposals; built in phase P19: [0002](0002-comments-on-text.md). |
 | 2026-11-10 | Maps are made by a Rust library in this repo (`theos-maps`, with `theos-map-format`), run in-process by the editor and reusable by the engine; canon floors are baked into `theos-map` 1.0 packages, the same bytes on every platform, and shipped, never regenerated in the game; stacked levels for indoor floors; phases P08, P29, P30: [0003](0003-map-generator-in-rust.md). |
 | 2026-11-12 | The map generation research enters P08 and the umbrella (version 4): corrected fluvial law and citations; place types `chime`, `gate-up`, `gate-down`; a `requires` list in map packages; no size limit, a memory budget; P29 and the new P34 at the state of the art with a shared room graph; P30 split from the Atlas half (P45); new P31 Floor frame and places, P32 Recipe families, P33 Map metrics and batch tool; the rest in a research track: [0004](0004-map-generation-research.md). |
+| 2026-11-28 | The final review loop judges every finding (fix it, or rule it not worth fixing); after 5 rounds a last fix wave and a targeted review end it as best effort, and the PR stays ready with its open findings listed: [0005](0005-judged-review-loop.md). |
+| 2026-11-28 | Review fixes inside a PR that already touches protected paths may change protected paths without asking Jann first; the PR lists them and its approval covers them: [0006](0006-review-fixes-in-a-protected-pr.md). |
