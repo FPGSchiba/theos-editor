@@ -1,0 +1,48 @@
+<!-- @dsCard group="Foundations" height=300 width=960 subtitle="Grid Noir and Grid Light, the same markup under data-theme" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Themes — preview</title>
+<style>
+  html, body { margin: 0; }
+  .ths { display: grid; grid-template-columns: 1fr 1fr; }
+  .th { background: var(--bg); color: var(--text); padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .th__name { font: 700 10.5px/14px var(--font-ui); letter-spacing: 1px; text-transform: uppercase; color: var(--textDim); }
+  .th__sig { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 8px 12px; border-top: 1px solid var(--border); background: var(--panel); font: 700 9.5px/12px var(--font-mono); letter-spacing: 0.8px; }
+  .th__voice { margin: 0 12px 12px; padding: 10px 14px; background: var(--panel-inworld); border: 1px solid var(--line-inworld); border-radius: var(--radius-manuscript); color: var(--ink-inworld); font: 400 15px/22px var(--font-serif); }
+  .th__voice span { display: block; font-style: italic; font-size: 12px; color: var(--ink-inworld-dim); }
+</style></head>
+<body>
+<div class="ths">
+  <div class="th" data-theme="grid-noir">
+    <div class="th__name">Grid Noir · default</div>
+    <section class="tu-window is-hot">
+      <div class="tu-tabbar"><div class="tu-tabbar__title">Review <span class="tu-badge">2</span></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
+      <article class="tu-review">
+        <div class="tu-review__head"><span class="tu-review__time">14:03:48</span><span class="tu-status" data-status="pending">Pending</span><span class="tu-ai">AI</span><span class="tu-review__cmd">SpawnEntity</span><span class="tu-review__arrow">→</span><span class="tu-review__target">Captain Vespera</span><span class="tu-review__sig"><span class="tu-mute">sig</span><span class="tu-meter is-attention"><span class="tu-meter__fill" style="width:91%"></span></span><span class="tu-review__sigval is-high">0.91</span></span></div>
+        <div class="tu-review__body">archetype="Story.Beacon" · @(12.48, 2.00, −5.62) · source=e#4f12</div>
+        <div class="tu-review__actions" style="padding:0 12px 10px"><button class="tu-btn tu-btn--approve">✓ Approve</button><button class="tu-btn tu-btn--danger">✕ Reject</button><button class="tu-btn tu-btn--secondary">Diff</button></div>
+      </article>
+      <div class="th__sig">
+        <span style="color:var(--sig-attention)">■ ATTENTION</span><span style="color:var(--sig-ai)">■ AI</span><span style="color:var(--sig-info)">■ INFO</span><span style="color:var(--sig-approve)">■ OK</span><span style="color:var(--sig-reject)">■ ERR</span><span style="color:var(--sig-warn)">■ WARN</span><span style="color:var(--sig-script)">■ SCRIPT</span>
+      </div>
+      <div class="th__voice">Sing the old name right and the dead lean close.<span>a binder, teaching the naming-song</span></div>
+    </section>
+  </div>
+  <div class="th" data-theme="grid-light">
+    <div class="th__name">Grid Light</div>
+    <section class="tu-window is-hot">
+      <div class="tu-tabbar"><div class="tu-tabbar__title">Review <span class="tu-badge">2</span></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
+      <article class="tu-review">
+        <div class="tu-review__head"><span class="tu-review__time">14:03:48</span><span class="tu-status" data-status="pending">Pending</span><span class="tu-ai">AI</span><span class="tu-review__cmd">SpawnEntity</span><span class="tu-review__arrow">→</span><span class="tu-review__target">Captain Vespera</span><span class="tu-review__sig"><span class="tu-mute">sig</span><span class="tu-meter is-attention"><span class="tu-meter__fill" style="width:91%"></span></span><span class="tu-review__sigval is-high">0.91</span></span></div>
+        <div class="tu-review__body">archetype="Story.Beacon" · @(12.48, 2.00, −5.62) · source=e#4f12</div>
+        <div class="tu-review__actions" style="padding:0 12px 10px"><button class="tu-btn tu-btn--approve">✓ Approve</button><button class="tu-btn tu-btn--danger">✕ Reject</button><button class="tu-btn tu-btn--secondary">Diff</button></div>
+      </article>
+      <div class="th__sig">
+        <span style="color:var(--sig-attention)">■ ATTENTION</span><span style="color:var(--sig-ai)">■ AI</span><span style="color:var(--sig-info)">■ INFO</span><span style="color:var(--sig-approve)">■ OK</span><span style="color:var(--sig-reject)">■ ERR</span><span style="color:var(--sig-warn)">■ WARN</span><span style="color:var(--sig-script)">■ SCRIPT</span>
+      </div>
+      <div class="th__voice">Sing the old name right and the dead lean close.<span>a binder, teaching the naming-song</span></div>
+    </section>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,292 @@
+{
+  "args": {
+    "id": "fates-shrine",
+    "path": "world/hearth/f04-choir-hall/fates-shrine.md"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "fates-shrine"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "location"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "The Fates' shrine"
+        }
+      },
+      {
+        "key": "parent",
+        "value": {
+          "type": "link",
+          "value": {
+            "fragment": null,
+            "id": "f04-choir-hall",
+            "shown": null,
+            "target": {
+              "id": "f04-choir-hall",
+              "kind": "floor",
+              "locked": [],
+              "never": false,
+              "path": "world/hearth/f04-choir-hall.md",
+              "status": "draft",
+              "title": "The Choir-Hall"
+            }
+          }
+        }
+      },
+      {
+        "key": "type",
+        "value": {
+          "type": "text",
+          "value": "shrine"
+        }
+      }
+    ],
+    "header": {
+      "children": 0,
+      "links_in": 4,
+      "parent": {
+        "id": "f04-choir-hall",
+        "kind": "floor",
+        "locked": [],
+        "never": false,
+        "path": "world/hearth/f04-choir-hall.md",
+        "status": "draft",
+        "title": "The Choir-Hall"
+      },
+      "record": {
+        "id": "fates-shrine",
+        "kind": "location",
+        "locked": [],
+        "never": false,
+        "path": "world/hearth/f04-choir-hall/fates-shrine.md",
+        "status": null,
+        "title": "The Fates' shrine"
+      }
+    },
+    "links_in": [
+      {
+        "column": 7,
+        "fragment": null,
+        "line": 6,
+        "slot": "field:for",
+        "source": {
+          "id": "fates-shrine-art",
+          "kind": "concept",
+          "locked": [],
+          "never": false,
+          "path": "concepts/fates-shrine-art.md",
+          "status": null,
+          "title": "Fates' shrine"
+        },
+        "target": {
+          "exists": true,
+          "id": "fates-shrine",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall/fates-shrine.md",
+          "status": null,
+          "title": "The Fates' shrine"
+        }
+      },
+      {
+        "column": 9,
+        "fragment": null,
+        "line": 9,
+        "slot": "field:where",
+        "source": {
+          "id": "C-032",
+          "kind": "clue",
+          "locked": [],
+          "never": false,
+          "path": "lore/clues/C-032.md",
+          "status": "draft",
+          "title": "Synthetic clue C-032"
+        },
+        "target": {
+          "exists": true,
+          "id": "fates-shrine",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall/fates-shrine.md",
+          "status": null,
+          "title": "The Fates' shrine"
+        }
+      },
+      {
+        "column": 7,
+        "fragment": null,
+        "line": 7,
+        "slot": "field:home",
+        "source": {
+          "id": "mother-ilse",
+          "kind": "npc",
+          "locked": [],
+          "never": false,
+          "path": "people/hearth-folk/fates-cult/mother-ilse.md",
+          "status": null,
+          "title": "Mother Ilse"
+        },
+        "target": {
+          "exists": true,
+          "id": "fates-shrine",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall/fates-shrine.md",
+          "status": null,
+          "title": "The Fates' shrine"
+        }
+      },
+      {
+        "column": 11,
+        "fragment": null,
+        "line": 11,
+        "slot": "mention",
+        "source": {
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        },
+        "target": {
+          "exists": true,
+          "id": "fates-shrine",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall/fates-shrine.md",
+          "status": null,
+          "title": "The Fates' shrine"
+        }
+      }
+    ],
+    "lore": [
+      {
+        "record": {
+          "id": "C-032",
+          "kind": "clue",
+          "locked": [],
+          "never": false,
+          "path": "lore/clues/C-032.md",
+          "status": "draft",
+          "title": "Synthetic clue C-032"
+        },
+        "tier": "T1",
+        "touches": {
+          "id": "T-012",
+          "kind": "truth",
+          "locked": [],
+          "never": false,
+          "path": "lore/truths/T-012.md",
+          "status": "draft",
+          "title": "Synthetic truth T-012"
+        },
+        "verb": "hints"
+      }
+    ],
+    "pictures": [
+      {
+        "concept": {
+          "id": "fates-shrine-art",
+          "kind": "concept",
+          "locked": [],
+          "never": false,
+          "path": "concepts/fates-shrine-art.md",
+          "status": null,
+          "title": "Fates' shrine"
+        },
+        "picked": "fates-shrine-art-v5"
+      }
+    ],
+    "used_by": [
+      {
+        "relations": [
+          "for"
+        ],
+        "source": {
+          "id": "fates-shrine-art",
+          "kind": "concept",
+          "locked": [],
+          "never": false,
+          "path": "concepts/fates-shrine-art.md",
+          "status": null,
+          "title": "Fates' shrine"
+        }
+      },
+      {
+        "relations": [
+          "where"
+        ],
+        "source": {
+          "id": "C-032",
+          "kind": "clue",
+          "locked": [],
+          "never": false,
+          "path": "lore/clues/C-032.md",
+          "status": "draft",
+          "title": "Synthetic clue C-032"
+        }
+      },
+      {
+        "relations": [
+          "home"
+        ],
+        "source": {
+          "id": "mother-ilse",
+          "kind": "npc",
+          "locked": [],
+          "never": false,
+          "path": "people/hearth-folk/fates-cult/mother-ilse.md",
+          "status": null,
+          "title": "Mother Ilse"
+        }
+      },
+      {
+        "relations": [
+          "mentions"
+        ],
+        "source": {
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      }
+    ]
+  }
+}

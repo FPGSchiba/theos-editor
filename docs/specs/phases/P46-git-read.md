@@ -1,6 +1,17 @@
 # P46 · Git read — phase spec
 
-Status: waiting for Jann's approval · 27 Nov 2026 · repo of the build: `theos-editor`
+Status: approved (#52) · 27 Nov 2026 · repo of the build: `theos-editor`
+Changes: 27 Nov 2026 — process trees through a `win32job` job on Windows and a process group with
+`nix`'s `killpg` on Unix, not `process-wrap` (§4.2, §4.3, §5.1, §5.3, §7, §9 R2, R3; Jann). Why:
+the plan's re-probe measured `process-wrap`'s job object at about 70 ms more per git start on
+Windows, which breaks §5.3's limit.
+Changes: 28 Nov 2026 — the spec as built (build PR #62): the job assignment of a git that has
+already exited (§5.3, §7), the read options' root-commit setting (§5.3), a missing revision and the
+mode read without a pathspec (§5.4), hooks turned off during status, the vanished-file retry and the
+gone upstream (§5.5), paging, the header format and the merges history lists (§5.6), the record
+rule, conflicts, unreadable files and history before a rename is committed (§5.8), the approval
+merge in §6.2, and rulings 11–21 (§9). Why: the build's reviews and the Windows gate showed where
+the approved text and git's behaviour differ.
 Source: `docs/specs/00-umbrella.md` §3 P46, umbrella version 8. Version 5 (#33) split the old
 "Command layer and git" into P06, P46 Git read and P47 Git write. Scope and acceptance criteria
 come from there; this spec decides how. It starts from P05's interfaces (P05 spec §5.2, §6) and
@@ -79,10 +90,20 @@ The diff itself lives in `theos-content` and needs no git, so P07 can show a pro
 - **The rename threshold.** A short truth (9 lines) renamed `T-012` → `T-013` in one commit that
   also rewrites its title and its one body line: `git log --follow` with git's default threshold
   (50 %) loses the history (`A T-013.md` only); with `-M30%` it keeps it (`R046`). §9 R1 decides.
-- **process-wrap.** P06's probe (12 Nov, 10.0.1): `Child::kill` on git, run through an alias that
-  starts `sh` and `sleep`, left all three running; process-wrap's `JobObject` (Windows) killed
-  them all, `ProcessGroup` does the same on Unix. Versions today: 10.0.1 (23 Sep 2026), 10.0.2
-  and 11.0.0 (both 24 Nov 2026, three days old). §9 R2 decides.
+- **Process trees.** P06's probe (12 Nov): `Child::kill` on git, run through an alias that starts
+  `sh` and `sleep`, left all three running. The plan's re-probe (27 Nov, toolchain 1.99.1), with
+  that alias writing a marker file after `sleep 2`; three ways stop the whole tree (no marker
+  appears):
+
+  | Way (Windows) | `git --version`, start to exit | Stopping the tree |
+  |---|---|---|
+  | `std::process::Command`, no tree handling | 8–10 ms | – (the tree lives on) |
+  | `process-wrap` 10.0.1 `JobObject` | 80–84 ms: the spawn alone takes 75 ms, because the process starts suspended and is resumed by scanning every thread of the system (Toolhelp snapshot) | yes |
+  | `win32job` 2.0.3: a job with kill-on-close, git assigned right after `spawn` | 9–11 ms | 1.6 ms (the job is closed) |
+  | `taskkill /T /F /PID` on cancel only | 8–10 ms | 380 ms; misses a process whose parent already exited |
+
+  Jann chose `win32job` (§9 R2). On Unix, std's `CommandExt::process_group(0)` starts git in its
+  own group, and `nix`'s `killpg` (nix 0.31 is already in `Cargo.lock`) stops it.
 - From P06 §11: `similar`'s `capture_diff_slices` over whitespace-free word tokens gives exactly
   `git diff --word-diff --word-diff-regex='[^[:space:]]+'`; `from_words` and
   `from_unicode_words` count whitespace as tokens, so a re-wrap shows as changes.
@@ -96,7 +117,7 @@ The diff itself lives in `theos-content` and needs no git, so P07 can show a pro
 | Field diff | Compare P02's parsed front matter by value | A line diff of the front matter (shows quoting and list style as changes, not old and new per field) |
 | Unstaged renames | `git add -N` on a temporary copy of the index, then git's own rename detection | Pairing deleted and new records in theos (re-implements git's similarity); showing them unpaired (Jann chose pairing) |
 | History across renames | `git log --follow` | theos's own walk over rename pairs (re-implements `--follow`); a rename trailer written by P47's commit (misses renames made outside the editor, and the journal that knows renames lives in memory only) |
-| Process trees | `process-wrap` (`JobObject`, `ProcessGroup`) | `Child::kill` (leaves grandchildren running, probe); own Win32 job code (`unsafe`, forbidden by G3) |
+| Process trees | Windows: `win32job` (a job with kill-on-close); Unix: std `process_group(0)` and `nix::sys::signal::killpg` | `Child::kill` (leaves grandchildren running, probe); `process-wrap` (+70 ms per git start on Windows, probe); `taskkill`/`kill` on cancel (380 ms, misses orphans); own Win32 job code (`unsafe`, forbidden by G3) |
 | Version parsing | A small parser of `git version X.Y.Z…` | `semver` (rejects `2.56.1.windows.1` and `2.39.3 (Apple Git-146)`) |
 
 ## 5. Design
@@ -106,7 +127,7 @@ The diff itself lives in `theos-content` and needs no git, so P07 can show a pro
 | Part | Crate | Tool or crate | Custom code, and why |
 |---|---|---|---|
 | Version check | `theos-vcs` | `git --version` | Parsing the leading `X.Y.Z` of git's answer: no crate reads git's version string (§4.3) |
-| Cancellable run, process trees | `theos-vcs` | `process-wrap` (`std`, `job-object`, `process-group`) | The wait loop that watches the cancel flag |
+| Cancellable run, process trees | `theos-vcs` | `win32job` (Windows), std `process_group` and `nix` `killpg` with the `signal` feature (Unix) | The wait loop that watches the cancel flag |
 | Read options | `theos-vcs` | git's `-c` and its flags | One list (§5.3) |
 | Status | `theos-vcs` | `ls-files`, `add -N`, `status --porcelain=v2 -z` | Parsing git's `-z` porcelain v2 lines, as P05 parses `-z` name-status and `ls-files -s` |
 | History | `theos-vcs` | `log --follow --name-status -z` | Parsing the format §5.6 asks for |
@@ -189,29 +210,43 @@ impl Git {
 
 - **One spawn path.** `run` keeps its signature (P05 §6) and calls `run_cancellable` with a flag
   nobody sets, so every git command, the hook's included, runs the same way.
-- **Process trees.** git is started through `process-wrap`'s `std` API, in a job object on
-  Windows (`JobObject`) and in a new process group on Unix (`ProcessGroup::leader()`). On cancel
-  the whole group or job is killed, then waited for, and the run returns `Cancelled`. This is the
-  per-OS code of the phase (§5.10).
+- **Process trees.** git is started with `std::process::Command`.
+  - Windows: a `win32job::Job` with kill-on-close is made for the run, and git is assigned to it
+    right after `spawn` returns, before anything else; every process git starts afterwards joins
+    the job. On cancel the job is closed, which ends every process in it. Windows refuses to
+    assign a process that has already exited, and on a busy machine a fast git (`git --version`, a
+    git that fails at once) can exit before the assignment. So a refused assignment first gives
+    git up to 50 ms (checked every millisecond) to finish exiting: a git that has exited keeps its
+    result and runs without a job, as it has no tree left. Only a git still running after that is
+    killed, and the run is `GitError::Io`.
+  - Unix: git starts in its own process group (`CommandExt::process_group(0)`); on cancel the group
+    gets `SIGKILL` through `nix::sys::signal::killpg`.
+
+  Then git is waited for, and the run returns `Cancelled`. This is the per-OS code of the phase
+  (§5.10).
 - **The wait.** stdout and stderr are read on their own threads, stdin is written on a third (as
-  in P05). The calling thread waits for the process and checks the flag. A cancel is noticed
-  within 50 ms, and a command that finishes in a few milliseconds is not slowed by more than a
-  millisecond or two. The builder picks the waiting (for example a short `try_wait` interval that
-  grows).
+  in P05). A waiter thread waits for git and hands its exit over a channel; the calling thread
+  checks the flag every 10 ms. A cancel is noticed within 50 ms, and a command that finishes in a
+  few milliseconds is not slowed by more than a millisecond or two. When a cancel and git's exit
+  meet, the run returns `Cancelled` (P47 decides whether a finished commit or push reports its
+  result instead).
 - A flag set before the run starts returns `Cancelled` without starting git.
 - **Read options.** Every read builds its arguments from one list, so a user's git settings
   cannot change what theos parses:
   - `--no-optional-locks` (P05) and `--literal-pathspecs`, so a path with `*`, `?`, `[` or `:` is
     a path, never a pattern;
   - `-c color.ui=never`, `-c log.showSignature=false`, `-c core.quotePath=false`,
-    `-c i18n.logOutputEncoding=UTF-8`;
+    `-c i18n.logOutputEncoding=UTF-8`, `-c log.showRoot=true` (with `log.showRoot=false` a history
+    loses its root commit);
   - the format flags each read needs: `-z`, `--porcelain=v2`, `--untracked-files=all`,
     `--find-renames`, `--no-ext-diff`, `--no-textconv`, `--format=…`, `--end-of-options` before
     a revision.
 
   A test runs every read with a user configuration that sets the opposite of each (§5.10).
-- **Logging.** Each git command logs its arguments, its folder and its duration at `debug`, and
-  a failure at `warn`, through `tracing`.
+- **Logging.** Each git command logs its arguments, its folder and its duration at `debug`,
+  through `tracing`. A failed git (`GitError::Failed`) is logged at `debug` too, because many are
+  expected (a `rev-parse --verify --quiet` miss, an unset setting); a git that cannot be started or
+  whose pipes fail is logged at `warn`.
 
 ### 5.4 A file at a version
 
@@ -236,11 +271,17 @@ pub fn read(git: &Git, top: &Path, version: Version<'_>, path: &[u8]) -> Result<
 
 - `Head`, `Index` and `Rev` resolve the path's object with `git rev-parse --verify --quiet
   --end-of-options <rev>:<path>` (`:0:<path>` for the index, so a path such as `1:notes.md` is
-  never read as a merge stage) and its mode with `ls-tree`, or with
-  `ls-files -s` for the index; the bytes come from P05's `blobs`. A path the version does not hold
-  is `Absent`; a missing `HEAD` (before the first commit) reads every path as `Absent`.
+  never read as a merge stage). The mode comes from `ls-tree -z --end-of-options <rev>:<folder>`
+  (`<rev>^{tree}` at the top) with the entry matched by its exact name, without a pathspec: on
+  Windows git reads a pathspec such as `1:notes.md` as a drive. For the index the mode comes from
+  `ls-files -s`. The bytes come from P05's `blobs`. A path the version does not hold is `Absent`;
+  a missing `HEAD` (before the first commit) reads every path as `Absent`. A revision that does not
+  exist is an error with git's message (`GitError::Failed`), not `Absent`.
 - An intent-to-add entry in the index reads as `Absent`: a commit does not record it (P05 §5.2).
-- `WorkTree` reads the file under `top` with `std::fs`; a link or a folder is `NotAFile`.
+- `WorkTree` reads the file under `top` with `std::fs`; a link or a folder is `NotAFile`; a file
+  that vanishes between its metadata and its read is `Absent`.
+- A path that is not UTF-8 is `GitError::Output` naming the command and the path; theos reads only
+  UTF-8 paths, which is what git stores.
 - Paths are git's bytes, relative to the top, with `/`. Text normalisation (CRLF, P02) is the
   diff's job, not the read's.
 
@@ -280,11 +321,19 @@ pub fn status(git: &Git, top: &Path, cancel: &Cancel) -> Result<Status, GitError
    `.gitignore`, `.git/info/exclude`, `core.excludesFile`).
 2. With no untracked files, step 4 runs on the real index; steps 3 and 5 are skipped.
 3. Otherwise the index file (`git rev-parse --git-path index`, which honours a `GIT_INDEX_FILE`)
-   is copied to a temporary file; a repository without an index file copies nothing (git reads a
-   missing index as empty). With `GIT_INDEX_FILE` set to the copy, `git add --intent-to-add
-   --pathspec-from-file=- --pathspec-file-nul` takes the untracked paths on stdin, so no command
-   line grows with them (Windows limits it to 32 767 characters). The real index is never
-   written; the copy is deleted when `status` returns, also on an error or a cancel.
+   is copied into a temporary folder (`tempfile::TempDir`: on Windows git cannot rename its lock
+   file over an open temporary file); a repository without an index file copies nothing (git
+   reads a missing index as empty). With `GIT_INDEX_FILE` set to the copy, `git add
+   --intent-to-add --pathspec-from-file=- --pathspec-file-nul` takes the untracked paths on stdin,
+   so no command line grows with them (Windows limits it to 32 767 characters). The real index is
+   never written; the folder is removed when `status` returns, also on an error or a cancel.
+   - The `add` writes the copy whole (`-c core.splitIndex=false`, so no `sharedindex` file appears
+     in `.git`) and runs no hook: `-c core.hooksPath=<the temporary folder>` turns off hook files,
+     and `-c hook.<name>.enabled=false` turns off each hook the configuration names (git 2.54+;
+     the names come from one `config --get-regexp` read). A configured name that `-c` cannot
+     express (not UTF-8, or holding `=`) makes `status` fail rather than run the hook.
+   - Untracked paths that vanished since step 1 are left out; if the `add` still fails, step 1
+     runs once more with a fresh list (an editor's atomic save, a tool's swap file).
 4. `git status --porcelain=v2 -z --branch --untracked-files=all --find-renames` with the read
    options of §5.3.
 5. Mapping back: a `.A` entry whose path was untracked in step 1 is `Untracked`; a `2` line with
@@ -293,7 +342,9 @@ pub fn status(git: &Git, top: &Path, cancel: &Cancel) -> Result<Status, GitError
    `Changed` with `unstaged: Added`, as git shows it.
 
 Paths are bytes in git's spelling, relative to the top. A submodule shows as its path with its
-change; theos does not look inside it.
+change; theos does not look inside it. An upstream that is gone (no `# branch.ab` line) reads as
+`upstream: None`, the same as no upstream: `Upstream` has no "gone" state, and a gone upstream
+with ahead and behind 0 would read as "in sync".
 
 ### 5.6 History (CE-21.1)
 
@@ -320,22 +371,25 @@ pub fn history(git: &Git, top: &Path, path: &[u8], page: Page, cancel: &Cancel)
 ```
 
 - One command: `git log --follow --find-renames --diff-merges=first-parent --name-status -z
-  --format=<fields> --skip=<n> --max-count=<n> -- <path>`, with the read options of §5.3. The fields are `%H`, `%aN`, `%aE`,
-  `%at`, the time zone (`%ad` with `--date=raw`), `%s` and `%(trailers:unfold,separator=…,
-  key_value_separator=…)`, separated by bytes that cannot appear in them. The builder picks the
-  separators and the parser; the review checks a subject or trailer value that holds `%`, a
-  quote, a tab or non-ASCII text.
+  --date=raw --format=<fields> --max-count=<skip + max> -- <path>`, with the read options of
+  §5.3. The first `skip` commits are dropped in theos: git applies `--skip` before `--follow` reads
+  the skipped commits, so a rename among them is never followed and the older history is lost.
+- The fields are `%H`, `%aN`, `%aE`, `%ad` (`<seconds> <±hhmm>`), the trailers
+  (`%(trailers:only,unfold,…)`: `only`, so a non-trailer line in the trailer block, such as
+  `git cherry-pick -x`'s, is not read as a trailer) and `%s` last. Each field ends with a NUL, so a
+  name, subject or trailer may hold any other byte. A malformed trailer block gives the commit no
+  trailers instead of failing the history.
 - Newest first. A path never committed, or a repository before its first commit, has an empty
   history (git's "does not have any commits yet" is not an error).
 - **The rename threshold** is git's default (§9 R1). A record renamed with P06's `Rename` (the id
   line, the file name and inbound links in other files) keeps its history at any size, because
   only one line of the record changes.
-- A merge commit is listed only when git's history simplification keeps it (a merge whose result
-  for the file differs from every parent, such as a resolved conflict); a merge that took one
-  side's version unchanged is left out, and the commit that made the change is listed. A listed
-  merge shows its change against its first parent (`--diff-merges=first-parent`, git 2.31), so
-  every listed commit has a change, a path and maybe a `from`. The approval of a merged agent
-  commit is on the merge (§6.2).
+- Merges: under `--follow`, git lists every merge whose result for the file differs from its
+  first parent, and shows its change against that parent (`--diff-merges=first-parent`, git
+  2.31). So a change made on a branch and merged into `main` is listed twice: the branch's commit
+  and the merge. The approval of a merged agent commit is on that merge (§6.2). A rename made on a
+  branch merged with `--no-ff` lists the branch's rename commit as `Deleted` at the old path and
+  the merge as the rename; the older commits are kept.
 
 ### 5.7 The diffs, in `theos-content` (CE-21.2)
 
@@ -458,17 +512,28 @@ pub fn history(workspace: &Workspace, git: &Git, id: &str, page: Page, cancel: &
 - **Paths.** Repository paths become project paths with P05's mapping (`project_path` in
   `staged.rs`, under the repository's `Folding`), moved to a module both use. A path outside the
   project folder goes to `files`.
-- **Which paths are records.** A path inside the project folder names a record when its newest
-  version (the working tree; for a path gone from it, the index, else HEAD) parses as a record
-  (`Record::parse`) whose `kind` the registry knows. Its id, kind and title come from those
-  bytes, not from P03's index, so `changes` needs no index sync, writes no cache and gives the
-  same answer with the in-memory fallback. A path that does not parse, or names an unknown kind,
-  goes to `files`.
+- **Which paths are records.** A path inside the project folder names a record when P03's
+  `is_record_path` accepts it and its newest version (the working tree; for a path gone from it,
+  the index, else HEAD) parses as a record (`Record::parse`) whose `kind` the registry knows. Its
+  id, kind and title come from those bytes, not from P03's index, so `changes` needs no index
+  sync, writes no cache and gives the same answer with the in-memory fallback. A path that does
+  not parse, names an unknown kind, or cannot be read (a sharing violation on Windows) goes to
+  `files`, the last with a warning.
+- **Conflicts.** A conflicted path is named from the first of the working tree and HEAD that
+  parses as a record, so a conflict inside the front matter (markers there) still lists the
+  record by id, with HEAD's kind and title.
+- **Cancel.** `changes` checks the flag before each record's reads as well as during the status.
 - **The id in a commit** is the file name of the path in that commit without `.md` (the data
   model, §2: the id equals the file name).
-- **History by id.** `history` finds the record's path through P03's index (`Index::record`), maps
-  it to git's spelling through the git index under the `Folding` (as P05's staged read does), then
-  follows it with `theos_vcs::history`. A record that exists only in the working tree has an empty history.
+- **History by id.** `history` checks the flag first, finds the record's path through P03's index
+  (`Index::record`), maps it to git's spelling through one cancellable `ls-files -z` of the index
+  under the `Folding` (exact spelling first, then folded), then follows it with
+  `theos_vcs::history`.
+  - A record renamed but not yet committed (unstaged, or staged) has no commits under its new
+    path. Then `history` takes the rename pairing from `theos_vcs::status` and follows the old
+    path, so the history shows before the rename is committed.
+  - A record that exists only in the working tree, and is no rename, has an empty history. When
+    two records share an id, the first path git tracks (in path order) is followed.
 - **Diff.** The bytes of both sides come from `theos_vcs::read`. Text that is not UTF-8 is
   `Binary`. A path that names a record diffs with `record`, any other text file with `words`.
 - Nothing here takes P06's repo lock or writes the cache: these are reads.
@@ -531,7 +596,7 @@ files than fit on one Windows command line.
 | Phase | Uses |
 |---|---|
 | P47 | `Cancel` and `run_cancellable` for pull and push; `status` and `Changes` to stage a record by its paths (both paths of a rename); `read` for discarding. Adds its own `GitError` variants |
-| P07 | `theos_content::diff::record` and `words` for `theos review show` (CE-25.2), with `Side::Between` for an agent branch against `main`. The `Approved-by:` trailer sits on the approval's merge commit, which `history` does not list (§5.6): P07 or P13 finds the merge that brought a commit in |
+| P07 | `theos_content::diff::record` and `words` for `theos review show` (CE-25.2), with `Side::Between` for an agent branch against `main`. The `Approved-by:` trailer sits on the approval's merge commit, which `history` lists when the merge changed the file against `main` (§5.6), next to the agent's own commit |
 | P12 | `theos_content::diff` to compare an unsaved edit with the saved record |
 | P13 | `changes`, `diff` and `history` for the Changes screen (`docs/ui/screens/08-git.html`); `Branch.upstream` for ahead and behind; `Conflicted` entries for CE-36.3; CE-36.2 is `history` |
 | P11, P48 | `Git::find` and its messages when they start git |
@@ -545,6 +610,9 @@ files than fit on one Windows command line.
 | `split-index` or a sparse index in the copied index | The temporary index cannot be read, or reads differently | A test with `core.splitIndex=true`. A failure is a `GitError`, never a wrong answer. Sparse checkouts are not tested (content projects do not use them) |
 | User settings that change git's output | Parsing fails or misreads | The read options of §5.3 and the hostile-settings test |
 | A job object inside a job object (theos in a hook, run by an IDE that uses jobs) | Creating the job fails on old Windows | Windows 8 and later nest jobs; G2's Windows is 11 |
+| A process git starts before it is assigned to the job (Windows) | That process survives a cancel | git loads for milliseconds before it starts anything, and the assignment follows `spawn` at once; the cancel test proves the tree stops |
+| git exits before it is assigned to the job (Windows, a busy machine) | Windows refuses the assignment | A git that has exited, or exits within 50 ms, keeps its result and runs without a job (§5.3); found by the gate's instrumented run. A git still exiting after 50 ms fails with `GitError::Io` |
+| git in its own process group (Unix) | Ctrl+C in a terminal reaches theos, not git | theos's reads end in milliseconds; P47 decides for pull and push, which can wait on the network |
 | Myers and git's xdiff choose different alignments when several are minimal | The editor marks other words than `git diff --word-diff` | Both are minimal; the oracle test uses pairs with one alignment |
 | A huge record or a rewrite of all of it | A slow diff | The deadline of §5.7 |
 | `log --follow` follows only one path and simplifies merges | A history through a merge that renamed the file on one side may lose the older part | Tests cover renames on a branch merged into `main`; a loss there is a `--follow` limit, listed for Jann if the build finds one |
@@ -577,12 +645,14 @@ files than fit on one Windows command line.
    the editor's own rename changes one line of the record — cost if wrong: a short record renamed
    and rewritten in one commit loses its older history in the editor, as it does in `git log
    --follow`; a lower threshold is then a one-line change.
-2. Ruling: `process-wrap` 10.0.1, not 11.0.0 or 10.0.2 — P06 probed 10.0.1, and the newer two
-   were released three days ago; the plan re-probes it on the pinned toolchain before the build
-   uses it — cost if wrong: a later upgrade.
+2. Ruling (Jann, 27 Nov 2026): `win32job` 2.0.3 on Windows and a process group with `nix`'s
+   `killpg` on Unix, not `process-wrap` — `process-wrap` adds about 70 ms to every git start on
+   Windows (§4.2), and 2.0.3 is the version probed (2.1.0 is 17 days old) — cost if wrong: a
+   process started in the microseconds before the assignment survives a cancel.
 3. Ruling: one spawn path for every git command, `run` included — two paths would test the
-   process-tree code only on the reads — cost if wrong: the hook also starts git in a job object,
-   which a policy that forbids nested jobs would break.
+   process-tree code only on the reads; with `win32job` a start costs no measurable time — cost if
+   wrong: the hook also starts git in a job object, which a policy that forbids nested jobs would
+   break.
 4. Ruling: fields are compared by value, and a byte change without a field or word change is
    `layout_only` — CE-21.2 asks for old and new per field, which is the value; a reformat is not a
    content change — cost if wrong: a comment edit is visible only as "layout only".
@@ -603,6 +673,43 @@ files than fit on one Windows command line.
 10. Ruling: `diff` takes repository paths in git's spelling — status and history already hold
     them, and mapping a project path back would need git's folding a second time — cost if
     wrong: a caller with only a project path looks up its `RecordChange` first.
+
+Rulings 11–21 were made during the build (PR #62) and are part of the spec as built.
+
+11. Ruling: paging uses `--max-count=skip+max` and drops the first `skip` commits in theos — git
+    applies `--skip` before `--follow` sees the skipped renames — cost if wrong: deep pages
+    re-walk the newer commits.
+12. Ruling: history lists every merge git shows under `--follow --diff-merges=first-parent`, so a
+    merged branch change appears twice — filtering merges in theos would re-implement history
+    simplification and break paging, and the approval merge's trailer is then in the list — cost
+    if wrong: P13 folds the duplicates.
+13. Ruling: a gone upstream reads as `upstream: None` (§5.5) — the type cannot say "gone" — cost
+    if wrong: P13 cannot show "upstream gone" until `Upstream` gains a state.
+14. Ruling: the index copy lives in a temporary folder and is written whole
+    (`core.splitIndex=false`) — Windows cannot rename git's lock file over an open temporary file,
+    and a split index would write a `sharedindex` file into `.git` — cost if wrong: the copy of a
+    split index is written whole.
+15. Ruling: `status` turns off hook files and every configured hook, and fails closed on a
+    configured hook name `-c` cannot express — status must never run repository code — cost if
+    wrong: `status` errors in such a repository instead of listing it.
+16. Ruling: a refused job assignment gives git up to 50 ms to finish exiting before it counts as
+    running (§5.3) — Windows refuses exited and exiting processes — cost if wrong: a git still
+    exiting after 50 ms on a very busy machine fails with `GitError::Io`.
+17. Ruling: the id is the file name without `.md`, also in `changes`; a rename from outside the
+    project folder has `from: None` with `repo_from` set — the data model's id rule — cost if
+    wrong: a file whose `id:` disagrees with its name shows under its file name.
+18. Ruling: a conflicted record is named from the working tree, else HEAD (§5.8) — P13 lists pull
+    conflicts by record (CE-36.3) — cost if wrong: its title shows HEAD's value.
+19. Ruling: an unreadable path goes to `files` with a warning instead of failing `changes` — one
+    locked file must not hide the rest — cost if wrong: a real IO fault shows as an unclassified
+    file.
+20. Ruling: the old side of a diff is read at `from`, and at `path` when the old version holds
+    nothing at `from`; `Side::Commit` uses the commit's own paths; a side that is no regular file
+    is `Binary` — the cases a staged rename with an unstaged edit, a followed history and a link or
+    submodule need — cost if wrong: a caller's paths are ignored for `Side::Commit`.
+21. Ruling: a non-UTF-8 author, email, subject or trailer is read lossily; the commit id must be
+    UTF-8 — git stores UTF-8 by default and the read options force it — cost if wrong: a
+    legacy-encoded name shows replacement characters.
 
 ## 10. Left to the builder
 

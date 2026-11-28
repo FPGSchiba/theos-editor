@@ -3,7 +3,7 @@
 use serde::Serialize;
 
 /// Every kind and every rule.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct SchemaView {
     /// The kinds, in registration order.
     pub kinds: Vec<KindSummaryView>,
@@ -12,7 +12,7 @@ pub struct SchemaView {
 }
 
 /// One kind in the overview.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct KindSummaryView {
     /// The kind name.
     pub name: String,
@@ -25,7 +25,7 @@ pub struct KindSummaryView {
 }
 
 /// Where the records of a kind live.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum PlacementView {
     /// Flat in this project-relative folder.
@@ -35,7 +35,7 @@ pub enum PlacementView {
 }
 
 /// One rule in the overview.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct RuleView {
     /// The rule id, `group/name`.
     pub id: String,
@@ -48,7 +48,7 @@ pub struct RuleView {
 }
 
 /// One kind in detail.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct KindView {
     /// The kind name.
     pub name: String,
@@ -65,7 +65,7 @@ pub struct KindView {
 }
 
 /// One front-matter field.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct FieldView {
     /// The field key.
     pub key: String,
@@ -77,7 +77,7 @@ pub struct FieldView {
 }
 
 /// What the body of a kind may contain.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct BodyView {
     /// The beat attributes, when the body has beats.
     pub beats: Option<Vec<BeatView>>,
@@ -88,7 +88,7 @@ pub struct BodyView {
 }
 
 /// One beat attribute.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct BeatView {
     /// The attribute key.
     pub key: String,

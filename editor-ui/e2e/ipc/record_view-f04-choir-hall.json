@@ -1,0 +1,679 @@
+{
+  "args": {
+    "id": "f04-choir-hall",
+    "path": "world/hearth/f04-choir-hall.md"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "A half-buried resonating chamber the Hearth folk have turned into their holiest place. Below the hall lies ",
+            "type": "text"
+          },
+          {
+            "fragment": null,
+            "id": "fates-shrine",
+            "shown": null,
+            "target": {
+              "id": "fates-shrine",
+              "kind": "location",
+              "locked": [],
+              "never": false,
+              "path": "world/hearth/f04-choir-hall/fates-shrine.md",
+              "status": null,
+              "title": "The Fates' shrine"
+            },
+            "type": "link"
+          },
+          {
+            "text": "; beside it the ",
+            "type": "text"
+          },
+          {
+            "fragment": null,
+            "id": "reed-marsh",
+            "shown": "marsh",
+            "target": {
+              "id": "reed-marsh",
+              "kind": "location",
+              "locked": [],
+              "never": false,
+              "path": "world/hearth/f04-choir-hall/reed-marsh.md",
+              "status": null,
+              "title": "Reed marsh"
+            },
+            "type": "link"
+          },
+          {
+            "text": ".",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      },
+      {
+        "inlines": [
+          {
+            "text": "Synthetic heading",
+            "type": "text"
+          }
+        ],
+        "level": 2,
+        "type": "heading"
+      },
+      {
+        "items": [
+          [
+            {
+              "inlines": [
+                {
+                  "text": "Synthetic list item: ",
+                  "type": "text"
+                },
+                {
+                  "fragment": null,
+                  "id": "C-031",
+                  "shown": null,
+                  "target": {
+                    "id": "C-031",
+                    "kind": "clue",
+                    "locked": [],
+                    "never": false,
+                    "path": "lore/clues/C-031.md",
+                    "status": "draft",
+                    "title": "A spirit murmurs a word in a dead tongue"
+                  },
+                  "type": "link"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ]
+        ],
+        "ordered": false,
+        "type": "list"
+      },
+      {
+        "beliefs": [
+          {
+            "fragment": null,
+            "id": "B-016",
+            "shown": null,
+            "target": {
+              "id": "B-016",
+              "kind": "belief",
+              "locked": [],
+              "never": false,
+              "path": "lore/beliefs/B-016.md",
+              "status": "draft",
+              "title": "The Fates spin for those who climb"
+            }
+          }
+        ],
+        "caption": [
+          {
+            "text": "a synthetic caption on the shrine stair",
+            "type": "text"
+          }
+        ],
+        "nodes": [
+          {
+            "inlines": [
+              {
+                "text": "The Fates spin for those who climb. Hum with me, stair-child, and they will hear you.",
+                "type": "text"
+              }
+            ],
+            "type": "paragraph"
+          }
+        ],
+        "speaker": {
+          "fragment": null,
+          "id": "mother-ilse",
+          "shown": null,
+          "target": {
+            "id": "mother-ilse",
+            "kind": "npc",
+            "locked": [],
+            "never": false,
+            "path": "people/hearth-folk/fates-cult/mother-ilse.md",
+            "status": null,
+            "title": "Mother Ilse"
+          }
+        },
+        "tier": "T1",
+        "type": "voice"
+      },
+      {
+        "nodes": [
+          {
+            "inlines": [
+              {
+                "text": "Synthetic design note.",
+                "type": "text"
+              }
+            ],
+            "type": "paragraph"
+          }
+        ],
+        "type": "design"
+      },
+      {
+        "inlines": [
+          {
+            "text": "A synthetic link that names no record: ",
+            "type": "text"
+          },
+          {
+            "fragment": null,
+            "id": "synthetic-dangling",
+            "shown": null,
+            "target": null,
+            "type": "link"
+          },
+          {
+            "text": ". A synthetic link left open: [[fates-shrine",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      },
+      {
+        "text": "<div>Synthetic HTML block, shown as text.</div>",
+        "type": "raw"
+      },
+      {
+        "nodes": [
+          {
+            "text": "[!voice] T1 · a synthetic voice title that names no speaker",
+            "type": "raw"
+          },
+          {
+            "inlines": [
+              {
+                "text": "Synthetic words under a malformed title.",
+                "type": "text"
+              }
+            ],
+            "type": "paragraph"
+          }
+        ],
+        "type": "quote"
+      }
+    ],
+    "findings": [
+      {
+        "column": 40,
+        "id": "f04-choir-hall",
+        "line": 24,
+        "message": "`synthetic-dangling` names no record",
+        "path": "world/hearth/f04-choir-hall.md",
+        "rule": "link/dangling",
+        "severity": "error",
+        "span": {
+          "end": 635,
+          "start": 613
+        }
+      },
+      {
+        "column": 1,
+        "id": "f04-choir-hall",
+        "line": 25,
+        "message": "`[[` does not start a link",
+        "path": "world/hearth/f04-choir-hall.md",
+        "rule": "body/link-unclosed",
+        "severity": "error",
+        "span": {
+          "end": 667,
+          "start": 665
+        }
+      },
+      {
+        "column": 12,
+        "id": "f04-choir-hall",
+        "line": 29,
+        "message": "a voice title starts with the speaker",
+        "path": "world/hearth/f04-choir-hall.md",
+        "rule": "body/callout-title",
+        "severity": "error",
+        "span": {
+          "end": 743,
+          "start": 741
+        }
+      }
+    ],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "f04-choir-hall"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "floor"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "The Choir-Hall"
+        }
+      },
+      {
+        "key": "parent",
+        "value": {
+          "type": "link",
+          "value": {
+            "fragment": null,
+            "id": "hearth",
+            "shown": null,
+            "target": {
+              "id": "hearth",
+              "kind": "band",
+              "locked": [],
+              "never": false,
+              "path": "world/hearth.md",
+              "status": "draft",
+              "title": "Hearth"
+            }
+          }
+        }
+      },
+      {
+        "key": "number",
+        "value": {
+          "type": "text",
+          "value": "4"
+        }
+      },
+      {
+        "key": "status",
+        "value": {
+          "type": "text",
+          "value": "draft"
+        }
+      }
+    ],
+    "header": {
+      "children": 2,
+      "links_in": 8,
+      "parent": {
+        "id": "hearth",
+        "kind": "band",
+        "locked": [],
+        "never": false,
+        "path": "world/hearth.md",
+        "status": "draft",
+        "title": "Hearth"
+      },
+      "record": {
+        "id": "f04-choir-hall",
+        "kind": "floor",
+        "locked": [],
+        "never": false,
+        "path": "world/hearth/f04-choir-hall.md",
+        "status": "draft",
+        "title": "The Choir-Hall"
+      }
+    },
+    "links_in": [
+      {
+        "column": 7,
+        "fragment": null,
+        "line": 6,
+        "slot": "field:for",
+        "source": {
+          "id": "f04-choir-hall-art",
+          "kind": "concept",
+          "locked": [],
+          "never": false,
+          "path": "concepts/f04-choir-hall-art.md",
+          "status": null,
+          "title": "Choir-Hall, synthetic concept"
+        },
+        "target": {
+          "exists": true,
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      },
+      {
+        "column": 25,
+        "fragment": null,
+        "line": 11,
+        "slot": "mention",
+        "source": {
+          "id": "B-017",
+          "kind": "belief",
+          "locked": [],
+          "never": false,
+          "path": "lore/beliefs/B-017.md",
+          "status": "draft",
+          "title": "A synthetic belief about the never truth"
+        },
+        "target": {
+          "exists": true,
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      },
+      {
+        "column": 9,
+        "fragment": null,
+        "line": 9,
+        "slot": "field:where",
+        "source": {
+          "id": "C-031",
+          "kind": "clue",
+          "locked": [],
+          "never": false,
+          "path": "lore/clues/C-031.md",
+          "status": "draft",
+          "title": "A spirit murmurs a word in a dead tongue"
+        },
+        "target": {
+          "exists": true,
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      },
+      {
+        "column": 9,
+        "fragment": null,
+        "line": 7,
+        "slot": "field:where",
+        "source": {
+          "id": "S-004",
+          "kind": "script",
+          "locked": [],
+          "never": false,
+          "path": "story/scripts/S-004.md",
+          "status": "draft",
+          "title": "The shrine hums"
+        },
+        "target": {
+          "exists": true,
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      },
+      {
+        "column": 6,
+        "fragment": null,
+        "line": 12,
+        "slot": "beat:at",
+        "source": {
+          "id": "S-004",
+          "kind": "script",
+          "locked": [],
+          "never": false,
+          "path": "story/scripts/S-004.md",
+          "status": "draft",
+          "title": "The shrine hums"
+        },
+        "target": {
+          "exists": true,
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      },
+      {
+        "column": 6,
+        "fragment": null,
+        "line": 21,
+        "slot": "beat:at",
+        "source": {
+          "id": "S-004",
+          "kind": "script",
+          "locked": [],
+          "never": false,
+          "path": "story/scripts/S-004.md",
+          "status": "draft",
+          "title": "The shrine hums"
+        },
+        "target": {
+          "exists": true,
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      },
+      {
+        "column": 9,
+        "fragment": null,
+        "line": 6,
+        "slot": "field:parent",
+        "source": {
+          "id": "fates-shrine",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall/fates-shrine.md",
+          "status": null,
+          "title": "The Fates' shrine"
+        },
+        "target": {
+          "exists": true,
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      },
+      {
+        "column": 9,
+        "fragment": null,
+        "line": 6,
+        "slot": "field:parent",
+        "source": {
+          "id": "reed-marsh",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall/reed-marsh.md",
+          "status": null,
+          "title": "Reed marsh"
+        },
+        "target": {
+          "exists": true,
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      }
+    ],
+    "lore": [
+      {
+        "record": {
+          "id": "B-017",
+          "kind": "belief",
+          "locked": [],
+          "never": false,
+          "path": "lore/beliefs/B-017.md",
+          "status": "draft",
+          "title": "A synthetic belief about the never truth"
+        },
+        "tier": null,
+        "touches": {
+          "id": "T-013",
+          "kind": "truth",
+          "locked": [
+            "never"
+          ],
+          "never": true,
+          "path": "lore/truths/T-013.md",
+          "status": "draft",
+          "title": "Synthetic truth T-013, never revealed"
+        },
+        "verb": "distorts"
+      },
+      {
+        "record": {
+          "id": "C-031",
+          "kind": "clue",
+          "locked": [],
+          "never": false,
+          "path": "lore/clues/C-031.md",
+          "status": "draft",
+          "title": "A spirit murmurs a word in a dead tongue"
+        },
+        "tier": "T1",
+        "touches": {
+          "id": "T-012",
+          "kind": "truth",
+          "locked": [],
+          "never": false,
+          "path": "lore/truths/T-012.md",
+          "status": "draft",
+          "title": "Synthetic truth T-012"
+        },
+        "verb": "hints"
+      }
+    ],
+    "pictures": [
+      {
+        "concept": {
+          "id": "f04-choir-hall-art",
+          "kind": "concept",
+          "locked": [],
+          "never": false,
+          "path": "concepts/f04-choir-hall-art.md",
+          "status": null,
+          "title": "Choir-Hall, synthetic concept"
+        },
+        "picked": null
+      }
+    ],
+    "used_by": [
+      {
+        "relations": [
+          "for"
+        ],
+        "source": {
+          "id": "f04-choir-hall-art",
+          "kind": "concept",
+          "locked": [],
+          "never": false,
+          "path": "concepts/f04-choir-hall-art.md",
+          "status": null,
+          "title": "Choir-Hall, synthetic concept"
+        }
+      },
+      {
+        "relations": [
+          "mentions"
+        ],
+        "source": {
+          "id": "B-017",
+          "kind": "belief",
+          "locked": [],
+          "never": false,
+          "path": "lore/beliefs/B-017.md",
+          "status": "draft",
+          "title": "A synthetic belief about the never truth"
+        }
+      },
+      {
+        "relations": [
+          "where"
+        ],
+        "source": {
+          "id": "C-031",
+          "kind": "clue",
+          "locked": [],
+          "never": false,
+          "path": "lore/clues/C-031.md",
+          "status": "draft",
+          "title": "A spirit murmurs a word in a dead tongue"
+        }
+      },
+      {
+        "relations": [
+          "where",
+          "in a beat"
+        ],
+        "source": {
+          "id": "S-004",
+          "kind": "script",
+          "locked": [],
+          "never": false,
+          "path": "story/scripts/S-004.md",
+          "status": "draft",
+          "title": "The shrine hums"
+        }
+      },
+      {
+        "relations": [
+          "child of"
+        ],
+        "source": {
+          "id": "fates-shrine",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall/fates-shrine.md",
+          "status": null,
+          "title": "The Fates' shrine"
+        }
+      },
+      {
+        "relations": [
+          "child of"
+        ],
+        "source": {
+          "id": "reed-marsh",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall/reed-marsh.md",
+          "status": null,
+          "title": "Reed marsh"
+        }
+      }
+    ]
+  }
+}

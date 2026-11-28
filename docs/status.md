@@ -17,7 +17,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P08 | Map format and terrain generator | theos-editor | done | #27 | #44 |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
 | P10 | Prose editor research | theos-editor | done | #3 | #11 |
-| P11 | Editor shell and Codex | theos-editor | todo | | |
+| P11 | Editor shell and Codex | theos-editor | pr-open | #56 | build PR, branch `phase/P11-editor-shell-and-codex` |
 | P12 | Manuscript editor | theos-editor | todo | | |
 | P13 | Changes and Review screens | theos-editor | todo | | |
 | P14 | Start and Settings | theos-editor | todo | | |
@@ -42,9 +42,9 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
 | P34 | Interiors | theos-editor | pr-open | #55 | |
 | P45 | Atlas level switcher | theos-editor | todo | | |
-| P46 | Git read | theos-editor | spec-pr | | |
+| P46 | Git read | theos-editor | done | #52, #58 | #62 |
 | P47 | Git write | theos-editor | todo | | |
-| P48 | MCP read | theos-editor | spec-pr | #53 | |
+| P48 | MCP read | theos-editor | done | #53 | #61 |
 | P49 | Releases and the check action | theos-editor | todo | | |
 | P50 | Leaner CI | theos-editor | done | #45, #46 | #48 |
 
@@ -66,6 +66,35 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
   The build PR lists every ruling, among them the recipe values that differ from §5.12:
   the choir hall's 84 m square and 3×3 hall (R45, R48), and the undercroft's 2×1 crypt (R50).
+- P48 is merged (#61). Open:
+  - The recorded Claude Code session that spec §5.14 asks for as CE-18.1/CE-18.2 evidence is
+    blocked: "MCP server blocked by enterprise policy: theos". Jann allows the server in the
+    managed MCP policy, or runs the session himself. The stdio tests prove all three ACs.
+  - P11 merged P48's early commits (257fd87); `main` now holds them, so P11 merges `main`.
+- P11 (build PR, 28 Nov 2026):
+  - Theos UI's light mode is on `main` as the theme `grid-light` (#63). P11 takes every colour
+    from tokens and sets `data-theme="grid-noir"` on the root; the switch (P14) sets `grid-light`
+    (P11 spec §5.7).
+  - P11's gate PR #60 merged on 27 Nov 2026. The live ruleset switch that adds `ui` to the
+    required checks (`cargo xtask github apply`) is Jann's.
+  - macOS needs one manual start of the editor before P11 is done: the app menu (Quit, Edit, no
+    "Close Window" on Cmd+W) and Cmd+W closing a record tab, not the window. The `platforms` run
+    covers the menu's tests; the start itself cannot run in CI.
+  - Spec follow-up (protected): spec §5.12 names the fixture
+    `crates/theos-editor/tests/fixtures/codex/`; it lives in
+    `crates/theos-studio/tests/fixtures/projects/editor-codex/`, since the studio's Codex views
+    test on it too. A docs PR moves the path in the spec.
+  - Spec proposal (protected): spec §5.11 gives the tree tabs Lore and Things Mod+Shift+3 and
+    Mod+Shift+4. On macOS, Cmd+Shift+3 and Cmd+Shift+4 are the system's screenshot keys, which
+    the system takes before the editor sees them. Proposal: other keys for the four tree tabs in
+    §5.11, changed in a docs PR and then in `keymap.ts`; not Ctrl+Alt+digits, which are AltGr
+    characters on many Windows layouts.
+  - Spec erratum (protected): the build's sync reports files, not only ids (`SyncView`: changed
+    and removed as `{id, path}`, moves as `{id, from, to}`), and `record_view` takes an optional
+    path, so each file of a duplicated id opens on its own. Spec §5.4 and §5.9 still describe ids
+    only; a docs PR brings them in line.
+  - The manual run of the app on 27 Nov 2026 rewrote Jann's `%APPDATA%/theos/editor-state.json`
+    (the last project); it names a scratchpad copy of the fixture until Jann opens another project.
 - P08's build PR #44 is a draft labelled `needs-jann`. The final review loop reached its cap of
   five rounds with 6 Minor findings open. A targeted fix and review round, which Jann asked for
   on 25 Nov 2026, closed them. Its spec changes reached main with #40 (rulings 51–75) and #47
@@ -80,9 +109,6 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 - P50 is merged (#48), and the `main` ruleset requires `gate`, `test`, `coverage`, `pr` and
   `approval`. Its proofs after the merge remain: the probe PRs and the speed measurements (spec
   §5.9, §5.10) and one manual Intel macOS run of `platforms`.
-- P46's spec (§9 R1): history follows renames with git's default threshold. A short record that
-  is renamed and largely rewritten in one commit starts a new history, as in `git log --follow`;
-  a rename in the editor changes one line of the record and keeps it.
 - Follow-up from P06: the class "a command changes which files are records without the verdict
   judging it" (m4-4, m5-1, and N1–N3 of PR #39) needs a general design. One option is a check
   after the write that compares the reindex with the preview and heals the cache; another is a
@@ -126,6 +152,64 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 - tower-of-theos#3 (P20, merged) locks `markdown-it-py` 4.3.0 in `tools/repo_checks`, which was
   released the day it was locked. Pinning an older 4.x is a one-line follow-up if Jann prefers a
   cool-down.
+- Theos UI with Grid Light (branch `docs/theos-ui-grid-light`, 27 Nov 2026):
+  - A user-facing theme setting is new scope. G13 makes the UI use `design/theos-ui/` and follow
+    `docs/ui/`, so the editor must render in both themes, but no AC lets the user choose the
+    theme. Proposed AC, under CE-42 as Jann asked: "CE-42.3 The user picks Grid Noir, Grid Light
+    or the system's preference; the choice is a user setting, applies to every window at once,
+    and 3D viewports and map stages stay Grid Noir." CE-42 is the Graph story of P15, settings
+    are CE-39 (P14, `10-settings.html`), and P11's spec already leaves the light theme switch to
+    P14, so CE-39 is the likelier home (as CE-39.5). Jann decides the place and the wording; no
+    phase builds it before that.
+  - Four component states in the design system's `bundle.css` put signal-coloured text on a
+    tint of the same signal and miss 4.5:1: the active rail label (amber 4.30:1 in Grid Light),
+    tinted chips (magenta 4.13 and cyan 4.27 in Grid Light), the review summary (amber 4.29 and
+    cyan 4.27, "12 AUTO", in Grid Light) and a violet filter (4.22:1 in Grid Noir). The violet
+    filter sits on the toolbar's `panel`, where plain violet reaches 4.86:1; its 13 % violet
+    tint lightens the ground toward the violet text. The design system's own previews show the
+    rail label, the magenta chip and the review summary. Only screens 12 and 13 use a violet
+    filter, and the cyan chip fails only on the selected row's amber tint on screen 13 (Q-104);
+    Q-101 and Q-103 on plain `panel` pass at 4.74:1. Tested fix for the artifact: text on those
+    tints mixes 10 % toward `text`, for example `color-mix(in srgb, var(--c) 90%, var(--text))`.
+    With it no text outside `textMute` fails in any screen or preview, in either theme, and the
+    fixed states reach at least 4.78:1 (the AI-drafted chip is the lowest). `design/theos-ui/`
+    mirrors the artifact, so the fix goes into the artifact and reaches the repo with the next
+    refresh.
+  - Measured per `bundle.css` rule in the screens and the previews (Grid Noir / Grid Light; text
+    needs 4.5:1, icons and controls 3:1), the design system's components that set text in `textMute`
+    miss 4.5:1 in both themes: inactive tabs (`.tu-tab`) 2.84 / 3.01; section-header actions and
+    counts (`.tu-section__more`) 2.46 / 3.29; off filters (`.tu-filter.is-off`) and property keys
+    (`.tu-prop__key`) 2.68 / 3.56; popover kind words and key hints (`.tu-pop__kind`)
+    2.02–2.46 / 2.74–3.29 and the popover footer (`.tu-pop__foot`) 2.68 / 3.56; tree tags
+    (`.tu-tree__tag`) and tree indices (`.tu-tree__idx`) 2.23–2.68 / 2.96–3.56; the empty beat value
+    (`.tu-beat__param.is-empty .tu-beat__val`) 2.68 / 3.56; review and console timestamps
+    (`.tu-review__time`, `.tu-console__time`) 2.42–2.68 / 3.19–3.56; input placeholders
+    (`.tu-input input::placeholder`) 2.84 / 3.01; and the `.tu-mute` utility 2.46–2.84 / 3.01–3.56.
+    The components' icons in `textMute` miss 3:1 in Grid Noir only, at 2.42–2.84 / 3.01–3.56: the
+    window controls (`.tu-tabbar__ctrls`), the select caret (`.tu-select::after`), the input icon
+    (`.tu-input__icon`), the ⋯ of section headers and the glyphs in tree tags and in empty beat
+    values; the separators (`.tu-titlebar__sep`, `.tu-beat__sep`) are 2.68–2.84 / 3.01–3.56. Control
+    edges in `border` miss 3:1 in both themes: unchecked check boxes, toggles that are off, inputs
+    and selects, 1.24–1.34 / 1.38–1.50; the `textMute` knob of a toggle that is off misses it in
+    Grid Noir only (2.46 / 3.29). No screen or preview uses the other `textMute` rules
+    (`.tu-section__note`, `.tu-empty__mark`, the console's `DBG` level), so they are not measured.
+    The README allows `textMute` only for redundant text, but a component gets whatever text a
+    screen puts in it: the screens and the cards' previews put state words, reasons, hints and
+    counts into these components ("needs an npc" in a tree tag on screen 15, "stage all" in a
+    section header on screen 08) as well as indices, timestamps and tags that repeat an id. Whether
+    a use is redundant depends on its text, not on the component, so the flag cannot settle a
+    component as a whole. The previews also set text in `textMute` themselves, with `.tu-mute` and
+    with KindGlyph's page style (its kind labels, 2.84 / 3.01). The PR of this branch lists every
+    `textMute` text below its need, by screen and preview. Proposed for the artifact: these
+    components set their text and icons in `textDim` and keep `textMute` for the `.tu-mute` utility
+    and separators, or the README's flag names the components and the content each may hold. The
+    locked tier option (`.tu-tier__opt.is-locked`, 2.68 / 3.56) is an inactive control, which WCAG
+    1.4.3 exempts. Like the states above, these go to the artifact and are not patched in
+    `design/theos-ui/`.
+  - P12 should not copy the P10 prototype's `textMute` for front matter, raw source lines and the
+    beat row's "+ add" (2.68 / 3.56 on `panel`, where `textDim` gives 5.56 / 6.71), in
+    `research/P10-prose-editor/app/src/`: `adapters/codemirror/theme.ts`,
+    `adapters/prosemirror/theme.ts` and `harness/styles.css`.
 
 ## Needs a private session (Confluence, Jira, plugin)
 

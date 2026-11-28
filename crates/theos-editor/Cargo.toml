@@ -13,3 +13,27 @@ engine = []
 
 [lints]
 workspace = true
+
+[dependencies]
+dirs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+specta.workspace = true
+tauri.workspace = true
+tauri-plugin-dialog.workspace = true
+tauri-specta.workspace = true
+theos-content = { path = "../theos-content" }
+theos-studio = { path = "../theos-studio" }
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+cargo_metadata.workspace = true
+specta-typescript.workspace = true
+tauri = { workspace = true, features = ["test"] }
+tauri-specta = { workspace = true, features = ["typescript"] }
+tempfile.workspace = true
+
+[build-dependencies]
+tauri-build.workspace = true

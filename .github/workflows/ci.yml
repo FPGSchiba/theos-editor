@@ -1,8 +1,10 @@
-# Three jobs side by side, so the run takes as long as the slowest one: `gate` runs the cheap
-# checks of docs/gate.md section 1, `test` and `coverage` the two long ones. Each job checks out,
-# sets up and runs `cargo xtask gate` with the checks it owns; xtask decides every verdict. The
-# job name is the required status check of `main` (gate/ruleset-main.json), and `cargo xtask gate`
-# runs all of the checks locally.
+# Four jobs side by side, so the run takes as long as the slowest one: `gate` runs the cheap
+# checks of docs/gate.md section 1, `test` and `coverage` the two long ones, and `ui` the checks of
+# editor-ui/ (the only job with Node, so `gate` needs none). Each job checks out, sets up and runs
+# `cargo xtask gate` with the checks it owns, except `ui`, which runs the `ui` subcommand of the
+# cached xtask binary (see the job); xtask decides every verdict. The job name is the required
+# status check of `main` (gate/ruleset-main.json), and `cargo xtask gate` runs all of the checks
+# locally.
 # Per-pull-request checks run on Linux only (D8); Windows and macOS are in platforms.yml.
 name: ci
 
@@ -43,8 +45,9 @@ jobs:
         with:
           cache-key: gate
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+          gui-packages: clippy,docs,slow-tests,lints,ac-trace
           save-xtask: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo xtask gate --skip test,coverage
+      - run: cargo xtask gate --skip test,coverage,ui
 
   test:
     name: test
@@ -59,6 +62,7 @@ jobs:
         with:
           cache-key: test
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+          gui-packages: test
       - run: cargo xtask gate --only test
 
   # The baseline of `main` is measured at the merge base and is cached by commit: a pull request
@@ -76,9 +80,39 @@ jobs:
         with:
           cache-key: coverage
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+          gui-packages: coverage
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/xtask/coverage/cache
           key: coverage-${{ github.event.pull_request.base.sha || github.sha }}-${{ hashFiles('rust-toolchain.toml', 'gate/tools.toml') }}
           restore-keys: coverage-
       - run: cargo xtask gate --only coverage
+
+  # The cached xtask, like `pr` and `approval`. It first asks `xtask needs ui`, which decides as
+  # `gate` does: a pull request that changes no code, or a repository without `editor-ui/`, needs
+  # no `ui`, and the install steps after the question are skipped, so the job costs seconds. The
+  # check itself always runs, as the `ui` subcommand, not `gate --only ui`: `gate` always runs
+  # `tools` first, which fails here, where none of the pinned Rust tools is installed. `xtask ui`
+  # applies the same scope as `gate`, so a change that touches no code gets the verdict "not
+  # needed" in the job summary, and needs no Node. The set-up action
+  # of the UI (.github/actions/ui) installs pnpm at the version of the `packageManager` of
+  # editor-ui, Node, the packages and Chromium. Its pnpm store and browsers are restored on every
+  # run and saved on `main` only, like the Rust caches: a pull request saves no cache.
+  ui:
+    name: ui
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/xtask
+      - id: needs
+        run: target/xtask-bin/debug/xtask --root . needs ui
+      - if: steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''
+        uses: ./.github/actions/ui
+        with:
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
+          browser-deps: true
+      - run: target/xtask-bin/debug/xtask --root . ui

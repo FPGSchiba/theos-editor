@@ -1,0 +1,107 @@
+{
+  "args": {
+    "reason": "focus"
+  },
+  "cmd": "project_sync",
+  "result": "ok",
+  "value": {
+    "changed": [
+      {
+        "id": "hearth",
+        "path": "world/hearth.md"
+      },
+      {
+        "id": "f04-choir-hall",
+        "path": "world/hearth/f04-choir-hall.md"
+      },
+      {
+        "id": "fates-shrine",
+        "path": "world/hearth/f04-choir-hall/fates-shrine.md"
+      },
+      {
+        "id": "reed-marsh",
+        "path": "world/hearth/f04-choir-hall/reed-marsh.md"
+      },
+      {
+        "id": "tower",
+        "path": "world/tower.md"
+      }
+    ],
+    "moved": [],
+    "project": {
+      "errors": 6,
+      "in_memory": false,
+      "kind": "content",
+      "name": "synthetic-codex",
+      "rail": [
+        {
+          "glyph": "◈",
+          "id": "codex",
+          "label": "Codex",
+          "order": 10,
+          "phase": null
+        },
+        {
+          "glyph": "⋈",
+          "id": "graph",
+          "label": "Graph",
+          "order": 30,
+          "phase": "P15"
+        },
+        {
+          "glyph": "¶",
+          "id": "scripts",
+          "label": "Scripts",
+          "order": 40,
+          "phase": "P15"
+        },
+        {
+          "glyph": "◫",
+          "id": "concepts",
+          "label": "Concepts",
+          "order": 50,
+          "phase": "P16"
+        },
+        {
+          "glyph": "△",
+          "id": "maps",
+          "label": "Maps",
+          "order": 60,
+          "phase": "P16"
+        },
+        {
+          "glyph": "◴",
+          "id": "review",
+          "label": "Review",
+          "order": 70,
+          "phase": "P13"
+        },
+        {
+          "glyph": "±",
+          "id": "changes",
+          "label": "Changes",
+          "order": 80,
+          "phase": "P13"
+        },
+        {
+          "glyph": "</>",
+          "id": "code",
+          "label": "Code",
+          "order": 90,
+          "phase": "P18"
+        },
+        {
+          "glyph": "⚙",
+          "id": "settings",
+          "label": "Settings",
+          "order": 100,
+          "phase": "P14"
+        }
+      ],
+      "records": 22,
+      "root": "<project>",
+      "warnings": 2
+    },
+    "removed": []
+  }
+}

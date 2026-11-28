@@ -1,0 +1,146 @@
+{
+  "args": {
+    "id": "synthetic-loop-b",
+    "path": "world/hearth/f04-choir-hall/synthetic-loop-a/synthetic-loop-b.md"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [
+      {
+        "column": 9,
+        "id": "synthetic-loop-b",
+        "line": 6,
+        "message": "the parent chain of `synthetic-loop-b` leads back to it",
+        "path": "world/hearth/f04-choir-hall/synthetic-loop-a/synthetic-loop-b.md",
+        "rule": "link/parent-cycle",
+        "severity": "error",
+        "span": {
+          "end": 163,
+          "start": 147
+        }
+      }
+    ],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "synthetic-loop-b"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "location"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "Synthetic loop B"
+        }
+      },
+      {
+        "key": "parent",
+        "value": {
+          "type": "link",
+          "value": {
+            "fragment": null,
+            "id": "synthetic-loop-a",
+            "shown": null,
+            "target": {
+              "id": "synthetic-loop-a",
+              "kind": "location",
+              "locked": [],
+              "never": false,
+              "path": "world/hearth/f04-choir-hall/synthetic-loop-a.md",
+              "status": null,
+              "title": "Synthetic loop A"
+            }
+          }
+        }
+      }
+    ],
+    "header": {
+      "children": 1,
+      "links_in": 1,
+      "parent": {
+        "id": "synthetic-loop-a",
+        "kind": "location",
+        "locked": [],
+        "never": false,
+        "path": "world/hearth/f04-choir-hall/synthetic-loop-a.md",
+        "status": null,
+        "title": "Synthetic loop A"
+      },
+      "record": {
+        "id": "synthetic-loop-b",
+        "kind": "location",
+        "locked": [],
+        "never": false,
+        "path": "world/hearth/f04-choir-hall/synthetic-loop-a/synthetic-loop-b.md",
+        "status": null,
+        "title": "Synthetic loop B"
+      }
+    },
+    "links_in": [
+      {
+        "column": 9,
+        "fragment": null,
+        "line": 6,
+        "slot": "field:parent",
+        "source": {
+          "id": "synthetic-loop-a",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall/synthetic-loop-a.md",
+          "status": null,
+          "title": "Synthetic loop A"
+        },
+        "target": {
+          "exists": true,
+          "id": "synthetic-loop-b",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall/synthetic-loop-a/synthetic-loop-b.md",
+          "status": null,
+          "title": "Synthetic loop B"
+        }
+      }
+    ],
+    "lore": [],
+    "pictures": [],
+    "used_by": [
+      {
+        "relations": [
+          "child of"
+        ],
+        "source": {
+          "id": "synthetic-loop-a",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall/synthetic-loop-a.md",
+          "status": null,
+          "title": "Synthetic loop A"
+        }
+      }
+    ]
+  }
+}

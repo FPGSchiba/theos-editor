@@ -32,4 +32,5 @@ always_code = [
     "**/.cargo/**",
     "**/.gitignore",
     "**/.gitattributes",
+    "design/theos-ui/**",
 ]

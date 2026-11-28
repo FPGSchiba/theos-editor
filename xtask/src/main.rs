@@ -20,14 +20,14 @@ use tracing_subscriber::filter::LevelFilter;
 use xtask::branch::Phase;
 use xtask::checks::{
     ac_trace, approval, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title,
-    slow,
+    slow, ui,
 };
 use xtask::gate;
 use xtask::git::Git;
 use xtask::github::settings;
 use xtask::verdict::{Check, Verdict};
 use xtask::view::Shared;
-use xtask::{Error, ci, report, tools};
+use xtask::{Error, ci, needs, report, tools};
 
 /// Gate tooling for the theos-editor workspace (`docs/gate.md`).
 #[derive(Parser)]
@@ -96,6 +96,24 @@ enum Command {
         /// The phase to check, instead of the phase of the branch.
         #[arg(long, value_name = "PNN")]
         phase: Option<Phase>,
+    },
+    /// Check `editor-ui/`: install, svelte-check, eslint, vitest and playwright (not needed
+    /// without `editor-ui/package.json`, nor for a change that touches no code, as for `gate`).
+    Ui,
+    /// Say whether a run needs any of the checks: `true` or `false`.
+    ///
+    /// Decides as `gate` does (`docs/gate.md` §1, pull requests that change no code), so CI can
+    /// skip installing what a check needs when the check is not needed. `ui` is also not needed
+    /// without `editor-ui/package.json`. Under GitHub Actions the answer is also appended to
+    /// the step outputs as `needed=true` or `needed=false`.
+    Needs {
+        /// Also require that `Cargo.lock` names this package: the answer is `false` when it does
+        /// not. The Linux packages of the GUI use `webkit2gtk`.
+        #[arg(long, value_name = "NAME")]
+        requires_package: Option<String>,
+        /// The checks to ask about, comma separated.
+        #[arg(required = true, value_delimiter = ',', value_parser = gate::parse_selectable)]
+        checks: Vec<Check>,
     },
     /// Check that every commit of the branch is a Conventional Commit.
     ///
@@ -258,6 +276,14 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         Command::AcTrace { phase } => {
             ac_trace::run_phase(&root, *phase, ci.is_some(), &shared, &mut out)?
         }
+        Command::Ui => return run_ui(&root, ci.as_ref(), &mut out),
+        Command::Needs {
+            checks,
+            requires_package,
+        } => {
+            let package = requires_package.as_deref();
+            return Ok(needs::run(&root, ci.as_ref(), checks, package, &mut out)?);
+        }
         Command::CommitMsg {
             base: None,
             head: None,
@@ -281,14 +307,7 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
         Command::PrBody { body_file: None } => pr_body::run(&root, ci.as_ref(), &mut out)?,
         Command::PrBody {
             body_file: Some(path),
-        } => {
-            let template = pr_body::read_template(&root)?;
-            let body = std::fs::read_to_string(path).map_err(|source| Error::Io {
-                path: path.clone(),
-                source,
-            })?;
-            pr_body::check_body(&template, Some(&body))
-        }
+        } => check_body_file(&root, path)?,
         Command::Approval => approval::run(&root, ci.as_ref(), &mut out)?,
         Command::Gate { only, skip } => {
             let selection = gate::Selection {
@@ -318,6 +337,24 @@ fn run(cli: &Cli) -> anyhow::Result<bool> {
     };
     report::emit(&verdict, ci.is_some(), &mut out)?;
     Ok(verdict.passed())
+}
+
+/// The `ui` check with the scope of the run: the table, and under GitHub Actions the summary with
+/// why every check ran, when the scope says so. Says whether it passed.
+fn run_ui(root: &Path, ci: Option<&ci::CiEvent>, out: &mut dyn Write) -> anyhow::Result<bool> {
+    let (verdict, every_because) = ui::run_scoped(root, ci, out)?;
+    report::emit_because(&verdict, every_because.as_deref(), ci.is_some(), out)?;
+    Ok(verdict.passed())
+}
+
+/// The verdict of `pr-body` for the description in the file at `path`, instead of the event's.
+fn check_body_file(root: &Path, path: &Path) -> anyhow::Result<Verdict> {
+    let template = pr_body::read_template(root)?;
+    let body = std::fs::read_to_string(path).map_err(|source| Error::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    Ok(pr_body::check_body(&template, Some(&body)))
 }
 
 /// Publishes the verdicts of a multi-check run under GitHub Actions, with why every check ran

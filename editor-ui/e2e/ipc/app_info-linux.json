@@ -1,0 +1,11 @@
+{
+  "args": {},
+  "cmd": "app_info",
+  "derived": "app_info with os `linux`, the version as `<version>` and engine off, as the app answers on that OS without the engine feature",
+  "result": "ok",
+  "value": {
+    "engine": false,
+    "os": "linux",
+    "version": "<version>"
+  }
+}

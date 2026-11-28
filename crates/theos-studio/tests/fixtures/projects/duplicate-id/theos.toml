@@ -1,0 +1,5 @@
+# Synthetic fixture (P11): two files with one id, `synthetic-twin`. Not canon.
+[project]
+name           = "synthetic-duplicate-id"
+kind           = "content"
+schema_version = 1

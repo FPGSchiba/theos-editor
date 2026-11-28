@@ -273,6 +273,11 @@ fn split_key(line: &str) -> Option<(&str, usize)> {
     valid.then_some((key, end + 2))
 }
 
+/// Whether `line` starts with a `key::` of the attribute form.
+pub(crate) fn is_attribute_line(line: &str) -> bool {
+    split_key(line).is_some()
+}
+
 fn first_line_is_attribute(source: &str, paragraph: Span) -> bool {
     split_key(first_line(source, paragraph).1).is_some()
 }

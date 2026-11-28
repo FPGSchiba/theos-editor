@@ -28,6 +28,8 @@ pub enum Check {
     Lints,
     /// Every acceptance criterion of the phase has a tagged test and every tag names one.
     AcTrace,
+    /// The checks of `editor-ui/`: install, svelte-check, eslint, vitest and playwright.
+    Ui,
     /// Every commit of the PR is a Conventional Commit.
     CommitMsg,
     /// The PR title is a Conventional Commit that matches the branch.
@@ -59,6 +61,7 @@ impl Check {
             Self::Coverage => "coverage",
             Self::Lints => "lints",
             Self::AcTrace => "ac-trace",
+            Self::Ui => "ui",
             Self::CommitMsg => "commit-msg",
             Self::PrTitle => "pr-title",
             Self::PrBody => "pr-body",
@@ -82,6 +85,7 @@ impl Check {
             "coverage" => Self::Coverage,
             "lints" => Self::Lints,
             "ac-trace" => Self::AcTrace,
+            "ui" => Self::Ui,
             "commit-msg" => Self::CommitMsg,
             "pr-title" => Self::PrTitle,
             "pr-body" => Self::PrBody,
@@ -92,9 +96,9 @@ impl Check {
     }
 }
 
-/// The checks `cargo xtask gate` runs, in order: cheap and local ones first. `ac-trace` is last,
-/// because it reads the reports of `test` and `slow-tests`.
-pub const GATE_ORDER: [Check; 12] = [
+/// The checks `cargo xtask gate` runs, in order: cheap and local ones first. `ac-trace` comes after
+/// them, because it reads the reports of `test` and `slow-tests`; `ui` is last and needs Node.
+pub const GATE_ORDER: [Check; 13] = [
     Check::Tools,
     Check::Fmt,
     Check::Lints,
@@ -107,6 +111,7 @@ pub const GATE_ORDER: [Check; 12] = [
     Check::Coverage,
     Check::SlowTests,
     Check::AcTrace,
+    Check::Ui,
 ];
 
 /// The checks that need a pull request, which the gate leaves out.
@@ -207,7 +212,7 @@ impl Verdict {
 mod tests {
     use super::*;
 
-    const ALL: [Check; 16] = [
+    const ALL: [Check; 17] = [
         Check::Tools,
         Check::Fmt,
         Check::Clippy,
@@ -219,6 +224,7 @@ mod tests {
         Check::Coverage,
         Check::Lints,
         Check::AcTrace,
+        Check::Ui,
         Check::CommitMsg,
         Check::PrTitle,
         Check::PrBody,
@@ -291,6 +297,7 @@ mod tests {
                 "coverage",
                 "lints",
                 "ac-trace",
+                "ui",
                 "commit-msg",
                 "pr-title",
                 "pr-body",
@@ -317,6 +324,7 @@ mod tests {
                 "coverage",
                 "slow-tests",
                 "ac-trace",
+                "ui",
             ]
         );
         assert_eq!(names(&PR_ONLY), ["pr-title", "pr-body", "approval"]);

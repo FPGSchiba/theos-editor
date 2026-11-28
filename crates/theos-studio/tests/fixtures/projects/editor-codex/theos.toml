@@ -1,0 +1,7 @@
+[project]
+name           = "synthetic-codex"
+kind           = "content"
+schema_version = 1
+
+[parts]
+enabled = ["codex", "changes", "scripts", "graph", "concepts", "maps", "review", "mcp"]

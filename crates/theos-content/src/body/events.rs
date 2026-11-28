@@ -46,4 +46,22 @@ impl<'a> Events<'a> {
             block_of,
         }
     }
+
+    /// The index of the `End` that closes the `Start` at `open`; the last item when none does.
+    pub fn closing(&self, open: usize) -> usize {
+        let mut depth = 0usize;
+        for (i, (event, _)) in self.items.iter().enumerate().skip(open) {
+            match event {
+                Event::Start(_) => depth += 1,
+                Event::End(_) => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return i;
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.items.len().saturating_sub(1)
+    }
 }

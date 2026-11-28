@@ -1,0 +1,5 @@
+# Synthetic fixture (P11): a content project with no records.
+[project]
+name           = "synthetic-empty"
+kind           = "content"
+schema_version = 1

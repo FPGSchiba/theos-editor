@@ -4,8 +4,8 @@ Library. Projects, layered settings, editor-part registry, command layer, agent 
 queue, generators, LLM client and binaries folder.
 
 After phases P05 and P06 the crate provides the workspace, the checks and the JSON views that
-`theos` prints and that later phases serve again, the repo lock and the command layer. The rest
-arrives in P07 and later phases.
+`theos` prints and that later phases serve again, the repo lock and the command layer. After P46 it
+also reads git by record: changes, diffs and history. The rest arrives in P07 and later phases.
 
 ## What P05 provides
 
@@ -38,11 +38,38 @@ arrives in P07 and later phases.
   newest entry that changed one file. The journal lives in memory and keeps the last 100
   commands.
 
+## What P46 provides
+
+| Item | What it does |
+|---|---|
+| `changes`, `Changes`, `RecordChange` | git's status of the project grouped by record: each changed record with its id, kind, title, paths (project and git spelling, also before a rename), staged and unstaged `Change`, `untracked` and `conflict`; `files` holds the changed paths that are no records. Records are told by their bytes, never by the index, so nothing is synced or locked. A path whose bytes cannot be read goes to `files` with a warning |
+| `diff`, `Side`, `FileDiff` | The diff of one file or record: `Staged`, `Unstaged`, a `Commit` against its first parent, or `Between` two versions. A record gives `theos-content`'s field and body diff, any other text file a word diff |
+| `history`, `HistoryEntry` | The commits of a record by id, newest first, across renames of the file and of the id, each with the record's path and id in that commit. A rename not yet committed is followed from its old path |
+| `repo_path` (internal, not public API) | The one mapping from git's path to a project path (below the project folder, under the repository's `Folding`); `changes`, `diff`, `history` and the staged check use it |
+
+## What P11 provides
+
+`codex_view`, the Codex-only views of the editor's Codex screen, built on P48's `codex` queries
+and plain `Serialize` types that `theos-editor` maps to its IPC types:
+
+- `tree(ws, tab)`: the Where, Who, Lore and Things tabs; kinds the registry does not know are
+  left out, and a record whose parent dangles or lies on a cycle sits at the top level once;
+- `record(ws, id, path)`: the header, the body as a block tree with resolved link chips, the
+  lore table, the pictures, the front-matter rows in file order, the backlinks, "Used by" (with
+  `relation(slot)`) and the findings; `path` picks the file of a duplicated id and never falls
+  back to another file, and without it the first file by path answers;
+- `query(ws, text, limit)`: the `#id`, `:kind` and `@people` prefixes over `codex::search`.
+
+Their fixture is `tests/fixtures/projects/editor-codex/`, which `theos-editor`'s tests open too.
+
 ## Who uses what
 
 | Phase | Uses |
 |---|---|
 | P06 | `Workspace` (`open`, `find`, `index_mut`), extended with its own `impl` blocks for the command layer and the repo lock; `introduced`, in its verdict. In turn `create` writes through P06's `Create` |
-| P47 | `check_staged`, so a commit blocks on the same findings as the hook; it holds the repo lock while git runs the hook, and the check never takes it |
+| P07 | `diff` with `Side::Between` for `theos review show`, an agent branch against `main` |
+| P12 | Not `diff`, which reads only versions from git: P12 compares an unsaved edit with the saved record through `theos_content::diff::record` directly |
+| P13 | `changes`, `diff` and `history` for the Changes screen; `Conflicted` entries for conflicts |
+| P47 | `changes`, to stage a record by its paths (both paths of a rename); `check_staged`, so a commit blocks on the same findings as the hook; it holds the repo lock while git runs the hook, and the check never takes it |
 | P48 | `Workspace`, the `views`, `report` and the contended-cache fallback, to serve the same results over MCP |
 | P14 | `user_settings::binaries_root`, grown into the three layers of the settings |

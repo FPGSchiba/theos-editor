@@ -12,6 +12,7 @@ use crate::changes::{self, Changes};
 use crate::ci::CiEvent;
 use crate::code_paths::CodePaths;
 use crate::git::Git;
+use crate::verdict::Check;
 
 /// Why a skipped check is not needed, for the verdict table.
 pub const NOT_NEEDED_REASON: &str = "the change touches only paths of the non-code list of \
@@ -27,6 +28,23 @@ pub enum Scope {
     },
     /// Only `commit-msg` runs: the change touches no path a check reads.
     DocsOnly,
+}
+
+/// Why every check runs under `scope`, when it says so; the gate and `ui` print it and show it in
+/// the job summary.
+#[must_use]
+pub fn every_note(scope: &Scope) -> Option<String> {
+    match scope {
+        Scope::Every { note } => note.clone(),
+        Scope::DocsOnly => None,
+    }
+}
+
+/// Whether `check` runs under `scope`: every check does, but for a change that touches no code
+/// only `commit-msg`. `gate` and `needs` both ask here, so they cannot disagree.
+#[must_use]
+pub fn runs(scope: &Scope, check: Check) -> bool {
+    *scope != Scope::DocsOnly || check == Check::CommitMsg
 }
 
 fn every() -> Scope {
@@ -142,6 +160,16 @@ mod tests {
 
     // AC: CE-08C.2
     #[test]
+    fn a_docs_only_scope_runs_only_commit_msg() {
+        assert!(runs(&Scope::DocsOnly, Check::CommitMsg));
+        assert!(!runs(&Scope::DocsOnly, Check::Clippy));
+        assert!(!runs(&Scope::DocsOnly, Check::Ui));
+        assert!(runs(&every(), Check::Clippy));
+        assert!(runs(&every_because("x"), Check::Ui));
+    }
+
+    // AC: CE-08C.2
+    #[test]
     fn docs_only_changes_on_a_docs_branch_need_only_commit_msg() {
         let scope = decide(Ok(changes("docs/x", &["docs/a.md", "README.md"])), &lists());
         assert_eq!(scope, Scope::DocsOnly);
@@ -167,6 +195,23 @@ mod tests {
     fn a_malformed_phase_branch_runs_every_check_with_a_note() {
         let scope = decide(Ok(changes("phase/foo", &["docs/x.md"])), &lists());
         assert!(note_of(&scope).contains("phase branch"), "{scope:?}");
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn the_design_system_the_ui_imports_is_code_but_other_design_files_are_not() {
+        let scope = decide(
+            Ok(changes("docs/x", &["design/theos-ui/tokens.css"])),
+            &lists(),
+        );
+        assert_eq!(scope, every());
+        let scope = decide(
+            Ok(changes("docs/x", &["design/theos-ui/fonts/a.woff2"])),
+            &lists(),
+        );
+        assert_eq!(scope, every());
+        let scope = decide(Ok(changes("docs/x", &["design/notes/ideas.md"])), &lists());
+        assert_eq!(scope, Scope::DocsOnly);
     }
 
     // AC: CE-08C.2

@@ -1,0 +1,29 @@
+{
+  "args": {
+    "tab": "things"
+  },
+  "cmd": "codex_tree",
+  "result": "ok",
+  "value": [
+    {
+      "children": [
+        {
+          "children": [],
+          "record": {
+            "id": "synthetic-html",
+            "kind": "thing",
+            "locked": [],
+            "never": false,
+            "path": "things/synthetic-html.md",
+            "status": null,
+            "title": "<img src=x onerror=alert(1)> <script>alert(2)</script>"
+          },
+          "tag": null,
+          "type": "record"
+        }
+      ],
+      "label": "Things",
+      "type": "group"
+    }
+  ]
+}
