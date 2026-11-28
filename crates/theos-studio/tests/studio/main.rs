@@ -6,6 +6,7 @@ mod changes;
 mod check;
 mod common;
 mod diff;
+mod git_write;
 mod helper;
 mod history;
 mod hook;
