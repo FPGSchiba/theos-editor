@@ -359,7 +359,7 @@ export type SyncReason =
 /**
  *  What a sync did: the project afterwards and the record files whose views changed, are gone or
  *  moved. Files are named by path, since two files may carry one id; see
- *  [`sync_files`](super::sync_files) for the rules.
+ *  [`super::sync_files`] for the rules.
  */
 export type SyncView = {
 	/**  The project after the sync. */

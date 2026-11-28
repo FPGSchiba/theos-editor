@@ -97,7 +97,7 @@ impl ProjectView {
 
 /// What a sync did: the project afterwards and the record files whose views changed, are gone or
 /// moved. Files are named by path, since two files may carry one id; see
-/// [`sync_files`](super::sync_files) for the rules.
+/// [`super::sync_files`] for the rules.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub struct SyncView {
