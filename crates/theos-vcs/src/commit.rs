@@ -1,0 +1,130 @@
+//! `commit`: a message and trailers, written by git itself with its hooks running.
+
+use std::path::Path;
+
+use crate::git::args_text;
+use crate::write_args::{checked, write_args_with, write_with};
+use crate::{Cancel, CommitId, Git, GitError, repo};
+
+/// The characters tried, in order, as `core.commentChar` for one commit.
+const COMMENT_CHARS: [char; 10] = ['#', ';', '@', '!', '$', '%', '^', '&', '|', ':'];
+
+/// A trailer of the commit message, such as `Approved-by: Jann`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Trailer {
+    /// The key: not empty, only ASCII letters, digits and `-`.
+    pub key: String,
+    /// The value: one line.
+    pub value: String,
+}
+
+/// Why a commit was not made.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum CommitRefused {
+    /// The message is empty after trimming.
+    #[error("the commit message is empty: {0}")]
+    Message(String),
+    /// A trailer has a bad key or a value of more than one line.
+    #[error("invalid trailer: {0}")]
+    Trailer(String),
+    /// Git failed, a hook refusing the commit included.
+    #[error(transparent)]
+    Git(#[from] GitError),
+}
+
+/// The first of [`COMMENT_CHARS`] that starts no line of `message`, `None` when each one does.
+pub(crate) fn comment_char(message: &str) -> Option<char> {
+    COMMENT_CHARS
+        .into_iter()
+        .find(|c| !message.lines().any(|line| line.starts_with(*c)))
+}
+
+fn check_trailer(trailer: &Trailer) -> Result<(), CommitRefused> {
+    let key_ok = !trailer.key.is_empty()
+        && trailer
+            .key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-');
+    if !key_ok {
+        return Err(CommitRefused::Trailer(format!(
+            "the key {:?} must be letters, digits and '-'",
+            trailer.key
+        )));
+    }
+    if trailer.value.contains(['\n', '\r']) {
+        return Err(CommitRefused::Trailer(format!(
+            "the value of {} has more than one line",
+            trailer.key
+        )));
+    }
+    Ok(())
+}
+
+/// Commits the index with `message` and `trailers` and returns the new commit. Hooks run; theos
+/// never skips them. Line endings of the message become LF and surrounding blank space goes;
+/// lines starting with `#` stay in it. Not cancellable.
+///
+/// # Errors
+///
+/// [`CommitRefused::Message`], [`CommitRefused::Trailer`], and [`CommitRefused::Git`] when git
+/// (or a hook) fails, or when the new commit cannot be read.
+pub fn commit(
+    git: &Git,
+    top: &Path,
+    message: &str,
+    trailers: &[Trailer],
+) -> Result<CommitId, CommitRefused> {
+    let message = message.replace("\r\n", "\n");
+    let message = message.trim();
+    if message.is_empty() {
+        return Err(CommitRefused::Message("nothing to say".to_owned()));
+    }
+    trailers.iter().try_for_each(check_trailer)?;
+
+    let setting = comment_char(message).map(|c| format!("core.commentChar={c}"));
+    let config: Vec<&str> = setting.iter().map(String::as_str).collect();
+    let lines: Vec<String> = trailers
+        .iter()
+        .map(|t| format!("{}: {}", t.key, t.value))
+        .collect();
+    let mut flags = vec!["--cleanup=whitespace", "-F", "-"];
+    for line in &lines {
+        flags.push("--trailer");
+        flags.push(line);
+    }
+    let out = write_with(
+        git,
+        top,
+        &config,
+        "commit",
+        &flags,
+        Some(message.as_bytes()),
+        &Cancel::new(),
+    )?;
+    let args = write_args_with(&config, "commit", &flags);
+    checked(&args, out)?;
+    repo::head(git, top)?.ok_or_else(|| {
+        CommitRefused::Git(GitError::Output {
+            args: args_text(&args),
+            message: "there is no HEAD after the commit".to_owned(),
+        })
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_first_char_that_starts_no_line_is_chosen() {
+        assert_eq!(comment_char("a\n# b"), Some(';'));
+        assert_eq!(comment_char("plain"), Some('#'));
+    }
+
+    #[test]
+    fn no_char_is_left_when_each_one_starts_a_line() {
+        let all = COMMENT_CHARS.map(|c| format!("{c} x")).join("\n");
+        assert_eq!(comment_char(&all), None);
+    }
+}

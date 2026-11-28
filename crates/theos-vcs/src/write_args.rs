@@ -24,9 +24,20 @@ const OPTIONS: [&str; 9] = [
 
 /// The arguments of a write: the write options, then `command`, then `flags`.
 pub(crate) fn write_args<'a>(command: &'a str, flags: &[&'a str]) -> Vec<&'a OsStr> {
+    write_args_with(&[], command, flags)
+}
+
+/// Like [`write_args`], with extra `key=value` settings, each passed as `-c key=value` after the
+/// write options and before `command`.
+pub(crate) fn write_args_with<'a>(
+    config: &[&'a str],
+    command: &'a str,
+    flags: &[&'a str],
+) -> Vec<&'a OsStr> {
     OPTIONS
         .iter()
         .copied()
+        .chain(config.iter().flat_map(|setting| ["-c", *setting]))
         .chain(std::iter::once(command))
         .chain(flags.iter().copied())
         .map(OsStr::new)
@@ -46,7 +57,31 @@ pub(crate) fn write(
     stdin: Option<&[u8]>,
     cancel: &Cancel,
 ) -> Result<Output, GitError> {
-    git.output(&write_args(command, flags), top, stdin, &[], cancel)
+    write_with(git, top, &[], command, flags, stdin, cancel)
+}
+
+/// Like [`write`], with extra `key=value` settings placed before the command (see
+/// [`write_args_with`]).
+///
+/// # Errors
+///
+/// As [`write`].
+pub(crate) fn write_with(
+    git: &Git,
+    top: &Path,
+    config: &[&str],
+    command: &str,
+    flags: &[&str],
+    stdin: Option<&[u8]>,
+    cancel: &Cancel,
+) -> Result<Output, GitError> {
+    git.output(
+        &write_args_with(config, command, flags),
+        top,
+        stdin,
+        &[],
+        cancel,
+    )
 }
 
 /// Passes a successful answer; turns a failure into [`GitError::IndexLocked`] when its stderr

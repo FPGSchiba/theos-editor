@@ -14,6 +14,7 @@
 //! (commit, worktrees, merge, pull and push) arrive in P47.
 
 mod cancel;
+pub mod commit;
 mod commit_id;
 mod folding;
 mod git;
