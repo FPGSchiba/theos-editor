@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Theos Editor",
+  "version": "0.0.0",
+  "identifier": "dev.theos.editor",
+  "build": {
+    "devUrl": "http://localhost:5179",
+    "frontendDist": "../../editor-ui/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Theos Editor",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}

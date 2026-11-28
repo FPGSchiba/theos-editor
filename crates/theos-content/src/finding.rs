@@ -4,8 +4,9 @@ use std::fmt;
 
 use crate::text::{Position, Span};
 
-/// How serious a finding is by default.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// How serious a finding is by default. It serialises as its [`Severity::as_str`] name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Severity {
     /// The record or input file is wrong.
     Error,
@@ -84,6 +85,14 @@ pub(crate) fn with_article(word: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_severity_serialises_as_its_name() -> Result<(), serde_json::Error> {
+        for severity in [Severity::Error, Severity::Warning] {
+            assert_eq!(serde_json::to_value(severity)?, severity.as_str());
+        }
+        Ok(())
+    }
 
     #[test]
     fn kinds_take_their_article() {

@@ -1,0 +1,128 @@
+{
+  "args": {
+    "id": "hearth-folk"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "hearth-folk"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "people"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "Hearth folk"
+        }
+      },
+      {
+        "key": "lives_in",
+        "value": {
+          "type": "list",
+          "value": [
+            {
+              "type": "link",
+              "value": {
+                "fragment": null,
+                "id": "hearth",
+                "shown": null,
+                "target": {
+                  "id": "hearth",
+                  "kind": "band",
+                  "locked": [],
+                  "never": false,
+                  "path": "world/hearth.md",
+                  "status": "draft",
+                  "title": "Hearth"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "header": {
+      "children": 1,
+      "links_in": 1,
+      "parent": null,
+      "record": {
+        "id": "hearth-folk",
+        "kind": "people",
+        "locked": [],
+        "never": false,
+        "path": "people/hearth-folk.md",
+        "status": null,
+        "title": "Hearth folk"
+      }
+    },
+    "links_in": [
+      {
+        "column": 9,
+        "fragment": null,
+        "line": 6,
+        "slot": "field:parent",
+        "source": {
+          "id": "fates-cult",
+          "kind": "faction",
+          "locked": [],
+          "never": false,
+          "path": "people/hearth-folk/fates-cult.md",
+          "status": null,
+          "title": "Fates cult"
+        },
+        "target": {
+          "exists": true,
+          "id": "hearth-folk",
+          "kind": "people",
+          "locked": [],
+          "never": false,
+          "path": "people/hearth-folk.md",
+          "status": null,
+          "title": "Hearth folk"
+        }
+      }
+    ],
+    "lore": [],
+    "pictures": [],
+    "used_by": [
+      {
+        "relations": [
+          "child of"
+        ],
+        "source": {
+          "id": "fates-cult",
+          "kind": "faction",
+          "locked": [],
+          "never": false,
+          "path": "people/hearth-folk/fates-cult.md",
+          "status": null,
+          "title": "Fates cult"
+        }
+      }
+    ]
+  }
+}

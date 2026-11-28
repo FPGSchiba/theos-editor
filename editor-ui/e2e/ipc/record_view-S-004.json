@@ -1,0 +1,283 @@
+{
+  "args": {
+    "id": "S-004"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "The player's first night under the Fates' shrine.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      },
+      {
+        "attributes": [
+          {
+            "key": "at",
+            "value": [
+              {
+                "fragment": null,
+                "id": "f04-choir-hall",
+                "shown": null,
+                "target": {
+                  "id": "f04-choir-hall",
+                  "kind": "floor",
+                  "locked": [],
+                  "never": false,
+                  "path": "world/hearth/f04-choir-hall.md",
+                  "status": "draft",
+                  "title": "The Choir-Hall"
+                },
+                "type": "link"
+              }
+            ]
+          },
+          {
+            "key": "with",
+            "value": [
+              {
+                "fragment": null,
+                "id": "mother-ilse",
+                "shown": null,
+                "target": {
+                  "id": "mother-ilse",
+                  "kind": "npc",
+                  "locked": [],
+                  "never": false,
+                  "path": "people/hearth-folk/fates-cult/mother-ilse.md",
+                  "status": null,
+                  "title": "Mother Ilse"
+                },
+                "type": "link"
+              }
+            ]
+          },
+          {
+            "key": "says",
+            "value": [
+              {
+                "fragment": null,
+                "id": "B-016",
+                "shown": null,
+                "target": {
+                  "id": "B-016",
+                  "kind": "belief",
+                  "locked": [],
+                  "never": false,
+                  "path": "lore/beliefs/B-016.md",
+                  "status": "draft",
+                  "title": "The Fates spin for those who climb"
+                },
+                "type": "link"
+              }
+            ]
+          },
+          {
+            "key": "when",
+            "value": [
+              {
+                "text": "T1",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "heading": [
+          {
+            "text": "Beat 1 — Arrival",
+            "type": "text"
+          }
+        ],
+        "nodes": [
+          {
+            "beliefs": [
+              {
+                "fragment": null,
+                "id": "B-016",
+                "shown": null,
+                "target": {
+                  "id": "B-016",
+                  "kind": "belief",
+                  "locked": [],
+                  "never": false,
+                  "path": "lore/beliefs/B-016.md",
+                  "status": "draft",
+                  "title": "The Fates spin for those who climb"
+                }
+              }
+            ],
+            "caption": null,
+            "nodes": [
+              {
+                "inlines": [
+                  {
+                    "text": "The Fates spin for those who climb. Hum with me, stair-child, and they will hear you.",
+                    "type": "text"
+                  }
+                ],
+                "type": "paragraph"
+              }
+            ],
+            "speaker": {
+              "fragment": null,
+              "id": "mother-ilse",
+              "shown": null,
+              "target": {
+                "id": "mother-ilse",
+                "kind": "npc",
+                "locked": [],
+                "never": false,
+                "path": "people/hearth-folk/fates-cult/mother-ilse.md",
+                "status": null,
+                "title": "Mother Ilse"
+              }
+            },
+            "tier": "T1",
+            "type": "voice"
+          }
+        ],
+        "type": "beat"
+      },
+      {
+        "attributes": [
+          {
+            "key": "at",
+            "value": [
+              {
+                "fragment": null,
+                "id": "f04-choir-hall",
+                "shown": null,
+                "target": {
+                  "id": "f04-choir-hall",
+                  "kind": "floor",
+                  "locked": [],
+                  "never": false,
+                  "path": "world/hearth/f04-choir-hall.md",
+                  "status": "draft",
+                  "title": "The Choir-Hall"
+                },
+                "type": "link"
+              }
+            ]
+          },
+          {
+            "key": "reveals",
+            "value": [
+              {
+                "fragment": null,
+                "id": "C-031",
+                "shown": null,
+                "target": {
+                  "id": "C-031",
+                  "kind": "clue",
+                  "locked": [],
+                  "never": false,
+                  "path": "lore/clues/C-031.md",
+                  "status": "draft",
+                  "title": "A spirit murmurs a word in a dead tongue"
+                },
+                "type": "link"
+              }
+            ]
+          },
+          {
+            "key": "when",
+            "value": [
+              {
+                "text": "T1",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "heading": [
+          {
+            "text": "Beat 2 — The murmur",
+            "type": "text"
+          }
+        ],
+        "nodes": [],
+        "type": "beat"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "S-004"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "script"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "The shrine hums"
+        }
+      },
+      {
+        "key": "status",
+        "value": {
+          "type": "text",
+          "value": "draft"
+        }
+      },
+      {
+        "key": "where",
+        "value": {
+          "type": "list",
+          "value": [
+            {
+              "type": "link",
+              "value": {
+                "fragment": null,
+                "id": "f04-choir-hall",
+                "shown": null,
+                "target": {
+                  "id": "f04-choir-hall",
+                  "kind": "floor",
+                  "locked": [],
+                  "never": false,
+                  "path": "world/hearth/f04-choir-hall.md",
+                  "status": "draft",
+                  "title": "The Choir-Hall"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "header": {
+      "children": 0,
+      "links_in": 0,
+      "parent": null,
+      "record": {
+        "id": "S-004",
+        "kind": "script",
+        "locked": [],
+        "never": false,
+        "path": "story/scripts/S-004.md",
+        "status": "draft",
+        "title": "The shrine hums"
+      }
+    },
+    "links_in": [],
+    "lore": [],
+    "pictures": [],
+    "used_by": []
+  }
+}

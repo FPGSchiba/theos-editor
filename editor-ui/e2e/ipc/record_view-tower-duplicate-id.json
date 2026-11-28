@@ -1,0 +1,143 @@
+{
+  "args": {
+    "id": "tower"
+  },
+  "cmd": "record_view",
+  "fixture": "duplicate-id",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "tower"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "tower"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "Synthetic tower"
+        }
+      }
+    ],
+    "header": {
+      "children": 2,
+      "links_in": 2,
+      "parent": null,
+      "record": {
+        "id": "tower",
+        "kind": "tower",
+        "locked": [],
+        "never": false,
+        "path": "world/tower.md",
+        "status": null,
+        "title": "Synthetic tower"
+      }
+    },
+    "links_in": [
+      {
+        "column": 9,
+        "fragment": null,
+        "line": 6,
+        "slot": "field:parent",
+        "source": {
+          "id": "synthetic-twin",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/synthetic-copy/synthetic-twin.md",
+          "status": null,
+          "title": "Synthetic twin two"
+        },
+        "target": {
+          "exists": true,
+          "id": "tower",
+          "kind": "tower",
+          "locked": [],
+          "never": false,
+          "path": "world/tower.md",
+          "status": null,
+          "title": "Synthetic tower"
+        }
+      },
+      {
+        "column": 9,
+        "fragment": null,
+        "line": 6,
+        "slot": "field:parent",
+        "source": {
+          "id": "synthetic-twin",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/synthetic-twin.md",
+          "status": null,
+          "title": "Synthetic twin one"
+        },
+        "target": {
+          "exists": true,
+          "id": "tower",
+          "kind": "tower",
+          "locked": [],
+          "never": false,
+          "path": "world/tower.md",
+          "status": null,
+          "title": "Synthetic tower"
+        }
+      }
+    ],
+    "lore": [],
+    "pictures": [],
+    "used_by": [
+      {
+        "relations": [
+          "child of"
+        ],
+        "source": {
+          "id": "synthetic-twin",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/synthetic-copy/synthetic-twin.md",
+          "status": null,
+          "title": "Synthetic twin two"
+        }
+      },
+      {
+        "relations": [
+          "child of"
+        ],
+        "source": {
+          "id": "synthetic-twin",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/synthetic-twin.md",
+          "status": null,
+          "title": "Synthetic twin one"
+        }
+      }
+    ]
+  }
+}

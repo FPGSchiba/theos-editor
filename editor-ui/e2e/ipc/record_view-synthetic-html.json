@@ -1,0 +1,104 @@
+{
+  "args": {
+    "id": "synthetic-html"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text with <img src=x onerror=alert(3)> and <script>alert(4)</script> inside.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      },
+      {
+        "text": "<script>alert(5)</script>",
+        "type": "raw"
+      },
+      {
+        "text": "<img src=x onerror=alert(6)>",
+        "type": "raw"
+      },
+      {
+        "inlines": [
+          {
+            "text": "A synthetic ",
+            "type": "text"
+          },
+          {
+            "text": "synthetic site",
+            "type": "external",
+            "url": "https://example.invalid/x"
+          },
+          {
+            "text": " and a synthetic image ",
+            "type": "text"
+          },
+          {
+            "text": "synthetic image",
+            "type": "external",
+            "url": "https://example.invalid/y.png"
+          },
+          {
+            "text": ", shown as text.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "synthetic-html"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "thing"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "<img src=x onerror=alert(1)> <script>alert(2)</script>"
+        }
+      },
+      {
+        "key": "type",
+        "value": {
+          "type": "text",
+          "value": "synthetic"
+        }
+      }
+    ],
+    "header": {
+      "children": 0,
+      "links_in": 0,
+      "parent": null,
+      "record": {
+        "id": "synthetic-html",
+        "kind": "thing",
+        "locked": [],
+        "never": false,
+        "path": "things/synthetic-html.md",
+        "status": null,
+        "title": "<img src=x onerror=alert(1)> <script>alert(2)</script>"
+      }
+    },
+    "links_in": [],
+    "lore": [],
+    "pictures": [],
+    "used_by": []
+  }
+}

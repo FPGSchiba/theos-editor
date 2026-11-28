@@ -13,3 +13,5 @@ pub use ledger::ledger_check;
 pub use list::{ListFilter, list};
 pub use read::{ReadTarget, read};
 pub use search::search;
+
+pub(crate) use lookup::saturate;

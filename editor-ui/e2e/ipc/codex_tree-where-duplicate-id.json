@@ -1,0 +1,53 @@
+{
+  "args": {
+    "tab": "where"
+  },
+  "cmd": "codex_tree",
+  "fixture": "duplicate-id",
+  "result": "ok",
+  "value": [
+    {
+      "children": [
+        {
+          "children": [],
+          "record": {
+            "id": "synthetic-twin",
+            "kind": "location",
+            "locked": [],
+            "never": false,
+            "path": "world/synthetic-twin.md",
+            "status": null,
+            "title": "Synthetic twin one"
+          },
+          "tag": null,
+          "type": "record"
+        },
+        {
+          "children": [],
+          "record": {
+            "id": "synthetic-twin",
+            "kind": "location",
+            "locked": [],
+            "never": false,
+            "path": "world/synthetic-copy/synthetic-twin.md",
+            "status": null,
+            "title": "Synthetic twin two"
+          },
+          "tag": null,
+          "type": "record"
+        }
+      ],
+      "record": {
+        "id": "tower",
+        "kind": "tower",
+        "locked": [],
+        "never": false,
+        "path": "world/tower.md",
+        "status": null,
+        "title": "Synthetic tower"
+      },
+      "tag": null,
+      "type": "record"
+    }
+  ]
+}

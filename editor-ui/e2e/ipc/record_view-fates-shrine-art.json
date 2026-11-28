@@ -1,0 +1,153 @@
+{
+  "args": {
+    "id": "fates-shrine-art"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic brief of the concept.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "fates-shrine-art"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "concept"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "Fates' shrine"
+        }
+      },
+      {
+        "key": "for",
+        "value": {
+          "type": "list",
+          "value": [
+            {
+              "type": "link",
+              "value": {
+                "fragment": null,
+                "id": "fates-shrine",
+                "shown": null,
+                "target": {
+                  "id": "fates-shrine",
+                  "kind": "location",
+                  "locked": [],
+                  "never": false,
+                  "path": "world/hearth/f04-choir-hall/fates-shrine.md",
+                  "status": null,
+                  "title": "The Fates' shrine"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "key": "picked",
+        "value": {
+          "type": "list",
+          "value": [
+            {
+              "type": "link",
+              "value": {
+                "fragment": null,
+                "id": "fates-shrine-art-v5",
+                "shown": null,
+                "target": {
+                  "id": "fates-shrine-art-v5",
+                  "kind": "concept-version",
+                  "locked": [],
+                  "never": false,
+                  "path": "concepts/fates-shrine-art/fates-shrine-art-v5.md",
+                  "status": null,
+                  "title": "Fates' shrine, synthetic version 5"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "header": {
+      "children": 1,
+      "links_in": 1,
+      "parent": null,
+      "record": {
+        "id": "fates-shrine-art",
+        "kind": "concept",
+        "locked": [],
+        "never": false,
+        "path": "concepts/fates-shrine-art.md",
+        "status": null,
+        "title": "Fates' shrine"
+      }
+    },
+    "links_in": [
+      {
+        "column": 10,
+        "fragment": null,
+        "line": 6,
+        "slot": "field:concept",
+        "source": {
+          "id": "fates-shrine-art-v5",
+          "kind": "concept-version",
+          "locked": [],
+          "never": false,
+          "path": "concepts/fates-shrine-art/fates-shrine-art-v5.md",
+          "status": null,
+          "title": "Fates' shrine, synthetic version 5"
+        },
+        "target": {
+          "exists": true,
+          "id": "fates-shrine-art",
+          "kind": "concept",
+          "locked": [],
+          "never": false,
+          "path": "concepts/fates-shrine-art.md",
+          "status": null,
+          "title": "Fates' shrine"
+        }
+      }
+    ],
+    "lore": [],
+    "pictures": [],
+    "used_by": [
+      {
+        "relations": [
+          "concept"
+        ],
+        "source": {
+          "id": "fates-shrine-art-v5",
+          "kind": "concept-version",
+          "locked": [],
+          "never": false,
+          "path": "concepts/fates-shrine-art/fates-shrine-art-v5.md",
+          "status": null,
+          "title": "Fates' shrine, synthetic version 5"
+        }
+      }
+    ]
+  }
+}

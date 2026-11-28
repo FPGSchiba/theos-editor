@@ -97,6 +97,7 @@ impl Lookup {
     }
 }
 
-pub(super) fn saturate(value: usize) -> u32 {
+/// `value` as the `u32` the views carry; a larger value saturates.
+pub(crate) fn saturate(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
 }

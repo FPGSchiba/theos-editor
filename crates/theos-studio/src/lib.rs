@@ -19,9 +19,14 @@
 //! the in-memory journal ([`Workspace::undo`], [`Workspace::redo`]), for the newest entry or,
 //! with [`Scope::Record`], the newest entry of one file; and [`introduced()`], the count of errors
 //! a command introduces. The rest arrives in P07 and later phases.
+//!
+//! P48 adds the Codex queries ([`codex`]) with their [`Marks`]; P11 adds the Codex-only views of
+//! the editor's Codex screen on top of them ([`codex_view`]): the tree tabs, the record page and
+//! the search prefixes.
 
 pub mod check;
 pub mod codex;
+pub mod codex_view;
 mod command;
 pub mod create;
 pub mod error;
@@ -30,6 +35,7 @@ pub mod hook;
 pub mod introduced;
 pub mod lock;
 pub mod marks;
+pub mod parts;
 pub mod project;
 pub mod report;
 pub mod schema;

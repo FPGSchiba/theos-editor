@@ -1,0 +1,40 @@
+{
+  "args": {
+    "limit": 20,
+    "query": ":clue murmur"
+  },
+  "cmd": "codex_search",
+  "result": "ok",
+  "value": {
+    "hits": [
+      {
+        "id": "C-031",
+        "kind": "clue",
+        "locked": [],
+        "matches": [
+          {
+            "column": "title",
+            "column_number": 17,
+            "line": 5,
+            "match": "murmurs",
+            "text": "title: A spirit murmurs a word in a dead tongue"
+          },
+          {
+            "column": "field:vector",
+            "column_number": 16,
+            "line": 11,
+            "match": "murmur",
+            "text": "vector: spirit murmur under the shrine, in the Tuners' language"
+          }
+        ],
+        "never": false,
+        "path": "lore/clues/C-031.md",
+        "score": 3.856538,
+        "status": "draft",
+        "title": "A spirit murmurs a word in a dead tongue"
+      }
+    ],
+    "note": null,
+    "truncated": false
+  }
+}

@@ -17,7 +17,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P08 | Map format and terrain generator | theos-editor | done | #27 | #44 |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
 | P10 | Prose editor research | theos-editor | done | #3 | #11 |
-| P11 | Editor shell and Codex | theos-editor | spec-approved | #56 | |
+| P11 | Editor shell and Codex | theos-editor | in-progress | #56 | |
 | P12 | Manuscript editor | theos-editor | todo | | |
 | P13 | Changes and Review screens | theos-editor | todo | | |
 | P14 | Start and Settings | theos-editor | todo | | |
@@ -62,12 +62,23 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
     managed MCP policy, or runs the session himself. The stdio tests prove all three ACs.
   - P11 merged P48's early commits (257fd87); `main` now holds them, so P11 merges `main`.
 - P11 (spec PR, 27 Nov 2026):
-  - Theos UI's light mode is the theme `grid-light`, which branch `docs/theos-ui-grid-light` adds
-    to `design/theos-ui/`. P11 takes every colour from tokens and sets `data-theme="grid-noir"`
-    on the root today; the switch (P14) sets `grid-light` (P11 spec §5.7).
-  - P11's gate PR (`ci(gate): the ui check and the editor's build needs (gate)`) waits for Jann
-    and must merge before the build PR. When Jann merges it, he switches the live ruleset to add
-    `ui` to the required checks (`cargo xtask github apply`).
+  - Theos UI's light mode is on `main` as the theme `grid-light` (#63). P11 takes every colour
+    from tokens and sets `data-theme="grid-noir"` on the root; the switch (P14) sets `grid-light`
+    (P11 spec §5.7).
+  - P11's gate PR #60 merged on 27 Nov 2026. The live ruleset switch that adds `ui` to the
+    required checks (`cargo xtask github apply`) is Jann's.
+  - macOS needs one manual start of the editor before P11 is done: the app menu (Quit, Edit, no
+    "Close Window" on Cmd+W) and Cmd+W closing a record tab, not the window. The `platforms` run
+    covers the menu's tests; the start itself cannot run in CI.
+  - Spec follow-up (protected): spec §5.12 names the fixture
+    `crates/theos-editor/tests/fixtures/codex/`; it lives in
+    `crates/theos-studio/tests/fixtures/projects/editor-codex/`, since the studio's Codex views
+    test on it too. A docs PR moves the path in the spec.
+  - Spec proposal (protected): spec §5.11 gives the tree tabs Lore and Things Mod+Shift+3 and
+    Mod+Shift+4. On macOS, Cmd+Shift+3 and Cmd+Shift+4 are the system's screenshot keys, which
+    the system takes before the editor sees them. Proposal: other keys for the four tree tabs in
+    §5.11, changed in a docs PR and then in `keymap.ts`; not Ctrl+Alt+digits, which are AltGr
+    characters on many Windows layouts.
 - P08's build PR #44 is a draft labelled `needs-jann`. The final review loop reached its cap of
   five rounds with 6 Minor findings open. A targeted fix and review round, which Jann asked for
   on 25 Nov 2026, closed them. Its spec changes reached main with #40 (rulings 51–75) and #47

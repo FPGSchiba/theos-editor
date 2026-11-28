@@ -1,0 +1,227 @@
+{
+  "args": {
+    "id": "B-016"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "B-016"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "belief"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "The Fates spin for those who climb"
+        }
+      },
+      {
+        "key": "status",
+        "value": {
+          "type": "text",
+          "value": "draft"
+        }
+      },
+      {
+        "key": "held_by",
+        "value": {
+          "type": "list",
+          "value": [
+            {
+              "type": "link",
+              "value": {
+                "fragment": null,
+                "id": "fates-cult",
+                "shown": null,
+                "target": {
+                  "id": "fates-cult",
+                  "kind": "faction",
+                  "locked": [],
+                  "never": false,
+                  "path": "people/hearth-folk/fates-cult.md",
+                  "status": null,
+                  "title": "Fates cult"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "key": "distorts",
+        "value": {
+          "type": "link",
+          "value": {
+            "fragment": null,
+            "id": "T-012",
+            "shown": null,
+            "target": {
+              "id": "T-012",
+              "kind": "truth",
+              "locked": [],
+              "never": false,
+              "path": "lore/truths/T-012.md",
+              "status": "draft",
+              "title": "Synthetic truth T-012"
+            }
+          }
+        }
+      },
+      {
+        "key": "accuracy",
+        "value": {
+          "type": "text",
+          "value": "partial"
+        }
+      }
+    ],
+    "header": {
+      "children": 0,
+      "links_in": 3,
+      "parent": null,
+      "record": {
+        "id": "B-016",
+        "kind": "belief",
+        "locked": [],
+        "never": false,
+        "path": "lore/beliefs/B-016.md",
+        "status": "draft",
+        "title": "The Fates spin for those who climb"
+      }
+    },
+    "links_in": [
+      {
+        "column": 8,
+        "fragment": null,
+        "line": 14,
+        "slot": "beat:says",
+        "source": {
+          "id": "S-004",
+          "kind": "script",
+          "locked": [],
+          "never": false,
+          "path": "story/scripts/S-004.md",
+          "status": "draft",
+          "title": "The shrine hums"
+        },
+        "target": {
+          "exists": true,
+          "id": "B-016",
+          "kind": "belief",
+          "locked": [],
+          "never": false,
+          "path": "lore/beliefs/B-016.md",
+          "status": "draft",
+          "title": "The Fates spin for those who climb"
+        }
+      },
+      {
+        "column": 30,
+        "fragment": null,
+        "line": 17,
+        "slot": "voice:belief",
+        "source": {
+          "id": "S-004",
+          "kind": "script",
+          "locked": [],
+          "never": false,
+          "path": "story/scripts/S-004.md",
+          "status": "draft",
+          "title": "The shrine hums"
+        },
+        "target": {
+          "exists": true,
+          "id": "B-016",
+          "kind": "belief",
+          "locked": [],
+          "never": false,
+          "path": "lore/beliefs/B-016.md",
+          "status": "draft",
+          "title": "The Fates spin for those who climb"
+        }
+      },
+      {
+        "column": 30,
+        "fragment": null,
+        "line": 17,
+        "slot": "voice:belief",
+        "source": {
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        },
+        "target": {
+          "exists": true,
+          "id": "B-016",
+          "kind": "belief",
+          "locked": [],
+          "never": false,
+          "path": "lore/beliefs/B-016.md",
+          "status": "draft",
+          "title": "The Fates spin for those who climb"
+        }
+      }
+    ],
+    "lore": [],
+    "pictures": [],
+    "used_by": [
+      {
+        "relations": [
+          "in a beat",
+          "voice"
+        ],
+        "source": {
+          "id": "S-004",
+          "kind": "script",
+          "locked": [],
+          "never": false,
+          "path": "story/scripts/S-004.md",
+          "status": "draft",
+          "title": "The shrine hums"
+        }
+      },
+      {
+        "relations": [
+          "voice"
+        ],
+        "source": {
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      }
+    ]
+  }
+}

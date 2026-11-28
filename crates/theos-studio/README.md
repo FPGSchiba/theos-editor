@@ -38,6 +38,20 @@ arrives in P07 and later phases.
   newest entry that changed one file. The journal lives in memory and keeps the last 100
   commands.
 
+## What P11 provides
+
+`codex_view`, the Codex-only views of the editor's Codex screen, built on P48's `codex` queries
+and plain `Serialize` types that `theos-editor` maps to its IPC types:
+
+- `tree(ws, tab)`: the Where, Who, Lore and Things tabs; kinds the registry does not know are
+  left out, and a record whose parent dangles or lies on a cycle sits at the top level once;
+- `record(ws, id)`: the header, the body as a block tree with resolved link chips, the lore
+  table, the pictures, the front-matter rows in file order, the backlinks, "Used by" (with
+  `relation(slot)`) and the findings;
+- `query(ws, text, limit)`: the `#id`, `:kind` and `@people` prefixes over `codex::search`.
+
+Their fixture is `tests/fixtures/projects/editor-codex/`, which `theos-editor`'s tests open too.
+
 ## Who uses what
 
 | Phase | Uses |

@@ -1,0 +1,9 @@
+{
+  "args": {
+    "tab": "who"
+  },
+  "cmd": "codex_tree",
+  "fixture": "empty",
+  "result": "ok",
+  "value": []
+}

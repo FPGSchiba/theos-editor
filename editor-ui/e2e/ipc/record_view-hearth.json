@@ -1,0 +1,193 @@
+{
+  "args": {
+    "id": "hearth"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "hearth"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "band"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "Hearth"
+        }
+      },
+      {
+        "key": "status",
+        "value": {
+          "type": "text",
+          "value": "draft"
+        }
+      },
+      {
+        "key": "parent",
+        "value": {
+          "type": "link",
+          "value": {
+            "fragment": null,
+            "id": "tower",
+            "shown": null,
+            "target": {
+              "id": "tower",
+              "kind": "tower",
+              "locked": [],
+              "never": false,
+              "path": "world/tower.md",
+              "status": null,
+              "title": "Synthetic tower"
+            }
+          }
+        }
+      },
+      {
+        "key": "floors",
+        "value": {
+          "type": "list",
+          "value": [
+            {
+              "type": "text",
+              "value": "1"
+            },
+            {
+              "type": "text",
+              "value": "20"
+            }
+          ]
+        }
+      }
+    ],
+    "header": {
+      "children": 1,
+      "links_in": 2,
+      "parent": {
+        "id": "tower",
+        "kind": "tower",
+        "locked": [],
+        "never": false,
+        "path": "world/tower.md",
+        "status": null,
+        "title": "Synthetic tower"
+      },
+      "record": {
+        "id": "hearth",
+        "kind": "band",
+        "locked": [],
+        "never": false,
+        "path": "world/hearth.md",
+        "status": "draft",
+        "title": "Hearth"
+      }
+    },
+    "links_in": [
+      {
+        "column": 12,
+        "fragment": null,
+        "line": 6,
+        "slot": "field:lives_in",
+        "source": {
+          "id": "hearth-folk",
+          "kind": "people",
+          "locked": [],
+          "never": false,
+          "path": "people/hearth-folk.md",
+          "status": null,
+          "title": "Hearth folk"
+        },
+        "target": {
+          "exists": true,
+          "id": "hearth",
+          "kind": "band",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth.md",
+          "status": "draft",
+          "title": "Hearth"
+        }
+      },
+      {
+        "column": 9,
+        "fragment": null,
+        "line": 6,
+        "slot": "field:parent",
+        "source": {
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        },
+        "target": {
+          "exists": true,
+          "id": "hearth",
+          "kind": "band",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth.md",
+          "status": "draft",
+          "title": "Hearth"
+        }
+      }
+    ],
+    "lore": [],
+    "pictures": [],
+    "used_by": [
+      {
+        "relations": [
+          "lives in"
+        ],
+        "source": {
+          "id": "hearth-folk",
+          "kind": "people",
+          "locked": [],
+          "never": false,
+          "path": "people/hearth-folk.md",
+          "status": null,
+          "title": "Hearth folk"
+        }
+      },
+      {
+        "relations": [
+          "child of"
+        ],
+        "source": {
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      }
+    ]
+  }
+}

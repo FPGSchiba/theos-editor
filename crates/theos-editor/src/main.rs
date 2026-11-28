@@ -1,7 +1,10 @@
-//! The authoring shell (Tauri 2): Tauri commands wrap the command layer and typed IPC bindings are
-//! generated for the UI. The cargo feature `engine` is reserved for the engine part and stays
-//! empty until then.
-//!
-//! This crate is empty until phase P11.
+//! The Theos editor: [`theos_editor::run`] with Tauri's runtime and the app menu
+//! ([`theos_editor::menu`]), the app's context and the command line, `theos-editor <path>`.
 
-fn main() {}
+fn main() -> tauri::Result<()> {
+    theos_editor::run(
+        theos_editor::menu::install(tauri::Builder::default()),
+        tauri::generate_context!(),
+        std::env::args_os(),
+    )
+}

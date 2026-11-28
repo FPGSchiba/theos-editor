@@ -1,0 +1,131 @@
+{
+  "args": {
+    "id": "reed-marsh"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "reed-marsh"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "location"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "Reed marsh"
+        }
+      },
+      {
+        "key": "parent",
+        "value": {
+          "type": "link",
+          "value": {
+            "fragment": null,
+            "id": "f04-choir-hall",
+            "shown": null,
+            "target": {
+              "id": "f04-choir-hall",
+              "kind": "floor",
+              "locked": [],
+              "never": false,
+              "path": "world/hearth/f04-choir-hall.md",
+              "status": "draft",
+              "title": "The Choir-Hall"
+            }
+          }
+        }
+      }
+    ],
+    "header": {
+      "children": 0,
+      "links_in": 1,
+      "parent": {
+        "id": "f04-choir-hall",
+        "kind": "floor",
+        "locked": [],
+        "never": false,
+        "path": "world/hearth/f04-choir-hall.md",
+        "status": "draft",
+        "title": "The Choir-Hall"
+      },
+      "record": {
+        "id": "reed-marsh",
+        "kind": "location",
+        "locked": [],
+        "never": false,
+        "path": "world/hearth/f04-choir-hall/reed-marsh.md",
+        "status": null,
+        "title": "Reed marsh"
+      }
+    },
+    "links_in": [
+      {
+        "column": 43,
+        "fragment": null,
+        "line": 11,
+        "slot": "mention",
+        "source": {
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        },
+        "target": {
+          "exists": true,
+          "id": "reed-marsh",
+          "kind": "location",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall/reed-marsh.md",
+          "status": null,
+          "title": "Reed marsh"
+        }
+      }
+    ],
+    "lore": [],
+    "pictures": [],
+    "used_by": [
+      {
+        "relations": [
+          "mentions"
+        ],
+        "source": {
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      }
+    ]
+  }
+}

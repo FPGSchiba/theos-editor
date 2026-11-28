@@ -1,0 +1,142 @@
+{
+  "args": {
+    "id": "B-017"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text, told in ",
+            "type": "text"
+          },
+          {
+            "fragment": null,
+            "id": "f04-choir-hall",
+            "shown": null,
+            "target": {
+              "id": "f04-choir-hall",
+              "kind": "floor",
+              "locked": [],
+              "never": false,
+              "path": "world/hearth/f04-choir-hall.md",
+              "status": "draft",
+              "title": "The Choir-Hall"
+            },
+            "type": "link"
+          },
+          {
+            "text": ".",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "B-017"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "belief"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "A synthetic belief about the never truth"
+        }
+      },
+      {
+        "key": "status",
+        "value": {
+          "type": "text",
+          "value": "draft"
+        }
+      },
+      {
+        "key": "held_by",
+        "value": {
+          "type": "list",
+          "value": [
+            {
+              "type": "link",
+              "value": {
+                "fragment": null,
+                "id": "fates-cult",
+                "shown": null,
+                "target": {
+                  "id": "fates-cult",
+                  "kind": "faction",
+                  "locked": [],
+                  "never": false,
+                  "path": "people/hearth-folk/fates-cult.md",
+                  "status": null,
+                  "title": "Fates cult"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "key": "distorts",
+        "value": {
+          "type": "link",
+          "value": {
+            "fragment": null,
+            "id": "T-013",
+            "shown": null,
+            "target": {
+              "id": "T-013",
+              "kind": "truth",
+              "locked": [
+                "never"
+              ],
+              "never": true,
+              "path": "lore/truths/T-013.md",
+              "status": "draft",
+              "title": "Synthetic truth T-013, never revealed"
+            }
+          }
+        }
+      },
+      {
+        "key": "accuracy",
+        "value": {
+          "type": "text",
+          "value": "false"
+        }
+      }
+    ],
+    "header": {
+      "children": 0,
+      "links_in": 0,
+      "parent": null,
+      "record": {
+        "id": "B-017",
+        "kind": "belief",
+        "locked": [],
+        "never": false,
+        "path": "lore/beliefs/B-017.md",
+        "status": "draft",
+        "title": "A synthetic belief about the never truth"
+      }
+    },
+    "links_in": [],
+    "lore": [],
+    "pictures": [],
+    "used_by": []
+  }
+}

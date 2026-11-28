@@ -1,0 +1,277 @@
+{
+  "args": {
+    "id": "C-031"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "C-031"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "clue"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "A spirit murmurs a word in a dead tongue"
+        }
+      },
+      {
+        "key": "status",
+        "value": {
+          "type": "text",
+          "value": "draft"
+        }
+      },
+      {
+        "key": "reveals",
+        "value": {
+          "type": "link",
+          "value": {
+            "fragment": null,
+            "id": "T-012",
+            "shown": null,
+            "target": {
+              "id": "T-012",
+              "kind": "truth",
+              "locked": [],
+              "never": false,
+              "path": "lore/truths/T-012.md",
+              "status": "draft",
+              "title": "Synthetic truth T-012"
+            }
+          }
+        }
+      },
+      {
+        "key": "moves_to",
+        "value": {
+          "type": "text",
+          "value": "hinted"
+        }
+      },
+      {
+        "key": "where",
+        "value": {
+          "type": "list",
+          "value": [
+            {
+              "type": "link",
+              "value": {
+                "fragment": null,
+                "id": "f04-choir-hall",
+                "shown": null,
+                "target": {
+                  "id": "f04-choir-hall",
+                  "kind": "floor",
+                  "locked": [],
+                  "never": false,
+                  "path": "world/hearth/f04-choir-hall.md",
+                  "status": "draft",
+                  "title": "The Choir-Hall"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "key": "gate",
+        "value": {
+          "type": "tier",
+          "value": "T1"
+        }
+      },
+      {
+        "key": "vector",
+        "value": {
+          "type": "text",
+          "value": "spirit murmur under the shrine, in the Tuners' language"
+        }
+      }
+    ],
+    "header": {
+      "children": 0,
+      "links_in": 3,
+      "parent": null,
+      "record": {
+        "id": "C-031",
+        "kind": "clue",
+        "locked": [],
+        "never": false,
+        "path": "lore/clues/C-031.md",
+        "status": "draft",
+        "title": "A spirit murmurs a word in a dead tongue"
+      }
+    },
+    "links_in": [
+      {
+        "column": 9,
+        "fragment": null,
+        "line": 11,
+        "slot": "field:after",
+        "source": {
+          "id": "C-032",
+          "kind": "clue",
+          "locked": [],
+          "never": false,
+          "path": "lore/clues/C-032.md",
+          "status": "draft",
+          "title": "Synthetic clue C-032"
+        },
+        "target": {
+          "exists": true,
+          "id": "C-031",
+          "kind": "clue",
+          "locked": [],
+          "never": false,
+          "path": "lore/clues/C-031.md",
+          "status": "draft",
+          "title": "A spirit murmurs a word in a dead tongue"
+        }
+      },
+      {
+        "column": 11,
+        "fragment": null,
+        "line": 22,
+        "slot": "beat:reveals",
+        "source": {
+          "id": "S-004",
+          "kind": "script",
+          "locked": [],
+          "never": false,
+          "path": "story/scripts/S-004.md",
+          "status": "draft",
+          "title": "The shrine hums"
+        },
+        "target": {
+          "exists": true,
+          "id": "C-031",
+          "kind": "clue",
+          "locked": [],
+          "never": false,
+          "path": "lore/clues/C-031.md",
+          "status": "draft",
+          "title": "A spirit murmurs a word in a dead tongue"
+        }
+      },
+      {
+        "column": 24,
+        "fragment": null,
+        "line": 15,
+        "slot": "mention",
+        "source": {
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        },
+        "target": {
+          "exists": true,
+          "id": "C-031",
+          "kind": "clue",
+          "locked": [],
+          "never": false,
+          "path": "lore/clues/C-031.md",
+          "status": "draft",
+          "title": "A spirit murmurs a word in a dead tongue"
+        }
+      }
+    ],
+    "lore": [
+      {
+        "record": {
+          "id": "C-032",
+          "kind": "clue",
+          "locked": [],
+          "never": false,
+          "path": "lore/clues/C-032.md",
+          "status": "draft",
+          "title": "Synthetic clue C-032"
+        },
+        "tier": "T1",
+        "touches": {
+          "id": "T-012",
+          "kind": "truth",
+          "locked": [],
+          "never": false,
+          "path": "lore/truths/T-012.md",
+          "status": "draft",
+          "title": "Synthetic truth T-012"
+        },
+        "verb": "hints"
+      }
+    ],
+    "pictures": [],
+    "used_by": [
+      {
+        "relations": [
+          "after"
+        ],
+        "source": {
+          "id": "C-032",
+          "kind": "clue",
+          "locked": [],
+          "never": false,
+          "path": "lore/clues/C-032.md",
+          "status": "draft",
+          "title": "Synthetic clue C-032"
+        }
+      },
+      {
+        "relations": [
+          "in a beat"
+        ],
+        "source": {
+          "id": "S-004",
+          "kind": "script",
+          "locked": [],
+          "never": false,
+          "path": "story/scripts/S-004.md",
+          "status": "draft",
+          "title": "The shrine hums"
+        }
+      },
+      {
+        "relations": [
+          "mentions"
+        ],
+        "source": {
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      }
+    ]
+  }
+}

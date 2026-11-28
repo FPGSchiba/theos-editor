@@ -1,0 +1,53 @@
+{
+  "args": {
+    "tab": "who"
+  },
+  "cmd": "codex_tree",
+  "result": "ok",
+  "value": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "record": {
+                "id": "mother-ilse",
+                "kind": "npc",
+                "locked": [],
+                "never": false,
+                "path": "people/hearth-folk/fates-cult/mother-ilse.md",
+                "status": null,
+                "title": "Mother Ilse"
+              },
+              "tag": null,
+              "type": "record"
+            }
+          ],
+          "record": {
+            "id": "fates-cult",
+            "kind": "faction",
+            "locked": [],
+            "never": false,
+            "path": "people/hearth-folk/fates-cult.md",
+            "status": null,
+            "title": "Fates cult"
+          },
+          "tag": null,
+          "type": "record"
+        }
+      ],
+      "record": {
+        "id": "hearth-folk",
+        "kind": "people",
+        "locked": [],
+        "never": false,
+        "path": "people/hearth-folk.md",
+        "status": null,
+        "title": "Hearth folk"
+      },
+      "tag": null,
+      "type": "record"
+    }
+  ]
+}
