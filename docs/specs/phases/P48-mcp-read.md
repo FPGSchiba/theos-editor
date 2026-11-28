@@ -1,8 +1,11 @@
 # P48 · MCP read — phase spec
 
-Status: waiting for Jann's approval · 27 Nov 2026 · repo of the build: `theos-editor`
+Status: approved (#53) · 27 Nov 2026 · repo of the build: `theos-editor`
 Source: `docs/specs/00-umbrella.md` §3 P48, version 8. Scope and acceptance criteria come from
 there; this spec decides how.
+Changes: 28 Nov 2026 — four errata from the build (#61): §4.3 (rmcp's lint on a hand-written
+`ServerHandler`), §5.2 (the exit code after the handshake, final review R5-1), §5.11 (an unknown
+parameter is an error result), §5.13 (where the fixture lives).
 
 ## 1. Goal
 
@@ -80,8 +83,10 @@ P11 (Editor shell and Codex) depends only on P06, so either build may come first
   `macros`, and `tokio` with `rt`, `io-std` and `macros`, builds on the pinned toolchain.
   - `#[tool_router(server_handler)]` on an `impl` block generates the `ServerHandler`, so the
     `#[tool_handler]` attribute and the `#[expect(clippy::unused_async_trait_impl)]` that 3.9.0
-    needed are not needed. When the server also serves prompts, the builder writes the `ServerHandler` impl and
-    keeps the tool router (§5.2).
+    needed are not needed. When the server also serves prompts, the builder writes the
+    `ServerHandler` impl and keeps the tool router (§5.2). Erratum (build): that hand-written
+    impl with `#[tool_handler]` still trips `clippy::unused_async_trait_impl` on 3.12, so it
+    carries `#[expect(clippy::unused_async_trait_impl, reason = "…")]`.
   - A tool that returns `Json<T>` with `T: Serialize + JsonSchema` lists an `outputSchema` in
     `tools/list` and answers with `structuredContent` plus the same JSON as a text block. Option
     fields appear as `"type": ["…", "null"]` and stay `required`, which matches P05's "every key
@@ -151,7 +156,9 @@ theos-mcp [--project <folder>]
   `.await`.
 - **stdout carries only the protocol.** Logs go to stderr through `tracing-subscriber`, filtered
   by `THEOS_LOG` (default `warn`). A test checks that every stdout line is a JSON-RPC message.
-- **Exit:** 0 when stdin closes; 2 when stdio itself fails.
+- **Exit:** 0 when stdin closes; 2 when the server cannot start or the MCP handshake fails.
+  After the handshake, rmcp 3.12 treats a failed stdin read as closed input and only logs a
+  failed stdout write, so the server then exits 0 (erratum from the build, final review R5-1).
 
 ### 5.3 Freshness and the shared cache
 
@@ -306,8 +313,9 @@ a silent default.
 - **Error results:** a failed query (unknown id, a bad filter value, the index failing, no
   project) returns a tool result with `isError: true` and one text block: the `report` of the
   error (P05 §5.12). Claude reads it and can retry.
-- **Protocol errors:** only for what `rmcp` itself refuses (unknown tool, parameters that do not
-  match the schema, an unknown prompt).
+- **Protocol errors:** only for what `rmcp` itself refuses (an unknown tool, an unknown prompt).
+  Parameters that do not match the schema, an unknown key included, come back as an error result:
+  rmcp 3.12 reports a failed deserialisation that way (erratum from the build).
 - Studio errors are new `StudioError` variants (`UnknownRecord`, `InvalidFilter`) with
   `thiserror`; `theos-mcp` uses `anyhow` only in `main`.
 
@@ -318,7 +326,8 @@ P48's server writes nothing in the project. The only file it may change is the c
 
 ### 5.13 Fixtures and tests
 
-- **Fixture project:** `crates/theos-mcp/tests/fixtures/codex/`, a small project with
+- **Fixture project:** `crates/theos-studio/tests/fixtures/projects/codex/` (erratum: the studio's
+  unit tests use it first; the `theos-mcp` tests copy it from there), a small project with
   `theos.toml`, marked `# synthetic fixture (P48), not canon` where it is not a data-model
   example:
   - the data model §14 records `mother-ilse`, `C-031` and `S-004`, with synthetic parents

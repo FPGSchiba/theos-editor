@@ -44,7 +44,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P45 | Atlas level switcher | theos-editor | todo | | |
 | P46 | Git read | theos-editor | pr-open | #52, #58 | #62 |
 | P47 | Git write | theos-editor | todo | | |
-| P48 | MCP read | theos-editor | pr-open | #53 | #61 |
+| P48 | MCP read | theos-editor | done | #53 | #61 |
 | P49 | Releases and the check action | theos-editor | todo | | |
 | P50 | Leaner CI | theos-editor | done | #45, #46 | #48 |
 
@@ -56,18 +56,11 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
-- P48's build PR #61 (labelled `needs-jann`, ready for review) waits for Jann's merge:
-  - The final review loop reached its cap of 5 rounds with one Minor open (R5-1, the exit code
-    after the handshake). On Jann's word, a targeted fix round fixed the crate README; the spec
-    erratum for §5.2 is in the list below.
+- P48 is merged (#61). Open:
   - The recorded Claude Code session that spec §5.14 asks for as CE-18.1/CE-18.2 evidence is
     blocked: "MCP server blocked by enterprise policy: theos". Jann allows the server in the
     managed MCP policy, or runs the session himself. The stdio tests prove all three ACs.
-  - Spec errata from the build, for a docs PR: §4.3 (rmcp still needs
-    `#[expect(clippy::unused_async_trait_impl)]` with a hand-written `ServerHandler`), §5.2
-    (exit code after the handshake, R5-1), §5.11 (an unknown parameter is an `isError` result,
-    not a protocol error), §5.13 (the fixture lives in `theos-studio`).
-  - P11 merged P48's early commits (257fd87) and opens its PR after P48's has merged.
+  - P11 merged P48's early commits (257fd87); `main` now holds them, so P11 merges `main`.
 - P11 (spec PR, 27 Nov 2026):
   - Theos UI's light mode is the theme `grid-light`, which branch `docs/theos-ui-grid-light` adds
     to `design/theos-ui/`. P11 takes every colour from tokens and sets `data-theme="grid-noir"`
