@@ -10,8 +10,8 @@ the gate and never merges a waiting PR are part of the gate.
 
 ## 1. Required checks
 
-The required status checks on `main` are five CI jobs: `gate`, `test`, `coverage`, `pr` and
-`approval` (branch protection, administrators included; `ui` joins from P11). Each job runs the
+The required status checks on `main` are six CI jobs: `gate`, `test`, `coverage`, `pr`,
+`approval` and `ui` (branch protection, administrators included). Each job runs the
 checks of the Job column below through `cargo xtask`. A check that fails does not stop the others
 of its job, and the job is red when any of its checks is. The job summary of a run is the table of
 verdicts, one row per check: passed, failed with its findings, or not needed with the reason. A
@@ -23,8 +23,8 @@ none, lists that cannot be read, a detached head), the summary says why above th
 | Check | Job | What it runs | OS |
 |---|---|---|---|
 | `fmt` | `gate` | `cargo fmt --all --check` | Linux |
-| `clippy` | `gate` | `cargo clippy --workspace --all-targets --locked -- -D warnings` | Linux |
-| `test` | `test` | `cargo nextest run --workspace --locked` (profile `ci` in CI, `default` locally; both leave out the slow tests) and `cargo test --doc --workspace --locked` | Linux |
+| `clippy` | `gate` | `cargo clippy --workspace --all-targets --locked -- -D warnings`, and the same with `--features theos-editor/engine` | Linux |
+| `test` | `test` | `cargo nextest run --workspace --features theos-editor/engine --locked -E 'package(theos-editor)'`, then `cargo nextest run --workspace --locked` (profile `ci` in CI, `default` locally; both leave out the slow tests; the full run comes last, so its report is the one `ac-trace` reads), and `cargo test --doc --workspace --locked` | Linux |
 | `slow-tests` | `gate` | `cargo xtask slow-tests`: `cargo nextest run --workspace --locked --profile slow --no-tests=warn`, only the slow tests; on a pull request only when it can change their outcome (below) | Linux |
 | `docs` | `gate` | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked` | Linux |
 | `deny` | `gate` | `cargo deny --locked check` (licences, advisories, bans, sources) | Linux |
@@ -36,7 +36,16 @@ none, lists that cannot be read, a detached head), the summary says why above th
 | `pr-title` | `pr` | `cargo xtask pr-title`: the title is a Conventional Commit ending with `(PNN)`, `(gate)`, `(docs)` or a release title (`CONTRIBUTING.md` §3) | Linux |
 | `commit-msg` | `gate` | `cargo xtask commit-msg`: every commit of the PR is a Conventional Commit (`CONTRIBUTING.md` §2) | Linux |
 | `approval` | `approval` | fails while the PR touches a protected path and lacks the label `approved` | Linux |
-| `ui` | `ui` | from P11: `pnpm install --frozen-lockfile`, `svelte-check`, `eslint`, `vitest`, Playwright component tests | Linux |
+| `ui` | `ui` | the versions of Node 24 and of pnpm (the `packageManager` pin), then `pnpm install --frozen-lockfile`, `svelte-check`, `eslint`, `vitest`, Playwright tests | Linux |
+
+**Linux packages.** The Tauri crates need system libraries to build. `gate/linux-packages.txt`
+lists them, one per line. The jobs `gate`, `test` and `coverage` install them with
+`apt-get install --no-install-recommends`, through the input `gui-packages` of the setup action.
+The downloaded `.deb` files are cached, keyed by the runner image and the list, so a run installs
+them without downloading. The setup action asks `cargo xtask needs` first, which decides as the
+gate does: a pull request that changes no code installs nothing, and nothing is installed until
+`Cargo.lock` names `webkit2gtk`, the package that links the libraries. Only a job that saves its
+build cache, on `main`, saves the cached files.
 
 **Slow tests** are tests that take minutes, such as the map generator's parity and golden runs
 (P08 spec §5.14). A test is slow when a segment of its name, the path nextest shows, starts with
@@ -127,6 +136,7 @@ folder, and it ignores letter case, because the tool configs are found in any ca
 - `**/.cargo/**`
 - `**/.gitignore`
 - `**/.gitattributes`
+- `design/theos-ui/**`
 
 The file `gate/code-paths.toml` itself is always code, whatever the lists say, so a pull request
 cannot make its own change to the lists skip the tests that guard them.
@@ -149,13 +159,14 @@ each check reads, with the place in the code:
 |---|---|---|
 | `fmt` | the workspace `.rs` files (`xtask/src/checks/cargo_cmds.rs:28`) | no non-code path is Rust code |
 | `clippy` | the workspace, and by `include_str!` the umbrella (`xtask/src/umbrella.rs:287`) and the PR template (`xtask/src/checks/pr_body.rs:129`, `xtask/tests/pr_body.rs:10`) | the umbrella is always code, and `.github/**` is code |
-| `test`, `coverage` | `docs/gate.md` (`xtask/tests/settings.rs:78`, `xtask/tests/workflows.rs:837`, `xtask/tests/approval.rs:579`), `CONTRIBUTING.md` (`xtask/tests/commit_msg.rs:436`), the workflows, and the files `clippy` includes; no crate takes a doc file into its docs (no `doc = include_str!`), so no doc test reads one | `docs/gate.md` is always code, and the others are code |
-| `docs` | the workspace sources, through rustdoc (`xtask/src/checks/cargo_cmds.rs:83`) | no non-code path is Rust code |
-| `deny` | the Cargo files, `deny.toml` and the advisory database (`xtask/src/checks/cargo_cmds.rs:92`) | Cargo files and `deny.toml` are code; a new advisory is not caused by the pull request and shows at the next code PR and the next push to `main` |
+| `test`, `coverage` | `docs/gate.md` (`xtask/tests/settings.rs:78`, `xtask/tests/workflows.rs:933`, `xtask/tests/approval.rs:579`), `CONTRIBUTING.md` (`xtask/tests/commit_msg.rs:436`), the workflows, and the files `clippy` includes; no crate takes a doc file into its docs (no `doc = include_str!`), so no doc test reads one | `docs/gate.md` is always code, and the others are code |
+| `docs` | the workspace sources, through rustdoc (`xtask/src/checks/cargo_cmds.rs:117`) | no non-code path is Rust code |
+| `deny` | the Cargo files, `deny.toml` and the advisory database (`xtask/src/checks/cargo_cmds.rs:126`) | Cargo files and `deny.toml` are code; a new advisory is not caused by the pull request and shows at the next code PR and the next push to `main` |
 | `engine-free` | `cargo metadata` and `gate/engine-crates.toml` (`xtask/src/checks/engine_free.rs:42`) | both are code |
 | `lints` | every file name, for `Cargo.toml` and the tool configs in any folder (`xtask/src/checks/lints/config_files.rs:168`, `:243`), and the mirrored files of `gate/` (`:39`) | those names are always code, whatever the folder and the case |
 | `ac-trace` | the umbrella (`xtask/src/umbrella.rs:20`), every `.ts` file (`xtask/src/checks/ac_trace/mod.rs:311`, `:328`) and the branch (`:259`) | the umbrella and `.ts` files are always code, and a `phase/` branch runs every check |
 | `tools` | `gate/tools.toml` (`xtask/src/tools.rs:21`) | code |
+| `ui` | `editor-ui/**`, `editor-ui/e2e/ipc/*.json` and the design system `design/theos-ui/**`, which the UI imports (`xtask/src/checks/ui.rs`) | all of it is code: no path of `editor-ui/` is in the first list, and `design/theos-ui/**` is in the second |
 | `slow-tests` | its own changed-paths rule (`xtask/src/checks/slow.rs:46`) | it only watches workspace crates and the files listed there |
 
 `commit-msg` always runs. `pr-title`, `pr-body` and `approval` always run too, in jobs of their

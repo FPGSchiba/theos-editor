@@ -17,7 +17,7 @@ use std::io::Write;
 use std::path::Path;
 
 use crate::checks::{
-    ac_trace, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title, slow,
+    ac_trace, cargo_cmds, commit_msg, coverage, engine_free, lints, pr_body, pr_title, slow, ui,
 };
 use crate::ci::CiEvent;
 use crate::scope::{self, Scope};
@@ -145,6 +145,7 @@ fn run_pr_check(
         | Check::Coverage
         | Check::Lints
         | Check::AcTrace
+        | Check::Ui
         | Check::CommitMsg
         | Check::Approval
         | Check::Github => Err(Error::Missing {
@@ -164,23 +165,18 @@ fn run_scoped(
     mut run_one: impl FnMut(Check, &mut dyn Write) -> Result<Verdict>,
     out: &mut dyn Write,
 ) -> Result<Outcome> {
-    let every_because = match scope {
-        Scope::Every { note } => note.clone(),
-        Scope::DocsOnly => None,
-    };
+    let every_because = scope::every_note(scope);
     if let Some(note) = &every_because {
         // The note can hold git's stderr, so it is marked line by line like any other text.
-        report::write_note(out, &format!("every check runs: {note}"))
-            .map_err(report::output_error)?;
+        report::write_every_note(out, note)?;
     }
-    let docs_only = *scope == Scope::DocsOnly;
     let verdicts = run_checks(
         order,
         |check, out| {
-            if docs_only && check != Check::CommitMsg {
-                Ok(Verdict::not_needed(check, scope::NOT_NEEDED_REASON))
-            } else {
+            if scope::runs(scope, check) {
                 run_one(check, out)
+            } else {
+                Ok(Verdict::not_needed(check, scope::NOT_NEEDED_REASON))
             }
         },
         out,
@@ -209,6 +205,7 @@ fn run_check(
         Check::Lints => lints::run(root, ci, shared, out),
         Check::EngineFree => engine_free::run(root, ci, out),
         Check::AcTrace => ac_trace::run(root, ci, shared, out),
+        Check::Ui => ui::run(root, ci, out),
         Check::CommitMsg => commit_msg::run(root, ci, out),
         Check::Coverage => coverage::run(root, ci, out),
         Check::SlowTests => slow::run(root, ci, out),
@@ -304,6 +301,7 @@ mod tests {
         Coverage => Gate,
         Lints => Gate,
         AcTrace => Gate,
+        Ui => Gate,
         CommitMsg => Gate,
         PrTitle => PrOnly,
         PrBody => PrOnly,
@@ -580,6 +578,65 @@ mod tests {
         covered.sort_by_key(|check| check.name());
         expected.sort_by_key(|check| check.name());
         assert_eq!(covered, expected);
+    }
+
+    /// What `run_scoped` makes of every selectable check under `scope`: the check is needed when
+    /// its verdict is not "not needed". `ui` is decided by its own plan, as `ui::run` does.
+    fn gate_needs(scope: &Scope, root: &Path) -> TestResult<Vec<(Check, bool)>> {
+        let order: Vec<Check> = GATE_ORDER
+            .iter()
+            .copied()
+            .filter(|check| parse_selectable(check.name()).is_ok())
+            .collect();
+        let outcome = run_scoped(
+            &order,
+            scope,
+            |check, _| {
+                Ok(match (check, crate::checks::ui::plan(root)) {
+                    (Check::Ui, crate::checks::ui::UiPlan::NotNeeded(reason)) => {
+                        Verdict::not_needed(check, reason)
+                    }
+                    _ => Verdict::pass(check),
+                })
+            },
+            &mut Vec::new(),
+        )?;
+        Ok(outcome
+            .verdicts
+            .iter()
+            .map(|verdict| (verdict.check, !verdict.is_not_needed()))
+            .collect())
+    }
+
+    // AC: CE-08C.2
+    #[test]
+    fn needs_answers_as_the_gate_decides_for_every_check() -> TestResult {
+        for with_editor_ui in [false, true] {
+            let root = tempfile::tempdir()?;
+            if with_editor_ui {
+                std::fs::create_dir(root.path().join("editor-ui"))?;
+                std::fs::write(root.path().join("editor-ui").join("package.json"), "{}")?;
+            }
+            for scope in [
+                Scope::DocsOnly,
+                Scope::Every { note: None },
+                Scope::Every {
+                    note: Some("why".to_owned()),
+                },
+            ] {
+                let decided = gate_needs(&scope, root.path())?;
+                assert!(decided.iter().any(|(check, _)| *check == Check::Ui));
+                for (check, needed) in decided {
+                    assert_eq!(
+                        crate::needs::needed_under(&scope, root.path(), &[check]),
+                        needed,
+                        "{} under {scope:?}, editor-ui: {with_editor_ui}",
+                        check.name()
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 
     // AC: CE-08C.2

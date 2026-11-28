@@ -156,13 +156,27 @@ mod tests {
             "docs/specs/phases/P50-leaner-ci.md",
             "docs/plans/P50-leaner-ci.md",
             "research/notes.md",
-            "design/theos-ui/index.html",
+            "design/notes/ideas.md",
             "README.md",
             "CLAUDE.md",
             ".claude/skills/theos-phase/SKILL.md",
             "docs/ui/screens/01-start.png",
         ] {
             assert!(paths.is_non_code(path), "{path}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn the_design_system_the_ui_imports_is_code() -> Result<()> {
+        let paths = real()?;
+        for path in [
+            "design/theos-ui/tokens.css",
+            "design/theos-ui/components/bundle.css",
+            "design/theos-ui/fonts/inter.woff2",
+            "design/theos-ui/README.md",
+        ] {
+            assert!(!paths.is_non_code(path), "{path}");
         }
         Ok(())
     }

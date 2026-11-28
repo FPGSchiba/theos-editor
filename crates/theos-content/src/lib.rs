@@ -111,8 +111,8 @@ pub use body::{
 };
 pub use finding::{Finding, Severity};
 pub use index::{
-    BeatRef, BinaryReport, Change, Column, EffectiveLens, HeldBelief, Hit, IgnoredEntry, Index,
-    IndexError, Layer, LedgerEntry, LensData, LensValue, LinkRef, Match, Origin, Overridden,
+    BeatRef, BinaryReport, Change, Column, EffectiveLens, FieldText, HeldBelief, Hit, IgnoredEntry,
+    Index, IndexError, Layer, LedgerEntry, LensData, LensValue, LinkRef, Match, Origin, Overridden,
     Preview, RecordSummary, Slot, TruthLedger, Update,
 };
 pub use kinds::{

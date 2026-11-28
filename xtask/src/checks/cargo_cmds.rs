@@ -28,27 +28,60 @@ pub fn fmt() -> Vec<CargoCommand> {
     vec![cargo(&["fmt", "--all", "--check"])]
 }
 
-/// `cargo clippy --workspace --all-targets --locked -- -D warnings`.
+/// `cargo clippy --workspace --all-targets --locked -- -D warnings`, then the same with
+/// `--features theos-editor/engine`, so the feature is built too (CE-32.3). The feature is
+/// switched on across the workspace, not with `-p`, so the dependencies are unified as in the
+/// first run and nothing shared is built twice.
 #[must_use]
 pub fn clippy() -> Vec<CargoCommand> {
-    vec![cargo(&[
-        "clippy",
-        "--workspace",
-        "--all-targets",
-        "--locked",
-        "--",
-        "-D",
-        "warnings",
-    ])]
+    vec![
+        cargo(&[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--locked",
+            "--",
+            "-D",
+            "warnings",
+        ]),
+        cargo(&[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--features",
+            "theos-editor/engine",
+            "--locked",
+            "--",
+            "-D",
+            "warnings",
+        ]),
+    ]
 }
 
-/// `cargo nextest run --workspace --locked --profile <ci|default>`, then
-/// `cargo test --doc --workspace --locked`. The profile is `ci` when `ci` is true. Both profiles
-/// leave out the slow tests, which [`slow_tests`] runs.
+/// `cargo nextest run --workspace --features theos-editor/engine --locked --profile <ci|default>
+/// -E 'package(theos-editor)'` (CE-32.3: the feature across the workspace, so nothing shared is
+/// rebuilt, and only the tests of `theos-editor`), then
+/// `cargo nextest run --workspace --locked --profile <same>`, then
+/// `cargo test --doc --workspace --locked`. The full run comes second so that its report is the
+/// one left in `target/nextest/<profile>/junit.xml`, which `ac-trace` reads; the filtered run
+/// writes to the same file. The profile is `ci` when `ci` is true. Both profiles leave out the
+/// slow tests, which [`slow_tests`] runs.
 #[must_use]
 pub fn test(ci: bool) -> Vec<CargoCommand> {
     let profile = if ci { "ci" } else { "default" };
     vec![
+        cargo(&[
+            "nextest",
+            "run",
+            "--workspace",
+            "--features",
+            "theos-editor/engine",
+            "--locked",
+            "--profile",
+            profile,
+            "-E",
+            "package(theos-editor)",
+        ]),
         cargo(&[
             "nextest",
             "run",
@@ -189,22 +222,58 @@ mod tests {
         assert_eq!(fmt(), [cmd(&["fmt", "--all", "--check"], &[])]);
         assert_eq!(
             clippy(),
-            [cmd(
-                &[
-                    "clippy",
-                    "--workspace",
-                    "--all-targets",
-                    "--locked",
-                    "--",
-                    "-D",
-                    "warnings"
-                ],
-                &[]
-            )]
+            [
+                cmd(
+                    &[
+                        "clippy",
+                        "--workspace",
+                        "--all-targets",
+                        "--locked",
+                        "--",
+                        "-D",
+                        "warnings"
+                    ],
+                    &[]
+                ),
+                cmd(
+                    &[
+                        "clippy",
+                        "--workspace",
+                        "--all-targets",
+                        "--features",
+                        "theos-editor/engine",
+                        "--locked",
+                        "--",
+                        "-D",
+                        "warnings"
+                    ],
+                    &[]
+                ),
+            ]
         );
+    }
+
+    // AC: CE-08.4
+    #[test]
+    fn test_and_other_commands_match_gate_md() {
         assert_eq!(
             test(true),
             [
+                cmd(
+                    &[
+                        "nextest",
+                        "run",
+                        "--workspace",
+                        "--features",
+                        "theos-editor/engine",
+                        "--locked",
+                        "--profile",
+                        "ci",
+                        "-E",
+                        "package(theos-editor)"
+                    ],
+                    &[]
+                ),
                 cmd(
                     &[
                         "nextest",
@@ -222,6 +291,21 @@ mod tests {
         assert_eq!(
             test(false),
             [
+                cmd(
+                    &[
+                        "nextest",
+                        "run",
+                        "--workspace",
+                        "--features",
+                        "theos-editor/engine",
+                        "--locked",
+                        "--profile",
+                        "default",
+                        "-E",
+                        "package(theos-editor)"
+                    ],
+                    &[]
+                ),
                 cmd(
                     &[
                         "nextest",
@@ -259,6 +343,71 @@ mod tests {
             )]
         );
         assert_eq!(deny(), [cmd(&["deny", "--locked", "check"], &[])]);
+    }
+
+    #[test]
+    fn clippy_also_builds_the_engine_feature() {
+        assert_eq!(
+            clippy().get(1),
+            Some(&cmd(
+                &[
+                    "clippy",
+                    "--workspace",
+                    "--all-targets",
+                    "--features",
+                    "theos-editor/engine",
+                    "--locked",
+                    "--",
+                    "-D",
+                    "warnings"
+                ],
+                &[]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_also_runs_the_engine_feature() {
+        for (ci, profile) in [(true, "ci"), (false, "default")] {
+            assert_eq!(
+                test(ci).first(),
+                Some(&cmd(
+                    &[
+                        "nextest",
+                        "run",
+                        "--workspace",
+                        "--features",
+                        "theos-editor/engine",
+                        "--locked",
+                        "--profile",
+                        profile,
+                        "-E",
+                        "package(theos-editor)"
+                    ],
+                    &[]
+                ))
+            );
+        }
+    }
+
+    // AC: CE-08.4
+    #[test]
+    fn the_full_workspace_run_is_the_last_nextest_run_so_its_report_stays() {
+        // Both runs write `target/nextest/<profile>/junit.xml`, which `ac-trace` reads for its
+        // result column: the filtered run goes first, or every test outside `theos-editor`
+        // would show no result.
+        for ci in [true, false] {
+            let nextest: Vec<CargoCommand> = test(ci)
+                .into_iter()
+                .filter(|command| command.args.first().is_some_and(|arg| arg == "nextest"))
+                .collect();
+            let [filtered, full] = nextest.as_slice() else {
+                panic!("expected two nextest runs, found {}", nextest.len());
+            };
+            assert!(filtered.args.contains(&"-E".to_owned()));
+            assert!(!full.args.contains(&"-E".to_owned()));
+            assert!(full.args.contains(&"--workspace".to_owned()));
+        }
     }
 
     #[test]
@@ -300,9 +449,10 @@ mod tests {
         let mut seen = Vec::new();
         let verdict = run_commands(Check::Test, &cmds, |command| {
             seen.push(command.args[0].clone());
-            Ok(command.args[0] != "nextest")
+            // The first nextest run fails: the one without a filter expression.
+            Ok(command.args[0] != "nextest" || command.args.contains(&"-E".to_owned()))
         })?;
-        assert_eq!(seen, ["nextest", "test"]);
+        assert_eq!(seen, ["nextest", "nextest", "test"]);
         assert_eq!(verdict.check, Check::Test);
         assert_eq!(verdict.findings.len(), 1);
         let message = &verdict.findings[0].message;

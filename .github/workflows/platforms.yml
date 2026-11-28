@@ -1,7 +1,9 @@
 # Windows and macOS are not in the per-pull-request checks (docs/gate.md section 1): CI runs on
 # Linux only, and these runners are slower or dearer. This runs the checks that read what the
 # compiler builds on the machine, so they can differ per OS: clippy, the tests, the slow tests,
-# `lints` and `ac-trace` (the last two read the cfg-selected code that `cargo check` builds). It
+# `lints` and `ac-trace` (the last two read the cfg-selected code that `cargo check` builds), and
+# `ui` (Playwright's browser differs per OS; the UI is set up when `xtask needs ui` says so and
+# `editor-ui/` exists, and its pnpm store and browsers are cached like the Rust build). It
 # runs every Monday, on demand, and on a pull request that Jann labels `windows` or `macos`, each
 # label starting the job of its own OS. The jobs are not required status checks. A label or manual
 # run is a deliberate request, so xtask runs every selected check even for a pull request that
@@ -57,7 +59,14 @@ jobs:
         with:
           cache-key: windows
           save-cache: ${{ github.event_name == 'schedule' }}
-      - run: cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace
+      - id: needs
+        run: cargo xtask needs ui
+      - if: steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''
+        uses: ./.github/actions/ui
+        with:
+          save-cache: ${{ github.event_name == 'schedule' }}
+          browsers-path: ~/AppData/Local/ms-playwright
+      - run: cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace,ui
 
   macos:
     name: macos
@@ -76,7 +85,14 @@ jobs:
         with:
           cache-key: macos
           save-cache: ${{ github.event_name == 'schedule' }}
-      - run: cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace
+      - id: needs
+        run: cargo xtask needs ui
+      - if: steps.needs.outputs.needed == 'true' && hashFiles('editor-ui/package.json') != ''
+        uses: ./.github/actions/ui
+        with:
+          save-cache: ${{ github.event_name == 'schedule' }}
+          browsers-path: ~/Library/Caches/ms-playwright
+      - run: cargo xtask gate --only clippy,test,slow-tests,lints,ac-trace,ui
 
   macos-intel:
     name: macos-intel

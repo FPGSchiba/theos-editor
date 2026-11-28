@@ -10,7 +10,7 @@ The 54px vertical rail that switches named layout presets; each item is a glyph 
 </nav>
 ```
 - A rail item activates a whole layout preset (the dock tree), never a single window.
-- The active preset is amber: 2px left edge, 6% amber wash, full-opacity label.
+- The active preset is amber: 2px left edge, 6% amber wash, amber label. Inactive labels are `textDim` at full opacity, so they pass contrast in both themes.
 - The badge is amber for "items wait for you" and red (`is-reject`) for "something is broken". Never magenta: an AI count is still a count of things you must review.
 - Settings sits alone at the bottom, after `tu-rail__spacer`.
 - Every tool uses this rail, the Magic sandbox included (its presets differ, the component does not).

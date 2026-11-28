@@ -26,14 +26,18 @@
 
 pub mod changes;
 pub mod check;
+pub mod codex;
 mod command;
 pub mod create;
 pub mod diff;
 pub mod error;
+pub mod guides;
 pub mod history;
 pub mod hook;
 pub mod introduced;
 pub mod lock;
+pub mod marks;
+pub mod project;
 mod repo_path;
 pub mod report;
 pub mod schema;
@@ -52,6 +56,8 @@ pub use diff::{FileDiff, Side, diff};
 pub use error::StudioError;
 pub use history::{HistoryEntry, history};
 pub use introduced::{FindingCounts, introduced};
+pub use marks::{LockReason, MarkView, Marks};
 pub use report::report;
 pub use staged::{StagedCheck, check_staged};
+pub use views::codex::RecordRef;
 pub use workspace::{Workspace, find_root};
