@@ -40,7 +40,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P31 | Floor frame and places | theos-editor | todo | | |
 | P32 | Recipe families | theos-editor | todo | | |
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
-| P34 | Interiors | theos-editor | in-progress | #55 | |
+| P34 | Interiors | theos-editor | pr-open | #55 | |
 | P45 | Atlas level switcher | theos-editor | todo | | |
 | P46 | Git read | theos-editor | spec-pr | | |
 | P47 | Git write | theos-editor | todo | | |
@@ -56,6 +56,16 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 
 ## Needs Jann
 
+- P34's build (Interiors) departs from its spec in three places, so the spec needs an erratum.
+  Claude opens it as a docs PR after the build PR:
+  - §5.9 item 4 and §9 ruling 7 define the drop check with the keys reachable from the start
+    with every drop removed, which is not what a falling party holds. The build checks from the
+    drop's target with the start room's and the drop room's keys only (ruling R54).
+  - §5.4's `locked` is set for every room behind a lock by `RoomGraph::mark_locked` (R55).
+  - §5.6's leaf row reads "non-locked" as the program's flag (R57).
+
+  The build PR lists every ruling, among them the recipe values that differ from §5.12:
+  the choir hall's 84 m square and 3×3 hall (R45, R48), and the undercroft's 2×1 crypt (R50).
 - P08's build PR #44 is a draft labelled `needs-jann`. The final review loop reached its cap of
   five rounds with 6 Minor findings open. A targeted fix and review round, which Jann asked for
   on 25 Nov 2026, closed them. Its spec changes reached main with #40 (rulings 51–75) and #47
