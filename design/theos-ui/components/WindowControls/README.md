@@ -3,8 +3,8 @@ The window controls of the frameless window: minimize, maximize (restore when ma
 **Use**
 ```html
 <div class="tu-winctl" role="group" aria-label="Window">
-  <button class="tu-winctl__btn" type="button" aria-label="Minimise">−</button>
-  <button class="tu-winctl__btn" type="button" aria-label="Maximise">□</button>   <!-- ▫ and "Restore" when maximized -->
+  <button class="tu-winctl__btn" type="button" aria-label="Minimize">−</button>
+  <button class="tu-winctl__btn" type="button" aria-label="Maximize">□</button>   <!-- ▫ and "Restore" when maximized -->
   <button class="tu-winctl__btn is-close" type="button" aria-label="Close">✕</button>
 </div>
 ```
