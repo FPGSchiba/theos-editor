@@ -23,6 +23,7 @@ pub mod index;
 mod no_hooks;
 pub mod read;
 mod read_args;
+pub mod remote;
 pub mod repo;
 pub mod stage;
 pub mod staged;

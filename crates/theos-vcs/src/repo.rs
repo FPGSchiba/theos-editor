@@ -84,6 +84,25 @@ pub fn flag(git: &Git, top: &Path, key: &str) -> Result<bool, GitError> {
     }
 }
 
+/// The value of the setting `key` for the repository at `top`, or `None` when it is not set.
+///
+/// # Errors
+///
+/// The errors of [`Git::run`], except the exit code 1 of an unset key.
+pub fn value(git: &Git, top: &Path, key: &str) -> Result<Option<String>, GitError> {
+    let args = read_args("config", &["--get", key]);
+    match git.run(&args, top, None, &[]) {
+        Ok(out) => Ok(Some(
+            String::from_utf8_lossy(&out)
+                .trim_end_matches(['\r', '\n'])
+                .to_owned(),
+        )),
+        // `--get` exits with 1 when the setting is not set.
+        Err(GitError::Failed { code: Some(1), .. }) => Ok(None),
+        Err(other) => Err(other),
+    }
+}
+
 /// The folder git runs hooks from for the work tree at `top`, honouring `core.hooksPath`, with
 /// the platform's separators.
 ///

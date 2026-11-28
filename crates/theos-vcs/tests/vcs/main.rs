@@ -7,6 +7,7 @@ mod git;
 mod history;
 mod index;
 mod read;
+mod remote;
 mod repo;
 mod settings;
 mod stage;

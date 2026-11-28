@@ -182,6 +182,15 @@ impl Git {
         self.version
     }
 
+    /// The value the runner itself sets for `name` (see [`Git::with_env`]), not the process's.
+    pub(crate) fn env_value(&self, name: &str) -> Option<&OsStr> {
+        self.env
+            .iter()
+            .rev()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.as_os_str())
+    }
+
     /// Adds variables to the environment of every command this runner starts.
     #[must_use]
     pub fn with_env(mut self, env: &[(&str, &str)]) -> Git {
@@ -257,8 +266,27 @@ impl Git {
         env: &[(&str, &str)],
         cancel: &Cancel,
     ) -> Result<Output, GitError> {
+        self.output_without(args, cwd, stdin, env, &[], cancel)
+    }
+
+    /// Like [`Git::output`], and removes the variables `removed` from git's environment. The
+    /// runner's own variables are applied first, then `env`, then the removals, so a removal
+    /// beats a value from either.
+    ///
+    /// # Errors
+    ///
+    /// As [`Git::output`].
+    pub fn output_without(
+        &self,
+        args: &[&OsStr],
+        cwd: &Path,
+        stdin: Option<&[u8]>,
+        env: &[(&str, &str)],
+        removed: &[&str],
+        cancel: &Cancel,
+    ) -> Result<Output, GitError> {
         let started = Instant::now();
-        let result = self.spawn_and_wait(args, cwd, stdin, env, cancel);
+        let result = self.spawn_and_wait(args, cwd, stdin, env, removed, cancel);
         let (elapsed, cwd) = (started.elapsed(), cwd.display());
         match &result {
             Ok(output) => tracing::debug!(?args, %cwd, ?elapsed, code = ?output.code, "git"),
@@ -277,6 +305,7 @@ impl Git {
         cwd: &Path,
         stdin: Option<&[u8]>,
         env: &[(&str, &str)],
+        removed: &[&str],
         cancel: &Cancel,
     ) -> Result<Output, GitError> {
         if cancel.is_cancelled() {
@@ -297,6 +326,9 @@ impl Git {
             })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        for name in removed {
+            command.env_remove(name);
+        }
         let (tree, mut child) =
             Tree::spawn(&mut command).map_err(|source| GitError::Io { source })?;
         let pipe = child.stdin.take();
