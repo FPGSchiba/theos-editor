@@ -145,8 +145,24 @@ mod tests {
     }
 
     fn commit_refusal(message: &str) -> String {
-        let git = Git::find().unwrap_or_else(|error| panic!("{error}"));
-        match commit(&git, Path::new("."), message, &[]) {
+        let dir = tempfile::tempdir().unwrap_or_else(|error| panic!("{error}"));
+        let config = dir.path().join("gitconfig");
+        std::fs::write(&config, "").unwrap_or_else(|error| panic!("{error}"));
+        let config = config.to_string_lossy().into_owned();
+        let git = Git::find()
+            .unwrap_or_else(|error| panic!("{error}"))
+            .with_env(&[("GIT_CONFIG_GLOBAL", &config), ("GIT_CONFIG_NOSYSTEM", "1")]);
+        let repository = dir.path().join("repo");
+        std::fs::create_dir(&repository).unwrap_or_else(|error| panic!("{error}"));
+        let init = std::process::Command::new("git")
+            .args(["init", "-q", "-b", "main"])
+            .current_dir(&repository)
+            .env("GIT_CONFIG_GLOBAL", &config)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .output()
+            .unwrap_or_else(|error| panic!("{error}"));
+        assert!(init.status.success(), "{init:?}");
+        match commit(&git, &repository, message, &[]) {
             Err(error) => error.to_string(),
             Ok(id) => panic!("committed {id:?}"),
         }
