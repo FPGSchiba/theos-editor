@@ -17,7 +17,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P08 | Map format and terrain generator | theos-editor | done | #27 | #44 |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
 | P10 | Prose editor research | theos-editor | done | #3 | #11 |
-| P11 | Editor shell and Codex | theos-editor | pr-open | #56 | build PR, branch `phase/P11-editor-shell-and-codex` |
+| P11 | Editor shell and Codex | theos-editor | done | #56 | #67 |
 | P12 | Manuscript editor | theos-editor | todo | | |
 | P13 | Changes and Review screens | theos-editor | todo | | |
 | P14 | Start and Settings | theos-editor | todo | | |
@@ -40,10 +40,10 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P31 | Floor frame and places | theos-editor | todo | | |
 | P32 | Recipe families | theos-editor | todo | | |
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
-| P34 | Interiors | theos-editor | pr-open | #55 | build PR on `phase/P34-interiors-2` |
+| P34 | Interiors | theos-editor | done | #55 | #69 |
 | P45 | Atlas level switcher | theos-editor | todo | | |
 | P46 | Git read | theos-editor | done | #52, #58 | #62 |
-| P47 | Git write | theos-editor | todo | | |
+| P47 | Git write | theos-editor | spec-pr | | |
 | P48 | MCP read | theos-editor | done | #53 | #61 |
 | P49 | Releases and the check action | theos-editor | todo | | |
 | P50 | Leaner CI | theos-editor | done | #45, #46 | #48 |
@@ -58,16 +58,11 @@ umbrella version 9.
 
 ## Needs Jann
 
-- P34's build (Interiors) departs from its spec in three places, so the spec needs an erratum.
-  Claude opens it as a docs PR after the build PR:
-  - §5.9 item 4 and §9 ruling 7 define the drop check with the keys reachable from the start
-    with every drop removed, which is not what a falling party holds. The build checks from the
-    drop's target with the start room's and the drop room's keys only (ruling R54).
-  - §5.4's `locked` is set for every room behind a lock by `RoomGraph::mark_locked` (R55).
-  - §5.6's leaf row reads "non-locked" as the program's flag (R57).
-
-  The build PR lists every ruling, among them the recipe values that differ from §5.12:
-  the choir hall's 84 m square and 3×3 hall (R45, R48), and the undercroft's 2×1 crypt (R50).
+- P34 is merged (#69). Its spec erratum, `docs(spec): interiors as built (docs)`, waits for Jann:
+  the drop check holds the start room's and the drop room's keys (§5.9 item 4, ruling 7; R54),
+  `locked` is set for every room behind a lock (§5.4; R55), the leaf rule reads "non-locked"
+  as the program's flag (§5.6; R57), and §5.12 shows the recipe values as built (R45, R48,
+  R50). P29 records its golden hashes as `theos-maps` 1.2.0, since #69 recorded 1.1.0.
 - P48 follow-up, seen on macOS in P34's PR run (28 Nov 2026): `theos-mcp`'s
   `project_info_over_stdio` fails there. The project root is reported as
   `/private/var/folders/…` while the test expects `/var/folders/…`, the same folder through
