@@ -6,12 +6,28 @@
   "result": "ok",
   "value": {
     "changed": [
-      "f04-choir-hall",
-      "fates-shrine",
-      "hearth",
-      "reed-marsh",
-      "tower"
+      {
+        "id": "hearth",
+        "path": "world/hearth.md"
+      },
+      {
+        "id": "f04-choir-hall",
+        "path": "world/hearth/f04-choir-hall.md"
+      },
+      {
+        "id": "fates-shrine",
+        "path": "world/hearth/f04-choir-hall/fates-shrine.md"
+      },
+      {
+        "id": "reed-marsh",
+        "path": "world/hearth/f04-choir-hall/reed-marsh.md"
+      },
+      {
+        "id": "tower",
+        "path": "world/tower.md"
+      }
     ],
+    "moved": [],
     "project": {
       "errors": 6,
       "in_memory": false,

@@ -267,10 +267,13 @@ fn app_info(recordings: &mut Recordings) -> Result<(), Error> {
 /// The project, its tree tabs, every record and the page tests' searches.
 fn codex(recordings: &mut Recordings) -> Result<(), Error> {
     let project = Project::copy(MAIN)?;
-    let ids: Vec<String> = {
+    let records: Vec<(String, String)> = {
         let workspace = Workspace::open(project.path())?;
         let records = workspace.index().records()?;
-        records.into_iter().map(|record| record.id).collect()
+        records
+            .into_iter()
+            .map(|record| (record.id, record.path))
+            .collect()
     };
     let (_app, window, view) = project.open()?;
     let args = project.portable(project.args());
@@ -302,9 +305,11 @@ fn codex(recordings: &mut Recordings) -> Result<(), Error> {
             json!({ "tab": tab }),
         )?;
     }
-    for id in ids {
+    // The UI sends the path of the row, chip or hit it opens.
+    for (id, path) in records {
         let name = format!("record_view-{id}");
-        recordings.call(&project, &window, &name, "record_view", json!({ "id": id }))?;
+        let args = json!({ "id": id, "path": path });
+        recordings.call(&project, &window, &name, "record_view", args)?;
     }
     for (slug, query) in SEARCHES {
         let name = format!("codex_search-{slug}");
@@ -404,7 +409,7 @@ A synthetic line added by the recorder.
     Ok(())
 }
 
-/// The Where tab and two pages of a project whose two files have one id: the id's, and the
+/// The Where tab and the pages of a project whose two files have one id: each file's, and the
 /// tower's, which both files link to.
 fn duplicate_id(recordings: &mut Recordings) -> Result<(), Error> {
     let project = Project::copy("duplicate-id")?;
@@ -416,19 +421,24 @@ fn duplicate_id(recordings: &mut Recordings) -> Result<(), Error> {
         "codex_tree",
         json!({ "tab": "where" }),
     )?;
-    recordings.call(
-        &project,
-        &window,
-        "record_view-synthetic-twin",
-        "record_view",
-        json!({ "id": "synthetic-twin" }),
-    )?;
+    for (name, path) in [
+        ("one", "world/synthetic-twin.md"),
+        ("two", "world/synthetic-copy/synthetic-twin.md"),
+    ] {
+        recordings.call(
+            &project,
+            &window,
+            &format!("record_view-synthetic-twin-{name}"),
+            "record_view",
+            json!({ "id": "synthetic-twin", "path": path }),
+        )?;
+    }
     recordings.call(
         &project,
         &window,
         "record_view-tower-duplicate-id",
         "record_view",
-        json!({ "id": "tower" }),
+        json!({ "id": "tower", "path": "world/tower.md" }),
     )
 }
 

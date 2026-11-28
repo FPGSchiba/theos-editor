@@ -2,6 +2,7 @@
      callout of another type, each with its label and its blocks. Plain props, so a CodeMirror
      widget can mount it. -->
 <script lang="ts">
+  import type { RecordTarget } from '../../lib/record-key';
   import type { ViewInline, ViewNode } from '../../lib/ipc/bindings';
   import Body from './Body.svelte';
   import Inline from './Inline.svelte';
@@ -16,7 +17,7 @@
     /** The blocks. */
     nodes: readonly ViewNode[];
     /** Opens a chip's record. */
-    onopen?: ((id: string) => void) | undefined;
+    onopen?: ((record: RecordTarget) => void) | undefined;
   }
 
   let { name, title = [], state = null, nodes, onopen }: Props = $props();

@@ -5,10 +5,10 @@
 
 import { call, failureText } from '../../lib/ipc/client';
 import { commands, type TreeTab } from '../../lib/ipc/bindings';
-import { recordKey } from '../../lib/record-key';
+import { recordKey, type RecordTarget } from '../../lib/record-key';
 import type { RecordTabTitle, TabSelection } from '../layout';
 import { loadKinds, treeTabOf } from './kinds.svelte';
-import { forgetPage, pageOf, pages, storePage } from './pages.svelte';
+import { forgetPage, pages, storePage } from './pages.svelte';
 import { expandTo, loadTree, tree } from './tree.svelte';
 
 /** The tree tabs in order, with their titles. Their kinds come from `codex_tabs` (kinds.svelte.ts). */
@@ -19,10 +19,14 @@ export const TREE_TABS: ReadonlyArray<{ tab: TreeTab; title: string }> = [
   { tab: 'things', title: 'Things' },
 ];
 
-/** An open record tab. */
+/** An open record tab: one file, so two files with one id are two tabs. */
 export interface RecordTab {
+  /** The key of the record's file (`recordKey`): its path, else its id. */
+  key: string;
   /** The record's id. */
   id: string;
+  /** The record's file, project-relative, when known. */
+  path: string | null;
   /** The record's title. */
   title: string;
   /** The record's kind, for the tab's glyph. */
@@ -47,28 +51,28 @@ export function setTreeTab(tab: TreeTab): void {
   codexTabs.tree = tab;
 }
 
-/** The id of the record in the active tab, or `null`. */
-export function activeRecord(): string | null {
-  return codexTabs.records[codexTabs.active]?.id ?? null;
-}
-
 /**
- * The key (`recordKey`) of the file shown in the active tab, or `null`: the tree marks that row,
- * not every row with the id.
+ * The key (`recordKey`) of the file in the active tab, or `null`: its page is `pageOf` that key,
+ * and the tree marks that row, not every row with the id.
  */
 export function activeKey(): string | null {
-  const page = pageOf(activeRecord());
-  return page === null ? null : recordKey(page.header.record);
+  return codexTabs.records[codexTabs.active]?.key ?? null;
 }
 
-/** Opens a tab for the record `id`, or makes its open tab active. */
-export function openRecordTab(id: string, title: string, kind: string | null = null): void {
-  const open = codexTabs.records.findIndex((tab) => tab.id === id);
+/** Opens a tab for the record `id` in the file `path`, or makes that file's open tab active. */
+export function openRecordTab(
+  id: string,
+  title: string,
+  kind: string | null = null,
+  path: string | null = null,
+): void {
+  const key = recordKey({ id, path });
+  const open = codexTabs.records.findIndex((tab) => tab.key === key);
   if (open >= 0) {
     codexTabs.active = open;
     return;
   }
-  codexTabs.records.push({ id, title, kind });
+  codexTabs.records.push({ key, id, path, title, kind });
   codexTabs.active = codexTabs.records.length - 1;
 }
 
@@ -81,15 +85,17 @@ export function dropOpening(): void {
 }
 
 /**
- * Opens the record `id` in a tab, or focuses its tab, after loading its page; shows the tree tab
- * of its kind with its row unfolded, loading that tab only when it is not loaded. A failure is
- * kept in `pages.error`, and no tab opens. When calls overlap, the last one wins.
+ * Opens the record `target` in a tab, or focuses its file's tab, after loading its page; its path,
+ * when known, picks the file among those with the id. Shows the tree tab of its kind with its row
+ * unfolded, loading that tab only when it is not loaded. A failure is kept in `pages.error`, and
+ * no tab opens. When calls overlap, the last one wins.
  */
-export async function openRecord(id: string): Promise<void> {
+export async function openRecord(target: RecordTarget): Promise<void> {
+  const { id } = target;
   const ticket = ++latest;
   let page;
   try {
-    [page] = await Promise.all([call(commands.recordView(id)), loadKinds()]);
+    [page] = await Promise.all([call(commands.recordView(id, target.path)), loadKinds()]);
   } catch (failure) {
     if (ticket === latest) {
       pages.error = `${id} could not be opened: ${failureText(failure)}`;
@@ -99,9 +105,9 @@ export async function openRecord(id: string): Promise<void> {
   if (ticket !== latest) {
     return;
   }
-  storePage(id, page);
   const { record } = page.header;
-  openRecordTab(id, record.title ?? id, record.kind);
+  storePage(recordKey(record), page);
+  openRecordTab(record.id, record.title ?? record.id, record.kind, record.path);
   const tab = treeTabOf(record.kind);
   if (tab === null) {
     return;
@@ -134,18 +140,18 @@ export function previousTab(): void {
 
 /** Closes the active record tab; the tab after it, else before it, becomes active. */
 export function closeTab(): void {
-  const id = activeRecord();
-  if (id !== null) {
-    closeRecordTab(id);
+  const key = activeKey();
+  if (key !== null) {
+    closeRecordTab(key);
   }
 }
 
 /**
- * Closes the tab of the record `id`, if one is open. The active tab stays active; when it is the
- * one closed, the tab after it, else before it, becomes active.
+ * Closes the tab of the file `key` (`recordKey`), if one is open. The active tab stays active;
+ * when it is the one closed, the tab after it, else before it, becomes active.
  */
-export function closeRecordTab(id: string): void {
-  const at = codexTabs.records.findIndex((tab) => tab.id === id);
+export function closeRecordTab(key: string): void {
+  const at = codexTabs.records.findIndex((tab) => tab.key === key);
   if (at < 0) {
     return;
   }
@@ -155,7 +161,7 @@ export function closeRecordTab(id: string): void {
   } else {
     codexTabs.active = Math.min(codexTabs.active, codexTabs.records.length - 1);
   }
-  forgetPage(id);
+  forgetPage(key);
 }
 
 /** The tree window's tab selection, which the window draws and sets. */
@@ -183,11 +189,11 @@ export const recordSelection: TabSelection = {
   },
 };
 
-/** The record window's tab titles: a glyph and id per open record, else the window's title. */
+/** The record window's tab titles: a glyph and id per open file, else the window's title. */
 export function recordTabTitles(): readonly (RecordTabTitle | string)[] {
   return codexTabs.records.length === 0
     ? ['Record']
-    : codexTabs.records.map((tab) => ({ title: tab.id, kind: tab.kind }));
+    : codexTabs.records.map((tab) => ({ title: tab.id, kind: tab.kind, key: tab.key }));
 }
 
 /** The side window's active tab: 0 for Front matter, 1 for Links in. */

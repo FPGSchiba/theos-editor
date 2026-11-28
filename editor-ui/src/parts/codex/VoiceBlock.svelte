@@ -3,6 +3,7 @@
      mount it. -->
 <script lang="ts">
   import type { ViewInline, ViewLink, ViewNode } from '../../lib/ipc/bindings';
+  import type { RecordTarget } from '../../lib/record-key';
   import Body from './Body.svelte';
   import Inline from './Inline.svelte';
 
@@ -18,7 +19,7 @@
     /** The caption line, if any. */
     caption?: readonly ViewInline[] | null;
     /** Opens a record named in the speech. */
-    onopen?: ((id: string) => void) | undefined;
+    onopen?: ((record: RecordTarget) => void) | undefined;
   }
 
   let { speaker, beliefs = [], tier = null, nodes, caption = null, onopen }: Props = $props();

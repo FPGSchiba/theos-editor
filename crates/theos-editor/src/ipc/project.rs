@@ -1,16 +1,16 @@
 //! Opening a project, the last project, and syncing the open one with its folder.
 
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::State;
-use theos_content::{Severity, is_record_path};
+use theos_content::Severity;
 use theos_studio::Workspace;
 use theos_studio::parts;
 
 use super::error::IpcError;
+use super::sync_files::{self, FileMove, Files, RecordFile};
 use super::{logged, saturate, timed};
 use crate::app_state::{AppState, lock};
 use crate::state::EditorState;
@@ -95,16 +95,21 @@ impl ProjectView {
     }
 }
 
-/// What a sync did: the project afterwards and the records whose views changed or are gone.
+/// What a sync did: the project afterwards and the record files whose views changed, are gone or
+/// moved. Files are named by path, since two files may carry one id; see
+/// [`sync_files`](super::sync_files) for the rules.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub struct SyncView {
     /// The project after the sync.
     pub project: ProjectView,
-    /// The ids of the records that were read again, relinked or checked again, sorted.
-    pub changed: Vec<String>,
-    /// The ids of the records that are gone, sorted.
-    pub removed: Vec<String>,
+    /// The files read again, relinked or checked again, sorted by path; a moved file's new path
+    /// is among them.
+    pub changed: Vec<RecordFile>,
+    /// The files that are gone and did not move, sorted by path.
+    pub removed: Vec<RecordFile>,
+    /// The files that moved with their id, sorted by id, then old path.
+    pub moved: Vec<FileMove>,
 }
 
 /// Opens the project in `path` and syncs its index. The open project stays open when this one
@@ -239,30 +244,32 @@ fn sync(state: &AppState, reason: SyncReason) -> Result<SyncView, IpcError> {
             project: ProjectView::of(workspace)?,
             changed: Vec::new(),
             removed: Vec::new(),
+            moved: Vec::new(),
         });
     }
+    let before = files(workspace)?;
     let update = workspace.write(theos_content::Index::sync)?;
     *last_sync = Some(Instant::now());
-    let changed = ids(update
-        .reparsed
-        .iter()
-        .chain(&update.relinked)
-        .chain(&update.revalidated));
-    // A file moved or renamed with the same id leaves its old path in `removed`; the record
-    // is still there, so it is not reported as removed.
-    let present: HashSet<String> = workspace
-        .index()
-        .records()?
-        .into_iter()
-        .map(|record| record.id)
-        .collect();
-    let mut removed = ids(update.removed.iter());
-    removed.retain(|id| !present.contains(id));
+    let after = files(workspace)?;
+    let sync_files::FileChanges {
+        changed,
+        removed,
+        moved,
+    } = sync_files::changes(
+        &before,
+        &after,
+        update
+            .reparsed
+            .iter()
+            .chain(&update.relinked)
+            .chain(&update.revalidated),
+    );
     let project = ProjectView::of(workspace)?;
     tracing::info!(
         project = %project.root,
         changed = changed.len(),
         removed = removed.len(),
+        moved = moved.len(),
         records = project.records,
         errors = project.errors,
         warnings = project.warnings,
@@ -272,19 +279,18 @@ fn sync(state: &AppState, reason: SyncReason) -> Result<SyncView, IpcError> {
         project,
         changed,
         removed,
+        moved,
     })
 }
 
-/// The record ids of `paths`, sorted and once each; paths that are not records are left out.
-fn ids<'a>(paths: impl Iterator<Item = &'a String>) -> Vec<String> {
-    let mut ids: Vec<String> = paths
-        .filter(|path| is_record_path(path))
-        .filter_map(|path| Path::new(path).file_stem())
-        .map(|stem| stem.to_string_lossy().into_owned())
-        .collect();
-    ids.sort();
-    ids.dedup();
-    ids
+/// The index's record files of `workspace`: id by path.
+fn files(workspace: &Workspace) -> Result<Files, IpcError> {
+    Ok(workspace
+        .index()
+        .records()?
+        .into_iter()
+        .map(|record| (record.path, record.id))
+        .collect())
 }
 
 fn folder_name(root: &Path) -> String {
@@ -297,17 +303,6 @@ fn folder_name(root: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn ids_are_the_stems_of_record_paths() {
-        let paths = [
-            "world/hearth.md".to_owned(),
-            ".theos/settings.toml".to_owned(),
-            "lore/truths/T-012.md".to_owned(),
-            "world/hearth.md".to_owned(),
-        ];
-        assert_eq!(ids(paths.iter()), ["T-012", "hearth"]);
-    }
 
     #[test]
     fn a_project_without_a_name_takes_its_folder_name() {

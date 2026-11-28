@@ -3,13 +3,13 @@
 <script lang="ts">
   import KindGlyph from '../../components/KindGlyph.svelte';
   import type { LoreRow } from '../../lib/ipc/bindings';
-  import { recordKey } from '../../lib/record-key';
+  import { recordKey, type RecordTarget } from '../../lib/record-key';
 
   interface Props {
     /** The rows; the caller draws the table only when there is one. */
     rows: readonly LoreRow[];
     /** Opens a row's record. */
-    onopen: (id: string) => void;
+    onopen: (record: RecordTarget) => void;
   }
 
   let { rows, onopen }: Props = $props();
@@ -22,7 +22,7 @@
     ><span class="tu-label tu-label--xs">Touches</span><span class="tu-label tu-label--xs">Tier</span>
   </div>
   {#each rows as row (recordKey(row.record))}
-    <button class="grid lore-row data" type="button" onclick={() => onopen(row.record.id)}>
+    <button class="grid lore-row data" type="button" onclick={() => onopen(row.record)}>
       <KindGlyph kind={row.record.kind ?? 'record'} />
       <span>{row.record.id}</span>
       <span class="what inst-body">{row.record.title ?? row.record.id}</span>

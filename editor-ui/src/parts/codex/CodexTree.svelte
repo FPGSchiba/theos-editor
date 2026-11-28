@@ -3,6 +3,7 @@
 <script lang="ts">
   import Note from '../../components/Note.svelte';
   import type { TreeNode } from '../../lib/ipc/bindings';
+  import type { RecordTarget } from '../../lib/record-key';
   import { project } from '../../lib/state/project.svelte';
   import { isRootKind, kinds as table, loadKinds, tabInfo } from './kinds.svelte';
   import { activeKey, codexTabs, openRecord, TREE_TABS } from './tabs.svelte';
@@ -45,7 +46,7 @@
     }
   });
 
-  const open = (id: string): void => void openRecord(id);
+  const open = (record: RecordTarget): void => void openRecord(record);
 </script>
 
 <div class="tu-window__body">

@@ -7,9 +7,9 @@
   import { recordKey } from '../../lib/record-key';
   import { isIdFirst } from './kinds.svelte';
   import { pageOf } from './pages.svelte';
-  import { activeRecord, openRecord } from './tabs.svelte';
+  import { activeKey, openRecord } from './tabs.svelte';
 
-  const page = $derived(pageOf(activeRecord()));
+  const page = $derived(pageOf(activeKey()));
 </script>
 
 <div class="tu-window__body">
@@ -23,7 +23,7 @@
           ? `${row.source.id} ${row.source.title ?? ''}`
           : (row.source.title ?? row.source.id)}
         type={row.relations.join(' · ')}
-        onclick={() => void openRecord(row.source.id)}
+        onclick={() => void openRecord(row.source)}
       />
     {:else}
       <Note>No record uses this one.</Note>

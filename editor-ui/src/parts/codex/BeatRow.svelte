@@ -1,6 +1,7 @@
 <!-- One attribute line of a beat (`tu-beat__param`, Theos UI BeatParams): its key and its value.
      Plain props, so a CodeMirror widget can mount it. -->
 <script lang="ts">
+  import type { RecordTarget } from '../../lib/record-key';
   import type { ViewInline } from '../../lib/ipc/bindings';
   import Inline from './Inline.svelte';
 
@@ -10,7 +11,7 @@
     /** The value. */
     value: readonly ViewInline[];
     /** Opens a chip's record. */
-    onopen?: ((id: string) => void) | undefined;
+    onopen?: ((record: RecordTarget) => void) | undefined;
   }
 
   let { key, value, onopen }: Props = $props();

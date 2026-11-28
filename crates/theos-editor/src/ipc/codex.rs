@@ -53,20 +53,28 @@ pub async fn codex_tree(
     logged("codex_tree", started, result)
 }
 
-/// The page of the record `id`: header, body, lore, pictures, front matter and backlinks.
+/// The page of the record `id`: header, body, lore, pictures, front matter and backlinks. `path`
+/// picks the file when several carry the id; without it (a link chip), the first by path. A path
+/// never falls back to another file with the id.
 ///
 /// # Errors
 ///
 /// [`IpcError::NoProject`] without an open project, [`IpcError::NotFound`] when no record has
-/// the id, else as the file or the index fails.
+/// the id or the file at `path` does not carry it, else as the file or the index fails.
 #[tauri::command]
 #[specta::specta]
-pub async fn record_view(state: State<'_, AppState>, id: String) -> Result<RecordPage, IpcError> {
+pub async fn record_view(
+    state: State<'_, AppState>,
+    id: String,
+    path: Option<String>,
+) -> Result<RecordPage, IpcError> {
     let started = Instant::now();
-    let result = with_workspace(&state, |ws| match codex_view::record(ws, &id) {
-        Ok(page) => Ok(RecordPage::from(page)),
-        Err(StudioError::UnknownRecord { .. }) => Err(IpcError::NotFound { id: id.clone() }),
-        Err(error) => Err(error.into()),
+    let result = with_workspace(&state, |ws| {
+        match codex_view::record(ws, &id, path.as_deref()) {
+            Ok(page) => Ok(RecordPage::from(page)),
+            Err(StudioError::UnknownRecord { .. }) => Err(IpcError::NotFound { id: id.clone() }),
+            Err(error) => Err(error.into()),
+        }
     });
     logged("record_view", started, result)
 }

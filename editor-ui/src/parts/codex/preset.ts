@@ -9,7 +9,7 @@ import FrontMatter from './FrontMatter.svelte';
 import { pageOf } from './pages.svelte';
 import RecordWindow from './RecordWindow.svelte';
 import {
-  activeRecord,
+  activeKey,
   recordSelection,
   recordTabTitles,
   sideSelection,
@@ -60,7 +60,7 @@ export const codex: Preset = {
           windowOf({
             id: 'codex-front-matter',
             get tabs() {
-              const page = pageOf(activeRecord());
+              const page = pageOf(activeKey());
               return ['Front matter', page === null ? 'Links in' : `Links in · ${page.links_in.length}`];
             },
             component: FrontMatter,
@@ -73,7 +73,7 @@ export const codex: Preset = {
           windowOf({
             id: 'codex-validation',
             get tabs() {
-              return [validationTitle(pageOf(activeRecord()))];
+              return [validationTitle(pageOf(activeKey()))];
             },
             component: Validation,
           }),

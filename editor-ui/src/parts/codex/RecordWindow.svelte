@@ -1,23 +1,25 @@
 <!-- The record window's body (P11 §5.8, screen 01): the active tab's record page, its head in
      the Instrument register and its body in the manuscript register, then the lore it carries and
-     its pictures. Empty sections are not drawn. Another record's page starts at its top. -->
+     its pictures. Empty sections are not drawn. Another file's page starts at its top, also one
+     with the same id (the block is keyed by the file, `recordKey`). -->
 <script lang="ts">
+  import { recordKey, type RecordTarget } from '../../lib/record-key';
   import EmptyWindow from '../placeholder/EmptyWindow.svelte';
   import Body from './Body.svelte';
   import LoreTable from './LoreTable.svelte';
   import { pageOf, pages } from './pages.svelte';
   import Pictures from './Pictures.svelte';
   import RecordHeader from './RecordHeader.svelte';
-  import { activeRecord, openRecord } from './tabs.svelte';
+  import { activeKey, openRecord } from './tabs.svelte';
 
-  const page = $derived(pageOf(activeRecord()));
-  const open = (id: string): void => void openRecord(id);
+  const page = $derived(pageOf(activeKey()));
+  const open = (record: RecordTarget): void => void openRecord(record);
 </script>
 
 {#if page === null}
   <EmptyWindow mark="◈" text="The record you open. Pick one in the tree." />
 {:else}
-  {#key page.header.record.id}
+  {#key recordKey(page.header.record)}
     <div class="tu-window__body tu-manuscript">
       <div class="tu-instrument"><RecordHeader header={page.header} /></div>
       <div class="content">

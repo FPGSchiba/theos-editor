@@ -2,6 +2,7 @@
      paragraphs, lists, quotes, code, rules, voice blocks, callouts, beats, and raw source as
      plain text. Nothing is HTML. -->
 <script lang="ts">
+  import type { RecordTarget } from '../../lib/record-key';
   import type { ViewNode } from '../../lib/ipc/bindings';
   import BeatRow from './BeatRow.svelte';
   import Body from './Body.svelte';
@@ -13,7 +14,7 @@
     /** The blocks. */
     nodes: readonly ViewNode[];
     /** Opens a chip's record. */
-    onopen?: ((id: string) => void) | undefined;
+    onopen?: ((record: RecordTarget) => void) | undefined;
   }
 
   let { nodes, onopen }: Props = $props();

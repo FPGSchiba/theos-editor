@@ -34,7 +34,7 @@
     }
     setQuery('');
     activate(CODEX);
-    void openRecord(hit.id);
+    void openRecord(hit);
   }
 
   /** The field's keys: arrows move, Enter opens the highlighted hit, or the first (not while an IME composes), Escape closes. */
@@ -118,10 +118,10 @@
         </div>
       {/if}
       {#if find.truncated}
-        <div class="tu-pop__row row is-off">more…</div>
+        <div class="tu-pop__row row is-note">more…</div>
       {/if}
       {#if find.note !== null}
-        <div class="tu-pop__row row is-off">{find.note}</div>
+        <div class="tu-pop__row row is-note">{find.note}</div>
       {/if}
     </div>
   {/if}
@@ -154,8 +154,8 @@
     cursor: default;
   }
 
-  .row.is-off {
-    color: var(--textMute);
+  .row.is-note {
+    color: var(--textDim);
   }
 
   .head {
@@ -166,12 +166,12 @@
 
   .id {
     font-family: var(--font-mono);
-    color: var(--textMute);
+    color: var(--textDim);
   }
 
   .line {
     font-family: var(--font-mono);
-    color: var(--textMute);
+    color: var(--textDim);
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;

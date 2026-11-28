@@ -24,12 +24,20 @@ pnpm exec playwright install chromium   # once, for the page tests
 | `pnpm build` / `pnpm preview` | Build to `dist/` / serve it |
 | `pnpm check` / `pnpm lint` / `pnpm test` / `pnpm e2e` | svelte-check, ESLint, Vitest, Playwright |
 
-From the repository root: `pnpm --dir editor-ui app crates/theos-studio/tests/fixtures/projects/editor-codex`
-(better a copy of it: opening a project writes its index cache). Without `scripts/app.js`, run
-`pnpm dev` and `cargo run -p theos-editor -- <project>` in two terminals. Closing the window stops
-both. Ctrl+C (or SIGTERM, SIGHUP, any exit of the script) stops the app as a whole process tree
-(`scripts/stop-tree.js`: `taskkill /T /F` on Windows, SIGTERM to the child's process group
-elsewhere), so no cargo, app or WebView process is left behind.
+Opening a project writes its index cache, so open a copy of a fixture, as the crate's README
+(`crates/theos-editor/README.md`) does. From the repository root, copy it into the ignored
+`target/` (in PowerShell: `Copy-Item -Recurse`) and start both:
+
+```text
+cp -r crates/theos-studio/tests/fixtures/projects/editor-codex target/editor-codex
+pnpm --dir editor-ui app target/editor-codex
+```
+
+Without `scripts/app.js`, run `pnpm dev` and `cargo run -p theos-editor -- <project>` in two
+terminals. Closing the window stops both. Ctrl+C (or SIGTERM, SIGHUP, any exit of the script)
+stops the app as a whole process tree (`scripts/stop-tree.js`: `taskkill /T /F` on Windows,
+SIGTERM to the child's process group elsewhere), so no cargo, app or WebView process is left
+behind.
 
 The gate's `ui` check (`docs/gate.md`) runs, in this folder:
 
@@ -63,9 +71,11 @@ await page.goto('/');
 ```
 
 A call is answered by the recording with the same `cmd` and deep-equal `args`; `app_info` by
-`app_info-<os>`. When several recordings share a call, the one named in `use` answers (later
-names win, also through `ipc.use(…)` during a test), else the only one without a `derived` key.
-A call no recording answers, or an ambiguous one, fails the test with its cmd and args.
+`app_info-<os>`. When only one recording has the call, it answers, whatever its keys. When several
+share it, the one named in `use` answers (later names win, also through `ipc.use(…)` during a
+test), else the only one with neither a `derived` key nor a `fixture` key (a recording on another
+fixture project, such as `duplicate-id`). A call no recording answers, or an ambiguous one, fails
+the test with its cmd and args.
 
 - `fail: { <cmd>: <error> }` makes a command reject with that error.
 - `answer: { <cmd>: <value> }` answers a plugin's command, which no recording can hold, such as

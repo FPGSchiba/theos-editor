@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "fates-shrine-art"
+    "id": "fates-shrine-art",
+    "path": "concepts/fates-shrine-art.md"
   },
   "cmd": "record_view",
   "result": "ok",

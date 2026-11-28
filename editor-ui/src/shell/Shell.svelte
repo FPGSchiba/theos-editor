@@ -2,7 +2,7 @@
      active preset's dock tree, the status bar, the command palette, and the one key listener. -->
 <script lang="ts">
   import { pageOf } from '../parts/codex/pages.svelte';
-  import { activeRecord } from '../parts/codex/tabs.svelte';
+  import { activeKey } from '../parts/codex/tabs.svelte';
   import { presetFor } from '../parts/presets';
   import { runCommand } from '../lib/commands';
   import { match } from '../lib/keymap';
@@ -27,7 +27,7 @@
   /** The path of the Codex's open record without `.md`, for the title bar. */
   const recordPath = $derived(
     preset?.id === CODEX
-      ? (pageOf(activeRecord())?.header.record.path?.replace(/\.md$/, '') ?? null)
+      ? (pageOf(activeKey())?.header.record.path?.replace(/\.md$/, '') ?? null)
       : null,
   );
 

@@ -203,7 +203,7 @@ fn empty_project_gives_empty_tabs() -> TestResult {
 // --- record ---------------------------------------------------------------------------------
 
 fn floor(ws: &Workspace) -> Result<RecordPage, theos_studio::StudioError> {
-    codex_view::record(ws, "f04-choir-hall")
+    codex_view::record(ws, "f04-choir-hall", None)
 }
 
 fn links_of(inlines: &[ViewInline]) -> Vec<&ViewLink> {
@@ -414,14 +414,18 @@ fn pictures_are_the_concepts_for_the_record() -> TestResult {
     assert_eq!(page.pictures.len(), 1);
     assert_eq!(page.pictures[0].concept.id, "f04-choir-hall-art");
     assert_eq!(page.pictures[0].picked, None);
-    let shrine = codex_view::record(&ws, "fates-shrine")?;
+    let shrine = codex_view::record(&ws, "fates-shrine", None)?;
     assert_eq!(shrine.pictures.len(), 1);
     assert_eq!(
         shrine.pictures[0].picked.as_deref(),
         Some("fates-shrine-art-v5")
     );
     // A record without a concept has no pictures.
-    assert!(codex_view::record(&ws, "reed-marsh")?.pictures.is_empty());
+    assert!(
+        codex_view::record(&ws, "reed-marsh", None)?
+            .pictures
+            .is_empty()
+    );
     Ok(())
 }
 
@@ -455,7 +459,7 @@ fn front_matter_rows_keep_file_order_and_types() -> TestResult {
     assert!(matches!(row(&page.front_matter, "number")?, FieldValue::Text(text) if text == "4"));
 
     // A tier field draws the tier selector: the clue's gate.
-    let clue = codex_view::record(&ws, "C-031")?;
+    let clue = codex_view::record(&ws, "C-031", None)?;
     assert!(matches!(row(&clue.front_matter, "gate")?, FieldValue::Tier(tier) if tier == "T1"));
     let FieldValue::List(places) = row(&clue.front_matter, "where")? else {
         return Err("where is no list".into());
@@ -463,7 +467,7 @@ fn front_matter_rows_keep_file_order_and_types() -> TestResult {
     assert!(matches!(places.as_slice(), [FieldValue::Link(link)] if link.id == "f04-choir-hall"));
 
     // A lens is a map whose entries keep their keys.
-    let npc = codex_view::record(&ws, "mother-ilse")?;
+    let npc = codex_view::record(&ws, "mother-ilse", None)?;
     let FieldValue::Map(lens) = row(&npc.front_matter, "lens")? else {
         return Err("lens is no map".into());
     };
@@ -485,6 +489,56 @@ fn floor_findings_include_dangling_link() -> TestResult {
         .filter_map(|f| f["rule"].as_str())
         .collect();
     assert!(rules.contains(&"link/dangling"), "{rules:?}");
+    Ok(())
+}
+
+/// The `duplicate-id` fixture copied to a temporary folder and opened: two files carry
+/// `synthetic-twin`.
+fn duplicate_workspace() -> Result<(TempDir, Workspace), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let from = fixture().with_file_name("duplicate-id");
+    copy_tree(&from, dir.path())?;
+    let ws = Workspace::open(dir.path())?;
+    Ok((dir, ws))
+}
+
+fn title(page: &RecordPage) -> Option<&str> {
+    page.header.record.title.as_deref()
+}
+
+// AC: CE-33.1
+#[test]
+fn a_path_picks_the_file_of_a_duplicated_id() -> TestResult {
+    let (_dir, ws) = duplicate_workspace()?;
+    let one = codex_view::record(&ws, "synthetic-twin", Some("world/synthetic-twin.md"))?;
+    assert_eq!(title(&one), Some("Synthetic twin one"));
+    let two = codex_view::record(
+        &ws,
+        "synthetic-twin",
+        Some(r"world\synthetic-copy\synthetic-twin.md"),
+    )?;
+    assert_eq!(title(&two), Some("Synthetic twin two"));
+    // Without a path, the first by path.
+    let first = codex_view::record(&ws, "synthetic-twin", None)?;
+    assert_eq!(title(&first), Some("Synthetic twin two"));
+    // A path names one file: when it holds no file, or another record's file, there is no page,
+    // never the page of another file with the id.
+    for path in ["world/moved.md", "world/tower.md"] {
+        let error = codex_view::record(&ws, "synthetic-twin", Some(path))
+            .err()
+            .ok_or(format!("{path} fell back to another file"))?;
+        assert!(
+            matches!(error, theos_studio::StudioError::UnknownRecord { .. }),
+            "{path}: {error:?}"
+        );
+    }
+    let error = codex_view::record(&ws, "nope", Some("world/tower.md"))
+        .err()
+        .ok_or("an unknown id opened")?;
+    assert!(
+        matches!(error, theos_studio::StudioError::UnknownRecord { .. }),
+        "{error:?}"
+    );
     Ok(())
 }
 

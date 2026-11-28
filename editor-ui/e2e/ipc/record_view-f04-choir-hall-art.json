@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "f04-choir-hall-art"
+    "id": "f04-choir-hall-art",
+    "path": "concepts/f04-choir-hall-art.md"
   },
   "cmd": "record_view",
   "result": "ok",

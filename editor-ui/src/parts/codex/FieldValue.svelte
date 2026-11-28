@@ -1,6 +1,7 @@
 <!-- One front-matter value (P11 §5.8): text, a link chip (red when it dangles), a list of values,
      the read-only tier selector (`tu-tier`), or the rows of a map such as a lens. -->
 <script lang="ts">
+  import type { RecordTarget } from '../../lib/record-key';
   import type { FieldValue } from '../../lib/ipc/bindings';
   import FieldValueView from './FieldValue.svelte';
   import LinkChip from './LinkChip.svelte';
@@ -9,7 +10,7 @@
     /** The value. */
     value: FieldValue;
     /** Opens a chip's record. */
-    onopen?: ((id: string) => void) | undefined;
+    onopen?: ((record: RecordTarget) => void) | undefined;
   }
 
   let { value, onopen }: Props = $props();

@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "reed-marsh"
+    "id": "reed-marsh",
+    "path": "world/hearth/f04-choir-hall/reed-marsh.md"
   },
   "cmd": "record_view",
   "result": "ok",

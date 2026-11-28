@@ -1,0 +1,132 @@
+{
+  "args": {
+    "id": "synthetic-twin",
+    "path": "world/synthetic-copy/synthetic-twin.md"
+  },
+  "cmd": "record_view",
+  "fixture": "duplicate-id",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [
+      {
+        "column": 5,
+        "id": "synthetic-twin",
+        "line": 3,
+        "message": "the id `synthetic-twin` is also the file name of `world/synthetic-twin.md`; ids must be unique, even apart from ASCII case",
+        "path": "world/synthetic-copy/synthetic-twin.md",
+        "rule": "index/duplicate-id",
+        "severity": "error",
+        "span": {
+          "end": 89,
+          "start": 75
+        }
+      },
+      {
+        "column": 9,
+        "id": "synthetic-twin",
+        "line": 6,
+        "message": "a location belongs in `world/tower/`, under its parent `tower`; this file is in `world/synthetic-copy/`",
+        "path": "world/synthetic-copy/synthetic-twin.md",
+        "rule": "index/placement",
+        "severity": "warning",
+        "span": {
+          "end": 144,
+          "start": 139
+        }
+      },
+      {
+        "column": 9,
+        "id": "synthetic-twin",
+        "line": 6,
+        "message": "`parent` must link to a floor or location; `tower` is a tower",
+        "path": "world/synthetic-copy/synthetic-twin.md",
+        "rule": "link/kind",
+        "severity": "error",
+        "span": {
+          "end": 144,
+          "start": 139
+        }
+      }
+    ],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "synthetic-twin"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "location"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "Synthetic twin two"
+        }
+      },
+      {
+        "key": "parent",
+        "value": {
+          "type": "link",
+          "value": {
+            "fragment": null,
+            "id": "tower",
+            "shown": null,
+            "target": {
+              "id": "tower",
+              "kind": "tower",
+              "locked": [],
+              "never": false,
+              "path": "world/tower.md",
+              "status": null,
+              "title": "Synthetic tower"
+            }
+          }
+        }
+      }
+    ],
+    "header": {
+      "children": 0,
+      "links_in": 0,
+      "parent": {
+        "id": "tower",
+        "kind": "tower",
+        "locked": [],
+        "never": false,
+        "path": "world/tower.md",
+        "status": null,
+        "title": "Synthetic tower"
+      },
+      "record": {
+        "id": "synthetic-twin",
+        "kind": "location",
+        "locked": [],
+        "never": false,
+        "path": "world/synthetic-copy/synthetic-twin.md",
+        "status": null,
+        "title": "Synthetic twin two"
+      }
+    },
+    "links_in": [],
+    "lore": [],
+    "pictures": [],
+    "used_by": []
+  }
+}

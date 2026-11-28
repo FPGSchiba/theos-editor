@@ -7,7 +7,7 @@ use theos_content::read_record;
 use super::resolve::Resolver;
 use super::{FieldRow, LoreRow, PictureRow, UsedBy, ViewNode};
 use super::{body, front_matter, lore, pictures, relation};
-use crate::codex::{ReadTarget, read, saturate};
+use crate::codex::{ReadTarget, read_with, saturate};
 use crate::views::check::FindingView;
 use crate::views::codex::{LinkView, RecordRef, RecordView};
 use crate::{StudioError, Workspace};
@@ -49,24 +49,21 @@ pub struct Header {
     pub children: u32,
 }
 
-/// The page of the record `id`; for a duplicated id, the first record by path. The caller syncs
-/// the index first; nothing is written.
+/// The page of the record `id`. `path` picks the file among those that carry the id (read
+/// through P48's [`ReadTarget::Path`]); without it (a link chip, a hit without a file), the first
+/// record by path. A path never falls back to another file: when no file with the id is at `path`
+/// any longer, there is no page. The caller syncs the index first; nothing is written.
 ///
 /// # Errors
-/// [`StudioError::UnknownRecord`] when no record has the id; [`StudioError::Read`] when its file
+/// [`StudioError::UnknownRecord`] when no record has the id, or the file at `path` does not
+/// carry it; [`StudioError::Read`] when its file
 /// cannot be read; [`StudioError::Index`] when the index fails.
-pub fn record(ws: &Workspace, id: &str) -> Result<RecordPage, StudioError> {
-    let view = read(ws, &ReadTarget::Id(id.to_owned()))?
-        .records
-        .into_iter()
-        .next()
-        .ok_or_else(|| StudioError::UnknownRecord {
-            what: id.to_owned(),
-        })?;
+pub fn record(ws: &Workspace, id: &str, path: Option<&str>) -> Result<RecordPage, StudioError> {
+    let resolver = Resolver::load(ws)?;
+    let view = view_of(ws, &resolver, id, path)?;
     let path = view.record.path.clone().unwrap_or_default();
     let file = ws.project().root().join(&path);
     let parsed = read_record(&file).map_err(|source| StudioError::Read { path: file, source })?;
-    let resolver = Resolver::load(ws)?;
     let front_matter = parsed
         .front_matter()
         .map(|front| {
@@ -83,6 +80,27 @@ pub fn record(ws: &Workspace, id: &str) -> Result<RecordPage, StudioError> {
         links_in: view.backlinks,
         findings: view.findings,
     })
+}
+
+/// The view of the file at `path` when it carries `id`, or of the first record with `id` when no
+/// path is given.
+fn view_of(
+    ws: &Workspace,
+    resolver: &Resolver,
+    id: &str,
+    path: Option<&str>,
+) -> Result<RecordView, StudioError> {
+    let target = path.map_or_else(
+        || ReadTarget::Id(id.to_owned()),
+        |path| ReadTarget::Path(path.to_owned()),
+    );
+    read_with(ws, resolver.lookup(), &target)?
+        .records
+        .into_iter()
+        .find(|view| view.record.id == id)
+        .ok_or_else(|| StudioError::UnknownRecord {
+            what: path.unwrap_or(id).to_owned(),
+        })
 }
 
 fn header(view: &RecordView) -> Header {

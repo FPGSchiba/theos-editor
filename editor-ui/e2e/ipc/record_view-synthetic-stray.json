@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "synthetic-stray"
+    "id": "synthetic-stray",
+    "path": "world/synthetic-stray.md"
   },
   "cmd": "record_view",
   "result": "ok",

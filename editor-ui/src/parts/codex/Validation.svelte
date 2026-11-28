@@ -5,13 +5,13 @@
   import Spoken from '../../components/Spoken.svelte';
   import type { Finding, Severity } from '../../lib/ipc/bindings';
   import { pageOf } from './pages.svelte';
-  import { activeRecord } from './tabs.svelte';
+  import { activeKey } from './tabs.svelte';
 
   /** The `tu-val` severity of each finding severity, in the order they are listed. */
   const SEVERITIES: Record<Severity, string> = { error: 'error', warning: 'warn' };
   const ORDER = Object.keys(SEVERITIES);
 
-  const page = $derived(pageOf(activeRecord()));
+  const page = $derived(pageOf(activeKey()));
   const findings = $derived(
     [...(page?.findings ?? [])].sort((a, b) => rank(a) - rank(b)),
   );

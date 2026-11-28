@@ -4,12 +4,13 @@
   import KindGlyph from '../../components/KindGlyph.svelte';
   import Note from '../../components/Note.svelte';
   import PropRow from '../../components/PropRow.svelte';
+  import type { RecordTarget } from '../../lib/record-key';
   import FieldValue from './FieldValue.svelte';
   import { pageOf } from './pages.svelte';
-  import { activeRecord, openRecord, sideSelection } from './tabs.svelte';
+  import { activeKey, openRecord, sideSelection } from './tabs.svelte';
 
-  const page = $derived(pageOf(activeRecord()));
-  const open = (id: string): void => void openRecord(id);
+  const page = $derived(pageOf(activeKey()));
+  const open = (record: RecordTarget): void => void openRecord(record);
 </script>
 
 <div class="tu-window__body">
@@ -49,7 +50,7 @@
           kind={link.source.kind}
           value={`${link.source.id} ${link.source.title ?? ''}`}
           type={link.slot}
-          onclick={() => open(link.source.id)}
+          onclick={() => open(link.source)}
         />
       {:else}
         <Note>No record links here.</Note>
@@ -70,5 +71,4 @@
     padding: var(--sp-6) var(--sp-10);
     border-top: 1px solid var(--border);
   }
-
 </style>

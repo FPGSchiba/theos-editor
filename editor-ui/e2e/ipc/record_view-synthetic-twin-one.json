@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "synthetic-twin"
+    "id": "synthetic-twin",
+    "path": "world/synthetic-twin.md"
   },
   "cmd": "record_view",
   "fixture": "duplicate-id",
@@ -22,8 +23,8 @@
         "column": 5,
         "id": "synthetic-twin",
         "line": 3,
-        "message": "the id `synthetic-twin` is also the file name of `world/synthetic-twin.md`; ids must be unique, even apart from ASCII case",
-        "path": "world/synthetic-copy/synthetic-twin.md",
+        "message": "the id `synthetic-twin` is also the file name of `world/synthetic-copy/synthetic-twin.md`; ids must be unique, even apart from ASCII case",
+        "path": "world/synthetic-twin.md",
         "rule": "index/duplicate-id",
         "severity": "error",
         "span": {
@@ -35,8 +36,8 @@
         "column": 9,
         "id": "synthetic-twin",
         "line": 6,
-        "message": "a location belongs in `world/tower/`, under its parent `tower`; this file is in `world/synthetic-copy/`",
-        "path": "world/synthetic-copy/synthetic-twin.md",
+        "message": "a location belongs in `world/tower/`, under its parent `tower`; this file is in `world/`",
+        "path": "world/synthetic-twin.md",
         "rule": "index/placement",
         "severity": "warning",
         "span": {
@@ -49,7 +50,7 @@
         "id": "synthetic-twin",
         "line": 6,
         "message": "`parent` must link to a floor or location; `tower` is a tower",
-        "path": "world/synthetic-copy/synthetic-twin.md",
+        "path": "world/synthetic-twin.md",
         "rule": "link/kind",
         "severity": "error",
         "span": {
@@ -77,7 +78,7 @@
         "key": "title",
         "value": {
           "type": "text",
-          "value": "Synthetic twin two"
+          "value": "Synthetic twin one"
         }
       },
       {
@@ -118,9 +119,9 @@
         "kind": "location",
         "locked": [],
         "never": false,
-        "path": "world/synthetic-copy/synthetic-twin.md",
+        "path": "world/synthetic-twin.md",
         "status": null,
-        "title": "Synthetic twin two"
+        "title": "Synthetic twin one"
       }
     },
     "links_in": [],

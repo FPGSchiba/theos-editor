@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "T-013"
+    "id": "T-013",
+    "path": "lore/truths/T-013.md"
   },
   "cmd": "record_view",
   "result": "ok",

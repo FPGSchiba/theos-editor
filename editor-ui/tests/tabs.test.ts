@@ -10,8 +10,10 @@ import {
   nextTab,
   openRecordTab,
   previousTab,
+  recordTabTitles,
   setTreeTab,
 } from '../src/parts/codex/tabs.svelte';
+import { tabKey } from '../src/parts/layout';
 
 beforeEach(() => {
   codexTabs.records = [];
@@ -82,4 +84,15 @@ test('closing another record tab keeps the active record active', () => {
   expect(codexTabs.records).toHaveLength(2);
   closeRecordTab('reed-marsh');
   expect(codexTabs.active).toBe(0);
+});
+
+// AC: CE-33.1
+test('two files with one id are two tabs with one title and two keys', () => {
+  openRecordTab('twin', 'Twin one', 'location', 'world/twin.md');
+  openRecordTab('twin', 'Twin two', 'location', 'world/copy/twin.md');
+  const titles = recordTabTitles();
+  expect(titles.map(tabKey)).toEqual(['world/twin.md', 'world/copy/twin.md']);
+  expect(titles.map((title) => (typeof title === 'string' ? title : title.title))).toEqual(['twin', 'twin']);
+  expect(tabKey('Record')).toBe('Record');
+  expect(tabKey({ title: 'Validation' })).toBe('Validation');
 });

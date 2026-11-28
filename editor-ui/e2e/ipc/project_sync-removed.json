@@ -6,9 +6,16 @@
   "result": "ok",
   "value": {
     "changed": [
-      "C-031",
-      "T-012"
+      {
+        "id": "C-031",
+        "path": "lore/clues/C-031.md"
+      },
+      {
+        "id": "T-012",
+        "path": "lore/truths/T-012.md"
+      }
     ],
+    "moved": [],
     "project": {
       "errors": 6,
       "in_memory": false,
@@ -84,7 +91,10 @@
       "warnings": 2
     },
     "removed": [
-      "C-032"
+      {
+        "id": "C-032",
+        "path": "lore/clues/C-032.md"
+      }
     ]
   }
 }

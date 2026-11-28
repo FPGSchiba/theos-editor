@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "hearth"
+    "id": "hearth",
+    "path": "world/hearth.md"
   },
   "cmd": "record_view",
   "result": "ok",

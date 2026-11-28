@@ -2,6 +2,7 @@
      Markdown links and images, which show as text with their URL: never a live link, never
      fetched (G12). Record text is always text, never HTML. -->
 <script lang="ts">
+  import type { RecordTarget } from '../../lib/record-key';
   import type { ViewInline } from '../../lib/ipc/bindings';
   import Inline from './Inline.svelte';
   import LinkChip from './LinkChip.svelte';
@@ -10,7 +11,7 @@
     /** The inlines. */
     inlines: readonly ViewInline[];
     /** Opens a chip's record. */
-    onopen?: ((id: string) => void) | undefined;
+    onopen?: ((record: RecordTarget) => void) | undefined;
   }
 
   let { inlines, onopen }: Props = $props();

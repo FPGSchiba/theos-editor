@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "tower"
+    "id": "tower",
+    "path": "world/tower.md"
   },
   "cmd": "record_view",
   "fixture": "duplicate-id",

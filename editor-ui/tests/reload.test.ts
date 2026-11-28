@@ -19,7 +19,7 @@ vi.mock('../src/lib/ipc/bindings', () => ({
       sync.reasons.push(reason);
       return new Promise((resolve) => {
         sync.resolve = () =>
-          resolve({ status: 'ok', data: { project: { name: 'p' }, changed: [], removed: [] } });
+          resolve({ status: 'ok', data: { project: { name: 'p' }, changed: [], removed: [], moved: [] } });
         sync.reject = () =>
           resolve({ status: 'error', error: { kind: 'index', message: 'damaged' } });
       });

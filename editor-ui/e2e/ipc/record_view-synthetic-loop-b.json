@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "synthetic-loop-b"
+    "id": "synthetic-loop-b",
+    "path": "world/hearth/f04-choir-hall/synthetic-loop-a/synthetic-loop-b.md"
   },
   "cmd": "record_view",
   "result": "ok",

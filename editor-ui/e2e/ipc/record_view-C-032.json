@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "C-032"
+    "id": "C-032",
+    "path": "lore/clues/C-032.md"
   },
   "cmd": "record_view",
   "result": "ok",

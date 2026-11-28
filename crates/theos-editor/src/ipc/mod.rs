@@ -9,6 +9,7 @@ pub mod app;
 pub mod codex;
 pub mod error;
 pub mod project;
+pub mod sync_files;
 pub mod views;
 
 use std::time::Instant;

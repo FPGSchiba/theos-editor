@@ -161,8 +161,14 @@ fn sync_reports_changed_and_removed_records() -> TestResult {
     let synced =
         call(&window, "project_sync", json!({ "reason": "reload" })).map_err(|e| e.to_string())?;
     let changed = synced["changed"].as_array().ok_or("no changed list")?;
-    assert!(changed.contains(&json!("T-013")), "{synced}");
-    assert_eq!(synced["removed"], json!(["C-032"]));
+    assert!(
+        changed.contains(&json!({ "id": "T-013", "path": "lore/truths/T-013.md" })),
+        "{synced}"
+    );
+    assert_eq!(
+        synced["removed"],
+        json!([{ "id": "C-032", "path": "lore/clues/C-032.md" }])
+    );
     assert_eq!(synced["project"]["records"], RECORDS - 1);
     Ok(())
 }

@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "f04-choir-hall"
+    "id": "f04-choir-hall",
+    "path": "world/hearth/f04-choir-hall.md"
   },
   "cmd": "record_view",
   "result": "ok",

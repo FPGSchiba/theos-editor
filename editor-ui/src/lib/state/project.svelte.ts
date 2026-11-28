@@ -142,7 +142,8 @@ export function reloadProject(reason: SyncReason = 'reload'): Promise<void> {
 async function syncOnce(reason: SyncReason): Promise<void> {
   try {
     const synced = await call(commands.projectSync(reason));
-    if (synced.changed.length > 0 || synced.removed.length > 0 || differs(synced.project)) {
+    const files = synced.changed.length + synced.removed.length + synced.moved.length;
+    if (files > 0 || differs(synced.project)) {
       project.view = synced.project;
     }
     if (project.error !== null && project.error === syncError) {

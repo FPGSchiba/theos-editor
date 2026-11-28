@@ -4,7 +4,7 @@
 <script lang="ts">
   import KindGlyph from '../../components/KindGlyph.svelte';
   import type { TreeNode } from '../../lib/ipc/bindings';
-  import { recordKey } from '../../lib/record-key';
+  import { recordKey, type RecordTarget } from '../../lib/record-key';
   import { isIdFirst, isRootKind } from './kinds.svelte';
   import TreeRow from './TreeRow.svelte';
   import { nodeKey } from './tree.svelte';
@@ -23,7 +23,7 @@
     /** Folds or unfolds the row `key`. */
     ontoggle: (key: string) => void;
     /** Opens the record `id`. */
-    onopen: (id: string) => void;
+    onopen: (record: RecordTarget) => void;
   }
 
   let { node, depth = 0, stray = false, selected, folded, ontoggle, onopen }: Props = $props();
@@ -74,7 +74,7 @@
     >
   {/if}
   {#if node.type === 'record'}
-    <button class="open" type="button" onclick={() => onopen(node.record.id)}>
+    <button class="open" type="button" onclick={() => onopen(node.record)}>
       <KindGlyph kind={node.record.kind ?? 'record'} /><span class="tu-tree__name">{name}</span>
     </button>
     {#if node.tag !== null || node.record.never || stray}

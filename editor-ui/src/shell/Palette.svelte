@@ -144,7 +144,7 @@
         <span class="tu-kbd">{row.keys}</span>
       </div>
     {:else}
-      <div class="tu-pop__row row is-off">No command matches.</div>
+      <div class="tu-pop__row row is-note">No command matches.</div>
     {/each}
   </div>
 </div>
@@ -185,7 +185,12 @@
     cursor: default;
   }
 
+  /* Only a disabled option is muted; a note is text to read. */
   .row.is-off {
     color: var(--textMute);
+  }
+
+  .row.is-note {
+    color: var(--textDim);
   }
 </style>

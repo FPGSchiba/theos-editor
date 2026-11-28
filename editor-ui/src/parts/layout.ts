@@ -26,6 +26,8 @@ export interface RecordTabTitle {
   title: string;
   /** The record's kind, for its glyph; present on record tabs only. */
   kind?: string | null;
+  /** What tells the tab from others with the same title (a record tab's file); else the title. */
+  key?: string;
   /** A count beside the title. */
   badge?: TabBadge;
 }
@@ -36,6 +38,11 @@ export type TabTitle = string | RecordTabTitle;
 /** The text of the tab title `tab`. */
 export function tabText(tab: TabTitle): string {
   return typeof tab === 'string' ? tab : tab.title;
+}
+
+/** The key of the tab title `tab` among its window's tabs: its `key`, else its text. */
+export function tabKey(tab: TabTitle): string {
+  return typeof tab === 'string' ? tab : (tab.key ?? tab.title);
 }
 
 /**

@@ -53,7 +53,7 @@
     justify-content: center;
     border: 1px dashed var(--borderHi);
     background: var(--panel3);
-    color: var(--textMute);
+    color: var(--textDim);
   }
 
   figcaption {

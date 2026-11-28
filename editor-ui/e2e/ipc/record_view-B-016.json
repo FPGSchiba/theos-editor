@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "B-016"
+    "id": "B-016",
+    "path": "lore/beliefs/B-016.md"
   },
   "cmd": "record_view",
   "result": "ok",

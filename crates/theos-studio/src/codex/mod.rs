@@ -14,4 +14,5 @@ pub use list::{ListFilter, list};
 pub use read::{ReadTarget, read};
 pub use search::search;
 
-pub(crate) use lookup::saturate;
+pub(crate) use lookup::{Lookup, saturate};
+pub(crate) use read::read_with;

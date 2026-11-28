@@ -18,8 +18,11 @@ snake_case.
   `{ "kind": …, "message": … }`.
 - `src/ipc/project.rs`: opening and syncing. `project_sync(reason)`: a `focus` sync (the window
   got the focus back) runs at most once a second (`SYNC_INTERVAL`) and within the second answers
-  the open view; a `reload` (Ctrl+R) always syncs. A record that only moved, with the same id, is
-  never reported removed. Unknown parts in `enabled` are logged once, when the project opens.
+  the open view; a `reload` (Ctrl+R) always syncs. A sync names record files by path, never
+  records by id alone, since two files may carry one id (`src/ipc/sync_files.rs`): `removed`
+  lists the files gone, `moved` the files that are gone while a new file with the same id
+  appeared (paired in path order), and `changed` the files read again, including each move's new
+  path. Unknown parts in `enabled` are logged once, when the project opens.
 - `src/state.rs`: the state file, `<data dir>/theos/editor-state.json`. It remembers the last
   project and is the only file the app writes. Tests pass their own folder to
   `AppState::new` through `builder_with`.

@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "hearth-folk"
+    "id": "hearth-folk",
+    "path": "people/hearth-folk.md"
   },
   "cmd": "record_view",
   "result": "ok",

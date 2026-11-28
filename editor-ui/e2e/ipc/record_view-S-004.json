@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "S-004"
+    "id": "S-004",
+    "path": "story/scripts/S-004.md"
   },
   "cmd": "record_view",
   "result": "ok",

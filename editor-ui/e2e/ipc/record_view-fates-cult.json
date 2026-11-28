@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "fates-cult"
+    "id": "fates-cult",
+    "path": "people/hearth-folk/fates-cult.md"
   },
   "cmd": "record_view",
   "result": "ok",

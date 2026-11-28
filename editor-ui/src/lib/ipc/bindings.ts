@@ -48,14 +48,16 @@ export const commands = {
 	 */
 	codexTree: (tab: TreeTab, options?: InvokeOptions) => typedError<TreeNode[], IpcError>(__TAURI_INVOKE("codex_tree", { tab }, options)),
 	/**
-	 *  The page of the record `id`: header, body, lore, pictures, front matter and backlinks.
+	 *  The page of the record `id`: header, body, lore, pictures, front matter and backlinks. `path`
+	 *  picks the file when several carry the id; without it (a link chip), the first by path. A path
+	 *  never falls back to another file with the id.
 	 * 
 	 *  # Errors
 	 * 
 	 *  [`IpcError::NoProject`] without an open project, [`IpcError::NotFound`] when no record has
-	 *  the id, else as the file or the index fails.
+	 *  the id or the file at `path` does not carry it, else as the file or the index fails.
 	 */
-	recordView: (id: string, options?: InvokeOptions) => typedError<RecordPage, IpcError>(__TAURI_INVOKE("record_view", { id }, options)),
+	recordView: (id: string, path: string | null, options?: InvokeOptions) => typedError<RecordPage, IpcError>(__TAURI_INVOKE("record_view", { id, path }, options)),
 	/**
 	 *  The records the find field's `query` finds, at most `limit`.
 	 * 
@@ -105,6 +107,16 @@ export type FieldValue =
 { type: "tier"; value: string } | 
 /**  A map of rows. */
 { type: "map"; value: FieldRow[] };
+
+/**  A record file that moved: it keeps its id and has a new path. */
+export type FileMove = {
+	/**  The record's id. */
+	id: string,
+	/**  The path before the sync. */
+	from: string,
+	/**  The path after the sync. */
+	to: string,
+};
 
 /**  A finding of a record's file. */
 export type Finding = {
@@ -280,6 +292,14 @@ export type RailEntry = {
 	phase: string | null,
 };
 
+/**  One record file: its id and its project-relative path with `/`. */
+export type RecordFile = {
+	/**  The record's id. */
+	id: string,
+	/**  The file, project-relative with `/`. */
+	path: string,
+};
+
 /**  Everything the record window and the side column show of one record. */
 export type RecordPage = {
 	/**  The top lines. */
@@ -336,14 +356,23 @@ export type SyncReason =
 /**  The user asked; always syncs. */
 "reload";
 
-/**  What a sync did: the project afterwards and the records whose views changed or are gone. */
+/**
+ *  What a sync did: the project afterwards and the record files whose views changed, are gone or
+ *  moved. Files are named by path, since two files may carry one id; see
+ *  [`sync_files`](super::sync_files) for the rules.
+ */
 export type SyncView = {
 	/**  The project after the sync. */
 	project: ProjectView,
-	/**  The ids of the records that were read again, relinked or checked again, sorted. */
-	changed: string[],
-	/**  The ids of the records that are gone, sorted. */
-	removed: string[],
+	/**
+	 *  The files read again, relinked or checked again, sorted by path; a moved file's new path
+	 *  is among them.
+	 */
+	changed: RecordFile[],
+	/**  The files that are gone and did not move, sorted by path. */
+	removed: RecordFile[],
+	/**  The files that moved with their id, sorted by id, then old path. */
+	moved: FileMove[],
 };
 
 /**  An id a link names. */

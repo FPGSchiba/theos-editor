@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "fates-shrine"
+    "id": "fates-shrine",
+    "path": "world/hearth/f04-choir-hall/fates-shrine.md"
   },
   "cmd": "record_view",
   "result": "ok",

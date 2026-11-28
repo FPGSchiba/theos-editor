@@ -6,7 +6,8 @@
 // Several recordings may share cmd and args (`project_sync-changed` and `project_sync-removed`).
 // Then the one named in `use` answers, the one named last when several are; without one, the
 // only recording with neither a `derived` key nor a `fixture` key (a call on another fixture
-// project, such as `duplicate-id`); else the call is ambiguous and fails like an unmatched one. `app_info` is answered by `app_info-<os>`. A command named in `fail` rejects with the error
+// project, such as `duplicate-id`); else the call is ambiguous and fails like an unmatched one.
+// `app_info` is answered by `app_info-<os>`. A command named in `fail` rejects with the error
 // value given there, so a test can show how the page handles a call that fails. A command named
 // in `answer` (a plugin's command, such as the folder dialog's `plugin:dialog|open`, which no
 // recording can hold) answers with the value given there. Events are mocked in the page:

@@ -45,9 +45,10 @@ and plain `Serialize` types that `theos-editor` maps to its IPC types:
 
 - `tree(ws, tab)`: the Where, Who, Lore and Things tabs; kinds the registry does not know are
   left out, and a record whose parent dangles or lies on a cycle sits at the top level once;
-- `record(ws, id)`: the header, the body as a block tree with resolved link chips, the lore
-  table, the pictures, the front-matter rows in file order, the backlinks, "Used by" (with
-  `relation(slot)`) and the findings;
+- `record(ws, id, path)`: the header, the body as a block tree with resolved link chips, the
+  lore table, the pictures, the front-matter rows in file order, the backlinks, "Used by" (with
+  `relation(slot)`) and the findings; `path` picks the file of a duplicated id and never falls
+  back to another file, and without it the first file by path answers;
 - `query(ws, text, limit)`: the `#id`, `:kind` and `@people` prefixes over `codex::search`.
 
 Their fixture is `tests/fixtures/projects/editor-codex/`, which `theos-editor`'s tests open too.

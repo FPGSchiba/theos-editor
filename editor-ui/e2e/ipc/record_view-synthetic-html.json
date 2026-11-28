@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "synthetic-html"
+    "id": "synthetic-html",
+    "path": "things/synthetic-html.md"
   },
   "cmd": "record_view",
   "result": "ok",

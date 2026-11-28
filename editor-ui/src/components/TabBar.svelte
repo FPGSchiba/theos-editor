@@ -1,7 +1,7 @@
 <!-- The tab bar of a window (`tu-tabbar`): one title, or tabs of which one is active. A tab that
      names a record shows its kind glyph before its id, and is a tab even when it is the only one. -->
 <script lang="ts">
-  import { tabText, type TabBadge, type TabTitle } from '../parts/layout';
+  import { tabKey, tabText, type TabBadge, type TabTitle } from '../parts/layout';
   import KindGlyph from './KindGlyph.svelte';
 
   interface Props {
@@ -39,7 +39,7 @@
     </div>
   {:else}
     <div class="tu-tabbar__tabs" role="tablist">
-      {#each tabs as tab, index (tabText(tab))}
+      {#each tabs as tab, index (tabKey(tab))}
         <button
           class="tu-tab"
           class:is-active={index === active}

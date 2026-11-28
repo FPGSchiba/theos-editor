@@ -261,10 +261,18 @@ test('two_files_with_one_id_both_show', async ({ page }) => {
   });
   await expect(twins.locator('.tu-tree__name')).toHaveText(['Synthetic twin one', 'Synthetic twin two']);
 
-  await twins.nth(1).click();
+  // Each file opens its own page and selects only its own row; both stay open as two tabs.
+  const heading = record(page).locator('.tu-rechead__title');
+  await twins.nth(0).click();
   await expect(record(page).locator('.tu-rechead__id')).toHaveText('synthetic-twin');
+  await expect(heading).toHaveText('Synthetic twin one');
+  await expect(twins.nth(0)).toHaveAttribute('aria-selected', 'true');
+  await expect(twins.nth(1)).toHaveAttribute('aria-selected', 'false');
+  await twins.nth(1).click();
+  await expect(heading).toHaveText('Synthetic twin two');
   await expect(twins.nth(1)).toHaveAttribute('aria-selected', 'true');
   await expect(twins.nth(0)).toHaveAttribute('aria-selected', 'false');
+  await expect(record(page).getByRole('tab')).toHaveText(['synthetic-twin', 'synthetic-twin']);
 
   await row(page, 'Synthetic tower').click();
   const usedBy = page.locator('[data-window="codex-used-by"]');
@@ -326,6 +334,28 @@ test('an_opened_record_starts_at_its_top', async ({ page }) => {
   await expect.poll(scrollTop).toBeGreaterThan(40);
   await row(page, 'Hearth').click();
   await expect(record(page).locator('.tu-rechead__id')).toHaveText('hearth');
+  await expect.poll(scrollTop).toBe(0);
+});
+
+test('another_file_with_the_same_id_starts_at_its_top', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 200 });
+  await openProject(page, ['codex_tree-who', 'codex_tree-where-duplicate-id']);
+  const body = record(page).locator('.tu-window__body');
+  const scrollTop = (): Promise<number> => body.evaluate((element) => element.scrollTop);
+  const twins = tree(page).locator('.tu-tree__row').filter({
+    has: page.locator('.tu-tree__name', { hasText: /^Synthetic twin/ }),
+  });
+  const heading = record(page).locator('.tu-rechead__title');
+  await twins.nth(0).click();
+  await expect(heading).toHaveText('Synthetic twin one');
+  // The page is taller than its window, so a kept scroll position would show.
+  expect(await body.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(20);
+  await body.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect.poll(scrollTop).toBeGreaterThan(20);
+  await twins.nth(1).click();
+  await expect(heading).toHaveText('Synthetic twin two');
   await expect.poll(scrollTop).toBe(0);
 });
 

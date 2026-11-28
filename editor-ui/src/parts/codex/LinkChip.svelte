@@ -3,6 +3,7 @@
      screen reader hears "broken link". A truth with target `never` carries the mark.
      Plain props, so a CodeMirror widget can mount it. -->
 <script lang="ts">
+  import type { RecordTarget } from '../../lib/record-key';
   import KindGlyph from '../../components/KindGlyph.svelte';
   import Spoken from '../../components/Spoken.svelte';
   import type { RecordRef } from '../../lib/ipc/bindings';
@@ -16,7 +17,7 @@
     /** The record the id names; `null` when no record has it. */
     target: RecordRef | null;
     /** Opens the target; without it the chip is not a button. */
-    onopen?: ((id: string) => void) | undefined;
+    onopen?: ((record: RecordTarget) => void) | undefined;
   }
 
   let { id, shown = null, target, onopen }: Props = $props();
@@ -46,7 +47,7 @@
     type="button"
     data-kind={target.kind}
     data-never={target.never ? 'true' : undefined}
-    onclick={() => onopen(target.id)}>{@render content(target)}</button
+    onclick={() => onopen(target)}>{@render content(target)}</button
   >
 {/if}
 

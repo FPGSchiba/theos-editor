@@ -1,12 +1,12 @@
-//! Turns the id a link names into the record it names, with P48's marks, once per view.
-
-use std::collections::HashMap;
+//! Turns the id a link names into the record it names, with P48's marks, once per view. It
+//! reads through P48's lookup (`codex::Lookup`), which `codex::read` shares, so a page loads the
+//! records and marks once.
 
 use serde::Serialize;
-use theos_content::RecordSummary;
 
+use crate::codex::Lookup;
 use crate::views::codex::RecordRef;
-use crate::{Marks, StudioError, Workspace};
+use crate::{StudioError, Workspace};
 
 /// A link as the Codex draws it: a chip with the record it names, or a red one when it dangles.
 #[derive(Clone, Debug, Serialize)]
@@ -23,8 +23,7 @@ pub struct ViewLink {
 
 /// Every record by id, with the marks, read once from the index.
 pub struct Resolver {
-    marks: Marks,
-    by_id: HashMap<String, RecordSummary>,
+    lookup: Lookup,
 }
 
 impl Resolver {
@@ -33,36 +32,28 @@ impl Resolver {
     /// # Errors
     /// [`StudioError::Index`] when the index fails.
     pub fn load(ws: &Workspace) -> Result<Resolver, StudioError> {
-        let mut by_id = HashMap::new();
-        // Ordered by path, so the first record of a duplicated id stays, as in `codex::read`.
-        for summary in ws.index().records()? {
-            by_id.entry(summary.id.clone()).or_insert(summary);
-        }
         Ok(Resolver {
-            marks: Marks::load(ws.index())?,
-            by_id,
+            lookup: Lookup::load(ws)?,
         })
     }
 
-    /// The marks of every record.
-    #[must_use]
-    pub fn marks(&self) -> &Marks {
-        &self.marks
+    /// The lookup the resolver reads, for `codex::read` to share.
+    pub(crate) fn lookup(&self) -> &Lookup {
+        &self.lookup
     }
 
-    /// The record `id` names, with the marks of every record that has the id.
+    /// The record `id` names (the first by path when several have it), with the marks of every
+    /// record that has the id.
     #[must_use]
     pub fn record(&self, id: &str) -> Option<RecordRef> {
-        self.by_id.get(id).map(|summary| RecordRef {
-            mark: self.marks.of_id(id),
-            ..RecordRef::from_summary(summary, &self.marks)
-        })
+        let target = self.lookup.target(id);
+        target.exists.then_some(target.record)
     }
 
     /// The record `id` names, or the bare id when none has it.
     #[must_use]
     pub fn record_or_missing(&self, id: &str) -> RecordRef {
-        self.record(id).unwrap_or_else(|| RecordRef::missing(id))
+        self.lookup.target(id).record
     }
 
     /// The chip of a link to `id`.

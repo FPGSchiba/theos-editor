@@ -14,8 +14,15 @@ type Window = WebviewWindow<MockRuntime>;
 /// The fixture copied to a temporary folder and opened in the app.
 fn opened()
 -> Result<(tempfile::TempDir, tauri::App<MockRuntime>, Window), Box<dyn std::error::Error>> {
+    opened_fixture("editor-codex")
+}
+
+/// The fixture project `name` copied to a temporary folder and opened in the app.
+fn opened_fixture(
+    name: &str,
+) -> Result<(tempfile::TempDir, tauri::App<MockRuntime>, Window), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
-    copy_fixture("editor-codex", temp.path())?;
+    copy_fixture(name, temp.path())?;
     let (app, window) = app()?;
     call(&window, "project_open", json!({ "path": temp.path() }))
         .map_err(|error| format!("the project does not open: {error}"))?;
@@ -254,6 +261,25 @@ fn codex_tree_returns_the_tabs() -> TestResult {
     Ok(())
 }
 
+// AC: CE-33.1
+#[test]
+fn record_view_opens_the_file_at_the_path() -> TestResult {
+    let (_temp, _app, window) = opened_fixture("duplicate-id")?;
+    for (path, title) in [
+        (json!("world/synthetic-twin.md"), "Synthetic twin one"),
+        (
+            json!("world/synthetic-copy/synthetic-twin.md"),
+            "Synthetic twin two",
+        ),
+        (Value::Null, "Synthetic twin two"),
+    ] {
+        let args = json!({ "id": "synthetic-twin", "path": path });
+        let page = ok(&window, "record_view", args)?;
+        assert_eq!(page["header"]["record"]["title"], title, "{path}");
+    }
+    Ok(())
+}
+
 #[test]
 fn unknown_id_is_not_found() -> TestResult {
     let (_temp, _app, window) = opened()?;
@@ -298,7 +324,7 @@ fn mirrors_serialise_like_the_studio() -> TestResult {
     copy_fixture("editor-codex", temp.path())?;
     let workspace = Workspace::open(temp.path())?;
 
-    let page = codex_view::record(&workspace, "f04-choir-hall")?;
+    let page = codex_view::record(&workspace, "f04-choir-hall", None)?;
     let studio = to_json(&page)?;
     assert_eq!(to_json(&RecordPage::from(page))?, studio, "record page");
 

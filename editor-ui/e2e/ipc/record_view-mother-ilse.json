@@ -1,6 +1,7 @@
 {
   "args": {
-    "id": "mother-ilse"
+    "id": "mother-ilse",
+    "path": "people/hearth-folk/fates-cult/mother-ilse.md"
   },
   "cmd": "record_view",
   "result": "ok",
