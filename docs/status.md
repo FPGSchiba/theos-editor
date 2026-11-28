@@ -43,7 +43,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P34 | Interiors | theos-editor | done | #55 | #69 |
 | P45 | Atlas level switcher | theos-editor | todo | | |
 | P46 | Git read | theos-editor | done | #52, #58 | #62 |
-| P47 | Git write | theos-editor | spec-pr | | |
+| P47 | Git write | theos-editor | in-progress | #70 | |
 | P48 | MCP read | theos-editor | done | #53 | #61 |
 | P49 | Releases and the check action | theos-editor | todo | | |
 | P50 | Leaner CI | theos-editor | done | #45, #46 | #48 |
