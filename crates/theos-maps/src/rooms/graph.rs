@@ -473,17 +473,17 @@ mod tests {
         g.rooms[3].ty = "choir-hall".to_owned();
         g.rooms[3].cells.push(Cell { row: 1, col: 2 });
         g.rooms[3].shape = Shape::Round;
-        g.rooms[3].locked = true;
-        g.connections[1].kind = Passage::Locked(1);
+        g.connections[2].kind = Passage::Locked(1);
         g.connections[3].kind = Passage::Drop { from: 3 };
         g.connections[3].main = false;
         assert_eq!(g.validate(&all), Ok(()));
+        g.mark_locked();
         let json = serde_json::to_string(&g.canonical_json().unwrap()).unwrap();
         let expected = concat!(
             r#"{"connections":["#,
             r#"{"a":0,"b":1,"kind":"open","main":true},"#,
-            r#"{"a":0,"b":2,"kind":{"locked":1},"main":true},"#,
-            r#"{"a":1,"b":3,"kind":"open","main":true},"#,
+            r#"{"a":0,"b":2,"kind":"open","main":true},"#,
+            r#"{"a":1,"b":3,"kind":{"locked":1},"main":true},"#,
             r#"{"a":2,"b":3,"kind":{"drop":{"from":3}},"main":false}],"#,
             r#""lattice":{"cols":3,"rows":2},"#,
             r#""rooms":["#,

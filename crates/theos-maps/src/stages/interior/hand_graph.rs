@@ -105,7 +105,8 @@ impl TypedStage for HandGraph {
             rows: lattice.rows,
             cols: lattice.cols,
         };
-        let g = graph(size, p.key_behind_lock);
+        let mut g = graph(size, p.key_behind_lock);
+        g.mark_locked();
         g.validate(&|c| lattice.is_enabled(c))
             .map_err(|e| ctx.fail(e.to_string()))?;
         ctx.write("room_graph", Layer::Value(Box::new(g)))?;
@@ -141,6 +142,9 @@ fn hand_graph_interior_passes_playability() {
     let lattice = done.world.value::<Lattice>("lattice").unwrap();
     assert_eq!((lattice.rows, lattice.cols), (6, 6));
     assert!(lattice.enabled.iter().all(|&e| e), "a rect without margin");
+    let g = done.world.value::<RoomGraph>("room_graph").unwrap();
+    assert!(g.rooms[1].locked, "the goal lies behind lock 1");
+    assert!(!g.rooms[0].locked, "the start never does");
     let a = done.world.value::<Analysis>("analysis").unwrap();
     assert_eq!(a.findings, []);
     assert_eq!(

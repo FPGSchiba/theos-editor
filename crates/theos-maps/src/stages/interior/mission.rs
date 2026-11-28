@@ -7,9 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::rooms::Role;
 use crate::rooms::lattice::Lattice;
-use crate::rooms::solve::behind_lock;
-use crate::rooms::{Role, RoomGraph};
 use crate::stage::{
     LayerSpec, MAX_COUNT, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
     too_large_count,
@@ -67,15 +66,6 @@ fn no_start(report: &MissionReport) -> String {
     }
 }
 
-/// Sets every room's `locked` to whether it lies behind a lock (spec §5.4, ruling R55). The rules
-/// read `locked` only while the mission runs; afterwards it means what the package says.
-fn mark_locked(graph: &mut RoomGraph) {
-    let behind = behind_lock(graph);
-    for (room, locked) in graph.rooms.iter_mut().zip(behind) {
-        room.locked = locked;
-    }
-}
-
 /// The stage `mission`.
 pub struct Mission;
 
@@ -124,7 +114,7 @@ impl TypedStage for Mission {
         if !state.graph.rooms.iter().any(|r| r.role == Role::Start) {
             return Err(ctx.fail(no_start(&done)));
         }
-        mark_locked(&mut state.graph);
+        state.graph.mark_locked();
         state
             .graph
             .validate(&|c| state.lattice.is_enabled(c))
@@ -141,6 +131,7 @@ impl TypedStage for Mission {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rooms::RoomGraph;
     use crate::stage::{Registry, Stage};
     use crate::stages::interior::support::execute_recipe;
 
@@ -190,7 +181,7 @@ cycle = \"lock_key\"";
                 goal_leaves += 1;
             }
             assert!(s.graph.rooms.iter().all(|r| !r.locked), "seed {seed}");
-            mark_locked(&mut s.graph);
+            s.graph.mark_locked();
             let g = &s.graph;
             assert!(!g.rooms[usize::from(room_of(&s, Role::Start))].locked);
             assert!(g.rooms[usize::from(goal)].locked, "seed {seed}: the goal");

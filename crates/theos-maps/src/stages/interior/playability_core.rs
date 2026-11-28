@@ -345,7 +345,7 @@ fn unsafe_drop(g: &RoomGraph, out: &mut Vec<(Code, String)>) {
         out.push(finding(
             Code::UnsafeDrop,
             &format!(
-                "{} drops from {} into {}, where the goal is out of reach",
+                "{} drops from {} into {}, where the goal is not reachable with the keys surely held (the start room's and the drop room's)",
                 door_name(i),
                 room_name(usize::from(from)),
                 room_name(usize::from(to))
@@ -799,7 +799,7 @@ mod tests {
             a.findings,
             [(
                 Code::UnsafeDrop,
-                "unsafe_drop: door-6 drops from room-3 into room-6, where the goal is out of reach"
+                "unsafe_drop: door-6 drops from room-3 into room-6, where the goal is not reachable with the keys surely held (the start room's and the drop room's)"
                     .to_owned()
             )]
         );

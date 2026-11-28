@@ -175,6 +175,19 @@ pub fn behind_lock(g: &RoomGraph) -> Vec<bool> {
     }
 }
 
+impl RoomGraph {
+    /// Sets every room's `locked` to whether it lies behind a lock ([`behind_lock`], spec §5.4,
+    /// ruling R55). Every writer of a `room_graph` runs this before it writes the graph, so the
+    /// flag always means what the package says; the mission rules read `locked` only while they
+    /// run.
+    pub fn mark_locked(&mut self) {
+        let behind = behind_lock(self);
+        for (room, locked) in self.rooms.iter_mut().zip(behind) {
+            room.locked = locked;
+        }
+    }
+}
+
 /// The drops (as connection indices) after which the goal can be out of reach (§5.9 check 4).
 ///
 /// From the drop's target room, holding only the keys of the start room and of the drop's own
@@ -504,6 +517,21 @@ mod tests {
         );
         assert_eq!(unsafe_drops(&g), Vec::<usize>::new());
         assert_eq!(solvable(&g), Ok(()));
+    }
+
+    #[test]
+    fn mark_locked_writes_behind_lock_into_the_rooms() {
+        let mut g = graph(
+            3,
+            &[(0, 1)],
+            &[(0, 1, Passage::Locked(1)), (0, 2, Passage::Open)],
+        );
+        g.rooms[0].locked = true;
+        g.rooms[1].locked = false;
+        g.mark_locked();
+        let flags: Vec<bool> = g.rooms.iter().map(|r| r.locked).collect();
+        assert_eq!(flags, behind_lock(&g));
+        assert!(!flags[0] && flags[1] && !flags[2]);
     }
 
     #[test]
