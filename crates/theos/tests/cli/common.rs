@@ -54,6 +54,11 @@ impl Sandbox {
         self.dir.path().join("config")
     }
 
+    /// The empty git configuration file (`GIT_CONFIG_GLOBAL`).
+    pub fn gitconfig(&self) -> PathBuf {
+        self.dir.path().join("gitconfig")
+    }
+
     /// A folder for projects and repositories.
     pub fn work(&self) -> PathBuf {
         self.dir.path().join("work")
