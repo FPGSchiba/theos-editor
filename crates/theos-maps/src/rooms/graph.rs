@@ -466,6 +466,34 @@ mod tests {
         let ja = serde_json::to_string(&a.canonical_json().unwrap()).unwrap();
         let jb = serde_json::to_string(&b.canonical_json().unwrap()).unwrap();
         assert_eq!(ja, jb);
+        // The canonical form P30 reads, frozen: a lock with its key, a drop and a two-cell hall.
+        let mut g = square();
+        g.lattice = LatticeRef { rows: 2, cols: 3 };
+        g.rooms[1].keys = vec![1];
+        g.rooms[3].ty = "choir-hall".to_owned();
+        g.rooms[3].cells.push(Cell { row: 1, col: 2 });
+        g.rooms[3].shape = Shape::Round;
+        g.rooms[3].locked = true;
+        g.connections[1].kind = Passage::Locked(1);
+        g.connections[3].kind = Passage::Drop { from: 3 };
+        g.connections[3].main = false;
+        assert_eq!(g.validate(&all), Ok(()));
+        let json = serde_json::to_string(&g.canonical_json().unwrap()).unwrap();
+        let expected = concat!(
+            r#"{"connections":["#,
+            r#"{"a":0,"b":1,"kind":"open","main":true},"#,
+            r#"{"a":0,"b":2,"kind":{"locked":1},"main":true},"#,
+            r#"{"a":1,"b":3,"kind":"open","main":true},"#,
+            r#"{"a":2,"b":3,"kind":{"drop":{"from":3}},"main":false}],"#,
+            r#""lattice":{"cols":3,"rows":2},"#,
+            r#""rooms":["#,
+            r#"{"cells":[{"col":0,"row":0}],"keys":[],"locked":false,"role":"start","shape":"rect","ty":"hall"},"#,
+            r#"{"cells":[{"col":1,"row":0}],"keys":[1],"locked":false,"role":"path","shape":"rect","ty":"hall"},"#,
+            r#"{"cells":[{"col":0,"row":1}],"keys":[],"locked":false,"role":"path","shape":"rect","ty":"hall"},"#,
+            r#"{"cells":[{"col":1,"row":1},{"col":2,"row":1}],"keys":[],"locked":true,"role":"goal","#,
+            r#""shape":"round","ty":"choir-hall"}]}"#,
+        );
+        assert_eq!(json, expected);
         assert_eq!(RoomGraph::key_name(1), "key-1");
         assert_eq!(RoomGraph::NAME, "room_graph");
     }
