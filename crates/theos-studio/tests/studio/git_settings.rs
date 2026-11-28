@@ -114,7 +114,7 @@ fn flow(hostile: bool) -> Result<Results, Error> {
 
     match push(&mut workspace, &git, &cancel)? {
         Pushed::Updated { .. } => steps.push("Updated"),
-        other => return Err(format!("expected Updated, got {other:?}").into()),
+        other @ Pushed::UpToDate => return Err(format!("expected Updated, got {other:?}").into()),
     }
     let stash = a.run(&["stash", "list"])?;
     Ok(Results {

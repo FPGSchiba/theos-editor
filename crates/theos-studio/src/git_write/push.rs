@@ -50,7 +50,7 @@ impl From<GitError> for PushFailed {
     }
 }
 
-/// Pushes the current branch to its push target ([`push_target`]) with `cancel`. It takes no repo
+/// Pushes the current branch to its push target (`push_target`) with `cancel`. It takes no repo
 /// lock: a push changes neither the work tree nor the index.
 ///
 /// # Errors
