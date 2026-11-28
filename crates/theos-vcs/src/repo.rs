@@ -103,6 +103,23 @@ pub fn value(git: &Git, top: &Path, key: &str) -> Result<Option<String>, GitErro
     }
 }
 
+/// The names of the repository's remotes, sorted.
+///
+/// # Errors
+///
+/// The errors of [`Git::run`].
+pub fn remotes(git: &Git, top: &Path) -> Result<Vec<String>, GitError> {
+    let args = read_args("remote", &[]);
+    let out = git.run(&args, top, None, &[])?;
+    let mut names: Vec<String> = String::from_utf8_lossy(&out)
+        .lines()
+        .map(|line| line.trim_end_matches('\r').to_owned())
+        .filter(|line| !line.is_empty())
+        .collect();
+    names.sort();
+    Ok(names)
+}
+
 /// The folder git runs hooks from for the work tree at `top`, honouring `core.hooksPath`, with
 /// the platform's separators.
 ///

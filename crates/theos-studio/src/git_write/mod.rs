@@ -4,8 +4,10 @@
 
 mod commit;
 mod pull;
+mod push;
 mod stage;
 
 pub use commit::{CommitError, Committed, commit};
 pub use pull::{PullError, Pulled, abort_merge, pull};
+pub use push::{PushFailed, push};
 pub use stage::{stage_records, unstage_records};

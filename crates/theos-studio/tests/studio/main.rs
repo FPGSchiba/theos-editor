@@ -17,6 +17,7 @@ mod log;
 mod new;
 mod pipeline;
 mod pull;
+mod push;
 mod rename;
 mod repo;
 mod staged;
