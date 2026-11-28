@@ -150,15 +150,18 @@ pub fn fixed_point(g: &RoomGraph, drops: bool) -> Reach {
 
 /// The drops (as connection indices) after which the goal can be out of reach (§5.9 check 4).
 ///
-/// From the drop's target room, with the keys surely held (those reachable from the start with
-/// every drop removed) and every key found on the way, the goal must be reachable.
+/// From the drop's target room, holding only the keys of the start room and of the drop's own
+/// room (a party standing there has picked both up) and every key found on the way, the goal
+/// must be reachable. Keys are never lost, so a party that falls holds at least those keys: the
+/// check is conservative (ruling R54). The keys reachable from the start with every drop removed
+/// are not a lower bound, because a party may fall before fetching them.
 #[must_use]
 pub fn unsafe_drops(g: &RoomGraph) -> Vec<usize> {
     let adj = adjacency(g);
     let Some((start, goal)) = start_goal(g) else {
         return Vec::new();
     };
-    let surely = expand(g, &adj, start, 0, false).keys;
+    let start_keys = room_keys(g, start);
     g.connections
         .iter()
         .enumerate()
@@ -171,7 +174,8 @@ pub fn unsafe_drops(g: &RoomGraph) -> Vec<usize> {
                 "a drop starts at one of its ends"
             );
             let target = if from == c.a { c.b } else { c.a };
-            let after = expand(g, &adj, usize::from(target), surely, true);
+            let held = start_keys | room_keys(g, usize::from(from));
+            let after = expand(g, &adj, usize::from(target), held, true);
             (!after.rooms[goal]).then_some(i)
         })
         .collect()
@@ -422,6 +426,57 @@ mod tests {
         );
         assert_eq!(unsafe_drops(&g), [0, 1]);
         assert_eq!(solvable(&g), Err(Unsolvable::UnsafeDrop { connection: 0 }));
+    }
+
+    // AC: CE-80.2
+    #[test]
+    fn drop_past_a_key_on_another_branch_is_unsafe() {
+        // Rooms: start 0, A 1 (key 1), B 2, C 3, goal 4. A party walking start -> B -> drop
+        // into C never fetched key 1 and cannot open C -> goal (ruling R54).
+        let g = graph(
+            5,
+            &[(1, 1)],
+            &[
+                (0, 1, Passage::Open),
+                (0, 2, Passage::Open),
+                (2, 3, Passage::Drop { from: 2 }),
+                (3, 4, Passage::Locked(1)),
+            ],
+        );
+        assert_eq!(unsafe_drops(&g), [2]);
+        assert_eq!(solvable(&g), Err(Unsolvable::UnsafeDrop { connection: 2 }));
+        // The keys of the start room and of the drop's own room are surely held.
+        for holder in [0, 2] {
+            let mut held = g.clone();
+            held.rooms[1].keys.clear();
+            held.rooms[holder].keys.push(1);
+            assert_eq!(
+                unsafe_drops(&held),
+                Vec::<usize>::new(),
+                "key in room {holder}"
+            );
+        }
+    }
+
+    // AC: CE-80.2
+    #[test]
+    fn lock_key_drop_out_of_the_goal_is_safe() {
+        // The shape of main_cycle's `lock_key`: arc A (room 1) is locked into the goal (room 4);
+        // arc B (rooms 2, 3) holds the key and ends in a drop from the goal into room 3. From
+        // room 3 the party walks back to the start, fetches the key and opens the lock.
+        let g = graph(
+            5,
+            &[(2, 1)],
+            &[
+                (0, 1, Passage::Open),
+                (1, 4, Passage::Locked(1)),
+                (0, 2, Passage::Open),
+                (2, 3, Passage::Open),
+                (3, 4, Passage::Drop { from: 4 }),
+            ],
+        );
+        assert_eq!(unsafe_drops(&g), Vec::<usize>::new());
+        assert_eq!(solvable(&g), Ok(()));
     }
 
     // AC: CE-80.2
