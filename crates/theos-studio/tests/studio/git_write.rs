@@ -39,7 +39,6 @@ fn edit(folder: &Path, path: &str) -> Result<(), Error> {
     Ok(())
 }
 
-// AC: CE-22.1
 #[test]
 fn a_renamed_record_stages_as_one_rename_and_unstages_back() -> TestResult {
     let repo = Repo::committed("")?;
@@ -69,6 +68,61 @@ fn a_renamed_record_stages_as_one_rename_and_unstages_back() -> TestResult {
         "{back:?}"
     );
     assert_eq!(back.records.len(), 1, "{back:?}");
+    Ok(())
+}
+
+#[test]
+fn a_staged_rename_with_an_unstaged_edit_stages_by_record() -> TestResult {
+    let repo = Repo::committed("")?;
+    let git = repo.git()?;
+    let new = "lore/truths/T-904.md";
+    repo.run(&["mv", T901, new])?;
+    edit(repo.top(), new)?;
+    let mut workspace = Workspace::open(repo.top())?;
+    let found = changes(&workspace, &git, &Cancel::new())?;
+    let moved = record(&found, "T-904")?;
+    assert_eq!(moved.staged, Change::Renamed, "{found:?}");
+    assert_eq!(moved.unstaged, Change::Modified, "{found:?}");
+
+    stage_records(&mut workspace, &git, &[moved], &[])?;
+
+    let after = changes(&workspace, &git, &Cancel::new())?;
+    let staged = record(&after, "T-904")?;
+    assert_eq!(staged.unstaged, Change::Unchanged, "{after:?}");
+    assert_eq!(staged.staged, Change::Renamed, "{after:?}");
+    Ok(())
+}
+
+#[test]
+fn staging_everything_survives_a_staged_deletion_and_a_staged_rename() -> TestResult {
+    let repo = Repo::committed("")?;
+    let git = repo.git()?;
+    repo.run(&["rm", "-q", T900])?;
+    repo.run(&["mv", T901, "lore/truths/T-904.md"])?;
+    put(repo.top(), "notes.txt", b"loose\n")?;
+    let mut workspace = Workspace::open(repo.top())?;
+    let found = changes(&workspace, &git, &Cancel::new())?;
+    let records: Vec<&RecordChange> = found.records.iter().collect();
+    let files: Vec<&Entry> = found.files.iter().collect();
+    assert!(!records.is_empty(), "{found:?}");
+
+    stage_records(&mut workspace, &git, &records, &files)?;
+
+    let after = changes(&workspace, &git, &Cancel::new())?;
+    assert!(
+        after
+            .records
+            .iter()
+            .all(|r| r.unstaged == Change::Unchanged && !r.untracked),
+        "{after:?}"
+    );
+    assert!(
+        after
+            .files
+            .iter()
+            .all(|f| !matches!(f, Entry::Untracked { .. })),
+        "{after:?}"
+    );
     Ok(())
 }
 
@@ -155,7 +209,6 @@ fn stage_edited_record(folder_on_disk: Option<&str>) -> TestResult {
     Ok(())
 }
 
-// AC: CE-22.1
 #[test]
 fn staging_uses_git_spelling() -> TestResult {
     stage_edited_record(None)
