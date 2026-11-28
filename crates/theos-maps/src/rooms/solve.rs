@@ -84,6 +84,28 @@ fn start_goal(g: &RoomGraph) -> Option<(usize, usize)> {
     Some((find(Role::Start)?, find(Role::Goal)?))
 }
 
+/// The rooms one flood from `start` reaches with the keys in `mask`. `start` must be a room.
+fn flood(
+    g: &RoomGraph,
+    adj: &[Vec<(usize, usize)>],
+    start: usize,
+    mask: u16,
+    drops: bool,
+) -> Vec<bool> {
+    let mut seen = vec![false; g.rooms.len()];
+    seen[start] = true;
+    let mut stack = vec![start];
+    while let Some(room) = stack.pop() {
+        for &(next, conn) in &adj[room] {
+            if !seen[next] && passable(g, conn, room, mask, drops) {
+                seen[next] = true;
+                stack.push(next);
+            }
+        }
+    }
+    seen
+}
+
 /// Floods from `start` with the keys `keys0` (plus the start room's) until no new key turns up.
 fn expand(
     g: &RoomGraph,
@@ -103,18 +125,7 @@ fn expand(
     }
     let mut round: u16 = 0;
     loop {
-        // One flood from `start` with the keys held now.
-        let mut seen = vec![false; n];
-        seen[start] = true;
-        let mut stack = vec![start];
-        while let Some(room) = stack.pop() {
-            for &(next, conn) in &adj[room] {
-                if !seen[next] && passable(g, conn, room, reach.keys, drops) {
-                    seen[next] = true;
-                    stack.push(next);
-                }
-            }
-        }
+        let seen = flood(g, adj, start, reach.keys, drops);
         let mut keys = reach.keys;
         for (room, &s) in seen.iter().enumerate() {
             if s {
@@ -145,6 +156,21 @@ pub fn fixed_point(g: &RoomGraph, drops: bool) -> Reach {
             keys: 0,
             round: vec![None; g.rooms.len()],
         },
+    }
+}
+
+/// Per room: whether it lies behind a lock (spec §5.4), i.e. no walk from the start through open
+/// passages and drops reaches it without using a key. Keys in the start room do not count: a
+/// room behind a lock whose key lies at the start is still behind that lock. Without a start
+/// room every room counts as behind a lock.
+#[must_use]
+pub fn behind_lock(g: &RoomGraph) -> Vec<bool> {
+    match start_goal(g) {
+        Some((start, _)) => flood(g, &adjacency(g), start, 0, true)
+            .into_iter()
+            .map(|reached| !reached)
+            .collect(),
+        None => vec![true; g.rooms.len()],
     }
 }
 
@@ -477,6 +503,27 @@ mod tests {
         );
         assert_eq!(unsafe_drops(&g), Vec::<usize>::new());
         assert_eq!(solvable(&g), Ok(()));
+    }
+
+    #[test]
+    fn behind_lock_ignores_keys_and_follows_drops() {
+        // Start 0 holds key 1; 0 -(lock 1)- 1; 0 - 2 open; drop 2 -> 3; 3 -(lock 1)- goal 4.
+        let g = graph(
+            5,
+            &[(0, 1)],
+            &[
+                (0, 1, Passage::Locked(1)),
+                (0, 2, Passage::Open),
+                (2, 3, Passage::Drop { from: 2 }),
+                (3, 4, Passage::Locked(1)),
+            ],
+        );
+        assert_eq!(behind_lock(&g), [false, true, false, false, true]);
+        // The fixed point reaches rooms 1 and 4 in round 0 because the key is at the start.
+        assert_eq!(fixed_point(&g, true).round[1], Some(0));
+        let mut no_start = g.clone();
+        no_start.rooms[0].role = Role::Path;
+        assert_eq!(behind_lock(&no_start), [true; 5]);
     }
 
     // AC: CE-80.2

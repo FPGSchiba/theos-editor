@@ -396,8 +396,8 @@ reach_min = "ee682d5dcfc623f24fd40583577eedd1f7cc5dc79b5c20c122daaf8369943a6b"
 [[run]]
 recipe = "choir-hall-ruin"
 seed = 1
-features = "94c921d4e30a3f3934e32eefe8bbbe1f971116b842044813e874bd9ae4e666ba"
-package = "21be9ed8d7e143f0f9447f77ac8f6f0103ccadf7280ed4f22c9dee6576b750ae"
+features = "6889a519d99f8fe35864b66b7142ab585f4d5f8883abbb2df6023ac1671731dd"
+package = "1ae590e7e25626f986f60e12aed8f089d19a3f3b59283c6614168ff1a6fe9b71"
 
 [[run.stage]]
 key = "envelope#0"
@@ -411,7 +411,7 @@ key = "mission#0"
 
 [run.stage.layers]
 mission_report = "89c25e2076432522aac0904392143b4b045939203fed87b55b09a419f8a8dbc4"
-room_graph = "2ecda52c66a187e3eb05896c821167aef93a84f54b1bb370fc244f9b7cf74d85"
+room_graph = "e35f9caddd89227f364bd77b393e17bc43c0f7c415a6ec2c232b117fb023cc44"
 
 [[run.stage]]
 key = "space#0"
@@ -438,8 +438,8 @@ analysis = "5bf70a3fe7d66b761555c754ca042ee0b0ef8d7822ebdae5507aaba78c2a4ddc"
 [[run]]
 recipe = "ruin-undercroft"
 seed = 1
-features = "3ff471d658fe6745e042fc9e3909023afcdb7cc27f78eb7b0d64629877d754a7"
-package = "491c08f9da8976b2697436d853142f2738fa81b9f0b2c3d28cc56353f7a512f8"
+features = "f1b82b6e2330cb6e9b4c6357f13f3477dbf05bdf1916eb229659c583242de14f"
+package = "afd791821fdbd3247dbc7cbdff0af34cb071a8371df7be4d88d585fd0d782864"
 
 [run.inputs]
 feature = "ruin-1"
@@ -460,7 +460,7 @@ key = "mission#0"
 
 [run.stage.layers]
 mission_report = "59f10dd9302326e6572085db660f75188accd1d8177a907a119eb31e17b900ea"
-room_graph = "f3324d96ce57d7e59082e892fc3eee0ba0c339310203c836999bc54ce693716e"
+room_graph = "07114d2c72dd167360da13cd9b1e2d591b7103b221ba6f10a92fad5ff4130796"
 
 [[run.stage]]
 key = "space#0"

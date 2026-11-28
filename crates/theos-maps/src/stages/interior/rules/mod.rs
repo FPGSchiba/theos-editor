@@ -11,7 +11,7 @@ mod main_cycle;
 mod merge_hall;
 mod shortcut;
 #[cfg(test)]
-mod testkit;
+pub(crate) mod testkit;
 
 /// Every mission rule, one line per rule.
 #[must_use]

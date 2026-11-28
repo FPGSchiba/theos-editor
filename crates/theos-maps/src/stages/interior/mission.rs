@@ -7,7 +7,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::rooms::RoomGraph;
 use crate::rooms::lattice::Lattice;
+use crate::rooms::solve::behind_lock;
 use crate::stage::{
     LayerSpec, MAX_COUNT, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
     too_large_count,
@@ -39,6 +41,15 @@ fn check_count(count: CountSpec, path: &str) -> Result<(), ParamError> {
         return Err(ParamError::at(Mission::ID, path, too_large_count()));
     }
     Ok(())
+}
+
+/// Sets every room's `locked` to whether it lies behind a lock (spec §5.4, ruling R55). The rules
+/// read `locked` only while the mission runs; afterwards it means what the package says.
+fn mark_locked(graph: &mut RoomGraph) {
+    let behind = behind_lock(graph);
+    for (room, locked) in graph.rooms.iter_mut().zip(behind) {
+        room.locked = locked;
+    }
 }
 
 /// The stage `mission`.
@@ -86,6 +97,7 @@ impl TypedStage for Mission {
         let mut state = MissionState::new(lattice, program);
         let done = run_mission(&mut state, &p.rule, &rules(), ctx.rng())
             .map_err(|e| ctx.fail(e.to_string()))?;
+        mark_locked(&mut state.graph);
         state
             .graph
             .validate(&|c| state.lattice.is_enabled(c))
@@ -102,7 +114,7 @@ impl TypedStage for Mission {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rooms::{Role, RoomGraph};
+    use crate::rooms::Role;
     use crate::stage::{Registry, Stage};
     use crate::stages::interior::support::execute_recipe;
 
@@ -128,6 +140,42 @@ mod tests {
                 .collect();
             assert_eq!(exits, ["gate"], "seed {seed}");
         }
+    }
+
+    // AC: CE-80.2
+    #[test]
+    fn rooms_behind_the_lock_are_marked_locked() {
+        use crate::stages::interior::rules::testkit::{
+            arcs, cell, entry, lattice, program, room, room_of, run, state_on,
+        };
+        let mut goal_leaves = 0;
+        for seed in 1..=8 {
+            let mut s = state_on(lattice(6, 6), &program(&[]));
+            let cycle = "side = \"south\"
+cycle = \"lock_key\"";
+            run(&mut s, &[entry("main_cycle", 1, true, cycle)], seed);
+            let goal = room_of(&s, Role::Goal);
+            // A leaf hung on the goal, on a free neighbour of its first cell.
+            let at = s.graph.rooms[usize::from(goal)].cells[0];
+            let free = s.free_neighbours(at);
+            if let Some(&c) = free.first() {
+                let leaf = s.add_room(room("cellar", Role::Leaf, cell(c.row, c.col), false));
+                s.connect(goal, leaf, crate::rooms::Passage::Open, false);
+                goal_leaves += 1;
+            }
+            assert!(s.graph.rooms.iter().all(|r| !r.locked), "seed {seed}");
+            mark_locked(&mut s.graph);
+            let g = &s.graph;
+            assert!(!g.rooms[usize::from(room_of(&s, Role::Start))].locked);
+            assert!(g.rooms[usize::from(goal)].locked, "seed {seed}: the goal");
+            for (arc, _) in arcs(&s) {
+                assert!(arc.iter().all(|&r| !g.rooms[usize::from(r)].locked));
+            }
+            for r in g.rooms.iter().filter(|r| r.role == Role::Leaf) {
+                assert!(r.locked, "seed {seed}: the goal's leaf");
+            }
+        }
+        assert!(goal_leaves > 0, "no seed had a free cell next to the goal");
     }
 
     #[test]
