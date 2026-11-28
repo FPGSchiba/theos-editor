@@ -42,7 +42,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
 | P34 | Interiors | theos-editor | spec-approved | #55 | |
 | P45 | Atlas level switcher | theos-editor | todo | | |
-| P46 | Git read | theos-editor | spec-approved | #52 | |
+| P46 | Git read | theos-editor | pr-open | #52, #58 | #62 |
 | P47 | Git write | theos-editor | todo | | |
 | P48 | MCP read | theos-editor | done | #53 | #61 |
 | P49 | Releases and the check action | theos-editor | todo | | |
@@ -82,9 +82,25 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 - P50 is merged (#48), and the `main` ruleset requires `gate`, `test`, `coverage`, `pr` and
   `approval`. Its proofs after the merge remain: the probe PRs and the speed measurements (spec
   §5.9, §5.10) and one manual Intel macOS run of `platforms`.
-- P46's spec (§9 R1): history follows renames with git's default threshold. A short record that
-  is renamed and largely rewritten in one commit starts a new history, as in `git log --follow`;
-  a rename in the editor changes one line of the record and keeps it.
+- P46's build PR #62 (labelled `needs-jann`) waits for Jann's review and merge:
+  - The final review loop reached its cap of 5 rounds with one Important open (R5-I1: hooks
+    defined in config, git 2.54+, still ran during `status`). Jann approved one more fix round and
+    a targeted review: `status` now turns off every configured hook by name; the review was clean.
+  - The PR also fixes four P05 `hook install` tests that failed on macOS (git answers
+    `/private/var/…`, the tests built `/var/…`); they had never run on macOS before.
+  - Spec text that the build found wrong or too narrow (a docs PR after Jann's rulings):
+    - §5.6 names `--skip`; git applies it before `--follow` sees the skipped renames, so paging
+      uses `--max-count` and skips in Rust (R7-1);
+    - §5.6 says a merge that took one side unchanged is left out; under `--follow` git lists it,
+      so a merged branch change shows twice, the merge with its `Approved-by` trailer (R7-4);
+    - §5.5's `Upstream` cannot say "gone", so a gone upstream reads as none (R6-3);
+    - §5.3 says a failed job assignment kills git; a git that has already exited (or exits within
+      50 ms) now keeps its result, found by the gate's instrumented run on Windows;
+    - §6.2 says the approval merge is not listed by `history`; it is listed when git shows it.
+  - §9 R1 stands: history follows renames with git's default threshold, so a short record renamed
+    and largely rewritten in one commit starts a new history, as in `git log --follow`.
+  - The Unix process-group code runs for the first time in CI (Linux); macOS waits for
+    `platforms`.
 - Follow-up from P06: the class "a command changes which files are records without the verdict
   judging it" (m4-4, m5-1, and N1–N3 of PR #39) needs a general design. One option is a check
   after the write that compares the reindex with the preview and heals the cache; another is a

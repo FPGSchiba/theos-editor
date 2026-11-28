@@ -101,3 +101,11 @@ fn with_env_reaches_every_command() -> Result<(), Box<dyn std::error::Error>> {
     assert!(String::from_utf8(out)?.contains("Synthetic Author <a@example.invalid>"));
     Ok(())
 }
+
+// AC: CE-21.3
+#[test]
+fn find_reads_a_version_that_is_at_least_the_minimum() -> Result<(), Box<dyn std::error::Error>> {
+    let sandbox = Sandbox::new()?;
+    assert!(sandbox.git()?.version() >= theos_vcs::GitVersion::MINIMUM);
+    Ok(())
+}

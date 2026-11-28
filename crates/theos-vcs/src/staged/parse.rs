@@ -3,7 +3,7 @@
 use super::{StagedPath, Status, Tracked};
 
 /// Splits NUL-terminated output into its fields; the last field must end with a NUL too.
-fn fields(out: &[u8]) -> Result<Vec<&[u8]>, String> {
+pub(crate) fn fields(out: &[u8]) -> Result<Vec<&[u8]>, String> {
     if out.is_empty() {
         return Ok(Vec::new());
     }
@@ -47,7 +47,7 @@ pub(super) fn name_status(out: &[u8]) -> Result<Vec<StagedPath>, String> {
 }
 
 /// Reads `ls-files -s -z`: `<mode> SP <object> SP <stage> TAB <path> NUL`, stage 0 only.
-pub(super) fn ls_files(out: &[u8]) -> Result<Vec<Tracked>, String> {
+pub(crate) fn ls_files(out: &[u8]) -> Result<Vec<Tracked>, String> {
     let mut entries = Vec::new();
     for field in fields(out)? {
         let tab = field
@@ -208,5 +208,18 @@ mod tests {
         assert!(batch(b"aaaa blob 3", 1).is_err());
         assert!(batch(b"aaaa blob 3\nabc\n", 2).is_err());
         assert!(batch(b"aaaa blob 3\nabc\nextra", 1).is_err());
+    }
+
+    #[test]
+    fn batch_rejects_a_header_without_a_kind() {
+        let error = batch(
+            b"aaaa
+abc
+",
+            1,
+        )
+        .err()
+        .unwrap_or_default();
+        assert!(error.contains("is not a header"), "{error}");
     }
 }
