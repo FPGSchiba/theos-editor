@@ -59,9 +59,6 @@ impl From<StudioError> for CommitError {
 impl From<CommitRefused> for CommitError {
     fn from(refused: CommitRefused) -> CommitError {
         match refused {
-            CommitRefused::Message(text) | CommitRefused::Trailer(text) => {
-                CommitError::Message(text)
-            }
             CommitRefused::Git(error) => CommitError::Git(error),
             other => CommitError::Message(other.to_string()),
         }
@@ -88,7 +85,9 @@ pub fn commit(
 ) -> Result<Committed, CommitError> {
     let mut held = workspace.hold("commit")?;
     if message.trim().is_empty() {
-        return Err(CommitError::Message("the message is empty".to_owned()));
+        return Err(CommitError::Message(
+            "invalid commit message: it is empty".to_owned(),
+        ));
     }
     let root = held.project().root().to_path_buf();
     let snapshot = staged::read(git, &root)?;

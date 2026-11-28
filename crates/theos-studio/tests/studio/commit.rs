@@ -169,6 +169,8 @@ fn an_empty_message_is_refused() -> TestResult {
     stage(&repo, T900, &clean_edit()?)?;
     let result = try_commit(&repo, " \n\t ")?;
     assert!(matches!(result, Err(CommitError::Message(_))), "{result:?}");
+    let text = result.err().map(|error| error.to_string());
+    assert_eq!(text.as_deref(), Some("invalid commit message: it is empty"));
     assert_eq!(head(&repo)?, before);
     Ok(())
 }

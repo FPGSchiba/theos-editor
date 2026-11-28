@@ -33,7 +33,7 @@ pub struct Trailer {
 #[non_exhaustive]
 pub enum CommitRefused {
     /// The message is empty after trimming, or uses every comment character at a line start.
-    #[error("the commit message is empty: {0}")]
+    #[error("invalid commit message: {0}")]
     Message(String),
     /// A trailer has a bad key or a value of more than one line.
     #[error("invalid trailer: {0}")]
@@ -88,13 +88,13 @@ pub fn commit(
     let message = message.replace("\r\n", "\n");
     let message = message.trim();
     if message.is_empty() {
-        return Err(CommitRefused::Message("nothing to say".to_owned()));
+        return Err(CommitRefused::Message("it is empty".to_owned()));
     }
     trailers.iter().try_for_each(check_trailer)?;
 
     let Some(comment) = comment_char(message) else {
         return Err(CommitRefused::Message(
-            "every comment character starts a line of it".to_owned(),
+            "every one of # ; @ ! $ % ^ & | : starts a line".to_owned(),
         ));
     };
     let comment = format!("core.commentChar={comment}");
@@ -131,6 +131,26 @@ pub fn commit(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_refused_message_names_its_reason() {
+        let all = COMMENT_CHARS.map(|c| format!("{c} x")).join("\n");
+        let refused = commit_refusal("");
+        assert_eq!(refused, "invalid commit message: it is empty");
+        let refused = commit_refusal(&all);
+        assert_eq!(
+            refused,
+            "invalid commit message: every one of # ; @ ! $ % ^ & | : starts a line"
+        );
+    }
+
+    fn commit_refusal(message: &str) -> String {
+        let git = Git::find().unwrap_or_else(|error| panic!("{error}"));
+        match commit(&git, Path::new("."), message, &[]) {
+            Err(error) => error.to_string(),
+            Ok(id) => panic!("committed {id:?}"),
+        }
+    }
 
     #[test]
     fn the_first_char_that_starts_no_line_is_chosen() {
