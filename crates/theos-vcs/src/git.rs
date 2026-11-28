@@ -83,11 +83,26 @@ impl std::fmt::Display for MinimumShort {
     }
 }
 
-/// The arguments as text, for error messages.
+/// The arguments as text, for error messages and logs. The credentials of a URL such as
+/// `https://user:token@host/path` are replaced: `https://***@host/path`.
 pub(crate) fn args_text(args: &[&OsStr]) -> Vec<String> {
     args.iter()
-        .map(|arg| arg.to_string_lossy().into_owned())
+        .map(|arg| redacted(&arg.to_string_lossy()))
         .collect()
+}
+
+/// `arg` without the userinfo of a `scheme://userinfo@host` URL.
+fn redacted(arg: &str) -> String {
+    let Some(scheme_end) = arg.find("://") else {
+        return arg.to_owned();
+    };
+    let start = scheme_end + 3;
+    let authority_len = arg[start..].find('/').unwrap_or(arg.len() - start);
+    let authority = &arg[start..start + authority_len];
+    match authority.rfind('@') {
+        Some(at) => format!("{}***{}", &arg[..start], &arg[start + at..]),
+        None => arg.to_owned(),
+    }
 }
 
 /// The error of a command that exited with a failure.
@@ -247,7 +262,7 @@ impl Git {
         let error = failed(args, output);
         // A failure exit is often expected (`rev-parse --verify --quiet` of a missing
         // version, `config --get` of an unset key); the caller decides whether it matters.
-        tracing::debug!(?args, cwd = %cwd.display(), %error, "git failed");
+        tracing::debug!(args = ?args_text(args), cwd = %cwd.display(), %error, "git failed");
         Err(error)
     }
 
@@ -289,11 +304,15 @@ impl Git {
         let result = self.spawn_and_wait(args, cwd, stdin, env, removed, cancel);
         let (elapsed, cwd) = (started.elapsed(), cwd.display());
         match &result {
-            Ok(output) => tracing::debug!(?args, %cwd, ?elapsed, code = ?output.code, "git"),
-            Err(GitError::Cancelled { .. }) => {
-                tracing::debug!(?args, %cwd, ?elapsed, "git cancelled");
+            Ok(output) => {
+                tracing::debug!(args = ?args_text(args), %cwd, ?elapsed, code = ?output.code, "git");
             }
-            Err(error) => tracing::warn!(?args, %cwd, ?elapsed, %error, "git could not run"),
+            Err(GitError::Cancelled { .. }) => {
+                tracing::debug!(args = ?args_text(args), %cwd, ?elapsed, "git cancelled");
+            }
+            Err(error) => {
+                tracing::warn!(args = ?args_text(args), %cwd, ?elapsed, %error, "git could not run");
+            }
         }
         result
     }
@@ -448,6 +467,26 @@ fn checked(program: PathBuf, answer: &[u8]) -> Result<GitVersion, GitError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_userinfo_of_a_url_argument_is_redacted() {
+        let url = OsStr::new("https://jann:s3cret@example.com:8443/repo.git");
+        let plain = OsStr::new("https://example.com/a@b");
+        let local = OsStr::new("origin");
+        let at_in_path = OsStr::new("ssh://git@host/x");
+        let texts = args_text(&[url, plain, local, at_in_path]);
+        assert_eq!(
+            texts,
+            [
+                "https://***@example.com:8443/repo.git",
+                "https://example.com/a@b",
+                "origin",
+                "ssh://***@host/x"
+            ]
+        );
+        let error = GitError::Cancelled { args: texts };
+        assert!(!error.to_string().contains("s3cret"), "{error}");
+    }
 
     #[test]
     fn an_empty_path_finds_no_git() -> Result<(), Box<dyn std::error::Error>> {
