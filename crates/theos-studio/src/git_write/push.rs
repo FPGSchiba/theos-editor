@@ -68,8 +68,15 @@ pub fn push(workspace: &mut Workspace, git: &Git, cancel: &Cancel) -> Result<Pus
     Ok(push::push(git, &top, &target, cancel)?)
 }
 
+/// The remote that setting `key` names; `.` (a branch tracking a local branch) is no remote and
+/// counts as not set, so a push never lands in this repository.
+fn real_remote(git: &Git, top: &Path, key: &str) -> Result<Option<String>, GitError> {
+    Ok(repo::value(git, top, key)?.filter(|remote| remote != "."))
+}
+
 /// Where `branch` is pushed, in git's own order for the remote: `branch.<b>.pushRemote`, then
-/// `remote.pushDefault`, then `branch.<b>.remote`. The branch on that remote is the upstream's
+/// `remote.pushDefault`, then `branch.<b>.remote` (each one unless it is `.`, the local
+/// repository). The branch on that remote is the upstream's
 /// branch when the remote is the upstream's remote, else `branch`. With none of the three set, the
 /// only remote is used and becomes the upstream.
 ///
@@ -78,11 +85,11 @@ pub fn push(workspace: &mut Workspace, git: &Git, cancel: &Cancel) -> Result<Pus
 /// [`PushFailed::NoUpstream`] when none is set and the repository has zero or several remotes.
 pub(crate) fn push_target(git: &Git, top: &Path, branch: &str) -> Result<PushTarget, PushFailed> {
     let upstream = upstream(git, top, branch)?;
-    let remote = match repo::value(git, top, &format!("branch.{branch}.pushRemote"))? {
+    let remote = match real_remote(git, top, &format!("branch.{branch}.pushRemote"))? {
         Some(remote) => Some(remote),
-        None => match repo::value(git, top, "remote.pushDefault")? {
+        None => match real_remote(git, top, "remote.pushDefault")? {
             Some(remote) => Some(remote),
-            None => repo::value(git, top, &format!("branch.{branch}.remote"))?,
+            None => real_remote(git, top, &format!("branch.{branch}.remote"))?,
         },
     };
     if let Some(remote) = remote {

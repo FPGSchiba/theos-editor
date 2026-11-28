@@ -247,3 +247,43 @@ fn a_push_cancelled_while_git_runs_returns_cancelled_at_once() -> TestResult {
     assert_ne!(remotes.tip("origin", "main"), Some(remotes.head()?));
     Ok(())
 }
+
+/// A branch `feature` that tracks the local `main` (remote `.`), with a commit of its own, checked
+/// out.
+fn feature_tracking_local_main(remotes: &Remotes) -> TestResult {
+    remotes
+        .repo
+        .run(&["branch", "--track", "feature", "main"])?;
+    remotes.repo.run(&["checkout", "-q", "feature"])?;
+    put(remotes.repo.top(), T900, b"feature change\n")?;
+    remotes.repo.commit("feature change")?;
+    Ok(())
+}
+
+// AC: CE-22.3
+#[test]
+fn a_branch_tracking_a_local_branch_pushes_to_the_only_remote() -> TestResult {
+    let remotes = with_remotes(&["origin"])?;
+    feature_tracking_local_main(&remotes)?;
+    let main_before = remotes.repo.run(&["rev-parse", "main"])?;
+    let pushed = run_push(&remotes)??;
+    assert!(matches!(pushed, Pushed::Updated { .. }), "{pushed:?}");
+    assert_eq!(remotes.tip("origin", "feature"), Some(remotes.head()?));
+    assert_eq!(remotes.repo.run(&["rev-parse", "main"])?, main_before);
+    Ok(())
+}
+
+// AC: CE-22.3
+#[test]
+fn a_branch_tracking_a_local_branch_without_a_remote_has_no_upstream() -> TestResult {
+    let remotes = with_remotes(&[])?;
+    feature_tracking_local_main(&remotes)?;
+    let main_before = remotes.repo.run(&["rev-parse", "main"])?;
+    let result = run_push(&remotes)?;
+    let Err(PushFailed::NoUpstream { remotes: names }) = result else {
+        return Err(format!("expected NoUpstream, got {result:?}").into());
+    };
+    assert!(names.is_empty(), "{names:?}");
+    assert_eq!(remotes.repo.run(&["rev-parse", "main"])?, main_before);
+    Ok(())
+}
