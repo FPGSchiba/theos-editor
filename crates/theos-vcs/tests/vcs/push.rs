@@ -32,18 +32,32 @@ fn with_bare(sandbox: &Sandbox) -> Result<(PathBuf, PathBuf)> {
     Ok((top, bare))
 }
 
-/// The stderr of the same push run by the test itself: the state is unchanged by a refusal, so
-/// git answers the same way.
+/// The stderr of the same push run by the test itself: a failed push changes nothing, so git
+/// answers the same way.
 fn independent_stderr(sandbox: &Sandbox, top: &Path, remote: &str) -> Result<String> {
-    let refspec = "HEAD:refs/heads/main";
-    let error = sandbox
-        .run(top, &["push", "--porcelain", remote, refspec])
-        .err()
-        .ok_or("the independent push succeeded")?
-        .to_string();
-    // `Sandbox::run` words its error "git [...] failed: <stderr>".
-    let (_, stderr) = error.split_once("failed: ").ok_or("error text")?;
-    Ok(stderr.trim().to_owned())
+    sandbox.failing_stderr(
+        top,
+        &["push", "--porcelain", remote, "HEAD:refs/heads/main"],
+        &[],
+    )
+}
+
+/// A failure before any ref was judged, whose message is git's stderr, whole and last in the
+/// error's text.
+pub(crate) fn assert_failed_with(
+    result: std::result::Result<Pushed, PushError>,
+    independent: &str,
+) -> Result {
+    let error = result.err().ok_or("the push succeeded")?;
+    let text = error.to_string();
+    match error {
+        PushError::Failed { message } => {
+            assert!(text.ends_with(&message), "{text}");
+            assert_eq!(message, independent);
+            Ok(())
+        }
+        other => Err(format!("{other:?}").into()),
+    }
 }
 
 /// A refusal of `reason` whose message is git's stderr, whole and last in the error's text.
@@ -166,11 +180,8 @@ fn a_missing_remote_fails_with_gits_text() -> Result {
 
     let result = push(&sandbox.git()?, &top, &target(missing_text), &Cancel::new());
 
-    match result {
-        Err(PushError::Failed { message }) => assert_ne!(message, ""),
-        other => return Err(format!("{other:?}").into()),
-    }
-    Ok(())
+    let independent = independent_stderr(&sandbox, &top, missing_text)?;
+    assert_failed_with(result, &independent)
 }
 
 // AC: CE-22.3

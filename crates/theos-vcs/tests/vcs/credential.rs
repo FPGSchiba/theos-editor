@@ -10,10 +10,12 @@ use theos_vcs::Cancel;
 use theos_vcs::push::{PushError, PushTarget, push};
 
 use crate::common::Sandbox;
+use crate::push::assert_failed_with;
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-/// A server that answers 401 once, records the next `Authorization` header and answers 403.
+/// A server that answers 401 to a request without `Authorization`, records the header of one
+/// with it and answers that 403. It stops after `limit` requests.
 struct Server {
     port: u16,
     seen: Arc<Mutex<Option<String>>>,
@@ -42,7 +44,7 @@ fn read_head(stream: &mut TcpStream) -> Option<String> {
 }
 
 impl Server {
-    fn start() -> Result<Server> {
+    fn start(limit: usize) -> Result<Server> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
         listener.set_nonblocking(true)?;
         let port = listener.local_addr()?.port();
@@ -51,7 +53,7 @@ impl Server {
         let thread = std::thread::spawn(move || {
             let deadline = Instant::now() + Duration::from_secs(20);
             let mut requests = 0;
-            while requests < 2 && Instant::now() < deadline {
+            while requests < limit && Instant::now() < deadline {
                 let Ok((mut stream, _)) = listener.accept() else {
                     std::thread::sleep(Duration::from_millis(20));
                     continue;
@@ -61,17 +63,17 @@ impl Server {
                     continue;
                 };
                 requests += 1;
-                if requests == 1 {
+                let header = head
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Authorization: "))
+                    .map(str::to_owned);
+                if header.is_none() {
                     reply(
                         &mut stream,
                         "401 Unauthorized",
                         "WWW-Authenticate: Basic realm=\"t\"\r\n",
                     );
                 } else {
-                    let header = head
-                        .lines()
-                        .find_map(|line| line.strip_prefix("Authorization: "))
-                        .map(str::to_owned);
                     if let Ok(mut slot) = recorded.lock() {
                         *slot = header;
                     }
@@ -140,7 +142,7 @@ fn the_credential_helper_supplies_the_credentials() -> Result {
         "!f() {{ echo username=helper-user; echo password=helper-token; touch '{marker_text}'; }}; f"
     );
     sandbox.run(&top, &["config", "credential.helper", &helper])?;
-    let server = Server::start()?;
+    let server = Server::start(2)?;
 
     let result = push(
         &sandbox.git()?,
@@ -180,16 +182,19 @@ fn without_a_helper_git_fails_fast_and_never_runs_askpass() -> Result {
     let git = sandbox
         .git()?
         .with_env(&[("GIT_ASKPASS", script_text), ("SSH_ASKPASS", script_text)]);
-    let server = Server::start()?;
+    let server = Server::start(2)?;
 
     let started = Instant::now();
     let result = push(&git, &top, &target(&server.url()), &Cancel::new());
 
     assert!(started.elapsed() < Duration::from_secs(10));
-    match result {
-        Err(PushError::Failed { message }) => assert_ne!(message, ""),
-        other => return Err(format!("{other:?}").into()),
-    }
+    // The same push again, on the same server (it stays up for both): git must say the same.
+    let independent = sandbox.failing_stderr(
+        &top,
+        &["push", "--porcelain", &server.url(), "HEAD:refs/heads/main"],
+        &[("GIT_TERMINAL_PROMPT", "0")],
+    )?;
+    assert_failed_with(result, &independent)?;
     assert!(!marker.exists(), "askpass ran");
     // Git never retried with a credential, so the server may still wait: do not join it.
     Ok(())
