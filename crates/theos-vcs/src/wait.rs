@@ -51,13 +51,20 @@ pub(crate) fn wait<'scope>(
 
 /// The decision once a cancel is seen. git may have exited just now: a status that has arrived
 /// is the answer, `Exited`, and nothing is stopped, as git's process id may be reused. Only a git
-/// still running is stopped, and the answer is `Cancelled`.
+/// still running is stopped, and the answer is `Cancelled`, unless (Unix) it exited successfully
+/// just before the stop: then its result stands.
 fn after_cancel(receiver: &Receiver<io::Result<ExitStatus>>, tree: Tree) -> io::Result<Waited> {
     if let Ok(status) = receiver.try_recv() {
         return status.map(Waited::Exited);
     }
     tree.stop();
-    receiver.recv().map_err(|_| gone())??;
+    let status = receiver.recv().map_err(|_| gone())??;
+    // git may have exited successfully between the check and the stop: what it did is done, so
+    // its result is reported, not a cancel (P47 ruling 2). Only Unix can tell: a git killed
+    // there ends by a signal, while closing the job on Windows ends it with exit code 0.
+    if cfg!(unix) && status.success() {
+        return Ok(Waited::Exited(status));
+    }
     Ok(Waited::Cancelled)
 }
 
@@ -84,6 +91,28 @@ mod tests {
         child.wait()?;
         let waited = after_cancel(&receiver, tree)?;
         assert!(matches!(waited, Waited::Exited(got) if got == status));
+        Ok(())
+    }
+
+    // Unix only: closing the job on Windows ends git with exit code 0, so a success there cannot
+    // be told from a kill and the run stays `Cancelled`.
+    #[cfg(unix)]
+    #[test]
+    fn a_success_that_arrives_while_stopping_is_kept() -> io::Result<()> {
+        let mut command = Command::new("git");
+        command.arg("--version").stdout(std::process::Stdio::null());
+        let (tree, mut child) = Tree::spawn(&mut command)?;
+        let status = child.wait()?;
+        assert!(status.success());
+        let (sender, receiver) = mpsc::channel();
+        let late = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            let _ = sender.send(Ok(status));
+        });
+        // Nothing has arrived yet, so the stop path runs and then receives the success.
+        let waited = after_cancel(&receiver, tree)?;
+        assert!(matches!(waited, Waited::Exited(got) if got == status));
+        late.join().map_err(|_| gone())?;
         Ok(())
     }
 
