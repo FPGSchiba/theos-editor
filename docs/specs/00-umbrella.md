@@ -1,6 +1,6 @@
 # Theos content editor — umbrella spec
 
-Status: accepted when this file is merged by Jann · version 8 · 25 Nov 2026 (version 1: 31 Oct 2026;
+Status: accepted when this file is merged by Jann · version 9 · 28 Nov 2026 (version 1: 31 Oct 2026;
 version 2, 5 Nov 2026, adds the world atlas, quests and art from lore: G19, P20–P28, slices S8 and
 S9; version 3, 10 Nov 2026, moves the map generator to Rust in this repo, decision 0003: G1, G4,
 G11, G20, P08 rewritten, P09 (with `theos gen`), P22 and P23 adjusted, P29, P30 and slice S10;
@@ -16,7 +16,8 @@ release instead of build provenance, which GitHub offers private repositories on
 Enterprise Cloud; version 7, 25 Nov 2026, adds P50 Leaner CI (CE-08C) after the included runner
 minutes ran out, and rewords G2, CE-08.3 and CE-08R.6 for it; version 8, the same day, runs
 P50's checks in three parallel jobs so CI reports as fast as before: CE-08C.1, CE-08C.2,
-CE-08C.5 and CE-08.3 reworded)
+CE-08C.5 and CE-08.3 reworded; version 9, 28 Nov 2026, adds P51 Window chrome (CE-84): the
+editor's own title bar and menu bar instead of the OS bar, and a page that never scrolls)
 Owner of architecture: Jann · Built by: Claude Code with superpowers
 
 This spec defines the whole build as phases. Each phase runs one superpowers cycle:
@@ -132,6 +133,7 @@ Slices say what Jann can do once their phases are merged; Jira tracks slices.
 | P48 | MCP read | theos-editor | S2 | P05 |
 | P49 | Releases and the check action | theos-editor | S2 | P05, P48 |
 | P50 | Leaner CI | theos-editor | S2 | P00 |
+| P51 | Window chrome | theos-editor | S5 | P11 |
 
 Core track runs in order P00 → P02 → … → P07; the git phases P46 (after P05) and P47 (after P06
 and P46) and the MCP read phase P48 (after P05) belong to it and come before P07. P49 can run
@@ -145,9 +147,9 @@ the gate and can run beside any phase.
 
 Slices: **S1** write lore now (P01, P10) · **S2** canon checks (P00, P02–P05, P48–P50) · **S3**
 propose and review (P06, P07, P46, P47) · **S4** maps (P08, P09) · **S5** core UI (P11–P13,
-P19) · **S6** complete UI (P14, P15) · **S7** pictures and places (P16–P18) · **S8** the world
-on the map (P20–P25, P29, P34) · **S9** art from lore (P26–P28) · **S10** indoor floors (P30,
-P45) · **S11** designable floors (P31–P33).
+P19, P51) · **S6** complete UI (P14, P15) · **S7** pictures and places (P16–P18) · **S8** the
+world on the map (P20–P25, P29, P34) · **S9** art from lore (P26–P28) · **S10** indoor floors
+(P30, P45) · **S11** designable floors (P31–P33).
 
 ---
 
@@ -991,6 +993,33 @@ switches the required checks of the live ruleset when he approves it.
 - CE-08C.6 `platforms` runs the checks of one OS in one job; its weekly and label runs test macOS
   on Apple silicon; the Intel macOS tests run only on demand; a newer label run for the same pull
   request and OS cancels the older one.
+
+### P51 · Window chrome
+
+The editor's own window chrome instead of the OS title bar, which Jann found ugly above P11's
+shell, and a page that never scrolls. Settled with Jann on 28 Nov 2026: on Windows and Linux one
+Theos title bar row carries the mark, an in-window menu bar, the breadcrumb as the drag region,
+the validator pip and the window controls; on macOS the native traffic lights stay, inset in the
+Theos title bar, and the system menu bar carries the same menus. The phase first proposes the
+layout (spec PR), then changes the design documents (`design/theos-ui/`, `docs/ui/`) in their
+own PR, then builds it. Depends on P11.
+
+**CE-84 Window chrome**
+- CE-84.1 On Windows and Linux the window has no OS title bar: the Theos title bar holds the
+  window controls (minimize, maximize or restore, close), drags the window, maximizes and
+  restores it on double-click, and the window still resizes from its edges; on Windows 11 the
+  maximize button shows the snap-layout flyout. On macOS the native traffic lights sit inset in
+  the Theos title bar.
+- CE-84.2 The commands of the command table are listed by menu, each with its keys from the one
+  keymap: in a menu bar in the title bar on Windows and Linux, and in the system menu bar on
+  macOS. On Windows and Linux, Alt or F10 focuses the menu bar, the arrow keys move and Esc
+  leaves it.
+- CE-84.3 The page never scrolls: at every window size from the minimum size up, the shell fills
+  the window exactly and only window bodies scroll.
+- CE-84.4 The window keeps its size, position and maximized state between starts, and cannot be
+  made smaller than its minimum size.
+- CE-84.5 `design/theos-ui/` and `docs/ui/` describe the title bar, the menu bar, the window
+  controls and the scrollbars in both themes, and the build uses only what they describe.
 
 ---
 

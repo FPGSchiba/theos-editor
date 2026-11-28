@@ -47,12 +47,14 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P48 | MCP read | theos-editor | done | #53 | #61 |
 | P49 | Releases and the check action | theos-editor | todo | | |
 | P50 | Leaner CI | theos-editor | done | #45, #46 | #48 |
+| P51 | Window chrome | theos-editor | spec-pr | | |
 
 Rows P20–P28 come from umbrella version 2 (#19); P29, P30 and the new P08 and P23 from version 3
 (decision 0003, #24). Rows P31–P34 and P45, and the new P29 and P30, come from umbrella version 4
 (decision 0004, #31). Rows P46 and P47 and the new P06 come from umbrella version 5 (the split of
 P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the split of P05,
-#34). Row P50 comes from umbrella version 7 (#45), amended by version 8.
+#34). Row P50 comes from umbrella version 7 (#45), amended by version 8. Row P51 comes from
+umbrella version 9.
 
 ## Needs Jann
 

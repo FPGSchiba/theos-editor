@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>P51 · Window chrome — proposal — Theos Editor reference</title>
+<!--
+  Layout proposal for phase P51 "Window chrome": the editor draws its own title bar, menu bar and
+  window controls; the OS bar goes away (Windows, Linux); macOS keeps its traffic lights.
+  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
+  The page styles hold the PROPOSED tokens and classes (tu-menubar, tu-menu, tu-winctl, …); they
+  read existing tokens only. bundle.js and the one-line script switch the theme (?theme=grid-light);
+  the second script copies the shell slice from <template> into each frame.
+  Hover, open and focus states are shown with is-* classes, because a static page cannot hover.
+  See README.md next to this file for the tokens, classes and decisions.
+-->
+<link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
+<link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
+<script src="../../../design/theos-ui/components/bundle.js"></script>
+<script>TheosUI.setTheme(new URLSearchParams(location.search).get("theme"));</script>
+<style>
+/* ── Proposed tokens (read existing tokens only) ─────────────────────── */
+:root {
+  --w-winctl: 46px;                 /* one window control: 46 wide, as Windows 11 */
+  --h-resize-edge: 4px;             /* Tauri's resize strip along the window's top edge */
+  --w-macos-inset: 72px;            /* room for the native traffic lights */
+  --w-menu-min: 248px;              /* a dropdown's least width */
+  --h-menu-item: 24px;
+  --w-scrollbar: 10px;              /* track; the thumb is inset 2px on each side */
+  --scrollbar-track: var(--panel);
+  --scrollbar-thumb: color-mix(in srgb, var(--textDim) 70%, var(--panel));
+  --scrollbar-thumb-hover: var(--textDim);
+  --scrollbar-thumb-active: var(--sig-attention);
+}
+
+/* ── Proposed: frameless title bar ───────────────────────────────────── */
+.tu-titlebar, .tu-statusbar { box-sizing: border-box; } /* design-system fix: no 1px overflow */
+.tu-titlebar--frameless { overflow: visible; position: relative; z-index: 3; padding-right: 0; gap: 10px; }
+.tu-titlebar__drag { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; justify-content: center; gap: 12px; overflow: hidden; }
+.tu-titlebar__drag > span { overflow: hidden; text-overflow: ellipsis; }
+.tu-titlebar--mac { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); padding-left: 0; }
+.tu-titlebar--mac .tu-titlebar__left { display: flex; align-items: center; gap: 10px; }
+.tu-titlebar--mac .tu-titlebar__right { display: flex; justify-content: flex-end; align-items: center; }
+.tu-titlebar__inset { width: var(--w-macos-inset); align-self: stretch; display: flex; align-items: center; gap: 8px; padding-left: 12px; box-sizing: border-box; flex-shrink: 0; }
+
+/* ── Proposed: menu bar ──────────────────────────────────────────────── */
+.tu-menubar { display: flex; align-items: stretch; align-self: stretch; }
+.tu-menubar__slot { position: relative; display: flex; }
+.tu-menubar__item { padding: 0 8px; display: flex; align-items: center; background: transparent; border: 0; border-radius: 0; cursor: default;
+  font: 700 10px/1 var(--tu-font-i); letter-spacing: 0.8px; text-transform: uppercase; color: var(--textDim); }
+.tu-menubar__item:hover, .tu-menubar__item.is-hover { color: var(--text); background: var(--panel2); }
+.tu-menubar__item.is-open { color: var(--text); background: var(--panel2); box-shadow: inset 1px 0 var(--borderHi), inset -1px 0 var(--borderHi), inset 0 1px var(--borderHi); }
+.tu-menubar__item:focus-visible, .tu-menubar__item.is-focus { outline: 1px solid var(--sig-attention); outline-offset: -1px; color: var(--text); }
+.tu-menubar__key { text-decoration: none; }
+.tu-menubar.is-keys .tu-menubar__key { text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
+
+/* ── Proposed: dropdown menu ─────────────────────────────────────────── */
+.tu-menu { position: absolute; top: 100%; left: 0; margin-top: 0; min-width: var(--w-menu-min); padding: 4px 0; z-index: 4;
+  background: var(--panel2); border: 1px solid var(--borderHi); border-radius: 0; box-shadow: var(--shadow-popover);
+  display: flex; flex-direction: column; text-transform: none; letter-spacing: 0; }
+.tu-menu--sub { top: -5px; left: 100%; margin-left: 2px; }
+.tu-menu--static { position: static; box-shadow: none; }
+.tu-menu__item { position: relative; height: var(--h-menu-item); display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 6px;
+  padding: 0 12px 0 6px; border-left: 2px solid transparent; white-space: nowrap;
+  font: 400 12px/16px var(--font-ui); color: var(--text); }
+.tu-menu__item:hover, .tu-menu__item.is-active { background: color-mix(in srgb, var(--sig-attention) 13%, transparent); border-left-color: var(--sig-attention); }
+.tu-menu__glyph { font: 400 11px/1 var(--font-mono); color: var(--textDim); text-align: center; }
+.tu-menu__item.is-current .tu-menu__glyph { color: var(--sig-attention); }
+.tu-menu__label { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.tu-menu__phase { font: 400 9.5px/12px var(--font-mono); color: var(--textDim); }
+.tu-menu__keys { font: 400 10px/14px var(--font-mono); color: var(--textDim); padding-left: 24px; text-align: right; }
+.tu-menu__more { font: 400 10px/1 var(--font-mono); color: var(--textDim); padding-left: 24px; }
+.tu-menu__item.is-active .tu-menu__keys, .tu-menu__item.is-active .tu-menu__more, .tu-menu__item.is-active .tu-menu__phase { color: var(--text); }
+.tu-menu__item.is-disabled { color: var(--textMute); }
+.tu-menu__item.is-disabled .tu-menu__keys, .tu-menu__item.is-disabled .tu-menu__glyph { color: var(--textMute); }
+.tu-menu__item.is-disabled:hover { background: transparent; border-left-color: transparent; }
+.tu-menu__sep { height: 1px; margin: 4px 0; background: var(--border); }
+.tu-menu__group { padding: 6px 12px 2px 30px; font: 700 9px/12px var(--tu-font-i); letter-spacing: 0.8px; text-transform: uppercase; color: var(--textDim); }
+
+/* ── Proposed: window controls ───────────────────────────────────────── */
+.tu-winctl { display: flex; align-self: stretch; border-left: 1px solid var(--border); margin-left: 2px; padding-top: var(--h-resize-edge); }
+.tu-titlebar.is-maximized .tu-winctl { padding-top: 0; }
+.tu-winctl__btn { width: var(--w-winctl); padding: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 0; cursor: default;
+  font: 400 12px/1 var(--font-mono); color: var(--textDim); }
+.tu-winctl__btn:hover, .tu-winctl__btn.is-hover { background: var(--panel2); color: var(--text); }
+.tu-winctl__btn--close:hover, .tu-winctl__btn--close.is-hover { background: var(--sig-reject); color: var(--onFill); }
+
+/* ── Proposed: scroll ────────────────────────────────────────────────── */
+/* WebView2, WKWebView and WebKitGTK all honour ::-webkit-scrollbar, but Blink ignores it while
+   scrollbar-width / scrollbar-color are set (bundle.css sets them on *). Reset them inside the shell. */
+.tu-shell, .tu-shell * { scrollbar-width: auto; scrollbar-color: auto; }
+.tu-shell ::-webkit-scrollbar { width: var(--w-scrollbar); height: var(--w-scrollbar); background: var(--scrollbar-track); }
+.tu-shell ::-webkit-scrollbar-track { background: var(--scrollbar-track); border-left: 1px solid var(--border); }
+.tu-shell ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border: 2px solid transparent; background-clip: padding-box; }
+.tu-shell ::-webkit-scrollbar-thumb:hover { background-color: var(--scrollbar-thumb-hover); }
+.tu-shell ::-webkit-scrollbar-thumb:active { background-color: var(--scrollbar-thumb-active); }
+.tu-shell ::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
+
+/* ── Page only ───────────────────────────────────────────────────────── */
+body { margin: 0; background: var(--bg); color: var(--text); width: 1440px; }
+.page-head { padding: 24px 24px 8px; display: flex; flex-direction: column; gap: 6px; }
+.page-head p { margin: 0; max-width: 110ch; color: var(--textDim); }
+.cap { padding: 22px 24px 8px; display: flex; align-items: baseline; gap: 12px; }
+.cap__note { font: 400 10.5px/16px var(--font-mono); color: var(--textDim); }
+.frame { width: 1440px; position: relative; border-top: 1px solid var(--borderHi); border-bottom: 1px solid var(--borderHi); }
+.frame > .tu-shell { height: 100%; overflow: hidden; }
+.frame button.tu-rail__item { width: 100%; padding: 0; background: transparent; border: 0; border-left: 2px solid transparent; }
+.frame .tu-rail { overflow: hidden; }
+.frame .tu-rail__item { flex-shrink: 0; }
+.frame button.tu-tab { background: transparent; border: 0; border-right: 1px solid var(--border); border-top: 2px solid transparent; }
+.frame--short { height: 230px; }
+.frame--mid { height: 320px; }
+.frame--tall { height: 420px; }
+.anno { outline: 1px dashed var(--borderHi); outline-offset: -3px; position: relative; }
+.anno__tag { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); font: 400 9.5px/12px var(--font-mono); color: var(--textDim); background: var(--panel3); border: 1px solid var(--border); padding: 1px 6px; z-index: 5; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 0 24px 34px; }
+.pair__item { display: flex; flex-direction: column; gap: 8px; }
+.pair__bar { position: relative; border: 1px solid var(--borderHi); }
+.strip { position: absolute; top: 0; left: 0; right: 0; height: var(--h-resize-edge); z-index: 6; background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--sig-info) 45%, transparent) 0 3px, transparent 3px 6px); }
+.snapbox { position: absolute; z-index: 6; outline: 1px dashed var(--sig-info); outline-offset: -1px; pointer-events: none; }
+.light { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--borderHi); box-sizing: border-box; }
+.slice-body { padding: 18px 24px; display: flex; flex-direction: column; gap: 14px; }
+.menus { padding: 4px 24px 32px; display: flex; gap: 24px; align-items: flex-start; }
+.menus__col { display: flex; flex-direction: column; gap: 6px; }
+.thumbs { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.thumbs__row { display: grid; grid-template-columns: 70px 10px minmax(0, 1fr); align-items: center; gap: 10px; font: 400 10.5px/16px var(--font-mono); color: var(--textDim); }
+.thumbs__track { width: 10px; height: 64px; background: var(--scrollbar-track); border-left: 1px solid var(--border); box-sizing: border-box; position: relative; }
+.thumbs__thumb { position: absolute; left: 1px; right: 2px; top: 14px; height: 30px; background: var(--c); }
+</style>
+</head>
+<body>
+
+<div class="page-head tu-instrument">
+  <span class="inst-section">P51 · WINDOW CHROME — LAYOUT PROPOSAL</span>
+  <p class="inst-body">The OS title bar goes. One Theos title bar row (h-titlebar 30px) carries the mark, the menu bar, the breadcrumb as the drag region, the validator pip and the window controls. macOS keeps its native traffic lights and its system menu bar. Hover, open and focus states are drawn with state classes. Frames are 1440 wide; each shows a slice of the Codex shell.</p>
+</div>
+
+<!-- (a) ─────────────────────────────────────────────────────────────── -->
+<div class="cap"><span class="tu-label">A · Windows and Linux — menu closed</span><span class="cap__note">no OS bar · dashed box = drag region (double-click maximises) · close shown hovered: the only control that turns sig-reject</span></div>
+<div class="frame frame--short">
+  <div class="tu-shell" style="--tu-font-i: var(--font-ui)">
+    <header class="tu-titlebar tu-titlebar--frameless">
+      <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+      <nav class="tu-menubar" role="menubar" aria-label="Main menu">
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">F</span>ile</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">E</span>dit</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">V</span>iew</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">G</span>o</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">H</span>elp</button></span>
+      </nav>
+      <div class="tu-titlebar__drag anno" data-tauri-drag-region>
+        <span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
+        <span class="anno__tag">drag region</span>
+      </div>
+      <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      <div class="tu-winctl" role="group" aria-label="Window">
+        <button class="tu-winctl__btn" type="button" aria-label="Minimise">−</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Maximise">□</button>
+        <button class="tu-winctl__btn tu-winctl__btn--close is-hover" type="button" aria-label="Close">✕</button>
+      </div>
+    </header>
+    <slot-shell></slot-shell>
+  </div>
+</div>
+
+<!-- (a2) ───────────────────────────────────────────────────────────── -->
+<div class="cap"><span class="tu-label">A2 · Window controls — restored and maximised</span><span class="cap__note">46 × 30 each · □ maximise, ▫ restore · hatched = Tauri's 4px resize strip · dashed = the snap-layout child window over maximise</span></div>
+<div class="pair tu-instrument">
+  <div class="pair__item">
+    <div class="pair__bar">
+      <header class="tu-titlebar tu-titlebar--frameless">
+        <div class="tu-titlebar__drag" data-tauri-drag-region><span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span></div>
+        <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+        <div class="tu-winctl" role="group" aria-label="Window">
+          <button class="tu-winctl__btn" type="button" aria-label="Minimise">−</button>
+          <button class="tu-winctl__btn is-hover" type="button" aria-label="Maximise">□</button>
+          <button class="tu-winctl__btn tu-winctl__btn--close" type="button" aria-label="Close">✕</button>
+        </div>
+      </header>
+      <span class="strip" aria-hidden="true"></span>
+      <span class="snapbox" style="right: 46px; width: 46px; top: 4px; height: 26px;" aria-hidden="true"></span>
+    </div>
+    <span class="cap__note">restored · maximise hovered · hit areas are 46 × 26 below the resize strip, so a click in the top 4px resizes and never hits a control</span>
+  </div>
+  <div class="pair__item">
+    <div class="pair__bar">
+      <header class="tu-titlebar tu-titlebar--frameless is-maximized">
+        <div class="tu-titlebar__drag" data-tauri-drag-region><span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span></div>
+        <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+        <div class="tu-winctl" role="group" aria-label="Window">
+          <button class="tu-winctl__btn" type="button" aria-label="Minimise">−</button>
+          <button class="tu-winctl__btn is-hover" type="button" aria-label="Restore">▫</button>
+          <button class="tu-winctl__btn tu-winctl__btn--close" type="button" aria-label="Close">✕</button>
+        </div>
+      </header>
+      <span class="snapbox" style="right: 46px; width: 46px; top: 0; height: 30px;" aria-hidden="true"></span>
+    </div>
+    <span class="cap__note">maximised · restore hovered · no resize strip, so the controls take the full 30px up to the screen edge</span>
+  </div>
+</div>
+
+<!-- (b) ─────────────────────────────────────────────────────────────── -->
+<div class="cap"><span class="tu-label">B · File menu open</span><span class="cap__note">one menu at a time · keys from the keymap (Ctrl on Windows and Linux) · disabled items name their phase · hovering EDIT now switches menus</span></div>
+<div class="frame frame--mid">
+  <div class="tu-shell" style="--tu-font-i: var(--font-ui)">
+    <header class="tu-titlebar tu-titlebar--frameless">
+      <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+      <nav class="tu-menubar" role="menubar" aria-label="Main menu">
+        <span class="tu-menubar__slot"><button class="tu-menubar__item is-open" type="button" role="menuitem" aria-haspopup="menu" aria-expanded="true"><span class="tu-menubar__key">F</span>ile</button>
+          <div class="tu-menu" role="menu" aria-label="File">
+            <div class="tu-menu__item is-active" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Open project…</span><span class="tu-menu__keys">Ctrl+O</span></div>
+            <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Reload project</span><span class="tu-menu__keys">Ctrl+R</span></div>
+            <div class="tu-menu__sep" role="separator"></div>
+            <div class="tu-menu__item is-disabled" role="menuitem" aria-disabled="true"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Save<span class="tu-menu__phase">arrives with P12</span></span><span class="tu-menu__keys">Ctrl+S</span></div>
+            <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Close tab</span><span class="tu-menu__keys">Ctrl+W</span></div>
+            <div class="tu-menu__sep" role="separator"></div>
+            <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Quit</span><span class="tu-menu__keys">Ctrl+Q</span></div>
+          </div>
+        </span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">E</span>dit</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">V</span>iew</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">G</span>o</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">H</span>elp</button></span>
+      </nav>
+      <div class="tu-titlebar__drag" data-tauri-drag-region>
+        <span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
+      </div>
+      <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      <div class="tu-winctl" role="group" aria-label="Window">
+        <button class="tu-winctl__btn" type="button" aria-label="Minimise">−</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Maximise">□</button>
+        <button class="tu-winctl__btn tu-winctl__btn--close" type="button" aria-label="Close">✕</button>
+      </div>
+    </header>
+    <slot-shell></slot-shell>
+  </div>
+</div>
+
+<!-- (c) ─────────────────────────────────────────────────────────────── -->
+<div class="cap"><span class="tu-label">C · View menu open, Layout submenu</span><span class="cap__note">the submenu lists the project's rail in rail order (Ctrl+1 … Ctrl+9) · the current layout's glyph is amber · layouts not built yet are disabled and name their phase</span></div>
+<div class="frame frame--tall">
+  <div class="tu-shell" style="--tu-font-i: var(--font-ui)">
+    <header class="tu-titlebar tu-titlebar--frameless">
+      <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+      <nav class="tu-menubar" role="menubar" aria-label="Main menu">
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">F</span>ile</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">E</span>dit</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item is-open" type="button" role="menuitem" aria-haspopup="menu" aria-expanded="true"><span class="tu-menubar__key">V</span>iew</button>
+          <div class="tu-menu" role="menu" aria-label="View">
+            <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Command palette</span><span class="tu-menu__keys">Ctrl+K</span></div>
+            <div class="tu-menu__sep" role="separator"></div>
+            <div class="tu-menu__item is-active" role="menuitem" aria-haspopup="menu" aria-expanded="true"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Layout</span><span class="tu-menu__more">▸</span>
+              <div class="tu-menu tu-menu--sub" role="menu" aria-label="Layout">
+                <div class="tu-menu__item is-current" role="menuitemradio" aria-checked="true"><span class="tu-menu__glyph">◈</span><span class="tu-menu__label">Codex</span><span class="tu-menu__keys">Ctrl+1</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">⋈</span><span class="tu-menu__label">Graph<span class="tu-menu__phase">arrives with P15</span></span><span class="tu-menu__keys">Ctrl+2</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">¶</span><span class="tu-menu__label">Scripts<span class="tu-menu__phase">arrives with P15</span></span><span class="tu-menu__keys">Ctrl+3</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">◫</span><span class="tu-menu__label">Concepts<span class="tu-menu__phase">arrives with P16</span></span><span class="tu-menu__keys">Ctrl+4</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">△</span><span class="tu-menu__label">Maps<span class="tu-menu__phase">arrives with P16</span></span><span class="tu-menu__keys">Ctrl+5</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">◴</span><span class="tu-menu__label">Review<span class="tu-menu__phase">arrives with P13</span></span><span class="tu-menu__keys">Ctrl+6</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">±</span><span class="tu-menu__label">Changes<span class="tu-menu__phase">arrives with P13</span></span><span class="tu-menu__keys">Ctrl+7</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">⚙</span><span class="tu-menu__label">Settings<span class="tu-menu__phase">arrives with P14</span></span><span class="tu-menu__keys">Ctrl+8</span></div>
+              </div>
+            </div>
+            <div class="tu-menu__sep" role="separator"></div>
+            <div class="tu-menu__group">Codex tree</div>
+            <div class="tu-menu__item is-current" role="menuitemradio" aria-checked="true"><span class="tu-menu__glyph">▸</span><span class="tu-menu__label">Where</span><span class="tu-menu__keys">Ctrl+Shift+1</span></div>
+            <div class="tu-menu__item" role="menuitemradio" aria-checked="false"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Who</span><span class="tu-menu__keys">Ctrl+Shift+2</span></div>
+            <div class="tu-menu__item" role="menuitemradio" aria-checked="false"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Lore</span><span class="tu-menu__keys">Ctrl+Shift+3</span></div>
+            <div class="tu-menu__item" role="menuitemradio" aria-checked="false"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Things</span><span class="tu-menu__keys">Ctrl+Shift+4</span></div>
+          </div>
+        </span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">G</span>o</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">H</span>elp</button></span>
+      </nav>
+      <div class="tu-titlebar__drag" data-tauri-drag-region>
+        <span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
+      </div>
+      <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      <div class="tu-winctl" role="group" aria-label="Window">
+        <button class="tu-winctl__btn" type="button" aria-label="Minimise">−</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Maximise">□</button>
+        <button class="tu-winctl__btn tu-winctl__btn--close" type="button" aria-label="Close">✕</button>
+      </div>
+    </header>
+    <slot-shell></slot-shell>
+  </div>
+</div>
+
+<!-- (d) ─────────────────────────────────────────────────────────────── -->
+<div class="cap"><span class="tu-label">D · Menu bar focused by keyboard</span><span class="cap__note">Alt (pressed and released) or F10 · access letters underline · ← → move · ↓ ⏎ Space open · letter opens its menu · Esc returns focus to where it was</span></div>
+<div class="frame frame--short">
+  <div class="tu-shell" style="--tu-font-i: var(--font-ui)">
+    <header class="tu-titlebar tu-titlebar--frameless">
+      <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+      <nav class="tu-menubar is-keys" role="menubar" aria-label="Main menu">
+        <span class="tu-menubar__slot"><button class="tu-menubar__item is-focus" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">F</span>ile</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu" tabindex="-1"><span class="tu-menubar__key">E</span>dit</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu" tabindex="-1"><span class="tu-menubar__key">V</span>iew</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu" tabindex="-1"><span class="tu-menubar__key">G</span>o</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu" tabindex="-1"><span class="tu-menubar__key">H</span>elp</button></span>
+      </nav>
+      <div class="tu-titlebar__drag" data-tauri-drag-region>
+        <span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
+      </div>
+      <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      <div class="tu-winctl" role="group" aria-label="Window">
+        <button class="tu-winctl__btn" type="button" aria-label="Minimise" tabindex="-1">−</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Maximise" tabindex="-1">□</button>
+        <button class="tu-winctl__btn tu-winctl__btn--close" type="button" aria-label="Close" tabindex="-1">✕</button>
+      </div>
+    </header>
+    <slot-shell></slot-shell>
+  </div>
+</div>
+
+<!-- (e) ─────────────────────────────────────────────────────────────── -->
+<div class="cap"><span class="tu-label">E · macOS</span><span class="cap__note">traffic lights are native (outlined here) in a 72px inset · no in-window menu: the system menu bar carries the same menus with ⌘ keys · breadcrumb centred on the window</span></div>
+<div class="frame frame--short">
+  <div class="tu-shell" style="--tu-font-i: var(--font-ui)">
+    <header class="tu-titlebar tu-titlebar--frameless tu-titlebar--mac">
+      <div class="tu-titlebar__left">
+        <span class="tu-titlebar__inset" aria-hidden="true"><span class="light"></span><span class="light"></span><span class="light"></span></span>
+        <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+      </div>
+      <div class="tu-titlebar__drag" data-tauri-drag-region>
+        <span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
+      </div>
+      <div class="tu-titlebar__right" style="padding-right: 10px;">
+        <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      </div>
+    </header>
+    <slot-shell></slot-shell>
+  </div>
+</div>
+
+<!-- (f) ─────────────────────────────────────────────────────────────── -->
+<div class="cap"><span class="tu-label">F · A window body with the themed scrollbar</span><span class="cap__note">the shell fills the window exactly (100vh, no page scroll) · only tu-window__body scrolls · 10px track, 6px thumb · amber only while dragging</span></div>
+<div class="frame frame--tall">
+  <div class="tu-shell" style="--tu-font-i: var(--font-ui)">
+    <header class="tu-titlebar tu-titlebar--frameless">
+      <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+      <nav class="tu-menubar" role="menubar" aria-label="Main menu">
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">F</span>ile</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">E</span>dit</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">V</span>iew</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">G</span>o</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">H</span>elp</button></span>
+      </nav>
+      <div class="tu-titlebar__drag" data-tauri-drag-region>
+        <span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
+      </div>
+      <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      <div class="tu-winctl" role="group" aria-label="Window">
+        <button class="tu-winctl__btn" type="button" aria-label="Minimise">−</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Maximise">□</button>
+        <button class="tu-winctl__btn tu-winctl__btn--close" type="button" aria-label="Close">✕</button>
+      </div>
+    </header>
+    <slot-shell data-thumbs></slot-shell>
+  </div>
+</div>
+
+<!-- (g) ─────────────────────────────────────────────────────────────── -->
+<div class="cap"><span class="tu-label">G · The other menus</span><span class="cap__note">drawn flat for review · Edit opens but every item waits for P12 · Help ▸ Keyboard shortcuts opens the palette</span></div>
+<div class="menus tu-instrument">
+  <div class="menus__col"><span class="tu-label tu-label--xs">Edit</span>
+    <div class="tu-menu tu-menu--static" role="menu" aria-label="Edit">
+      <div class="tu-menu__item is-disabled" role="menuitem" aria-disabled="true"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Undo<span class="tu-menu__phase">arrives with P12</span></span><span class="tu-menu__keys"></span></div>
+      <div class="tu-menu__item is-disabled" role="menuitem" aria-disabled="true"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Redo<span class="tu-menu__phase">arrives with P12</span></span><span class="tu-menu__keys"></span></div>
+      <div class="tu-menu__sep" role="separator"></div>
+      <div class="tu-menu__item is-disabled" role="menuitem" aria-disabled="true"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Cut<span class="tu-menu__phase">arrives with P12</span></span><span class="tu-menu__keys"></span></div>
+      <div class="tu-menu__item is-disabled" role="menuitem" aria-disabled="true"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Copy<span class="tu-menu__phase">arrives with P12</span></span><span class="tu-menu__keys"></span></div>
+      <div class="tu-menu__item is-disabled" role="menuitem" aria-disabled="true"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Paste<span class="tu-menu__phase">arrives with P12</span></span><span class="tu-menu__keys"></span></div>
+    </div>
+  </div>
+  <div class="menus__col"><span class="tu-label tu-label--xs">Go</span>
+    <div class="tu-menu tu-menu--static" role="menu" aria-label="Go">
+      <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Find record</span><span class="tu-menu__keys">Ctrl+P</span></div>
+      <div class="tu-menu__sep" role="separator"></div>
+      <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Next tab</span><span class="tu-menu__keys">Ctrl+Tab</span></div>
+      <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Previous tab</span><span class="tu-menu__keys">Ctrl+Shift+Tab</span></div>
+    </div>
+  </div>
+  <div class="menus__col"><span class="tu-label tu-label--xs">Help</span>
+    <div class="tu-menu tu-menu--static" role="menu" aria-label="Help">
+      <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Keyboard shortcuts</span><span class="tu-menu__keys">Ctrl+K</span></div>
+      <div class="tu-menu__sep" role="separator"></div>
+      <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">About Theos Editor</span><span class="tu-menu__keys"></span></div>
+    </div>
+  </div>
+  <div class="menus__col"><span class="tu-label tu-label--xs">macOS app menu (system bar)</span>
+    <div class="tu-menu tu-menu--static" role="menu" aria-label="Theos Editor">
+      <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">About Theos Editor</span><span class="tu-menu__keys"></span></div>
+      <div class="tu-menu__sep" role="separator"></div>
+      <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Hide Theos Editor</span><span class="tu-menu__keys">⌘H</span></div>
+      <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Quit Theos Editor</span><span class="tu-menu__keys">⌘Q</span></div>
+    </div>
+    <span class="cap__note">drawn by macOS in its own style; shown for its contents only</span>
+  </div>
+</div>
+
+<!-- The shell slice under each title bar (toolbar, rail, tree, record). -->
+<template id="shell-slice">
+  <div class="tu-toolbar">
+    <label class="tu-input" style="width: 300px;"><span class="tu-input__icon">~</span><input type="text" aria-label="Find record" placeholder="find record   #id   @people   :kind"></label>
+    <span class="tu-divider"></span>
+    <span class="tu-seg" aria-label="Editor mode"><button class="tu-seg__opt is-active" type="button">Read</button><button class="tu-seg__opt" type="button" disabled>Write</button><button class="tu-seg__opt" type="button" disabled>Source</button></span>
+    <span class="tu-spacer"></span>
+    <button class="tu-btn tu-btn--accent" type="button" disabled>Save Ctrl+S</button>
+  </div>
+  <nav class="tu-rail" aria-label="Layout presets">
+    <button class="tu-rail__item is-active" type="button" aria-current="true"><span class="tu-rail__glyph">◈</span><span class="tu-rail__label">Codex</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">⋈</span><span class="tu-rail__label">Graph</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">¶</span><span class="tu-rail__label">Scripts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◫</span><span class="tu-rail__label">Concepts</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">△</span><span class="tu-rail__label">Maps</span></button>
+    <button class="tu-rail__item" type="button"><span class="tu-rail__glyph">◴</span><span class="tu-rail__label">Review</span></button>
+  </nav>
+  <div class="tu-shell__work">
+    <section class="tu-window" style="flex: 0 0 248px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__tabs">
+        <button class="tu-tab is-active" type="button">Where</button><button class="tu-tab" type="button">Who</button><button class="tu-tab" type="button">Lore</button><button class="tu-tab" type="button">Things</button>
+      </div></div>
+      <div class="tu-window__body">
+        <div class="tu-tree">
+          <div class="tu-tree__row is-root"><span class="tu-kind" data-kind="tower"></span><span class="tu-tree__name">Tower of Theos</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="band"></span><span class="tu-tree__name">The Hearth</span><span class="tu-tree__tag">1–20</span></div>
+          <div class="tu-tree__row" style="--depth: 2;"><span class="tu-kind" data-kind="floor"></span><span class="tu-tree__name">F03</span><span class="tu-tree__tag">stub</span></div>
+          <div class="tu-tree__row is-entity is-selected" style="--depth: 2;"><span class="tu-kind" data-kind="floor"></span><span class="tu-tree__name">F04 The Choir-hall</span><span class="tu-tree__tag">draft</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 3;"><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Fates' shrine</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 3;"><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Choir-hall nave</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 3;"><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Tuning gallery</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 3;"><span class="tu-kind" data-kind="location"></span><span class="tu-tree__name">Rim terraces</span></div>
+          <div class="tu-tree__row" style="--depth: 2;"><span class="tu-kind" data-kind="floor"></span><span class="tu-tree__name">F05</span><span class="tu-tree__tag">stub</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="band"></span><span class="tu-tree__name">The Wilds</span><span class="tu-tree__tag">21–50</span></div>
+          <div class="tu-tree__row is-entity" style="--depth: 1;"><span class="tu-kind" data-kind="band"></span><span class="tu-tree__name">The Crucible</span><span class="tu-tree__tag">51–80</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="tu-window" style="flex: 1 1 560px;">
+      <div class="tu-tabbar">
+        <div class="tu-tabbar__tabs">
+          <button class="tu-tab is-active" type="button"><span class="tu-kind" data-kind="floor"></span>F04</button>
+          <button class="tu-tab" type="button"><span class="tu-kind" data-kind="location"></span>fates-shrine</button>
+        </div>
+      </div>
+      <div class="tu-window__body tu-manuscript">
+        <header class="tu-rechead">
+          <div class="tu-rechead__top"><span class="tu-kind tu-rechead__glyph" data-kind="floor"></span><span class="tu-rechead__id">F04</span><span class="tu-rechead__kind">floor · in The Hearth</span><span class="tu-rechead__right"><span class="tu-status" data-status="draft">Draft</span></span></div>
+          <h1 class="tu-rechead__title">Floor 4 — The Choir-hall</h1>
+          <div class="tu-rechead__meta"><span>world/hearth/f04-choir-hall/floor.md</span><span>12 links in · 2 lenses · 2 concepts</span></div>
+        </header>
+        <div class="slice-body">
+          <div class="tu-prose">
+            <p>A grassland floor grown over a half-buried <span class="tu-link" data-kind="location"><span class="tu-kind" data-kind="location"></span><span class="tu-link__title">Choir-hall nave</span></span>. The <span class="tu-link" data-kind="people"><span class="tu-kind" data-kind="people"></span><span class="tu-link__title">Hearth folk</span></span> have farmed its slopes for generations and built the <span class="tu-link" data-kind="location"><span class="tu-kind" data-kind="location"></span><span class="tu-link__title">Fates' shrine</span></span> on the roof of the ruin, where the pipes still hum at dusk. It is the first floor where the Tower answers back.</p>
+            <h2>What the player should leave with</h2>
+            <ul>
+              <li>The hum is not weather. Something in the hall responds to song.</li>
+              <li>The Hearth folk have a complete, comforting explanation for it, and it is wrong.</li>
+              <li>One word in a dead tongue, heard once under the shrine: <span class="tu-link" data-kind="clue"><span class="tu-kind" data-kind="clue"></span><span class="tu-link__id">C-031</span><span class="tu-link__title">the murmur</span></span>.</li>
+            </ul>
+            <h2>How the Hearth folk see it</h2>
+            <p>The faithful hear the Fates at their weaving. When the hum drops low, they light three candles and keep the children in.</p>
+            <h2>Lore this floor carries</h2>
+            <p>C-031 hints at T-012. B-014, B-016 and B-033 distort T-001, T-012 and T-031.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="tu-window thumbs-win" style="flex: 0 0 300px;">
+      <div class="tu-tabbar"><div class="tu-tabbar__title">Validation <span class="tu-badge is-warn">1</span></div></div>
+      <div class="tu-window__body">
+        <div class="tu-val" data-sev="warn" style="border-top: 0;"><span class="tu-val__sev"></span><span class="tu-val__msg">Choir-hall nave has a T1 picture but no picked T3 reading.</span><div class="tu-val__meta"><span class="tu-val__rule">two-state</span></div></div>
+        <div class="tu-val" data-sev="pass"><span class="tu-val__sev"></span><span class="tu-val__msg">All 12 links resolve.</span><div class="tu-val__meta"><span class="tu-val__rule">no-broken-links</span></div></div>
+      </div>
+    </section>
+  </div>
+</template>
+<template id="thumb-states">
+  <div class="tu-tabbar"><div class="tu-tabbar__title">Scrollbar thumb</div></div>
+  <div class="tu-window__body">
+    <div class="thumbs">
+      <div class="thumbs__row"><span>rest</span><span class="thumbs__track"><span class="thumbs__thumb" style="--c: var(--scrollbar-thumb)"></span></span><span>--scrollbar-thumb</span></div>
+      <div class="thumbs__row"><span>hover</span><span class="thumbs__track"><span class="thumbs__thumb" style="--c: var(--scrollbar-thumb-hover)"></span></span><span>--scrollbar-thumb-hover</span></div>
+      <div class="thumbs__row"><span>dragging</span><span class="thumbs__track"><span class="thumbs__thumb" style="--c: var(--scrollbar-thumb-active)"></span></span><span>--scrollbar-thumb-active</span></div>
+    </div>
+  </div>
+</template>
+<script>
+  // Copies the shell slice into each frame; in frame F the right window shows the thumb states.
+  var slice = document.getElementById("shell-slice");
+  var thumbs = document.getElementById("thumb-states");
+  document.querySelectorAll("slot-shell").forEach(function (slot) {
+    var copy = slice.content.cloneNode(true);
+    if (slot.hasAttribute("data-thumbs")) {
+      var win = copy.querySelector(".thumbs-win");
+      win.replaceChildren(thumbs.content.cloneNode(true));
+    }
+    slot.replaceWith(copy);
+  });
+</script>
+</body>
+</html>
