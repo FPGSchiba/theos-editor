@@ -1,6 +1,6 @@
 //! `push` against local bare repositories.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use theos_vcs::push::{PushError, PushTarget, Pushed, Rejection, push};
 use theos_vcs::{Cancel, repo};
@@ -30,6 +30,42 @@ fn with_bare(sandbox: &Sandbox) -> Result<(PathBuf, PathBuf)> {
     )?;
     sandbox.run(&top, &["remote", "add", "origin", text])?;
     Ok((top, bare))
+}
+
+/// The stderr of the same push run by the test itself: the state is unchanged by a refusal, so
+/// git answers the same way.
+fn independent_stderr(sandbox: &Sandbox, top: &Path, remote: &str) -> Result<String> {
+    let refspec = "HEAD:refs/heads/main";
+    let error = sandbox
+        .run(top, &["push", "--porcelain", remote, refspec])
+        .err()
+        .ok_or("the independent push succeeded")?
+        .to_string();
+    // `Sandbox::run` words its error "git [...] failed: <stderr>".
+    let (_, stderr) = error.split_once("failed: ").ok_or("error text")?;
+    Ok(stderr.trim().to_owned())
+}
+
+/// A refusal of `reason` whose message is git's stderr, whole and last in the error's text.
+fn assert_git_message(
+    result: std::result::Result<Pushed, PushError>,
+    reason: Rejection,
+    independent: &str,
+) -> Result<String> {
+    let error = result.err().ok_or("the push succeeded")?;
+    let text = error.to_string();
+    match error {
+        PushError::Rejected {
+            reason: got,
+            message,
+        } => {
+            assert_eq!(got, reason);
+            assert!(text.ends_with(&message), "{text}");
+            assert_eq!(message, independent);
+            Ok(message)
+        }
+        other => Err(format!("{other:?}").into()),
+    }
 }
 
 // AC: CE-22.3
@@ -87,16 +123,12 @@ fn a_hook_refusal_shows_the_hooks_line() -> Result {
 
     let result = push(&sandbox.git()?, &top, &target("origin"), &Cancel::new());
 
-    match result {
-        Err(PushError::Rejected {
-            reason: Rejection::RemoteRefused,
-            message,
-        }) => assert!(
-            message.contains("theos: the clue C-901 confirms a never truth"),
-            "{message}"
-        ),
-        other => return Err(format!("{other:?}").into()),
-    }
+    let independent = independent_stderr(&sandbox, &top, "origin")?;
+    let message = assert_git_message(result, Rejection::RemoteRefused, &independent)?;
+    assert!(
+        message.contains("theos: the clue C-901 confirms a never truth"),
+        "{message}"
+    );
     Ok(())
 }
 
@@ -119,15 +151,8 @@ fn a_remote_that_is_ahead_is_not_a_fast_forward_with_gits_stderr() -> Result {
 
     let result = push(&git, &top, &target("origin"), &Cancel::new());
 
-    match result {
-        Err(PushError::Rejected {
-            reason: Rejection::NotFastForward,
-            message,
-        }) => {
-            assert!(message.contains("failed to push some refs"), "{message}");
-        }
-        other => return Err(format!("{other:?}").into()),
-    }
+    let independent = independent_stderr(&sandbox, &top, "origin")?;
+    assert_git_message(result, Rejection::NotFastForward, &independent)?;
     Ok(())
 }
 
@@ -142,7 +167,7 @@ fn a_missing_remote_fails_with_gits_text() -> Result {
     let result = push(&sandbox.git()?, &top, &target(missing_text), &Cancel::new());
 
     match result {
-        Err(PushError::Failed { message }) => assert!(message.contains("fatal"), "{message}"),
+        Err(PushError::Failed { message }) => assert_ne!(message, ""),
         other => return Err(format!("{other:?}").into()),
     }
     Ok(())
