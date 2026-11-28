@@ -261,7 +261,7 @@ body {
 .tu-titlebar.is-maximized .tu-winctl { padding-top: 0; }
 .tu-winctl__btn { width: var(--w-winctl); padding: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 0; cursor: default;
   font: 400 12px/1 var(--font-mono); color: var(--textDim); }
-.tu-winctl__btn:hover { background: var(--panel2); color: var(--text); }
+.tu-winctl__btn:hover, .tu-winctl__btn.is-hovered { background: var(--panel2); color: var(--text); }
 .tu-winctl__btn:focus-visible { outline: 1px solid var(--sig-attention); outline-offset: -1px; }
 .tu-winctl__btn.is-close:hover { background: var(--sig-reject); color: var(--onFill); }
 
