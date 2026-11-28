@@ -27,6 +27,7 @@ pub mod status;
 mod tree;
 mod version;
 mod wait;
+mod write_args;
 
 pub use cancel::Cancel;
 pub use folding::Folding;

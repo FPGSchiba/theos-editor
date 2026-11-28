@@ -51,6 +51,12 @@ pub enum GitError {
         /// Everything git wrote to stderr, lossily decoded and trimmed.
         stderr: String,
     },
+    /// Another git holds the index: its `index.lock` exists. theos never deletes that file.
+    #[error("another git is working in this repository (its index.lock exists): {stderr}")]
+    IndexLocked {
+        /// Everything git wrote to stderr, lossily decoded and trimmed.
+        stderr: String,
+    },
     /// git could not be started or its pipes failed.
     #[error("could not run git: {source}")]
     Io {
@@ -82,6 +88,15 @@ pub(crate) fn args_text(args: &[&OsStr]) -> Vec<String> {
     args.iter()
         .map(|arg| arg.to_string_lossy().into_owned())
         .collect()
+}
+
+/// The error of a command that exited with a failure.
+pub(crate) fn failed(args: &[&OsStr], output: Output) -> GitError {
+    GitError::Failed {
+        args: args_text(args),
+        code: output.code,
+        stderr: output.stderr,
+    }
 }
 
 fn exit_text(code: Option<i32>) -> String {
@@ -220,11 +235,7 @@ impl Git {
         if output.success() {
             return Ok(output.stdout);
         }
-        let error = GitError::Failed {
-            args: args_text(args),
-            code: output.code,
-            stderr: output.stderr,
-        };
+        let error = failed(args, output);
         // A failure exit is often expected (`rev-parse --verify --quiet` of a missing
         // version, `config --get` of an unset key); the caller decides whether it matters.
         tracing::debug!(?args, cwd = %cwd.display(), %error, "git failed");
