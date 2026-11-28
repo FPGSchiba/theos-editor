@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::rng::StageRng;
 use crate::rooms::graph::type_ok;
 use crate::rooms::{Role, Room, Shape};
-use crate::stage::ParamError;
+use crate::stage::{MapKind, ParamError};
 
 /// How many: `count = n` or `count = [min, max]`, drawn once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -138,19 +138,28 @@ pub struct ProgramRoom {
     pub locked: bool,
 }
 
+/// The type of the generic `path` room.
+const GENERIC_PATH: &str = "path";
+/// The type of the generic `leaf` room.
+const GENERIC_LEAF: &str = "leaf";
+
 /// The types of the generic rooms the queue makes when the program has used up `path` or
 /// `leaf` rooms (spec §5.6). Renders draw no type label for them (ruling R43).
-pub const GENERIC_TYPES: &[&str] = &["path", "leaf"];
+pub const GENERIC_TYPES: &[&str] = &[GENERIC_PATH, GENERIC_LEAF];
 
-/// Room types a program may not name: the interior's static feature types (doors,
-/// connections, the route) and the generic room types. A room type of one of these names would
-/// share its `features.<type>` count with them.
-pub const RESERVED_TYPES: &[&str] = &[
-    "open", "locked", "drop", "oneway", "critical", "path", "leaf",
-];
+/// Whether a program may not name the room type `ty`: it is one of the interior kind's static
+/// feature types (doors, connections, the route) or a [`GENERIC_TYPES`] entry. A room type of
+/// one of these names would share its `features.<type>` count with them.
+fn reserved(ty: &str) -> bool {
+    GENERIC_TYPES.contains(&ty)
+        || crate::kind::table(MapKind::Interior)
+            .types
+            .iter()
+            .any(|&(_, t)| t == ty)
+}
 
-/// Checks the program: room types match `^[a-z][a-z0-9-]*$` and are not
-/// [`RESERVED_TYPES`], ranges have `min <= max`, and both sides of a footprint are at least 1.
+/// Checks the program: room types match `^[a-z][a-z0-9-]*$` and are not reserved (the
+/// interior's static feature types and [`GENERIC_TYPES`]), ranges have `min <= max`, and both sides of a footprint are at least 1.
 /// Paths read `room[i].<key>`.
 ///
 /// # Errors
@@ -164,7 +173,7 @@ pub fn check_program(stage: &str, program: &[ProgramRoom]) -> Result<(), ParamEr
                 "must match ^[a-z][a-z0-9-]*$",
             ));
         }
-        if RESERVED_TYPES.contains(&room.ty.as_str()) {
+        if reserved(&room.ty) {
             return Err(ParamError::at(
                 stage,
                 format!("room[{i}].type"),
@@ -288,8 +297,8 @@ impl ProgramQueue {
     /// The generic room of `role`; records a used-up `start`, `goal` or `exit`.
     fn generic(&mut self, role: Role) -> Room {
         let ty = match role {
-            Role::Path => "path",
-            Role::Leaf => "leaf",
+            Role::Path => GENERIC_PATH,
+            Role::Leaf => GENERIC_LEAF,
             Role::Start => "start",
             Role::Goal => "goal",
             Role::Exit => "exit",
