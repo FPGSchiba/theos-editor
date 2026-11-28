@@ -71,6 +71,22 @@ fn unstaging_before_the_first_commit_leaves_the_file_untracked() -> Result {
 }
 
 #[test]
+fn unstaging_a_staged_file_edited_since_keeps_the_edit_before_the_first_commit() -> Result {
+    let sandbox = Sandbox::new()?;
+    let top = sandbox.init("repo")?;
+    Sandbox::write(&top.join("f.md"), "version A\n")?;
+    let git = sandbox.git()?;
+    stage::stage(&git, &top, &[b"f.md"])?;
+    Sandbox::write(&top.join("f.md"), "version B\n")?;
+
+    stage::unstage(&git, &top, &[b"f.md"])?;
+
+    assert_eq!(entries(&sandbox, &top)?, [untracked("f.md")]);
+    assert_eq!(std::fs::read_to_string(top.join("f.md"))?, "version B\n");
+    Ok(())
+}
+
+#[test]
 fn unstaging_after_a_commit_keeps_the_edit_unstaged() -> Result {
     let sandbox = Sandbox::new()?;
     let top = sandbox.init("repo")?;

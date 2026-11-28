@@ -67,7 +67,7 @@ pub fn unstage(git: &Git, top: &Path, paths: &[&[u8]]) -> Result<(), GitError> {
             git,
             top,
             "rm",
-            &["-q", "--cached", "--ignore-unmatch"],
+            &["-q", "--cached", "-f", "--ignore-unmatch"],
             paths,
         ),
     }
