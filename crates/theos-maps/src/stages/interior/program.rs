@@ -6,6 +6,7 @@ use serde::de::{self, Deserializer, SeqAccess, Visitor};
 use serde::{Deserialize, Serialize};
 
 use crate::rng::StageRng;
+use crate::rooms::graph::type_ok;
 use crate::rooms::{Role, Room, Shape};
 use crate::stage::ParamError;
 
@@ -156,10 +157,7 @@ pub const RESERVED_TYPES: &[&str] = &[
 /// [`ParamError`] of `stage` for the first entry that breaks a rule.
 pub fn check_program(stage: &str, program: &[ProgramRoom]) -> Result<(), ParamError> {
     for (i, room) in program.iter().enumerate() {
-        let mut chars = room.ty.chars();
-        let ty_ok = chars.next().is_some_and(|c| c.is_ascii_lowercase())
-            && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
-        if !ty_ok {
+        if !type_ok(&room.ty) {
             return Err(ParamError::at(
                 stage,
                 format!("room[{i}].type"),
