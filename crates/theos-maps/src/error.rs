@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use crate::child::ChildError;
 use crate::recipe::RecipeError;
 use crate::stage::StageError;
 
@@ -11,6 +12,9 @@ pub enum RunError {
     /// The recipe was refused before any stage ran.
     #[error(transparent)]
     Recipe(#[from] RecipeError),
+    /// The parent package of a child run, or its feature, was refused.
+    #[error(transparent)]
+    Child(#[from] ChildError),
     /// The estimate of the layers' memory is above the budget; nothing ran.
     #[error(
         "the run needs about {needed} bytes but the budget is {budget} bytes; largest layers: {largest}"

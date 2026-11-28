@@ -7,7 +7,7 @@ use super::voronoi::{PointIndex, same_shape};
 use crate::grid::Grid;
 
 /// The Catmull-Rom basis at `t` for one coordinate of four control points.
-fn spline(p: [f64; 4], t: f64) -> f64 {
+pub(super) fn spline(p: [f64; 4], t: f64) -> f64 {
     let [p0, p1, p2, p3] = p;
     0.5 * ((2.0 * p1)
         + (-p0 + p2) * t

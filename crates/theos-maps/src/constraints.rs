@@ -4,10 +4,10 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
 
-use crate::features::TYPES;
-use crate::metrics::{CHIME_WALK, PATHS};
+use crate::kind;
+use crate::metrics::CHIME_WALK;
 use crate::recipe::PlannedStage;
-use crate::stage::TypedStage;
+use crate::stage::{MapKind, TypedStage};
 use crate::stages::terrain::travel::Travel;
 use crate::summary;
 
@@ -61,12 +61,13 @@ pub(crate) fn evaluate(
     out
 }
 
-/// Whether a constraint may name `path` in a recipe with these planned stages.
-pub(crate) fn is_known_path(path: &str, stages: &[PlannedStage]) -> bool {
+/// Whether a constraint may name `path` in a recipe of `kind` with these planned stages.
+pub(crate) fn is_known_path(path: &str, kind: MapKind, stages: &[PlannedStage]) -> bool {
+    let table = kind::table(kind);
     if path == CHIME_WALK {
         return stages.iter().any(|s| s.id == Travel::ID);
     }
-    if PATHS.contains(&path) {
+    if table.summary_paths.contains(&path) {
         return true;
     }
     let under = |key: &str| {
@@ -74,7 +75,7 @@ pub(crate) fn is_known_path(path: &str, stages: &[PlannedStage]) -> bool {
             .and_then(|rest| rest.strip_prefix('.'))
     };
     if let Some(kind) = under(summary::FEATURES) {
-        return TYPES.iter().any(|(_, t)| *t == kind);
+        return table.known_types(stages).iter().any(|t| t == kind);
     }
     if let Some((id, metric)) = under(summary::STAGES).and_then(|rest| rest.split_once('.')) {
         return stages

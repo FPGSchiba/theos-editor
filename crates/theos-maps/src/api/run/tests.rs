@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -156,5 +157,146 @@ fn the_golden_record_hashes_the_written_files() -> TestResult {
     let keys: Vec<&str> = golden.stages.iter().map(|s| s.key.as_str()).collect();
     assert_eq!(keys.first(), Some(&"grid#0"));
     assert_eq!(keys.last(), Some(&"travel#0"));
+    Ok(())
+}
+
+/// A synthetic interior child recipe (8 x 8 cells of 100 m) with the given stage ids.
+fn child_recipe(dir: &Path, stages: &[&str]) -> TestResult {
+    let mut text = String::from(
+        "id = \"child\"\ntitle = \"Child\"\nkind = \"interior\"\ngrid = [8, 8]\nsize_km = [0.8, 0.8]\n\
+         [inputs.feature]\ntype = \"feature\"\nparent_types = [\"town\", \"village\"]\n",
+    );
+    for stage in stages {
+        let _ = write!(text, "[[stage]]\nid = \"{stage}\"\n");
+    }
+    std::fs::write(dir.join("child.toml"), text)?;
+    Ok(())
+}
+
+/// A terrain run of `api-small` in `dir`: the path of its package.
+fn parent_run(dir: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let (manifest, _) = run_inner(
+        &Registry::builtin(),
+        &request("api-small", 1),
+        &[fixtures()],
+        dir,
+        &mut |_| {},
+        &CancelToken::new(),
+    )?;
+    Ok(dir.join(&manifest.outputs["package"]))
+}
+
+fn child_request(from: Option<PathBuf>, feature: Option<&str>) -> RunRequest {
+    let mut r = request("child", 7);
+    r.from = from;
+    if let Some(feature) = feature {
+        r.inputs.insert("feature".to_owned(), feature.into());
+    }
+    r
+}
+
+fn run_child(
+    recipes: &Path,
+    r: &RunRequest,
+    out: &Path,
+) -> Result<(RunManifest, GoldenRun), RunError> {
+    run_inner(
+        &crate::child::test_support::registry(),
+        r,
+        &[recipes.to_path_buf()],
+        out,
+        &mut |_| {},
+        &CancelToken::new(),
+    )
+}
+
+#[test]
+fn a_child_run_writes_origin_and_parent_into_the_package() -> TestResult {
+    let (recipes, parent_dir, out) = (
+        tempfile::tempdir()?,
+        tempfile::tempdir()?,
+        tempfile::tempdir()?,
+    );
+    child_recipe(recipes.path(), &["ph", "pi"])?;
+    let parent = parent_run(parent_dir.path())?;
+    let (manifest, _) = run_child(
+        recipes.path(),
+        &child_request(Some(parent.clone()), Some("town-1")),
+        out.path(),
+    )?;
+    let package = theos_map_format::read(std::fs::File::open(
+        out.path().join(&manifest.outputs["package"]),
+    )?)?;
+    let frame = &package.manifest.frame;
+    assert_eq!(package.manifest.kind, "interior");
+    assert!(frame.origin_m.is_some());
+    assert_eq!(frame.origin_m, manifest.frame.origin_m);
+    let from = frame.parent.as_ref().ok_or("no parent in the frame")?;
+    assert_eq!(from.package_sha256, sha256_hex(&std::fs::read(&parent)?));
+    assert_eq!(from.feature, "town-1");
+    Ok(())
+}
+
+#[test]
+fn a_child_recipe_without_from_is_refused_before_the_run() -> TestResult {
+    let (recipes, out) = (tempfile::tempdir()?, tempfile::tempdir()?);
+    child_recipe(recipes.path(), &["ph"])?;
+    let error = run_child(recipes.path(), &child_request(None, None), out.path()).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("is a child recipe and needs `from`"),
+        "{error}"
+    );
+    assert!(is_empty(out.path())?);
+    Ok(())
+}
+
+#[test]
+fn a_child_recipe_with_a_standalone_stage_runs_without_from() -> TestResult {
+    let (recipes, out, out2) = (
+        tempfile::tempdir()?,
+        tempfile::tempdir()?,
+        tempfile::tempdir()?,
+    );
+    child_recipe(recipes.path(), &["ph", "sa", "pi"])?;
+    let (manifest, _) = run_child(recipes.path(), &child_request(None, None), out.path())?;
+    assert_eq!(manifest.frame.origin_m, None);
+    let package = theos_map_format::read(std::fs::File::open(
+        out.path().join(&manifest.outputs["package"]),
+    )?)?;
+    assert!(package.manifest.frame.parent.is_none());
+    let error = run_child(
+        recipes.path(),
+        &child_request(None, Some("town-1")),
+        out2.path(),
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("input `feature`"), "{error}");
+    assert!(is_empty(out2.path())?);
+    Ok(())
+}
+
+#[test]
+fn a_recipe_without_a_feature_input_refuses_from() -> TestResult {
+    let out = tempfile::tempdir()?;
+    let mut r = request("api-small", 1);
+    r.from = Some(PathBuf::from("parent.theosmap"));
+    let error = run_inner(
+        &Registry::builtin(),
+        &r,
+        &[fixtures()],
+        out.path(),
+        &mut |_| {},
+        &CancelToken::new(),
+    )
+    .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("starts from no other map, so `from` must be empty"),
+        "{error}"
+    );
+    assert!(is_empty(out.path())?);
     Ok(())
 }

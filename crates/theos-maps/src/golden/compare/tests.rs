@@ -18,6 +18,8 @@ fn golden() -> GoldenRun {
     GoldenRun {
         recipe: "fixture-small".to_owned(),
         seed: 1,
+        inputs: BTreeMap::new(),
+        from: None,
         features: "f0".to_owned(),
         package: "p0".to_owned(),
         stages: vec![

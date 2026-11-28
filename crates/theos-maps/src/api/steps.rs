@@ -18,16 +18,13 @@ use theos_map_format::FormatError;
 use crate::constraints;
 use crate::error::RunError;
 use crate::features::FeatureSet;
-use crate::features::output as features;
 use crate::kernels::num::to_u32;
-use crate::metrics;
+use crate::kind;
 use crate::package::{self, RunRecord};
 use crate::progress::{CancelToken, Progress};
 use crate::recipe::Plan;
 use crate::render::{self, RenderError, RenderInput};
 use crate::runner::{Execution, panicked};
-use crate::stage::TypedStage;
-use crate::stages::terrain::travel::Travel;
 use crate::summary::summary;
 use crate::world::World;
 
@@ -126,18 +123,16 @@ pub(super) fn constraints(
     seed: u64,
 ) -> Result<Checked, RunError> {
     let world = &execution.world;
-    let (collection, counts) =
-        features::build(world).map_err(|e| output_error(super::outputs::FEATURES, &e))?;
-    let travel = execution
-        .stage_metrics
-        .iter()
-        .find(|(id, _)| id == Travel::ID)
-        .map(|(_, metrics)| metrics);
+    let table = kind::table(plan.kind);
+    let (collection, counts) = (table.features)(world, table.ids)
+        .map_err(|e| output_error(super::outputs::FEATURES, &e))?;
     let not_finite =
         |e: FormatError| output_error(super::outputs::PACKAGE, &format!("the run summary: {e}"));
-    let metrics = metrics::compute(world, travel).map_err(not_finite)?;
-    let title = render::title_line(&plan.recipe_id, seed, &metrics);
+    let metrics = (table.metrics)(world, &execution.stage_metrics).map_err(not_finite)?;
+    let title = (table.title)(&plan.recipe_id, seed, &metrics);
     let summary = summary(
+        plan.kind,
+        &plan.stages,
         metrics,
         &counts,
         &execution.stage_metrics,
@@ -183,7 +178,7 @@ pub(super) fn draw(
             message: other.to_string(),
         },
     };
-    let Some(draw) = render::render(name) else {
+    let Some(draw) = render::render(plan.kind, name) else {
         return Err(RunError::Render {
             render: name.to_owned(),
             message: "no render has this name".to_owned(),

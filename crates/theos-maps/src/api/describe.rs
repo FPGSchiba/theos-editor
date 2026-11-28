@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use super::needs;
 use super::{Description, GENERATOR, RecipeInfo, StageInfo, VERSION};
-use crate::recipe::{self, LoadedRecipe, RecipeError, RecipeOrigin, RecipeProblem};
+use crate::recipe::{self, LoadedRecipe, Planning, RecipeError, RecipeOrigin, RecipeProblem};
 use crate::stage::Registry;
 
 /// Describes the generator: its name and version, the recipes of the built-ins and
@@ -12,8 +12,8 @@ use crate::stage::Registry;
 ///
 /// Every recipe is planned with empty inputs. One that does not plan, or whose stages do not
 /// write a layer the package or a render reads (ledger ruling P3), is reported as a problem
-/// naming its file and is not offered. Terrain recipes take no inputs, so `inputs` is empty and
-/// every recipe is `seeded`.
+/// naming its file and is not offered. `inputs` are the declarations of the recipe
+/// (`Inputs::describe`) and every recipe is `seeded`.
 ///
 /// # Errors
 /// [`RecipeError::Io`] when a recipe folder or file cannot be read.
@@ -23,8 +23,13 @@ pub fn describe(recipe_dirs: &[PathBuf]) -> Result<Description, RecipeError> {
     let mut problems = catalog.problems;
     let mut recipes = Vec::new();
     for loaded in catalog.recipes.values() {
-        let planned = recipe::plan(loaded, &registry, &serde_json::Map::new())
-            .and_then(|plan| needs::check(&plan).map(|()| plan));
+        let planned = recipe::plan(
+            loaded,
+            &registry,
+            &serde_json::Map::new(),
+            Planning::Describe,
+        )
+        .and_then(|plan| needs::check(&plan).map(|()| plan));
         match planned {
             Ok(plan) => recipes.push(info(loaded, &plan, &registry)),
             Err(error) => problems.push(RecipeProblem {
@@ -59,7 +64,7 @@ fn info(loaded: &LoadedRecipe, plan: &recipe::Plan, registry: &Registry) -> Reci
     RecipeInfo {
         id: loaded.recipe.id.clone(),
         title: loaded.recipe.title.clone(),
-        inputs: serde_json::Map::new(),
+        inputs: loaded.recipe.inputs().describe(),
         seeded: true,
         stages,
     }

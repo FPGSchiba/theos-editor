@@ -111,16 +111,18 @@ fn columns(entries: &[Entry], canvas_height: f64) -> Vec<&[Entry]> {
     entries.chunks(fit.max(1)).collect()
 }
 
-/// Draws the legend of `entries` in the lower right corner of `pixmap`; nothing for no entries.
-///
-/// # Errors
-/// [`RenderError::Font`] when a glyph cannot be drawn.
-pub(crate) fn draw(pixmap: &mut Pixmap, face: &Face, entries: &[Entry]) -> Result<(), RenderError> {
-    if entries.is_empty() {
-        return Ok(());
-    }
-    let canvas_w = f64::from(pixmap.width());
-    let canvas_h = f64::from(pixmap.height());
+/// Where the entries go: the columns, the width of each, and the panel's size.
+struct Layout<'a> {
+    /// The entries split into columns.
+    cols: Vec<&'a [Entry]>,
+    /// The width of each column, pixels.
+    widths: Vec<f64>,
+    /// The panel's width and height, pixels.
+    panel: [f64; 2],
+}
+
+/// The layout of `entries` on a canvas `canvas_h` pixels tall.
+fn layout<'a>(face: &Face, entries: &'a [Entry], canvas_h: f64) -> Layout<'a> {
     let cols = columns(entries, canvas_h);
     let widths: Vec<f64> = cols
         .iter()
@@ -132,8 +134,42 @@ pub(crate) fn draw(pixmap: &mut Pixmap, face: &Face, entries: &[Entry]) -> Resul
         })
         .collect();
     let rows = cols.first().map_or(0, |c| c.len());
-    let panel_w = widths.iter().sum::<f64>() + PAD_PX;
-    let panel_h = to_f64(rows) * ROW_PX + 2.0 * PAD_PX;
+    let panel = [
+        widths.iter().sum::<f64>() + PAD_PX,
+        to_f64(rows) * ROW_PX + 2.0 * PAD_PX,
+    ];
+    Layout {
+        cols,
+        widths,
+        panel,
+    }
+}
+
+/// The width the legend of `entries` takes on a canvas `canvas_height` pixels tall, its margins
+/// on both sides included; 0 for no entries. A render that keeps the legend off its map widens
+/// its canvas by this much.
+pub(crate) fn width(face: &Face, entries: &[Entry], canvas_height: f64) -> f64 {
+    if entries.is_empty() {
+        return 0.0;
+    }
+    layout(face, entries, canvas_height).panel[0] + 2.0 * MARGIN_PX
+}
+
+/// Draws the legend of `entries` in the lower right corner of `pixmap`; nothing for no entries.
+///
+/// # Errors
+/// [`RenderError::Font`] when a glyph cannot be drawn.
+pub(crate) fn draw(pixmap: &mut Pixmap, face: &Face, entries: &[Entry]) -> Result<(), RenderError> {
+    if entries.is_empty() {
+        return Ok(());
+    }
+    let canvas_w = f64::from(pixmap.width());
+    let canvas_h = f64::from(pixmap.height());
+    let Layout {
+        cols,
+        widths,
+        panel: [panel_w, panel_h],
+    } = layout(face, entries, canvas_h);
     let x0 = canvas_w - MARGIN_PX - panel_w;
     let y0 = canvas_h - MARGIN_PX - panel_h;
     if let Some(path) = rect(x0, y0, panel_w, panel_h) {
