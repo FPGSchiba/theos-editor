@@ -133,6 +133,7 @@
   --h-resize-edge: 4px;
   --w-macos-inset: 72px;
   --w-menu-min: 248px;
+  --w-menu-max: 420px;
   --h-menu-item: 24px;
   --w-scrollbar: 10px;
   --measure-prose: 70ch;

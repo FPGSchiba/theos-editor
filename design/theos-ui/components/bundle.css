@@ -35,10 +35,6 @@ body {
 :where(.tu-btn, .tu-iconbtn, .tu-seg__opt, .tu-rate__opt, .tu-tab, .tu-rail__item, .tu-pop__row, .tu-link, input, select, textarea):focus-visible {
   outline: 1px solid var(--sig-attention); outline-offset: -1px;
 }
-* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: var(--border); }
-::-webkit-scrollbar-thumb:hover { background: var(--borderHi); }
 
 /* ── Button ─────────────────────────────────────────────────────────── */
 .tu-btn {
@@ -223,26 +219,28 @@ body {
 
 /* A menu is a popup (.tu-menu) that holds its item list (.tu-menu__list) and, beside it, any submenu.
    The list scrolls when the window is too short (max-height: the window minus the title bar), so a
-   dropdown never makes the page scroll. A submenu is a separate popup, a sibling of the list inside
+   dropdown never makes the page scroll; a submenu's list also gives up its --sub-top, so it ends
+   inside the window too. A menu is as wide as its widest row (w-menu-min to w-menu-max). A submenu is a separate popup, a sibling of the list inside
    the parent .tu-menu (never a descendant of the scrolling list, which would clip it); --sub-top
    is the offset of its parent row from the top of the parent menu, minus the submenu's own 5px
    of border and padding. */
-.tu-menu { position: absolute; top: 100%; left: 0; min-width: var(--w-menu-min); z-index: 4;
+.tu-menu { position: absolute; top: 100%; left: 0; width: max-content; min-width: var(--w-menu-min); max-width: var(--w-menu-max); z-index: 4;
   background: var(--panel2); border: 1px solid var(--borderHi); border-radius: 0; box-shadow: var(--shadow-popover);
   text-transform: none; letter-spacing: 0; }
 .tu-menu__list { box-sizing: border-box; padding: 4px 0; display: flex; flex-direction: column;
   max-height: calc(100vh - var(--h-titlebar) - 2px); overflow-y: auto; }
-.tu-menu__sub { top: var(--sub-top, 0); left: 100%; margin-left: 2px; }
+.tu-menu__sub { top: var(--sub-top, 0px); left: 100%; margin-left: 2px; }
+.tu-menu__sub > .tu-menu__list { max-height: calc(100vh - var(--h-titlebar) - 2px - var(--sub-top, 0px)); }
 .tu-menu--static { position: static; box-shadow: none; }
 .tu-menu--static > .tu-menu__list { max-height: none; overflow-y: visible; }
-.tu-menu__item { position: relative; height: var(--h-menu-item); box-sizing: border-box; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 6px;
+.tu-menu__item { position: relative; flex-shrink: 0; height: var(--h-menu-item); box-sizing: border-box; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 6px;
   padding: 0 12px 0 6px; border-left: 2px solid transparent; white-space: nowrap;
   font: 400 12px/16px var(--font-ui); color: var(--text); }
 .tu-menu__item:hover, .tu-menu__item.is-active { background: color-mix(in srgb, var(--sig-attention) 13%, transparent); border-left-color: var(--sig-attention); }
 .tu-menu__glyph { font: 400 11px/1 var(--font-mono); color: var(--textDim); text-align: center; }
 .tu-menu__item.is-current .tu-menu__glyph { color: var(--sig-attention); }
-.tu-menu__label { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.tu-menu__phase { font: 400 9.5px/12px var(--font-mono); color: var(--textDim); }
+.tu-menu__label { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tu-menu__phase { margin-left: 8px; font: 400 9.5px/12px var(--font-mono); color: var(--textDim); }
 .tu-menu__keys { font: 400 10px/14px var(--font-mono); color: var(--textDim); padding-left: 24px; text-align: right; }
 .tu-menu__more { font: 400 10px/1 var(--font-mono); color: var(--textDim); padding-left: 24px; }
 .tu-menu__item:hover .tu-menu__keys, .tu-menu__item:hover .tu-menu__more, .tu-menu__item:hover .tu-menu__phase,
@@ -525,19 +523,19 @@ body {
 .is-script    { --c: var(--sig-script); }
 .is-neutral   { --c: var(--textDim); }
 
-/* ── Scrollbars inside the shell ────────────────────────────────────── */
+/* ── Scrollbars (every scrolling element on a Theos UI page, overlays included) ───────── */
 /* The reset is :where() so it has specificity 0,0,0 and any component rule still wins: a tab strip
    (.tu-tabbar__tabs) keeps scrollbar-width: none and hides its bar entirely (below).
    WebView2, WKWebView and WebKitGTK all honour ::-webkit-scrollbar, but Blink ignores it while
-   scrollbar-width or scrollbar-color is set (the base rule sets both on *). Reset them in the shell.
-   The page itself never scrolls: only .tu-window__body and other bodies do. */
-.tu-shell, :where(.tu-shell *) { scrollbar-width: auto; scrollbar-color: auto; }
-.tu-shell ::-webkit-scrollbar { width: var(--w-scrollbar); height: var(--w-scrollbar); background: var(--scrollbar-track); }
-.tu-shell ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
-.tu-shell ::-webkit-scrollbar-track:vertical { border-left: 1px solid var(--border); }
-.tu-shell ::-webkit-scrollbar-track:horizontal { border-top: 1px solid var(--border); }
-.tu-shell .tu-tabbar__tabs::-webkit-scrollbar { display: none; }
-.tu-shell ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border: 2px solid transparent; background-clip: padding-box; }
-.tu-shell ::-webkit-scrollbar-thumb:hover { background-color: var(--scrollbar-thumb-hover); }
-.tu-shell ::-webkit-scrollbar-thumb:active { background-color: var(--scrollbar-thumb-active); }
-.tu-shell ::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
+   scrollbar-width or scrollbar-color is set, so nothing in this file sets either (except the tab strip).
+   Not scoped to .tu-shell: the command palette and the About popover mount beside the shell. */
+:where(*) { scrollbar-width: auto; scrollbar-color: auto; }
+::-webkit-scrollbar { width: var(--w-scrollbar); height: var(--w-scrollbar); background: var(--scrollbar-track); }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-track:vertical { border-left: 1px solid var(--border); }
+::-webkit-scrollbar-track:horizontal { border-top: 1px solid var(--border); }
+.tu-tabbar__tabs::-webkit-scrollbar { display: none; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--scrollbar-thumb-hover); }
+::-webkit-scrollbar-thumb:active { background-color: var(--scrollbar-thumb-active); }
+::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
