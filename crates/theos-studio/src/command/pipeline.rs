@@ -10,14 +10,13 @@ use super::boundary;
 use super::files::write_plan;
 use super::journal::EntryId;
 use super::route::{Applied, Route};
-use super::state::CommandState;
 use super::verdict;
 use super::{
     Command, CommandError, FileChange, Plan, PlanContext, Reads, normal_path, project_path,
     read_file,
 };
+use crate::hold::Holding;
 use crate::introduced::FindingCounts;
-use crate::lock::{self, LockError, LockGuard};
 use crate::{StudioError, Workspace};
 
 /// What an applied command did.
@@ -32,7 +31,8 @@ pub struct Outcome {
     /// included.
     pub findings: Vec<Finding>,
     /// The findings of `findings` that are new: warnings only, since a new error rejects the
-    /// command.
+    /// command; for a command that restores a state ([`Command::restores`]), its new errors too,
+    /// first.
     pub introduced: Vec<Finding>,
     /// The journal entry, when the route keeps one.
     pub entry: Option<EntryId>,
@@ -82,6 +82,15 @@ impl Work<'_> {
             Work::Replay { label, .. } => label.clone(),
         }
     }
+
+    /// Whether the verdict lets every count through ([`Command::restores`]); a replay keeps the
+    /// verdict of undo and redo.
+    fn restores(&self) -> bool {
+        match self {
+            Work::Command(command) => command.restores(),
+            Work::Replay { .. } => false,
+        }
+    }
 }
 
 /// What a replay brings beyond its plan.
@@ -102,48 +111,8 @@ pub(crate) fn run(
 ) -> Result<Outcome, CommandError> {
     let label = work.label();
     let _span = tracing::error_span!("command", %label).entered();
-    let held = Held::take(workspace, &label, route.holds_lock())?;
-    steps(held.workspace, work, label, route)
-}
-
-/// The workspace of one command, with the repo lock when its route holds it. Dropping it, on
-/// every way out, a panic included, clears the workspace's flag and releases the lock.
-struct Held<'w> {
-    workspace: &'w mut Workspace,
-    guard: Option<LockGuard>,
-}
-
-impl<'w> Held<'w> {
-    /// Step 1: takes the repo lock when `lock` is set.
-    fn take(workspace: &'w mut Workspace, label: &str, lock: bool) -> Result<Held<'w>, LockError> {
-        let guard = if lock {
-            let root = workspace.project().root().to_path_buf();
-            Some(take_lock(&mut workspace.commands, &root, label)?)
-        } else {
-            None
-        };
-        Ok(Held { workspace, guard })
-    }
-}
-
-impl Drop for Held<'_> {
-    fn drop(&mut self) {
-        if let Some(guard) = self.guard.take() {
-            self.workspace.commands.locked = false;
-            drop(guard);
-        }
-    }
-}
-
-/// The repo lock of `root`, unless this workspace holds it already: then [`LockError::Reentrant`]
-/// at once, instead of waiting for itself.
-fn take_lock(state: &mut CommandState, root: &Path, label: &str) -> Result<LockGuard, LockError> {
-    if state.locked {
-        return Err(LockError::Reentrant);
-    }
-    let guard = lock::acquire(root, label, state.lock_wait)?;
-    state.locked = true;
-    Ok(guard)
+    let mut held = Holding::take(workspace, &label, route.holds_lock())?;
+    steps(&mut held, work, label, route)
 }
 
 /// Steps 2 to 8.
@@ -153,6 +122,7 @@ fn steps(
     label: String,
     route: &mut dyn Route,
 ) -> Result<Outcome, CommandError> {
+    let restores = work.restores();
     let (plan, replayed) = plan(workspace, work)?;
     if plan.is_empty() {
         tracing::debug!(%label, "nothing to change");
@@ -165,10 +135,18 @@ fn steps(
     boundary::check(&root, &plan)?;
     check_bases(&root, &plan, replayed.is_some())?;
     let (preview, before) = preview(workspace, &plan)?;
-    // Step 5, the verdict: no moved record leaves the index, and no error is new.
+    // Step 5, the verdict: no moved record leaves the index, and no error is new, unless the
+    // command restores a state the user asked for; its new errors are then reported only.
     verdict::keep_records(&plan.moved, &preview.update)?;
     let allowance = replayed.as_ref().map(|replayed| &replayed.allowance);
-    let verdict = verdict::judge(&before, &plan.moved, allowance, &preview.findings);
+    let mut verdict = verdict::judge(&before, &plan.moved, allowance, &preview.findings);
+    if restores && !verdict.blocking.is_empty() {
+        let new: Vec<String> = verdict.blocking.iter().map(ToString::to_string).collect();
+        tracing::info!(%label, ?new, "the command restores a state; its new errors do not block");
+        let warnings = std::mem::take(&mut verdict.introduced);
+        verdict.introduced = std::mem::take(&mut verdict.blocking);
+        verdict.introduced.extend(warnings);
+    }
     if !verdict.blocking.is_empty() {
         let blocking: Vec<String> = verdict.blocking.iter().map(ToString::to_string).collect();
         tracing::info!(%label, paths = ?plan.paths(), ?blocking, "command rejected");
@@ -411,45 +389,11 @@ fn on_index<T>(
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use super::*;
     use crate::command::HumanRoute;
     use crate::test_support::{
         self, Fixture, Planned, ReadOnly, TRUTH, TRUTH_PATH, TestResult, change,
     };
-
-    #[test]
-    fn reentry_is_refused() -> TestResult {
-        let dir = tempfile::tempdir()?;
-        let mut state = CommandState {
-            locked: true,
-            ..CommandState::default()
-        };
-        let result = take_lock(&mut state, dir.path(), "again");
-        assert!(matches!(result, Err(LockError::Reentrant)), "{result:?}");
-        assert!(state.locked);
-        // The refused call did not take the lock.
-        drop(lock::acquire(dir.path(), "probe", Duration::ZERO)?);
-        Ok(())
-    }
-
-    #[test]
-    fn the_lock_step_sets_the_flag_and_the_guard_clears_it() -> TestResult {
-        let mut fixture = Fixture::new(&[])?;
-        let root = fixture.root().to_path_buf();
-        {
-            let held = Held::take(fixture.workspace_mut(), "synthetic", true)?;
-            assert!(held.workspace.commands.locked);
-            assert!(matches!(
-                lock::acquire(&root, "probe", Duration::ZERO),
-                Err(LockError::Busy { .. })
-            ));
-        }
-        assert!(!fixture.workspace_mut().commands.locked);
-        drop(lock::acquire(&root, "probe", Duration::ZERO)?);
-        Ok(())
-    }
 
     fn replay(before: &str, after: &str) -> Work<'static> {
         Work::Replay {

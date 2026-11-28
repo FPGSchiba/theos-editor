@@ -44,18 +44,23 @@ pub enum Content {
 /// The errors of [`Git::run`], [`GitError::Output`] when an answer of git cannot be read or the
 /// path is not UTF-8, and [`GitError::Io`] when the working-tree file cannot be read.
 pub fn read(git: &Git, top: &Path, version: Version<'_>, path: &[u8]) -> Result<Content, GitError> {
-    let path = std::str::from_utf8(path).map_err(|_| GitError::Output {
-        args: vec!["rev-parse".to_owned()],
-        message: format!(
-            "the path `{}` is not UTF-8; theos reads only UTF-8 paths",
-            String::from_utf8_lossy(path)
-        ),
-    })?;
+    let path = utf8_path(path)?;
     match version {
         Version::WorkTree => work_tree(top, path),
         Version::Index => index(git, top, path),
         Version::Head | Version::Rev(_) => commit(git, top, version, path),
     }
+}
+
+/// `path` as text; git's paths here are UTF-8 only.
+fn utf8_path(path: &[u8]) -> Result<&str, GitError> {
+    std::str::from_utf8(path).map_err(|_| GitError::Output {
+        args: vec!["rev-parse".to_owned()],
+        message: format!(
+            "the path `{}` is not UTF-8; theos reads only UTF-8 paths",
+            String::from_utf8_lossy(path)
+        ),
+    })
 }
 
 fn work_tree(top: &Path, path: &str) -> Result<Content, GitError> {
@@ -176,13 +181,14 @@ fn entry_mode(out: &[u8], name: &str) -> Result<u32, String> {
     Err(format!("the folder has no entry called {name}"))
 }
 
-/// A file of the index at stage 0: `ls-files -s` gives the mode, `cat-file` the bytes.
-fn index(git: &Git, top: &Path, path: &str) -> Result<Content, GitError> {
+/// The stage-0 entry of the index at `path`: its object and mode, or `None` when the index lacks
+/// it or holds it as intent-to-add (`git add -N`).
+fn index_entry(git: &Git, top: &Path, path: &str) -> Result<Option<(String, u32)>, GitError> {
     let Some(object) = object(git, top, &format!(":0:{path}"))? else {
-        return Ok(Content::Absent);
+        return Ok(None);
     };
     if staged::is_intent_to_add(git, top, path)? {
-        return Ok(Content::Absent);
+        return Ok(None);
     }
     let entries = staged::query(
         git,
@@ -199,7 +205,39 @@ fn index(git: &Git, top: &Path, path: &str) -> Result<Content, GitError> {
             args: vec!["ls-files".to_owned()],
             message: format!("the index has no entry for {path}"),
         })?;
-    bytes(git, top, entry.mode, &object)
+    Ok(Some((object, entry.mode)))
+}
+
+/// A file of the index at stage 0: `ls-files -s` gives the mode, `cat-file` the bytes.
+fn index(git: &Git, top: &Path, path: &str) -> Result<Content, GitError> {
+    match index_entry(git, top, path)? {
+        Some((object, mode)) => bytes(git, top, mode, &object),
+        None => Ok(Content::Absent),
+    }
+}
+
+/// The bytes `git checkout` would write for `path` from the index, after git's filters
+/// (`core.autocrlf`, `eol`, `text`, `filter` attributes), for an undoable discard.
+///
+/// The entry is the index's stage 0. The result is [`Content::Absent`] when the index lacks the
+/// path or holds it as intent-to-add, [`Content::NotAFile`] for a link or a submodule, else the
+/// answer of `git cat-file --filters --path=<path> <object>`.
+///
+/// # Errors
+///
+/// The errors of [`Git::run`], [`GitError::Output`] when an answer of git cannot be read or the
+/// path is not UTF-8.
+pub fn checkout_bytes(git: &Git, top: &Path, path: &[u8]) -> Result<Content, GitError> {
+    let path = utf8_path(path)?;
+    let Some((object, mode)) = index_entry(git, top, path)? else {
+        return Ok(Content::Absent);
+    };
+    if !regular_mode(mode) {
+        return Ok(Content::NotAFile);
+    }
+    let path_flag = format!("--path={path}");
+    let args = read_args("cat-file", &["--filters", &path_flag, &object]);
+    git.run(&args, top, None, &[]).map(Content::File)
 }
 
 #[cfg(test)]

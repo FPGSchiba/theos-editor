@@ -345,3 +345,74 @@ fn a_folder_that_is_no_repository_is_a_git_failure_for_the_index_and_a_commit() 
     }
     Ok(())
 }
+
+fn checkout(sandbox: &Sandbox, top: &Path, path: &str) -> Result<Content> {
+    Ok(read::checkout_bytes(&sandbox.git()?, top, path.as_bytes())?)
+}
+
+/// A repository whose index holds `e.md` as two LF lines.
+fn staged_lf(sandbox: &Sandbox) -> Result<std::path::PathBuf> {
+    let repo = sandbox.init("repo")?;
+    Sandbox::write(&repo.join("e.md"), "a\nb\n")?;
+    sandbox.run(&repo, &["add", "e.md"])?;
+    Ok(repo)
+}
+
+#[test]
+fn a_checkout_writes_crlf_under_autocrlf() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = staged_lf(&sandbox)?;
+    sandbox.run(&repo, &["config", "core.autocrlf", "true"])?;
+    assert_eq!(checkout(&sandbox, &repo, "e.md")?, file("a\r\nb\r\n"));
+    Ok(())
+}
+
+#[test]
+fn a_checkout_writes_crlf_under_an_eol_attribute() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    Sandbox::write(&repo.join(".gitattributes"), "*.md eol=crlf\n")?;
+    Sandbox::write(&repo.join("e.md"), "a\nb\n")?;
+    sandbox.run(&repo, &["add", ".gitattributes", "e.md"])?;
+    assert_eq!(checkout(&sandbox, &repo, "e.md")?, file("a\r\nb\r\n"));
+    Ok(())
+}
+
+#[test]
+fn a_checkout_without_filters_writes_the_raw_bytes() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = staged_lf(&sandbox)?;
+    assert_eq!(checkout(&sandbox, &repo, "e.md")?, file("a\nb\n"));
+    Ok(())
+}
+
+#[test]
+fn a_checkout_of_an_untracked_or_intent_to_add_path_is_absent() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = staged_lf(&sandbox)?;
+    Sandbox::write(&repo.join("u.md"), "x\n")?;
+    assert_eq!(checkout(&sandbox, &repo, "u.md")?, Content::Absent);
+    sandbox.run(&repo, &["add", "-N", "u.md"])?;
+    assert_eq!(checkout(&sandbox, &repo, "u.md")?, Content::Absent);
+    Ok(())
+}
+
+#[test]
+fn a_checkout_gives_the_staged_bytes_not_heads() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = three_versions(&sandbox)?;
+    assert_eq!(checkout(&sandbox, &repo, "a.md")?, file("index\n"));
+    Ok(())
+}
+
+#[test]
+fn a_checkout_path_that_is_not_utf_8_is_an_output_error() -> Result {
+    let sandbox = Sandbox::new()?;
+    let repo = staged_lf(&sandbox)?;
+    let error = read::checkout_bytes(&sandbox.git()?, &repo, &[0xff]).err();
+    assert!(
+        matches!(error, Some(theos_vcs::GitError::Output { .. })),
+        "{error:?}"
+    );
+    Ok(())
+}

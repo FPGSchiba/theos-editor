@@ -1,11 +1,11 @@
 # theos-vcs
 
-Library. Wrapper over the git command line: status, word diff, history with `--follow`, commit
-with trailers, worktrees, merge, pull and push.
+Library. Wrapper over the git command line: status, history with `--follow`, commit with
+trailers, merge, fetch and push. Worktrees and the approval merge arrive in P07.
 
-After phase P46 the crate provides the runner, with git's version check and cancellable runs, the
-reader of the staged snapshot and the reads: a file at a version, the status and a file's history.
-The writes (commit, worktrees, merge, pull and push) arrive in P47.
+After phase P47 the crate provides the runner, with git's version check and cancellable runs, the
+reader of the staged snapshot, the reads (a file at a version, the status and a file's history)
+and the writes: stage and unstage, commit, merge, fetch, push and housekeeping.
 
 ## What P05 provides
 
@@ -29,14 +29,34 @@ The writes (commit, worktrees, merge, pull and push) arrive in P47.
 | `repo::first_parent` | The first parent of a commit, `None` for a root commit: what a commit's diff compares with |
 | Read options | Every read passes `--no-optional-locks`, `--literal-pathspecs` and the `-c` settings that keep a user's colour, signatures, path quoting and output encoding out of git's answers, and show the root commit (`log.showRoot=true`) |
 
+## What P47 provides
+
+Every write starts with the same options (`write_args`): literal pathspecs, no colour, no path
+quoting, no automatic `gc` or maintenance. User settings such as `pull.rebase` or `commit.verbose`
+do not change a result (spec §5.12).
+
+| Item | What it does |
+|---|---|
+| `stage::stage`, `stage::unstage` | Add or remove paths in the index. The paths go to git NUL-separated on stdin, so their number and spelling cannot overflow or change a command line |
+| `commit::commit`, `Trailer` | Commits the index with a message and trailers, written by git itself with its hooks running (theos never skips them). Returns the new `CommitId`. `CommitRefused` says what was wrong with the message or a trailer, or that git failed |
+| `CommitId` | The id of a commit as git spells it |
+| `merge::merge` | Merges an upstream into the current branch and leaves a clean merge staged, uncommitted, so the caller can check it. `Merged` is `UpToDate`, `FastForward`, `Staged` or `Conflicts`. `merge_state` reads a pending merge, `conclude` commits it, `abort_merge` drops it, `merge_base` and `changed_since` find what each side changed |
+| `remote::fetch` | Fetches a remote, cancellable. theos never reads or stores a credential: git asks the user's credential helper, and there is no terminal prompt and no askpass program. ssh runs in batch mode unless the user set an ssh command |
+| `push::push`, `PushTarget` | Pushes `HEAD` to a branch of a remote, optionally with `--set-upstream`. `Pushed` is `UpToDate` or `Updated`; `PushError::Rejected` carries a `Rejection` (`NotFastForward`, `RemoteRefused`, `Other`) and git's message whole |
+| `housekeeping::housekeeping` | Runs `git maintenance run --auto` in the foreground, cancellable |
+| `read::checkout_bytes` | The bytes a checkout would write for a path in the index (filters applied), for an undoable discard |
+| `repo::head`, `value`, `remotes` | The current commit (`None` before the first), a setting's value (`None` when unset) and the remotes' names |
+| `Git::output`, `Git::output_without`, `Output` | Run git and get stdout and stderr whether it succeeded or failed; `output_without` also removes variables from git's environment |
+| `GitError::IndexLocked` | Another git holds the index (`index.lock` exists). theos never deletes that file |
+
 ## Who uses what
 
 | Phase | Uses |
 |---|---|
 | P05 | `Git`, `repo` and `staged` for `theos check --staged` and `theos hook install` |
 | P46 | Adds git's version check to `Git::find` (with `TooOld` and `Cancelled` in `GitError`) and the reads: `read`, `status`, `history`; `theos-studio` builds `changes`, `diff` and `history` by record on them, `theos-content` the word and field diffs |
-| P47 | `staged::read`, `staged::blobs` and `Staged` for the commit; `Cancel` and `run_cancellable` for pull and push (on Unix git runs in its own process group, so a git that prompts on the terminal, for credentials or ssh host keys, would stop on SIGTTIN; P47's pull and push must decide, spec §7); `status` and `theos-studio`'s `Changes` to stage a record by its paths (both paths of a rename); `read` for discarding: `read(WorkTree)` does not reject `..` or an absolute path (`top.join` with an absolute path replaces `top`), so P47's discard passes only paths git gave (status entries, `RecordChange` paths). `wait` returns `Cancelled` when a cancel and git's exit meet, even if git had finished; for commit, push and pull P47 must decide whether a finished run reports its real result. Adds commit, worktrees, merge, pull and push, and its own `GitError` variants. Hand-off (ruling R4-2): on Windows, closing the job also ends processes git leaves running after a normal exit (a detached `gc --auto`, maintenance), so P47 turns them off per call or lets them outlive the job; on Unix, a cancel is not seen while the pipe readers are joined if a `setsid` daemon of git's holds its pipes |
-| P07 | `theos-content`'s `diff::record` and `diff::words` for `theos review show` (CE-25.2), with `theos-studio`'s `Side::Between` for an agent branch against `main`. The `Approved-by:` trailer sits on the approval's merge commit, which a file's history need not list: P07 or P13 finds the merge that brought a commit in |
+| P47 | The writes above. `theos-studio` builds `git_write` on them: `stage_records` and `unstage_records` (both paths of a rename), `commit` after the staged check (`staged::read`, `staged::blobs`), `pull` (`fetch`, `merge`, a check of the merged result), `abort_merge`, `push`, and the discard (`read::checkout_bytes`, only paths git gave). `Cancel` and `run_cancellable` stop fetch and push with every process git started |
+| P07 | Worktrees and the approval merge (new in P07), with `commit` and `Trailer` for agent commits and `Approved-by:` on approvals, `Git::output` and `IndexLocked`. `theos-content`'s `diff::record` and `diff::words` for `theos review show` (CE-25.2), with `theos-studio`'s `Side::Between` for an agent branch against `main`. The `Approved-by:` trailer sits on the approval's merge commit, which a file's history need not list: P07 or P13 finds the merge that brought a commit in |
 | P12 | `theos-content`'s `diff` to compare an unsaved edit with the saved record |
-| P13 | `theos-studio`'s `changes`, `diff` and `history` for the Changes screen (`docs/ui/screens/08-git.html`); `Branch.upstream` for ahead and behind; `Conflicted` entries for CE-36.3; CE-36.2 is `history` |
+| P13 | `theos-studio`'s `changes`, `diff` and `history` for the Changes screen (`docs/ui/screens/08-git.html`); `Branch.upstream` for ahead and behind; `Conflicted` entries for CE-36.3; CE-36.2 is `history`. The writes: `stage_records`, `unstage_records`, discard, `commit` with its warnings (CE-36.1), `pull` with `Conflicts`, `merge_state`, `abort_merge`, `push` (`Rejection::NotFastForward` for "Pull first") and `housekeeping` |
 | P11, P48 | `Git::find` and its messages when they start git |

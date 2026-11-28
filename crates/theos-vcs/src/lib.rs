@@ -14,21 +14,30 @@
 //! (commit, worktrees, merge, pull and push) arrive in P47.
 
 mod cancel;
+pub mod commit;
+mod commit_id;
 mod folding;
 mod git;
 pub mod history;
+pub mod housekeeping;
 pub mod index;
+pub mod merge;
 mod no_hooks;
+pub mod push;
 pub mod read;
 mod read_args;
+pub mod remote;
 pub mod repo;
+pub mod stage;
 pub mod staged;
 pub mod status;
 mod tree;
 mod version;
 mod wait;
+mod write_args;
 
 pub use cancel::Cancel;
+pub use commit_id::CommitId;
 pub use folding::Folding;
-pub use git::{Git, GitError};
+pub use git::{Git, GitError, Output};
 pub use version::GitVersion;

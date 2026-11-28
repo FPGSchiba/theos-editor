@@ -118,6 +118,23 @@ impl Sandbox {
         Ok(String::from_utf8(output.stdout)?)
     }
 
+    /// Runs a git command that must fail and returns its trimmed stderr.
+    pub fn failing_stderr(
+        &self,
+        cwd: &Path,
+        args: &[&str],
+        env: &[(&str, &str)],
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let error = self
+            .run_env(cwd, args, env)
+            .err()
+            .ok_or("the command succeeded")?
+            .to_string();
+        // `run_env` words its error "git [...] failed: <stderr>".
+        let (_, stderr) = error.split_once("failed: ").ok_or("error text")?;
+        Ok(stderr.trim().to_owned())
+    }
+
     /// Stages everything and commits it with a synthetic identity.
     pub fn commit(&self, cwd: &Path, message: &str) -> Result<(), Box<dyn std::error::Error>> {
         self.run(cwd, &["add", "-A"])?;

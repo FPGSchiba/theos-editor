@@ -2,7 +2,7 @@
 
 use std::ffi::OsStr;
 
-use theos_vcs::GitError;
+use theos_vcs::{Cancel, GitError};
 
 use crate::common::Sandbox;
 
@@ -107,5 +107,42 @@ fn with_env_reaches_every_command() -> Result<(), Box<dyn std::error::Error>> {
 fn find_reads_a_version_that_is_at_least_the_minimum() -> Result<(), Box<dyn std::error::Error>> {
     let sandbox = Sandbox::new()?;
     assert!(sandbox.git()?.version() >= theos_vcs::GitVersion::MINIMUM);
+    Ok(())
+}
+
+#[test]
+fn output_keeps_a_failure_exit_as_an_answer() -> Result<(), Box<dyn std::error::Error>> {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    let git = sandbox.git()?;
+    let list = args(&["rev-parse", "--verify", "--quiet", "nosuchref"]);
+    let out = git.output(&list, &repo, None, &[], &Cancel::new())?;
+    assert_eq!(out.code, Some(1));
+    assert_eq!(out.stdout, Vec::<u8>::new());
+    assert!(!out.success());
+    let err = git
+        .run(&list, &repo, None, &[])
+        .err()
+        .ok_or("expected a failure")?;
+    assert!(
+        matches!(err, GitError::Failed { code: Some(1), .. }),
+        "{err:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn output_pipes_stdin_and_returns_stdout() -> Result<(), Box<dyn std::error::Error>> {
+    let sandbox = Sandbox::new()?;
+    let repo = sandbox.init("repo")?;
+    let out = sandbox.git()?.output(
+        &args(&["hash-object", "--stdin"]),
+        &repo,
+        Some(b"x"),
+        &[],
+        &Cancel::new(),
+    )?;
+    assert!(out.success());
+    assert_eq!(String::from_utf8(out.stdout)?.trim().len(), 40);
     Ok(())
 }

@@ -51,6 +51,12 @@ pub enum GitError {
         /// Everything git wrote to stderr, lossily decoded and trimmed.
         stderr: String,
     },
+    /// Another git holds the index: its `index.lock` exists. theos never deletes that file.
+    #[error("another git is working in this repository (its index.lock exists): {stderr}")]
+    IndexLocked {
+        /// Everything git wrote to stderr, lossily decoded and trimmed.
+        stderr: String,
+    },
     /// git could not be started or its pipes failed.
     #[error("could not run git: {source}")]
     Io {
@@ -77,11 +83,35 @@ impl std::fmt::Display for MinimumShort {
     }
 }
 
-/// The arguments as text, for error messages.
+/// The arguments as text, for error messages and logs. The credentials of a URL such as
+/// `https://user:token@host/path` are replaced: `https://***@host/path`.
 pub(crate) fn args_text(args: &[&OsStr]) -> Vec<String> {
     args.iter()
-        .map(|arg| arg.to_string_lossy().into_owned())
+        .map(|arg| redacted(&arg.to_string_lossy()))
         .collect()
+}
+
+/// `arg` without the userinfo of a `scheme://userinfo@host` URL.
+fn redacted(arg: &str) -> String {
+    let Some(scheme_end) = arg.find("://") else {
+        return arg.to_owned();
+    };
+    let start = scheme_end + 3;
+    let authority_len = arg[start..].find('/').unwrap_or(arg.len() - start);
+    let authority = &arg[start..start + authority_len];
+    match authority.rfind('@') {
+        Some(at) => format!("{}***{}", &arg[..start], &arg[start + at..]),
+        None => arg.to_owned(),
+    }
+}
+
+/// The error of a command that exited with a failure.
+pub(crate) fn failed(args: &[&OsStr], output: Output) -> GitError {
+    GitError::Failed {
+        args: args_text(args),
+        code: output.code,
+        stderr: output.stderr,
+    }
 }
 
 fn exit_text(code: Option<i32>) -> String {
@@ -89,6 +119,25 @@ fn exit_text(code: Option<i32>) -> String {
         || "no exit code".to_owned(),
         |code| format!("exit code {code}"),
     )
+}
+
+/// git's whole answer to a command that ran to its end, whatever its exit code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Output {
+    /// The exit code, `None` when a signal ended the process.
+    pub code: Option<i32>,
+    /// Everything git wrote to stdout.
+    pub stdout: Vec<u8>,
+    /// Everything git wrote to stderr, lossily decoded and trimmed.
+    pub stderr: String,
+}
+
+impl Output {
+    /// Whether git exited with code 0.
+    #[must_use]
+    pub fn success(&self) -> bool {
+        self.code == Some(0)
+    }
 }
 
 /// The git command line, found once and run many times.
@@ -148,6 +197,15 @@ impl Git {
         self.version
     }
 
+    /// The value the runner itself sets for `name` (see [`Git::with_env`]), not the process's.
+    pub(crate) fn env_value(&self, name: &str) -> Option<&OsStr> {
+        self.env
+            .iter()
+            .rev()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.as_os_str())
+    }
+
     /// Adds variables to the environment of every command this runner starts.
     #[must_use]
     pub fn with_env(mut self, env: &[(&str, &str)]) -> Git {
@@ -197,33 +255,78 @@ impl Git {
         env: &[(&str, &str)],
         cancel: &Cancel,
     ) -> Result<Vec<u8>, GitError> {
-        let started = Instant::now();
-        let result = self.spawn_and_wait(args, cwd, stdin, env, cancel);
-        let (elapsed, cwd) = (started.elapsed(), cwd.display());
-        match &result {
-            Ok(_) => tracing::debug!(?args, %cwd, ?elapsed, "git"),
-            Err(GitError::Cancelled { .. }) => {
-                tracing::debug!(?args, %cwd, ?elapsed, "git cancelled");
-            }
-            // A failure exit is often expected (`rev-parse --verify --quiet` of a missing
-            // version, `config --get` of an unset key); the caller decides whether it matters.
-            Err(error @ GitError::Failed { .. }) => {
-                tracing::debug!(?args, %cwd, ?elapsed, %error, "git failed");
-            }
-            Err(error) => tracing::warn!(?args, %cwd, ?elapsed, %error, "git could not run"),
+        let output = self.output(args, cwd, stdin, env, cancel)?;
+        if output.success() {
+            return Ok(output.stdout);
         }
-        result
+        let error = failed(args, output);
+        // A failure exit is often expected (`rev-parse --verify --quiet` of a missing
+        // version, `config --get` of an unset key); the caller decides whether it matters.
+        tracing::debug!(args = ?args_text(args), cwd = %cwd.display(), %error, "git failed");
+        Err(error)
     }
 
-    /// The body of [`Git::run_cancellable`], without the logging.
-    fn spawn_and_wait(
+    /// Runs git as [`Git::run_cancellable`] does and returns its whole answer: the exit code,
+    /// stdout and stderr, whether git succeeded or failed.
+    ///
+    /// # Errors
+    ///
+    /// [`GitError::Cancelled`] when `cancel` is set before git exits, and [`GitError::Io`] when
+    /// git cannot be started or its pipes fail. A failure exit is an [`Output`], not an error.
+    pub fn output(
         &self,
         args: &[&OsStr],
         cwd: &Path,
         stdin: Option<&[u8]>,
         env: &[(&str, &str)],
         cancel: &Cancel,
-    ) -> Result<Vec<u8>, GitError> {
+    ) -> Result<Output, GitError> {
+        self.output_without(args, cwd, stdin, env, &[], cancel)
+    }
+
+    /// Like [`Git::output`], and removes the variables `removed` from git's environment. The
+    /// runner's own variables are applied first, then `env`, then the removals, so a removal
+    /// beats a value from either.
+    ///
+    /// # Errors
+    ///
+    /// As [`Git::output`].
+    pub fn output_without(
+        &self,
+        args: &[&OsStr],
+        cwd: &Path,
+        stdin: Option<&[u8]>,
+        env: &[(&str, &str)],
+        removed: &[&str],
+        cancel: &Cancel,
+    ) -> Result<Output, GitError> {
+        let started = Instant::now();
+        let result = self.spawn_and_wait(args, cwd, stdin, env, removed, cancel);
+        let (elapsed, cwd) = (started.elapsed(), cwd.display());
+        match &result {
+            Ok(output) => {
+                tracing::debug!(args = ?args_text(args), %cwd, ?elapsed, code = ?output.code, "git");
+            }
+            Err(GitError::Cancelled { .. }) => {
+                tracing::debug!(args = ?args_text(args), %cwd, ?elapsed, "git cancelled");
+            }
+            Err(error) => {
+                tracing::warn!(args = ?args_text(args), %cwd, ?elapsed, %error, "git could not run");
+            }
+        }
+        result
+    }
+
+    /// The body of [`Git::output`], without the logging.
+    fn spawn_and_wait(
+        &self,
+        args: &[&OsStr],
+        cwd: &Path,
+        stdin: Option<&[u8]>,
+        env: &[(&str, &str)],
+        removed: &[&str],
+        cancel: &Cancel,
+    ) -> Result<Output, GitError> {
         if cancel.is_cancelled() {
             return Err(GitError::Cancelled {
                 args: args_text(args),
@@ -242,6 +345,9 @@ impl Git {
             })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        for name in removed {
+            command.env_remove(name);
+        }
         let (tree, mut child) =
             Tree::spawn(&mut command).map_err(|source| GitError::Io { source })?;
         let pipe = child.stdin.take();
@@ -272,15 +378,14 @@ impl Git {
         };
         let stdout = stdout.map_err(io)?;
         let stderr = stderr.map_err(io)?;
-        if !status.success() {
-            return Err(GitError::Failed {
-                args: args_text(args),
-                code: status.code(),
-                stderr: String::from_utf8_lossy(&stderr).trim().to_owned(),
-            });
+        if status.success() {
+            written.map_err(io)?;
         }
-        written.map_err(io)?;
-        Ok(stdout)
+        Ok(Output {
+            code: status.code(),
+            stdout,
+            stderr: String::from_utf8_lossy(&stderr).trim().to_owned(),
+        })
     }
 }
 
@@ -362,6 +467,26 @@ fn checked(program: PathBuf, answer: &[u8]) -> Result<GitVersion, GitError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_userinfo_of_a_url_argument_is_redacted() {
+        let url = OsStr::new("https://jann:s3cret@example.com:8443/repo.git");
+        let plain = OsStr::new("https://example.com/a@b");
+        let local = OsStr::new("origin");
+        let at_in_path = OsStr::new("ssh://git@host/x");
+        let texts = args_text(&[url, plain, local, at_in_path]);
+        assert_eq!(
+            texts,
+            [
+                "https://***@example.com:8443/repo.git",
+                "https://example.com/a@b",
+                "origin",
+                "ssh://***@host/x"
+            ]
+        );
+        let error = GitError::Cancelled { args: texts };
+        assert!(!error.to_string().contains("s3cret"), "{error}");
+    }
 
     #[test]
     fn an_empty_path_finds_no_git() -> Result<(), Box<dyn std::error::Error>> {

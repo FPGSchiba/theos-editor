@@ -9,3 +9,4 @@ mod hook;
 mod ledger;
 mod new;
 mod schema;
+mod studio_commit;

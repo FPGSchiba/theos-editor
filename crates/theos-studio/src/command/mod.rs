@@ -9,6 +9,7 @@ mod base;
 mod boundary;
 mod create;
 mod delete;
+mod discard;
 mod edit;
 mod error;
 #[cfg(test)]
@@ -35,6 +36,7 @@ use theos_content::{Index, KindRegistry};
 pub use base::Base;
 pub use create::Create;
 pub use delete::Delete;
+pub use discard::Discard;
 pub use edit::Edit;
 pub use error::CommandError;
 pub use journal::{EntryId, EntrySummary, Scope};
@@ -60,6 +62,13 @@ pub trait Command {
     ///
     /// A [`CommandError`] naming why the command cannot be planned; nothing was changed.
     fn plan(&self, ctx: &PlanContext<'_>) -> Result<Plan, CommandError>;
+    /// Whether the command restores a state the user asked for, such as a discard bringing back
+    /// the index's version: then no count of the verdict refuses it. Its new errors are reported
+    /// in [`Outcome::introduced`] but do not block; every other check of the pipeline (paths,
+    /// boundary, bases, records kept by a move) stays. The default judges.
+    fn restores(&self) -> bool {
+        false
+    }
 }
 
 /// What the index must have fresh before a command plans.

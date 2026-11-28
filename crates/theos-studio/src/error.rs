@@ -7,6 +7,7 @@ use theos_content::{IndexError, KindRegistry, ProjectError, ReadError, RegistryE
 use crate::CommandError;
 use crate::create::CreateError;
 use crate::hook::HookError;
+use crate::lock::LockError;
 use theos_vcs::GitError;
 
 /// A failure of the studio.
@@ -90,6 +91,29 @@ pub enum StudioError {
     /// `theos hook install` refused.
     #[error(transparent)]
     Hook(#[from] HookError),
+    /// The repo lock could not be taken.
+    #[error(transparent)]
+    Lock(#[from] LockError),
+    /// The record or file is in a merge conflict; resolve it first.
+    #[error("`{id}` is in a merge conflict; resolve it first")]
+    Conflicted {
+        /// The record's id, or the repository path of a file.
+        id: String,
+    },
+    /// The change cannot be discarded.
+    #[error("cannot discard `{path}`: {why}")]
+    NotDiscardable {
+        /// The record's project path or the file's repository path.
+        path: String,
+        /// Why not.
+        why: String,
+    },
+    /// A status entry of a kind this studio does not know how to write.
+    #[error("cannot write to git for the status entry {entry}")]
+    UnsupportedEntry {
+        /// The entry, as debug text.
+        entry: String,
+    },
     /// A command of the command layer failed. Boxed, since a [`CommandError`] can hold a
     /// [`StudioError`].
     #[error(transparent)]

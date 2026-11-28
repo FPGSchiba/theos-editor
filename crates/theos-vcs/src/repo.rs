@@ -3,8 +3,9 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::git::{Git, GitError, args_text};
+use crate::git::{Git, GitError, args_text, failed};
 use crate::read_args::read_args;
+use crate::{Cancel, CommitId};
 
 /// Runs a `rev-parse` in `cwd` and reads the answer as one line of UTF-8 text.
 fn rev_parse(git: &Git, cwd: &Path, extra: &[&str]) -> Result<String, GitError> {
@@ -83,6 +84,42 @@ pub fn flag(git: &Git, top: &Path, key: &str) -> Result<bool, GitError> {
     }
 }
 
+/// The value of the setting `key` for the repository at `top`, or `None` when it is not set.
+///
+/// # Errors
+///
+/// The errors of [`Git::run`], except the exit code 1 of an unset key.
+pub fn value(git: &Git, top: &Path, key: &str) -> Result<Option<String>, GitError> {
+    let args = read_args("config", &["--get", key]);
+    match git.run(&args, top, None, &[]) {
+        Ok(out) => Ok(Some(
+            String::from_utf8_lossy(&out)
+                .trim_end_matches(['\r', '\n'])
+                .to_owned(),
+        )),
+        // `--get` exits with 1 when the setting is not set.
+        Err(GitError::Failed { code: Some(1), .. }) => Ok(None),
+        Err(other) => Err(other),
+    }
+}
+
+/// The names of the repository's remotes, sorted.
+///
+/// # Errors
+///
+/// The errors of [`Git::run`].
+pub fn remotes(git: &Git, top: &Path) -> Result<Vec<String>, GitError> {
+    let args = read_args("remote", &[]);
+    let out = git.run(&args, top, None, &[])?;
+    let mut names: Vec<String> = String::from_utf8_lossy(&out)
+        .lines()
+        .map(|line| line.trim_end_matches('\r').to_owned())
+        .filter(|line| !line.is_empty())
+        .collect();
+    names.sort();
+    Ok(names)
+}
+
 /// The folder git runs hooks from for the work tree at `top`, honouring `core.hooksPath`, with
 /// the platform's separators.
 ///
@@ -130,6 +167,29 @@ pub fn first_parent(git: &Git, top: &Path, commit: &str) -> Result<Option<String
     })?;
     // One line: the commit's id, then the ids of its parents.
     Ok(text.split_ascii_whitespace().nth(1).map(str::to_owned))
+}
+
+/// The commit `HEAD` names, or `None` before the first commit.
+///
+/// # Errors
+///
+/// [`GitError::Failed`] when git fails for another reason, [`GitError::Output`] when the answer
+/// is not UTF-8, and the errors of [`Git::output`].
+pub fn head(git: &Git, top: &Path) -> Result<Option<CommitId>, GitError> {
+    let args = read_args("rev-parse", &["-q", "--verify", "HEAD"]);
+    let out = git.output(&args, top, None, &[], &Cancel::new())?;
+    // `-q --verify` exits with 1 and says nothing when the name does not resolve.
+    if out.code == Some(1) && out.stderr.is_empty() {
+        return Ok(None);
+    }
+    if !out.success() {
+        return Err(failed(&args, out));
+    }
+    let text = String::from_utf8(out.stdout).map_err(|_| GitError::Output {
+        args: args_text(&args),
+        message: "the answer is not UTF-8".to_owned(),
+    })?;
+    Ok(Some(CommitId(text.trim_end().to_owned())))
 }
 
 #[cfg(test)]
