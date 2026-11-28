@@ -223,14 +223,15 @@ body {
    inside the window too. A menu is as wide as its widest row (w-menu-min to w-menu-max). A submenu is a separate popup, a sibling of the list inside
    the parent .tu-menu (never a descendant of the scrolling list, which would clip it); --sub-top
    is the offset of its parent row from the top of the parent menu, minus the submenu's own 5px
-   of border and padding. */
+   of border and padding. --sub-shift (default 0) moves the submenu left until its right edge meets
+   the window's right edge: max(0, submenuRight - window.innerWidth), set by the build; it then
+   overlaps its parent menu, as native menus do. */
 .tu-menu { position: absolute; top: 100%; left: 0; width: max-content; min-width: var(--w-menu-min); max-width: var(--w-menu-max); z-index: 4;
   background: var(--panel2); border: 1px solid var(--borderHi); border-radius: 0; box-shadow: var(--shadow-popover);
   text-transform: none; letter-spacing: 0; }
 .tu-menu__list { box-sizing: border-box; padding: 4px 0; display: flex; flex-direction: column;
   max-height: calc(100vh - var(--h-titlebar) - 2px); overflow-y: auto; }
-.tu-menu__sub { top: var(--sub-top, 0px); left: 100%; margin-left: 2px; }
-.tu-menu__sub.is-left { left: auto; right: 100%; margin-left: 0; margin-right: 2px; }
+.tu-menu__sub { top: var(--sub-top, 0px); left: calc(100% - var(--sub-shift, 0px)); margin-left: 2px; }
 .tu-menu__sub > .tu-menu__list { max-height: calc(100vh - var(--h-titlebar) - 2px - var(--sub-top, 0px)); }
 .tu-menu--static { position: static; box-shadow: none; }
 .tu-menu--static > .tu-menu__list { max-height: none; overflow-y: visible; }
