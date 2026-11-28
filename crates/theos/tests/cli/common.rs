@@ -64,6 +64,15 @@ impl Sandbox {
         self.run_binary(Path::new(env!("CARGO_BIN_EXE_theos")), args, cwd)
     }
 
+    /// Runs `theos` in `cwd` with `args` and the isolation, with `PATH` replaced by `path`.
+    pub fn run_with_path(&self, args: &[&str], cwd: &Path, path: &OsStr) -> io::Result<Output> {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_theos"));
+        command.args(args).current_dir(cwd);
+        self.isolate(&mut command);
+        command.env("PATH", path);
+        command.output()
+    }
+
     /// Runs the `theos` at `binary`, which may be a copy of the built one, like [`Sandbox::run`].
     pub fn run_binary(&self, binary: &Path, args: &[&str], cwd: &Path) -> io::Result<Output> {
         let mut command = Command::new(binary);

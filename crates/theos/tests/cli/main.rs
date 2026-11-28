@@ -4,6 +4,7 @@ mod check;
 mod commit;
 mod common;
 mod formalism;
+mod git_version;
 mod hook;
 mod ledger;
 mod new;

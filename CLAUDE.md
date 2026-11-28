@@ -45,8 +45,8 @@ repo column in the umbrella's phase table names it, and for reading fixtures.
   change that touches the file.
 - Write a pull request's description completely before opening it, and edit it at most once more,
   at the end: every edit starts `pr` and `approval`.
-- Do not add `needs-jann` to a pull request that touches a protected path: `approval` adds it
-  without starting another run. (The review-cap rule below still labels other pull requests.)
+- Do not add `needs-jann` to a pull request: `approval` adds it to one that touches a protected
+  path without starting another run, and a review loop that hits its cap is no reason to add it.
 - Merge `main` into a pull request branch only when it is next to merge (`CONTRIBUTING.md`).
 - Never start `platforms` by hand unless Jann asks. OS checks on a pull request go through the
   labels `windows` and `macos`, and only for the OS whose code the change touches.
@@ -60,7 +60,10 @@ GitHub cannot enforce them; breaking one is never acceptable, also not to unbloc
 2. Never enable auto-merge, merge, or ask anyone to merge a PR that touches a protected path
    (`docs/gate.md` §5). Those PRs wait for Jann.
 3. Never change protected paths inside an implementation PR. Gate, spec or doc changes go in their
-   own PR.
+   own PR. A PR that already touches protected paths may change protected paths in the fix waves
+   of its own final review loop without asking Jann first; it lists every protected path it
+   changes, and Jann's approval of the PR covers them (decision 0006). No fix ever weakens a
+   check (rule 4).
 4. Never lower a threshold, disable or skip a check, delete or weaken a test to make it pass,
    add `#[allow]`, or add `#[ignore]` / `#[expect]` without a real reason in the attribute.
 5. Never use `--no-verify`, force-push to a shared branch, or rewrite history on `main`.
@@ -79,17 +82,22 @@ GitHub cannot enforce them; breaking one is never acceptable, also not to unbloc
 - **Plans** copy the umbrella's global constraints (G1–G16) and the phase ACs verbatim into
   "Global Constraints". Every task names the ACs its tests prove; tests carry `// AC: <id>`.
 - **Execution** is superpowers:subagent-driven-development.
-- **Final review is a loop** (replaces the single fix wave in the skill's final review):
+- **Final review is a judged loop** (replaces the single fix wave in the skill's final review;
+  decision 0005):
   1. Dispatch a fresh whole-branch reviewer (most capable model) with the review package, the
      phase spec, the umbrella constraints and ACs, the ledger's deferred and parked lines, and the
      list of all earlier findings with their resolutions and rulings.
-  2. If it reports any finding — Critical, Important or Minor — dispatch one fix subagent with the
-     complete list, then go back to step 1 with a new, fresh reviewer (never a scoped re-review).
-  3. Stop when a fresh reviewer reports no findings.
-  4. A reviewer may not reopen a finding that an earlier round resolved or ruled on unless it
+  2. Judge every finding it reports, Critical, Important or Minor: fix it, or rule it not worth
+     fixing with a `Ruling: <what> — <why> — <cost if wrong>` line in the ledger. Minor findings
+     that change no behaviour and risk nothing are ruled, not fixed.
+  3. If any finding is to be fixed, dispatch one fix subagent with the complete list of findings
+     to fix, then go back to step 1 with a new, fresh reviewer (never a scoped re-review).
+  4. Stop when a fresh reviewer reports nothing worth fixing.
+  5. A reviewer may not reopen a finding that an earlier round resolved or ruled on unless it
      brings new evidence; it says so explicitly.
-  5. After 5 rounds without a clean review, stop: open the PR as a draft, label it `needs-jann`,
-     and list the open findings in the description.
+  6. After 5 rounds: one last fix wave and a targeted review of that fix wave, then stop. The
+     review was best effort: open the PR ready for review (not as a draft) and list its open
+     findings in the description. The cap is no reason to ask Jann or to label the PR.
 - **Finishing** is always a PR (never a local merge). Fill the PR template completely, including
   every ruling from the ledger. Enable auto-merge only when rule 2 above allows it.
 - **Model selection** as in the skill: plans and final reviews on the most capable model; task
@@ -148,7 +156,8 @@ every subagent; put them in subagent briefs.
 ## When to stop and ask Jann
 
 Only for: an irreversible or destructive action; a security-sensitive action; anything that needs
-a protected-path change; an AC that is wrong or impossible; a final review loop that hit its cap.
+a protected-path change outside a PR that already touches protected paths (hard rule 3); an AC
+that is wrong or impossible.
 Everything else is decided, recorded as `Ruling: <what> — <why> — <cost if wrong>` in the ledger,
 and listed in the PR. Put open questions for Jann in `docs/status.md` under "Needs Jann".
 

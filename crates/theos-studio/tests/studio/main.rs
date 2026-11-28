@@ -2,9 +2,12 @@
 //! pipeline and what hangs on them, the staged check, new records and the hook.
 
 mod boundary;
+mod changes;
 mod check;
 mod common;
+mod diff;
 mod helper;
+mod history;
 mod hook;
 mod lock;
 mod log;

@@ -7,7 +7,7 @@ UI.
 After phase P02 the crate provided records and grammars. After P03 it also provided the project,
 the kind registry, the persistent index, search and effective lenses. After P04 it also validates:
 body rules, lore rules across records, the reveal ledger, validation settings, binary checks and
-the Shared Formalism mirror.
+the Shared Formalism mirror. After P46 it also diffs texts and records.
 
 ## What it provides
 
@@ -28,6 +28,7 @@ the Shared Formalism mirror.
 | `settings` | `[validate]` of `.theos/settings.toml`: `parse` gives `ValidationSettings` and `SettingsProblem`s |
 | `formalism` | The Shared Formalism mirror: `Source`, `Equation`, `render`, `regenerate` |
 | `index` | `Index`: the persistent index with sync, update, apply, preview, queries, search, lens and dump |
+| `diff` | Diffs for review (P46): `words` (a word-level diff of two texts), `fields` (old and new per front matter field, compared by value) and `record` (a record's fields plus a word diff of its body) |
 
 The patcher changes only the lines of the field it is asked to change: every edit is a span edit
 on the text, the result is parsed again and checked, and nothing is returned when the check fails.
@@ -200,8 +201,9 @@ cache copies a project into a temporary folder first.
 |---|---|
 | P05 | `Project::open`, `SCHEMA_VERSION`, `findings`, `preview` for the hook, `KindSpec`, `Placement` and `order()`, `search`, records, links, backlinks and `lens` for the MCP read tools |
 | P06 | `preview` before every write and `update` after it; `KindSpec::order()`; backlinks with spans for renaming an id; `Placement`; `walk::is_hidden_entry` and `walk::disk_spelling` for the command boundary |
-| P07 | One project and one `.theos/cache` per agent worktree; `preview` for proposals |
-| P11, P12 | `search`, backlinks, slot targets for `[[` suggestions, `link/dangling` findings; P11 draws the record body from `body::tree` (`tree()`, `Node`, `Inline`) and sends `Severity` through its `Serialize` |
+| P07 | One project and one `.theos/cache` per agent worktree; `preview` for proposals; `diff::record` and `diff::words` for `theos review show` |
+| P11, P12 | `search`, backlinks, slot targets for `[[` suggestions, `link/dangling` findings; P11 draws the record body from `body::tree` (`tree()`, `Node`, `Inline`) and sends `Severity` through its `Serialize`; P12 also `diff` to compare an unsaved edit with the saved record |
 | P15 | `lens` and its beliefs; links for the graph |
 | P17 | `preview` for drafts; `unaware_of` of the effective lens; embeddings in the same store |
+| P46 | `theos-studio`'s `diff` builds its `FileDiff` on `diff::record` and `diff::words` |
 | P19 | Comment lists may be cached in the same store |

@@ -42,7 +42,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
 | P34 | Interiors | theos-editor | spec-approved | #55 | |
 | P45 | Atlas level switcher | theos-editor | todo | | |
-| P46 | Git read | theos-editor | spec-approved | #52 | |
+| P46 | Git read | theos-editor | done | #52, #58 | #62 |
 | P47 | Git write | theos-editor | todo | | |
 | P48 | MCP read | theos-editor | done | #53 | #61 |
 | P49 | Releases and the check action | theos-editor | todo | | |
@@ -99,9 +99,6 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
 - P50 is merged (#48), and the `main` ruleset requires `gate`, `test`, `coverage`, `pr` and
   `approval`. Its proofs after the merge remain: the probe PRs and the speed measurements (spec
   §5.9, §5.10) and one manual Intel macOS run of `platforms`.
-- P46's spec (§9 R1): history follows renames with git's default threshold. A short record that
-  is renamed and largely rewritten in one commit starts a new history, as in `git log --follow`;
-  a rename in the editor changes one line of the record and keeps it.
 - Follow-up from P06: the class "a command changes which files are records without the verdict
   judging it" (m4-4, m5-1, and N1–N3 of PR #39) needs a general design. One option is a check
   after the write that compares the reindex with the preview and heals the cache; another is a

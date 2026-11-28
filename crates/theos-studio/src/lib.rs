@@ -18,25 +18,33 @@
 //! through one pipeline of preview, verdict, write and reindex on a [`Route`]; undo and redo of
 //! the in-memory journal ([`Workspace::undo`], [`Workspace::redo`]), for the newest entry or,
 //! with [`Scope::Record`], the newest entry of one file; and [`introduced()`], the count of errors
-//! a command introduces. The rest arrives in P07 and later phases.
+//! a command introduces.
+//!
+//! P46 adds [`changes()`], git's status of a project grouped by record, [`diff()`], a record's
+//! or a file's diff between two versions, and [`history()`], a record's commits by id across
+//! renames of its file and its id.
 //!
 //! P48 adds the Codex queries ([`codex`]) with their [`Marks`]; P11 adds the Codex-only views of
 //! the editor's Codex screen on top of them ([`codex_view`]): the tree tabs, the record page and
-//! the search prefixes.
+//! the search prefixes. The rest arrives in P07 and later phases.
 
+pub mod changes;
 pub mod check;
 pub mod codex;
 pub mod codex_view;
 mod command;
 pub mod create;
+pub mod diff;
 pub mod error;
 pub mod guides;
+pub mod history;
 pub mod hook;
 pub mod introduced;
 pub mod lock;
 pub mod marks;
 pub mod parts;
 pub mod project;
+mod repo_path;
 pub mod report;
 pub mod schema;
 pub mod staged;
@@ -47,9 +55,12 @@ pub mod user_settings;
 pub mod views;
 pub mod workspace;
 
+pub use changes::{Changes, RecordChange, changes};
 pub use check::{Binaries, BinariesFolder, Check, binaries_folder, check};
 pub use command::*;
+pub use diff::{FileDiff, Side, diff};
 pub use error::StudioError;
+pub use history::{HistoryEntry, history};
 pub use introduced::{FindingCounts, introduced};
 pub use marks::{LockReason, MarkView, Marks};
 pub use report::report;
