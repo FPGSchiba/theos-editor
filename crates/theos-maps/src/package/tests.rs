@@ -6,10 +6,11 @@ use super::table::{ROADS_LEGEND, ROCK_LEGEND};
 use super::{PackageError, RunRecord, TERRAIN_LAYERS, build};
 use crate::features::output::build as build_features;
 use crate::grid::Grid;
+use crate::kind::IdScheme;
 use crate::progress::CancelToken;
 use crate::recipe::{LoadedRecipe, Plan, RecipeOrigin, parse, plan};
 use crate::runner::{RunOptions, execute};
-use crate::stage::Registry;
+use crate::stage::{MapKind, Registry};
 use crate::stages::terrain::roads::RoadClass;
 use crate::stages::terrain::rocks::Rock;
 use crate::world::{Layer, MapFrame, World};
@@ -22,12 +23,18 @@ const WATER_SMALL: &str = include_str!("../../tests/fixtures/recipes/water-small
 fn run(seed: u64) -> Result<(World, Plan, LoadedRecipe), Box<dyn std::error::Error>> {
     let loaded = parse(WATER_SMALL, RecipeOrigin::Builtin)?;
     let registry = Registry::builtin();
-    let planned = plan(&loaded, &registry, &serde_json::Map::new())?;
+    let planned = plan(
+        &loaded,
+        &registry,
+        &serde_json::Map::new(),
+        crate::recipe::Planning::Standalone,
+    )?;
     let done = execute(
         &planned,
         seed,
         &registry,
         &RunOptions::default(),
+        None,
         &mut |_| {},
         &CancelToken::new(),
     )?;
@@ -35,7 +42,9 @@ fn run(seed: u64) -> Result<(World, Plan, LoadedRecipe), Box<dyn std::error::Err
 }
 
 fn package_of(world: &World, plan: &Plan, loaded: &LoadedRecipe) -> Result<Package, PackageError> {
-    let features = build_features(world).map(|f| f.0).unwrap_or_default();
+    let features = build_features(world, IdScheme::ByType)
+        .map(|f| f.0)
+        .unwrap_or_default();
     let inputs = serde_json::json!({"size": "small"})
         .as_object()
         .cloned()
@@ -243,7 +252,7 @@ fn a_missing_layer_is_an_error_naming_it() -> TestResult {
 #[test]
 fn the_package_needs_exactly_the_layers_it_reads() -> TestResult {
     let (mut world, planned, loaded) = run(1)?;
-    let needs = super::needs();
+    let needs = super::needs(MapKind::Terrain);
     let names: Vec<String> = world.names().map(str::to_owned).collect();
     for name in names {
         if needs.iter().all(|spec| spec.name != name) {

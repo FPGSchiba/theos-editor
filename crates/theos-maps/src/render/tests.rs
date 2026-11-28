@@ -11,6 +11,7 @@ use super::{RENDERS, RenderError, canvas, render, styles};
 use crate::features::{FeatureSet, Prop};
 use crate::kernels::num::{to_f64, to_index};
 use crate::progress::CancelToken;
+use crate::stage::MapKind;
 use crate::stages::terrain::roads::RoadClass;
 
 const ROWS: usize = 40;
@@ -419,7 +420,7 @@ fn every_render_stops_on_cancel() {
     let cancel = CancelToken::new();
     cancel.cancel();
     for name in every_render() {
-        let draw = render(name).unwrap();
+        let draw = render(MapKind::Terrain, name).unwrap();
         let result = draw(&w.input(&cancel));
         assert!(matches!(result, Err(RenderError::Cancelled)), "{name}");
     }

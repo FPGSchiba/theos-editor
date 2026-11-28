@@ -60,7 +60,12 @@ fn no_constraints_pass() {
 }
 
 fn parameter_of(extra: &str, stages: &[&str]) -> Result<(), Option<String>> {
-    match plan(&recipe(extra, stages), &registry(), &serde_json::Map::new()) {
+    match plan(
+        &recipe(extra, stages),
+        &registry(),
+        &serde_json::Map::new(),
+        crate::recipe::Planning::Standalone,
+    ) {
         Ok(_) => Ok(()),
         Err(RecipeError::Invalid { parameter, .. }) => Err(parameter),
         Err(other) => panic!("{other:?}"),
@@ -103,4 +108,14 @@ fn the_chime_walk_needs_a_travel_stage() {
         Err(Some("travel.chime_to_chime_min".to_owned()))
     );
     assert_eq!(parameter_of(extra, &["a", "travel"]), Ok(()));
+}
+
+#[test]
+fn a_feature_type_path_is_known_only_for_its_kind() {
+    use crate::stage::MapKind;
+    assert!(is_known_path("features.ruin", MapKind::Terrain, &[]));
+    assert!(!is_known_path("features.ruin", MapKind::Settlement, &[]));
+    assert!(!is_known_path("features.ruin", MapKind::Interior, &[]));
+    assert!(is_known_path("lake_pct", MapKind::Terrain, &[]));
+    assert!(!is_known_path("lake_pct", MapKind::Settlement, &[]));
 }

@@ -61,6 +61,13 @@ pub fn round_half_even(x: f64) -> f64 {
     x.round_ties_even()
 }
 
+/// `x` rounded to the nearest integer, halves away from zero (libm, exact), for lattice
+/// snapping.
+#[must_use]
+pub fn round_half_away(x: f64) -> f64 {
+    libm::round(x)
+}
+
 /// `x` rounded to one decimal place (`scale` 10) or two (`scale` 100) the way Python's
 /// `round(x, n)` does: halves to even on the scaled value, both steps exact IEEE operations, and
 /// never `-0.0` (a ruling of the metrics: the plan said `f64::round`, which rounds halves away
@@ -102,6 +109,19 @@ pub fn to_usize(i: u32) -> usize {
 )]
 pub fn to_f64_i64(i: i64) -> f64 {
     i as f64
+}
+
+/// A float already rounded to an integer, as `i32`.
+///
+/// Precondition: `x` is finite and within the `i32` range (callers range-check first; the
+/// lattice checks `|x| <= 2^30`). Outside it the cast saturates and NaN gives 0.
+#[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the caller checked that the integral value fits i32"
+)]
+pub fn to_i32(x: f64) -> i32 {
+    x as i32
 }
 
 /// `floor(x)` as an index, clamped to `0..len` (`0` for NaN or `len == 0`).

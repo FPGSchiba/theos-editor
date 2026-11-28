@@ -9,6 +9,8 @@ fn file(seed: u64) -> GoldenFile {
         run: vec![GoldenRun {
             recipe: "fixture-small".to_owned(),
             seed,
+            inputs: BTreeMap::new(),
+            from: None,
             features: "f".to_owned(),
             package: "p".to_owned(),
             stages: vec![

@@ -8,7 +8,8 @@ use serde::de::DeserializeOwned;
 
 use super::params::{self, StageParams};
 use super::{
-    Finding, LayerSpec, MapKind, Metrics, ParamError, Stage, StageContext, StageError, StageReport,
+    Finding, LayerSpec, MapKind, Metrics, ParamError, Runs, Stage, StageContext, StageError,
+    StageReport,
 };
 use crate::world::World;
 
@@ -33,6 +34,8 @@ pub trait TypedStage: Send + Sync + 'static {
     const SUMMARY: &'static str;
     /// The map kinds the stage applies to.
     const KINDS: &'static [MapKind];
+    /// Which runs the stage takes part in; every run unless a stage says otherwise.
+    const RUNS: Runs = Runs::Always;
 
     /// The layers the stage reads with `params`.
     fn reads(&self, params: &Self::Params) -> Vec<LayerSpec>;
@@ -135,6 +138,10 @@ impl<T: TypedStage> Stage for T {
 
     fn kinds(&self) -> &'static [MapKind] {
         T::KINDS
+    }
+
+    fn runs(&self) -> Runs {
+        T::RUNS
     }
 
     fn params(&self, table: &toml::Table) -> Result<Box<dyn StageParams>, ParamError> {
@@ -381,6 +388,12 @@ mod tests {
                 message: "must be positive".into(),
             }
         );
+    }
+
+    #[test]
+    fn stages_default_to_running_always() {
+        let stage: &dyn Stage = &Rate;
+        assert_eq!(stage.runs(), crate::stage::Runs::Always);
     }
 
     #[test]

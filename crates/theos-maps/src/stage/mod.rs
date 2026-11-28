@@ -38,6 +38,10 @@ use crate::world::World;
 pub enum MapKind {
     /// A terrain map.
     Terrain,
+    /// The map of a settlement, a child of a terrain map.
+    Settlement,
+    /// The floor plan of a building, a child of a settlement map.
+    Interior,
 }
 
 impl std::fmt::Display for MapKind {
@@ -45,8 +49,22 @@ impl std::fmt::Display for MapKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Terrain => f.write_str("terrain"),
+            Self::Settlement => f.write_str("settlement"),
+            Self::Interior => f.write_str("interior"),
         }
     }
+}
+
+/// Which runs a stage takes part in: a map made from nothing (standalone) or one made from a
+/// parent map (child), or both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Runs {
+    /// Every run.
+    Always,
+    /// Only runs of a child map, which has a parent package and a parent feature.
+    Child,
+    /// Only runs of a map without a parent.
+    Standalone,
 }
 
 /// One step of map generation, object safe so that the registry and the runner can hold any
@@ -60,6 +78,9 @@ pub trait Stage: Send + Sync {
 
     /// The map kinds the stage applies to.
     fn kinds(&self) -> &'static [MapKind];
+
+    /// Which runs the stage takes part in.
+    fn runs(&self) -> Runs;
 
     /// Parses and checks the stage's parameters from its recipe table; unknown keys are errors.
     ///
@@ -119,5 +140,14 @@ mod tests {
         );
         let kind: MapKind = serde_json::from_value(serde_json::json!("terrain")).unwrap();
         assert_eq!(kind, MapKind::Terrain);
+        for (kind, name) in [
+            (MapKind::Settlement, "settlement"),
+            (MapKind::Interior, "interior"),
+        ] {
+            assert_eq!(serde_json::to_value(kind).unwrap(), serde_json::json!(name));
+            let back: MapKind = serde_json::from_value(serde_json::json!(name)).unwrap();
+            assert_eq!(back, kind);
+            assert_eq!(kind.to_string(), name);
+        }
     }
 }

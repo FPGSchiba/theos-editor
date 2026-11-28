@@ -208,15 +208,25 @@ fn an_unknown_parameter_fails_before_any_stage_runs() -> TestResult {
 // AC: CE-28.3
 #[test]
 fn a_recipe_input_fails_as_unknown() -> TestResult {
+    // Since P29 a declaration is a table with a type; the P08 form `floor = 1` is no declaration.
     let declared = recipe_text(
         "declares",
         "Declares",
-        &format!("{GRID}\n[inputs]\nfloor = 1\n"),
+        &format!(
+            "{GRID}
+[inputs]
+floor = 1
+"
+        ),
     );
     let dir = folder_with("declares.toml", &declared)?;
-    let (_, parameter, message) = invalid(run_from(&request("declares", 1), dir.path())?)?;
-    assert_eq!(parameter.as_deref(), Some("floor"));
-    assert!(message.contains("unknown recipe input"), "{message}");
+    let outcome = run_from(&request("declares", 1), dir.path())?;
+    match refusal(outcome)? {
+        RecipeError::Parse { message, .. } => {
+            assert!(message.contains("inputs.floor"), "{message}");
+        }
+        other => return Err(format!("expected Parse, got {other:?}").into()),
+    }
 
     let plain = recipe_text("plain", "Plain", GRID);
     let dir = folder_with("plain.toml", &plain)?;
@@ -294,8 +304,13 @@ fn every_built_in_recipe_plans() -> TestResult {
     assert_eq!(ids, BUILT_IN);
     let registry = Registry::builtin();
     for (id, loaded) in &catalog.recipes {
-        recipe::plan(loaded, &registry, &serde_json::Map::new())
-            .map_err(|e| format!("{id}: {e}"))?;
+        recipe::plan(
+            loaded,
+            &registry,
+            &serde_json::Map::new(),
+            theos_maps::recipe::Planning::Standalone,
+        )
+        .map_err(|e| format!("{id}: {e}"))?;
     }
     Ok(())
 }

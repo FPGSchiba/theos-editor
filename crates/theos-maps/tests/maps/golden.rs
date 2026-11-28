@@ -7,10 +7,35 @@
 use std::collections::BTreeMap;
 
 use theos_maps::golden::{
-    GOLDEN_RUNS, GoldenFile, GoldenMismatch, GoldenRun, GoldenStage, compare, golden_path, load,
-    record,
+    GOLDEN_RUNS, GoldenFile, GoldenMismatch, GoldenRun, GoldenSpec, GoldenStage, compare,
+    golden_path, load, record,
 };
 use theos_maps::{GENERATOR, VERSION};
+
+type Key<'a> = (
+    &'a str,
+    u64,
+    Vec<(&'a str, &'a str)>,
+    Option<(&'a str, u64)>,
+);
+
+/// What identifies a recorded run: recipe, seed, inputs and parent.
+fn run_key(run: &GoldenRun) -> Key<'_> {
+    (
+        &run.recipe,
+        run.seed,
+        run.inputs
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect(),
+        run.from.as_ref().map(|p| (p.recipe.as_str(), p.seed)),
+    )
+}
+
+/// The same key of a [`GoldenSpec`].
+fn spec_key(spec: &GoldenSpec) -> Key<'_> {
+    (spec.recipe, spec.seed, spec.inputs.to_vec(), spec.from)
+}
 
 use crate::support::{TestResult, golden_run};
 
@@ -23,22 +48,19 @@ fn slow_outputs_match_the_golden_hashes_of_this_version() -> TestResult {
     let path = golden_path(VERSION);
     let file = load(&path).unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(file.generator, format!("{GENERATOR}@{VERSION}"));
-    let recorded: Vec<(&str, u64)> = file
-        .run
-        .iter()
-        .map(|r| (r.recipe.as_str(), r.seed))
-        .collect();
+    let recorded: Vec<_> = file.run.iter().map(run_key).collect();
+    let expected: Vec<_> = GOLDEN_RUNS.iter().map(spec_key).collect();
     assert_eq!(
         recorded,
-        GOLDEN_RUNS,
+        expected,
         "{} holds other runs than GOLDEN_RUNS; before P08 merges, delete it and run \
          `cargo run -p theos-maps --example bless` (spec ruling 41); once 1.0.0 is on main, \
          raise `VERSION` instead",
         path.display()
     );
     let mut mismatches = Vec::new();
-    for expected in &file.run {
-        let fresh = golden_run(&expected.recipe, expected.seed)?;
+    for (expected, spec) in file.run.iter().zip(GOLDEN_RUNS) {
+        let fresh = golden_run(spec)?;
         if let Err(mismatch) = compare(expected, &fresh) {
             eprintln!(
                 "fresh hashes of {} seed {}:\n{}",
@@ -61,7 +83,7 @@ fn slow_outputs_match_the_golden_hashes_of_this_version() -> TestResult {
 // AC: CE-77.2
 #[test]
 fn a_changed_output_fails_the_golden_comparison() -> TestResult {
-    let golden = golden_run("fixture-small", 1)?;
+    let golden = golden_run(&GOLDEN_RUNS[0])?;
     let mut changed = golden.clone();
     let stage = changed
         .stages
@@ -132,6 +154,8 @@ fn bless_refuses_to_overwrite_an_existing_version() -> TestResult {
         run: vec![GoldenRun {
             recipe: "fixture-small".to_owned(),
             seed: 1,
+            inputs: BTreeMap::new(),
+            from: None,
             features: "a".repeat(64),
             package: "b".repeat(64),
             stages: vec![GoldenStage {
