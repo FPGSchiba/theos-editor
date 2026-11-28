@@ -1,6 +1,7 @@
 # P34 · Interiors — phase spec
 
-Status: proposed · repo of the build: `theos-editor`
+Status: approved (#55) · built in #69 · as built (this erratum, 28 Nov 2026) · repo of the build:
+`theos-editor`
 Source: `docs/specs/00-umbrella.md` §3 P34, decision 0004
 (`docs/decisions/0004-map-generation-research.md`, decisions 5b and 5c) and the P08 spec
 (`docs/specs/phases/P08-map-format-and-terrain-generator.md`), whose Stage contract, runner,
@@ -308,7 +309,7 @@ pub struct Room {
     pub cells: Vec<Cell>,              // lattice cells, sorted; one for a room, several for a hall
     pub shape: Shape,                  // rect | round | ragged | passage
     pub keys: Vec<KeyId>,              // keys found in this room
-    pub locked: bool,                  // the room lies behind a lock (for renders and metrics)
+    pub locked: bool,                  // the room lies behind a lock: RoomGraph::mark_locked
 }
 pub struct Connection {
     pub a: RoomId, pub b: RoomId,      // a < b
@@ -332,6 +333,10 @@ pub struct Connection {
   - every key a lock names lies in some room.
 - **Keys are never lost** and a key opens every lock that names it. This is what makes the check
   a fixed point (§5.9), and it matches Unexplored's safe main locks.
+- **`locked`** is set by `RoomGraph::mark_locked`, which every writer of `room_graph` runs before
+  writing it: a room is locked when a keyless flood from the start through open passages and
+  drops does not reach it (as built). While the mission runs, the rules read it as the program's
+  flag (`locked_leaf`'s rooms).
 - **A drop** is a one-way connection: walkable from `from` to the other room only.
 - **Role `exit`** is 0.3.0's `extraction` role in the room program: a room where a party can
   leave. It is not a place feature: `chime` and the gates inside interiors wait in the research
@@ -405,7 +410,7 @@ The eight rules of P34. Each is one module, unit-tested on a small fixed lattice
 | `insert_cycle` | Replaces an open connection u–v by a detour loop of 2×2, 2×3 or 3×3 cells through free cells; optional `lock = true` locks the detour's far end and puts its key on the detour's near side | The key lies on the entrance side of its lock |
 | `close_loop` | Adds an open connection between two adjacent rooms whose graph distance is in `[min_dist, max_dist]`; capped by `count` (the probe's uncapped version made 39–67 cycles at 150 rooms) | Adding an open connection never removes a route |
 | `extend_arc` | Inserts a new `path` room into a connection along free cells | The new room is open on both sides and inherits the connection's kind on its far side |
-| `leaf` | Attaches a dead-end room of the program to a non-locked room | Open |
+| `leaf` | Attaches a dead-end room of the program to a room the program does not mark `locked` (`locked_leaf`'s rooms); with `role = "exit"` it places the program's exit rooms | Open |
 | `locked_leaf` | Attaches a `locked` room behind a lock, and puts its key in a room the solver reaches before the lock | The key's room is chosen from the rooms reachable without the new lock |
 | `shortcut` | Connects an adjacent, unconnected pair of rooms whose shortest route between them is at least `min_route` rooms by a one-way drop from the later room to the earlier. "Later" is the order of §5.9's fixed point with every key held: first the round in which a room is reached, then its graph distance from the start, then its room id | A drop toward an earlier room only returns the party to ground it has walked; §5.9's drop check confirms the goal stays reachable |
 | `merge_hall` | Grows a room over free neighbour cells to its program footprint (1×2, 2×2, 2×3, 3×3), or merges two adjacent open `path` rooms into one hall | Merging open rooms keeps every route |
@@ -504,9 +509,13 @@ rooms, keys or doors involved. The codes are `uncarved_room`, `disconnected`, `u
 
    At most K + 1 floods for K keys. Every room and the goal must be reached.
 4. **Drops leave no dead end:** for every drop, from its target room, with the keys *surely
-   held* there, the goal must stay reachable. Surely held means the keys reachable from the start
-   with every drop removed. This is conservative: it is a subset of what any party holds when it
-   falls (`06c` §5). Unsafe cases are refused, never guessed.
+   held* there, the goal must stay reachable. Surely held means the keys of the start room and of
+   the room the drop leaves from: a party that falls has entered both, and keys are never lost.
+   The flood from the target picks up the keys it finds. This is conservative: it refuses some
+   drops a party could survive, never one it could not. Unsafe cases are refused, never
+   guessed. (The keys reachable with every drop removed are not a subset of what a falling party
+   holds: with start–A open, A holding key-1, start–B open, a drop B→C and C–goal locked by
+   key-1, a party taking start→B→drop never holds key-1.)
 5. **Doors agree with the graph:** every connection has its door, and a door's two rooms are its
    connection's.
 
@@ -573,11 +582,16 @@ them through `renders` as `blueprint-ruin` (§9, ruling 9). Drawing follows P08 
 
 | Recipe | Frame | Program | Rules | Use |
 |---|---|---|---|---|
-| `choir-hall-ruin` | 100² at 1 m (100 m) | 0.3.0's: entrance (start), choir hall (goal, 2×2, round), 2–3 tuning galleries, 1–2 junctions, operator room, echo vault (locked, round), 1–2 collapsed (ragged), shrine crypt, 1–2 stores, 2 exits | `main_cycle` (`lock_key`), `merge_hall`, `locked_leaf`, `insert_cycle` ×1, `leaf` | 0.3.0's intent, CE-80.1 |
+| `choir-hall-ruin` | 84² at 1 m, square outline, 6×6 lattice at 14 m | 0.3.0's: entrance (start), choir hall (goal, 3×3, round), 2–3 tuning galleries, 1–2 junctions, operator room, echo vault (locked, round), 1–2 collapsed (ragged), shrine crypt, 1–2 stores, 2 exits | `main_cycle` (`lock_key`), `merge_hall`, `locked_leaf`, `insert_cycle` ×1, `leaf` | 0.3.0's intent, CE-80.1 |
 | `works-halls` | 300² at 1 m (300 m) | about 150 rooms: machine halls (2×3, 3×3), galleries (passages), stores, 2–4 exits | `main_cycle` (`two_routes`), `extend_arc`, `insert_cycle` with locks, `close_loop` ×≤12, `merge_hall`, `locked_leaf`, `shortcut`, `leaf` | A large interior (bands 4 and 9) |
-| `ruin-undercroft` | 80² at 1 m (80 m) | entrance (start), crypt (goal), 6–9 rooms | `main_cycle` (`lock_key`), `leaf`, `merge_hall` | Child of a terrain ruin (CE-80.4) |
+| `ruin-undercroft` | 80² at 1 m, square outline, 4×4 lattice at 20 m | entrance (start), crypt (goal, 2×1), 8–9 rooms with one exit | `main_cycle` (`lock_key`), `leaf`, `merge_hall` | Child of a terrain ruin (CE-80.4) |
 | `fixture-interior` | 40² | 6 rooms | `main_cycle`, `leaf` | Tests only, not in `describe` |
 
+- **As built.** The tuning moved three values from this table's first version: the choir hall's
+  frame (100 m circle → 84 m square, so the rooms use more than half the floor; a circle holds
+  only whole lattice blocks), its hall (2×2 → 3×3, which keeps 0.3.0's 40–52 m hall at the 14 m
+  pitch), and the undercroft's crypt (2×1, since a 2×2 goal leaves no room for the loop on 4×4).
+  Every built-in also carries a `stages.playability.footprint_used_pct` range.
 - **Cell size.** 1 m raster cells, against 0.3.0's 2 m: a one-cell wall and a one-cell door read as
   walls and doors at 1 m, while at 2 m a door is four metres wide. The frame sizes follow from the
   probe's dense floor sizes with staggered walls.
@@ -755,9 +769,10 @@ Further tests (no AC of their own):
    designed without a third probe round — they keep every invariant by construction (§5.7) and
    only change room widths and where walls meet — cost if wrong: the tuning finds the 150-room
    look still too regular and adds hall types.
-7. Ruling: the drop check uses the keys reachable with all drops removed — conservative and
-   cheap; a dominator computation (`06c` §5) is more permissive but needs more code — cost if
-   wrong: a recipe's drop refused that would have been safe.
+7. Ruling: the drop check holds only the start room's and the drop room's keys at the target
+   (as built, §5.9 item 4) — a true lower bound and cheap; a dominator computation (`06c` §5) is
+   more permissive but needs more code — cost if wrong: a recipe's drop refused that would have
+   been safe.
 8. Ruling: sightlines are measured along rows, columns and both diagonals in raster cells — 0.3.0
    used rows and columns only; line of sight at any angle is P33's (CE-83.1) — cost if wrong:
    long oblique sightlines pass the constraint.
