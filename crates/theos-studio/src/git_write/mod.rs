@@ -3,7 +3,9 @@
 //! git in git's own spelling, as status and diff gave it.
 
 mod commit;
+mod pull;
 mod stage;
 
 pub use commit::{CommitError, Committed, commit};
+pub use pull::{PullError, Pulled, abort_merge, pull};
 pub use stage::{stage_records, unstage_records};

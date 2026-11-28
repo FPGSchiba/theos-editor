@@ -10,8 +10,11 @@ use crate::common::{Error, TempProject, files, put};
 
 /// A temp folder with an empty git configuration and one repository in it.
 pub struct Repo {
-    dir: TempDir,
+    /// Kept for its drop, which deletes the folder.
+    _dir: TempDir,
     config: PathBuf,
+    /// The top folder of the work tree: the temp folder itself, or a folder in it for a clone.
+    top: PathBuf,
 }
 
 impl Repo {
@@ -21,7 +24,12 @@ impl Repo {
         let dir = tempfile::tempdir()?;
         let config = dir.path().join("gitconfig");
         std::fs::write(&config, "")?;
-        let repo = Repo { dir, config };
+        let top = dir.path().to_path_buf();
+        let repo = Repo {
+            _dir: dir,
+            config,
+            top,
+        };
         repo.run(&["init", "-q", "-b", "main"])?;
         let fixture = TempProject::copy_of_studio("projects/staged")?;
         let top = repo.top().join(place);
@@ -32,9 +40,43 @@ impl Repo {
         Ok(repo)
     }
 
+    /// A clone of the repository at `source` (a local bare repository, say), with a synthetic
+    /// identity in its own configuration so that git can commit and merge in it.
+    pub fn clone_of(source: &Path) -> Result<Repo, Error> {
+        let dir = tempfile::tempdir()?;
+        let config = dir.path().join("gitconfig");
+        std::fs::write(&config, "")?;
+        let top = dir.path().join("clone");
+        let output = Command::new("git")
+            .args(["clone", "-q", "--"])
+            .arg(source)
+            .arg(&top)
+            .env("GIT_CONFIG_GLOBAL", &config)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .output()?;
+        if !output.status.success() {
+            return Err(format!(
+                "git clone failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into());
+        }
+        let repo = Repo {
+            _dir: dir,
+            config,
+            top,
+        };
+        repo.run(&["config", "user.name", "Synthetic"])?;
+        repo.run(&["config", "user.email", "synthetic@example.invalid"])?;
+        Ok(repo)
+    }
+
     /// The top folder of the repository.
     pub fn top(&self) -> &Path {
-        self.dir.path()
+        &self.top
     }
 
     /// A runner that ignores the user and system git configuration.
