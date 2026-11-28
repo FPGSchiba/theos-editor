@@ -5,10 +5,10 @@ use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 use theos_studio::Workspace;
 use theos_studio::git_write::{PushFailed, push};
-use theos_vcs::Cancel;
 use theos_vcs::push::{PushError, Pushed, Rejection};
+use theos_vcs::{Cancel, GitError};
 
-use crate::common::{Error, TestResult, put, spawn_helper};
+use crate::common::{Error, TestResult, cancel_when_exists, put, sh_path, spawn_helper};
 use crate::helper::HelperTask;
 use crate::repo::Repo;
 
@@ -215,5 +215,35 @@ fn the_push_takes_no_repo_lock() -> TestResult {
     child.wait()?;
     result??;
     assert_eq!(remotes.tip("origin", "main"), Some(remotes.head()?));
+    Ok(())
+}
+
+// AC: CE-22.3
+#[test]
+fn a_push_cancelled_while_git_runs_returns_cancelled_at_once() -> TestResult {
+    let remotes = with_remotes(&["origin"])?;
+    let marker = remotes.dir.join("hook-started");
+    script_hook(
+        &remotes.bare("origin"),
+        &format!("#!/bin/sh\ntouch '{}'\nsleep 30\n", sh_path(&marker)),
+    )?;
+    let mut workspace = Workspace::open(remotes.repo.top())?;
+    let git = remotes.repo.git()?;
+    let cancel = Cancel::new();
+    let watcher = cancel_when_exists(marker, cancel.clone());
+    let result = push(&mut workspace, &git, &cancel);
+    let returned = std::time::Instant::now();
+    let cancelled_at = watcher.join().map_err(|_| "watcher panicked")?;
+    let cancelled_at = cancelled_at.ok_or("the hook never started")?;
+    assert!(
+        matches!(
+            &result,
+            Err(PushFailed::Push(PushError::Git(GitError::Cancelled { .. })))
+        ),
+        "{result:?}"
+    );
+    let took = returned.saturating_duration_since(cancelled_at);
+    assert!(took < std::time::Duration::from_secs(2), "took {took:?}");
+    assert_ne!(remotes.tip("origin", "main"), Some(remotes.head()?));
     Ok(())
 }

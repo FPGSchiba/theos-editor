@@ -5,11 +5,12 @@ use std::time::{Duration, Instant};
 
 use tempfile::TempDir;
 use theos_studio::git_write::{PullError, Pulled, abort_merge, commit, pull};
+use theos_studio::lock::LockError;
 use theos_studio::{Changes, RecordChange, StudioError, Workspace};
 use theos_vcs::merge::merge_state;
 use theos_vcs::{Cancel, CommitId, GitError, repo};
 
-use crate::common::{Error, TestResult, put, spawn_helper};
+use crate::common::{Error, TestResult, cancel_when_exists, put, sh_path, spawn_helper};
 use crate::helper::HelperTask;
 use crate::repo::{Repo, variant};
 
@@ -386,5 +387,53 @@ fn a_cancelled_fetch_takes_no_lock() -> TestResult {
     );
     assert!(took < wait / 2, "the pull waited {took:?}");
     assert!(!read(&remote.a, T900)?.contains("Remote."));
+    Ok(())
+}
+
+#[test]
+fn a_pull_waits_for_the_lock_then_fails_busy() -> TestResult {
+    let remote = remote()?;
+    push_change(&remote.b, T900, &edited(&remote.b, T900, "Remote.")?)?;
+    let mut workspace = Workspace::open(remote.a.top())?;
+    workspace.set_lock_wait(Duration::from_millis(200));
+    let scratch = tempfile::tempdir()?;
+    let mut child = hold(remote.a.top(), scratch.path())?;
+    let result = pull(&mut workspace, &remote.a.git()?, &Cancel::new());
+    std::fs::write(scratch.path().join("release"), "")?;
+    child.wait()?;
+    assert!(
+        matches!(&result, Err(PullError::Lock(LockError::Busy { .. }))),
+        "{result:?}"
+    );
+    assert!(!read(&remote.a, T900)?.contains("Remote."));
+    Ok(())
+}
+
+#[test]
+fn a_fetch_cancelled_while_it_runs_returns_cancelled_at_once() -> TestResult {
+    let remote = remote()?;
+    push_change(&remote.b, T900, &edited(&remote.b, T900, "Remote.")?)?;
+    // The command that runs git-upload-pack on the remote: it signals and then hangs.
+    let marker = remote.a.top().join(".git").join("fetch-started");
+    let command = format!("touch '{}'; sleep 30 #", sh_path(&marker));
+    remote
+        .a
+        .run(&["config", "remote.origin.uploadpack", &command])?;
+    let mut workspace = Workspace::open(remote.a.top())?;
+    let git = remote.a.git()?;
+    let cancel = Cancel::new();
+    let watcher = cancel_when_exists(marker, cancel.clone());
+    let result = pull(&mut workspace, &git, &cancel);
+    let returned = Instant::now();
+    let cancelled_at = watcher
+        .join()
+        .map_err(|_| "watcher panicked")?
+        .ok_or("the fetch never started")?;
+    assert!(
+        matches!(&result, Err(PullError::Git(GitError::Cancelled { .. }))),
+        "{result:?}"
+    );
+    let took = returned.saturating_duration_since(cancelled_at);
+    assert!(took < Duration::from_secs(2), "took {took:?}");
     Ok(())
 }

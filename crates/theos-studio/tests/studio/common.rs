@@ -326,3 +326,27 @@ pub fn spawn_helper(task: &HelperTask) -> Result<HelperProcess, Error> {
         .spawn()?;
     Ok(HelperProcess { child })
 }
+
+/// Cancels `cancel` as soon as the file `marker` exists (a hook or command writes it once git is
+/// running) and returns when it did; `None` when the file never appeared within 30 s.
+pub fn cancel_when_exists(
+    marker: std::path::PathBuf,
+    cancel: theos_vcs::Cancel,
+) -> std::thread::JoinHandle<Option<Instant>> {
+    std::thread::spawn(move || {
+        let start = Instant::now();
+        while !marker.exists() {
+            if start.elapsed() > Duration::from_secs(30) {
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        cancel.cancel();
+        Some(Instant::now())
+    })
+}
+
+/// `path` spelled for `sh`: forward slashes also on Windows.
+pub fn sh_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
