@@ -5,8 +5,7 @@ Follows theos-loom's decision 0009 (`docs/decisions/0009-review-fixes-in-a-prote
 
 ## Status
 
-proposed · 2026-11-28 · accepted when Jann merges the PR
-`docs(docs): judge review findings and end the review loop as best effort (docs)`.
+proposed · 2026-11-28 · accepted when Jann merges #65.
 
 ## Decision
 
