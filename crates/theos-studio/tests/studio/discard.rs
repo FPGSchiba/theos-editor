@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use theos_studio::changes::{Changes, RecordChange, changes};
+use theos_studio::git_write::unstage_records;
 use theos_studio::{CommandError, Discard, Rename, Scope, StudioError, Workspace};
 use theos_vcs::status::{Change, Conflict, Entry};
 use theos_vcs::{Cancel, Git};
@@ -116,7 +117,78 @@ fn with_autocrlf_the_discard_writes_the_checkout_bytes() -> TestResult {
     let crlf = String::from_utf8(committed)?.replace('\n', "\r\n");
     assert_eq!(read(repo.top(), T900)?, Some(crlf.into_bytes()));
     let after = changes_now(&workspace, &git)?;
-    assert!(after.records.is_empty(), "{after:?}");
+    assert_eq!(after.records, [], "{after:?}");
+    Ok(())
+}
+
+/// Spec §5.13: an `eol=crlf` attribute gives the checkout bytes CRLF too.
+#[test]
+fn with_an_eol_crlf_attribute_the_discard_writes_the_checkout_bytes() -> TestResult {
+    let repo = Repo::committed("")?;
+    put(repo.top(), ".gitattributes", b"*.md eol=crlf\n")?;
+    repo.commit("attributes")?;
+    let git = repo.git()?;
+    let committed = std::fs::read(repo.top().join(T900))?;
+    // Check the file out again under the attribute, as a clone has it.
+    std::fs::remove_file(repo.top().join(T900))?;
+    repo.run(&["checkout", "--", T900])?;
+    edit(repo.top(), T900)?;
+    let mut workspace = Workspace::open(repo.top())?;
+
+    discard_record(&mut workspace, &git, "T-900")?;
+    let crlf = String::from_utf8(committed)?.replace('\n', "\r\n");
+    assert_eq!(read(repo.top(), T900)?, Some(crlf.into_bytes()));
+    let after = changes_now(&workspace, &git)?;
+    assert_eq!(after.records, [], "{after:?}");
+    Ok(())
+}
+
+/// A record with staged and unstaged changes (`MM`): the unstaged edit goes, the staged one stays.
+#[test]
+fn a_record_with_staged_and_unstaged_changes_keeps_the_staged_ones() -> TestResult {
+    let repo = Repo::committed("")?;
+    let git = repo.git()?;
+    let staged = edit(repo.top(), T900)?;
+    repo.run(&["add", "--", T900])?;
+    edit(repo.top(), T900)?;
+    let mut workspace = Workspace::open(repo.top())?;
+    let before = changes_now(&workspace, &git)?;
+    let change = record(&before, "T-900")?;
+    assert_eq!(
+        (change.staged, change.unstaged),
+        (Change::Modified, Change::Modified)
+    );
+
+    discard_record(&mut workspace, &git, "T-900")?;
+    assert_eq!(read(repo.top(), T900)?, Some(staged));
+    let after = changes_now(&workspace, &git)?;
+    let change = record(&after, "T-900")?;
+    assert_eq!(change.staged, Change::Modified, "{after:?}");
+    assert_eq!(change.unstaged, Change::Unchanged, "{after:?}");
+    Ok(())
+}
+
+/// A file of the project in a subfolder of the repository is labelled by its project path, as a
+/// record is.
+#[test]
+fn a_file_is_labelled_by_its_project_path() -> TestResult {
+    let repo = Repo::committed("content")?;
+    let git = repo.git()?;
+    put(repo.top(), "content/notes.txt", b"one\n")?;
+    repo.commit("notes")?;
+    put(repo.top(), "content/notes.txt", b"two\n")?;
+    let mut workspace = Workspace::open(&repo.top().join("content"))?;
+    let found = changes_now(&workspace, &git)?;
+    let [file] = found.files.as_slice() else {
+        return Err(format!("{found:?}").into());
+    };
+    let discard = Discard::file(&workspace, &git, file)?;
+    assert_eq!(theos_studio::Command::label(&discard), "discard notes.txt");
+    workspace.run(&discard)?;
+    assert_eq!(
+        read(repo.top(), "content/notes.txt")?.as_deref(),
+        Some(&b"one\n"[..])
+    );
     Ok(())
 }
 
@@ -137,33 +209,87 @@ fn an_unstaged_deletion_is_created_again() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn a_paired_unstaged_rename_goes_back_and_undo_brings_it_again() -> TestResult {
+/// The record T-901 renamed to T-904 on disk by the Rename command, unstaged; with
+/// `intent_to_add` the user also ran `git add -N` on the new path. Returns the repo, the workspace
+/// and the bytes of the old and the new file.
+fn renamed_on_disk(intent_to_add: bool) -> Result<(Repo, Workspace, Vec<u8>, Vec<u8>), Error> {
     let repo = Repo::committed("")?;
-    let git = repo.git()?;
     let committed = std::fs::read(repo.top().join(T901))?;
     let mut workspace = Workspace::open(repo.top())?;
     workspace.run(&Rename {
         id: "T-901".to_owned(),
         to: "T-904".to_owned(),
     })?;
-    let new = "lore/truths/T-904.md";
-    let renamed = read(repo.top(), new)?;
-    // Intent to add pairs the deletion and the new file as one unstaged rename.
-    repo.run(&["add", "-N", "--", new])?;
-    let found = changes_now(&workspace, &git)?;
+    let renamed = std::fs::read(repo.top().join(T904))?;
+    if intent_to_add {
+        repo.run(&["add", "-N", "--", T904])?;
+    }
+    Ok((repo, workspace, committed, renamed))
+}
+
+const T904: &str = "lore/truths/T-904.md";
+
+/// Discards the paired unstaged rename to T-904 and checks the files, then undoes it.
+fn discard_rename_and_undo(
+    repo: &Repo,
+    workspace: &mut Workspace,
+    committed: &[u8],
+    renamed: &[u8],
+) -> Result<Changes, Error> {
+    let git = repo.git()?;
+    let found = changes_now(workspace, &git)?;
     let change = record(&found, "T-904")?;
     assert_eq!(change.unstaged, Change::Renamed, "{found:?}");
     assert_eq!(change.from.as_deref(), Some(T901));
+    assert_eq!(found.records.len(), 1, "{found:?}");
 
-    let discard = Discard::record(&workspace, &git, change)?;
+    let discard = Discard::record(workspace, &git, change)?;
     workspace.run(&discard)?;
-    assert_eq!(read(repo.top(), T901)?, Some(committed));
-    assert_eq!(read(repo.top(), new)?, None);
+    assert_eq!(read(repo.top(), T901)?.as_deref(), Some(committed));
+    assert_eq!(read(repo.top(), T904)?, None);
+    let after = changes_now(workspace, &git)?;
 
     workspace.undo(Scope::Newest)?;
     assert_eq!(read(repo.top(), T901)?, None);
-    assert_eq!(read(repo.top(), new)?, renamed);
+    assert_eq!(read(repo.top(), T904)?.as_deref(), Some(renamed));
+    Ok(after)
+}
+
+/// The usual case: status pairs the rename on a temporary index, the real index has no entry
+/// for the new path, so the discard leaves nothing behind.
+#[test]
+fn a_paired_unstaged_rename_goes_back_and_undo_brings_it_again() -> TestResult {
+    let (repo, mut workspace, committed, renamed) = renamed_on_disk(false)?;
+    assert_eq!(repo.run(&["ls-files", "--", T904])?, "");
+    let after = discard_rename_and_undo(&repo, &mut workspace, &committed, &renamed)?;
+    assert_eq!(after.records, [], "{after:?}");
+    assert_eq!(after.files, [], "{after:?}");
+    Ok(())
+}
+
+/// The user ran `git add -N` on the new path: the real index holds an intent-to-add entry, which
+/// a discard does not touch (it writes the working tree only). That entry remains as a file
+/// deleted on disk, no longer a record, and Unstage clears it.
+#[test]
+fn a_rename_with_the_new_path_added_with_intent_leaves_that_entry() -> TestResult {
+    let (repo, mut workspace, committed, renamed) = renamed_on_disk(true)?;
+    let after = discard_rename_and_undo(&repo, &mut workspace, &committed, &renamed)?;
+    assert_eq!(after.records, [], "{after:?}");
+    let left = Entry::Changed {
+        path: T904.as_bytes().to_vec(),
+        staged: Change::Unchanged,
+        unstaged: Change::Deleted,
+    };
+    assert_eq!(after.files, std::slice::from_ref(&left), "{after:?}");
+
+    // Discard it again (undone above), then Unstage takes the entry out of the index.
+    let git = repo.git()?;
+    workspace.redo(Scope::Newest)?;
+    unstage_records(&mut workspace, &git, &[], &[&left])?;
+    let clean = changes_now(&workspace, &git)?;
+    assert_eq!(clean.records, [], "{clean:?}");
+    assert_eq!(clean.files, [], "{clean:?}");
+    assert_eq!(repo.run(&["ls-files", "--", T904])?, "");
     Ok(())
 }
 

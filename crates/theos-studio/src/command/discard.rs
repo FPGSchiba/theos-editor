@@ -30,6 +30,15 @@ pub struct Discard {
     changes: Vec<FileChange>,
 }
 
+/// What a discard is named by in its label.
+#[derive(Clone, Copy)]
+enum Name<'a> {
+    /// A record's project path.
+    Project(&'a str),
+    /// A file's repository path; the label shows its project path.
+    Repo(&'a [u8]),
+}
+
 /// One repository path a discard brings back to the index.
 #[derive(Debug, PartialEq, Eq)]
 struct Target<'a> {
@@ -66,7 +75,7 @@ impl Discard {
             record.unstaged,
             record.untracked,
         );
-        build(workspace, git, &record.path, &targets)
+        build(workspace, git, Name::Project(&record.path), &targets)
     }
 
     /// The discard of `entry`, an entry of [`Changes::files`](crate::Changes).
@@ -76,17 +85,12 @@ impl Discard {
     /// As [`Discard::record`], and [`StudioError::UnsupportedEntry`] for an entry of a kind this
     /// studio does not know.
     pub fn file(workspace: &Workspace, git: &Git, entry: &Entry) -> Result<Discard, StudioError> {
-        let lossy = |path: &[u8]| String::from_utf8_lossy(path).into_owned();
         let (name, targets) = match entry {
-            Entry::Changed { path, unstaged, .. } => {
-                (lossy(path), targets(path, None, *unstaged, false))
-            }
+            Entry::Changed { path, unstaged, .. } => (path, targets(path, None, *unstaged, false)),
             Entry::Renamed {
                 from, to, unstaged, ..
-            } => (lossy(to), targets(to, Some(from), *unstaged, false)),
-            Entry::Untracked { path } => {
-                (lossy(path), targets(path, None, Change::Unchanged, true))
-            }
+            } => (to, targets(to, Some(from), *unstaged, false)),
+            Entry::Untracked { path } => (path, targets(path, None, Change::Unchanged, true)),
             Entry::Conflicted { path, .. } => {
                 return Err(StudioError::Conflicted { id: lossy(path) });
             }
@@ -96,7 +100,7 @@ impl Discard {
                 });
             }
         };
-        build(workspace, git, &name, &targets)
+        build(workspace, git, Name::Repo(name), &targets)
     }
 }
 
@@ -156,17 +160,17 @@ fn targets<'a>(
     }
 }
 
-/// The discard named `name` of `targets`, read from git and the disk now.
+/// The discard named `name` of `targets`, read from git and the disk now. A record with nothing
+/// unstaged runs no git.
 fn build(
     workspace: &Workspace,
     git: &Git,
-    name: &str,
+    name: Name<'_>,
     targets: &[Target<'_>],
 ) -> Result<Discard, StudioError> {
-    let label = format!("discard {name}");
-    if targets.is_empty() {
+    if let (Name::Project(path), []) = (name, targets) {
         return Ok(Discard {
-            label,
+            label: format!("discard {path}"),
             changes: Vec::new(),
         });
     }
@@ -174,6 +178,14 @@ fn build(
     let top = repo_top(git, root)?;
     let place = repo::place(&top, root)?;
     let folding = Folding::read(git, &top)?;
+    let label = match name {
+        Name::Project(path) => format!("discard {path}"),
+        // A path outside the project keeps git's spelling; its targets are refused below.
+        Name::Repo(path) => format!(
+            "discard {}",
+            repo_path::project_path(folding, &place, path).unwrap_or_else(|| lossy(path))
+        ),
+    };
     let mut changes = Vec::new();
     for target in targets {
         let path = in_project(folding, &place, target.repo_path)?;
@@ -198,7 +210,7 @@ fn build(
 fn in_project(folding: Folding, place: &str, repo_path: &[u8]) -> Result<String, StudioError> {
     let Some(path) = repo_path::project_path(folding, place, repo_path) else {
         return Err(not_discardable(
-            &String::from_utf8_lossy(repo_path),
+            &lossy(repo_path),
             "it is outside the project folder",
         ));
     };
@@ -243,6 +255,11 @@ fn refused(error: CommandError) -> StudioError {
         CommandError::Path { path, reason } => not_discardable(&path, &format!("it {reason}")),
         other => other.into(),
     }
+}
+
+/// git's bytes `path` as text, for a message.
+fn lossy(path: &[u8]) -> String {
+    String::from_utf8_lossy(path).into_owned()
 }
 
 /// [`StudioError::NotDiscardable`] for `path`, `why` followed by the way that remains.
