@@ -4,6 +4,7 @@
 mod boundary;
 mod changes;
 mod check;
+mod commit;
 mod common;
 mod diff;
 mod discard;
