@@ -8,5 +8,6 @@ mod index;
 mod read;
 mod repo;
 mod settings;
+mod stage;
 mod staged;
 mod status;

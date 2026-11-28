@@ -1,14 +1,6 @@
 //! The one list of options every git write starts with, and the one place a failing write is
 //! turned into an error.
 
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the writes of P47 tasks 3 to 8 are the callers; the first one removes this line"
-    )
-)]
-
 use std::ffi::OsStr;
 use std::path::Path;
 
