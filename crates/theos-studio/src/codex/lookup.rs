@@ -9,14 +9,18 @@ use crate::{Marks, StudioError, Workspace};
 
 /// Everything one call looks records up in, built once. `read` and `graph` build link targets
 /// through it, so both carry the same marks.
-pub(super) struct Lookup {
+pub(crate) struct Lookup {
     pub(super) marks: Marks,
     pub(super) by_path: HashMap<String, RecordSummary>,
     pub(super) by_id: HashMap<String, RecordSummary>,
 }
 
 impl Lookup {
-    pub(super) fn load(ws: &Workspace) -> Result<Lookup, StudioError> {
+    /// Reads the records and marks of `ws`.
+    ///
+    /// # Errors
+    /// [`StudioError::Index`] when the index fails.
+    pub(crate) fn load(ws: &Workspace) -> Result<Lookup, StudioError> {
         let mut by_path = HashMap::new();
         let mut by_id: HashMap<String, RecordSummary> = HashMap::new();
         // Ordered by path, so the first record of a duplicated id stays.
@@ -69,7 +73,7 @@ impl Lookup {
     }
 
     /// The record an id names, with the marks of every record that has the id.
-    pub(super) fn target(&self, id: &str) -> TargetRef {
+    pub(crate) fn target(&self, id: &str) -> TargetRef {
         match self.by_id.get(id) {
             Some(summary) => TargetRef {
                 record: RecordRef {
@@ -97,6 +101,7 @@ impl Lookup {
     }
 }
 
-pub(super) fn saturate(value: usize) -> u32 {
+/// `value` as the `u32` the views carry; a larger value saturates.
+pub(crate) fn saturate(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
 }

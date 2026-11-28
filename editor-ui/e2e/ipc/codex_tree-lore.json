@@ -1,0 +1,113 @@
+{
+  "args": {
+    "tab": "lore"
+  },
+  "cmd": "codex_tree",
+  "result": "ok",
+  "value": [
+    {
+      "children": [
+        {
+          "children": [],
+          "record": {
+            "id": "T-012",
+            "kind": "truth",
+            "locked": [],
+            "never": false,
+            "path": "lore/truths/T-012.md",
+            "status": "draft",
+            "title": "Synthetic truth T-012"
+          },
+          "tag": "draft",
+          "type": "record"
+        },
+        {
+          "children": [],
+          "record": {
+            "id": "T-013",
+            "kind": "truth",
+            "locked": [
+              "never"
+            ],
+            "never": true,
+            "path": "lore/truths/T-013.md",
+            "status": "draft",
+            "title": "Synthetic truth T-013, never revealed"
+          },
+          "tag": "draft",
+          "type": "record"
+        }
+      ],
+      "label": "Truths",
+      "type": "group"
+    },
+    {
+      "children": [
+        {
+          "children": [],
+          "record": {
+            "id": "B-016",
+            "kind": "belief",
+            "locked": [],
+            "never": false,
+            "path": "lore/beliefs/B-016.md",
+            "status": "draft",
+            "title": "The Fates spin for those who climb"
+          },
+          "tag": "draft",
+          "type": "record"
+        },
+        {
+          "children": [],
+          "record": {
+            "id": "B-017",
+            "kind": "belief",
+            "locked": [],
+            "never": false,
+            "path": "lore/beliefs/B-017.md",
+            "status": "draft",
+            "title": "A synthetic belief about the never truth"
+          },
+          "tag": "draft",
+          "type": "record"
+        }
+      ],
+      "label": "Beliefs",
+      "type": "group"
+    },
+    {
+      "children": [
+        {
+          "children": [],
+          "record": {
+            "id": "C-031",
+            "kind": "clue",
+            "locked": [],
+            "never": false,
+            "path": "lore/clues/C-031.md",
+            "status": "draft",
+            "title": "A spirit murmurs a word in a dead tongue"
+          },
+          "tag": "draft",
+          "type": "record"
+        },
+        {
+          "children": [],
+          "record": {
+            "id": "C-032",
+            "kind": "clue",
+            "locked": [],
+            "never": false,
+            "path": "lore/clues/C-032.md",
+            "status": "draft",
+            "title": "Synthetic clue C-032"
+          },
+          "tag": "draft",
+          "type": "record"
+        }
+      ],
+      "label": "Clues",
+      "type": "group"
+    }
+  ]
+}

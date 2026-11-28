@@ -1,0 +1,12 @@
+# Settings of the editor-ui package (pnpm reads them here; it is a single package, not a workspace).
+
+# Every version, transitive ones included, is at least two weeks old (in minutes).
+minimumReleaseAge: 20160
+# Published on 13 Nov 2026, the last day of the two weeks the phase counts in whole days; the
+# spec names Playwright 1.65.1 (P11 §4.2). The exclusions name exact versions only.
+minimumReleaseAgeExclude:
+  - "@eslint/config-array@0.23.6"
+  - "@playwright/test@1.65.1"
+  - "eslint@10.15.0"
+  - "playwright@1.65.1"
+  - "playwright-core@1.65.1"

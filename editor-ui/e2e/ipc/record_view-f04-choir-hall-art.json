@@ -1,0 +1,88 @@
+{
+  "args": {
+    "id": "f04-choir-hall-art",
+    "path": "concepts/f04-choir-hall-art.md"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic brief of the concept, with no pick.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "f04-choir-hall-art"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "concept"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "Choir-Hall, synthetic concept"
+        }
+      },
+      {
+        "key": "for",
+        "value": {
+          "type": "list",
+          "value": [
+            {
+              "type": "link",
+              "value": {
+                "fragment": null,
+                "id": "f04-choir-hall",
+                "shown": null,
+                "target": {
+                  "id": "f04-choir-hall",
+                  "kind": "floor",
+                  "locked": [],
+                  "never": false,
+                  "path": "world/hearth/f04-choir-hall.md",
+                  "status": "draft",
+                  "title": "The Choir-Hall"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "header": {
+      "children": 0,
+      "links_in": 0,
+      "parent": null,
+      "record": {
+        "id": "f04-choir-hall-art",
+        "kind": "concept",
+        "locked": [],
+        "never": false,
+        "path": "concepts/f04-choir-hall-art.md",
+        "status": null,
+        "title": "Choir-Hall, synthetic concept"
+      }
+    },
+    "links_in": [],
+    "lore": [],
+    "pictures": [],
+    "used_by": []
+  }
+}

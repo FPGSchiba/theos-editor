@@ -1,0 +1,60 @@
+{
+  "args": {},
+  "cmd": "codex_tabs",
+  "result": "ok",
+  "value": [
+    {
+      "folder": "world/",
+      "id_first": [],
+      "kinds": [
+        "tower",
+        "band",
+        "floor",
+        "location",
+        "spawn"
+      ],
+      "root": "tower",
+      "tab": "where"
+    },
+    {
+      "folder": "people/",
+      "id_first": [],
+      "kinds": [
+        "people",
+        "faction",
+        "npc"
+      ],
+      "root": "people",
+      "tab": "who"
+    },
+    {
+      "folder": "lore/",
+      "id_first": [
+        "topic",
+        "truth",
+        "belief",
+        "clue",
+        "equation"
+      ],
+      "kinds": [
+        "topic",
+        "truth",
+        "belief",
+        "clue",
+        "equation"
+      ],
+      "root": null,
+      "tab": "lore"
+    },
+    {
+      "folder": "things/",
+      "id_first": [],
+      "kinds": [
+        "thing",
+        "enemy"
+      ],
+      "root": null,
+      "tab": "things"
+    }
+  ]
+}

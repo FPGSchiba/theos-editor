@@ -1,0 +1,147 @@
+{
+  "args": {
+    "id": "T-013",
+    "path": "lore/truths/T-013.md"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "T-013"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "truth"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "Synthetic truth T-013, never revealed"
+        }
+      },
+      {
+        "key": "status",
+        "value": {
+          "type": "text",
+          "value": "draft"
+        }
+      },
+      {
+        "key": "target",
+        "value": {
+          "type": "text",
+          "value": "never"
+        }
+      }
+    ],
+    "header": {
+      "children": 0,
+      "links_in": 1,
+      "parent": null,
+      "record": {
+        "id": "T-013",
+        "kind": "truth",
+        "locked": [
+          "never"
+        ],
+        "never": true,
+        "path": "lore/truths/T-013.md",
+        "status": "draft",
+        "title": "Synthetic truth T-013, never revealed"
+      }
+    },
+    "links_in": [
+      {
+        "column": 11,
+        "fragment": null,
+        "line": 8,
+        "slot": "field:distorts",
+        "source": {
+          "id": "B-017",
+          "kind": "belief",
+          "locked": [],
+          "never": false,
+          "path": "lore/beliefs/B-017.md",
+          "status": "draft",
+          "title": "A synthetic belief about the never truth"
+        },
+        "target": {
+          "exists": true,
+          "id": "T-013",
+          "kind": "truth",
+          "locked": [
+            "never"
+          ],
+          "never": true,
+          "path": "lore/truths/T-013.md",
+          "status": "draft",
+          "title": "Synthetic truth T-013, never revealed"
+        }
+      }
+    ],
+    "lore": [
+      {
+        "record": {
+          "id": "B-017",
+          "kind": "belief",
+          "locked": [],
+          "never": false,
+          "path": "lore/beliefs/B-017.md",
+          "status": "draft",
+          "title": "A synthetic belief about the never truth"
+        },
+        "tier": null,
+        "touches": {
+          "id": "T-013",
+          "kind": "truth",
+          "locked": [
+            "never"
+          ],
+          "never": true,
+          "path": "lore/truths/T-013.md",
+          "status": "draft",
+          "title": "Synthetic truth T-013, never revealed"
+        },
+        "verb": "distorts"
+      }
+    ],
+    "pictures": [],
+    "used_by": [
+      {
+        "relations": [
+          "distorts"
+        ],
+        "source": {
+          "id": "B-017",
+          "kind": "belief",
+          "locked": [],
+          "never": false,
+          "path": "lore/beliefs/B-017.md",
+          "status": "draft",
+          "title": "A synthetic belief about the never truth"
+        }
+      }
+    ]
+  }
+}

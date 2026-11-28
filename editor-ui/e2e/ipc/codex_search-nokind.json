@@ -1,0 +1,13 @@
+{
+  "args": {
+    "limit": 20,
+    "query": ":nokind"
+  },
+  "cmd": "codex_search",
+  "result": "ok",
+  "value": {
+    "hits": [],
+    "note": "no kind `nokind`",
+    "truncated": false
+  }
+}

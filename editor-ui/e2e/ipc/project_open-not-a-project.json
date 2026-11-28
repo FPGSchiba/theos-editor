@@ -1,0 +1,11 @@
+{
+  "args": {
+    "path": "<project>/world"
+  },
+  "cmd": "project_open",
+  "result": "error",
+  "value": {
+    "kind": "not_a_project",
+    "message": "`<project>/world` is not a content project: it has no theos.toml"
+  }
+}

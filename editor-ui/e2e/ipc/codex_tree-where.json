@@ -1,0 +1,124 @@
+{
+  "args": {
+    "tab": "where"
+  },
+  "cmd": "codex_tree",
+  "result": "ok",
+  "value": [
+    {
+      "children": [],
+      "record": {
+        "id": "synthetic-loop-a",
+        "kind": "location",
+        "locked": [],
+        "never": false,
+        "path": "world/hearth/f04-choir-hall/synthetic-loop-a.md",
+        "status": null,
+        "title": "Synthetic loop A"
+      },
+      "tag": null,
+      "type": "record"
+    },
+    {
+      "children": [],
+      "record": {
+        "id": "synthetic-loop-b",
+        "kind": "location",
+        "locked": [],
+        "never": false,
+        "path": "world/hearth/f04-choir-hall/synthetic-loop-a/synthetic-loop-b.md",
+        "status": null,
+        "title": "Synthetic loop B"
+      },
+      "tag": null,
+      "type": "record"
+    },
+    {
+      "children": [],
+      "record": {
+        "id": "synthetic-stray",
+        "kind": "location",
+        "locked": [],
+        "never": false,
+        "path": "world/synthetic-stray.md",
+        "status": null,
+        "title": "Synthetic stray"
+      },
+      "tag": null,
+      "type": "record"
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "record": {
+                    "id": "reed-marsh",
+                    "kind": "location",
+                    "locked": [],
+                    "never": false,
+                    "path": "world/hearth/f04-choir-hall/reed-marsh.md",
+                    "status": null,
+                    "title": "Reed marsh"
+                  },
+                  "tag": null,
+                  "type": "record"
+                },
+                {
+                  "children": [],
+                  "record": {
+                    "id": "fates-shrine",
+                    "kind": "location",
+                    "locked": [],
+                    "never": false,
+                    "path": "world/hearth/f04-choir-hall/fates-shrine.md",
+                    "status": null,
+                    "title": "The Fates' shrine"
+                  },
+                  "tag": null,
+                  "type": "record"
+                }
+              ],
+              "record": {
+                "id": "f04-choir-hall",
+                "kind": "floor",
+                "locked": [],
+                "never": false,
+                "path": "world/hearth/f04-choir-hall.md",
+                "status": "draft",
+                "title": "The Choir-Hall"
+              },
+              "tag": "draft",
+              "type": "record"
+            }
+          ],
+          "record": {
+            "id": "hearth",
+            "kind": "band",
+            "locked": [],
+            "never": false,
+            "path": "world/hearth.md",
+            "status": "draft",
+            "title": "Hearth"
+          },
+          "tag": "1–20",
+          "type": "record"
+        }
+      ],
+      "record": {
+        "id": "tower",
+        "kind": "tower",
+        "locked": [],
+        "never": false,
+        "path": "world/tower.md",
+        "status": null,
+        "title": "Synthetic tower"
+      },
+      "tag": null,
+      "type": "record"
+    }
+  ]
+}

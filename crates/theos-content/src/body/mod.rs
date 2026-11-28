@@ -6,12 +6,14 @@ mod design_note;
 mod events;
 mod links;
 mod malformed;
+pub mod tree;
 
 pub use beat::{Attribute, AttributeValue, Beat};
 pub use callout::{Callout, CalloutTitle, Design, Fold, Note, NoteState, Token, Voice};
 pub use design_note::{DesignNote, DesignNoteForm};
 pub use links::Link;
 pub use malformed::{Malformed, MalformedKind};
+pub use tree::{Inline, Node};
 
 use pulldown_cmark::{Event, Tag};
 

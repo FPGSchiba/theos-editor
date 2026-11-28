@@ -1,0 +1,120 @@
+{
+  "args": {
+    "limit": 20,
+    "query": "Mother Ilse"
+  },
+  "cmd": "codex_search",
+  "result": "ok",
+  "value": {
+    "hits": [
+      {
+        "id": "mother-ilse",
+        "kind": "npc",
+        "locked": [],
+        "matches": [
+          {
+            "column": "field:id",
+            "column_number": 5,
+            "line": 3,
+            "match": "mother",
+            "text": "id: mother-ilse"
+          },
+          {
+            "column": "field:id",
+            "column_number": 12,
+            "line": 3,
+            "match": "ilse",
+            "text": "id: mother-ilse"
+          },
+          {
+            "column": "title",
+            "column_number": 8,
+            "line": 5,
+            "match": "Mother",
+            "text": "title: Mother Ilse"
+          },
+          {
+            "column": "title",
+            "column_number": 15,
+            "line": 5,
+            "match": "Ilse",
+            "text": "title: Mother Ilse"
+          }
+        ],
+        "never": false,
+        "path": "people/hearth-folk/fates-cult/mother-ilse.md",
+        "score": 6.421151,
+        "status": null,
+        "title": "Mother Ilse"
+      },
+      {
+        "id": "S-004",
+        "kind": "script",
+        "locked": [],
+        "matches": [
+          {
+            "column": "body",
+            "column_number": 10,
+            "line": 13,
+            "match": "mother",
+            "text": "with:: [[mother-ilse]]"
+          },
+          {
+            "column": "body",
+            "column_number": 17,
+            "line": 13,
+            "match": "ilse",
+            "text": "with:: [[mother-ilse]]"
+          },
+          {
+            "column": "body",
+            "column_number": 14,
+            "line": 17,
+            "match": "mother",
+            "text": "> [!voice] [[mother-ilse]] · [[B-016]] · T1"
+          },
+          {
+            "column": "body",
+            "column_number": 21,
+            "line": 17,
+            "match": "ilse",
+            "text": "> [!voice] [[mother-ilse]] · [[B-016]] · T1"
+          }
+        ],
+        "never": false,
+        "path": "story/scripts/S-004.md",
+        "score": 2.977756,
+        "status": "draft",
+        "title": "The shrine hums"
+      },
+      {
+        "id": "f04-choir-hall",
+        "kind": "floor",
+        "locked": [],
+        "matches": [
+          {
+            "column": "body",
+            "column_number": 14,
+            "line": 17,
+            "match": "mother",
+            "text": "> [!voice] [[mother-ilse]] · [[B-016]] · T1"
+          },
+          {
+            "column": "body",
+            "column_number": 21,
+            "line": 17,
+            "match": "ilse",
+            "text": "> [!voice] [[mother-ilse]] · [[B-016]] · T1"
+          }
+        ],
+        "never": false,
+        "path": "world/hearth/f04-choir-hall.md",
+        "score": 1.269338,
+        "status": "draft",
+        "title": "The Choir-Hall"
+      }
+    ],
+    "note": null,
+    "truncated": false
+  }
+}

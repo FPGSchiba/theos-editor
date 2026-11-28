@@ -1,0 +1,36 @@
+{
+  "args": {
+    "limit": 20,
+    "query": "#f04"
+  },
+  "cmd": "codex_search",
+  "result": "ok",
+  "value": {
+    "hits": [
+      {
+        "id": "f04-choir-hall",
+        "kind": "floor",
+        "locked": [],
+        "matches": [],
+        "never": false,
+        "path": "world/hearth/f04-choir-hall.md",
+        "score": 0.0,
+        "status": "draft",
+        "title": "The Choir-Hall"
+      },
+      {
+        "id": "f04-choir-hall-art",
+        "kind": "concept",
+        "locked": [],
+        "matches": [],
+        "never": false,
+        "path": "concepts/f04-choir-hall-art.md",
+        "score": 0.0,
+        "status": null,
+        "title": "Choir-Hall, synthetic concept"
+      }
+    ],
+    "note": null,
+    "truncated": false
+  }
+}

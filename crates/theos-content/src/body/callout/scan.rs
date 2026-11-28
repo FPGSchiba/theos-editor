@@ -50,24 +50,6 @@ fn trimmed(source: &str, start: usize, end: usize) -> Span {
     Span::new(start + head, start + head + kept)
 }
 
-/// The index of the `End` that closes the `Start` at `open`.
-fn closing(events: &Events<'_>, open: usize) -> usize {
-    let mut depth = 0usize;
-    for (i, (event, _)) in events.items.iter().enumerate().skip(open) {
-        match event {
-            Event::Start(_) => depth += 1,
-            Event::End(_) => {
-                depth -= 1;
-                if depth == 0 {
-                    return i;
-                }
-            }
-            _ => {}
-        }
-    }
-    events.items.len().saturating_sub(1)
-}
-
 /// The blocks that are direct children of the quote opened at `open`, in document order.
 fn child_blocks(events: &Events<'_>, open: usize, close: usize) -> Vec<ContentBlock> {
     let mut depth = 0usize;
@@ -183,7 +165,7 @@ pub(crate) fn scan(
         let Some(marker) = marker(source, first.start) else {
             continue;
         };
-        let close = closing(events, i);
+        let close = events.closing(i);
         let line_end = first
             .get(source)
             .and_then(|p| p.find('\n'))

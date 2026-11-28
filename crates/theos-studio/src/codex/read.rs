@@ -30,7 +30,18 @@ pub enum ReadTarget {
 /// [`StudioError::UnknownRecord`] when no record matches; [`StudioError::Read`] when a file
 /// cannot be read; [`StudioError::Index`] when the index fails.
 pub fn read(ws: &Workspace, target: &ReadTarget) -> Result<ReadView, StudioError> {
-    let lookup = Lookup::load(ws)?;
+    read_with(ws, &Lookup::load(ws)?, target)
+}
+
+/// [`read`] with the caller's `lookup`, so a caller that resolves more ids builds it once.
+///
+/// # Errors
+/// As [`read`].
+pub(crate) fn read_with(
+    ws: &Workspace,
+    lookup: &Lookup,
+    target: &ReadTarget,
+) -> Result<ReadView, StudioError> {
     let (summaries, what) = match target {
         ReadTarget::Id(id) => (ws.index().record(id)?, id),
         ReadTarget::Path(path) => (
@@ -48,7 +59,7 @@ pub fn read(ws: &Workspace, target: &ReadTarget) -> Result<ReadView, StudioError
     }
     let records = summaries
         .iter()
-        .map(|summary| record_view(ws, &lookup, summary))
+        .map(|summary| record_view(ws, lookup, summary))
         .collect::<Result<_, _>>()?;
     Ok(ReadView { records })
 }

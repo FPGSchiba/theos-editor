@@ -1,7 +1,7 @@
 //! The JSON views of a check and of a staged check.
 
 use serde::Serialize;
-use theos_content::Finding;
+use theos_content::{Finding, Severity};
 
 use crate::check::{Binaries, Check, counts};
 use crate::staged::StagedCheck;
@@ -9,21 +9,32 @@ use crate::staged::StagedCheck;
 /// A finding as JSON: every key is present, an absent one is `null`.
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct FindingView {
-    rule: String,
-    severity: &'static str,
-    path: String,
-    id: Option<String>,
-    line: Option<usize>,
-    column: Option<usize>,
-    span: Option<SpanView>,
-    message: String,
+    /// The rule that raised it.
+    pub rule: String,
+    /// How bad it is; written as `error` or `warning`.
+    #[schemars(with = "String")]
+    pub severity: Severity,
+    /// The project-relative path of the file.
+    pub path: String,
+    /// The id of the record, when the finding names one.
+    pub id: Option<String>,
+    /// The line, from 1.
+    pub line: Option<usize>,
+    /// The column, from 1.
+    pub column: Option<usize>,
+    /// The byte range.
+    pub span: Option<SpanView>,
+    /// What is wrong.
+    pub message: String,
 }
 
 /// A byte range as JSON.
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct SpanView {
-    start: usize,
-    end: usize,
+    /// The first byte.
+    pub start: usize,
+    /// One past the last byte.
+    pub end: usize,
 }
 
 /// Whether binaries were checked, as JSON.
@@ -56,7 +67,7 @@ impl From<&Finding> for FindingView {
     fn from(finding: &Finding) -> Self {
         FindingView {
             rule: finding.rule.clone(),
-            severity: finding.severity.as_str(),
+            severity: finding.severity,
             path: finding.path.clone(),
             id: finding.id.clone(),
             line: finding.position.map(|p| p.line),

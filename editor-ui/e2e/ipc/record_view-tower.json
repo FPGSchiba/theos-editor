@@ -1,0 +1,104 @@
+{
+  "args": {
+    "id": "tower",
+    "path": "world/tower.md"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "tower"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "tower"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "Synthetic tower"
+        }
+      }
+    ],
+    "header": {
+      "children": 1,
+      "links_in": 1,
+      "parent": null,
+      "record": {
+        "id": "tower",
+        "kind": "tower",
+        "locked": [],
+        "never": false,
+        "path": "world/tower.md",
+        "status": null,
+        "title": "Synthetic tower"
+      }
+    },
+    "links_in": [
+      {
+        "column": 9,
+        "fragment": null,
+        "line": 7,
+        "slot": "field:parent",
+        "source": {
+          "id": "hearth",
+          "kind": "band",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth.md",
+          "status": "draft",
+          "title": "Hearth"
+        },
+        "target": {
+          "exists": true,
+          "id": "tower",
+          "kind": "tower",
+          "locked": [],
+          "never": false,
+          "path": "world/tower.md",
+          "status": null,
+          "title": "Synthetic tower"
+        }
+      }
+    ],
+    "lore": [],
+    "pictures": [],
+    "used_by": [
+      {
+        "relations": [
+          "child of"
+        ],
+        "source": {
+          "id": "hearth",
+          "kind": "band",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth.md",
+          "status": "draft",
+          "title": "Hearth"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,239 @@
+{
+  "args": {
+    "id": "mother-ilse",
+    "path": "people/hearth-folk/fates-cult/mother-ilse.md"
+  },
+  "cmd": "record_view",
+  "result": "ok",
+  "value": {
+    "body": [
+      {
+        "inlines": [
+          {
+            "text": "Synthetic text.",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "findings": [],
+    "front_matter": [
+      {
+        "key": "id",
+        "value": {
+          "type": "text",
+          "value": "mother-ilse"
+        }
+      },
+      {
+        "key": "kind",
+        "value": {
+          "type": "text",
+          "value": "npc"
+        }
+      },
+      {
+        "key": "title",
+        "value": {
+          "type": "text",
+          "value": "Mother Ilse"
+        }
+      },
+      {
+        "key": "parent",
+        "value": {
+          "type": "link",
+          "value": {
+            "fragment": null,
+            "id": "fates-cult",
+            "shown": null,
+            "target": {
+              "id": "fates-cult",
+              "kind": "faction",
+              "locked": [],
+              "never": false,
+              "path": "people/hearth-folk/fates-cult.md",
+              "status": null,
+              "title": "Fates cult"
+            }
+          }
+        }
+      },
+      {
+        "key": "home",
+        "value": {
+          "type": "link",
+          "value": {
+            "fragment": null,
+            "id": "fates-shrine",
+            "shown": null,
+            "target": {
+              "id": "fates-shrine",
+              "kind": "location",
+              "locked": [],
+              "never": false,
+              "path": "world/hearth/f04-choir-hall/fates-shrine.md",
+              "status": null,
+              "title": "The Fates' shrine"
+            }
+          }
+        }
+      },
+      {
+        "key": "role",
+        "value": {
+          "type": "text",
+          "value": "keeper of the Fates' shrine"
+        }
+      },
+      {
+        "key": "lens",
+        "value": {
+          "type": "map",
+          "value": [
+            {
+              "key": "speaks_to",
+              "value": {
+                "type": "text",
+                "value": "children and newcomers; calls the player \"stair-child\""
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "header": {
+      "children": 0,
+      "links_in": 3,
+      "parent": {
+        "id": "fates-cult",
+        "kind": "faction",
+        "locked": [],
+        "never": false,
+        "path": "people/hearth-folk/fates-cult.md",
+        "status": null,
+        "title": "Fates cult"
+      },
+      "record": {
+        "id": "mother-ilse",
+        "kind": "npc",
+        "locked": [],
+        "never": false,
+        "path": "people/hearth-folk/fates-cult/mother-ilse.md",
+        "status": null,
+        "title": "Mother Ilse"
+      }
+    },
+    "links_in": [
+      {
+        "column": 8,
+        "fragment": null,
+        "line": 13,
+        "slot": "beat:with",
+        "source": {
+          "id": "S-004",
+          "kind": "script",
+          "locked": [],
+          "never": false,
+          "path": "story/scripts/S-004.md",
+          "status": "draft",
+          "title": "The shrine hums"
+        },
+        "target": {
+          "exists": true,
+          "id": "mother-ilse",
+          "kind": "npc",
+          "locked": [],
+          "never": false,
+          "path": "people/hearth-folk/fates-cult/mother-ilse.md",
+          "status": null,
+          "title": "Mother Ilse"
+        }
+      },
+      {
+        "column": 12,
+        "fragment": null,
+        "line": 17,
+        "slot": "voice:speaker",
+        "source": {
+          "id": "S-004",
+          "kind": "script",
+          "locked": [],
+          "never": false,
+          "path": "story/scripts/S-004.md",
+          "status": "draft",
+          "title": "The shrine hums"
+        },
+        "target": {
+          "exists": true,
+          "id": "mother-ilse",
+          "kind": "npc",
+          "locked": [],
+          "never": false,
+          "path": "people/hearth-folk/fates-cult/mother-ilse.md",
+          "status": null,
+          "title": "Mother Ilse"
+        }
+      },
+      {
+        "column": 12,
+        "fragment": null,
+        "line": 17,
+        "slot": "voice:speaker",
+        "source": {
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        },
+        "target": {
+          "exists": true,
+          "id": "mother-ilse",
+          "kind": "npc",
+          "locked": [],
+          "never": false,
+          "path": "people/hearth-folk/fates-cult/mother-ilse.md",
+          "status": null,
+          "title": "Mother Ilse"
+        }
+      }
+    ],
+    "lore": [],
+    "pictures": [],
+    "used_by": [
+      {
+        "relations": [
+          "in a beat",
+          "voice"
+        ],
+        "source": {
+          "id": "S-004",
+          "kind": "script",
+          "locked": [],
+          "never": false,
+          "path": "story/scripts/S-004.md",
+          "status": "draft",
+          "title": "The shrine hums"
+        }
+      },
+      {
+        "relations": [
+          "voice"
+        ],
+        "source": {
+          "id": "f04-choir-hall",
+          "kind": "floor",
+          "locked": [],
+          "never": false,
+          "path": "world/hearth/f04-choir-hall.md",
+          "status": "draft",
+          "title": "The Choir-Hall"
+        }
+      }
+    ]
+  }
+}
