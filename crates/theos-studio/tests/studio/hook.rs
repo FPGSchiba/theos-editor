@@ -33,6 +33,13 @@ fn pre_merge_commit(repo: &Repo) -> PathBuf {
         .join("pre-merge-commit")
 }
 
+// git answers with resolved paths (`/private/var/...` for a temp folder under the `/var` link of
+// macOS, `\?\` forms on Windows), so two spellings of one existing file are compared by the file
+// they name.
+fn real(path: &Path) -> std::io::Result<PathBuf> {
+    std::fs::canonicalize(path)
+}
+
 fn hook_error(
     result: Result<theos_studio::hook::Installed, StudioError>,
 ) -> Result<HookError, Error> {
@@ -65,9 +72,9 @@ fn a_reinstall_replaces_its_own_hook() -> TestResult {
 fn both_hooks_are_written_with_the_same_script() -> TestResult {
     let repo = Repo::committed("")?;
     let installed = install(&repo, "", false)?;
-    assert_eq!(installed.hook, pre_commit(&repo));
+    assert_eq!(real(&installed.hook)?, real(&pre_commit(&repo))?);
     let merge = &installed.pre_merge_commit;
-    assert_eq!(merge.hook, pre_merge_commit(&repo));
+    assert_eq!(real(&merge.hook)?, real(&pre_merge_commit(&repo))?);
     assert!(!merge.replaced);
     assert_eq!(merge.backup, None);
     let text = std::fs::read_to_string(&installed.hook)?;
@@ -134,7 +141,10 @@ fn force_keeps_a_foreign_pre_merge_commit_as_a_backup() -> TestResult {
     let installed = install(&repo, "", true)?;
     assert_eq!(installed.backup, None);
     let backup = installed.pre_merge_commit.backup.ok_or("no backup named")?;
-    assert_eq!(backup, hooks.join("pre-merge-commit.before-theos"));
+    assert_eq!(
+        real(&backup)?,
+        real(&hooks.join("pre-merge-commit.before-theos"))?
+    );
     assert_eq!(std::fs::read_to_string(&backup)?, "#!/bin/sh\necho mine\n");
     assert!(std::fs::read_to_string(pre_merge_commit(&repo))?.contains(MARKER));
     assert!(std::fs::read_to_string(pre_commit(&repo))?.contains(MARKER));
@@ -152,9 +162,11 @@ fn an_existing_pre_merge_commit_backup_stops_force() -> TestResult {
     std::fs::write(pre_merge_commit(&repo), "foreign merge\n")?;
     let kept = hooks.join("pre-merge-commit.before-theos");
     std::fs::write(&kept, "old backup\n")?;
+    let kept_real = real(&kept)?;
     let error = hook_error(install(&repo, "", true))?;
     assert!(
-        matches!(error, HookError::BackupExists { ref path } if *path == kept),
+        matches!(error, HookError::BackupExists { ref path }
+            if real(path).is_ok_and(|found| found == kept_real)),
         "{error:?}"
     );
     assert_eq!(std::fs::read_to_string(pre_commit(&repo))?, "foreign\n");
@@ -186,7 +198,10 @@ fn force_keeps_the_foreign_hook_as_a_backup() -> TestResult {
     std::fs::write(pre_commit(&repo), "#!/bin/sh\necho mine\n")?;
     let installed = install(&repo, "", true)?;
     let backup = installed.backup.ok_or("no backup named")?;
-    assert_eq!(backup, hooks.join("pre-commit.before-theos"));
+    assert_eq!(
+        real(&backup)?,
+        real(&hooks.join("pre-commit.before-theos"))?
+    );
     assert_eq!(std::fs::read_to_string(&backup)?, "#!/bin/sh\necho mine\n");
     assert!(std::fs::read_to_string(&installed.hook)?.contains(MARKER));
     Ok(())

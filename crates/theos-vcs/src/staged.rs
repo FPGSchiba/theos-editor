@@ -1,13 +1,13 @@
 //! The staged snapshot: what a commit would contain, read through the git command line.
 
-mod parse;
+pub(crate) mod parse;
 
 use std::collections::{HashMap, HashSet};
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use crate::folding::Folding;
 use crate::git::{Git, GitError, args_text};
+use crate::read_args::read_args;
 use crate::repo;
 
 /// How git sees a staged path against `HEAD`.
@@ -85,15 +85,17 @@ pub fn regular_mode(mode: u32) -> bool {
     matches!(mode, 0o100_644 | 0o100_755)
 }
 
-/// Runs git in `top` and reads its answer with `parse`, naming the command when it is unusable.
-fn query<T>(
+/// Runs the read `command` with `flags` (see [`read_args`]) in `top` and reads its answer with
+/// `parse`, naming the command when it is unusable.
+pub(crate) fn query<T>(
     git: &Git,
     top: &Path,
-    args: &[&str],
+    command: &str,
+    flags: &[&str],
     stdin: Option<&[u8]>,
     parse: impl FnOnce(&[u8]) -> Result<T, String>,
 ) -> Result<T, GitError> {
-    let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
+    let args = read_args(command, flags);
     let out = git.run(&args, top, stdin, &[])?;
     parse(&out).map_err(|message| GitError::Output {
         args: args_text(&args),
@@ -121,36 +123,18 @@ pub fn read(git: &Git, folder: &Path) -> Result<Staged, GitError> {
     let top = repo::top(git, folder)?;
     let canonical = repo::place(&top, folder)?;
     let folding = Folding::read(git, &top)?;
-    let cached = [
-        "--no-optional-locks",
-        "diff",
-        "--cached",
-        "--name-status",
-        "--no-renames",
-        "-z",
-    ];
-    let changed = query(git, &top, &cached, None, parse::name_status)?;
-    let mut visible_args = cached.to_vec();
-    visible_args.push("--ita-visible-in-index");
-    let visible = query(git, &top, &visible_args, None, parse::name_status)?;
+    let cached = ["--cached", "--name-status", "--no-renames", "-z"];
+    let changed = query(git, &top, "diff", &cached, None, parse::name_status)?;
+    let mut visible_flags = cached.to_vec();
+    visible_flags.push("--ita-visible-in-index");
+    let visible = query(git, &top, "diff", &visible_flags, None, parse::name_status)?;
     let intent = intent_to_add(&changed, &visible);
-    let entries = query(
-        git,
-        &top,
-        &["--no-optional-locks", "ls-files", "-s", "-z"],
-        None,
-        parse::ls_files,
-    )?;
+    let entries = query(git, &top, "ls-files", &["-s", "-z"], None, parse::ls_files)?;
     let work_tree = query(
         git,
         &top,
-        &[
-            "--no-optional-locks",
-            "diff",
-            "--name-status",
-            "--no-renames",
-            "-z",
-        ],
+        "diff",
+        &["--name-status", "--no-renames", "-z"],
         None,
         parse::name_status,
     )?;
@@ -194,6 +178,20 @@ fn intent_to_add(changed: &[StagedPath], visible: &[StagedPath]) -> HashSet<Vec<
         .collect()
 }
 
+/// Whether the index holds `path` (git's bytes as text) only as an intent-to-add entry
+/// (`git add -N`), found as [`read`] finds them: the staged changes of that path, read with and
+/// without `--ita-visible-in-index`, disagree.
+pub(crate) fn is_intent_to_add(git: &Git, top: &Path, path: &str) -> Result<bool, GitError> {
+    let flags = ["--cached", "--name-status", "--no-renames", "-z"];
+    let mut visible_flags = flags.to_vec();
+    visible_flags.extend(["--ita-visible-in-index", "--", path]);
+    let mut hidden_flags = flags.to_vec();
+    hidden_flags.extend(["--", path]);
+    let hidden = query(git, top, "diff", &hidden_flags, None, parse::name_status)?;
+    let visible = query(git, top, "diff", &visible_flags, None, parse::name_status)?;
+    Ok(!intent_to_add(&hidden, &visible).is_empty())
+}
+
 /// The place `canonical` as the first entry below it spells it, or `canonical` when no entry
 /// lies below it.
 fn git_place(entries: &[Tracked], canonical: &str, folding: Folding) -> String {
@@ -229,13 +227,9 @@ pub fn blobs(git: &Git, top: &Path, objects: &[&str]) -> Result<Vec<Vec<u8>>, Gi
         input.extend_from_slice(object.as_bytes());
         input.push(b'\n');
     }
-    query(
-        git,
-        top,
-        &["--no-optional-locks", "cat-file", "--batch"],
-        Some(&input),
-        |out| parse::batch(out, objects.len()),
-    )
+    query(git, top, "cat-file", &["--batch"], Some(&input), |out| {
+        parse::batch(out, objects.len())
+    })
 }
 
 /// Reads the staged bytes of the `edited` paths that are regular entries of `tracked`.
