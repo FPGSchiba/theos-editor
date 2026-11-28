@@ -88,7 +88,8 @@ branch history. On `main`, the squashed pull request is the unit.
   pull requests.
 - **Merging:** pull requests that touch no protected path merge automatically when every check
   is green. Pull requests that touch a protected path (`docs/gate.md` §5) wait until Jann adds the
-  label `approved`. Release pull requests are merged by Jann only.
+  label `approved`; their approval covers the protected paths their review fixes change, which
+  the description lists (decision 0006). Release pull requests are merged by Jann only.
 
 ## 4. Tests
 
