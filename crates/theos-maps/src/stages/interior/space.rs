@@ -12,16 +12,15 @@ use crate::rooms::lattice::Lattice;
 use crate::stage::{
     Check, LayerSpec, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
 };
-use crate::stages::interior::space_core::{SpaceParams as CoreParams, build_space};
+use crate::stages::interior::space_core::{
+    MAX_DOOR, SpaceParams as CoreParams, build_space, out_of_range,
+};
 use crate::stages::interior::support::{ROOM_GRAPH, SPACE_LAYERS, cells};
 use crate::stages::interior::units;
 use crate::world::{Layer, MapFrame, ValueType};
 
 /// The spectral exponent of the ragged noise (0.3.0's).
 const RAGGED_BETA: f64 = 2.2;
-
-/// The widest door, in raster cells.
-const MAX_DOOR: u32 = 2;
 
 fn one() -> f64 {
     1.0
@@ -99,17 +98,15 @@ impl TypedStage for Space {
 
     fn check_frame(&self, p: &SpaceParams, frame: &MapFrame) -> Result<(), ParamError> {
         let c = Self::core(p, |name, m| units::cells(Self::ID, name, m, frame))?;
-        let check = Check::of(Self::ID);
-        if c.wall < 1 {
-            return Err(check.refuse("wall_m", "must be at least one raster cell"));
+        match out_of_range(&c) {
+            Some(("door", _)) => Err(Check::of(Self::ID).refuse(
+                "door_m",
+                format!("must be from 1 to {MAX_DOOR} raster cells"),
+            )),
+            Some((name, _)) => Err(Check::of(Self::ID)
+                .refuse(&format!("{name}_m"), "must be at least one raster cell")),
+            None => Ok(()),
         }
-        if !(1..=MAX_DOOR).contains(&c.door) {
-            return Err(check.refuse("door_m", "must be one or two raster cells"));
-        }
-        if c.passage < 1 {
-            return Err(check.refuse("passage_m", "must be at least one raster cell"));
-        }
-        Ok(())
     }
 
     fn run(&self, ctx: &mut StageContext<'_>, p: &SpaceParams) -> Result<StageReport, StageError> {

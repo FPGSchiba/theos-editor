@@ -128,7 +128,7 @@ pub enum SpaceError {
 }
 
 /// The widest door, in raster cells (ruling R1).
-const MAX_DOOR: u32 = 2;
+pub(crate) const MAX_DOOR: u32 = 2;
 
 /// Builds rooms, walls and doors on a raster the size of `envelope` (spec §5.7), then checks
 /// them.
@@ -226,19 +226,28 @@ pub fn build_space(
     Ok(out)
 }
 
-/// Refuses parameters out of range.
-fn check_params(p: &SpaceParams) -> Result<(), SpaceError> {
-    let bad = |name, value| Err(SpaceError::BadParam { name, value });
+/// The first parameter out of range, by name (`wall`, `door`, `passage`) with its value:
+/// `wall` and `passage` at least 1, `door` from 1 to [`MAX_DOOR`]. The `space` stage refuses
+/// the same values when it plans.
+pub(crate) fn out_of_range(p: &SpaceParams) -> Option<(&'static str, u32)> {
     if p.wall == 0 {
-        return bad("wall", p.wall);
+        return Some(("wall", p.wall));
     }
-    if p.door == 0 || p.door > MAX_DOOR {
-        return bad("door", p.door);
+    if !(1..=MAX_DOOR).contains(&p.door) {
+        return Some(("door", p.door));
     }
     if p.passage == 0 {
-        return bad("passage", p.passage);
+        return Some(("passage", p.passage));
     }
-    Ok(())
+    None
+}
+
+/// Refuses parameters out of range.
+fn check_params(p: &SpaceParams) -> Result<(), SpaceError> {
+    match out_of_range(p) {
+        Some((name, value)) => Err(SpaceError::BadParam { name, value }),
+        None => Ok(()),
+    }
 }
 
 /// The room number + 1 of every raster cell of a room's blocks, walls included.
