@@ -189,25 +189,24 @@ fn shoelace(ring: &[geojson::Position]) -> f64 {
         / 2.0
 }
 
-// AC: CE-80.1
-#[test]
-fn room_polygons_enclose_their_cells() -> TestResult {
+/// Every room is a Polygon whose area (holes taken out) and `area_m2` match its cells in the
+/// `rooms` layer, numbered in order, with the room properties of `docs/map-package.md` §5.
+fn check_rooms(package: &theos_map_format::Package, at: &str) -> TestResult {
     use geojson::GeometryValue;
     use theos_map_format::{LayerData, LayerKey};
-    let (package, _) = fixture_run()?;
     let cell_m = package.manifest.frame.cell_m;
     let key = LayerKey {
         level: None,
         name: "rooms".to_owned(),
     };
     let Some(LayerData::U16(numbers)) = package.layers.get(&key) else {
-        return Err("the package has no u16 `rooms` layer".into());
+        return Err(format!("{at}: the package has no u16 `rooms` layer").into());
     };
-    let rooms = of_kind(&package, "room");
-    assert!(rooms.len() >= 8, "{} rooms", rooms.len());
+    let rooms = of_kind(package, "room");
+    assert!(!rooms.is_empty(), "{at}: no rooms");
     for (k, room) in rooms.iter().enumerate() {
-        let id = id_of(room);
-        assert_eq!(id, format!("room-{}", k + 1));
+        let id = format!("{at}: {}", id_of(room));
+        assert_eq!(id_of(room), format!("room-{}", k + 1), "{at}");
         let number = prop(room, "number")
             .and_then(serde_json::Value::as_u64)
             .ok_or(format!("{id}: no number"))?;
@@ -221,7 +220,9 @@ fn room_polygons_enclose_their_cells() -> TestResult {
         else {
             return Err(format!("{id} is not a Polygon").into());
         };
-        let (outline, holes) = coordinates.split_first().ok_or("no outline")?;
+        let (outline, holes) = coordinates
+            .split_first()
+            .ok_or(format!("{id}: no outline"))?;
         let area = shoelace(outline).abs() - holes.iter().map(|h| shoelace(h).abs()).sum::<f64>();
         let expected = f64::from(u32::try_from(cells)?) * cell_m * cell_m;
         assert!(
@@ -241,20 +242,28 @@ fn room_polygons_enclose_their_cells() -> TestResult {
 
 // AC: CE-80.1
 #[test]
-fn doors_and_connections_follow_the_format() -> TestResult {
+fn room_polygons_enclose_their_cells() -> TestResult {
     let (package, _) = fixture_run()?;
-    let room_ids: Vec<String> = of_kind(&package, "room").into_iter().map(id_of).collect();
-    let doors = of_kind(&package, "door");
+    let rooms = of_kind(&package, "room").len();
+    assert!(rooms >= 8, "{rooms} rooms");
+    check_rooms(&package, "fixture-interior")
+}
+
+/// Every door is a Point between two known rooms; every connection has no geometry, known
+/// `from` and `to` rooms and names its door, one door per connection, in order.
+fn check_doors(package: &theos_map_format::Package, at: &str) -> TestResult {
+    let room_ids: Vec<String> = of_kind(package, "room").into_iter().map(id_of).collect();
+    let doors = of_kind(package, "door");
     let door_ids: Vec<String> = doors.iter().map(|f| id_of(f)).collect();
-    assert_ne!(doors.len(), 0, "no doors");
+    assert_ne!(doors.len(), 0, "{at}: no doors");
     for door in &doors {
-        let id = id_of(door);
+        let id = format!("{at}: {}", id_of(door));
         let rooms = prop(door, "rooms")
             .and_then(serde_json::Value::as_array)
             .ok_or(format!("{id}: no rooms"))?;
         assert_eq!(rooms.len(), 2, "{id}");
         for room in rooms {
-            let room = room.as_str().ok_or("a room id is text")?;
+            let room = room.as_str().ok_or(format!("{id}: a room id is text"))?;
             assert!(room_ids.iter().any(|r| r == room), "{id}: {room}");
         }
         assert!(
@@ -269,13 +278,17 @@ fn doors_and_connections_follow_the_format() -> TestResult {
     let json: serde_json::Value = serde_json::from_slice(&bytes)?;
     let connections: Vec<&serde_json::Value> = json["features"]
         .as_array()
-        .ok_or("no features")?
+        .ok_or(format!("{at}: no features"))?
         .iter()
         .filter(|f| f["properties"]["kind"] == "connection")
         .collect();
-    assert_eq!(connections.len(), doors.len(), "one door per connection");
+    assert_eq!(
+        connections.len(),
+        doors.len(),
+        "{at}: one door per connection"
+    );
     for (i, c) in connections.iter().enumerate() {
-        let id = &c["id"];
+        let id = format!("{at}: {}", c["id"]);
         assert_eq!(c.get("geometry"), Some(&serde_json::Value::Null), "{id}");
         for key in ["from", "to"] {
             let room = c["properties"][key]
@@ -290,18 +303,25 @@ fn doors_and_connections_follow_the_format() -> TestResult {
 
 // AC: CE-80.1
 #[test]
-fn one_critical_route_from_start_to_goal() -> TestResult {
+fn doors_and_connections_follow_the_format() -> TestResult {
     let (package, _) = fixture_run()?;
-    let routes = of_kind(&package, "route");
-    assert_eq!(routes.len(), 1);
+    check_doors(&package, "fixture-interior")
+}
+
+/// One `critical` route, a `LineString` at z 0 from the start room to the goal room, whose
+/// `length_m` is the analysis's critical path.
+fn check_route(package: &theos_map_format::Package, at: &str) -> TestResult {
+    let routes = of_kind(package, "route");
+    assert_eq!(routes.len(), 1, "{at}");
     let route = routes[0];
-    assert_eq!(id_of(route), "route-1");
+    assert_eq!(id_of(route), "route-1", "{at}");
     assert_eq!(
         prop(route, "type"),
-        Some(&serde_json::Value::from("critical"))
+        Some(&serde_json::Value::from("critical")),
+        "{at}"
     );
     let role_of = |id: &str| {
-        of_kind(&package, "room")
+        of_kind(package, "room")
             .into_iter()
             .find(|r| id_of(r) == id)
             .and_then(|r| prop(r, "role").and_then(serde_json::Value::as_str))
@@ -309,35 +329,64 @@ fn one_critical_route_from_start_to_goal() -> TestResult {
     };
     let rooms = prop(route, "rooms")
         .and_then(serde_json::Value::as_array)
-        .ok_or("no rooms")?;
+        .ok_or(format!("{at}: the route has no rooms"))?;
     let first = rooms
         .first()
         .and_then(serde_json::Value::as_str)
-        .ok_or("empty")?;
+        .ok_or(format!("{at}: empty route"))?;
     let last = rooms
         .last()
         .and_then(serde_json::Value::as_str)
-        .ok_or("empty")?;
-    assert_eq!(role_of(first).as_deref(), Some("start"));
-    assert_eq!(role_of(last).as_deref(), Some("goal"));
+        .ok_or(format!("{at}: empty route"))?;
+    assert_eq!(role_of(first).as_deref(), Some("start"), "{at}");
+    assert_eq!(role_of(last).as_deref(), Some("goal"), "{at}");
     let Some(geojson::GeometryValue::LineString { coordinates }) =
         route.geometry.as_ref().map(|g| &g.value)
     else {
-        return Err("the route is not a LineString".into());
+        return Err(format!("{at}: the route is not a LineString").into());
     };
-    assert!(coordinates.len() >= 2);
+    assert!(coordinates.len() >= 2, "{at}");
     assert!(
         coordinates
             .iter()
-            .all(|p| p.as_slice().len() == 3 && p.as_slice()[2] == 0.0)
+            .all(|p| p.as_slice().len() == 3 && p.as_slice()[2] == 0.0),
+        "{at}"
     );
     // Ruling R26: `length_m` is the analysis's critical path, not the line's own length.
     let length = prop(route, "length_m").and_then(serde_json::Value::as_f64);
     let critical = package.manifest.summary["stages"]["playability"]["critical_path_m"].as_f64();
     assert!(
         length.is_some() && length == critical,
-        "{length:?} vs {critical:?}"
+        "{at}: {length:?} vs {critical:?}"
     );
+    Ok(())
+}
+
+// AC: CE-80.1
+#[test]
+fn one_critical_route_from_start_to_goal() -> TestResult {
+    let (package, _) = fixture_run()?;
+    check_route(&package, "fixture-interior")
+}
+
+/// Ids are `<kind>-<n>`, unique and numbered per feature kind; rooms, doors, connections and
+/// the route are all present.
+fn check_ids(package: &theos_map_format::Package, at: &str) -> TestResult {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut next: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for f in &package.features.features {
+        let id = id_of(f);
+        assert!(seen.insert(id.clone()), "{at}: {id} twice");
+        let kind = prop(f, "kind")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(format!("{at}: {id}: no kind"))?;
+        let n = next.entry(kind.to_owned()).or_insert(0);
+        *n += 1;
+        assert_eq!(id, format!("{kind}-{n}"), "{at}");
+    }
+    for kind in ["room", "door", "connection", "route"] {
+        assert!(next.contains_key(kind), "{at}: no {kind}");
+    }
     Ok(())
 }
 
@@ -345,29 +394,12 @@ fn one_critical_route_from_start_to_goal() -> TestResult {
 #[test]
 fn ids_are_unique_per_kind() -> TestResult {
     let (package, _) = fixture_run()?;
-    let mut seen = std::collections::BTreeSet::new();
-    let mut next: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
-    for f in &package.features.features {
-        let id = id_of(f);
-        assert!(seen.insert(id.clone()), "{id} twice");
-        let kind = prop(f, "kind")
-            .and_then(serde_json::Value::as_str)
-            .ok_or(format!("{id}: no kind"))?;
-        let n = next.entry(kind.to_owned()).or_insert(0);
-        *n += 1;
-        assert_eq!(id, format!("{kind}-{n}"));
-    }
-    for kind in ["room", "door", "connection", "route"] {
-        assert!(next.contains_key(kind), "no {kind}");
-    }
-    Ok(())
+    check_ids(&package, "fixture-interior")
 }
 
-// AC: CE-80.1
-#[test]
-fn package_layers_and_dtypes() -> TestResult {
+/// The interior package layers of `docs/map-package.md` §4.4, in order, with their dtypes.
+fn check_layers(package: &theos_map_format::Package, at: &str) {
     use theos_map_format::DType;
-    let (package, _) = fixture_run()?;
     let layers: Vec<(&str, DType)> = package
         .manifest
         .layers
@@ -382,9 +414,57 @@ fn package_layers_and_dtypes() -> TestResult {
             ("corridors", DType::U8),
             ("cover", DType::U8),
             ("walls", DType::U8),
-        ]
+        ],
+        "{at}"
+    );
+}
+
+// AC: CE-80.1
+#[test]
+fn package_layers_and_dtypes() -> TestResult {
+    let (package, _) = fixture_run()?;
+    check_layers(&package, "fixture-interior");
+    Ok(())
+}
+
+/// The `base` render of a run in `dir` is frame-exact: two pixels per grid cell.
+fn check_base_size(
+    dir: &std::path::Path,
+    package: &theos_map_format::Package,
+    manifest: &theos_maps::RunManifest,
+    at: &str,
+) -> TestResult {
+    let file = manifest
+        .outputs
+        .get("base")
+        .ok_or(format!("{at}: no base"))?;
+    let decoder = png::Decoder::new(std::io::BufReader::new(std::fs::File::open(
+        dir.join(file),
+    )?));
+    let reader = decoder.read_info()?;
+    let (width, height) = (reader.info().width, reader.info().height);
+    let [rows, cols] = package.manifest.frame.grid;
+    assert_eq!(
+        (u64::from(width), u64::from(height)),
+        (2 * u64::from(cols), 2 * u64::from(rows)),
+        "{at}: base is {width} x {height} px for a {rows} x {cols} grid"
     );
     Ok(())
+}
+
+/// Every CE-80.1 check of a run's package, features and `base` render.
+fn check_outputs(
+    dir: &std::path::Path,
+    package: &theos_map_format::Package,
+    manifest: &theos_maps::RunManifest,
+    at: &str,
+) -> TestResult {
+    check_layers(package, at);
+    check_rooms(package, at)?;
+    check_doors(package, at)?;
+    check_route(package, at)?;
+    check_ids(package, at)?;
+    check_base_size(dir, package, manifest, at)
 }
 
 /// The fixture with one more constraint line.
@@ -459,6 +539,16 @@ const BUILTIN_INTERIORS: [(&str, bool); 3] = [
     ("works-halls", false),
 ];
 
+/// A run kept with its output folder.
+struct Outputs {
+    /// The output folder.
+    dir: tempfile::TempDir,
+    /// The package the run wrote.
+    package: theos_map_format::Package,
+    /// The run's manifest.
+    manifest: theos_maps::RunManifest,
+}
+
 /// Runs the built-in `recipe` with `seed` into a temporary folder, from `parent` (its package
 /// path and ruin id) when `child` is set, and reads back its package.
 fn run_builtin(
@@ -467,14 +557,24 @@ fn run_builtin(
     child: bool,
     parent: &(PathBuf, String),
 ) -> Result<(theos_map_format::Package, theos_maps::RunManifest), Box<dyn std::error::Error>> {
-    if !child {
-        return Ok(run_package(recipe, seed, &[]).map_err(|e| e.to_string())?);
-    }
+    let done = run_builtin_kept(recipe, seed, child, parent)?;
+    Ok((done.package, done.manifest))
+}
+
+/// [`run_builtin`], keeping the output folder.
+fn run_builtin_kept(
+    recipe: &str,
+    seed: u64,
+    child: bool,
+    parent: &(PathBuf, String),
+) -> Result<Outputs, Box<dyn std::error::Error>> {
     let out = tempfile::tempdir()?;
     let mut r = request(recipe, seed);
-    r.from = Some(parent.0.clone());
-    r.inputs
-        .insert("feature".to_owned(), parent.1.as_str().into());
+    if child {
+        r.from = Some(parent.0.clone());
+        r.inputs
+            .insert("feature".to_owned(), parent.1.as_str().into());
+    }
     let manifest = run(
         &r,
         &[],
@@ -483,7 +583,11 @@ fn run_builtin(
         &CancelToken::new(),
     )?;
     let package = read_package(&out.path().join(&manifest.outputs["package"]))?;
-    Ok((package, manifest))
+    Ok(Outputs {
+        dir: out,
+        package,
+        manifest,
+    })
 }
 
 // AC: CE-80.1
@@ -492,7 +596,11 @@ fn builtins_produce_all_outputs() -> TestResult {
     let parent_dir = tempfile::tempdir()?;
     let parent = ruin_parent(parent_dir.path())?;
     for (recipe, child) in BUILTIN_INTERIORS {
-        let (package, manifest) = run_builtin(recipe, 1, child, &parent)?;
+        let Outputs {
+            dir,
+            package,
+            manifest,
+        } = run_builtin_kept(recipe, 1, child, &parent)?;
         for output in ["base", "blueprint", "graph", "features", "package"] {
             assert!(
                 manifest.outputs.contains_key(output),
@@ -501,6 +609,7 @@ fn builtins_produce_all_outputs() -> TestResult {
             );
         }
         assert_eq!(package.manifest.kind, "interior", "{recipe}");
+        check_outputs(dir.path(), &package, &manifest, recipe)?;
     }
     Ok(())
 }
