@@ -7,7 +7,7 @@
 use std::cmp::{Ordering, Reverse};
 use std::collections::{BTreeMap, BinaryHeap};
 
-use crate::rooms::graph::{KeyId, Passage, RoomGraph, RoomId};
+use crate::rooms::graph::{KEY_IDS, KeyId, Passage, RoomGraph, RoomId};
 use crate::rooms::measure::hop_distance;
 
 /// What a flood from the start reaches.
@@ -38,10 +38,11 @@ pub enum Unsolvable {
     },
 }
 
-/// The mask bit of a key; keys above 16 cannot occur and count as never held.
+/// The mask bit of a key; keys outside [`KEY_IDS`] are refused by [`RoomGraph::validate`] and
+/// count as never held.
 fn bit(k: KeyId) -> u16 {
-    debug_assert!((1..=16).contains(&k), "key {k} is outside 1..=16");
-    if (1..=16).contains(&k) {
+    debug_assert!(KEY_IDS.contains(&k), "key {k} is outside 1..=16");
+    if KEY_IDS.contains(&k) {
         1 << (k - 1)
     } else {
         0

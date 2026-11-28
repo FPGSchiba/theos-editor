@@ -166,6 +166,9 @@ pub enum GraphError {
         /// The second room of the connection.
         b: RoomId,
     },
+    /// A key id lies outside 1..=16 (a room's key or a lock's).
+    #[error("key id {0} lies outside 1..=16")]
+    KeyOutOfRange(KeyId),
     /// A room type is not lower case with hyphens.
     #[error("room type {0:?} must match ^[a-z][a-z0-9-]*$")]
     BadType(String),
@@ -180,6 +183,9 @@ pub enum GraphError {
         from: RoomId,
     },
 }
+
+/// The key ids a graph may use: keys are held as a 16-bit mask.
+pub const KEY_IDS: std::ops::RangeInclusive<KeyId> = 1..=16;
 
 /// Whether a room type is lower case with hyphens, `^[a-z][a-z0-9-]*$`.
 pub(crate) fn type_ok(ty: &str) -> bool {
@@ -218,6 +224,9 @@ impl RoomGraph {
             if !type_ok(&room.ty) {
                 return Err(GraphError::BadType(room.ty.clone()));
             }
+            if let Some(&k) = room.keys.iter().find(|k| !KEY_IDS.contains(k)) {
+                return Err(GraphError::KeyOutOfRange(k));
+            }
             let room_id = RoomId::try_from(i).unwrap_or(RoomId::MAX);
             for (j, &cell) in room.cells.iter().enumerate() {
                 if !enabled(cell) {
@@ -248,6 +257,11 @@ impl RoomGraph {
                 return Err(GraphError::ConnectionOrder { a: c.a, b: c.b });
             }
             previous = Some((c.a, c.b));
+            if let Passage::Locked(k) = c.kind
+                && !KEY_IDS.contains(&k)
+            {
+                return Err(GraphError::KeyOutOfRange(k));
+            }
             let (Some(ra), Some(rb)) = (
                 self.rooms.get(usize::from(c.a)),
                 self.rooms.get(usize::from(c.b)),
@@ -421,6 +435,24 @@ mod tests {
             bad.validate(&all),
             Err(GraphError::BadType("choir_hall".to_owned()))
         );
+    }
+
+    // AC: CE-80.3
+    #[test]
+    fn validate_refuses_key_ids_outside_one_to_sixteen() {
+        for k in [0, 17] {
+            let mut held = square();
+            held.rooms[1].keys = vec![k];
+            assert_eq!(held.validate(&all), Err(GraphError::KeyOutOfRange(k)));
+            let mut lock = square();
+            lock.rooms[1].keys = vec![1];
+            lock.connections[0].kind = Passage::Locked(k);
+            assert_eq!(lock.validate(&all), Err(GraphError::KeyOutOfRange(k)));
+        }
+        let mut edge = square();
+        edge.rooms[1].keys = vec![1, 16];
+        edge.connections[0].kind = Passage::Locked(16);
+        assert_eq!(edge.validate(&all), Ok(()));
     }
 
     // AC: CE-80.3
