@@ -2,7 +2,7 @@
 
 The screens of the Theos Content Studio concept, exported from the design canvas at
 1440 × 900: screens 01–11 on 31 Oct 2026, screens 12–15 (atlas, quests, generating from lore) on
-5 Nov 2026. On 27 Nov 2026 they moved to theme tokens and their previews were rendered again from
+5 Nov 2026. On 28 Nov 2026 they moved to theme tokens and their previews were rendered again from
 the HTML, in both themes.
 
 - **`screens/NN-<name>.html` is the reference.** Each file is plain HTML that uses only
