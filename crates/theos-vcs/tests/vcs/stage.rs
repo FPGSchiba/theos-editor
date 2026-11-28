@@ -184,3 +184,27 @@ fn an_empty_list_runs_no_git() -> Result {
     stage::unstage(&git, sandbox.path(), &[])?;
     Ok(())
 }
+
+#[test]
+fn unstaging_works_with_a_folder_named_head_at_the_top() -> Result {
+    let sandbox = Sandbox::new()?;
+    let top = sandbox.init("repo")?;
+    Sandbox::write(&top.join("a.md"), BODY)?;
+    Sandbox::write(&top.join("HEAD").join("x.md"), BODY)?;
+    sandbox.commit(&top, "first")?;
+    Sandbox::write(&top.join("a.md"), "changed\n")?;
+    let git = sandbox.git()?;
+    stage::stage(&git, &top, &[b"a.md"])?;
+
+    stage::unstage(&git, &top, &[b"a.md"])?;
+
+    assert_eq!(
+        entries(&sandbox, &top)?,
+        [Entry::Changed {
+            path: b"a.md".to_vec(),
+            staged: Change::Unchanged,
+            unstaged: Change::Modified,
+        }]
+    );
+    Ok(())
+}

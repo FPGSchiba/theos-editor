@@ -22,19 +22,23 @@ fn nul_joined(paths: &[&[u8]]) -> Vec<u8> {
     bytes
 }
 
-/// Runs `command` with `flags` and the paths on stdin; no git runs for an empty list. A write on
-/// paths is not cancellable (spec 5.2).
+/// Runs `command` with `flags`, the stdin flags and `tail` (after them), and the paths on stdin;
+/// no git runs for an empty list. A write on paths is not cancellable (spec 5.2).
 fn run(
     git: &Git,
     top: &Path,
     command: &str,
     flags: &[&str],
+    tail: &[&str],
     paths: &[&[u8]],
 ) -> Result<(), GitError> {
     if paths.is_empty() {
         return Ok(());
     }
-    let flags: Vec<&str> = flags.iter().copied().chain(FROM_STDIN).collect();
+    let flags: Vec<&str> = (flags.iter().copied())
+        .chain(FROM_STDIN)
+        .chain(tail.iter().copied())
+        .collect();
     let stdin = nul_joined(paths);
     let out = write(git, top, command, &flags, Some(&stdin), &Cancel::new())?;
     let args: Vec<&OsStr> = write_args(command, &flags);
@@ -48,7 +52,7 @@ fn run(
 ///
 /// [`GitError::IndexLocked`], [`GitError::Failed`] and the errors of [`Git::output`].
 pub fn stage(git: &Git, top: &Path, paths: &[&[u8]]) -> Result<(), GitError> {
-    run(git, top, "add", &["-A"], paths)
+    run(git, top, "add", &["-A"], &[], paths)
 }
 
 /// Takes `paths` out of the index, keeping the working tree as it is. Before the first commit
@@ -62,12 +66,14 @@ pub fn unstage(git: &Git, top: &Path, paths: &[&[u8]]) -> Result<(), GitError> {
         return Ok(());
     }
     match repo::head(git, top)? {
-        Some(_) => run(git, top, "reset", &["-q", "HEAD"], paths),
+        // `HEAD --` after the flags: a file or folder named HEAD cannot make the revision ambiguous.
+        Some(_) => run(git, top, "reset", &["-q"], &["HEAD", "--"], paths),
         None => run(
             git,
             top,
             "rm",
             &["-q", "--cached", "-f", "--ignore-unmatch"],
+            &[],
             paths,
         ),
     }
