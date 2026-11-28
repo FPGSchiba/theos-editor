@@ -128,7 +128,7 @@ All three families are under the SIL Open Font License 1.1.
 ## Spacing, radius, lines, elevation
 
 - Spacing runs on a 2px base (`sp-2` … `sp-48`). Instrument uses 2–16px; Manuscript uses 12–48px. Tree indent is `sp-14` per level.
-- Fixed sizes live in tokens: `h-control` 26, `h-tab` 28, `h-titlebar` 30, `h-toolbar` 42, `h-statusbar` 22, `w-rail` 54, `h-rail-item` 48.
+- Fixed sizes live in tokens: `h-control` 26, `h-tab` 28, `h-titlebar` 30, `h-toolbar` 42, `h-statusbar` 22, `w-rail` 54, `h-rail-item` 48; window chrome: `w-winctl` 46, `h-resize-edge` 4, `w-macos-inset` 72, `w-menu-min` 248, `w-menu-max` 420, `h-menu-item` 24, `w-scrollbar` 10 (the scrollbar colours are the `scrollbar-*` tokens).
 - **Radius.** `radius-instrument` is 0 for all chrome in both registers, so the shell never changes shape when its content does. `radius-manuscript` is 2px and goes only on Manuscript content surfaces: the voice block, link chips in prose, inline code and the `[[` popover. 2px softens the HUD edge over long reading and stays inside the Grid Noir family. The Magic editor's 4–7px is retired because it read as a different app.
 - Lines are 1px everywhere. Dashed lines separate property rows and mark "add" and "pending". Dotted lines indent review bodies.
 - Elevation is colour, not shadow. The only shadows are `shadow-hot` (the one window that needs you) and `shadow-popover` (floating layers).
@@ -138,7 +138,7 @@ All three families are under the SIL Open Font License 1.1.
 Theos UI draws its icons from Unicode glyphs in JetBrains Mono, as Grid Noir always has. There are no icon fonts, no SVG sets and no emoji.
 - Ship the **full** JetBrains Mono (as in `fonts/`), not a Latin subset. Subsets drop the geometric shapes the UI relies on.
 - Kind glyphs are set by CSS from `data-kind` (see KindGlyph): ▲ ≣ ⊟ ⌂ ∴ ◧ ◉ ◆ ⌸ ✶ for world entities, and ■ □ ◔ ◎ § ¶ ◫ ⊡ for Truth, Belief, Clue, Perspective, Chronicle, Script/Beat, Concept/Version, Template.
-- UI glyphs: ▸ breadcrumb, ▾ collapse, ⋯ more, − ▢ window controls, ⤷ component child, ✓ ✕ verdicts, ⊕ mix, ⊘ locked, ⌘ ⇧ ⏎ keys.
+- UI glyphs: ▸ breadcrumb, ▾ collapse, ⋯ more, − □ ▫ ✕ window controls, ⤷ component child, ✓ ✕ verdicts, ⊕ mix, ⊘ locked, ⌘ ⇧ ⏎ keys.
 - Flagged: the source rail glyphs ◴ (Review), ✱ (AI) and ⚙ (Settings) and the transport glyphs ⏸ ⏭ are not in JetBrains Mono. They fall back to the OS symbol font and may look different per platform. Keep them for now; replace them when the rail gets its final icon pass.
 
 ## Writing in the UI
@@ -149,6 +149,26 @@ Theos UI draws its icons from Unicode glyphs in JetBrains Mono, as Grid Noir alw
 - **In-world text** never contains developer vocabulary: no IDs, tiers, truths or system words. Developer prose can name in-world things; in-world text cannot name developer things.
 - **Validation messages** say what is wrong and what fixes it: "Broken link: “Song-cellar” does not exist." plus the rule `no-broken-links` and a `Create record` action.
 - **Empty states** say what will appear and what to do: "New AI proposals land here. Nothing changes the world until you approve it."
+
+## Window chrome
+
+The editor draws its own window. Components: `TitleBar`, `MenuBar` and `WindowControls` (each folder has a README and a preview in both themes).
+
+### The title bar, per OS
+- **Windows and Linux:** no OS bar. One `h-titlebar` (30px) row holds mark, menu bar, breadcrumb (the drag region, written `data-tauri-drag-region="deep"` so its text drags; centred; a double-click maximizes or restores; the `<header>` also carries a bare `data-tauri-drag-region` so its padding and gaps drag), validator pip and the window controls (`w-winctl` 46px each, 46 × 26 restored, 46 × 30 maximized). The window still resizes from its edges: the top `h-resize-edge` (4px) is Tauri's resize strip and the controls are padded down by it.
+- **macOS:** the native traffic lights sit in a `w-macos-inset` (72px) inset at the left of the title bar; the breadcrumb is centred on the whole window, and the left and right columns drag too (all `="deep"`); the mark (icon and THEOS//EDITOR) and the pip never drag (each carries `data-tauri-drag-region="false"`; Tauri blocks a drag on clickable tags and roles such as button or menuitem, not on `role="img"`, and `="false"` is the explicit opt-out); the menus are in the system menu bar, not in the window.
+
+### The menu bar
+`tu-menubar` with `tu-menubar__item`s and one open `tu-menu` at a time (`is-open`). Keyboard: Alt pressed and released alone, or F10, focuses the bar (`is-focused`, access letters underlined by `is-keys`); Left and Right move, Down, Enter and Space open, a click or a letter opens its menu, Esc leaves; Alt with an access letter opens that menu directly. In an open menu Up and Down move (disabled rows stay focusable and do nothing), a letter jumps to the row starting with it, Enter runs it, Right and Left open and close a submenu. A menu's own list (`tu-menu__list`, the `role="menu"` element) scrolls when the window is too short; a submenu is a separate popup beside its row, not inside the scrolling list, and its list ends inside the window too (`--sub-top` places it vertically; `--sub-shift`, default 0, moves it left by `max(0, submenuRight - window.innerWidth)` so its right edge meets the window's right edge). A menu is as wide as its widest row (248 to 420px). Highlighted rows reuse the palette row's amber wash and 2px edge; disabled rows are `textMute` and name their phase. See `components/MenuBar/README.md`.
+
+### The window controls
+Minimize, maximize or restore, close (− □ ▫ ✕). Close alone turns `sig-reject` on hover. The top 4px of the window are the resize strip. The maximize button keeps a fixed size and position because the Windows 11 snap-layout flyout is a transparent child window laid over it, and that window takes the pointer, so the build sets `is-hovered` on the button instead of relying on `:hover`. See `components/WindowControls/README.md`.
+
+### Scrollbars
+Every scrolling element on a Theos UI page (the shell and the overlays mounted beside it, such as the command palette and the About popover) has a scrollbar that is `w-scrollbar` (10px) wide: a `scrollbar-track` (`panel`) with a 1px `border` line on its inner edge and a thumb inset 2px (6px wide). The thumb is `scrollbar-thumb` at rest (`textDim` 70% over `panel`, 3.3:1 on the track in both themes), `scrollbar-thumb-hover` (`textDim`) under the pointer and `scrollbar-thumb-active` (`sig-attention`) while dragged, as the slider rule has it: amber only while dragging. They are drawn with `::-webkit-scrollbar` (WebView2, WKWebView and WebKitGTK all read it). Chromium ignores `::-webkit-scrollbar` while `scrollbar-width` or `scrollbar-color` is set, so `bundle.css` sets neither and resets both to `auto` for the whole document with a `:where(*)` rule, a guard so that no future rule can hide the themed bars. Do not set them on anything, with one exception: a tab strip (`tu-tabbar__tabs`) scrolls but shows no bar (`scrollbar-width: none`, and `::-webkit-scrollbar { display: none }`); the reset is `:where()` (specificity 0) so that rule wins. The track's 1px `border` line is on its left edge for a vertical bar and its top edge for a horizontal one.
+
+### The page never scrolls
+The shell is exactly the window (`height: 100%` of a full-height root): at every size from the minimum window size up the page does not scroll, and only window bodies (`tu-window__body`) and other designated bodies scroll. A component that has a border and a fixed height (an `h-*` token) must be `box-sizing: border-box`, or its border adds to the height and the page scrolls: with `content-box`, `.tu-titlebar` and `.tu-statusbar` were 1px taller than their grid rows (901 against 900). Both are now `border-box`; give every new component with a border and a fixed height the same.
 
 ## The Magic sandbox
 

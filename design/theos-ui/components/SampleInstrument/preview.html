@@ -15,14 +15,24 @@
 </style></head>
 <body>
 <div class="tu-shell" style="height:660px">
-  <div class="tu-titlebar">
-    <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
-    <span class="tu-titlebar__sep">▸</span><span>hollowbrook · dirty</span>
-    <span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Review</span>
-    <span class="tu-spacer"></span>
-    <span class="tu-statuspip"><span class="tu-pip tu-pip--glow is-approve"></span>authoring</span>
-    <span class="tu-statuspip"><span class="tu-pip is-warn"></span>pie idle</span>
-  </div>
+  <header class="tu-titlebar tu-titlebar--frameless" data-tauri-drag-region>
+    <span class="tu-titlebar__brand" data-tauri-drag-region="false"><span class="tu-mark" role="img" aria-label="Theos"></span>THEOS//EDITOR</span>
+    <nav class="tu-menubar" role="menubar" aria-label="Main menu">
+      <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">F</span>ile</button></span>
+      <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">E</span>dit</button></span>
+      <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">V</span>iew</button></span>
+      <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">G</span>o</button></span>
+      <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">H</span>elp</button></span>
+    </nav>
+    <div class="tu-titlebar__drag" data-tauri-drag-region="deep"><span>hollowbrook · dirty</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Review</span></div>
+    <span class="tu-statuspip" data-tauri-drag-region="false"><span class="tu-pip tu-pip--glow is-approve"></span>authoring</span>
+    <span class="tu-statuspip" data-tauri-drag-region="false"><span class="tu-pip is-warn"></span>pie idle</span>
+    <div class="tu-winctl" role="group" aria-label="Window">
+      <button class="tu-winctl__btn" type="button" aria-label="Minimize">−</button>
+      <button class="tu-winctl__btn" type="button" aria-label="Maximize">□</button>
+      <button class="tu-winctl__btn is-close" type="button" aria-label="Close">✕</button>
+    </div>
+  </header>
   <div class="tu-toolbar">
     <span class="tu-seg"><button class="tu-seg__opt">Select</button><button class="tu-seg__opt is-active">Move</button><button class="tu-seg__opt">Rotate</button></span>
     <span class="tu-divider"></span>
@@ -44,7 +54,7 @@
   <div class="tu-shell__work">
     <div style="flex:1.05;display:flex;flex-direction:column;gap:4px;min-width:0">
       <section class="tu-window" style="flex:1.4">
-        <div class="tu-tabbar"><div class="tu-tabbar__tabs"><div class="tu-tab is-active">Scene</div><div class="tu-tab">Game</div><div class="tu-tab">PIE</div></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
+        <div class="tu-tabbar"><div class="tu-tabbar__tabs"><div class="tu-tab is-active">Scene</div><div class="tu-tab">Game</div><div class="tu-tab">PIE</div></div><div class="tu-tabbar__ctrls"><span>−</span><span>□</span><span>⋯</span></div></div>
         <div class="vp" data-theme="grid-noir">
           <span class="tu-seg vp__views"><button class="tu-seg__opt is-active">Persp</button><button class="tu-seg__opt">Top</button><button class="tu-seg__opt">Front</button></span>
           <div class="vp__sel"></div><div class="vp__tag">▸ CAPT. VESPERA</div>
@@ -52,7 +62,7 @@
         </div>
       </section>
       <section class="tu-window" style="flex:1">
-        <div class="tu-tabbar"><div class="tu-tabbar__tabs"><div class="tu-tab is-active">Console</div><div class="tu-tab">AI monitor</div></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
+        <div class="tu-tabbar"><div class="tu-tabbar__tabs"><div class="tu-tab is-active">Console</div><div class="tu-tab">AI monitor</div></div><div class="tu-tabbar__ctrls"><span>−</span><span>□</span><span>⋯</span></div></div>
         <div class="tu-window__body"><div class="tu-console">
           <div class="tu-console__row"><span class="tu-console__time">14:02:31</span><span class="tu-console__lv" data-lv="WARN">WARN</span><span class="tu-console__src is-ai">ai</span><span class="tu-console__msg">AiRequest(id=req-17b) timeout 640ms · fallback BT</span></div>
           <div class="tu-console__row"><span class="tu-console__time">14:02:58</span><span class="tu-console__lv" data-lv="INFO">INFO</span><span class="tu-console__src">review</span><span class="tu-console__msg">queued LoreDraft B-021 (sig 0.74)</span></div>
@@ -62,7 +72,7 @@
       </section>
     </div>
     <section class="tu-window is-hot" style="flex:1.25">
-      <div class="tu-tabbar"><div class="tu-tabbar__title">Review <span class="tu-badge">4</span></div><div class="tu-tabbar__ctrls"><span>−</span><span>▢</span><span>⋯</span></div></div>
+      <div class="tu-tabbar"><div class="tu-tabbar__title">Review <span class="tu-badge">4</span></div><div class="tu-tabbar__ctrls"><span>−</span><span>□</span><span>⋯</span></div></div>
       <div style="padding:10px;background:var(--panel2);border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px">
         <div class="tu-row"><span class="tu-label tu-label--strong">Design review queue</span><span class="tu-spacer"></span><span class="tu-mono tu-mute" style="font-size:10px">since 14:00:00</span></div>
         <div class="tu-review-sum"><span class="is-attention" style="flex:4 1 90px">4 PENDING</span><span class="is-info" style="flex:12 1 78px">12 AUTO</span><span class="is-approve" style="flex:38 1 104px">38 APPROVED</span><span class="is-reject" style="flex:3 1 96px">3 REJECTED</span></div>

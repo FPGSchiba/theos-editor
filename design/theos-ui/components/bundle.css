@@ -35,10 +35,6 @@ body {
 :where(.tu-btn, .tu-iconbtn, .tu-seg__opt, .tu-rate__opt, .tu-tab, .tu-rail__item, .tu-pop__row, .tu-link, input, select, textarea):focus-visible {
   outline: 1px solid var(--sig-attention); outline-offset: -1px;
 }
-* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: var(--border); }
-::-webkit-scrollbar-thumb:hover { background: var(--borderHi); }
 
 /* ── Button ─────────────────────────────────────────────────────────── */
 .tu-btn {
@@ -188,16 +184,86 @@ body {
 .tu-shell { display: grid; grid-template-columns: var(--w-rail) minmax(0, 1fr); grid-template-rows: var(--h-titlebar) auto minmax(0, 1fr) var(--h-statusbar); height: 100%; background: var(--bg); }
 .tu-shell > .tu-titlebar, .tu-shell > .tu-toolbar, .tu-shell > .tu-statusbar { grid-column: 1 / -1; }
 .tu-shell__work { display: flex; gap: 4px; padding: 4px; min-width: 0; min-height: 0; }
-.tu-titlebar { height: var(--h-titlebar); display: flex; align-items: center; gap: 12px; padding: 0 10px; background: var(--bg); border-bottom: 1px solid var(--border); font: 400 10px/1 var(--font-mono); color: var(--textDim); white-space: nowrap; overflow: hidden; }
+.tu-titlebar { box-sizing: border-box; height: var(--h-titlebar); display: flex; align-items: center; gap: 12px; padding: 0 10px; background: var(--bg); border-bottom: 1px solid var(--border); font: 400 10px/1 var(--font-mono); color: var(--textDim); white-space: nowrap; overflow: hidden; }
 .tu-titlebar__brand { font: 700 10px/1 var(--font-ui); letter-spacing: 1.2px; color: var(--text); display: inline-flex; align-items: center; gap: 8px; }
 .tu-titlebar__sep { color: var(--textMute); }
 .tu-titlebar__preset { color: var(--sig-attention); letter-spacing: 0.6px; }
 .tu-mark { width: 14px; height: 14px; border: 1.2px solid var(--sig-attention); box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
 .tu-mark::after { content: ""; width: 6px; height: 6px; background: var(--sig-attention); opacity: 0.75; }
 .tu-toolbar { height: var(--h-toolbar); display: flex; align-items: center; gap: 6px; padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--border); min-width: 0; overflow: hidden; }
-.tu-statusbar { height: var(--h-statusbar); display: flex; align-items: center; gap: 14px; padding: 0 10px; background: var(--bg); border-top: 1px solid var(--border);
+.tu-statusbar { box-sizing: border-box; height: var(--h-statusbar); display: flex; align-items: center; gap: 14px; padding: 0 10px; background: var(--bg); border-top: 1px solid var(--border);
   font: 400 10px/1 var(--font-mono); color: var(--textDim); white-space: nowrap; overflow: hidden; }
 .tu-statusbar__brand { color: var(--sig-attention); font-weight: 700; letter-spacing: 0.8px; }
+
+/* ── Shell: frameless title bar, menu bar, menus, window controls ───── */
+/* The app draws the window (Windows, Linux) or keeps native traffic lights in an inset (macOS).
+   box-sizing: border-box on .tu-titlebar and .tu-statusbar keeps each exactly its grid row: with
+   content-box the 1px border made both 1px taller and the page scrolled by 1px. */
+.tu-titlebar--frameless { overflow: visible; position: relative; z-index: 3; padding-right: 0; gap: 10px; }
+.tu-titlebar__drag { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; justify-content: center; gap: 12px; overflow: hidden; }
+.tu-titlebar__drag > span { overflow: hidden; text-overflow: ellipsis; }
+.tu-titlebar--mac { overflow: visible; position: relative; z-index: 3; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); padding: 0 10px 0 0; }
+.tu-titlebar--mac .tu-titlebar__left { display: flex; align-items: center; gap: 10px; align-self: stretch; min-width: 0; }
+.tu-titlebar--mac .tu-titlebar__right { display: flex; justify-content: flex-end; align-items: center; align-self: stretch; min-width: 0; }
+.tu-titlebar__inset { width: var(--w-macos-inset); align-self: stretch; display: flex; align-items: center; gap: 8px; padding-left: 12px; box-sizing: border-box; flex-shrink: 0; }
+
+.tu-menubar { display: flex; align-items: stretch; align-self: stretch; }
+.tu-menubar__slot { position: relative; display: flex; }
+.tu-menubar__item { padding: 0 8px; display: flex; align-items: center; background: transparent; border: 0; border-radius: 0; cursor: default;
+  font: 700 10px/1 var(--tu-font-i); letter-spacing: 0.8px; text-transform: uppercase; color: var(--textDim); }
+.tu-menubar__item:hover { color: var(--text); background: var(--panel2); }
+.tu-menubar__item.is-open { color: var(--text); background: var(--panel2); box-shadow: inset 1px 0 var(--borderHi), inset -1px 0 var(--borderHi), inset 0 1px var(--borderHi); }
+.tu-menubar__item:focus-visible, .tu-menubar__item.is-focused { outline: 1px solid var(--sig-attention); outline-offset: -1px; color: var(--text); }
+.tu-menubar__key { text-decoration: none; }
+.tu-menubar.is-keys .tu-menubar__key { text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
+
+/* A menu is a popup (.tu-menu) that holds its item list (.tu-menu__list) and, beside it, any submenu.
+   The list scrolls when the window is too short (max-height: the window minus the title bar), so a
+   dropdown never makes the page scroll; a submenu's list also gives up its --sub-top, so it ends
+   inside the window too. A menu is as wide as its widest row (w-menu-min to w-menu-max). A submenu is a separate popup, a sibling of the list inside
+   the parent .tu-menu (never a descendant of the scrolling list, which would clip it); --sub-top
+   is the offset of its parent row from the top of the parent menu, minus the submenu's own 5px
+   of border and padding. --sub-shift (default 0) moves the submenu left until its right edge meets
+   the window's right edge: max(0, submenuRight - window.innerWidth), set by the build; it then
+   overlaps its parent menu, as native menus do. */
+.tu-menu { position: absolute; top: 100%; left: 0; width: max-content; min-width: var(--w-menu-min); max-width: var(--w-menu-max); z-index: 4;
+  background: var(--panel2); border: 1px solid var(--borderHi); border-radius: 0; box-shadow: var(--shadow-popover);
+  text-transform: none; letter-spacing: 0; }
+.tu-menu__list { box-sizing: border-box; padding: 4px 0; display: flex; flex-direction: column;
+  max-height: calc(100vh - var(--h-titlebar) - 2px); overflow-y: auto; }
+.tu-menu__sub { top: var(--sub-top, 0px); left: calc(100% - var(--sub-shift, 0px)); margin-left: 2px; }
+.tu-menu__sub > .tu-menu__list { max-height: calc(100vh - var(--h-titlebar) - 2px - var(--sub-top, 0px)); }
+.tu-menu--static { position: static; box-shadow: none; }
+.tu-menu--static > .tu-menu__list { max-height: none; overflow-y: visible; }
+.tu-menu__item { position: relative; flex-shrink: 0; height: var(--h-menu-item); box-sizing: border-box; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 6px;
+  padding: 0 12px 0 6px; border-left: 2px solid transparent; white-space: nowrap;
+  font: 400 12px/16px var(--font-ui); color: var(--text); }
+.tu-menu__item:hover, .tu-menu__item.is-active { background: color-mix(in srgb, var(--sig-attention) 13%, transparent); border-left-color: var(--sig-attention); }
+.tu-menu__glyph { font: 400 11px/1 var(--font-mono); color: var(--textDim); text-align: center; }
+.tu-menu__item.is-current .tu-menu__glyph { color: var(--sig-attention); }
+.tu-menu__label { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tu-menu__phase { margin-left: 8px; font: 400 9.5px/12px var(--font-mono); color: var(--textDim); }
+.tu-menu__keys { font: 400 10px/14px var(--font-mono); color: var(--textDim); padding-left: 24px; text-align: right; }
+.tu-menu__more { font: 400 10px/1 var(--font-mono); color: var(--textDim); padding-left: 24px; }
+.tu-menu__item:hover .tu-menu__keys, .tu-menu__item:hover .tu-menu__more, .tu-menu__item:hover .tu-menu__phase,
+.tu-menu__item.is-active .tu-menu__keys, .tu-menu__item.is-active .tu-menu__more, .tu-menu__item.is-active .tu-menu__phase { color: var(--text); }
+.tu-menu__item.is-disabled { color: var(--textMute); }
+.tu-menu__item.is-disabled .tu-menu__keys, .tu-menu__item.is-disabled .tu-menu__glyph { color: var(--textMute); }
+.tu-menu__item.is-disabled:hover { background: transparent; border-left-color: transparent; }
+.tu-menu__item.is-disabled:hover .tu-menu__phase { color: var(--textDim); }
+.tu-menu__sep { height: 1px; margin: 4px 0; background: var(--border); }
+.tu-menu__group { padding: 6px 12px 2px 30px; font: 700 9px/12px var(--tu-font-i); letter-spacing: 0.8px; text-transform: uppercase; color: var(--textDim); }
+
+/* Window controls: 46 x 26 restored (padded down by the resize strip), 46 x 30 maximized; the
+   -1px bottom margin lets them cover the title bar's 1px border line. Size and
+   position are fixed: the Windows 11 snap-layout child window lies over the maximize button. */
+.tu-winctl { display: flex; align-self: stretch; border-left: 1px solid var(--border); margin: 0 0 -1px 2px; padding-top: var(--h-resize-edge); }
+.tu-titlebar.is-maximized .tu-winctl { padding-top: 0; }
+.tu-winctl__btn { width: var(--w-winctl); padding: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 0; cursor: default;
+  font: 400 12px/1 var(--font-mono); color: var(--textDim); }
+.tu-winctl__btn:hover, .tu-winctl__btn.is-hovered { background: var(--panel2); color: var(--text); }
+.tu-winctl__btn:focus-visible { outline: 1px solid var(--sig-attention); outline-offset: -1px; }
+.tu-winctl__btn.is-close:hover { background: var(--sig-reject); color: var(--onFill); }
 
 /* ── Activity rail ──────────────────────────────────────────────────── */
 .tu-rail { width: var(--w-rail); flex-shrink: 0; display: flex; flex-direction: column; background: var(--bg); border-right: 1px solid var(--border); box-sizing: border-box; }
@@ -458,3 +524,20 @@ body {
 .is-warn      { --c: var(--sig-warn); }
 .is-script    { --c: var(--sig-script); }
 .is-neutral   { --c: var(--textDim); }
+
+/* ── Scrollbars (every scrolling element on a Theos UI page, overlays included) ───────── */
+/* The reset is :where() so it has specificity 0,0,0 and any component rule still wins: a tab strip
+   (.tu-tabbar__tabs) keeps scrollbar-width: none and hides its bar entirely (below).
+   WebView2, WKWebView and WebKitGTK all honour ::-webkit-scrollbar, but Blink ignores it while
+   scrollbar-width or scrollbar-color is set, so nothing in this file sets either (except the tab strip).
+   Not scoped to .tu-shell: the command palette and the About popover mount beside the shell. */
+:where(*) { scrollbar-width: auto; scrollbar-color: auto; }
+::-webkit-scrollbar { width: var(--w-scrollbar); height: var(--w-scrollbar); background: var(--scrollbar-track); }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-track:vertical { border-left: 1px solid var(--border); }
+::-webkit-scrollbar-track:horizontal { border-top: 1px solid var(--border); }
+.tu-tabbar__tabs::-webkit-scrollbar { display: none; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--scrollbar-thumb-hover); }
+::-webkit-scrollbar-thumb:active { background-color: var(--scrollbar-thumb-active); }
+::-webkit-scrollbar-corner { background: var(--scrollbar-track); }

@@ -3,100 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1440">
-<title>P51 · Window chrome — proposal — Theos Editor reference</title>
+<title>00 · Window chrome — Theos Editor reference</title>
 <!--
-  Layout proposal for phase P51 "Window chrome": the editor draws its own title bar, menu bar and
-  window controls; the OS bar goes away (Windows, Linux); macOS keeps its traffic lights.
-  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below.
-  The page styles hold the PROPOSED tokens and classes (tu-menubar, tu-menu, tu-winctl, …); they
-  read existing tokens only. bundle.js and the one-line script switch the theme (?theme=grid-light);
-  the second script copies the shell slice from <template> into each frame.
-  Hover, open and focus states are shown with is-* classes, because a static page cannot hover.
-  See README.md next to this file for the tokens, classes and decisions.
+  Reference screen 00 of the Theos content editor: the window chrome of phase P51. The editor draws
+  its own title bar, menu bar and window controls; the OS bar goes away (Windows, Linux); macOS
+  keeps its native traffic lights and its system menu bar.
+  Built only from design/theos-ui (tokens.css, components/bundle.css) plus the page styles below,
+  which only lay out the frames and draw the states a static page cannot show (hover, drag region,
+  resize strip, snap-layout child window).
+  components/bundle.js and the one-line script after it only switch the theme (?theme=grid-light);
+  the last script copies the shell slice from <template> into each frame.
 -->
 <link rel="stylesheet" href="../../../design/theos-ui/tokens.css">
 <link rel="stylesheet" href="../../../design/theos-ui/components/bundle.css">
 <script src="../../../design/theos-ui/components/bundle.js"></script>
 <script>TheosUI.setTheme(new URLSearchParams(location.search).get("theme"));</script>
 <style>
-/* ── Proposed tokens (read existing tokens only) ─────────────────────── */
-:root {
-  --w-winctl: 46px;                 /* one window control: 46 wide, as Windows 11 */
-  --h-resize-edge: 4px;             /* Tauri's resize strip along the window's top edge */
-  --w-macos-inset: 72px;            /* room for the native traffic lights */
-  --w-menu-min: 248px;              /* a dropdown's least width */
-  --h-menu-item: 24px;
-  --w-scrollbar: 10px;              /* track; the thumb is inset 2px on each side */
-  --scrollbar-track: var(--panel);
-  --scrollbar-thumb: color-mix(in srgb, var(--textDim) 70%, var(--panel));
-  --scrollbar-thumb-hover: var(--textDim);
-  --scrollbar-thumb-active: var(--sig-attention);
-}
+/* ── States a static page cannot show: hover is drawn with is-hover ── */
+.tu-menubar__item.is-hover { color: var(--text); background: var(--panel2); }
+.tu-winctl__btn.is-hover { background: var(--panel2); color: var(--text); }
+.tu-winctl__btn.is-close.is-hover { background: var(--sig-reject); color: var(--onFill); }
 
-/* ── Proposed: frameless title bar ───────────────────────────────────── */
-.tu-titlebar, .tu-statusbar { box-sizing: border-box; } /* design-system fix: no 1px overflow */
-.tu-titlebar--frameless { overflow: visible; position: relative; z-index: 3; padding-right: 0; gap: 10px; }
-.tu-titlebar__drag { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; justify-content: center; gap: 12px; overflow: hidden; }
-.tu-titlebar__drag > span { overflow: hidden; text-overflow: ellipsis; }
-.tu-titlebar--mac { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); padding-left: 0; }
-.tu-titlebar--mac .tu-titlebar__left { display: flex; align-items: center; gap: 10px; }
-.tu-titlebar--mac .tu-titlebar__right { display: flex; justify-content: flex-end; align-items: center; }
-.tu-titlebar__inset { width: var(--w-macos-inset); align-self: stretch; display: flex; align-items: center; gap: 8px; padding-left: 12px; box-sizing: border-box; flex-shrink: 0; }
-
-/* ── Proposed: menu bar ──────────────────────────────────────────────── */
-.tu-menubar { display: flex; align-items: stretch; align-self: stretch; }
-.tu-menubar__slot { position: relative; display: flex; }
-.tu-menubar__item { padding: 0 8px; display: flex; align-items: center; background: transparent; border: 0; border-radius: 0; cursor: default;
-  font: 700 10px/1 var(--tu-font-i); letter-spacing: 0.8px; text-transform: uppercase; color: var(--textDim); }
-.tu-menubar__item:hover, .tu-menubar__item.is-hover { color: var(--text); background: var(--panel2); }
-.tu-menubar__item.is-open { color: var(--text); background: var(--panel2); box-shadow: inset 1px 0 var(--borderHi), inset -1px 0 var(--borderHi), inset 0 1px var(--borderHi); }
-.tu-menubar__item:focus-visible, .tu-menubar__item.is-focus { outline: 1px solid var(--sig-attention); outline-offset: -1px; color: var(--text); }
-.tu-menubar__key { text-decoration: none; }
-.tu-menubar.is-keys .tu-menubar__key { text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
-
-/* ── Proposed: dropdown menu ─────────────────────────────────────────── */
-.tu-menu { position: absolute; top: 100%; left: 0; margin-top: 0; min-width: var(--w-menu-min); padding: 4px 0; z-index: 4;
-  background: var(--panel2); border: 1px solid var(--borderHi); border-radius: 0; box-shadow: var(--shadow-popover);
-  display: flex; flex-direction: column; text-transform: none; letter-spacing: 0; }
-.tu-menu--sub { top: -5px; left: 100%; margin-left: 2px; }
-.tu-menu--static { position: static; box-shadow: none; }
-.tu-menu__item { position: relative; height: var(--h-menu-item); display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 6px;
-  padding: 0 12px 0 6px; border-left: 2px solid transparent; white-space: nowrap;
-  font: 400 12px/16px var(--font-ui); color: var(--text); }
-.tu-menu__item:hover, .tu-menu__item.is-active { background: color-mix(in srgb, var(--sig-attention) 13%, transparent); border-left-color: var(--sig-attention); }
-.tu-menu__glyph { font: 400 11px/1 var(--font-mono); color: var(--textDim); text-align: center; }
-.tu-menu__item.is-current .tu-menu__glyph { color: var(--sig-attention); }
-.tu-menu__label { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.tu-menu__phase { font: 400 9.5px/12px var(--font-mono); color: var(--textDim); }
-.tu-menu__keys { font: 400 10px/14px var(--font-mono); color: var(--textDim); padding-left: 24px; text-align: right; }
-.tu-menu__more { font: 400 10px/1 var(--font-mono); color: var(--textDim); padding-left: 24px; }
-.tu-menu__item.is-active .tu-menu__keys, .tu-menu__item.is-active .tu-menu__more, .tu-menu__item.is-active .tu-menu__phase { color: var(--text); }
-.tu-menu__item.is-disabled { color: var(--textMute); }
-.tu-menu__item.is-disabled .tu-menu__keys, .tu-menu__item.is-disabled .tu-menu__glyph { color: var(--textMute); }
-.tu-menu__item.is-disabled:hover { background: transparent; border-left-color: transparent; }
-.tu-menu__sep { height: 1px; margin: 4px 0; background: var(--border); }
-.tu-menu__group { padding: 6px 12px 2px 30px; font: 700 9px/12px var(--tu-font-i); letter-spacing: 0.8px; text-transform: uppercase; color: var(--textDim); }
-
-/* ── Proposed: window controls ───────────────────────────────────────── */
-.tu-winctl { display: flex; align-self: stretch; border-left: 1px solid var(--border); margin-left: 2px; padding-top: var(--h-resize-edge); }
-.tu-titlebar.is-maximized .tu-winctl { padding-top: 0; }
-.tu-winctl__btn { width: var(--w-winctl); padding: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 0; cursor: default;
-  font: 400 12px/1 var(--font-mono); color: var(--textDim); }
-.tu-winctl__btn:hover, .tu-winctl__btn.is-hover { background: var(--panel2); color: var(--text); }
-.tu-winctl__btn--close:hover, .tu-winctl__btn--close.is-hover { background: var(--sig-reject); color: var(--onFill); }
-
-/* ── Proposed: scroll ────────────────────────────────────────────────── */
-/* WebView2, WKWebView and WebKitGTK all honour ::-webkit-scrollbar, but Blink ignores it while
-   scrollbar-width / scrollbar-color are set (bundle.css sets them on *). Reset them inside the shell. */
-.tu-shell, .tu-shell * { scrollbar-width: auto; scrollbar-color: auto; }
-.tu-shell ::-webkit-scrollbar { width: var(--w-scrollbar); height: var(--w-scrollbar); background: var(--scrollbar-track); }
-.tu-shell ::-webkit-scrollbar-track { background: var(--scrollbar-track); border-left: 1px solid var(--border); }
-.tu-shell ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border: 2px solid transparent; background-clip: padding-box; }
-.tu-shell ::-webkit-scrollbar-thumb:hover { background-color: var(--scrollbar-thumb-hover); }
-.tu-shell ::-webkit-scrollbar-thumb:active { background-color: var(--scrollbar-thumb-active); }
-.tu-shell ::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
-
-/* ── Page only ───────────────────────────────────────────────────────── */
+/* ── Page only ── */
 body { margin: 0; background: var(--bg); color: var(--text); width: 1440px; }
 .page-head { padding: 24px 24px 8px; display: flex; flex-direction: column; gap: 6px; }
 .page-head p { margin: 0; max-width: 110ch; color: var(--textDim); }
@@ -131,16 +59,16 @@ body { margin: 0; background: var(--bg); color: var(--text); width: 1440px; }
 <body>
 
 <div class="page-head tu-instrument">
-  <span class="inst-section">P51 · WINDOW CHROME — LAYOUT PROPOSAL</span>
-  <p class="inst-body">The OS title bar goes. One Theos title bar row (h-titlebar 30px) carries the mark, the menu bar, the breadcrumb as the drag region, the validator pip and the window controls. macOS keeps its native traffic lights and its system menu bar. Hover, open and focus states are drawn with state classes. Frames are 1440 wide; each shows a slice of the Codex shell.</p>
+  <span class="inst-section">00 · WINDOW CHROME</span>
+  <p class="inst-body">One Theos title bar row (h-titlebar, 30px) carries the mark, the menu bar, the breadcrumb as the drag region, the validator pip and the window controls; the toolbar row stays below it. Every other reference screen shows this chrome. Hover, open and focus states are drawn with state classes. Frames are 1440 wide; each shows a slice of the Codex shell.</p>
 </div>
 
 <!-- (a) ─────────────────────────────────────────────────────────────── -->
-<div class="cap"><span class="tu-label">A · Windows and Linux — menu closed</span><span class="cap__note">no OS bar · dashed box = drag region (double-click maximises) · close shown hovered: the only control that turns sig-reject</span></div>
+<div class="cap"><span class="tu-label">A · Windows and Linux — menu closed</span><span class="cap__note">no OS bar · dashed box = drag region, data-tauri-drag-region="deep" so the breadcrumb text drags too (double-click maximizes) · close drawn hovered: the only control that turns sig-reject</span></div>
 <div class="frame frame--short">
   <div class="tu-shell" style="--tu-font-i: var(--font-ui)">
-    <header class="tu-titlebar tu-titlebar--frameless">
-      <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <header class="tu-titlebar tu-titlebar--frameless" data-tauri-drag-region>
+      <span class="tu-titlebar__brand" data-tauri-drag-region="false"><span class="tu-mark" role="img" aria-label="Theos"></span>THEOS//EDITOR</span>
       <nav class="tu-menubar" role="menubar" aria-label="Main menu">
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">F</span>ile</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">E</span>dit</button></span>
@@ -148,15 +76,15 @@ body { margin: 0; background: var(--bg); color: var(--text); width: 1440px; }
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">G</span>o</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">H</span>elp</button></span>
       </nav>
-      <div class="tu-titlebar__drag anno" data-tauri-drag-region>
+      <div class="tu-titlebar__drag anno" data-tauri-drag-region="deep">
         <span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
         <span class="anno__tag">drag region</span>
       </div>
-      <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      <span class="tu-statuspip" data-tauri-drag-region="false"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
       <div class="tu-winctl" role="group" aria-label="Window">
-        <button class="tu-winctl__btn" type="button" aria-label="Minimise">−</button>
-        <button class="tu-winctl__btn" type="button" aria-label="Maximise">□</button>
-        <button class="tu-winctl__btn tu-winctl__btn--close is-hover" type="button" aria-label="Close">✕</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Minimize">−</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Maximize">□</button>
+        <button class="tu-winctl__btn is-close is-hover" type="button" aria-label="Close">✕</button>
       </div>
     </header>
     <slot-shell></slot-shell>
@@ -164,50 +92,50 @@ body { margin: 0; background: var(--bg); color: var(--text); width: 1440px; }
 </div>
 
 <!-- (a2) ───────────────────────────────────────────────────────────── -->
-<div class="cap"><span class="tu-label">A2 · Window controls — restored and maximised</span><span class="cap__note">46 × 30 each · □ maximise, ▫ restore · hatched = Tauri's 4px resize strip · dashed = the snap-layout child window over maximise</span></div>
+<div class="cap"><span class="tu-label">A2 · Window controls — restored and maximized</span><span class="cap__note">46 × 26 restored, 46 × 30 maximized · □ maximize, ▫ restore · hatched = the 4px resize strip · dashed = the snap-layout child window over maximize</span></div>
 <div class="pair tu-instrument">
   <div class="pair__item">
     <div class="pair__bar">
-      <header class="tu-titlebar tu-titlebar--frameless">
-        <div class="tu-titlebar__drag" data-tauri-drag-region><span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span></div>
-        <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      <header class="tu-titlebar tu-titlebar--frameless" data-tauri-drag-region>
+        <div class="tu-titlebar__drag" data-tauri-drag-region="deep"><span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span></div>
+        <span class="tu-statuspip" data-tauri-drag-region="false"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
         <div class="tu-winctl" role="group" aria-label="Window">
-          <button class="tu-winctl__btn" type="button" aria-label="Minimise">−</button>
-          <button class="tu-winctl__btn is-hover" type="button" aria-label="Maximise">□</button>
-          <button class="tu-winctl__btn tu-winctl__btn--close" type="button" aria-label="Close">✕</button>
+          <button class="tu-winctl__btn" type="button" aria-label="Minimize">−</button>
+          <button class="tu-winctl__btn is-hover" type="button" aria-label="Maximize">□</button>
+          <button class="tu-winctl__btn is-close" type="button" aria-label="Close">✕</button>
         </div>
       </header>
       <span class="strip" aria-hidden="true"></span>
       <span class="snapbox" style="right: 46px; width: 46px; top: 4px; height: 26px;" aria-hidden="true"></span>
     </div>
-    <span class="cap__note">restored · maximise hovered · hit areas are 46 × 26 below the resize strip, so a click in the top 4px resizes and never hits a control</span>
+    <span class="cap__note">restored · maximize hovered · hit areas are 46 × 26 below the resize strip, so a click in the top 4px resizes</span>
   </div>
   <div class="pair__item">
     <div class="pair__bar">
-      <header class="tu-titlebar tu-titlebar--frameless is-maximized">
-        <div class="tu-titlebar__drag" data-tauri-drag-region><span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span></div>
-        <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      <header class="tu-titlebar tu-titlebar--frameless is-maximized" data-tauri-drag-region>
+        <div class="tu-titlebar__drag" data-tauri-drag-region="deep"><span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span></div>
+        <span class="tu-statuspip" data-tauri-drag-region="false"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
         <div class="tu-winctl" role="group" aria-label="Window">
-          <button class="tu-winctl__btn" type="button" aria-label="Minimise">−</button>
+          <button class="tu-winctl__btn" type="button" aria-label="Minimize">−</button>
           <button class="tu-winctl__btn is-hover" type="button" aria-label="Restore">▫</button>
-          <button class="tu-winctl__btn tu-winctl__btn--close" type="button" aria-label="Close">✕</button>
+          <button class="tu-winctl__btn is-close" type="button" aria-label="Close">✕</button>
         </div>
       </header>
       <span class="snapbox" style="right: 46px; width: 46px; top: 0; height: 30px;" aria-hidden="true"></span>
     </div>
-    <span class="cap__note">maximised · restore hovered · no resize strip, so the controls take the full 30px up to the screen edge</span>
+    <span class="cap__note">maximized · restore hovered · no resize strip, so the controls take the full 30px</span>
   </div>
 </div>
 
 <!-- (b) ─────────────────────────────────────────────────────────────── -->
-<div class="cap"><span class="tu-label">B · File menu open</span><span class="cap__note">one menu at a time · keys from the keymap (Ctrl on Windows and Linux) · disabled items name their phase · hovering EDIT now switches menus</span></div>
+<div class="cap"><span class="tu-label">B · File menu open</span><span class="cap__note">one menu at a time · keys from the keymap (Ctrl on Windows and Linux) · disabled items name their phase</span></div>
 <div class="frame frame--mid">
   <div class="tu-shell" style="--tu-font-i: var(--font-ui)">
-    <header class="tu-titlebar tu-titlebar--frameless">
-      <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <header class="tu-titlebar tu-titlebar--frameless" data-tauri-drag-region>
+      <span class="tu-titlebar__brand" data-tauri-drag-region="false"><span class="tu-mark" role="img" aria-label="Theos"></span>THEOS//EDITOR</span>
       <nav class="tu-menubar" role="menubar" aria-label="Main menu">
         <span class="tu-menubar__slot"><button class="tu-menubar__item is-open" type="button" role="menuitem" aria-haspopup="menu" aria-expanded="true"><span class="tu-menubar__key">F</span>ile</button>
-          <div class="tu-menu" role="menu" aria-label="File">
+          <div class="tu-menu"><div class="tu-menu__list" role="menu" aria-label="File">
             <div class="tu-menu__item is-active" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Open project…</span><span class="tu-menu__keys">Ctrl+O</span></div>
             <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Reload project</span><span class="tu-menu__keys">Ctrl+R</span></div>
             <div class="tu-menu__sep" role="separator"></div>
@@ -215,21 +143,21 @@ body { margin: 0; background: var(--bg); color: var(--text); width: 1440px; }
             <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Close tab</span><span class="tu-menu__keys">Ctrl+W</span></div>
             <div class="tu-menu__sep" role="separator"></div>
             <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Quit</span><span class="tu-menu__keys">Ctrl+Q</span></div>
-          </div>
+          </div></div>
         </span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">E</span>dit</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">V</span>iew</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">G</span>o</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">H</span>elp</button></span>
       </nav>
-      <div class="tu-titlebar__drag" data-tauri-drag-region>
+      <div class="tu-titlebar__drag" data-tauri-drag-region="deep">
         <span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
       </div>
-      <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      <span class="tu-statuspip" data-tauri-drag-region="false"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
       <div class="tu-winctl" role="group" aria-label="Window">
-        <button class="tu-winctl__btn" type="button" aria-label="Minimise">−</button>
-        <button class="tu-winctl__btn" type="button" aria-label="Maximise">□</button>
-        <button class="tu-winctl__btn tu-winctl__btn--close" type="button" aria-label="Close">✕</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Minimize">−</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Maximize">□</button>
+        <button class="tu-winctl__btn is-close" type="button" aria-label="Close">✕</button>
       </div>
     </header>
     <slot-shell></slot-shell>
@@ -237,29 +165,19 @@ body { margin: 0; background: var(--bg); color: var(--text); width: 1440px; }
 </div>
 
 <!-- (c) ─────────────────────────────────────────────────────────────── -->
-<div class="cap"><span class="tu-label">C · View menu open, Layout submenu</span><span class="cap__note">the submenu lists the project's rail in rail order (Ctrl+1 … Ctrl+9) · the current layout's glyph is amber · layouts not built yet are disabled and name their phase</span></div>
+<div class="cap"><span class="tu-label">C · View menu open, Layout submenu</span><span class="cap__note">the submenu lists the project's rail in rail order (Ctrl+1 … Ctrl+9) · the current layout and the current Codex-tree tab carry ▸ or ◈ in amber (is-current, aria-checked) · the submenu is its own popup beside the Layout row · layouts not built yet are disabled and name their phase</span></div>
 <div class="frame frame--tall">
   <div class="tu-shell" style="--tu-font-i: var(--font-ui)">
-    <header class="tu-titlebar tu-titlebar--frameless">
-      <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <header class="tu-titlebar tu-titlebar--frameless" data-tauri-drag-region>
+      <span class="tu-titlebar__brand" data-tauri-drag-region="false"><span class="tu-mark" role="img" aria-label="Theos"></span>THEOS//EDITOR</span>
       <nav class="tu-menubar" role="menubar" aria-label="Main menu">
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">F</span>ile</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">E</span>dit</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item is-open" type="button" role="menuitem" aria-haspopup="menu" aria-expanded="true"><span class="tu-menubar__key">V</span>iew</button>
-          <div class="tu-menu" role="menu" aria-label="View">
+          <div class="tu-menu"><div class="tu-menu__list" role="menu" aria-label="View">
             <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Command palette</span><span class="tu-menu__keys">Ctrl+K</span></div>
             <div class="tu-menu__sep" role="separator"></div>
-            <div class="tu-menu__item is-active" role="menuitem" aria-haspopup="menu" aria-expanded="true"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Layout</span><span class="tu-menu__more">▸</span>
-              <div class="tu-menu tu-menu--sub" role="menu" aria-label="Layout">
-                <div class="tu-menu__item is-current" role="menuitemradio" aria-checked="true"><span class="tu-menu__glyph">◈</span><span class="tu-menu__label">Codex</span><span class="tu-menu__keys">Ctrl+1</span></div>
-                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">⋈</span><span class="tu-menu__label">Graph<span class="tu-menu__phase">arrives with P15</span></span><span class="tu-menu__keys">Ctrl+2</span></div>
-                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">¶</span><span class="tu-menu__label">Scripts<span class="tu-menu__phase">arrives with P15</span></span><span class="tu-menu__keys">Ctrl+3</span></div>
-                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">◫</span><span class="tu-menu__label">Concepts<span class="tu-menu__phase">arrives with P16</span></span><span class="tu-menu__keys">Ctrl+4</span></div>
-                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">△</span><span class="tu-menu__label">Maps<span class="tu-menu__phase">arrives with P16</span></span><span class="tu-menu__keys">Ctrl+5</span></div>
-                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">◴</span><span class="tu-menu__label">Review<span class="tu-menu__phase">arrives with P13</span></span><span class="tu-menu__keys">Ctrl+6</span></div>
-                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">±</span><span class="tu-menu__label">Changes<span class="tu-menu__phase">arrives with P13</span></span><span class="tu-menu__keys">Ctrl+7</span></div>
-                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-disabled="true"><span class="tu-menu__glyph">⚙</span><span class="tu-menu__label">Settings<span class="tu-menu__phase">arrives with P14</span></span><span class="tu-menu__keys">Ctrl+8</span></div>
-              </div>
+            <div class="tu-menu__item is-active" role="menuitem" aria-haspopup="menu" aria-expanded="true" aria-controls="menu-layout"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Layout</span><span class="tu-menu__more">▸</span>
             </div>
             <div class="tu-menu__sep" role="separator"></div>
             <div class="tu-menu__group">Codex tree</div>
@@ -267,19 +185,28 @@ body { margin: 0; background: var(--bg); color: var(--text); width: 1440px; }
             <div class="tu-menu__item" role="menuitemradio" aria-checked="false"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Who</span><span class="tu-menu__keys">Ctrl+Shift+2</span></div>
             <div class="tu-menu__item" role="menuitemradio" aria-checked="false"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Lore</span><span class="tu-menu__keys">Ctrl+Shift+3</span></div>
             <div class="tu-menu__item" role="menuitemradio" aria-checked="false"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Things</span><span class="tu-menu__keys">Ctrl+Shift+4</span></div>
-          </div>
+          </div><div class="tu-menu tu-menu__sub" style="--sub-top: 32px;"><div class="tu-menu__list" id="menu-layout" role="menu" aria-label="Layout">
+                <div class="tu-menu__item is-current" role="menuitemradio" aria-checked="true"><span class="tu-menu__glyph">◈</span><span class="tu-menu__label">Codex</span><span class="tu-menu__keys">Ctrl+1</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-checked="false" aria-disabled="true"><span class="tu-menu__glyph">⋈</span><span class="tu-menu__label">Graph<span class="tu-menu__phase">arrives with P15</span></span><span class="tu-menu__keys">Ctrl+2</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-checked="false" aria-disabled="true"><span class="tu-menu__glyph">¶</span><span class="tu-menu__label">Scripts<span class="tu-menu__phase">arrives with P15</span></span><span class="tu-menu__keys">Ctrl+3</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-checked="false" aria-disabled="true"><span class="tu-menu__glyph">◫</span><span class="tu-menu__label">Concepts<span class="tu-menu__phase">arrives with P16</span></span><span class="tu-menu__keys">Ctrl+4</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-checked="false" aria-disabled="true"><span class="tu-menu__glyph">△</span><span class="tu-menu__label">Maps<span class="tu-menu__phase">arrives with P16</span></span><span class="tu-menu__keys">Ctrl+5</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-checked="false" aria-disabled="true"><span class="tu-menu__glyph">◴</span><span class="tu-menu__label">Review<span class="tu-menu__phase">arrives with P13</span></span><span class="tu-menu__keys">Ctrl+6</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-checked="false" aria-disabled="true"><span class="tu-menu__glyph">±</span><span class="tu-menu__label">Changes<span class="tu-menu__phase">arrives with P13</span></span><span class="tu-menu__keys">Ctrl+7</span></div>
+                <div class="tu-menu__item is-disabled" role="menuitemradio" aria-checked="false" aria-disabled="true"><span class="tu-menu__glyph">⚙</span><span class="tu-menu__label">Settings<span class="tu-menu__phase">arrives with P14</span></span><span class="tu-menu__keys">Ctrl+8</span></div>
+              </div></div></div>
         </span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">G</span>o</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">H</span>elp</button></span>
       </nav>
-      <div class="tu-titlebar__drag" data-tauri-drag-region>
+      <div class="tu-titlebar__drag" data-tauri-drag-region="deep">
         <span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
       </div>
-      <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      <span class="tu-statuspip" data-tauri-drag-region="false"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
       <div class="tu-winctl" role="group" aria-label="Window">
-        <button class="tu-winctl__btn" type="button" aria-label="Minimise">−</button>
-        <button class="tu-winctl__btn" type="button" aria-label="Maximise">□</button>
-        <button class="tu-winctl__btn tu-winctl__btn--close" type="button" aria-label="Close">✕</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Minimize">−</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Maximize">□</button>
+        <button class="tu-winctl__btn is-close" type="button" aria-label="Close">✕</button>
       </div>
     </header>
     <slot-shell></slot-shell>
@@ -287,26 +214,26 @@ body { margin: 0; background: var(--bg); color: var(--text); width: 1440px; }
 </div>
 
 <!-- (d) ─────────────────────────────────────────────────────────────── -->
-<div class="cap"><span class="tu-label">D · Menu bar focused by keyboard</span><span class="cap__note">Alt (pressed and released) or F10 · access letters underline · ← → move · ↓ ⏎ Space open · letter opens its menu · Esc returns focus to where it was</span></div>
+<div class="cap"><span class="tu-label">D · Menu bar focused by keyboard</span><span class="cap__note">Alt (pressed and released) or F10 · access letters underline · ← → move · ↓ ⏎ Space open · a letter opens its menu · Alt+letter opens it directly · Esc returns focus to where it was</span></div>
 <div class="frame frame--short">
   <div class="tu-shell" style="--tu-font-i: var(--font-ui)">
-    <header class="tu-titlebar tu-titlebar--frameless">
-      <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <header class="tu-titlebar tu-titlebar--frameless" data-tauri-drag-region>
+      <span class="tu-titlebar__brand" data-tauri-drag-region="false"><span class="tu-mark" role="img" aria-label="Theos"></span>THEOS//EDITOR</span>
       <nav class="tu-menubar is-keys" role="menubar" aria-label="Main menu">
-        <span class="tu-menubar__slot"><button class="tu-menubar__item is-focus" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">F</span>ile</button></span>
+        <span class="tu-menubar__slot"><button class="tu-menubar__item is-focused" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">F</span>ile</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu" tabindex="-1"><span class="tu-menubar__key">E</span>dit</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu" tabindex="-1"><span class="tu-menubar__key">V</span>iew</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu" tabindex="-1"><span class="tu-menubar__key">G</span>o</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu" tabindex="-1"><span class="tu-menubar__key">H</span>elp</button></span>
       </nav>
-      <div class="tu-titlebar__drag" data-tauri-drag-region>
+      <div class="tu-titlebar__drag" data-tauri-drag-region="deep">
         <span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
       </div>
-      <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      <span class="tu-statuspip" data-tauri-drag-region="false"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
       <div class="tu-winctl" role="group" aria-label="Window">
-        <button class="tu-winctl__btn" type="button" aria-label="Minimise" tabindex="-1">−</button>
-        <button class="tu-winctl__btn" type="button" aria-label="Maximise" tabindex="-1">□</button>
-        <button class="tu-winctl__btn tu-winctl__btn--close" type="button" aria-label="Close" tabindex="-1">✕</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Minimize" tabindex="-1">−</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Maximize" tabindex="-1">□</button>
+        <button class="tu-winctl__btn is-close" type="button" aria-label="Close" tabindex="-1">✕</button>
       </div>
     </header>
     <slot-shell></slot-shell>
@@ -314,19 +241,19 @@ body { margin: 0; background: var(--bg); color: var(--text); width: 1440px; }
 </div>
 
 <!-- (e) ─────────────────────────────────────────────────────────────── -->
-<div class="cap"><span class="tu-label">E · macOS</span><span class="cap__note">traffic lights are native (outlined here) in a 72px inset · no in-window menu: the system menu bar carries the same menus with ⌘ keys · breadcrumb centred on the window</span></div>
+<div class="cap"><span class="tu-label">E · macOS</span><span class="cap__note">traffic lights are native (outlined here) in a 72px inset · left column, breadcrumb and right column are drag regions, except the mark (icon and THEOS//EDITOR) and the pip, which carry data-tauri-drag-region="false" · no in-window menu: the system menu bar carries the same menus with ⌘ keys · breadcrumb centred on the window</span></div>
 <div class="frame frame--short">
   <div class="tu-shell" style="--tu-font-i: var(--font-ui)">
-    <header class="tu-titlebar tu-titlebar--frameless tu-titlebar--mac">
-      <div class="tu-titlebar__left">
+    <header class="tu-titlebar tu-titlebar--mac" data-tauri-drag-region>
+      <div class="tu-titlebar__left" data-tauri-drag-region="deep">
         <span class="tu-titlebar__inset" aria-hidden="true"><span class="light"></span><span class="light"></span><span class="light"></span></span>
-        <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+        <span class="tu-titlebar__brand" data-tauri-drag-region="false"><span class="tu-mark" role="img" aria-label="Theos"></span>THEOS//EDITOR</span>
       </div>
-      <div class="tu-titlebar__drag" data-tauri-drag-region>
+      <div class="tu-titlebar__drag" data-tauri-drag-region="deep">
         <span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
       </div>
-      <div class="tu-titlebar__right" style="padding-right: 10px;">
-        <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      <div class="tu-titlebar__right" data-tauri-drag-region="deep">
+        <span class="tu-statuspip" data-tauri-drag-region="false"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
       </div>
     </header>
     <slot-shell></slot-shell>
@@ -337,8 +264,8 @@ body { margin: 0; background: var(--bg); color: var(--text); width: 1440px; }
 <div class="cap"><span class="tu-label">F · A window body with the themed scrollbar</span><span class="cap__note">the shell fills the window exactly (100vh, no page scroll) · only tu-window__body scrolls · 10px track, 6px thumb · amber only while dragging</span></div>
 <div class="frame frame--tall">
   <div class="tu-shell" style="--tu-font-i: var(--font-ui)">
-    <header class="tu-titlebar tu-titlebar--frameless">
-      <span class="tu-titlebar__brand"><span class="tu-mark"></span>THEOS//EDITOR</span>
+    <header class="tu-titlebar tu-titlebar--frameless" data-tauri-drag-region>
+      <span class="tu-titlebar__brand" data-tauri-drag-region="false"><span class="tu-mark" role="img" aria-label="Theos"></span>THEOS//EDITOR</span>
       <nav class="tu-menubar" role="menubar" aria-label="Main menu">
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">F</span>ile</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">E</span>dit</button></span>
@@ -346,14 +273,14 @@ body { margin: 0; background: var(--bg); color: var(--text); width: 1440px; }
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">G</span>o</button></span>
         <span class="tu-menubar__slot"><button class="tu-menubar__item" type="button" role="menuitem" aria-haspopup="menu"><span class="tu-menubar__key">H</span>elp</button></span>
       </nav>
-      <div class="tu-titlebar__drag" data-tauri-drag-region>
+      <div class="tu-titlebar__drag" data-tauri-drag-region="deep">
         <span>tower-of-theos</span><span class="tu-titlebar__sep">▸</span><span>world/hearth/f04-choir-hall</span><span class="tu-titlebar__sep">▸</span><span class="tu-titlebar__preset">layout · Codex</span>
       </div>
-      <span class="tu-statuspip"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
+      <span class="tu-statuspip" data-tauri-drag-region="false"><span class="tu-pip is-warn"></span>validator · 1 warn</span>
       <div class="tu-winctl" role="group" aria-label="Window">
-        <button class="tu-winctl__btn" type="button" aria-label="Minimise">−</button>
-        <button class="tu-winctl__btn" type="button" aria-label="Maximise">□</button>
-        <button class="tu-winctl__btn tu-winctl__btn--close" type="button" aria-label="Close">✕</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Minimize">−</button>
+        <button class="tu-winctl__btn" type="button" aria-label="Maximize">□</button>
+        <button class="tu-winctl__btn is-close" type="button" aria-label="Close">✕</button>
       </div>
     </header>
     <slot-shell data-thumbs></slot-shell>
@@ -361,41 +288,43 @@ body { margin: 0; background: var(--bg); color: var(--text); width: 1440px; }
 </div>
 
 <!-- (g) ─────────────────────────────────────────────────────────────── -->
-<div class="cap"><span class="tu-label">G · The other menus</span><span class="cap__note">drawn flat for review · Edit opens but every item waits for P12 · Help ▸ Keyboard shortcuts opens the palette</span></div>
+<div class="cap"><span class="tu-label">G · The other menus</span><span class="cap__note">Edit opens, but every item is disabled and names P12 · Help holds About only · the macOS app menu is drawn by macOS in its own style, shown for its contents only</span></div>
 <div class="menus tu-instrument">
   <div class="menus__col"><span class="tu-label tu-label--xs">Edit</span>
-    <div class="tu-menu tu-menu--static" role="menu" aria-label="Edit">
+    <div class="tu-menu tu-menu--static"><div class="tu-menu__list" role="menu" aria-label="Edit">
       <div class="tu-menu__item is-disabled" role="menuitem" aria-disabled="true"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Undo<span class="tu-menu__phase">arrives with P12</span></span><span class="tu-menu__keys"></span></div>
       <div class="tu-menu__item is-disabled" role="menuitem" aria-disabled="true"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Redo<span class="tu-menu__phase">arrives with P12</span></span><span class="tu-menu__keys"></span></div>
       <div class="tu-menu__sep" role="separator"></div>
       <div class="tu-menu__item is-disabled" role="menuitem" aria-disabled="true"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Cut<span class="tu-menu__phase">arrives with P12</span></span><span class="tu-menu__keys"></span></div>
       <div class="tu-menu__item is-disabled" role="menuitem" aria-disabled="true"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Copy<span class="tu-menu__phase">arrives with P12</span></span><span class="tu-menu__keys"></span></div>
       <div class="tu-menu__item is-disabled" role="menuitem" aria-disabled="true"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Paste<span class="tu-menu__phase">arrives with P12</span></span><span class="tu-menu__keys"></span></div>
-    </div>
+    </div></div>
   </div>
   <div class="menus__col"><span class="tu-label tu-label--xs">Go</span>
-    <div class="tu-menu tu-menu--static" role="menu" aria-label="Go">
+    <div class="tu-menu tu-menu--static"><div class="tu-menu__list" role="menu" aria-label="Go">
       <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Find record</span><span class="tu-menu__keys">Ctrl+P</span></div>
       <div class="tu-menu__sep" role="separator"></div>
       <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Next tab</span><span class="tu-menu__keys">Ctrl+Tab</span></div>
       <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Previous tab</span><span class="tu-menu__keys">Ctrl+Shift+Tab</span></div>
-    </div>
+    </div></div>
   </div>
   <div class="menus__col"><span class="tu-label tu-label--xs">Help</span>
-    <div class="tu-menu tu-menu--static" role="menu" aria-label="Help">
-      <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Keyboard shortcuts</span><span class="tu-menu__keys">Ctrl+K</span></div>
-      <div class="tu-menu__sep" role="separator"></div>
+    <div class="tu-menu tu-menu--static"><div class="tu-menu__list" role="menu" aria-label="Help">
       <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">About Theos Editor</span><span class="tu-menu__keys"></span></div>
-    </div>
+    </div></div>
   </div>
   <div class="menus__col"><span class="tu-label tu-label--xs">macOS app menu (system bar)</span>
-    <div class="tu-menu tu-menu--static" role="menu" aria-label="Theos Editor">
+    <div class="tu-menu tu-menu--static"><div class="tu-menu__list" role="menu" aria-label="Theos Editor">
       <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">About Theos Editor</span><span class="tu-menu__keys"></span></div>
       <div class="tu-menu__sep" role="separator"></div>
+      <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Services</span><span class="tu-menu__keys">▸</span></div>
+      <div class="tu-menu__sep" role="separator"></div>
       <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Hide Theos Editor</span><span class="tu-menu__keys">⌘H</span></div>
+      <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Hide Others</span><span class="tu-menu__keys">⌥⌘H</span></div>
+      <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Show All</span><span class="tu-menu__keys"></span></div>
+      <div class="tu-menu__sep" role="separator"></div>
       <div class="tu-menu__item" role="menuitem"><span class="tu-menu__glyph"></span><span class="tu-menu__label">Quit Theos Editor</span><span class="tu-menu__keys">⌘Q</span></div>
-    </div>
-    <span class="cap__note">drawn by macOS in its own style; shown for its contents only</span>
+    </div></div>
   </div>
 </div>
 

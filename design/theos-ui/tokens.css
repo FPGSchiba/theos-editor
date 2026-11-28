@@ -25,6 +25,10 @@
   --sig-reject: var(--red);
   --sig-warn: var(--yellow);
   --sig-script: var(--violet);
+  --scrollbar-track: var(--panel);
+  --scrollbar-thumb: color-mix(in srgb, var(--textDim) 70%, var(--panel));
+  --scrollbar-thumb-hover: var(--textDim);
+  --scrollbar-thumb-active: var(--sig-attention);
   --panel-inworld: #19140e;
   --line-inworld: #473b2c;
   --ink-inworld: #dfd3bf;
@@ -96,6 +100,10 @@
   --sig-reject: var(--red);
   --sig-warn: var(--yellow);
   --sig-script: var(--violet);
+  --scrollbar-track: var(--panel);
+  --scrollbar-thumb: color-mix(in srgb, var(--textDim) 70%, var(--panel));
+  --scrollbar-thumb-hover: var(--textDim);
+  --scrollbar-thumb-active: var(--sig-attention);
 }
 :root {
   --sp-2: 2px;
@@ -121,6 +129,13 @@
   --h-statusbar: 22px;
   --w-rail: 54px;
   --h-rail-item: 48px;
+  --w-winctl: 46px;
+  --h-resize-edge: 4px;
+  --w-macos-inset: 72px;
+  --w-menu-min: 248px;
+  --w-menu-max: 420px;
+  --h-menu-item: 24px;
+  --w-scrollbar: 10px;
   --measure-prose: 70ch;
   --measure-inworld: 62ch;
   --font-ui: "Inter", "JetBrains Mono", -apple-system, "Segoe UI", sans-serif;

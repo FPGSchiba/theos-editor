@@ -7,7 +7,7 @@ acceptance criteria come from there; this spec decides how.
 ## 1. Goal
 
 After P51 the editor draws its own window chrome. On Windows and Linux the OS title bar ("Theos
-Editor", − ▢ ✕) is gone. In its place is one Theos title bar row that holds:
+Editor", − □ ✕) is gone. In its place is one Theos title bar row that holds:
 - the `THEOS//EDITOR` mark;
 - an in-window menu bar (File, Edit, View, Go, Help);
 - the breadcrumb, which is the drag region;
@@ -22,7 +22,7 @@ Jann's words: "I don't want the default bar there. It looks horrible." and "no s
 ever allowed over the whole page."
 
 The phase runs in three steps, in this order (Jann):
-1. **This spec proposes the layout**: the reference page `docs/ui/proposals/P51-window-chrome.html`
+1. **This spec proposes the layout**: the reference page `docs/ui/screens/00-chrome.html`
    with its screenshots in both themes.
 2. **A design PR** changes the design documents: `design/theos-ui/` and `docs/ui/`.
 3. **The build** implements it, working.
@@ -106,7 +106,7 @@ The build (Part B):
   - **Windows and Linux:** one title bar row (mark, menus, breadcrumb as the drag region,
     validator pip, window controls).
   - **macOS:** native traffic lights inset, and the system menu bar.
-  - **Window controls:** 46px wide (Windows 11's width), with ▢ becoming a restore glyph while
+  - **Window controls:** 46px wide (Windows 11's width), with □ becoming ▫, the restore glyph, while
     the window is maximized. Close alone turns `sig-reject` on hover.
   - **Snap layouts:** the Windows 11 snap-layout flyout through `tauri-plugin-snap-layout`.
   - **Edit:** shown, with every item disabled and naming P12.
@@ -224,7 +224,7 @@ One row of `h-titlebar` (30px), the classes of the design PR:
 |---|---|---|
 | left | the mark, then the menu bar | the `w-macos-inset` space for the lights, then the mark |
 | middle | the breadcrumb, the drag region (`data-tauri-drag-region`) | the same, centred on the window |
-| right | the validator pip, then − ▢ ✕ (46px each) | the validator pip |
+| right | the validator pip, then − □ ✕ (46px each) | the validator pip |
 
 - **The drag region** is the title bar's empty space and the breadcrumb text. The mark, the menu
   labels, the pip and the controls are not draggable, because they are interactive.
