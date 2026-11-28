@@ -246,3 +246,20 @@ fn a_held_lock_is_busy_and_nothing_is_committed() -> TestResult {
     commit(&mut workspace, &git_of(&repo)?, "edit", &[])?;
     Ok(())
 }
+
+// AC: CE-22.1
+#[test]
+fn a_file_staged_outside_the_workspace_is_judged_without_a_sync() -> TestResult {
+    let repo = Repo::committed("")?;
+    let before = head(&repo)?;
+    let mut workspace = Workspace::open(repo.top())?;
+    // Written and staged behind the workspace's back; nothing syncs its index.
+    stage(&repo, C901, &variant("C-901.md")?)?;
+    let result = commit(&mut workspace, &git_of(&repo)?, "add a clue", &[]);
+    let Err(CommitError::Blocked(check)) = result else {
+        return Err(format!("expected Blocked, got {result:?}").into());
+    };
+    assert!(on_rule(&check, "lore/never-confirm", C901), "{check:?}");
+    assert_eq!(head(&repo)?, before);
+    Ok(())
+}

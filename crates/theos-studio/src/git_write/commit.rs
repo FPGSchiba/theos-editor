@@ -1,5 +1,6 @@
 //! The checked commit: the staged snapshot is judged before git commits it.
 
+use theos_content::Index;
 use theos_vcs::commit::{CommitRefused, Trailer};
 use theos_vcs::staged::{self, Status};
 use theos_vcs::{CommitId, Git, GitError, merge};
@@ -69,14 +70,16 @@ impl From<CommitRefused> for CommitError {
 
 /// Commits the staged snapshot with `message` and `trailers`, when it has no error: warnings do
 /// not block. The repo lock is held throughout, and git starts only after the check has ended
-/// its index transactions. The hooks run, so the `pre-commit` hook judges the snapshot once
+/// its index transactions. The index syncs with the folder under the lock before the check, so
+/// changes made outside the workspace are judged too. The hooks run, so the `pre-commit` hook judges the snapshot once
 /// more. A merge in progress is concluded by the commit.
 ///
 /// # Errors
 ///
 /// [`CommitError::Lock`] when the lock is busy, [`CommitError::Message`] for an empty message,
 /// [`CommitError::NothingStaged`], [`CommitError::Conflicted`], [`CommitError::Blocked`] with the
-/// whole check, and [`CommitError::Git`] when git or a hook refuses.
+/// whole check, [`CommitError::Studio`] when the index cannot sync (nothing is committed), and
+/// [`CommitError::Git`] when git or a hook refuses.
 pub fn commit(
     workspace: &mut Workspace,
     git: &Git,
@@ -101,6 +104,9 @@ pub fn commit(
     if snapshot.changed.is_empty() && merge::merge_state(git, &snapshot.top)?.is_none() {
         return Err(CommitError::NothingStaged);
     }
+    // The check reads the index for every path whose staged bytes match the working tree, so
+    // the index must hold the working tree first, whatever changed it outside this workspace.
+    held.write(Index::sync)?;
     let check = check_staged(&mut held, git)?;
     if check.blocks() {
         return Err(CommitError::Blocked(check));

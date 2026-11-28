@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use tempfile::TempDir;
 use theos_studio::git_write::{PullError, Pulled, abort_merge, commit, pull};
-use theos_studio::{Changes, RecordChange, Workspace};
+use theos_studio::{Changes, RecordChange, StudioError, Workspace};
 use theos_vcs::merge::merge_state;
 use theos_vcs::{Cancel, CommitId, GitError, repo};
 
@@ -169,8 +169,6 @@ fn an_error_in_the_merged_result_is_refused_and_the_merge_waits() -> TestResult 
     let fixed = variant("C-901.md")?.replace("reveals: T-901", "reveals: T-900");
     put(remote.a.top(), C901, fixed.as_bytes())?;
     remote.a.run(&["add", "--", C901])?;
-    // The editor's watcher syncs the index after an edit outside it; the check reads the index.
-    workspace.index_mut().sync()?;
     let done = commit(&mut workspace, &git, "conclude the pull", &[])?;
     assert_eq!(head(&remote.a)?, Some(done.id));
     assert_eq!(parents(&remote.a)?, 2);
@@ -215,7 +213,7 @@ fn abort_without_a_merge_is_refused() -> TestResult {
     let remote = remote()?;
     let mut workspace = Workspace::open(remote.a.top())?;
     let result = abort_merge(&mut workspace, &remote.a.git()?);
-    assert!(result.is_err(), "{result:?}");
+    assert!(matches!(result, Err(StudioError::Git(_))), "{result:?}");
     Ok(())
 }
 
