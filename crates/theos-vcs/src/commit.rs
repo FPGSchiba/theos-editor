@@ -9,6 +9,14 @@ use crate::{Cancel, CommitId, Git, GitError, repo};
 /// The characters tried, in order, as `core.commentChar` for one commit.
 const COMMENT_CHARS: [char; 10] = ['#', ';', '@', '!', '$', '%', '^', '&', '|', ':'];
 
+/// Settings that keep a user's `trailer.*` configuration from moving the trailers: they are added
+/// last, and a repeated neighbour is not added twice.
+const TRAILER_SETTINGS: [&str; 3] = [
+    "trailer.where=end",
+    "trailer.ifexists=addIfDifferentNeighbor",
+    "trailer.ifmissing=add",
+];
+
 /// A trailer of the commit message, such as `Approved-by: Jann`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Trailer {
@@ -22,7 +30,7 @@ pub struct Trailer {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum CommitRefused {
-    /// The message is empty after trimming.
+    /// The message is empty after trimming, or uses every comment character at a line start.
     #[error("the commit message is empty: {0}")]
     Message(String),
     /// A trailer has a bad key or a value of more than one line.
@@ -67,7 +75,7 @@ fn check_trailer(trailer: &Trailer) -> Result<(), CommitRefused> {
 ///
 /// # Errors
 ///
-/// [`CommitRefused::Message`], [`CommitRefused::Trailer`], and [`CommitRefused::Git`] when git
+/// [`CommitRefused::Message`] (also when no comment character is free), [`CommitRefused::Trailer`], and [`CommitRefused::Git`] when git
 /// (or a hook) fails, or when the new commit cannot be read.
 pub fn commit(
     git: &Git,
@@ -82,8 +90,14 @@ pub fn commit(
     }
     trailers.iter().try_for_each(check_trailer)?;
 
-    let setting = comment_char(message).map(|c| format!("core.commentChar={c}"));
-    let config: Vec<&str> = setting.iter().map(String::as_str).collect();
+    let Some(comment) = comment_char(message) else {
+        return Err(CommitRefused::Message(
+            "every comment character starts a line of it".to_owned(),
+        ));
+    };
+    let comment = format!("core.commentChar={comment}");
+    let mut config = vec![comment.as_str()];
+    config.extend(TRAILER_SETTINGS);
     let lines: Vec<String> = trailers
         .iter()
         .map(|t| format!("{}: {}", t.key, t.value))

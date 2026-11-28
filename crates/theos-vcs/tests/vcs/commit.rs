@@ -146,6 +146,7 @@ fn the_users_comment_char_and_verbose_change_nothing() -> Result {
     let top = staged_repo(&sandbox)?;
     sandbox.run(&top, &["config", "core.commentChar", ";"])?;
     sandbox.run(&top, &["config", "commit.verbose", "true"])?;
+    sandbox.run(&top, &["config", "trailer.where", "start"])?;
     commit(
         &sandbox.git()?,
         &top,
@@ -156,5 +157,30 @@ fn the_users_comment_char_and_verbose_change_nothing() -> Result {
         body(&sandbox, &top)?,
         "subject\n\n; semi line\n# hash line\n\nApproved-by: Jann\n"
     );
+    Ok(())
+}
+
+// AC: CE-22.1
+#[test]
+fn a_message_using_every_comment_char_is_refused_and_commits_nothing() -> Result {
+    let sandbox = Sandbox::new()?;
+    let top = staged_repo(&sandbox)?;
+    let git = sandbox.git()?;
+    let message = "# a
+; b
+@ c
+! d
+$ e
+% f
+^ g
+& h
+| i
+: j
+";
+    assert!(matches!(
+        commit(&git, &top, message, &[]),
+        Err(CommitRefused::Message(_))
+    ));
+    assert_eq!(repo::head(&git, &top)?, None);
     Ok(())
 }
