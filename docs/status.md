@@ -17,7 +17,7 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P08 | Map format and terrain generator | theos-editor | done | #27 | #44 |
 | P09 | Generator layer and generator tools | theos-editor | todo | | |
 | P10 | Prose editor research | theos-editor | done | #3 | #11 |
-| P11 | Editor shell and Codex | theos-editor | in-progress | #56 | |
+| P11 | Editor shell and Codex | theos-editor | pr-open | #56 | build PR, branch `phase/P11-editor-shell-and-codex` |
 | P12 | Manuscript editor | theos-editor | todo | | |
 | P13 | Changes and Review screens | theos-editor | todo | | |
 | P14 | Start and Settings | theos-editor | todo | | |
@@ -61,7 +61,7 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
     blocked: "MCP server blocked by enterprise policy: theos". Jann allows the server in the
     managed MCP policy, or runs the session himself. The stdio tests prove all three ACs.
   - P11 merged P48's early commits (257fd87); `main` now holds them, so P11 merges `main`.
-- P11 (spec PR, 27 Nov 2026):
+- P11 (build PR, 28 Nov 2026):
   - Theos UI's light mode is on `main` as the theme `grid-light` (#63). P11 takes every colour
     from tokens and sets `data-theme="grid-noir"` on the root; the switch (P14) sets `grid-light`
     (P11 spec §5.7).
@@ -79,6 +79,12 @@ P06, #33). Rows P48 and P49 and the new P05 come from umbrella version 6 (the sp
     the system takes before the editor sees them. Proposal: other keys for the four tree tabs in
     §5.11, changed in a docs PR and then in `keymap.ts`; not Ctrl+Alt+digits, which are AltGr
     characters on many Windows layouts.
+  - Spec erratum (protected): the build's sync reports files, not only ids (`SyncView`: changed
+    and removed as `{id, path}`, moves as `{id, from, to}`), and `record_view` takes an optional
+    path, so each file of a duplicated id opens on its own. Spec §5.4 and §5.9 still describe ids
+    only; a docs PR brings them in line.
+  - The manual run of the app on 27 Nov 2026 rewrote Jann's `%APPDATA%/theos/editor-state.json`
+    (the last project); it names a scratchpad copy of the fixture until Jann opens another project.
 - P08's build PR #44 is a draft labelled `needs-jann`. The final review loop reached its cap of
   five rounds with 6 Minor findings open. A targeted fix and review round, which Jann asked for
   on 25 Nov 2026, closed them. Its spec changes reached main with #40 (rulings 51–75) and #47
