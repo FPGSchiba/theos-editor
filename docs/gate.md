@@ -246,5 +246,10 @@ Crate-level READMEs and rustdoc are not protected; they are reviewed in the phas
 ## 7. Process requirements outside CI
 
 - Every phase follows `.claude/skills/theos-phase/SKILL.md`.
-- The final whole-branch review loops until a fresh reviewer finds nothing (CLAUDE.md).
-- The PR description carries the final review summary and every ruling Claude made.
+- The final whole-branch review loops until a fresh reviewer reports nothing worth fixing; every
+  finding is fixed or ruled, and after 5 rounds a last fix wave and a targeted review end it as
+  best effort (CLAUDE.md, decision 0005).
+- The PR description carries the final review summary, every ruling Claude made, and the open
+  findings of a loop that hit its cap.
+- A PR that touches protected paths lists every protected path it changes, including those its
+  review fixes changed; Jann's approval covers them (decision 0006).
