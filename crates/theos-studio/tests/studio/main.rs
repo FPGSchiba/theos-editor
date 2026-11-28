@@ -8,6 +8,7 @@ mod commit;
 mod common;
 mod diff;
 mod discard;
+mod git_settings;
 mod git_write;
 mod helper;
 mod history;

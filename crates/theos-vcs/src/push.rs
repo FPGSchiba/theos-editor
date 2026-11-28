@@ -1,4 +1,6 @@
 //! `push`: the current commit to a branch of a remote, with git's message kept whole.
+//!
+//! Follows spec P47 §5.7.
 
 mod porcelain;
 

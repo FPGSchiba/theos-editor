@@ -2,6 +2,8 @@
 //!
 //! theos never reads, stores or passes a credential: git asks the user's credential helper. What
 //! theos does is stop git from asking anywhere else: no terminal prompt and no askpass program.
+//!
+//! Follows spec P47 §5.8.
 
 use std::ffi::OsStr;
 use std::path::Path;

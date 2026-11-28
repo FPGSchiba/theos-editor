@@ -1,5 +1,7 @@
 //! The one list of options every git write starts with, and the one place a failing write is
 //! turned into an error.
+//!
+//! Follows spec P47 §5.2.
 
 use std::ffi::OsStr;
 use std::path::Path;

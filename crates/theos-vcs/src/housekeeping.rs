@@ -1,4 +1,6 @@
 //! Git's own housekeeping, run on purpose after a write, in the foreground.
+//!
+//! Follows spec P47 §5.9.
 
 use std::ffi::OsStr;
 use std::path::Path;

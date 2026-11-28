@@ -1,5 +1,7 @@
 //! Staging and unstaging paths: the paths go to git NUL-separated on stdin, so their number and
 //! their spelling cannot overflow or change a command line.
+//!
+//! Follows spec P47 §5.3.
 
 use std::ffi::OsStr;
 use std::path::Path;

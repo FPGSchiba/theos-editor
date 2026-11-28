@@ -3,6 +3,8 @@
 //!
 //! The outcome is read from exit codes, `MERGE_HEAD`, the index and `HEAD`, never from git's
 //! messages. Revisions go after `--end-of-options`, so a name that starts with `-` is a name.
+//!
+//! Follows spec P47 §5.6.
 
 use std::path::Path;
 

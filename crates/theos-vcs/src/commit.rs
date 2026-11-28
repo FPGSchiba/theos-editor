@@ -1,4 +1,6 @@
 //! `commit`: a message and trailers, written by git itself with its hooks running.
+//!
+//! Follows spec P47 §5.5.
 
 use std::path::Path;
 

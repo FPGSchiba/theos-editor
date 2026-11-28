@@ -1,6 +1,9 @@
 //! Writes to git by record: what the editor's Changes screen does with a record or a file. Every
 //! write runs under the repo lock ([`Workspace::hold`](crate::Workspace)), and every path goes to
 //! git in git's own spelling, as status and diff gave it.
+//!
+//! Stage and unstage follow spec P47 §5.3, `commit` §5.5, `pull` and `abort_merge` §5.6, `push`
+//! §5.7, and the lock §5.10.
 
 mod commit;
 mod pull;

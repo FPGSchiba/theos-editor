@@ -1,4 +1,6 @@
 //! The id of a commit.
+//!
+//! Follows spec P47 §5.5: the id a commit returns.
 
 use std::fmt;
 
