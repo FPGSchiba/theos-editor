@@ -3,9 +3,11 @@
 mod cancel;
 mod commit;
 mod common;
+mod credential;
 mod git;
 mod history;
 mod index;
+mod push;
 mod read;
 mod remote;
 mod repo;

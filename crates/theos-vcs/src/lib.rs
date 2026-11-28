@@ -21,6 +21,7 @@ mod git;
 pub mod history;
 pub mod index;
 mod no_hooks;
+pub mod push;
 pub mod read;
 mod read_args;
 pub mod remote;
