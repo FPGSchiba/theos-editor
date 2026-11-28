@@ -134,6 +134,15 @@ fn open(state: &AppState, path: &Path) -> Result<ProjectView, IpcError> {
         path: path.display().to_string(),
         message: error.to_string(),
     })?;
+    // Checked here, not left to the read of `theos.toml`: under a file that read fails with
+    // NotFound on Windows but with "not a directory" on Linux, and the answer must not depend on
+    // the OS.
+    if !root.is_dir() {
+        return Err(IpcError::NotAProject {
+            path: root.display().to_string(),
+            message: format!("{} is not a folder, so it is not a project", root.display()),
+        });
+    }
     let workspace = Workspace::open(&root).map_err(|error| IpcError::opening(&root, error))?;
     let view = ProjectView::of(&workspace)?;
     for part in parts::unknown(workspace.project().enabled_parts()) {
