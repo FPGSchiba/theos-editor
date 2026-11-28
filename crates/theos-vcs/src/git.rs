@@ -91,6 +91,25 @@ fn exit_text(code: Option<i32>) -> String {
     )
 }
 
+/// git's whole answer to a command that ran to its end, whatever its exit code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Output {
+    /// The exit code, `None` when a signal ended the process.
+    pub code: Option<i32>,
+    /// Everything git wrote to stdout.
+    pub stdout: Vec<u8>,
+    /// Everything git wrote to stderr, lossily decoded and trimmed.
+    pub stderr: String,
+}
+
+impl Output {
+    /// Whether git exited with code 0.
+    #[must_use]
+    pub fn success(&self) -> bool {
+        self.code == Some(0)
+    }
+}
+
 /// The git command line, found once and run many times.
 #[derive(Debug, Clone)]
 pub struct Git {
@@ -197,25 +216,50 @@ impl Git {
         env: &[(&str, &str)],
         cancel: &Cancel,
     ) -> Result<Vec<u8>, GitError> {
+        let output = self.output(args, cwd, stdin, env, cancel)?;
+        if output.success() {
+            return Ok(output.stdout);
+        }
+        let error = GitError::Failed {
+            args: args_text(args),
+            code: output.code,
+            stderr: output.stderr,
+        };
+        // A failure exit is often expected (`rev-parse --verify --quiet` of a missing
+        // version, `config --get` of an unset key); the caller decides whether it matters.
+        tracing::debug!(?args, cwd = %cwd.display(), %error, "git failed");
+        Err(error)
+    }
+
+    /// Runs git as [`Git::run_cancellable`] does and returns its whole answer: the exit code,
+    /// stdout and stderr, whether git succeeded or failed.
+    ///
+    /// # Errors
+    ///
+    /// [`GitError::Cancelled`] when `cancel` is set before git exits, and [`GitError::Io`] when
+    /// git cannot be started or its pipes fail. A failure exit is an [`Output`], not an error.
+    pub fn output(
+        &self,
+        args: &[&OsStr],
+        cwd: &Path,
+        stdin: Option<&[u8]>,
+        env: &[(&str, &str)],
+        cancel: &Cancel,
+    ) -> Result<Output, GitError> {
         let started = Instant::now();
         let result = self.spawn_and_wait(args, cwd, stdin, env, cancel);
         let (elapsed, cwd) = (started.elapsed(), cwd.display());
         match &result {
-            Ok(_) => tracing::debug!(?args, %cwd, ?elapsed, "git"),
+            Ok(output) => tracing::debug!(?args, %cwd, ?elapsed, code = ?output.code, "git"),
             Err(GitError::Cancelled { .. }) => {
                 tracing::debug!(?args, %cwd, ?elapsed, "git cancelled");
-            }
-            // A failure exit is often expected (`rev-parse --verify --quiet` of a missing
-            // version, `config --get` of an unset key); the caller decides whether it matters.
-            Err(error @ GitError::Failed { .. }) => {
-                tracing::debug!(?args, %cwd, ?elapsed, %error, "git failed");
             }
             Err(error) => tracing::warn!(?args, %cwd, ?elapsed, %error, "git could not run"),
         }
         result
     }
 
-    /// The body of [`Git::run_cancellable`], without the logging.
+    /// The body of [`Git::output`], without the logging.
     fn spawn_and_wait(
         &self,
         args: &[&OsStr],
@@ -223,7 +267,7 @@ impl Git {
         stdin: Option<&[u8]>,
         env: &[(&str, &str)],
         cancel: &Cancel,
-    ) -> Result<Vec<u8>, GitError> {
+    ) -> Result<Output, GitError> {
         if cancel.is_cancelled() {
             return Err(GitError::Cancelled {
                 args: args_text(args),
@@ -272,15 +316,14 @@ impl Git {
         };
         let stdout = stdout.map_err(io)?;
         let stderr = stderr.map_err(io)?;
-        if !status.success() {
-            return Err(GitError::Failed {
-                args: args_text(args),
-                code: status.code(),
-                stderr: String::from_utf8_lossy(&stderr).trim().to_owned(),
-            });
+        if status.success() {
+            written.map_err(io)?;
         }
-        written.map_err(io)?;
-        Ok(stdout)
+        Ok(Output {
+            code: status.code(),
+            stdout,
+            stderr: String::from_utf8_lossy(&stderr).trim().to_owned(),
+        })
     }
 }
 

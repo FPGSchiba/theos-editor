@@ -6,7 +6,7 @@
 
 use std::io;
 use std::process::{Child, ExitStatus};
-use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread::Scope;
 use std::time::Duration;
 
@@ -46,11 +46,18 @@ pub(crate) fn wait<'scope>(
             Err(RecvTimeoutError::Disconnected) => return Err(gone()),
         }
     }
-    // git may have exited just now; it is not stopped then, as its process id may be reused.
-    if receiver.try_recv().is_err() {
-        tree.stop();
-        receiver.recv().map_err(|_| gone())??;
+    after_cancel(&receiver, tree)
+}
+
+/// The decision once a cancel is seen. git may have exited just now: a status that has arrived
+/// is the answer, `Exited`, and nothing is stopped, as git's process id may be reused. Only a git
+/// still running is stopped, and the answer is `Cancelled`.
+fn after_cancel(receiver: &Receiver<io::Result<ExitStatus>>, tree: Tree) -> io::Result<Waited> {
+    if let Ok(status) = receiver.try_recv() {
+        return status.map(Waited::Exited);
     }
+    tree.stop();
+    receiver.recv().map_err(|_| gone())??;
     Ok(Waited::Cancelled)
 }
 
@@ -61,6 +68,24 @@ fn gone() -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
+
+    #[test]
+    fn a_status_that_arrived_before_the_cancel_is_kept() -> io::Result<()> {
+        let status = Command::new("git")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .status()?;
+        let (sender, receiver) = mpsc::channel();
+        sender.send(Ok(status)).map_err(|_| gone())?;
+        let mut command = Command::new("git");
+        command.arg("--version").stdout(std::process::Stdio::null());
+        let (tree, mut child) = Tree::spawn(&mut command)?;
+        child.wait()?;
+        let waited = after_cancel(&receiver, tree)?;
+        assert!(matches!(waited, Waited::Exited(got) if got == status));
+        Ok(())
+    }
 
     #[test]
     fn the_flag_is_checked_at_least_every_20_ms() {

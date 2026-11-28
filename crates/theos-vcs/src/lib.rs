@@ -30,5 +30,5 @@ mod wait;
 
 pub use cancel::Cancel;
 pub use folding::Folding;
-pub use git::{Git, GitError};
+pub use git::{Git, GitError, Output};
 pub use version::GitVersion;
