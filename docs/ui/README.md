@@ -1,6 +1,6 @@
 # UI reference
 
-The fifteen screens of the Theos Content Studio concept, exported from the design canvas at
+The screens of the Theos Content Studio concept, exported from the design canvas at
 1440 × 900: screens 01–11 on 31 Oct 2026, screens 12–15 (atlas, quests, generating from lore) on
 5 Nov 2026. On 27 Nov 2026 they moved to theme tokens and their previews were rendered again from
 the HTML, in both themes.
@@ -46,6 +46,7 @@ Where the sample content disagrees with `docs/specs/data-model.md` (for example 
 
 | Screen | Name | Phase |
 |---|---|---|
+| `00-chrome` | Window chrome — title bar, menus, window controls, scrollbar | P51 |
 | `01-main` | Codex — floor record | P11 |
 | `02-lens` | Codex — npc and lens | P15 |
 | `03-truth` | Codex — truth and reveal ledger | P15 |
@@ -61,6 +62,12 @@ Where the sample content disagrees with `docs/specs/data-model.md` (for example 
 | `13-atlas-tower` | Atlas — the Tower view | P25 |
 | `14-quest` | Quests — flow editor | P24 |
 | `15-generate` | Concepts — generate from lore | P27 |
+
+Every screen shows the frameless title bar of Windows and Linux: the mark, the menus File, Edit, View,
+Go and Help, the breadcrumb as the drag region, the validator pip and the window controls. `00-chrome`
+draws the chrome itself: the menus open, the keyboard focus, the window controls restored and
+maximized, macOS, and the themed scrollbar. It is one tall page, not a 1440 × 900 screen, so its
+previews are full-page renders.
 
 Screens 01–11 show the rail without Atlas; screens 12–15 show it after Codex. P25 adds the entry
 to every screen. The camera thumbnails on screen 15 are clay renders of the floor-0 blockout (the
