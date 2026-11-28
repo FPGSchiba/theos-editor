@@ -8,6 +8,7 @@ use theos_map_format::FormatError;
 use theos_map_format::json::to_checked_value;
 
 use crate::kind;
+use crate::recipe::PlannedStage;
 use crate::runner::StageFinding;
 use crate::stage::{MapKind, Metrics};
 
@@ -36,8 +37,8 @@ fn insert_nested(root: &mut Map<String, Value>, path: &str, value: Value) {
 }
 
 /// The run summary: the parity `metrics` (keys are dotted paths, so `elevation_m.relief` becomes
-/// `{"elevation_m": {"relief": ..}}`), then `features` (the count of every type of
-/// [`TYPES`], 0 included), `stages` (each
+/// `{"elevation_m": {"relief": ..}}`), then `features` (the count of every type the kind knows
+/// with the `planned` stages, its static types and the recipe's own, 0 included), `stages` (each
 /// stage id with its metrics) and `findings` (`{stage, message}` per warning). Constraints read
 /// it by dotted path (spec §5.6). The stage metrics go through the checked conversion, as every
 /// number bound for JSON does.
@@ -46,6 +47,7 @@ fn insert_nested(root: &mut Map<String, Value>, path: &str, value: Value) {
 /// [`FormatError::JsonNotFinite`] when a stage metric is NaN or an infinity (spec §5.13).
 pub(crate) fn summary(
     kind: MapKind,
+    planned: &[PlannedStage],
     metrics: Value,
     feature_counts: &BTreeMap<String, usize>,
     stage_metrics: &[(String, Metrics)],
@@ -59,9 +61,9 @@ pub(crate) fn summary(
     }
     // Every type of `TYPES` with 0 first (ledger ruling, Task 11): a count constraint must see 0.
     let mut features: Map<String, Value> = kind::table(kind)
-        .types
-        .iter()
-        .map(|(_, ty)| ((*ty).to_owned(), Value::from(0)))
+        .known_types(planned)
+        .into_iter()
+        .map(|ty| (ty, Value::from(0)))
         .collect();
     for (ty, &n) in feature_counts {
         features.insert(ty.clone(), Value::from(n));
@@ -99,7 +101,7 @@ mod tests {
             stage: "travel".to_owned(),
             message: "slow".to_owned(),
         }];
-        let s = summary(MapKind::Terrain, metrics, &counts, &stages, &findings).unwrap();
+        let s = summary(MapKind::Terrain, &[], metrics, &counts, &stages, &findings).unwrap();
         assert_eq!(s["elevation_m"]["relief"], 1134.0);
         assert_eq!(s["precip_mm_yr"]["median"], 751.0);
         assert_eq!(s["lake_pct"], 6.25);
@@ -138,6 +140,7 @@ mod tests {
             let stages = [("level".to_owned(), m)];
             let result = summary(
                 MapKind::Terrain,
+                &[],
                 serde_json::json!({}),
                 &BTreeMap::new(),
                 &stages,
@@ -153,6 +156,7 @@ mod tests {
         let stages = [("level".to_owned(), m)];
         let s = summary(
             MapKind::Terrain,
+            &[],
             serde_json::json!({}),
             &BTreeMap::new(),
             &stages,
@@ -170,7 +174,15 @@ mod tests {
     #[test]
     fn every_feature_type_is_counted_with_zero_included() {
         let counts = BTreeMap::from([("chime".to_owned(), 2)]);
-        let s = summary(MapKind::Terrain, serde_json::json!({}), &counts, &[], &[]).unwrap();
+        let s = summary(
+            MapKind::Terrain,
+            &[],
+            serde_json::json!({}),
+            &counts,
+            &[],
+            &[],
+        )
+        .unwrap();
         let features = s["features"].as_object().unwrap();
         let types: Vec<&str> = crate::features::TYPES.iter().map(|(_, t)| *t).collect();
         let mut sorted = types.clone();

@@ -90,6 +90,14 @@ pub enum FeaturesError {
         /// What holds the reference, as text.
         by: String,
     },
+    /// A room's cells make more than one outline, which a `Polygon` cannot hold.
+    #[error("room {room} has {outlines} separate outlines")]
+    SplitRoom {
+        /// The room's number.
+        room: usize,
+        /// How many exterior rings its cells make.
+        outlines: usize,
+    },
     /// A lake has no exterior ring.
     #[error("lake {lake} has no outline")]
     NoOutline {
@@ -311,6 +319,7 @@ fn prop_value(p: &Prop, id: &str, name: &str, named: &Named) -> Result<Value, Fe
         Prop::Num(x) => number(*x, id, name)?,
         Prop::Int(n) => Value::from(*n),
         Prop::Text(t) => Value::from(t.as_str()),
+        Prop::Texts(ts) => Value::Array(ts.iter().map(|t| Value::from(t.as_str())).collect()),
         Prop::Bool(b) => Value::from(*b),
         Prop::Nums(xs) => numbers(xs, id, name)?,
         Prop::At(at) => numbers(at, id, name)?,

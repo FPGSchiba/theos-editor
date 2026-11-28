@@ -12,7 +12,7 @@ use theos_map_format::{
 };
 
 use self::encode::encode;
-pub(crate) use self::table::{OMEGA_LAYER, PackageLayer, TERRAIN_LAYERS};
+pub(crate) use self::table::{INTERIOR_LAYERS, OMEGA_LAYER, PackageLayer, TERRAIN_LAYERS};
 use crate::api::{GENERATOR, VERSION};
 use crate::kind;
 use crate::recipe::Plan;
@@ -27,6 +27,14 @@ pub enum PackageError {
     MissingLayer {
         /// The layer name.
         layer: &'static str,
+    },
+    /// A value does not fit the layer's stored sample type.
+    #[error("layer `{layer}` holds {value}, which does not fit its stored type")]
+    OutOfRange {
+        /// The layer name.
+        layer: &'static str,
+        /// The value.
+        value: u32,
     },
     /// The grid does not fit the manifest's 32-bit rows and columns.
     #[error("the grid of {rows} x {cols} cells is too large for a package")]

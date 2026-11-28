@@ -10,7 +10,7 @@ use serde_json::{Map, Value};
 /// The value of the manifest's `format` field.
 pub const FORMAT: &str = "theos-map";
 /// The format version this crate writes.
-pub const FORMAT_VERSION: &str = "1.0";
+pub const FORMAT_VERSION: &str = "1.1";
 
 /// The sample type of a layer file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

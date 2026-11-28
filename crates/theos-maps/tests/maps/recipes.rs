@@ -11,7 +11,17 @@ use theos_maps::{CancelToken, RunError, RunRequest, describe, run};
 use crate::support::{TestResult, request};
 
 /// The ids of the recipes built into the crate.
-const BUILT_IN: [&str; 3] = ["fixture-small", "hearth-valley", "hearth-valley-omega"];
+const BUILT_IN: [&str; 6] = [
+    "choir-hall-ruin",
+    "fixture-small",
+    "hearth-valley",
+    "hearth-valley-omega",
+    "ruin-undercroft",
+    "works-halls",
+];
+
+/// The built-in interior recipes; their first stage is `envelope`, a terrain's is `grid`.
+const INTERIORS: [&str; 3] = ["choir-hall-ruin", "ruin-undercroft", "works-halls"];
 
 const GRID: &str = "\n[[stage]]\nid = \"grid\"\nedges = [\"south\"]\n";
 const TECTONICS: &str = "\n[[stage]]\nid = \"tectonics\"\n";
@@ -79,7 +89,7 @@ fn refusal(outcome: (Result<(), RunError>, bool)) -> Result<RecipeError, String>
 fn describe_lists_the_three_built_in_recipes() -> TestResult {
     let d = describe(&[])?;
     assert_eq!(d.name, "theos-maps");
-    assert_eq!(d.version, "1.0.0");
+    assert_eq!(d.version, "1.1.0");
     assert_eq!(d.produces, ["map"]);
     assert!(!d.accepts_notes);
     assert!(d.problems.is_empty(), "{:?}", d.problems);
@@ -89,10 +99,26 @@ fn describe_lists_the_three_built_in_recipes() -> TestResult {
             .iter()
             .find(|r| r.id == id)
             .ok_or_else(|| format!("{id} is not described"))?;
-        assert!(info.inputs.is_empty(), "{id}");
+        // Only the child `ruin-undercroft` declares an input: the parent ruin (spec §5.13).
+        if id == "ruin-undercroft" {
+            let keys: Vec<&str> = info.inputs.keys().map(String::as_str).collect();
+            assert_eq!(keys, ["feature"], "{id}");
+            assert_eq!(info.inputs["feature"]["type"], "feature", "{id}");
+        } else {
+            assert!(info.inputs.is_empty(), "{id}");
+        }
         assert!(info.seeded, "{id}");
         assert!(!info.title.is_empty(), "{id}");
-        assert_eq!(info.stages.first().map(|s| s.id.as_str()), Some("grid"));
+        let first = if INTERIORS.contains(&id) {
+            "envelope"
+        } else {
+            "grid"
+        };
+        assert_eq!(
+            info.stages.first().map(|s| s.id.as_str()),
+            Some(first),
+            "{id}"
+        );
         assert!(info.stages.iter().all(|s| !s.summary.is_empty()), "{id}");
     }
     let ids: Vec<&str> = d.recipes.iter().map(|r| r.id.as_str()).collect();

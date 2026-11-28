@@ -1,7 +1,7 @@
 //! The table of settlement maps. Empty until the settlement stages and package layers arrive;
 //! settlement features are numbered per type, like terrain's.
 
-use super::{FrameRule, IdScheme, KindTable, OwnSeed, no_metrics, plain_title};
+use super::{FrameRule, IdScheme, KindTable, OwnSeed, no_metrics, no_recipe_types, plain_title};
 use crate::child::values::CLASS_FRAME;
 use crate::child::{ClassSource, ParentContext, class_frame_of};
 use crate::error::RunError;
@@ -17,6 +17,7 @@ pub(super) const TABLE: KindTable = KindTable {
     optional_layers: &[],
     renders: &[],
     types: &[],
+    recipe_types: no_recipe_types,
     ids: IdScheme::ByType,
     summary_paths: &[],
     metrics: no_metrics,
@@ -27,6 +28,8 @@ pub(super) const TABLE: KindTable = KindTable {
         spec: LayerSpec::value(CLASS_FRAME, "class_frame"),
         build: class_frame,
     }],
+    check_frame: None,
+    check_plan: None,
 };
 
 /// The class table entry of the map (`class_frame`): the class of the parent feature, or of the

@@ -80,6 +80,35 @@ fn slow_outputs_match_the_golden_hashes_of_this_version() -> TestResult {
     Ok(())
 }
 
+// The interior runs (a standalone one and a child of a terrain ruin) are recorded and fresh
+// runs reproduce them; a changed interior output fails with the stage and layer named.
+// AC: CE-80.5
+#[test]
+fn interior_runs_match_the_golden_hashes() -> TestResult {
+    let file = load(&golden_path(VERSION)).unwrap_or_else(|error| panic!("{error}"));
+    let interiors: Vec<_> = GOLDEN_RUNS
+        .iter()
+        .filter(|s| matches!(s.recipe, "choir-hall-ruin" | "ruin-undercroft"))
+        .collect();
+    assert_eq!(
+        interiors.len(),
+        2,
+        "both interior recipes have a golden run"
+    );
+    for spec in interiors {
+        let expected = file
+            .run
+            .iter()
+            .find(|r| run_key(r) == spec_key(spec))
+            .ok_or_else(|| format!("{} seed {} is not recorded", spec.recipe, spec.seed))?;
+        let fresh = golden_run(spec)?;
+        if let Err(mismatch) = compare(expected, &fresh) {
+            return Err(format!("{} seed {}: {mismatch}", spec.recipe, spec.seed).into());
+        }
+    }
+    Ok(())
+}
+
 // AC: CE-77.2
 #[test]
 fn a_changed_output_fails_the_golden_comparison() -> TestResult {

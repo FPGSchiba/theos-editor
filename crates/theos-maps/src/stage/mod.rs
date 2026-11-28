@@ -24,13 +24,13 @@ use serde::{Deserialize, Serialize};
 pub use context::{StageContext, StepInfo};
 pub use error::{Access, ParamError, StageError};
 pub use layer_spec::LayerSpec;
-pub(crate) use params::too_large_count;
 pub use params::{Check, MAX_COUNT, MAX_MAGNITUDE, MIN_MAGNITUDE, StageParams};
+pub(crate) use params::{parse_table, too_large_count};
 pub use registry::Registry;
 pub use report::{Finding, Metrics, Severity, StageReport};
 pub use typed::TypedStage;
 
-use crate::world::World;
+use crate::world::{MapFrame, World};
 
 /// The kinds of map a stage applies to; recipes name them in snake case.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -96,6 +96,15 @@ pub trait Stage: Send + Sync {
 
     /// The names of the metrics the stage reports with `params`, known before anything runs.
     fn metric_names(&self, params: &dyn StageParams) -> Vec<&'static str>;
+
+    /// Checks `params` against the map's `frame`, for parameters in metres that must fit the
+    /// raster (whole cells, a lattice that fits the grid). The plan calls it before any stage
+    /// runs.
+    ///
+    /// # Errors
+    /// [`ParamError`] naming the stage and the parameter; also, with no parameter, when `params`
+    /// are the parameters of another stage.
+    fn check_frame(&self, params: &dyn StageParams, frame: &MapFrame) -> Result<(), ParamError>;
 
     /// Checks the order of nested steps against the layers `available` before this stage.
     ///

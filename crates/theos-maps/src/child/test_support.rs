@@ -94,6 +94,99 @@ stage!(
     writes: []
 );
 
+/// A stage that writes the package layers of an interior and the values its renders read, all
+/// empty, so a test child of the interior kind can write its package and draw its renders
+/// without the interior stages.
+pub(crate) struct Floor;
+
+/// The layers [`Floor`] writes: the interior package's.
+const FLOOR: [LayerSpec; 6] = [
+    LayerSpec::mask("envelope"),
+    LayerSpec::mask("walkable"),
+    LayerSpec::u32("rooms"),
+    LayerSpec::mask("corridors"),
+    LayerSpec::mask("cover"),
+    LayerSpec::mask("walls"),
+];
+
+impl TypedStage for Floor {
+    type Params = Knob;
+    const ID: &'static str = "pi";
+    const SUMMARY: &'static str = "A synthetic test stage.";
+    const KINDS: &'static [MapKind] = &[MapKind::Interior];
+    fn reads(&self, _: &Knob) -> Vec<LayerSpec> {
+        Vec::new()
+    }
+    fn writes(&self, _: &Knob) -> Vec<LayerSpec> {
+        let mut writes = FLOOR.to_vec();
+        writes.extend([
+            LayerSpec::value("lattice", "lattice"),
+            LayerSpec::value("room_graph", "room_graph"),
+            LayerSpec::value("doors", "doors"),
+            LayerSpec::value("analysis", "analysis"),
+        ]);
+        writes
+    }
+    fn run(&self, ctx: &mut StageContext<'_>, _: &Knob) -> Result<StageReport, StageError> {
+        let (rows, cols) = (ctx.frame().rows, ctx.frame().cols);
+        for spec in FLOOR {
+            let layer = if spec.kind == crate::world::LayerKind::U32 {
+                Layer::U32(crate::grid::Grid::filled(rows, cols, 0))
+            } else {
+                Layer::Mask(crate::grid::Grid::filled(rows, cols, false))
+            };
+            ctx.write(spec.name, layer)?;
+        }
+        write_plan_values(ctx, (rows, cols))?;
+        Ok(StageReport::default())
+    }
+}
+
+/// Writes an empty room graph, a one-cell lattice, no doors and an empty analysis.
+fn write_plan_values(ctx: &mut StageContext<'_>, grid: (usize, usize)) -> Result<(), StageError> {
+    use crate::rooms::lattice::{Lattice, Stagger};
+    use crate::rooms::{LatticeRef, RoomGraph};
+    use crate::stages::interior::playability_core::Analysis;
+    use crate::stages::interior::space_core::Doors;
+    let lattice = Lattice::new(grid.0, grid.1, 6, 0, Stagger::Rows, ctx.rng()).map_err(|e| {
+        StageError::Failed {
+            stage: Floor::ID.to_owned(),
+            message: e.to_string(),
+        }
+    })?;
+    let graph = RoomGraph {
+        rooms: Vec::new(),
+        connections: Vec::new(),
+        lattice: LatticeRef {
+            rows: lattice.rows,
+            cols: lattice.cols,
+        },
+    };
+    let analysis = Analysis {
+        rooms: 0.0,
+        connections: 0.0,
+        cycles: 0.0,
+        locks: 0.0,
+        one_way: 0.0,
+        chokepoints: 0.0,
+        dead_end_pct: 0.0,
+        footprint_used_pct: 0.0,
+        hall_share_pct: 0.0,
+        critical_path_m: 0.0,
+        longest_sightline_m: 0.0,
+        start_to_exit_min_m: None,
+        goal_to_exit_min_m: None,
+        route: Vec::new(),
+        route_points: Vec::new(),
+        findings: Vec::new(),
+    };
+    ctx.write("lattice", Layer::Value(Box::new(lattice)))?;
+    ctx.write("room_graph", Layer::Value(Box::new(graph)))?;
+    ctx.write("doors", Layer::Value(Box::new(Doors(Vec::new()))))?;
+    ctx.write("analysis", Layer::Value(Box::new(analysis)))?;
+    Ok(())
+}
+
 /// A registry of the test stages.
 pub(crate) fn registry() -> Registry {
     add_test_stages(Registry::empty())
@@ -113,6 +206,7 @@ fn add_test_stages(mut registry: Registry) -> Registry {
     registry.add(Box::new(OnlyChild));
     registry.add(Box::new(Feats));
     registry.add(Box::new(Class));
+    registry.add(Box::new(Floor));
     registry
 }
 

@@ -21,7 +21,7 @@ use crate::runner::RunOptions;
 /// The generator's name in the manifest and the description.
 pub const GENERATOR: &str = "theos-maps";
 /// The generator's version.
-pub const VERSION: &str = "1.0.0";
+pub const VERSION: &str = "1.1.0";
 
 /// One run's request.
 #[derive(Debug, Clone, Serialize, Deserialize)]

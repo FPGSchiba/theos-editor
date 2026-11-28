@@ -18,10 +18,10 @@ use crate::child::{FrameRule, ParentContext};
 use crate::error::RunError;
 use crate::features::output::FeaturesError;
 use crate::package::PackageLayer;
-use crate::recipe::Plan;
+use crate::recipe::{Plan, PlannedStage};
 use crate::render::Render;
-use crate::stage::{LayerSpec, MapKind, Metrics};
-use crate::world::{Layer, World};
+use crate::stage::{LayerSpec, MapKind, Metrics, ParamError};
+use crate::world::{Layer, MapFrame, World};
 
 /// How the ids of a kind's features are numbered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,12 +44,23 @@ pub(crate) struct OwnSeed {
     pub build: SeedFn,
 }
 
+/// Refuses a frame a kind cannot use, with the reason.
+pub(crate) type FrameCheck = fn(&MapFrame) -> Result<(), String>;
+
+/// Refuses planned stages whose parameters do not fit together, naming the stage and the
+/// parameter to blame.
+pub(crate) type PlanCheck = fn(&[PlannedStage], &MapFrame) -> Result<(), ParamError>;
+
 /// The top-level metrics of the summary, from the world and the stages' metrics.
 pub(crate) type MetricsFn = fn(&World, &[(String, Metrics)]) -> Result<Value, FormatError>;
 
 /// The features output and how many features each id key has.
 pub(crate) type FeaturesFn =
     fn(&World, IdScheme) -> Result<(FeatureCollection, BTreeMap<String, usize>), FeaturesError>;
+
+/// The feature types a recipe adds to its kind's static ones, from its planned stages (an
+/// interior's room types).
+pub(crate) type RecipeTypesFn = fn(&[PlannedStage]) -> Vec<String>;
 
 /// The title line of the people renders, from the recipe id, the seed and the summary metrics.
 pub(crate) type TitleFn = fn(recipe: &str, seed: u64, summary: &Value) -> String;
@@ -66,6 +77,8 @@ pub(crate) struct KindTable {
     pub renders: &'static [Render],
     /// The feature types as `(kind, type)`; the paths `features.<type>` of constraints.
     pub types: &'static [(&'static str, &'static str)],
+    /// The feature types a recipe adds to [`KindTable::types`].
+    pub recipe_types: RecipeTypesFn,
     /// How feature ids are numbered.
     pub ids: IdScheme,
     /// The summary paths a constraint may name besides `features.*` and `stages.*`.
@@ -80,6 +93,22 @@ pub(crate) struct KindTable {
     pub frame: FrameRule,
     /// The world values the kind offers besides `parent.*`, available before the first stage.
     pub own_seeds: &'static [OwnSeed],
+    /// Refuses a frame the kind cannot use, with the reason; the plan names `size_km`. `None`
+    /// for a kind that takes every frame the recipe checks allow.
+    pub check_frame: Option<FrameCheck>,
+    /// Refuses planned stages whose parameters do not fit together (an interior's walls and its
+    /// lattice); `None` for a kind whose stages are checked one by one only.
+    pub check_plan: Option<PlanCheck>,
+}
+
+impl KindTable {
+    /// Every feature type a recipe of this kind with the planned `stages` knows: the static
+    /// types, then the recipe's own.
+    pub(crate) fn known_types(&self, stages: &[PlannedStage]) -> Vec<String> {
+        let mut out: Vec<String> = self.types.iter().map(|(_, t)| (*t).to_owned()).collect();
+        out.extend((self.recipe_types)(stages));
+        out
+    }
 }
 
 /// One entry per [`MapKind`].
@@ -96,6 +125,11 @@ pub(crate) fn table(kind: MapKind) -> &'static KindTable {
 /// The metrics of a kind that has none: an empty object.
 pub(super) fn no_metrics(_: &World, _: &[(String, Metrics)]) -> Result<Value, FormatError> {
     theos_map_format::json::to_checked_value(&BTreeMap::<String, f64>::new())
+}
+
+/// The recipe types of a kind whose types are all static: none.
+pub(super) fn no_recipe_types(_: &[PlannedStage]) -> Vec<String> {
+    Vec::new()
 }
 
 /// The title line of a kind without numbers of its own: recipe and seed.

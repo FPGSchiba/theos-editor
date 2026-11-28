@@ -75,7 +75,7 @@ pub(crate) fn is_known_path(path: &str, kind: MapKind, stages: &[PlannedStage]) 
             .and_then(|rest| rest.strip_prefix('.'))
     };
     if let Some(kind) = under(summary::FEATURES) {
-        return table.types.iter().any(|(_, t)| *t == kind);
+        return table.known_types(stages).iter().any(|t| t == kind);
     }
     if let Some((id, metric)) = under(summary::STAGES).and_then(|rest| rest.split_once('.')) {
         return stages
