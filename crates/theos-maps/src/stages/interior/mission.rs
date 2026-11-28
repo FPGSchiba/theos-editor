@@ -7,9 +7,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::rooms::RoomGraph;
 use crate::rooms::lattice::Lattice;
 use crate::rooms::solve::behind_lock;
+use crate::rooms::{Role, RoomGraph};
 use crate::stage::{
     LayerSpec, MAX_COUNT, MapKind, ParamError, StageContext, StageError, StageReport, TypedStage,
     too_large_count,
@@ -41,6 +41,30 @@ fn check_count(count: CountSpec, path: &str) -> Result<(), ParamError> {
         return Err(ParamError::at(Mission::ID, path, too_large_count()));
     }
     Ok(())
+}
+
+/// Why a mission placed no start room: the entries that came up short, each with its index,
+/// rule id, the count asked and the count applied. A rule such as `main_cycle` that could not
+/// fit its loop leaves the graph without a start, and the graph check alone would only say
+/// "expected one start room, found 0".
+fn no_start(report: &MissionReport) -> String {
+    let short: Vec<String> = report
+        .per_entry
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.applied < e.asked)
+        .map(|(i, e)| {
+            format!(
+                "rule[{i}] `{}` asked {}, applied {}",
+                e.rule, e.asked, e.applied
+            )
+        })
+        .collect();
+    if short.is_empty() {
+        "no rule placed a start room".to_owned()
+    } else {
+        format!("no start room was placed; short: {}", short.join("; "))
+    }
 }
 
 /// Sets every room's `locked` to whether it lies behind a lock (spec §5.4, ruling R55). The rules
@@ -97,6 +121,9 @@ impl TypedStage for Mission {
         let mut state = MissionState::new(lattice, program);
         let done = run_mission(&mut state, &p.rule, &rules(), ctx.rng())
             .map_err(|e| ctx.fail(e.to_string()))?;
+        if !state.graph.rooms.iter().any(|r| r.role == Role::Start) {
+            return Err(ctx.fail(no_start(&done)));
+        }
         mark_locked(&mut state.graph);
         state
             .graph
@@ -114,7 +141,6 @@ impl TypedStage for Mission {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rooms::Role;
     use crate::stage::{Registry, Stage};
     use crate::stages::interior::support::execute_recipe;
 
@@ -176,6 +202,32 @@ cycle = \"lock_key\"";
             }
         }
         assert!(goal_leaves > 0, "no seed had a free cell next to the goal");
+    }
+
+    // AC: CE-80.2
+    #[test]
+    fn a_short_main_cycle_is_named_when_no_start_is_placed() {
+        // The fixture on a frame of one lattice row: main_cycle cannot fit its loop.
+        let text = include_str!("../../../tests/fixtures/recipes/fixture-interior.toml")
+            .replace("grid    = [40, 40]", "grid    = [8, 40]")
+            .replace("size_km = [0.04, 0.04]", "size_km = [0.04, 0.008]");
+        let Err(err) = execute_recipe(&text, &Registry::builtin(), 1) else {
+            panic!("the run fails");
+        };
+        let err = err.to_string();
+        assert!(
+            err.contains(
+                "no start room was placed; short: rule[0] `main_cycle` asked 1, applied 0"
+            ),
+            "{err}"
+        );
+        assert!(!err.contains("expected one start room"), "{err}");
+        let none = MissionReport {
+            applied: 0,
+            short: 0,
+            per_entry: Vec::new(),
+        };
+        assert_eq!(no_start(&none), "no rule placed a start room");
     }
 
     #[test]
