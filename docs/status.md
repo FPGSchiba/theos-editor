@@ -35,12 +35,12 @@ States: `todo` → `spec-pr` → `spec-approved` → `in-progress` → `pr-open`
 | P26 | Style bible and briefs | theos-editor | todo | | |
 | P27 | Asset pipelines | theos-editor | todo | | |
 | P28 | Workflow catalogue and asset guide | tower-of-theos | todo | | |
-| P29 | Settlements and child maps | theos-editor | spec-approved | #54 | |
+| P29 | Settlements and child maps | theos-editor | in-progress | #54 | |
 | P30 | Levels in the generator | theos-editor | todo | | |
 | P31 | Floor frame and places | theos-editor | todo | | |
 | P32 | Recipe families | theos-editor | todo | | |
 | P33 | Map metrics and batch tool | theos-editor | todo | | |
-| P34 | Interiors | theos-editor | spec-approved | #55 | |
+| P34 | Interiors | theos-editor | pr-open | #55 | build PR on `phase/P34-interiors-2` |
 | P45 | Atlas level switcher | theos-editor | todo | | |
 | P46 | Git read | theos-editor | done | #52, #58 | #62 |
 | P47 | Git write | theos-editor | todo | | |
@@ -58,6 +58,21 @@ umbrella version 9.
 
 ## Needs Jann
 
+- P34's build (Interiors) departs from its spec in three places, so the spec needs an erratum.
+  Claude opens it as a docs PR after the build PR:
+  - §5.9 item 4 and §9 ruling 7 define the drop check with the keys reachable from the start
+    with every drop removed, which is not what a falling party holds. The build checks from the
+    drop's target with the start room's and the drop room's keys only (ruling R54).
+  - §5.4's `locked` is set for every room behind a lock by `RoomGraph::mark_locked` (R55).
+  - §5.6's leaf row reads "non-locked" as the program's flag (R57).
+
+  The build PR lists every ruling, among them the recipe values that differ from §5.12:
+  the choir hall's 84 m square and 3×3 hall (R45, R48), and the undercroft's 2×1 crypt (R50).
+- P48 follow-up, seen on macOS in P34's PR run (28 Nov 2026): `theos-mcp`'s
+  `project_info_over_stdio` fails there. The project root is reported as
+  `/private/var/folders/…` while the test expects `/var/folders/…`, the same folder through
+  macOS's `/var` link. Comparing canonical paths in the test fixes it. P34 leaves it to P48
+  (Jann, 28 Nov).
 - P48 is merged (#61). Open:
   - The recorded Claude Code session that spec §5.14 asks for as CE-18.1/CE-18.2 evidence is
     blocked: "MCP server blocked by enterprise policy: theos". Jann allows the server in the

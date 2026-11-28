@@ -17,18 +17,20 @@ pub struct MemoryEstimate {
     pub largest: Vec<(String, u64)>,
 }
 
-/// Every distinct layer name of every stage's reads and writes counts once at
+/// Every distinct layer name of the seeded values and every stage's reads and writes counts once at
 /// `cells x bytes_per_cell`; the sum is raised by half for working copies.
 #[must_use]
 pub fn estimate(plan: &Plan) -> MemoryEstimate {
     let cells = u64::try_from(plan.frame.cells()).unwrap_or(u64::MAX);
     let mut sizes: BTreeMap<&str, u64> = BTreeMap::new();
-    for stage in &plan.stages {
-        for spec in stage.reads.iter().chain(&stage.writes) {
-            let size = cells.saturating_mul(bytes_per_cell(spec.kind));
-            let entry = sizes.entry(spec.name).or_insert(0);
-            *entry = (*entry).max(size);
-        }
+    let staged = plan
+        .stages
+        .iter()
+        .flat_map(|stage| stage.reads.iter().chain(&stage.writes));
+    for spec in plan.seeded.iter().chain(staged) {
+        let size = cells.saturating_mul(bytes_per_cell(spec.kind));
+        let entry = sizes.entry(spec.name).or_insert(0);
+        *entry = (*entry).max(size);
     }
     let total = sizes.values().fold(0_u64, |sum, &s| sum.saturating_add(s));
     let mut largest: Vec<(String, u64)> = sizes

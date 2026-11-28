@@ -22,11 +22,54 @@ use crate::progress::CancelToken;
 use crate::runner::RunOptions;
 use crate::stage::Registry;
 
-/// The golden runs, as (built-in recipe id, seed), in the order of the golden file (spec §5.14).
-pub const GOLDEN_RUNS: &[(&str, u64)] = &[
-    ("fixture-small", 1),
-    ("fixture-small", 2),
-    ("hearth-valley", 1),
+/// One golden run: a built-in recipe, a seed, string inputs and, for a child recipe, the golden
+/// run of its parent (spec §5.14).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GoldenSpec {
+    /// The built-in recipe id.
+    pub recipe: &'static str,
+    /// The run seed.
+    pub seed: u64,
+    /// The recipe inputs, name to string value.
+    pub inputs: &'static [(&'static str, &'static str)],
+    /// The parent's golden run as (recipe, seed); the parent runs first and the child starts
+    /// from its package.
+    pub from: Option<(&'static str, u64)>,
+}
+
+/// The golden runs, in the order of the golden file (spec §5.14).
+pub const GOLDEN_RUNS: &[GoldenSpec] = &[
+    GoldenSpec {
+        recipe: "fixture-small",
+        seed: 1,
+        inputs: &[],
+        from: None,
+    },
+    GoldenSpec {
+        recipe: "fixture-small",
+        seed: 2,
+        inputs: &[],
+        from: None,
+    },
+    GoldenSpec {
+        recipe: "hearth-valley",
+        seed: 1,
+        inputs: &[],
+        from: None,
+    },
+    GoldenSpec {
+        recipe: "choir-hall-ruin",
+        seed: 1,
+        inputs: &[],
+        from: None,
+    },
+    // `ruin-1` is the one ruin `fixture-small` seed 1 places.
+    GoldenSpec {
+        recipe: "ruin-undercroft",
+        seed: 1,
+        inputs: &[("feature", "ruin-1")],
+        from: Some(("fixture-small", 1)),
+    },
 ];
 
 /// The golden hashes of one generator version (plan ruling L23): a `[[run]]` table per golden
@@ -46,6 +89,12 @@ pub struct GoldenRun {
     pub recipe: String,
     /// The run seed.
     pub seed: u64,
+    /// The recipe inputs, name to string value; absent from the file when there are none.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub inputs: BTreeMap<String, String>,
+    /// The parent run a child run started from; absent for a standalone run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<GoldenParent>,
     /// The SHA-256 (hex) of the bytes of the run's `features` output.
     pub features: String,
     /// The SHA-256 (hex) of the bytes of the run's `.theosmap` package.
@@ -53,6 +102,15 @@ pub struct GoldenRun {
     /// The stages in pipeline order.
     #[serde(rename = "stage")]
     pub stages: Vec<GoldenStage>,
+}
+
+/// The parent run of a child golden run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GoldenParent {
+    /// The parent's recipe id.
+    pub recipe: String,
+    /// The parent's seed.
+    pub seed: u64,
 }
 
 /// The layers one stage wrote, by name, with their SHA-256 in hex.
@@ -75,33 +133,100 @@ pub fn golden_path(version: &str) -> PathBuf {
         .join(format!("{version}.toml"))
 }
 
-/// Runs the built-in recipe `recipe` with `seed`, default options and no inputs, and returns its
-/// golden record. The run writes its outputs into `dir`, an existing folder that holds none of
-/// their names, and leaves them there; the caller owns the folder (a temporary one, in the tests
-/// and the example `bless`).
+/// Runs the golden run `spec` with default options and returns its golden record. With
+/// `spec.from`, the parent's recipe and seed run first into `dir/parent/` and the child starts
+/// from that package. The runs write their outputs into `dir`, an existing folder that holds
+/// none of their names, and leave them there; the caller owns the folder (a temporary one, in
+/// the tests and the example `bless`).
 ///
 /// # Errors
 /// The errors of [`run`](crate::run): [`RunError::Recipe`] for an id that is not built in,
 /// [`RunError::OutputExists`] when `dir` already holds an output's name, [`RunError::Io`] when
 /// `dir` is not a folder, and the errors of the stages and the outputs.
-pub fn compute(recipe: &str, seed: u64, dir: &Path) -> Result<GoldenRun, RunError> {
+pub fn compute(spec: &GoldenSpec, dir: &Path) -> Result<GoldenRun, RunError> {
+    compute_in(&Registry::builtin(), &[], spec, dir)
+}
+
+/// [`compute`] with the given registry and extra recipe folders (the tests' child recipes).
+pub(crate) fn compute_in(
+    registry: &Registry,
+    recipe_dirs: &[PathBuf],
+    spec: &GoldenSpec,
+    dir: &Path,
+) -> Result<GoldenRun, RunError> {
+    let inputs: BTreeMap<String, String> = spec
+        .inputs
+        .iter()
+        .map(|&(name, value)| (name.to_owned(), value.to_owned()))
+        .collect();
+    let mut request = RunRequest {
+        recipe: spec.recipe.to_owned(),
+        seed: spec.seed,
+        inputs: inputs
+            .iter()
+            .map(|(k, v)| (k.clone(), serde_json::Value::from(v.as_str())))
+            .collect(),
+        from: None,
+        notes: Vec::new(),
+        options: RunOptions::default(),
+    };
+    let mut parent = None;
+    if let Some((recipe, seed)) = spec.from {
+        let parent_dir = dir.join("parent");
+        std::fs::create_dir(&parent_dir).map_err(|source| RunError::Io {
+            path: parent_dir.clone(),
+            source,
+        })?;
+        let parent_spec = GoldenSpec {
+            recipe,
+            seed,
+            inputs: &[],
+            from: None,
+        };
+        let (manifest, _) = run_golden(registry, recipe_dirs, &parent_spec, &parent_dir)?;
+        let file = manifest.outputs.get("package").cloned().unwrap_or_default();
+        request.from = Some(parent_dir.join(file));
+        parent = Some(GoldenParent {
+            recipe: recipe.to_owned(),
+            seed,
+        });
+    }
+    let (_, mut golden) = run_inner(
+        registry,
+        &request,
+        recipe_dirs,
+        dir,
+        &mut |_| {},
+        &CancelToken::new(),
+    )?;
+    golden.inputs = inputs;
+    golden.from = parent;
+    Ok(golden)
+}
+
+/// Runs a standalone `spec` (the parent of a child run).
+fn run_golden(
+    registry: &Registry,
+    recipe_dirs: &[PathBuf],
+    spec: &GoldenSpec,
+    dir: &Path,
+) -> Result<(crate::api::RunManifest, GoldenRun), RunError> {
     let request = RunRequest {
-        recipe: recipe.to_owned(),
-        seed,
+        recipe: spec.recipe.to_owned(),
+        seed: spec.seed,
         inputs: serde_json::Map::new(),
         from: None,
         notes: Vec::new(),
         options: RunOptions::default(),
     };
-    let (_, golden) = run_inner(
-        &Registry::builtin(),
+    run_inner(
+        registry,
         &request,
-        &[],
+        recipe_dirs,
         dir,
         &mut |_| {},
         &CancelToken::new(),
-    )?;
-    Ok(golden)
+    )
 }
 
 #[cfg(test)]
@@ -113,6 +238,8 @@ mod tests {
         let run = GoldenRun {
             recipe: "r".to_owned(),
             seed: 1,
+            inputs: BTreeMap::new(),
+            from: None,
             features: String::new(),
             package: String::new(),
             stages: vec![GoldenStage {
@@ -133,6 +260,8 @@ mod tests {
             run: vec![GoldenRun {
                 recipe: "r".to_owned(),
                 seed: 2,
+                inputs: BTreeMap::new(),
+                from: None,
                 features: "f".to_owned(),
                 package: "p".to_owned(),
                 stages: vec![GoldenStage {
@@ -165,15 +294,27 @@ mod tests {
     #[test]
     fn the_golden_runs_are_built_in_recipes() {
         let built_in = crate::recipe::catalog(&[]).unwrap();
-        for (recipe, _) in GOLDEN_RUNS {
-            assert!(built_in.recipes.contains_key(*recipe), "{recipe}");
+        for spec in GOLDEN_RUNS {
+            assert!(
+                built_in.recipes.contains_key(spec.recipe),
+                "{}",
+                spec.recipe
+            );
         }
     }
 
     #[test]
     fn compute_refuses_a_recipe_that_is_not_built_in() {
         let dir = tempfile::tempdir().unwrap();
-        let result = compute("api-small", 1, dir.path());
+        let result = compute(
+            &GoldenSpec {
+                recipe: "api-small",
+                seed: 1,
+                inputs: &[],
+                from: None,
+            },
+            dir.path(),
+        );
         assert!(
             matches!(
                 result,
@@ -182,5 +323,88 @@ mod tests {
             ),
             "{result:?}"
         );
+    }
+
+    #[test]
+    fn golden_runs_round_trip_with_inputs_and_parent() {
+        let run = GoldenRun {
+            recipe: "child".to_owned(),
+            seed: 7,
+            inputs: BTreeMap::from([("feature".to_owned(), "town-1".to_owned())]),
+            from: Some(GoldenParent {
+                recipe: "fixture-small".to_owned(),
+                seed: 1,
+            }),
+            features: "f".to_owned(),
+            package: "p".to_owned(),
+            stages: vec![],
+        };
+        let text = toml::to_string(&run).unwrap();
+        assert!(
+            text.contains("[inputs]") && text.contains("[from]"),
+            "{text}"
+        );
+        assert_eq!(toml::from_str::<GoldenRun>(&text).unwrap(), run);
+        // A run without them (the 1.0.0 file) writes and parses neither.
+        let plain = GoldenRun {
+            inputs: BTreeMap::new(),
+            from: None,
+            ..run
+        };
+        let text = toml::to_string(&plain).unwrap();
+        assert!(!text.contains("inputs") && !text.contains("from"), "{text}");
+        assert_eq!(toml::from_str::<GoldenRun>(&text).unwrap(), plain);
+    }
+
+    #[test]
+    fn slow_a_golden_spec_with_a_parent_runs_the_parent_first() {
+        // The real interior stages, under the id `child` and with a feature input.
+        let fixture = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/recipes/fixture-interior.toml"),
+        )
+        .unwrap()
+        .replace("fixture-interior", "child")
+        .replace(
+            "size_km = [0.04, 0.04]",
+            "size_km = [0.04, 0.04]
+[inputs.feature]
+type = \"feature\"
+parent_types = [\"town\", \"village\"]",
+        );
+        let recipes = tempfile::tempdir().unwrap();
+        std::fs::write(recipes.path().join("child.toml"), fixture).unwrap();
+        let dirs = [
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/recipes"),
+            recipes.path().to_path_buf(),
+        ];
+        let spec = GoldenSpec {
+            recipe: "child",
+            seed: 7,
+            inputs: &[("feature", "town-1")],
+            from: Some(("api-small", 1)),
+        };
+        let out = tempfile::tempdir().unwrap();
+        let run = compute_in(
+            &crate::child::test_support::registry_with_builtin(),
+            &dirs,
+            &spec,
+            out.path(),
+        )
+        .unwrap();
+        assert_eq!(
+            run.from,
+            Some(GoldenParent {
+                recipe: "api-small".to_owned(),
+                seed: 1
+            })
+        );
+        assert_eq!(run.inputs["feature"], "town-1");
+        // An interior reads no parent layer, so it seeds nothing and has no `parent#0` stage.
+        assert_eq!(
+            run.stages.first().map(|s| s.key.as_str()),
+            Some("envelope#0")
+        );
+        assert!(out.path().join("parent").is_dir());
     }
 }

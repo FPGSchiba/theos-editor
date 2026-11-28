@@ -156,7 +156,7 @@ fn entries_are_filled_in_by_the_writer() -> TestResult {
     let zip = zip_bytes::parse(&bytes)?;
     let manifest: Manifest = serde_json::from_slice(&zip.entry("manifest.json")?)?;
     assert_eq!(manifest.format, "theos-map");
-    assert_eq!(manifest.format_version, "1.0");
+    assert_eq!(manifest.format_version, "1.1");
     assert_eq!(manifest.features, "features.geojson");
     let height = &manifest.layers[0];
     assert_eq!(height.file, "layers/height.f32");

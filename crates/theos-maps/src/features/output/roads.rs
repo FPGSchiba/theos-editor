@@ -3,7 +3,7 @@
 use geojson::{Feature as Gj, GeometryValue};
 use serde_json::Value;
 
-use super::{FeaturesError, Named, assemble, base, number, position};
+use super::{FeaturesError, Named, base, gj_feature, number, position};
 use crate::grid::Grid;
 use crate::kernels::num::to_usize;
 use crate::stages::terrain::roads::{Road, RoadNetwork};
@@ -47,5 +47,9 @@ pub(super) fn feature(
         .iter()
         .map(|&cell| position(&frame.index_centre_m(to_usize(cell)), id))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(assemble(id, props, GeometryValue::new_line_string(line)))
+    Ok(gj_feature(
+        id,
+        props,
+        Some(GeometryValue::new_line_string(line)),
+    ))
 }

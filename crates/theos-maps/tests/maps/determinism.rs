@@ -6,15 +6,15 @@
 //! one run into the next shows up. Runs in two processes are covered by the golden test, which
 //! compares with hashes `bless` recorded in another process (plan ruling L28).
 
-use theos_maps::golden::compare;
+use theos_maps::golden::{GOLDEN_RUNS, compare};
 
 use crate::support::{TestResult, golden_run};
 
 #[test]
 fn two_runs_in_one_process_give_identical_packages_and_layers() -> TestResult {
-    let first = golden_run("fixture-small", 2)?;
-    let between = golden_run("fixture-small", 1)?;
-    let second = golden_run("fixture-small", 2)?;
+    let first = golden_run(&GOLDEN_RUNS[1])?;
+    let between = golden_run(&GOLDEN_RUNS[0])?;
+    let second = golden_run(&GOLDEN_RUNS[1])?;
     compare(&first, &second)?;
     assert_eq!(first, second);
     assert_ne!(

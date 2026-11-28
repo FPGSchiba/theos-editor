@@ -9,13 +9,16 @@ pub mod distance;
 pub mod fft;
 pub mod filters;
 pub mod flood;
+pub mod geometry;
 pub mod labels;
 pub mod morphology;
 pub mod mst;
 pub mod noise;
 pub mod num;
+pub mod outline;
 pub mod paths;
 pub mod reflect;
+pub mod resample;
 pub mod routing;
 pub mod stats;
 pub mod tridiagonal;
@@ -91,4 +94,11 @@ pub enum KernelError {
     /// The caller asked to stop a long kernel.
     #[error("the kernel was cancelled")]
     Cancelled,
+    /// A resample from a parent grid with no cells to sample.
+    #[error("the parent grid has no cells to sample")]
+    NoCells,
+    /// A resample with a cell size that is not positive and finite, or an origin that is not
+    /// finite.
+    #[error("the resample needs positive, finite cell sizes and a finite origin")]
+    BadGeometry,
 }

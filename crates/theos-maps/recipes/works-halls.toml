@@ -1,0 +1,118 @@
+# Intent: a large works of about 150 rooms. Galleries form two open routes from the south rim to
+# the main hall, lengthened, with detours (some locked), loops and drops back toward the
+# entrance. Machine halls of two sizes open off the galleries and grow where the floor is free;
+# stores, locked stores and two to four exits fill the rest. The hall types, the merged halls
+# and the staggered walls keep the plan from reading as a grid of tiles (spec ruling 6).
+# Room types are ids, not canon.
+id      = "works-halls"
+title   = "Works halls"
+kind    = "interior"
+grid    = [300, 300]
+size_km = [0.3, 0.3]
+
+[[stage]]
+id       = "envelope"
+shape    = "rect"
+margin_m = 2.0
+pitch_m  = 16.0
+jitter_m = 4.0
+
+[[stage]]
+id = "mission"
+  [[stage.room]]
+  type = "entrance"
+  role = "start"
+  [[stage.room]]
+  type      = "main-hall"
+  role      = "goal"
+  footprint = [3, 3]
+  [[stage.room]]
+  type      = "gallery"
+  role      = "path"
+  count     = [14, 18]
+  footprint = [1, 2]
+  shape     = "passage"
+  [[stage.room]]
+  type      = "machine-hall-large"
+  role      = "leaf"
+  count     = 4
+  footprint = [3, 3]
+  [[stage.room]]
+  type      = "machine-hall"
+  role      = "leaf"
+  count     = 8
+  footprint = [2, 3]
+  [[stage.room]]
+  type   = "store"
+  role   = "leaf"
+  count  = 4
+  locked = true
+  [[stage.room]]
+  type  = "store"
+  role  = "leaf"
+  count = 50
+  [[stage.room]]
+  type  = "exit"
+  role  = "exit"
+  count = 4
+  [[stage.rule]]
+  rule    = "main_cycle"
+  side    = "south"
+  cycle   = "two_routes"
+  min_arc = 4
+  [[stage.rule]]
+  rule  = "extend_arc"
+  count = [25, 30]
+  [[stage.rule]]
+  rule  = "insert_cycle"
+  count = [6, 8]
+  [[stage.rule]]
+  rule  = "insert_cycle"
+  count = [2, 3]
+  lock  = true
+  [[stage.rule]]
+  rule       = "leaf"
+  count      = 12
+  from_roles = ["path"]
+  [[stage.rule]]
+  rule     = "merge_hall"   # grows the halls; best effort, the hall share is a constraint
+  count    = 12
+  required = false
+  [[stage.rule]]
+  rule  = "merge_hall"
+  mode  = "merge"
+  count = [8, 12]
+  [[stage.rule]]
+  rule  = "close_loop"
+  count = [8, 12]
+  [[stage.rule]]
+  rule  = "shortcut"
+  count = [2, 4]
+  [[stage.rule]]
+  rule  = "locked_leaf"
+  count = [3, 4]
+  [[stage.rule]]
+  rule  = "leaf"
+  count = [40, 50]
+  [[stage.rule]]
+  rule  = "leaf"
+  role  = "exit"
+  count = [2, 4]
+
+[[stage]]
+id = "space"
+
+[[stage]]
+id = "cover"
+
+[[stage]]
+id = "playability"
+
+[constraints]
+"stages.mission.short"                = [0, 0]
+"stages.playability.rooms"            = [130, 175]
+"stages.playability.critical_path_m"  = [200, 800]
+"stages.playability.dead_end_pct"     = [15, 35]
+"stages.playability.cycles"           = [15, 35]
+"stages.playability.hall_share_pct"   = [20, 50]
+"stages.playability.footprint_used_pct" = [40, 70]   # R42: measured 43.8-52.8 on seeds 1-8

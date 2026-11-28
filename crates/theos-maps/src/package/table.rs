@@ -1,4 +1,4 @@
-//! The layers a terrain package holds, in order, and where each one's values come from
+//! The layers a package of each kind holds, in order, and where each one's values come from
 //! (spec §5.10, `docs/map-package.md` §4.4).
 
 use theos_map_format::DType;
@@ -13,9 +13,13 @@ pub(crate) enum Source {
     /// `climate.fields.precipitation`, computed from the height when the climate holds no
     /// fields (ruling P2).
     Precipitation,
+    /// The mask of the same name, as 0 and 1.
+    Mask,
+    /// The `u32` raster of the same name, stored as `u16`; a value above 65535 is refused.
+    Narrow,
 }
 
-/// A layer of a terrain package: how it is stored and described in the manifest.
+/// A layer of a package: how it is stored and described in the manifest.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PackageLayer {
     /// The layer name, in the package and in the world.
@@ -180,3 +184,32 @@ pub(crate) const TERRAIN_LAYERS: &[PackageLayer] = &[
 
 /// The layer `omega`, written only when the recipe ran the detuning stage.
 pub(crate) const OMEGA_LAYER: PackageLayer = density("omega", "Detuning omega");
+
+const fn mask(name: &'static str, description: &'static str) -> PackageLayer {
+    PackageLayer {
+        name,
+        dtype: DType::U8,
+        units: None,
+        scale: None,
+        legend: None,
+        description,
+        source: Source::Mask,
+    }
+}
+
+/// The interior layers in package order (spec P34 §5.10, `docs/map-package.md` §4.4).
+pub(crate) const INTERIOR_LAYERS: &[PackageLayer] = &[
+    mask("walkable", "Mask of walkable floor"),
+    PackageLayer {
+        name: "rooms",
+        dtype: DType::U16,
+        units: None,
+        scale: None,
+        legend: None,
+        description: "Room number + 1 per cell, 0 for none; the room features carry the number",
+        source: Source::Narrow,
+    },
+    mask("corridors", "Mask of door cells and passage rooms"),
+    mask("cover", "Mask of cover"),
+    mask("walls", "Mask of built wall cells"),
+];

@@ -140,6 +140,20 @@ fn fixture_package_round_trips() -> TestResult {
     Ok(())
 }
 
+// A package written before format 1.1 still reads.
+// AC: CE-76.2
+#[test]
+fn a_one_point_zero_package_is_still_read() -> TestResult {
+    let mut manifest = fixture_manifest()?;
+    manifest["format_version"] = json!("1.0");
+    let (_, bytes) = build(&manifest, &fixture_features()?)?;
+    assert_eq!(read_bytes(&bytes)?.manifest.format_version, "1.0");
+    manifest["format_version"] = json!("1.1");
+    let (_, bytes) = build(&manifest, &fixture_features()?)?;
+    assert_eq!(read_bytes(&bytes)?.manifest.format_version, "1.1");
+    Ok(())
+}
+
 // AC: CE-76.2
 #[test]
 fn an_unknown_major_is_refused_naming_both_versions() -> TestResult {

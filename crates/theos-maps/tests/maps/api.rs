@@ -111,7 +111,7 @@ fn run_reports_progress_and_returns_outputs_and_results() -> TestResult {
         manifest.frame.size_m.map(f64::to_bits),
         [6400.0_f64.to_bits(); 2]
     );
-    assert_eq!(manifest.generator, "theos-maps@1.0.0");
+    assert_eq!(manifest.generator, "theos-maps@1.1.0");
     assert_eq!((manifest.recipe.as_str(), manifest.seed), ("api-small", 1));
     for step in [
         "landscape_evolution",

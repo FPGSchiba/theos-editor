@@ -32,6 +32,27 @@ fn mask<'a>(world: &'a World, name: &'static str) -> Result<&'a Grid<bool>, Pack
         .ok_or(PackageError::MissingLayer { layer: name })
 }
 
+/// The `u32` raster `name` as `u16` values.
+///
+/// # Errors
+/// [`PackageError::MissingLayer`] without the raster, [`PackageError::OutOfRange`] for a value
+/// above 65535.
+fn narrow(world: &World, name: &'static str) -> Result<LayerData, PackageError> {
+    let grid = world
+        .u32(name)
+        .ok_or(PackageError::MissingLayer { layer: name })?;
+    grid.as_slice()
+        .iter()
+        .map(|&v| {
+            u16::try_from(v).map_err(|_| PackageError::OutOfRange {
+                layer: name,
+                value: v,
+            })
+        })
+        .collect::<Result<_, _>>()
+        .map(LayerData::U16)
+}
+
 /// The classes of `water`.
 fn water(world: &World) -> Result<LayerData, PackageError> {
     let lake = mask(world, "lake")?;
@@ -70,6 +91,8 @@ pub(crate) fn needs(layer: &PackageLayer) -> Vec<LayerSpec> {
             LayerSpec::value("climate", Climate::NAME),
             LayerSpec::f64("height"),
         ],
+        Source::Mask => vec![LayerSpec::mask(layer.name)],
+        Source::Narrow => vec![LayerSpec::u32(layer.name)],
         Source::Raster => match (layer.dtype, layer.scale) {
             (DType::F32, _) | (_, Some(_)) => vec![LayerSpec::f64(layer.name)],
             (_, None) if layer.name == ROADS => Vec::new(),
@@ -79,13 +102,22 @@ pub(crate) fn needs(layer: &PackageLayer) -> Vec<LayerSpec> {
 }
 
 /// The package values of `layer`: `f32` through `to_f32`, a density through `to_u8_unit`, a
-/// class raster as it is.
+/// class raster as it is, a mask as 0 and 1, a `u32` raster narrowed to `u16`.
 ///
 /// # Errors
-/// [`PackageError::MissingLayer`] when the world lacks a layer the values come from.
+/// [`PackageError::MissingLayer`] when the world lacks a layer the values come from, and
+/// [`PackageError::OutOfRange`] for a `u32` value that does not fit `u16`.
 pub(crate) fn encode(world: &World, layer: &PackageLayer) -> Result<LayerData, PackageError> {
-    if layer.source == Source::Water {
-        return water(world);
+    match layer.source {
+        Source::Water => return water(world),
+        Source::Mask => {
+            let grid = mask(world, layer.name)?;
+            return Ok(LayerData::U8(
+                grid.as_slice().iter().map(|&on| u8::from(on)).collect(),
+            ));
+        }
+        Source::Narrow => return narrow(world, layer.name),
+        Source::Raster | Source::Precipitation => {}
     }
     match (layer.dtype, layer.scale) {
         (DType::F32, _) => {
@@ -106,5 +138,65 @@ pub(crate) fn encode(world: &World, layer: &PackageLayer) -> Result<LayerData, P
             None if layer.name == ROADS => Ok(LayerData::U8(vec![0; world.frame().cells()])),
             None => Err(PackageError::MissingLayer { layer: layer.name }),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::package::INTERIOR_LAYERS;
+    use crate::world::{Layer, MapFrame};
+
+    fn layer(name: &str) -> &'static PackageLayer {
+        INTERIOR_LAYERS
+            .iter()
+            .find(|l| l.name == name)
+            .expect("an interior layer")
+    }
+
+    fn world(rooms: Vec<u32>) -> World {
+        let frame = MapFrame {
+            rows: 1,
+            cols: 2,
+            cell_m: 1.0,
+        };
+        let mut w = World::new(frame);
+        w.insert("rooms", Layer::U32(Grid::from_vec(1, 2, rooms).unwrap()))
+            .unwrap();
+        w.insert(
+            "walls",
+            Layer::Mask(Grid::from_vec(1, 2, vec![true, false]).unwrap()),
+        )
+        .unwrap();
+        w
+    }
+
+    // AC: CE-80.1
+    #[test]
+    fn room_numbers_narrow_to_u16_and_masks_to_bytes() {
+        let w = world(vec![0, 65_535]);
+        assert_eq!(
+            encode(&w, layer("rooms")).unwrap(),
+            LayerData::U16(vec![0, 65_535])
+        );
+        assert_eq!(
+            encode(&w, layer("walls")).unwrap(),
+            LayerData::U8(vec![1, 0])
+        );
+        assert_eq!(needs(layer("rooms")), [LayerSpec::u32("rooms")]);
+        assert_eq!(needs(layer("walls")), [LayerSpec::mask("walls")]);
+    }
+
+    // AC: CE-80.1
+    #[test]
+    fn a_room_number_above_u16_is_refused() {
+        let w = world(vec![1, 65_536]);
+        assert!(matches!(
+            encode(&w, layer("rooms")),
+            Err(PackageError::OutOfRange {
+                layer: "rooms",
+                value: 65_536
+            })
+        ));
     }
 }

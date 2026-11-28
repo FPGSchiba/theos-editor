@@ -1,0 +1,105 @@
+# Intent: 0.3.0's choir-hall complex. Entered from the south rim; the round choir hall is the
+# goal. One arc reaches the hall through a lock, the other holds its key and is joined to the
+# hall only by a drop out of it. The echo vault lies behind its own lock. Leaves and exits hang
+# off the start, the arcs and the hall, never off other leaves, which keeps the chokepoints
+# within 0.3.0's range. The frame fits the program (R42): a 6 x 6 lattice of 14 m cells, so the
+# rooms use more than half of the floor; a circle wastes its rim on so few rooms. The choir
+# hall is 3 x 3 cells (42 m), near 0.3.0's 40-52 m. Room types are ids, not canon.
+id      = "choir-hall-ruin"
+title   = "Choir hall ruin"
+kind    = "interior"
+grid    = [84, 84]
+size_km = [0.084, 0.084]
+
+[[stage]]
+id       = "envelope"
+shape    = "rect"
+margin_m = 0.0
+pitch_m  = 14.0
+jitter_m = 3.0
+
+[[stage]]
+id = "mission"
+  [[stage.room]]
+  type = "entrance"
+  role = "start"
+  [[stage.room]]
+  type      = "choir-hall"
+  role      = "goal"
+  footprint = [3, 3]
+  shape     = "round"
+  [[stage.room]]
+  type      = "tuning-gallery"
+  role      = "path"
+  count     = [2, 3]
+  [[stage.room]]
+  type  = "junction"
+  role  = "path"
+  count = [1, 2]
+  [[stage.room]]
+  type = "operator-room"
+  role = "path"
+  [[stage.room]]
+  type   = "echo-vault"
+  role   = "leaf"
+  shape  = "round"
+  locked = true
+  [[stage.room]]
+  type  = "collapsed"
+  role  = "leaf"
+  count = [1, 2]
+  shape = "ragged"
+  [[stage.room]]
+  type = "shrine-crypt"
+  role = "leaf"
+  [[stage.room]]
+  type  = "store"
+  role  = "leaf"
+  count = [1, 2]
+  [[stage.room]]
+  type  = "exit"
+  role  = "exit"
+  count = 2
+  shape = "round"
+  [[stage.rule]]
+  rule    = "main_cycle"
+  side    = "south"
+  cycle   = "lock_key"
+  min_arc = 3
+  [[stage.rule]]
+  rule = "insert_cycle"
+  [[stage.rule]]
+  rule  = "merge_hall"   # joins two open path rooms into one hall, after the detour
+  mode  = "merge"
+  count = 1
+  [[stage.rule]]
+  rule = "locked_leaf"
+  [[stage.rule]]
+  rule       = "leaf"
+  count      = [4, 6]
+  from_roles = ["start", "path", "goal"]
+  [[stage.rule]]
+  rule       = "leaf"
+  role       = "exit"
+  count      = 2
+  from_roles = ["start", "path", "goal"]
+
+[[stage]]
+id = "space"
+
+[[stage]]
+id              = "cover"
+max_sightline_m = 40.0
+
+[[stage]]
+id = "playability"
+
+[constraints]
+"stages.mission.short"                   = [0, 0]
+"stages.playability.rooms"               = [15, 22]
+"stages.playability.critical_path_m"     = [140, 300]  # ruling 11: retuned, not 0.3.0's [90, 260]
+"stages.playability.dead_end_pct"        = [35, 55]
+"stages.playability.cycles"              = [2, 3]
+"stages.playability.longest_sightline_m" = [10, 45]    # 0.3.0's
+"stages.playability.chokepoints"         = [1, 6]      # 0.3.0's
+"stages.playability.footprint_used_pct"  = [50, 80]    # R42: the dense floor
