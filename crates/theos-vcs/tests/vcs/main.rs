@@ -7,6 +7,7 @@ mod credential;
 mod git;
 mod history;
 mod index;
+mod merge;
 mod push;
 mod read;
 mod remote;
