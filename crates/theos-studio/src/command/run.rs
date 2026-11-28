@@ -53,7 +53,8 @@ impl Workspace {
     /// [`CommandError::Stale`] when a file changed on disk since the caller or the plan read it,
     /// [`CommandError::NotARecord`] when a record it moves would not be read as a record at its
     /// new path (ruling R16),
-    /// [`CommandError::Rejected`] when the command would introduce errors,
+    /// [`CommandError::Rejected`] when the command would introduce errors and does not restore a
+    /// state ([`Command::restores`]),
     /// [`CommandError::ReadOnly`] when a file the command would replace or remove is read-only
     /// (ruling R9; nothing is written),
     /// or the error of the command's plan or of the index.

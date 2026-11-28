@@ -31,7 +31,8 @@ pub struct Outcome {
     /// included.
     pub findings: Vec<Finding>,
     /// The findings of `findings` that are new: warnings only, since a new error rejects the
-    /// command.
+    /// command; for a command that restores a state ([`Command::restores`]), its new errors too,
+    /// first.
     pub introduced: Vec<Finding>,
     /// The journal entry, when the route keeps one.
     pub entry: Option<EntryId>,
@@ -81,6 +82,15 @@ impl Work<'_> {
             Work::Replay { label, .. } => label.clone(),
         }
     }
+
+    /// Whether the verdict lets every count through ([`Command::restores`]); a replay keeps the
+    /// verdict of undo and redo.
+    fn restores(&self) -> bool {
+        match self {
+            Work::Command(command) => command.restores(),
+            Work::Replay { .. } => false,
+        }
+    }
 }
 
 /// What a replay brings beyond its plan.
@@ -112,6 +122,7 @@ fn steps(
     label: String,
     route: &mut dyn Route,
 ) -> Result<Outcome, CommandError> {
+    let restores = work.restores();
     let (plan, replayed) = plan(workspace, work)?;
     if plan.is_empty() {
         tracing::debug!(%label, "nothing to change");
@@ -124,10 +135,18 @@ fn steps(
     boundary::check(&root, &plan)?;
     check_bases(&root, &plan, replayed.is_some())?;
     let (preview, before) = preview(workspace, &plan)?;
-    // Step 5, the verdict: no moved record leaves the index, and no error is new.
+    // Step 5, the verdict: no moved record leaves the index, and no error is new, unless the
+    // command restores a state the user asked for; its new errors are then reported only.
     verdict::keep_records(&plan.moved, &preview.update)?;
     let allowance = replayed.as_ref().map(|replayed| &replayed.allowance);
-    let verdict = verdict::judge(&before, &plan.moved, allowance, &preview.findings);
+    let mut verdict = verdict::judge(&before, &plan.moved, allowance, &preview.findings);
+    if restores && !verdict.blocking.is_empty() {
+        let new: Vec<String> = verdict.blocking.iter().map(ToString::to_string).collect();
+        tracing::info!(%label, ?new, "the command restores a state; its new errors do not block");
+        let warnings = std::mem::take(&mut verdict.introduced);
+        verdict.introduced = std::mem::take(&mut verdict.blocking);
+        verdict.introduced.extend(warnings);
+    }
     if !verdict.blocking.is_empty() {
         let blocking: Vec<String> = verdict.blocking.iter().map(ToString::to_string).collect();
         tracing::info!(%label, paths = ?plan.paths(), ?blocking, "command rejected");
